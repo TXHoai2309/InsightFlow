@@ -2,9 +2,21 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useAuth } from "@/hooks/useAuth";
+import { signOut } from "firebase/auth";
+import { auth } from "@/lib/firebase";
 
 export default function TopNavBar() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { user, loading } = useAuth();
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
+  };
 
   return (
     <nav className="bg-white border-b border-[#E7EAF3] fixed top-0 left-0 right-0 h-16 z-50">
@@ -36,17 +48,36 @@ export default function TopNavBar() {
           </Link>
         </div>
 
-        {/* CTA Buttons */}
+        {/* CTA Buttons or User Info */}
         <div className="flex items-center gap-6">
-          <Link
-            href="#"
-            className="hidden md:block text-[#5B4FCF] font-semibold text-[12px] hover:opacity-80 transition-all"
-          >
-            Đăng nhập
-          </Link>
-          <button className="bg-[#5B4FCF] text-white px-6 h-10 rounded-[10px] font-semibold text-[12px] hover:opacity-90 active:scale-95 transition-all">
-            Bắt đầu
-          </button>
+          {!loading && user ? (
+            <div className="flex items-center gap-4">
+              <span className="text-[14px] font-medium text-[#111c2d]">
+                Chào mừng, <span className="font-bold text-[#5B4FCF]">{user.displayName || user.email}</span>
+              </span>
+              <button
+                onClick={handleLogout}
+                className="text-[12px] font-semibold text-[#ef4444] hover:underline"
+              >
+                Đăng xuất
+              </button>
+            </div>
+          ) : (
+            <>
+              <Link
+                href="/login"
+                className="hidden md:block text-[#5B4FCF] font-semibold text-[12px] hover:opacity-80 transition-all"
+              >
+                Đăng nhập
+              </Link>
+              <Link
+                href="/login"
+                className="flex items-center justify-center bg-[#5B4FCF] text-white px-6 h-10 rounded-[10px] font-semibold text-[12px] hover:opacity-90 active:scale-95 transition-all"
+              >
+                Bắt đầu
+              </Link>
+            </>
+          )}
 
           {/* Mobile hamburger */}
           <button
@@ -85,12 +116,30 @@ export default function TopNavBar() {
           >
             Về chúng tôi
           </Link>
-          <Link
-            href="#"
-            className="block text-[#5B4FCF] font-semibold text-[14px] hover:opacity-80 transition-all"
-          >
-            Đăng nhập
-          </Link>
+          {!loading && user ? (
+            <div className="pt-2 border-t border-[#E7EAF3]">
+              <p className="text-[14px] font-medium text-[#111c2d] mb-2">
+                Chào, {user.displayName || user.email}
+              </p>
+              <button
+                onClick={() => {
+                  handleLogout();
+                  setMobileOpen(false);
+                }}
+                className="block text-[#ef4444] font-semibold text-[14px]"
+              >
+                Đăng xuất
+              </button>
+            </div>
+          ) : (
+            <Link
+              href="/login"
+              onClick={() => setMobileOpen(false)}
+              className="block text-[#5B4FCF] font-semibold text-[14px] hover:opacity-80 transition-all"
+            >
+              Đăng nhập
+            </Link>
+          )}
         </div>
       )}
     </nav>
