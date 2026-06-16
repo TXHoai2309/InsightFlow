@@ -18,7 +18,7 @@
 10. [Security Architecture](#10-security-architecture)
 11. [Monitoring & Observability](#11-monitoring--observability)
 12. [Quyết định kiến trúc (ADR)](#12-quyết-định-kiến-trúc-adr)
-
+13. [DevOps & CI/CD](#13-devops--cicd)
 ---
 
 ## 1. Tổng quan kiến trúc
