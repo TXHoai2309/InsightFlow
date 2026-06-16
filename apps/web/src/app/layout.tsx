@@ -2,30 +2,33 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "InsightFlow - AI Brand Monitoring Platform",
-  description:
-    "Nền tảng AI theo dõi dữ liệu thương hiệu và cảnh báo sớm cho doanh nghiệp F&B tại Việt Nam.",
-  keywords: "brand monitoring, AI, F&B, Vietnam, sentiment analysis, social media",
+  title: {
+    template: "%s — InsightFlow",
+    default: "InsightFlow · Biến dữ liệu thành insight",
+  },
+  description: "Nền tảng AI theo dõi và phân tích thương hiệu theo thời gian thực",
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
     <html lang="vi">
       <head>
         <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
           rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Hanken+Grotesk:wght@600;700;800&display=swap"
         />
         <link
-          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
           rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
         />
       </head>
-      <body>{children}</body>
+      <body style={{ margin: 0, backgroundColor: "#f9f9ff" }}>
+        {children}
+      </body>
     </html>
   );
 }
