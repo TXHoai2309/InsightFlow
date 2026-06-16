@@ -180,7 +180,8 @@ insightflow/
 │   ├── SPEC.md                     # Functional specification
 │   ├── ARCHITECTURE.md             # System architecture
 │   ├── API.md                      # API reference
-│   └── DEPLOYMENT.md               # Hướng dẫn deploy
+│   ├── DEPLOYMENT.md               # Hướng dẫn deploy
+│   └── CHANGELOG.md                # Nhật ký thay đổi dự án
 │
 ├── .env.example
 ├── .gitignore
