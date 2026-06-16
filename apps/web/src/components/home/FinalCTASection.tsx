@@ -1,4 +1,11 @@
+"use client";
+
+import Link from "next/link";
+import { useAuth } from "@/hooks/useAuth";
+
 export default function FinalCTASection() {
+  const { user, loading } = useAuth();
+
   return (
     <section className="py-[80px] px-6">
       <div
@@ -28,9 +35,21 @@ export default function FinalCTASection() {
             liệu thời gian thực.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-            <button className="bg-[#5b4fcf] text-white px-10 py-4 rounded-xl text-[20px] font-semibold hover:opacity-90 active:scale-95 transition-all">
-              Bắt đầu ngay
-            </button>
+            {!loading && user ? (
+              <Link
+                href="/dashboard"
+                className="bg-[#5b4fcf] text-white px-10 py-4 rounded-xl text-[20px] font-semibold hover:opacity-90 active:scale-95 transition-all flex items-center justify-center"
+              >
+                Vào Dashboard
+              </Link>
+            ) : (
+              <Link
+                href="/login"
+                className="bg-[#5b4fcf] text-white px-10 py-4 rounded-xl text-[20px] font-semibold hover:opacity-90 active:scale-95 transition-all flex items-center justify-center"
+              >
+                Bắt đầu ngay
+              </Link>
+            )}
             <button className="bg-transparent border border-white/35 text-white px-10 py-4 rounded-xl text-[20px] font-semibold hover:bg-white/10 transition-all">
               Liên hệ tư vấn
             </button>
