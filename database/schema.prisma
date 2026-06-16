@@ -1,0 +1,113 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Tenant {
+  id         String      @id @default(uuid())
+  name       String
+  plan       String
+  createdAt  DateTime    @default(now())
+  workspaces Workspace[]
+
+  @@map("tenants")
+}
+
+model Workspace {
+  id          String    @id @default(uuid())
+  tenantId    String    @map("tenant_id")
+  name        String
+  industry    String
+  keywords    Json      // [{term, synonyms, priority}]
+  crisisWatch Boolean   @default(false) @map("crisis_watch")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  mentions    Mention[]
+  alerts      Alert[]
+  leads       Lead[]
+  reports     Report[]
+
+  @@map("workspaces")
+}
+
+model Mention {
+  id                String       @id @default(uuid())
+  workspaceId       String       @map("workspace_id")
+  sourcePlatform    String       @map("source_platform") // facebook | tiktok | news | youtube
+  sourceUrl         String       @map("source_url")
+  contentSummary    String       @map("content_summary")
+  authorDisplayName String       @map("author_display_name")
+  credibilityScore  Float        @map("credibility_score")
+  publishedAt       DateTime     @map("published_at")
+  crawledAt         DateTime     @default(now()) @map("crawled_at")
+  workspace         Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  nlpResult         NlpResult?
+  leads             Lead[]
+
+  @@map("mentions")
+}
+
+model NlpResult {
+  id                  String    @id @default(uuid())
+  mentionId           String    @unique @map("mention_id")
+  sentiment           String    // positive | negative | neutral
+  sentimentConfidence Float     @map("sentiment_confidence")
+  topics              String[]
+  intent              String    // hot | warm | cold | none
+  modelVersion        String    @map("model_version")
+  isRelabeled         Boolean   @default(false) @map("is_relabeled")
+  relabeledBy         String?   @map("relabeled_by")
+  analyzedAt          DateTime  @default(now()) @map("analyzed_at")
+  mention             Mention   @relation(fields: [mentionId], references: [id], onDelete: Cascade)
+
+  @@map("nlp_results")
+}
+
+model Alert {
+  id             String    @id @default(uuid())
+  workspaceId    String    @map("workspace_id")
+  type           String    // spike | high_reach | sensitive_topic
+  severity       String    // low | medium | high | critical
+  triggeredAt    DateTime  @default(now()) @map("triggered_at")
+  sentAt         DateTime? @map("sent_at")
+  channelsSent   String[]  @map("channels_sent")
+  acknowledgedAt DateTime? @map("acknowledged_at")
+  acknowledgedBy String?   @map("acknowledged_by")
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("alerts")
+}
+
+model Lead {
+  id            String    @id @default(uuid())
+  workspaceId   String    @map("workspace_id")
+  mentionId     String    @map("mention_id")
+  intentType    String    @map("intent_type") // hot | warm | cold
+  intentSignals String[]  @map("intent_signals")
+  status        String    @default("new")     // new | in_progress | handled | ignored
+  pushedAt      DateTime  @default(now()) @map("pushed_at")
+  handledAt     DateTime? @map("handled_at")
+  handledBy     String?   @map("handled_by")
+  expiresAt     DateTime? @map("expires_at")
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  mention       Mention   @relation(fields: [mentionId], references: [id], onDelete: Cascade)
+
+  @@map("leads")
+}
+
+model Report {
+  id           String    @id @default(uuid())
+  workspaceId  String    @map("workspace_id")
+  periodStart  DateTime  @map("period_start")
+  periodEnd    DateTime  @map("period_end")
+  fileUrl      String    @map("file_url")
+  generatedAt  DateTime  @default(now()) @map("generated_at")
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("reports")
+}

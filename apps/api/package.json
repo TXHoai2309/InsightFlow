@@ -1,0 +1,15 @@
+{
+  "name": "@insightflow/api",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "fastify": "^4.25.0",
+    "socket.io": "^4.7.0",
+    "redis": "^4.6.0",
+    "kafkajs": "^2.2.0"
+  }
+}

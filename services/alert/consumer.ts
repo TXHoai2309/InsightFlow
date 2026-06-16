@@ -1,0 +1,1 @@
+if (require.main === module) { console.log('Starting Alert consumer...'); }

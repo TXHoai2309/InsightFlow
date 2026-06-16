@@ -1,0 +1,9 @@
+{
+  "name": "@insightflow/lead",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "redis": "^4.6.0",
+    "kafkajs": "^2.2.0"
+  }
+}

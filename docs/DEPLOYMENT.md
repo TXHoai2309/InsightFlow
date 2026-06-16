@@ -1,0 +1,1 @@
+# InsightFlow Deployment Guide\n\nKubernetes and deployment details placeholder\n

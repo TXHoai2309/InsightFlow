@@ -1,0 +1,16 @@
+topics:
+  - name: raw-content
+    partitions: 3
+    retention_ms: 86400000 # 1 day
+  - name: matched-content
+    partitions: 3
+    retention_ms: 86400000 # 1 day
+  - name: analyzed-content
+    partitions: 3
+    retention_ms: 259200000 # 3 days
+  - name: crisis-alerts
+    partitions: 3
+    retention_ms: 604800000 # 7 days
+  - name: hot-leads
+    partitions: 3
+    retention_ms: 604800000 # 7 days
