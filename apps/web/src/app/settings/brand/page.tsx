@@ -53,9 +53,9 @@ export default function BrandManagementPage() {
   ];
 
   return (
-    <div className="p-8 space-y-8">
+    <div className="p-4 md:p-8 space-y-6 md:space-y-8">
       {/* Header Section */}
-      <div className="flex justify-between items-end">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-3">
         <div>
           <h2 className="text-headline-lg text-on-surface font-bold">Quản lý Thương hiệu</h2>
         </div>
@@ -137,7 +137,7 @@ export default function BrandManagementPage() {
             {/* Abstract decoration */}
             <div className="absolute -top-12 -right-12 w-48 h-48 bg-primary/5 rounded-full blur-3xl"></div>
             
-            <div className="flex justify-between items-start mb-8 relative z-10">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-6 md:mb-8 relative z-10">
               <div>
                 <h3 className="text-headline-md text-on-surface font-bold">Cấu hình Từ khóa Theo dõi</h3>
                 <p className="text-body-sm text-on-surface-variant">
@@ -180,7 +180,7 @@ export default function BrandManagementPage() {
                 <p className="text-label-sm text-on-surface-variant">Giúp AI mở rộng phạm vi thu thập nhưng vẫn giữ đúng ngữ cảnh.</p>
               </div>
 
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
                 {/* Exclusion Keywords */}
                 <div className="space-y-2">
                   <label className="text-label-md text-on-surface block font-bold">Từ khóa loại trừ (Negative)</label>
@@ -233,7 +233,7 @@ export default function BrandManagementPage() {
           </div>
 
           {/* Usage Statistics Card */}
-          <div className="grid grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6">
             <div className="glass-card rounded-xl p-6 text-center">
               <p className="text-label-sm text-on-surface-variant mb-2">Data Usage</p>
               <h4 className="text-headline-md text-primary font-bold">74%</h4>

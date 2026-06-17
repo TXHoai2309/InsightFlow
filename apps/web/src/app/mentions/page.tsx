@@ -18,18 +18,18 @@ export default function MentionsPage() {
   );
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       {/* Header Section */}
       <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-bold text-on-surface">
+          <h1 className="text-2xl md:text-4xl font-bold text-on-surface">
             Khám phá Đề cập
           </h1>
           <p className="text-base text-on-surface-variant mt-2">
             Theo dõi và quản lý các phản hồi từ đa nền tảng thời gian thực.
           </p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-2 md:gap-3 flex-wrap">
           <button className="flex items-center gap-2 px-4 py-3 bg-surface-container-high text-on-surface-variant rounded-lg border border-outline-variant hover:bg-surface-container-highest transition-all font-medium text-sm">
             <span className="material-symbols-outlined text-lg">
               file_download

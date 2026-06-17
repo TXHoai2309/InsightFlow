@@ -42,7 +42,7 @@ export default function LoginForm() {
     setError("");
     try {
       const credential = await signInWithPopup(auth, googleProvider);
-      
+
       // Lưu hoặc cập nhật thông tin người dùng vào Firestore
       await setDoc(doc(db, "users", credential.user.uid), {
         uid: credential.user.uid,
@@ -69,7 +69,7 @@ export default function LoginForm() {
     setError("");
     try {
       const credential = await signInWithPopup(auth, facebookProvider);
-      
+
       // Lưu hoặc cập nhật thông tin người dùng vào Firestore
       await setDoc(doc(db, "users", credential.user.uid), {
         uid: credential.user.uid,
@@ -201,9 +201,7 @@ export default function LoginForm() {
                 <label htmlFor="password" className="text-[14px] font-medium text-[#464554]">
                   Mật khẩu
                 </label>
-                <Link href="/forgot-password" className="text-[12px] font-medium text-[#4648d4] hover:text-[#645efb] transition-colors">
-                  Quên mật khẩu?
-                </Link>
+
               </div>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-[#767586] group-focus-within:text-[#4648d4] transition-colors">
@@ -255,6 +253,9 @@ export default function LoginForm() {
 
           {/* Footer */}
           <footer className="mt-12 text-center">
+            <Link href="/forgot-password" className="text-[12px] font-medium text-[#4648d4] hover:text-[#645efb] transition-colors">
+              Quên mật khẩu?
+            </Link>
             <p className="text-[14px] text-[#464554]">
               Chưa có tài khoản?{" "}
               <Link href="/register" className="text-[#4648d4] font-semibold hover:underline">
