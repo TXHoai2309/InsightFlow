@@ -6,9 +6,8 @@ import Link from "next/link";
 import {
   signInWithEmailAndPassword,
   signInWithPopup,
-  GoogleAuthProvider,
 } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { auth, googleProvider, facebookProvider } from "@/lib/firebase";
 
 export default function LoginForm() {
   const router = useRouter();
@@ -41,12 +40,23 @@ export default function LoginForm() {
   const handleGoogleLogin = async () => {
     setError("");
     try {
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      await signInWithPopup(auth, googleProvider);
       router.push("/");
     } catch (err: any) {
       if (err.code !== "auth/popup-closed-by-user") {
         setError("Đăng nhập Google thất bại.");
+      }
+    }
+  };
+
+  const handleFacebookLogin = async () => {
+    setError("");
+    try {
+      await signInWithPopup(auth, facebookProvider);
+      router.push("/");
+    } catch (err: any) {
+      if (err.code !== "auth/popup-closed-by-user") {
+        setError("Đăng nhập Facebook thất bại.");
       }
     }
   };
@@ -122,13 +132,14 @@ export default function LoginForm() {
 
             <button
               type="button"
+              onClick={handleFacebookLogin}
               className="flex items-center justify-center gap-2 border border-[#c7c4d7] bg-[#f9f9ff] hover:bg-[#f0f3ff] py-3 rounded-lg transition-all active:scale-95"
             >
-              {/* Apple SVG */}
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.11.8 1.12-.11 2.31-.83 3.69-.73 1.56.09 2.76.68 3.52 1.81-3.23 1.9-2.73 6.08.52 7.36-.61 1.54-1.44 2.87-2.84 3.73zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
+              {/* Facebook SVG */}
+              <svg className="w-5 h-5" fill="#1877F2" viewBox="0 0 24 24">
+                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
               </svg>
-              <span className="text-[14px] font-medium text-[#111c2d]">Apple</span>
+              <span className="text-[14px] font-medium text-[#111c2d]">Facebook</span>
             </button>
           </div>
 
