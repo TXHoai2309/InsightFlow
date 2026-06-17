@@ -1,5 +1,5 @@
 import { initializeApp, getApps } from "firebase/app";
-import { getAuth, GoogleAuthProvider } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -19,5 +19,9 @@ if (!firebaseConfig.apiKey) {
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 
 export const auth = getAuth(app);
+
+// Thiết lập duy trì phiên đăng nhập cục bộ (duy trì ngay cả khi đóng trình duyệt)
+setPersistence(auth, browserLocalPersistence);
+
 export const db = getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();

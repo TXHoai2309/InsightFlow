@@ -1,4 +1,11 @@
+"use client";
+
+import Link from "next/link";
+import { useAuth } from "@/hooks/useAuth";
+
 export default function HeroSection() {
+  const { user, loading } = useAuth();
+
   return (
     <section className="py-[80px] px-6 max-w-[1200px] mx-auto">
       <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
@@ -19,9 +26,21 @@ export default function HeroSection() {
           </p>
 
           <div className="flex flex-wrap gap-4 pt-2">
-            <button className="bg-[#4234b6] text-white px-8 py-3.5 rounded-[10px] font-semibold text-[14px] soft-shadow hover:opacity-90 transition-all">
-              Bắt đầu miễn phí
-            </button>
+            {!loading && user ? (
+              <Link
+                href="/dashboard"
+                className="bg-[#4234b6] text-white px-8 py-3.5 rounded-[10px] font-semibold text-[14px] soft-shadow hover:opacity-90 transition-all flex items-center justify-center"
+              >
+                Vào Dashboard
+              </Link>
+            ) : (
+              <Link
+                href="/login"
+                className="bg-[#4234b6] text-white px-8 py-3.5 rounded-[10px] font-semibold text-[14px] soft-shadow hover:opacity-90 transition-all flex items-center justify-center"
+              >
+                Bắt đầu miễn phí
+              </Link>
+            )}
             <button className="border-2 border-[#4234b6] text-[#4234b6] px-8 py-3.5 rounded-[10px] font-semibold text-[14px] hover:bg-[#f6f2fd] transition-all">
               Xem demo
             </button>
