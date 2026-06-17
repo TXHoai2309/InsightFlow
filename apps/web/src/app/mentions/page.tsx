@@ -19,29 +19,43 @@ export default function MentionsPage() {
 
   return (
     <div className="p-8">
-      <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      {/* Header Section */}
+      <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold text-on-surface">Mentions</h1>
-          <p className="text-sm text-on-surface-variant mt-2 max-w-2xl">
-            Quản lý danh sách đề cập, lọc theo nguồn và trạng thái sentiment, và
-            thực hiện relabel khi cần.
+          <h1 className="text-4xl font-bold text-on-surface">
+            Khám phá Đề cập
+          </h1>
+          <p className="text-base text-on-surface-variant mt-2">
+            Theo dõi và quản lý các phản hồi từ đa nền tảng thời gian thực.
           </p>
         </div>
-        <div className="flex flex-wrap gap-3">
-          <button className="rounded-xl border border-outline-variant bg-white px-5 py-3 text-sm font-semibold text-primary transition hover:bg-surface-container-low">
-            Lọc nhanh
+        <div className="flex gap-3">
+          <button className="flex items-center gap-2 px-4 py-3 bg-surface-container-high text-on-surface-variant rounded-lg border border-outline-variant hover:bg-surface-container-highest transition-all font-medium text-sm">
+            <span className="material-symbols-outlined text-lg">
+              file_download
+            </span>
+            Xuất báo cáo
           </button>
-          <button className="rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90">
+          <button className="flex items-center gap-2 px-4 py-3 bg-primary text-white rounded-lg shadow-sm hover:opacity-90 transition-all font-medium text-sm">
+            <span className="material-symbols-outlined text-lg">refresh</span>
             Làm mới
           </button>
         </div>
       </div>
 
-      <MentionStats mentions={mentions} isLoading={isLoading} />
-
-      <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)] mt-6">
+      {/* Filters Bar - 4 Column Bento Style */}
+      <div className="mb-6">
         <MentionFilters workspaces={workspaces} filters={filters} />
+      </div>
+
+      {/* Mentions Table */}
+      <div className="mb-8">
         <MentionTable mentions={mentions} isLoading={isLoading} />
+      </div>
+
+      {/* Stats Dashboard Widget */}
+      <div>
+        <MentionStats mentions={mentions} isLoading={isLoading} />
       </div>
     </div>
   );
