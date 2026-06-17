@@ -41,9 +41,12 @@ export default function HeroSection() {
                 Bắt đầu miễn phí
               </Link>
             )}
-            <button className="border-2 border-[#4234b6] text-[#4234b6] px-8 py-3.5 rounded-[10px] font-semibold text-[14px] hover:bg-[#f6f2fd] transition-all">
+            <Link 
+              href="/dashboard"
+              className="border-2 border-[#4234b6] text-[#4234b6] px-8 py-3.5 rounded-[10px] font-semibold text-[14px] hover:bg-[#f6f2fd] transition-all flex items-center justify-center"
+            >
               Xem demo
-            </button>
+            </Link>
           </div>
 
           <div className="flex items-center gap-4 pt-6 border-t border-[#c8c4d6] w-fit">

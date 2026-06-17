@@ -7,7 +7,9 @@
 
 import React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { signOut } from "firebase/auth";
+import { auth } from "@/lib/firebase";
 
 interface NavItem {
   href: string;
@@ -22,11 +24,21 @@ const navItems: NavItem[] = [
   { href: "/alerts", label: "Alerts", icon: "notifications_active" },
   { href: "/leads", label: "Leads", icon: "leaderboard" },
   { href: "/reports", label: "Reports", icon: "assessment" },
-  { href: "/settings", label: "Settings", icon: "settings" },
+  { href: "/settings/brand", label: "Brands", icon: "settings" },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      router.push("/");
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
+  };
 
   return (
     <aside className="w-64 bg-white border-r border-outline-variant flex flex-col py-6 px-4 fixed h-screen left-0 top-0 z-40">
@@ -79,6 +91,14 @@ export function Sidebar() {
 
       {/* Bottom Section */}
       <div className="mt-auto space-y-3 pt-4 border-t border-outline-variant">
+        <button
+          onClick={handleLogout}
+          className="w-full flex items-center gap-3 px-4 py-3 rounded text-on-surface-variant hover:bg-error/10 hover:text-error transition-all"
+        >
+          <span className="material-symbols-outlined text-xl">logout</span>
+          <span className="flex-1 text-left font-medium">Đăng xuất</span>
+        </button>
+
         <div className="bg-gradient-to-br from-primary-container to-secondary-container p-4 rounded-lg text-on-primary text-sm">
           <p className="font-bold mb-2">💡 Báo cáo sẵn sàng</p>
           <p className="text-xs mb-3 opacity-90">
