@@ -1,6 +1,7 @@
 "use client";
 
 import type { Metadata } from "next";
+import { usePathname } from "next/navigation";
 import "./globals.css";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
@@ -18,13 +19,16 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+  const hideShell = ["/", "/login", "/register"].includes(pathname || "");
+
   return (
     <html lang="vi">
       <head>
         <title>InsightFlow · Biến dữ liệu thành insight</title>
         <meta
           name="description"
-          content="Nền tảng AI theo dõi và phân tích thương hiệu theo thời gian thực"
+          content="Nền tảng AI theo dõi và phân tích thương hiệu trong thời gian thực"
         />
         <link
           rel="stylesheet"
@@ -38,19 +42,17 @@ export default function RootLayout({
         <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
       </head>
       <body style={{ margin: 0, padding: 0, backgroundColor: "#f9f9ff" }}>
-        <div className="flex h-screen w-screen overflow-hidden">
-          {/* Sidebar */}
-          <Sidebar />
-
-          {/* Main Content */}
-          <div className="flex flex-col flex-1 ml-64">
-            {/* Header */}
-            <Header />
-
-            {/* Main Content Area */}
-            <main className="flex-1 overflow-y-auto mt-16">{children}</main>
+        {hideShell ? (
+          <main className="min-h-screen">{children}</main>
+        ) : (
+          <div className="flex h-screen w-screen overflow-hidden">
+            <Sidebar />
+            <div className="flex flex-col flex-1 ml-64">
+              <Header />
+              <main className="flex-1 overflow-y-auto mt-16">{children}</main>
+            </div>
           </div>
-        </div>
+        )}
       </body>
     </html>
   );
