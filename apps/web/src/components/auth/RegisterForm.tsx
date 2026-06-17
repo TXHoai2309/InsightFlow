@@ -140,7 +140,7 @@ export default function RegisterForm() {
         createdAt: new Date().toISOString(),
       }, { merge: true });
 
-      router.push("/dashboard");
+      router.push("/");
     } catch (err: any) {
       if (err.code !== "auth/popup-closed-by-user") {
         setError("Đăng nhập Google thất bại.");
@@ -163,7 +163,7 @@ export default function RegisterForm() {
         createdAt: new Date().toISOString(),
       }, { merge: true });
 
-      router.push("/dashboard");
+      router.push("/");
     } catch (err: any) {
       if (err.code !== "auth/popup-closed-by-user") {
         setError("Đăng nhập Facebook thất bại.");
