@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import type { Mention } from "@/types/dashboard";
+import { useMentionReassign } from "@/hooks/useMentionReassign";
+import { MentionReassignModal } from "./MentionReassignModal";
 
 interface MentionTableProps {
   mentions: Mention[];
@@ -54,6 +56,15 @@ const topicTags: Record<Mention["topic"], string[]> = {
 };
 
 export function MentionTable({ mentions, isLoading }: MentionTableProps) {
+  const {
+    isOpen,
+    selectedMention,
+    isLoading: isReassigning,
+    openReassignModal,
+    closeReassignModal,
+    submitReassign,
+  } = useMentionReassign();
+
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -77,190 +88,203 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-outline-variant shadow-sm overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm border-collapse">
-          <thead>
-            <tr className="bg-surface-container-low border-b border-outline-variant">
-              <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-24">
-                Nguồn
-              </th>
-              <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-24">
-                Độ tin cậy
-              </th>
-              <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center">
-                Nội dung tóm tắt
-              </th>
-              <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-32">
-                Sắc thái
-              </th>
-              <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-32">
-                Chủ đề
-              </th>
-              <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-40">
-                Thời gian
-              </th>
-              <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-32">
-                Hành động
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-outline-variant/30">
-            {isLoading ? (
-              <tr>
-                <td
-                  colSpan={7}
-                  className="py-20 text-center text-on-surface-variant"
-                >
-                  Đang tải dữ liệu mentions...
-                </td>
+    <>
+      <div className="bg-white rounded-2xl border border-outline-variant shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="bg-surface-container-low border-b border-outline-variant">
+                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-24">
+                  Nguồn
+                </th>
+                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-24">
+                  Độ tin cậy
+                </th>
+                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center">
+                  Nội dung tóm tắt
+                </th>
+                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-32">
+                  Sắc thái
+                </th>
+                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-32">
+                  Chủ đề
+                </th>
+                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-40">
+                  Thời gian
+                </th>
+                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-32">
+                  Hành động
+                </th>
               </tr>
-            ) : mentions.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={7}
-                  className="py-20 text-center text-on-surface-variant"
-                >
-                  Không tìm thấy mention phù hợp với bộ lọc.
-                </td>
-              </tr>
-            ) : (
-              mentions.map((mention) => {
-                const { timeStr, relativeTime } = formatTime(
-                  mention.created_at,
-                );
-                const tags = topicTags[mention.topic] || [];
-
-                return (
-                  <tr
-                    key={mention.id}
-                    className="hover:bg-surface-container-low transition-colors"
+            </thead>
+            <tbody className="divide-y divide-outline-variant/30">
+              {isLoading ? (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="py-20 text-center text-on-surface-variant"
                   >
-                    {/* Platform */}
-                    <td className="px-4 py-4 align-top text-center">
-                      <div className="flex items-center justify-center">
-                        <span
-                          className={`material-symbols-outlined ${platformIconMap[mention.platform].color}`}
-                        >
-                          {platformIconMap[mention.platform].icon}
-                        </span>
-                      </div>
-                    </td>
+                    Đang tải dữ liệu mentions...
+                  </td>
+                </tr>
+              ) : mentions.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="py-20 text-center text-on-surface-variant"
+                  >
+                    Không tìm thấy mention phù hợp với bộ lọc.
+                  </td>
+                </tr>
+              ) : (
+                mentions.map((mention) => {
+                  const { timeStr, relativeTime } = formatTime(
+                    mention.created_at,
+                  );
+                  const tags = topicTags[mention.topic] || [];
 
-                    {/* Credibility Score with Progress Bar */}
-                    <td className="px-4 py-4 align-top">
-                      <div className="flex flex-col gap-2">
-                        <span className="font-bold text-on-surface text-center">
-                          {Math.round(mention.credibility_score * 100)}%
-                        </span>
-                        <div className="w-24 h-2 bg-surface-container rounded-full overflow-hidden">
-                          <div
-                            className="bg-primary h-full rounded-full"
-                            style={{
-                              width: `${mention.credibility_score * 100}%`,
-                            }}
-                          />
-                        </div>
-                      </div>
-                    </td>
-
-                    {/* Content */}
-                    <td className="px-4 py-4 align-top">
-                      <Link
-                        href={mention.url || "#"}
-                        target="_blank"
-                        className="text-sm leading-relaxed line-clamp-2 text-on-surface hover:text-primary"
-                      >
-                        "{mention.content}"
-                      </Link>
-                      <div className="mt-2 flex gap-2 flex-wrap">
-                        {tags.map((tag) => (
+                  return (
+                    <tr
+                      key={mention.id}
+                      className="hover:bg-surface-container-low transition-colors"
+                    >
+                      {/* Platform */}
+                      <td className="px-4 py-4 align-top text-center">
+                        <div className="flex items-center justify-center">
                           <span
-                            key={tag}
-                            className="px-2 py-1 bg-surface-container text-outline rounded text-xs font-bold uppercase"
+                            className={`material-symbols-outlined ${platformIconMap[mention.platform].color}`}
                           >
-                            {tag}
+                            {platformIconMap[mention.platform].icon}
                           </span>
-                        ))}
-                      </div>
-                    </td>
+                        </div>
+                      </td>
 
-                    {/* Sentiment */}
-                    <td className="px-4 py-4 align-top text-center">
-                      <span
-                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${sentimentMap[mention.sentiment].className}`}
-                      >
-                        <span
-                          className="material-symbols-outlined text-sm"
-                          style={{ fontVariationSettings: '"FILL" 1' }}
+                      {/* Credibility Score with Progress Bar */}
+                      <td className="px-4 py-4 align-top">
+                        <div className="flex flex-col gap-2">
+                          <span className="font-bold text-on-surface text-center">
+                            {Math.round(mention.credibility_score * 100)}%
+                          </span>
+                          <div className="w-24 h-2 bg-surface-container rounded-full overflow-hidden">
+                            <div
+                              className="bg-primary h-full rounded-full"
+                              style={{
+                                width: `${mention.credibility_score * 100}%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Content */}
+                      <td className="px-4 py-4 align-top">
+                        <Link
+                          href={mention.url || "#"}
+                          target="_blank"
+                          className="text-sm leading-relaxed line-clamp-2 text-on-surface hover:text-primary"
                         >
-                          {sentimentMap[mention.sentiment].icon}
+                          "{mention.content}"
+                        </Link>
+                        <div className="mt-2 flex gap-2 flex-wrap">
+                          {tags.map((tag) => (
+                            <span
+                              key={tag}
+                              className="px-2 py-1 bg-surface-container text-outline rounded text-xs font-bold uppercase"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+
+                      {/* Sentiment */}
+                      <td className="px-4 py-4 align-top text-center">
+                        <span
+                          className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${sentimentMap[mention.sentiment].className}`}
+                        >
+                          <span
+                            className="material-symbols-outlined text-sm"
+                            style={{ fontVariationSettings: '"FILL" 1' }}
+                          >
+                            {sentimentMap[mention.sentiment].icon}
+                          </span>
+                          {sentimentMap[mention.sentiment].label}
                         </span>
-                        {sentimentMap[mention.sentiment].label}
-                      </span>
-                    </td>
+                      </td>
 
-                    {/* Topic */}
-                    <td className="px-4 py-4 align-top text-center">
-                      <span className="px-2 py-1 bg-primary/5 text-primary rounded text-xs font-bold uppercase border border-primary/10">
-                        {mention.topic}
-                      </span>
-                    </td>
-
-                    {/* Time */}
-                    <td className="px-4 py-4 align-top whitespace-nowrap">
-                      <div className="flex flex-col text-center">
-                        <span className="font-medium text-on-surface text-sm">
-                          {timeStr}
+                      {/* Topic */}
+                      <td className="px-4 py-4 align-top text-center">
+                        <span className="px-2 py-1 bg-primary/5 text-primary rounded text-xs font-bold uppercase border border-primary/10">
+                          {mention.topic}
                         </span>
-                        <span className="text-xs text-outline">
-                          {relativeTime}
-                        </span>
-                      </div>
-                    </td>
+                      </td>
 
-                    {/* Action */}
-                    <td className="px-4 py-4 align-top text-center">
-                      <button className="px-3 py-2 border border-primary text-primary hover:bg-primary hover:text-white transition-all rounded-lg font-semibold whitespace-nowrap text-xs">
-                        Gán lại
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+                      {/* Time */}
+                      <td className="px-4 py-4 align-top whitespace-nowrap">
+                        <div className="flex flex-col text-center">
+                          <span className="font-medium text-on-surface text-sm">
+                            {timeStr}
+                          </span>
+                          <span className="text-xs text-outline">
+                            {relativeTime}
+                          </span>
+                        </div>
+                      </td>
 
-      {/* Pagination */}
-      <div className="px-4 py-4 bg-surface-bright flex items-center justify-between border-t border-outline-variant">
-        <span className="text-xs text-outline font-medium">
-          Hiển thị 1-{Math.min(mentions.length, 4)} trên tổng số{" "}
-          {mentions.length} đề cập
-        </span>
-        <div className="flex gap-2">
-          <button className="w-8 h-8 flex items-center justify-center rounded border border-outline-variant text-on-surface-variant hover:bg-surface-container transition-colors">
-            <span className="material-symbols-outlined text-lg">
-              chevron_left
-            </span>
-          </button>
-          <button className="w-8 h-8 flex items-center justify-center rounded bg-primary text-white font-medium text-sm">
-            1
-          </button>
-          <button className="w-8 h-8 flex items-center justify-center rounded border border-outline-variant text-on-surface-variant hover:bg-surface-container transition-colors font-medium text-sm">
-            2
-          </button>
-          <button className="w-8 h-8 flex items-center justify-center rounded border border-outline-variant text-on-surface-variant hover:bg-surface-container transition-colors font-medium text-sm">
-            3
-          </button>
-          <button className="w-8 h-8 flex items-center justify-center rounded border border-outline-variant text-on-surface-variant hover:bg-surface-container transition-colors">
-            <span className="material-symbols-outlined text-lg">
-              chevron_right
-            </span>
-          </button>
+                      {/* Action */}
+                      <td className="px-4 py-4 align-top text-center">
+                        <button
+                          onClick={() => openReassignModal(mention)}
+                          className="px-3 py-2 border border-primary text-primary hover:bg-primary hover:text-white transition-all rounded-lg font-semibold whitespace-nowrap text-xs"
+                        >
+                          Gán lại
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        <div className="px-4 py-4 bg-surface-bright flex items-center justify-between border-t border-outline-variant">
+          <span className="text-xs text-outline font-medium">
+            Hiển thị 1-{Math.min(mentions.length, 4)} trên tổng số{" "}
+            {mentions.length} đề cập
+          </span>
+          <div className="flex gap-2">
+            <button className="w-8 h-8 flex items-center justify-center rounded border border-outline-variant text-on-surface-variant hover:bg-surface-container transition-colors">
+              <span className="material-symbols-outlined text-lg">
+                chevron_left
+              </span>
+            </button>
+            <button className="w-8 h-8 flex items-center justify-center rounded bg-primary text-white font-medium text-sm">
+              1
+            </button>
+            <button className="w-8 h-8 flex items-center justify-center rounded border border-outline-variant text-on-surface-variant hover:bg-surface-container transition-colors font-medium text-sm">
+              2
+            </button>
+            <button className="w-8 h-8 flex items-center justify-center rounded border border-outline-variant text-on-surface-variant hover:bg-surface-container transition-colors font-medium text-sm">
+              3
+            </button>
+            <button className="w-8 h-8 flex items-center justify-center rounded border border-outline-variant text-on-surface-variant hover:bg-surface-container transition-colors">
+              <span className="material-symbols-outlined text-lg">
+                chevron_right
+              </span>
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+
+      <MentionReassignModal
+        mention={selectedMention}
+        isOpen={isOpen}
+        onClose={closeReassignModal}
+        onSubmit={submitReassign}
+        isLoading={isReassigning}
+      />
+    </>
   );
 }
