@@ -6,9 +6,23 @@
  */
 
 import React, { useState } from "react";
+import { useAuth } from "@/hooks/useAuth";
 
 export function Header() {
   const [showNotifications, setShowNotifications] = useState(false);
+  const { user } = useAuth();
+
+  // Hàm lấy tên viết tắt (Initials) từ Full Name
+  // Ví dụ: "Lê Minh" -> "LM", "Trần Văn A" -> "TA"
+  const getInitials = (name: string | null | undefined) => {
+    if (!name) return "U"; // Mặc định là User
+    const parts = name.trim().split(" ");
+    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
+
+  const userName = user?.displayName || user?.email?.split("@")[0] || "Guest";
+  const initials = getInitials(user?.displayName || userName);
 
   return (
     <header className="h-16 bg-white border-b border-outline-variant flex justify-between items-center px-8 shadow-sm fixed top-0 left-64 right-0 z-30">
@@ -86,11 +100,13 @@ export function Header() {
         {/* User Profile */}
         <div className="flex items-center gap-3 pl-6 border-l border-outline-variant">
           <div className="text-right">
-            <p className="font-bold text-sm text-on-surface">Minh Trần</p>
-            <p className="text-xs text-on-surface-variant">Administrator</p>
+            <p className="font-bold text-sm text-on-surface">{userName}</p>
+            <p className="text-xs text-on-surface-variant">
+              {user ? "Administrator" : "Guest"}
+            </p>
           </div>
-          <div className="w-10 h-10 rounded-full border-2 border-primary-container bg-primary-fixed-dim flex items-center justify-center font-bold text-primary">
-            MT
+          <div className="w-10 h-10 rounded-full border-2 border-primary-container bg-primary-fixed-dim flex items-center justify-center font-bold text-primary uppercase">
+            {initials}
           </div>
         </div>
       </div>
