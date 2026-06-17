@@ -3,9 +3,18 @@
 Tất cả các thay đổi đáng chú ý đối với dự án này sẽ được ghi lại trong file này.
 Định dạng dựa trên [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) và dự án này tuân thủ [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+Ghi chú về nhãn mục CHANGELOG:
+
+- `Added`: tính năng mới, nội dung mới hoặc tài nguyên mới được thêm vào.
+- `Changed`: thay đổi đáng kể đối với hành vi hoặc cấu trúc hiện có.
+- `Deprecated`: tính năng hoặc API bị cảnh báo sẽ không còn được hỗ trợ trong tương lai.
+- `Removed`: tính năng hoặc nội dung đã được loại bỏ hoàn toàn.
+- `Fixed`: lỗi và vấn đề đã được sửa.
+- `Security`: cải tiến liên quan đến bảo mật hoặc sửa lỗi bảo mật.
+
 ---
 
-## [Unreleased]
+## [Unreleased] - 2026-06-16
 
 > Ghi chú: phần sau đây phản ánh các thay đổi đã được thực hiện trong workspace tính đến thời điểm hiện tại (triển khai Dashboard, thành phần giao diện, cấu hình build và sửa lỗi Chart.js). Các mục bên dưới mô tả các file và thay đổi kỹ thuật đã thêm/sửa.
 
