@@ -24,7 +24,7 @@ export default function LoginForm() {
     setError("");
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      router.push("/dashboard");
+      router.push("/");
     } catch (err: any) {
       const msg: Record<string, string> = {
         "auth/user-not-found": "Email không tồn tại.",
@@ -43,7 +43,7 @@ export default function LoginForm() {
     try {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
-      router.push("/dashboard");
+      router.push("/");
     } catch (err: any) {
       if (err.code !== "auth/popup-closed-by-user") {
         setError("Đăng nhập Google thất bại.");
