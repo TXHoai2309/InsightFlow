@@ -19,6 +19,7 @@ export interface Mention {
     | "experience"
     | "legal"
     | "operation"
+    | "marketing"
     | "competitor"
     | "other";
   credibility_score: number;
@@ -93,4 +94,5 @@ export interface DashboardFilters {
   time_range: "24h" | "7d" | "30d";
   platform: "all" | "facebook" | "tiktok" | "news" | "youtube";
   sentiment: "all" | "positive" | "negative" | "neutral";
+  topic: "all" | Mention["topic"];
 }
