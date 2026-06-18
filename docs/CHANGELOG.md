@@ -14,6 +14,40 @@ Ghi chú về nhãn mục CHANGELOG:
 
 ---
 
+### 2026-06-17
+
+- Giao diện Mentions: hoàn thiện layout và component chính (filters, stats, table, reassign modal) và hook tái phân công.
+  - `apps/web/src/app/mentions/page.tsx`
+  - `apps/web/src/components/mentions/MentionFilters.tsx`
+  - `apps/web/src/components/mentions/MentionStats.tsx`
+  - `apps/web/src/components/mentions/MentionTable.tsx`
+  - `apps/web/src/components/mentions/MentionReassignModal.tsx`
+  - `apps/web/src/components/mentions/index.ts`
+  - `apps/web/src/hooks/useMentionsData.ts`
+  - `apps/web/src/hooks/useMentionReassign.ts`
+
+- Alerts: xây dựng layout trang Alerts.
+  - `apps/web/src/app/alerts/page.tsx`
+
+- Cập nhật trang Reports, Leads, và Settings (brand page) cùng một số thay đổi layout/headers.
+  - `apps/web/src/app/reports/page.tsx`
+  - `apps/web/src/app/leads/page.tsx`
+  - `apps/web/src/app/settings/brand/page.tsx`
+  - `apps/web/src/components/layout/Header.tsx`
+  - `apps/web/src/components/layout/Sidebar.tsx`
+
+- Cập nhật authentication forms và firebase helper.
+  - `apps/web/src/components/auth/LoginForm.tsx`
+  - `apps/web/src/components/auth/RegisterForm.tsx`
+  - `apps/web/src/lib/firebase.ts`
+
+- Thêm/tinh chỉnh assets và hình ảnh cho trang chủ.
+  - `apps/web/public/images/hero-sphere.png`
+  - `apps/web/public/images/test.png`
+  - `apps/web/src/components/home/HeroSection.tsx`
+
+- Các chỉnh sửa build/khác: cập nhật `apps/web/package-lock.json`, sửa một số lỗi layout chung.
+
 ## [Unreleased] - 2026-06-16
 
 > Ghi chú: phần sau đây phản ánh các thay đổi đã được thực hiện trong workspace tính đến thời điểm hiện tại (triển khai Dashboard, thành phần giao diện, cấu hình build và sửa lỗi Chart.js). Các mục bên dưới mô tả các file và thay đổi kỹ thuật đã thêm/sửa.
