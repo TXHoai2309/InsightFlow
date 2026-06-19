@@ -52,17 +52,17 @@ function AtmosphereDots() {
 // ─── Password strength indicator ──────────────────────────────────────────────
 function getPasswordStrength(pw: string): { label: string; color: string; width: string } {
   if (pw.length === 0) return { label: "", color: "", width: "0%" };
-  if (pw.length < 6)   return { label: "Yếu", color: "#ba1a1a", width: "25%" };
-  if (pw.length < 10)  return { label: "Trung bình", color: "#904900", width: "60%" };
+  if (pw.length < 6) return { label: "Yếu", color: "#ba1a1a", width: "25%" };
+  if (pw.length < 10) return { label: "Trung bình", color: "#904900", width: "60%" };
   return { label: "Mạnh", color: "#1a7a4a", width: "100%" };
 }
 
 // ─── Firebase error messages ───────────────────────────────────────────────────
 const FIREBASE_ERRORS: Record<string, string> = {
   "auth/email-already-in-use": "Tài khoản này đã tồn tại. Hãy quay lại đăng nhập.",
-  "auth/invalid-email":        "Email không hợp lệ.",
-  "auth/weak-password":        "Mật khẩu phải có ít nhất 6 ký tự.",
-  "auth/too-many-requests":    "Quá nhiều yêu cầu. Vui lòng thử lại sau.",
+  "auth/invalid-email": "Email không hợp lệ.",
+  "auth/weak-password": "Mật khẩu phải có ít nhất 6 ký tự.",
+  "auth/too-many-requests": "Quá nhiều yêu cầu. Vui lòng thử lại sau.",
   "auth/popup-closed-by-user": "", // silent — user intentionally closed
 };
 
@@ -70,13 +70,13 @@ const FIREBASE_ERRORS: Record<string, string> = {
 export default function RegisterForm() {
   const router = useRouter();
 
-  const [fullName, setFullName]           = useState("");
-  const [email, setEmail]                 = useState("");
-  const [password, setPassword]           = useState("");
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [error, setError]                 = useState("");
-  const [loading, setLoading]             = useState(false);
-  const [iconFill, setIconFill]           = useState<Record<string, string>>({});
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [iconFill, setIconFill] = useState<Record<string, string>>({});
 
   // Replicate the password-field focus FILL animation from the original HTML
   const handleIconFocus = (id: string) =>
@@ -108,7 +108,7 @@ export default function RegisterForm() {
     try {
       const credential = await createUserWithEmailAndPassword(auth, email, password);
       await updateProfile(credential.user, { displayName: fullName.trim() });
-      
+
       // Lưu thông tin người dùng vào Firestore
       await setDoc(doc(db, "users", credential.user.uid), {
         uid: credential.user.uid,
@@ -139,7 +139,7 @@ export default function RegisterForm() {
         await auth.signOut();
         return;
       }
-      
+
       // Nếu là user mới, lưu vào Firestore
       await setDoc(doc(db, "users", result.user.uid), {
         uid: result.user.uid,
@@ -221,7 +221,7 @@ export default function RegisterForm() {
               <img
                 className="w-full h-[320px] object-cover transition-transform duration-700 group-hover:scale-105"
                 alt="InsightFlow Dashboard Preview"
-                src="/images/hero-sphere.png"
+                src="https://stitch.withgoogle.com/projects/9130814568656963951?node-id=7aca257138b4411894df12bf42794683"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
             </div>
@@ -397,11 +397,10 @@ export default function RegisterForm() {
                         onFocus={() => handleIconFocus("confirm")}
                         onBlur={() => handleIconBlur("confirm")}
                         placeholder="••••••••"
-                        className={`w-full pl-10 pr-4 py-3 rounded-lg border bg-white focus:ring-2 outline-none transition-all text-[16px] placeholder:text-[#767586]/50 ${
-                          confirmPassword && confirmPassword !== password
-                            ? "border-[#ba1a1a] focus:ring-[#ba1a1a]/20 focus:border-[#ba1a1a]"
-                            : "border-[#c7c4d7] focus:ring-[#4648d4]/20 focus:border-[#4648d4]"
-                        }`}
+                        className={`w-full pl-10 pr-4 py-3 rounded-lg border bg-white focus:ring-2 outline-none transition-all text-[16px] placeholder:text-[#767586]/50 ${confirmPassword && confirmPassword !== password
+                          ? "border-[#ba1a1a] focus:ring-[#ba1a1a]/20 focus:border-[#ba1a1a]"
+                          : "border-[#c7c4d7] focus:ring-[#4648d4]/20 focus:border-[#4648d4]"
+                          }`}
                       />
                       {/* Match indicator */}
                       {confirmPassword.length > 0 && (

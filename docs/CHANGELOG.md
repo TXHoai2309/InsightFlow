@@ -3,15 +3,6 @@
 Tất cả các thay đổi đáng chú ý đối với dự án này sẽ được ghi lại trong file này.
 Định dạng dựa trên [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) và dự án này tuân thủ [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-Ghi chú về nhãn mục CHANGELOG:
-
-- `Added`: tính năng mới, nội dung mới hoặc tài nguyên mới được thêm vào.
-- `Changed`: thay đổi đáng kể đối với hành vi hoặc cấu trúc hiện có.
-- `Deprecated`: tính năng hoặc API bị cảnh báo sẽ không còn được hỗ trợ trong tương lai.
-- `Removed`: tính năng hoặc nội dung đã được loại bỏ hoàn toàn.
-- `Fixed`: lỗi và vấn đề đã được sửa.
-- `Security`: cải tiến liên quan đến bảo mật hoặc sửa lỗi bảo mật.
-
 ---
 
 ## [Unreleased] - 2026-06-19
@@ -37,38 +28,64 @@ Ghi chú về nhãn mục CHANGELOG:
 
 ## [Unreleased] - 2026-06-16
 
-> Ghi chú: phần sau đây phản ánh các thay đổi đã được thực hiện trong workspace tính đến thời điểm hiện tại (triển khai Dashboard, thành phần giao diện, cấu hình build và sửa lỗi Chart.js). Các mục bên dưới mô tả các file và thay đổi kỹ thuật đã thêm/sửa.
+> Dự án đang ở giai đoạn khởi tạo. Chưa có thay đổi nào được ghi nhận.
+> Các tính năng dưới đây là kế hoạch phát triển dự kiến cho các phiên bản tiếp theo.
 
-### Added / Updated (Unreleased)
+## [1.2.0] - 2026-06-17
 
-- Thêm **Trang Dashboard (US-13)** hoàn chỉnh dưới đường dẫn `apps/web/src/app/dashboard/page.tsx` và các component liên quan:
-  - `apps/web/src/components/dashboard/Dashboard.tsx` (thành phần chính)
-  - `StatCard.tsx`, `SentimentTrend.tsx`, `SentimentDonut.tsx`, `TopSources.tsx`, `TopTopics.tsx`, `DashboardFilters.tsx`, `index.ts`
-- Thêm `apps/web/src/types/dashboard.ts` (định nghĩa TypeScript cho Mention, DashboardStats, Filters, v.v.)
-- Thêm `apps/web/src/stores/dashboard.store.ts` (Zustand store với logic filter và computed getters)
-- Thêm `apps/web/src/hooks/useDashboardData.ts` (hook lấy dữ liệu với mock generators và refetch định kỳ)
-- Thêm layout và điều hướng chính:
-  - `apps/web/src/components/layout/Sidebar.tsx`
-  - `apps/web/src/components/layout/Header.tsx`
-  - Cập nhật `apps/web/src/app/layout.tsx` để tích hợp Sidebar + Header
-- Cập nhật `apps/web/src/app/page.tsx` để redirect root → `/dashboard`
-- Cập nhật CSS hệ thống và design tokens:
-  - `apps/web/src/app/globals.css` (glass-card, tokens, scrollbar)
-  - `apps/web/tailwind.config.ts` (màu chủ đạo: `#4648d4`, spacing, font sizes)
-- Thêm dependencies charting và tích hợp Chart.js:
-  - Cài `chart.js` và `react-chartjs-2`
-  - Sửa lỗi runtime Chart.js bằng cách đăng ký rõ ràng các component/controller (ví dụ `CategoryScale`, `LinearScale`, `LineController`, `ArcElement`/`DoughnutController`, `Tooltip`, `Legend`) trong các file `SentimentTrend.tsx` và `SentimentDonut.tsx` để tránh lỗi: "linear is not a registered scale" và "doughnut is not a registered controller".
-- Sửa lỗi canvas reuse: đảm bảo `chart.destroy()` trước khi khởi tạo lại chart để tránh lỗi "Canvas is already in use".
-- Build production kiểm tra: `npm run build` thành công (tuyến build đã verified trên môi trường dev local của tác giả).
+### Added
+- Thiết kế giao diện màn hình **Dashboard**.
+- Thiết kế giao diện màn hình **Brands**: cấu hình từ khóa theo dõi cho từng thương hiệu.
+- Thiết kế giao diện màn hình **Mentions**: hiển thị chi tiết từng bài đăng, hỗ trợ lọc theo Sentiment, Topic, Platform.
+- Thiết kế giao diện màn hình **Leads**: danh sách Lead được chia theo Tab (Hot, Warm, Cold).
+- Thiết kế giao diện màn hình **Alerts**: hiển thị cảnh báo khủng hoảng.
+- Thiết kế giao diện màn hình **Reports**: danh sách báo cáo.
+- Bổ sung giao diện **Responsive** cho toàn bộ các màn hình trên (Dashboard, Brands, Mentions, Leads, Alerts, Reports), đảm bảo hiển thị tốt trên các kích thước màn hình (desktop, tablet, mobile).
 
-### Notes / Next steps
+## [1.1.0] - 2026-06-16
+- Phiên bản khởi tạo đầu tiên của ứng dụng InsightFlow.
+- Tích hợp Firebase Authentication và Firestore.
+- Giao diện Landing Page cơ bản.
+- Chức năng Đăng nhập/Đăng ký cơ bản.
+### Thêm (Added)
+- Triển khai duy trì phiên đăng nhập (`setPersistence`) với `browserLocalPersistence` trong Firebase, giúp giữ trạng thái đăng nhập lên đến 1 tháng.
+- Thêm lời chào cá nhân hóa "Chào mừng, [Tên người dùng]" và nút Đăng xuất trên thanh điều hướng (`TopNavBar`) khi đã đăng nhập.
+- Thêm logic chuyển hướng động cho các nút "Bắt đầu" trên trang chủ: Chuyển thành "Vào Dashboard" nếu đã đăng nhập.
 
-- Các biểu đồ hiện dùng mock data trong `useDashboardData.ts` — cần thay bằng API thật khi backend có endpoint `/api/dashboard/stats`.
-- Tiếp tục thực hiện: US-14 (Mentions page, phân trang + relabel), US-15 (Leads), US-16 (Alerts), US-17 (Reports), Settings, và tích hợp WebSocket/Realtime.
+### Thay đổi (Changed)
+- Cấu trúc lại luồng chuyển hướng:
+    - Đăng ký thành công -> Chuyển hướng sang trang Đăng nhập (`/login`).
+    - Đăng nhập thành công -> Chuyển hướng về Trang chủ (`/`).
+- Chuyển đổi `HeroSection` và `FinalCTASection` sang Client Components để hỗ trợ xử lý trạng thái đăng nhập thời gian thực.
+- Cập nhật các nút hành động từ `<button>` sang `<Link>` để tối ưu hóa điều hướng trong Next.js.
 
----
+### Sửa lỗi (Fixed)
+- Khắc phục lỗi runtime `useAuth is not a function` do sử dụng React Hooks trong Server Components.
+- Sửa lỗi các nút trên trang chủ không nhận diện được trạng thái phiên đăng nhập hiện tại.
 
-Những thay đổi chi tiết cho từng file đã được commit trong workspace; vui lòng xem mã nguồn tại các đường dẫn nêu trên để kiểm tra chi tiết implement và tích hợp tiếp theo.
+
+
+
+### Added
+- Xây dựng pipeline crawler thu thập dữ liệu công khai từ báo điện tử, Fanpage và Group MXH theo từ khóa tùy biến.
+- Tích hợp Brand Mention Detection — tự động xác định nội dung đề cập đúng thương hiệu, loại bỏ trùng từ khóa ngẫu nhiên.
+- Thiết lập Campaign Management — cấu hình chiến dịch theo dõi riêng biệt cho từng thương hiệu (từ khóa chính, từ đồng nghĩa, tên sản phẩm, chi nhánh).
+- Tích hợp 9 thương hiệu F&B mục tiêu vào hệ thống theo dõi (XLIII Coffee, Maison Marou, Laha Cafe, KATINAT, Phê La, Pizza 4P's, Highlands Coffee, Phúc Long, Cộng Cà Phê).
+- Phát triển AI NLP Engine (fine-tune PhoBERT / multilingual BERT) phân loại cảm xúc 3 trạng thái: Tích cực / Tiêu cực / Trung tính (mục tiêu độ chính xác > 90%).
+- Áp dụng Context Window mở rộng để nhận diện sarcasm và ngôn ngữ lóng tiếng Việt (mục tiêu F1-score > 75%).
+- Xây dựng Topic Tagging tự động — gắn nhãn chủ đề F&B: Chất lượng sản phẩm, Giá cả, Không gian/Vệ sinh, Thái độ phục vụ, Tốc độ giao hàng, Vấn đề vận hành.
+- Triển khai Spam Filter nhị phân ở tầng đầu vào để loại bỏ tin rác, bot comment trước khi vào pipeline NLP.
+- Áp dụng thuật toán MinHash LSH phát hiện và loại trừ nội dung gần trùng lặp (near-duplicate).
+- Xây dựng Crisis Alert Engine — kích hoạt cảnh báo tức thì qua Telegram/Zalo khi mention tiêu cực tăng đột biến (mục tiêu Crisis Alert Latency < 3 phút).
+- Phát triển Dashboard trực quan real-time: tổng lưu lượng mention, tỷ lệ sentiment, bảng xếp hạng nguồn tin, xu hướng biến động theo thời gian.
+- Tự động xuất Báo cáo tóm tắt hàng ngày định dạng PDF/Excel gửi tới người quản lý.
+- Triển khai kiến trúc Event-Driven với Message Queue (Apache Kafka / RabbitMQ) và Kubernetes HPA để xử lý tải đột biến.
+- Phân tầng pipeline thành Fast-path (rule-based < 1 giây) và Deep-path (NLP chuyên sâu 5–10 giây).
+- Thiết lập PII Anonymization Pipeline — tự động ẩn danh hóa thông tin định danh cá nhân trước khi lưu vào cơ sở dữ liệu.
+
+### Security
+- Giới hạn crawler chỉ thu thập dữ liệu công khai, tuân thủ Luật An ninh mạng và nghị định VNDP về bảo vệ dữ liệu cá nhân.
+- Lưu trữ nội dung báo điện tử dưới dạng headline, đoạn tóm tắt ngắn và URL gốc — không sao chép toàn văn bài báo.
 
 ---
 
@@ -77,7 +94,6 @@ Những thay đổi chi tiết cho từng file đã được commit trong worksp
 > _Phiên bản chưa phát hành. Ngày tháng sẽ được cập nhật khi hoàn thành Giai đoạn 1._
 
 ### Added
-
 - Khởi tạo pipeline crawler cơ bản và bản end-to-end demo cho 9 thương hiệu F&B mục tiêu.
 - Thiết lập Brand Mention Detection và Campaign Management ở mức cơ bản.
 
@@ -88,7 +104,6 @@ Những thay đổi chi tiết cho từng file đã được commit trong worksp
 > _Phiên bản chưa phát hành. Ngày tháng sẽ được cập nhật khi hoàn thành MVP._
 
 ### Added
-
 - Phát hành MVP chính thức với đầy đủ 5 tính năng cốt lõi: theo dõi từ khóa, tổng hợp mention, phân loại cảm xúc, cảnh báo Crisis qua Telegram/Zalo, và báo cáo tự động hàng ngày.
 - Hoàn thiện Dashboard real-time và Crisis Alert Engine trên môi trường production.
 - Áp dụng toàn bộ lớp bảo mật dữ liệu (PII Anonymization, tuân thủ VNDP) trên môi trường production.

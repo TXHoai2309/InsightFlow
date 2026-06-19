@@ -10,7 +10,7 @@ import { MentionStats } from "@/components/mentions/MentionStats";
 export default function MentionsPage() {
   useMentionsData({ autoFetch: true, refetchInterval: 120000 });
 
-  const { getFilteredMentions, filters, workspaces, isLoading } =
+  const { getFilteredMentions, filters, workspaces, mentions: allMentions, isLoading } =
     useDashboardStore();
   const mentions = useMemo(
     () => getFilteredMentions(),
@@ -43,9 +43,9 @@ export default function MentionsPage() {
         </div>
       </div>
 
-      {/* Filters Bar - 4 Column Bento Style */}
+      {/* Filters Bar */}
       <div className="mb-6">
-        <MentionFilters workspaces={workspaces} filters={filters} />
+        <MentionFilters workspaces={workspaces} filters={filters} allMentions={allMentions} />
       </div>
 
       {/* Mentions Table */}
