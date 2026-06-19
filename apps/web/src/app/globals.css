@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  scroll-behavior: smooth;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -44,6 +48,18 @@ h6 {
 .glass-card:hover {
   transform: translateY(-4px);
   box-shadow: 0 12px 30px -4px rgba(73, 75, 214, 0.08);
+}
+
+/* Hover lift for industry cards */
+.hover-lift {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.hover-lift:hover {
+  transform: translateY(-8px);
+  box-shadow:
+    0 20px 25px -5px rgba(0, 0, 0, 0.05),
+    0 10px 10px -5px rgba(0, 0, 0, 0.04);
 }
 
 /* Color scheme from DESIGN.md */
