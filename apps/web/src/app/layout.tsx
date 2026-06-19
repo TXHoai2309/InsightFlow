@@ -13,7 +13,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const hideShell = ["/", "/login", "/register"].includes(pathname || "");
+  const hideShell = ["/", "/login", "/register", "/nganh", "/ve-chung-toi", "/profile"].includes(pathname || "");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
