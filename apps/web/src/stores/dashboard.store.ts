@@ -1,10 +1,11 @@
 /**
  * US-13: Dashboard Store
- * Zustand store để quản lý state dashboard
+ * Zustand store quản lý state dashboard với filter thật (workspace, time, platform)
  */
 
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
+import { normalizeBrandName } from "@/lib/services/dashboard";
 import type {
   DashboardStats,
   DashboardFilters,
@@ -14,10 +15,11 @@ import type {
   Workspace,
   TopSource,
   TopTopic,
+  SentimentTrendPoint,
 } from "@/types/dashboard";
 
 interface DashboardState {
-  // Data
+  // ── Raw data từ Firestore ─────────────────────────────────────────────────
   stats: DashboardStats;
   mentions: Mention[];
   alerts: Alert[];
@@ -25,15 +27,16 @@ interface DashboardState {
   workspaces: Workspace[];
   topSources: TopSource[];
   topTopics: TopTopic[];
+  trendData: SentimentTrendPoint[];
 
-  // Filters
+  // ── Filter state ──────────────────────────────────────────────────────────
   filters: DashboardFilters;
 
-  // UI State
+  // ── UI State ──────────────────────────────────────────────────────────────
   isLoading: boolean;
   error: string | null;
 
-  // Actions
+  // ── Actions ───────────────────────────────────────────────────────────────
   setStats: (stats: DashboardStats) => void;
   setMentions: (mentions: Mention[]) => void;
   setAlerts: (alerts: Alert[]) => void;
@@ -41,16 +44,15 @@ interface DashboardState {
   setWorkspaces: (workspaces: Workspace[]) => void;
   setTopSources: (sources: TopSource[]) => void;
   setTopTopics: (topics: TopTopic[]) => void;
+  setTrendData: (trend: SentimentTrendPoint[]) => void;
 
-  // Filter actions
   setFilters: (filters: Partial<DashboardFilters>) => void;
   resetFilters: () => void;
 
-  // Loading & Error
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
 
-  // Computed
+  // ── Computed (client-side filtering) ─────────────────────────────────────
   getFilteredMentions: () => Mention[];
   getFilteredAlerts: () => Alert[];
   getFilteredLeads: () => Lead[];
@@ -64,9 +66,16 @@ const defaultFilters: DashboardFilters = {
   topic: "all",
 };
 
+/** Tính timestamp cutoff từ time_range */
+function getCutoffMs(timeRange: DashboardFilters["time_range"]): number | null {
+  if (timeRange === "all") return null;
+  const ms = { "24h": 1, "7d": 7, "30d": 30 };
+  return Date.now() - ms[timeRange] * 24 * 60 * 60 * 1000;
+}
+
 export const useDashboardStore = create<DashboardState>()(
   subscribeWithSelector((set, get) => ({
-    // Initial state
+    // ── Initial state ───────────────────────────────────────────────────────
     stats: {
       total_mentions: 0,
       positive_count: 0,
@@ -83,11 +92,12 @@ export const useDashboardStore = create<DashboardState>()(
     workspaces: [],
     topSources: [],
     topTopics: [],
+    trendData: [],
     filters: defaultFilters,
     isLoading: false,
     error: null,
 
-    // Setters
+    // ── Setters ─────────────────────────────────────────────────────────────
     setStats: (stats) => set({ stats }),
     setMentions: (mentions) => set({ mentions }),
     setAlerts: (alerts) => set({ alerts }),
@@ -95,6 +105,7 @@ export const useDashboardStore = create<DashboardState>()(
     setWorkspaces: (workspaces) => set({ workspaces }),
     setTopSources: (sources) => set({ topSources: sources }),
     setTopTopics: (topics) => set({ topTopics: topics }),
+    setTrendData: (trendData) => set({ trendData }),
 
     setFilters: (newFilters) =>
       set((state) => ({
@@ -106,7 +117,7 @@ export const useDashboardStore = create<DashboardState>()(
     setLoading: (loading) => set({ isLoading: loading }),
     setError: (error) => set({ error }),
 
-    // Computed
+    // ── Client-side filtered views ──────────────────────────────────────────────
     getFilteredMentions: () => {
       const state = get();
       let filtered = state.mentions;
@@ -151,29 +162,30 @@ export const useDashboardStore = create<DashboardState>()(
     },
 
     getFilteredAlerts: () => {
-      const state = get();
-      let filtered = state.alerts;
-
-      if (state.filters.workspace_id !== "all") {
-        filtered = filtered.filter(
-          (a) => a.workspace_id === state.filters.workspace_id,
-        );
-      }
-
-      return filtered;
+      const { alerts, filters } = get();
+      const cutoff = getCutoffMs(filters.time_range);
+      const normFilter = filters.workspace_id !== "all"
+        ? normalizeBrandName(filters.workspace_id)
+        : null;
+      return alerts.filter((a) => {
+        if (normFilter && normalizeBrandName(a.workspace_id) !== normFilter) return false;
+        if (cutoff !== null && new Date(a.created_at).getTime() < cutoff) return false;
+        return true;
+      });
     },
 
     getFilteredLeads: () => {
-      const state = get();
-      let filtered = state.leads;
-
-      if (state.filters.workspace_id !== "all") {
-        filtered = filtered.filter(
-          (l) => l.workspace_id === state.filters.workspace_id,
-        );
-      }
-
-      return filtered;
+      const { leads, filters } = get();
+      const cutoff = getCutoffMs(filters.time_range);
+      const normFilter = filters.workspace_id !== "all"
+        ? normalizeBrandName(filters.workspace_id)
+        : null;
+      return leads.filter((l) => {
+        if (normFilter && normalizeBrandName(l.workspace_id) !== normFilter) return false;
+        if (filters.platform !== "all" && l.platform !== filters.platform) return false;
+        if (cutoff !== null && new Date(l.created_at).getTime() < cutoff) return false;
+        return true;
+      });
     },
   })),
 );
