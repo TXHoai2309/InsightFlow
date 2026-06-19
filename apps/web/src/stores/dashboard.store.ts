@@ -62,6 +62,8 @@ const defaultFilters: DashboardFilters = {
   workspace_id: "all",
   time_range: "7d",
   platform: "all",
+  sentiment: "all",
+  topic: "all",
 };
 
 /** Tính timestamp cutoff từ time_range */
@@ -117,18 +119,46 @@ export const useDashboardStore = create<DashboardState>()(
 
     // ── Client-side filtered views ──────────────────────────────────────────────
     getFilteredMentions: () => {
-      const { mentions, filters } = get();
-      const cutoff = getCutoffMs(filters.time_range);
-      // Chuẩn hoá workspace filter để so sánh không phân biệt hoa thường và ký tự đặc biệt
-      const normFilter = filters.workspace_id !== "all"
-        ? normalizeBrandName(filters.workspace_id)
-        : null;
-      return mentions.filter((m) => {
-        if (normFilter && normalizeBrandName(m.workspace_id) !== normFilter) return false;
-        if (filters.platform !== "all" && m.platform !== filters.platform) return false;
-        if (cutoff !== null && new Date(m.posted_at).getTime() < cutoff) return false;
-        return true;
-      });
+      const state = get();
+      let filtered = state.mentions;
+
+      // Filter by workspace
+      if (state.filters.workspace_id !== "all") {
+        filtered = filtered.filter(
+          (m) => m.workspace_id === state.filters.workspace_id,
+        );
+      }
+
+      // Filter by platform
+      if (state.filters.platform !== "all") {
+        filtered = filtered.filter(
+          (m) => m.platform === state.filters.platform,
+        );
+      }
+
+      // Filter by sentiment
+      if (state.filters.sentiment !== "all") {
+        filtered = filtered.filter(
+          (m) => m.sentiment === state.filters.sentiment,
+        );
+      }
+
+      // Filter by topic
+      if (state.filters.topic && state.filters.topic !== "all") {
+        filtered = filtered.filter((m) => m.topic === state.filters.topic);
+      }
+
+      // Filter by time_range
+      const now = new Date().getTime();
+      if (state.filters.time_range === "24h") {
+        filtered = filtered.filter((m) => (now - new Date(m.created_at).getTime()) <= 24 * 60 * 60 * 1000);
+      } else if (state.filters.time_range === "7d") {
+        filtered = filtered.filter((m) => (now - new Date(m.created_at).getTime()) <= 7 * 24 * 60 * 60 * 1000);
+      } else if (state.filters.time_range === "30d") {
+        filtered = filtered.filter((m) => (now - new Date(m.created_at).getTime()) <= 30 * 24 * 60 * 60 * 1000);
+      }
+
+      return filtered;
     },
 
     getFilteredAlerts: () => {

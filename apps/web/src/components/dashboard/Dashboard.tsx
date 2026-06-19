@@ -102,12 +102,12 @@ export function Dashboard({
         : { text: "Ổn định", color: "bg-slate-500/10 text-slate-700" };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       {/* Global Filters */}
       <DashboardFilters workspaces={workspaces} />
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
         <StatCard
           title="Tổng lượt nhắc đến"
           value={stats.total_mentions.toLocaleString("vi-VN")}
@@ -160,7 +160,7 @@ export function Dashboard({
         </div>
         <div className="col-span-2">
           {/* SentimentDonut dùng counts từ filtered stats */}
-          <SentimentDonut
+          shboard<SentimentDonut
             positive={stats.positive_count}
             neutral={stats.neutral_count}
             negative={stats.negative_count}
@@ -169,12 +169,12 @@ export function Dashboard({
       </div>
 
       {/* Sources, Topics, AI Summary */}
-      <div className="grid grid-cols-5 gap-6">
-        <div className="col-span-3">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 md:gap-6">
+        <div className="lg:col-span-3">
           <TopSources sources={topSources} />
         </div>
 
-        <div className="col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-4 md:space-y-6">
           <TopTopics topics={topTopics} />
         </div>
       </div>

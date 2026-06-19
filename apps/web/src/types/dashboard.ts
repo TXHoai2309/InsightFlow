@@ -15,6 +15,8 @@ export type Platform =
 
 export interface Mention {
   id: string;
+  workspace_id: string;
+  platform: string;
   workspace_id: string;       // = brand field từ Firestore
   platform: Platform;
   content: string;
@@ -52,6 +54,7 @@ export interface Alert {
 export interface Lead {
   id: string;
   workspace_id: string;
+  platform: string;
   platform: Platform;
   content: string;
   intent: "hot" | "warm" | "cold" | "none";
@@ -84,6 +87,7 @@ export interface DashboardStats {
 }
 
 export interface TopSource {
+  platform: string;
   platform: Platform;
   count: number;
   percentage: number;
@@ -109,7 +113,9 @@ export interface SentimentTrendPoint {
 
 /** Filter state của Dashboard — không có sentiment (đã bỏ) */
 export interface DashboardFilters {
-  workspace_id: string;            // "all" hoặc brand name cụ thể
-  time_range: "all" | "24h" | "7d" | "30d";
-  platform: "all" | Platform;
+  workspace_id: string; // 'all' or specific workspace
+  time_range: "24h" | "7d" | "30d";
+  platform: string;
+  sentiment: "all" | "positive" | "negative" | "neutral";
+  topic?: "all" | string;
 }
