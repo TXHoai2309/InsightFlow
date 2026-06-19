@@ -61,6 +61,7 @@ const defaultFilters: DashboardFilters = {
   time_range: "7d",
   platform: "all",
   sentiment: "all",
+  topic: "all",
 };
 
 export const useDashboardStore = create<DashboardState>()(
@@ -129,6 +130,21 @@ export const useDashboardStore = create<DashboardState>()(
         filtered = filtered.filter(
           (m) => m.sentiment === state.filters.sentiment,
         );
+      }
+
+      // Filter by topic
+      if (state.filters.topic && state.filters.topic !== "all") {
+        filtered = filtered.filter((m) => m.topic === state.filters.topic);
+      }
+
+      // Filter by time_range
+      const now = new Date().getTime();
+      if (state.filters.time_range === "24h") {
+        filtered = filtered.filter((m) => (now - new Date(m.created_at).getTime()) <= 24 * 60 * 60 * 1000);
+      } else if (state.filters.time_range === "7d") {
+        filtered = filtered.filter((m) => (now - new Date(m.created_at).getTime()) <= 7 * 24 * 60 * 60 * 1000);
+      } else if (state.filters.time_range === "30d") {
+        filtered = filtered.filter((m) => (now - new Date(m.created_at).getTime()) <= 30 * 24 * 60 * 60 * 1000);
       }
 
       return filtered;

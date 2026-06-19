@@ -6,7 +6,7 @@
 export interface Mention {
   id: string;
   workspace_id: string;
-  platform: "facebook" | "tiktok" | "news" | "youtube";
+  platform: string;
   content: string;
   author: string;
   sentiment: "positive" | "negative" | "neutral";
@@ -41,7 +41,7 @@ export interface Alert {
 export interface Lead {
   id: string;
   workspace_id: string;
-  platform: "facebook" | "tiktok" | "news" | "youtube";
+  platform: string;
   content: string;
   intent: "hot" | "warm" | "cold" | "none";
   intent_signals: string[];
@@ -73,7 +73,7 @@ export interface DashboardStats {
 }
 
 export interface TopSource {
-  platform: "facebook" | "tiktok" | "news" | "youtube";
+  platform: string;
   count: number;
   percentage: number;
 }
@@ -91,6 +91,7 @@ export interface TopTopic {
 export interface DashboardFilters {
   workspace_id: string; // 'all' or specific workspace
   time_range: "24h" | "7d" | "30d";
-  platform: "all" | "facebook" | "tiktok" | "news" | "youtube";
+  platform: string;
   sentiment: "all" | "positive" | "negative" | "neutral";
+  topic?: "all" | string;
 }
