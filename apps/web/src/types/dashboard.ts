@@ -21,16 +21,16 @@ export interface Mention {
   author: string;
   sentiment: "positive" | "negative" | "neutral";
   topic:
-    | "quality"
-    | "price"
-    | "service"
-    | "staff"
-    | "delivery"
-    | "experience"
-    | "legal"
-    | "operation"
-    | "competitor"
-    | "other";
+  | "quality"
+  | "price"
+  | "service"
+  | "staff"
+  | "delivery"
+  | "experience"
+  | "legal"
+  | "operation"
+  | "competitor"
+  | "other";
   credibility_score: number;  // 0–100 (từ baseline_confidence × 100)
   created_at: string;         // ISO string (từ crawled_at)
   posted_at: string;          // ISO string (ngày đăng bài thật: post_date / created_at từ nguồn)
@@ -112,4 +112,6 @@ export interface DashboardFilters {
   workspace_id: string;            // "all" hoặc brand name cụ thể
   time_range: "all" | "24h" | "7d" | "30d";
   platform: "all" | Platform;
+  sentiment: "all" | "positive" | "negative" | "neutral";
+  topic?: "all" | string;
 }
