@@ -24,25 +24,6 @@ export function Header() {
 
       {/* Right Section */}
       <div className="flex items-center gap-6">
-        {/* Simulation Controls */}
-        <div className="flex items-center gap-2 bg-surface-container-low border border-outline-variant/80 rounded-lg px-3 py-1.5">
-          <span className="text-xs font-bold text-on-surface-variant uppercase">
-            Giả lập:
-          </span>
-          <button
-            onClick={() => alert("Triggered Hot Lead simulation")}
-            className="px-2.5 py-1 bg-primary text-white text-xs font-bold rounded hover:opacity-90 transition-all"
-          >
-            + Lead
-          </button>
-          <button
-            onClick={() => alert("Triggered Crisis Alert simulation")}
-            className="px-2.5 py-1 bg-error text-white text-xs font-bold rounded hover:opacity-90 transition-all"
-          >
-            + Alert
-          </button>
-        </div>
-
         {/* Notifications */}
         <div className="relative">
           <button
