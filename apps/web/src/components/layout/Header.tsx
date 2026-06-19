@@ -138,6 +138,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
           </div>
         </div>
       </div>
+      </div>
 
       {/* Mobile search bar — slide down khi mở */}
       {showSearch && (
