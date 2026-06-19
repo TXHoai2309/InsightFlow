@@ -29,6 +29,7 @@ export interface Mention {
   | "experience"
   | "legal"
   | "operation"
+  | "marketing"
   | "competitor"
   | "other";
   credibility_score: number;  // 0–100 (từ baseline_confidence × 100)
