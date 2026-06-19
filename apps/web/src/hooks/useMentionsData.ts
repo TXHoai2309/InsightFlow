@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import type { Mention, Workspace, DashboardStats } from "@/types/dashboard";
+import { collection, getDocs } from "firebase/firestore";
+import { secondDb } from "@/lib/firebase";
 
 const now = () => new Date();
 
@@ -198,7 +200,63 @@ export function useMentionsData(options: UseMentionsOptions = {}) {
   const fetchMentions = async () => {
     try {
       setLoading(true);
-      const mentions = generateMockMentions();
+      
+      // Fetch from Firebase
+      let fetchedMentions: Mention[] = [];
+      try {
+        const mentionsRef = collection(secondDb, "mentions_nlp_demo");
+        const snapshot = await getDocs(mentionsRef);
+
+        fetchedMentions = snapshot.docs.map(doc => {
+          const data = doc.data();
+          
+          // Map platform from source
+          let platform = data.source || "unknown";
+          
+          // Map workspace from brand
+          let workspace_id = "ws-1";
+          const brandStr = String(data.brand || "").toLowerCase();
+          if (brandStr.includes("highland")) workspace_id = "ws-1";
+          else if (brandStr.includes("phúc long") || brandStr.includes("phuclong")) workspace_id = "ws-2";
+          else if (brandStr.includes("katinat")) workspace_id = "ws-3";
+          else workspace_id = data.brand || "ws-1";
+
+          // Normalize sentiment to valid enum values
+          const rawSentiment = String(data.baseline_sentiment || data.sentiment || "").toLowerCase();
+          let sentiment: Mention["sentiment"] = "neutral";
+          if (rawSentiment.includes("positive") || rawSentiment.includes("pos")) sentiment = "positive";
+          else if (rawSentiment.includes("negative") || rawSentiment.includes("neg")) sentiment = "negative";
+
+          // Normalize topic to valid enum values
+          const rawTopic = String(data.baseline_topic || data.topic || "").toLowerCase();
+          const validTopics: Mention["topic"][] = ["quality", "price", "service", "staff", "delivery", "experience", "legal", "operation", "competitor", "other"];
+          const topic: Mention["topic"] = validTopics.find(t => rawTopic.includes(t)) || "other";
+
+          // Use posted_at if available, fallback to analyzed_at or crawled_at
+          let timeStr = data.posted_at;
+          if (!timeStr || timeStr === "") {
+            timeStr = data.analyzed_at || data.crawled_at || data.created_at || new Date().toISOString();
+          }
+
+          return {
+            id: doc.id,
+            workspace_id: workspace_id,
+            platform: platform,
+            content: data.content || data.text || "(Không có nội dung)",
+            author: data.author_name || data.author || "Khách hàng",
+            sentiment,
+            topic,
+            credibility_score: parseFloat(data.baseline_confidence) || data.credibility_score || 0.8,
+            created_at: timeStr,
+            url: data.url || "",
+          } as Mention;
+        });
+      } catch (err) {
+        console.error("Error fetching from Firebase:", err);
+      }
+
+      // Use fetched data or fallback to mock if empty
+      const mentions = fetchedMentions.length > 0 ? fetchedMentions : generateMockMentions();
       const workspaces = generateMockWorkspaces();
 
       setMentions(mentions);

@@ -1,5 +1,4 @@
-"use client";
-
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import type { Mention } from "@/types/dashboard";
 import { useMentionReassign } from "@/hooks/useMentionReassign";
@@ -11,13 +10,18 @@ interface MentionTableProps {
 }
 
 const platformIconMap: Record<
-  Mention["platform"],
+  string,
   { icon: string; color: string }
 > = {
   facebook: { icon: "face", color: "text-blue-600" },
   tiktok: { icon: "music_video", color: "text-pink-600" },
   news: { icon: "newspaper", color: "text-slate-600" },
   youtube: { icon: "play_circle", color: "text-red-600" },
+  google_maps: { icon: "location_on", color: "text-green-600" },
+};
+
+const getPlatformIcon = (platformStr: string) => {
+  return platformIconMap[platformStr.toLowerCase()] || { icon: "public", color: "text-gray-600" };
 };
 
 const sentimentMap: Record<
@@ -66,6 +70,27 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
     submitReassign,
   } = useMentionReassign();
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+  
+  // Reset page when mentions change (e.g. filters applied)
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [mentions]);
+
+  const totalPages = Math.ceil(mentions.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage, mentions.length);
+  const currentMentions = mentions.slice(startIndex, endIndex);
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) setCurrentPage(prev => prev + 1);
+  };
+
+  const handlePrevPage = () => {
+    if (currentPage > 1) setCurrentPage(prev => prev - 1);
+  };
+
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -97,12 +122,12 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
             <div className="py-20 text-center text-on-surface-variant">
               Đang tải dữ liệu mentions...
             </div>
-          ) : mentions.length === 0 ? (
+          ) : currentMentions.length === 0 ? (
             <div className="py-20 text-center text-on-surface-variant">
               Không tìm thấy mention phù hợp với bộ lọc.
             </div>
           ) : (
-            mentions.map((mention) => {
+            currentMentions.map((mention) => {
               const { timeStr, relativeTime } = formatTime(mention.created_at);
               const tags = topicTags[mention.topic] || [];
 
@@ -111,9 +136,9 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                   <div className="flex justify-between items-start">
                     <div className="flex items-center gap-2">
                       <span
-                        className={`material-symbols-outlined ${platformIconMap[mention.platform].color}`}
+                        className={`material-symbols-outlined ${getPlatformIcon(mention.platform).color}`}
                       >
-                        {platformIconMap[mention.platform].icon}
+                        {getPlatformIcon(mention.platform).icon}
                       </span>
                       <span className="text-xs font-bold text-outline uppercase tracking-wider">
                         {mention.platform}
@@ -208,7 +233,7 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                     Đang tải dữ liệu mentions...
                   </td>
                 </tr>
-              ) : mentions.length === 0 ? (
+              ) : currentMentions.length === 0 ? (
                 <tr>
                   <td
                     colSpan={7}
@@ -218,7 +243,7 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                   </td>
                 </tr>
               ) : (
-                mentions.map((mention) => {
+                currentMentions.map((mention) => {
                   const { timeStr, relativeTime } = formatTime(
                     mention.created_at,
                   );
@@ -233,9 +258,9 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                       <td className="px-4 py-4 align-top text-center">
                         <div className="flex items-center justify-center">
                           <span
-                            className={`material-symbols-outlined ${platformIconMap[mention.platform].color}`}
+                            className={`material-symbols-outlined ${getPlatformIcon(mention.platform).color}`}
                           >
-                            {platformIconMap[mention.platform].icon}
+                            {getPlatformIcon(mention.platform).icon}
                           </span>
                         </div>
                       </td>
@@ -330,33 +355,55 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
         </div>
 
         {/* Pagination */}
-        <div className="px-4 py-4 bg-surface-bright flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-outline-variant">
-          <span className="text-xs text-outline font-medium">
-            Hiển thị 1-{Math.min(mentions.length, 4)} trên tổng số{" "}
-            {mentions.length} đề cập
-          </span>
-          <div className="flex gap-2">
-            <button className="w-8 h-8 flex items-center justify-center rounded border border-outline-variant text-on-surface-variant hover:bg-surface-container transition-colors">
-              <span className="material-symbols-outlined text-lg">
-                chevron_left
-              </span>
-            </button>
-            <button className="w-8 h-8 flex items-center justify-center rounded bg-primary text-white font-medium text-sm">
-              1
-            </button>
-            <button className="w-8 h-8 flex items-center justify-center rounded border border-outline-variant text-on-surface-variant hover:bg-surface-container transition-colors font-medium text-sm">
-              2
-            </button>
-            <button className="w-8 h-8 flex items-center justify-center rounded border border-outline-variant text-on-surface-variant hover:bg-surface-container transition-colors font-medium text-sm">
-              3
-            </button>
-            <button className="w-8 h-8 flex items-center justify-center rounded border border-outline-variant text-on-surface-variant hover:bg-surface-container transition-colors">
-              <span className="material-symbols-outlined text-lg">
-                chevron_right
-              </span>
-            </button>
+        {mentions.length > 0 && (
+          <div className="px-4 py-4 bg-surface-bright flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-outline-variant">
+            <span className="text-xs text-outline font-medium">
+              Hiển thị {startIndex + 1}-{endIndex} trên tổng số{" "}
+              {mentions.length} đề cập
+            </span>
+            <div className="flex gap-2">
+              <button 
+                onClick={handlePrevPage}
+                disabled={currentPage === 1}
+                className={`w-8 h-8 flex items-center justify-center rounded border border-outline-variant transition-colors ${currentPage === 1 ? 'text-outline-variant cursor-not-allowed' : 'text-on-surface-variant hover:bg-surface-container'}`}
+              >
+                <span className="material-symbols-outlined text-lg">
+                  chevron_left
+                </span>
+              </button>
+              
+              {/* Show simple pagination numbers (e.g. up to 5 visible) */}
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                // Calculate which page numbers to show to keep the current page roughly in the middle
+                let startPage = Math.max(1, currentPage - 2);
+                if (startPage + 4 > totalPages) startPage = Math.max(1, totalPages - 4);
+                const pageNum = startPage + i;
+                
+                if (pageNum > totalPages) return null;
+                
+                return (
+                  <button 
+                    key={pageNum}
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`w-8 h-8 flex items-center justify-center rounded font-medium text-sm transition-colors ${currentPage === pageNum ? 'bg-primary text-white' : 'border border-outline-variant text-on-surface-variant hover:bg-surface-container'}`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+              
+              <button 
+                onClick={handleNextPage}
+                disabled={currentPage === totalPages}
+                className={`w-8 h-8 flex items-center justify-center rounded border border-outline-variant transition-colors ${currentPage === totalPages ? 'text-outline-variant cursor-not-allowed' : 'text-on-surface-variant hover:bg-surface-container'}`}
+              >
+                <span className="material-symbols-outlined text-lg">
+                  chevron_right
+                </span>
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       <MentionReassignModal
