@@ -14,6 +14,27 @@ Ghi chú về nhãn mục CHANGELOG:
 
 ---
 
+## [Unreleased] - 2026-06-19
+
+### Added / Updated
+
+- **Trang Ngành (`/nganh`)**:
+  - Giao diện Landing độc lập (ẩn Dashboard Shell).
+  - Các component: Hero Section, Feature Grid, Bento Box, CTA Section.
+- **Trang Về chúng tôi (`/ve-chung-toi`)**:
+  - Giao diện Landing độc lập với hiệu ứng Smooth Scroll.
+  - Tích hợp anchor links (`#mission-vision`, `#team`).
+  - Các component: AboutHeroSection, MissionVisionSection, CoreValuesSection, TeamSection (kèm ảnh thực tế sinh bằng AI), PartnersSection, AboutCTASection.
+- **Trang Thông tin cá nhân / Cài đặt tài khoản (`/profile`)**:
+  - Cập nhật Navbar: avatar + tên người dùng có thể click để điều hướng đến profile.
+  - Giao diện 3 tab chuyên biệt:
+    1. **Thông tin cá nhân:** Xem và chỉnh sửa thông tin (tên, số điện thoại, công ty, vai trò). Đồng bộ hai chiều với Firebase Firestore (`users/{uid}`) và Firebase Auth (`displayName`).
+    2. **Bảo mật:** Form đổi mật khẩu hoàn chỉnh sử dụng `reauthenticateWithCredential` và `updatePassword` của Firebase Auth, hiển thị độ mạnh mật khẩu và checklist thời gian thực.
+    3. **Thông báo:** Quản lý tùy chọn nhận thông báo (Email, Push, Khủng hoảng, Báo cáo ngày). Lưu trạng thái người dùng lên Firestore (`users/{uid}/notifications`).
+  - Toàn bộ 3 tab đều hỗ trợ tính năng Hủy (trả về trạng thái cũ) và Lưu (có hiệu ứng loading và thông báo thành công).
+
+---
+
 ## [Unreleased] - 2026-06-16
 
 > Ghi chú: phần sau đây phản ánh các thay đổi đã được thực hiện trong workspace tính đến thời điểm hiện tại (triển khai Dashboard, thành phần giao diện, cấu hình build và sửa lỗi Chart.js). Các mục bên dưới mô tả các file và thay đổi kỹ thuật đã thêm/sửa.
