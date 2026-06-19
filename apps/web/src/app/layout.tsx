@@ -1,18 +1,11 @@
 "use client";
 
-import type { Metadata } from "next";
+import { useState } from "react";
 import { usePathname } from "next/navigation";
 import "./globals.css";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
-
-// export const metadata: Metadata = {
-//   title: {
-//     template: "%s — InsightFlow",
-//     default: "InsightFlow · Biến dữ liệu thành insight",
-//   },
-//   description: "Nền tảng AI theo dõi và phân tích thương hiệu theo thời gian thực",
-// };
+import { MobileNav } from "@/components/layout/MobileNav";
 
 export default function RootLayout({
   children,
@@ -21,6 +14,7 @@ export default function RootLayout({
 }) {
   const pathname = usePathname();
   const hideShell = ["/", "/login", "/register"].includes(pathname || "");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
     <html lang="vi">
@@ -30,6 +24,7 @@ export default function RootLayout({
           name="description"
           content="Nền tảng AI theo dõi và phân tích thương hiệu trong thời gian thực"
         />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Hanken+Grotesk:wght@600;700;800&display=swap"
@@ -46,10 +41,16 @@ export default function RootLayout({
           <main className="min-h-screen">{children}</main>
         ) : (
           <div className="flex h-screen w-screen overflow-hidden">
-            <Sidebar />
-            <div className="flex flex-col flex-1 ml-64">
-              <Header />
-              <main className="flex-1 overflow-y-auto mt-16">{children}</main>
+            <Sidebar
+              isOpen={sidebarOpen}
+              onClose={() => setSidebarOpen(false)}
+            />
+            {/* Trên desktop: ml-64 để nhường chỗ cho sidebar cố định */}
+            {/* Trên mobile: ml-0 vì sidebar là drawer overlay */}
+            <div className="flex flex-col flex-1 md:ml-64">
+              <Header onMenuToggle={() => setSidebarOpen((prev) => !prev)} />
+              <main className="flex-1 overflow-y-auto mt-16 pb-16 md:pb-0">{children}</main>
+              <MobileNav />
             </div>
           </div>
         )}

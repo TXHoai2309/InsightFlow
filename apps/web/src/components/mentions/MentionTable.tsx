@@ -51,6 +51,7 @@ const topicTags: Record<Mention["topic"], string[]> = {
   experience: ["#Experience", "#Feedback"],
   legal: ["#Legal", "#Compliance"],
   operation: ["#Operation", "#Process"],
+  marketing: ["#Marketing", "#Campaign"],
   competitor: ["#Competitor", "#Market"],
   other: ["#Other"],
 };
@@ -90,7 +91,87 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
   return (
     <>
       <div className="bg-white rounded-2xl border border-outline-variant shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile View: Card List */}
+        <div className="md:hidden divide-y divide-outline-variant/30">
+          {isLoading ? (
+            <div className="py-20 text-center text-on-surface-variant">
+              Đang tải dữ liệu mentions...
+            </div>
+          ) : mentions.length === 0 ? (
+            <div className="py-20 text-center text-on-surface-variant">
+              Không tìm thấy mention phù hợp với bộ lọc.
+            </div>
+          ) : (
+            mentions.map((mention) => {
+              const { timeStr, relativeTime } = formatTime(mention.created_at);
+              const tags = topicTags[mention.topic] || [];
+
+              return (
+                <div key={mention.id} className="p-4 flex flex-col gap-4">
+                  <div className="flex justify-between items-start">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`material-symbols-outlined ${platformIconMap[mention.platform].color}`}
+                      >
+                        {platformIconMap[mention.platform].icon}
+                      </span>
+                      <span className="text-xs font-bold text-outline uppercase tracking-wider">
+                        {mention.platform}
+                      </span>
+                    </div>
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${sentimentMap[mention.sentiment].className}`}
+                    >
+                      {sentimentMap[mention.sentiment].label}
+                    </span>
+                  </div>
+
+                  <Link
+                    href={mention.url || "#"}
+                    target="_blank"
+                    className="text-sm leading-relaxed text-on-surface hover:text-primary line-clamp-3"
+                  >
+                    "{mention.content}"
+                  </Link>
+
+                  <div className="flex flex-wrap gap-2">
+                    <span className="px-2 py-0.5 bg-primary/5 text-primary rounded text-[10px] font-bold uppercase border border-primary/10">
+                      {mention.topic}
+                    </span>
+                    {tags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="px-2 py-0.5 bg-surface-container text-outline rounded text-[10px] font-bold uppercase"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center justify-between mt-2 pt-4 border-t border-outline-variant/30">
+                    <div className="flex flex-col">
+                      <span className="text-xs font-medium text-on-surface">
+                        {timeStr}
+                      </span>
+                      <span className="text-[10px] text-outline">
+                        {relativeTime}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => openReassignModal(mention)}
+                      className="px-4 py-2 border border-primary text-primary hover:bg-primary hover:text-white transition-all rounded-lg font-bold text-xs"
+                    >
+                      Gán lại
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Desktop View: Table */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm border-collapse">
             <thead>
               <tr className="bg-surface-container-low border-b border-outline-variant">
@@ -249,7 +330,7 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
         </div>
 
         {/* Pagination */}
-        <div className="px-4 py-4 bg-surface-bright flex items-center justify-between border-t border-outline-variant">
+        <div className="px-4 py-4 bg-surface-bright flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-outline-variant">
           <span className="text-xs text-outline font-medium">
             Hiển thị 1-{Math.min(mentions.length, 4)} trên tổng số{" "}
             {mentions.length} đề cập
