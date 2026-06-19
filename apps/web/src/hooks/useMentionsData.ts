@@ -54,6 +54,9 @@ const generateMockMentions = (): Mention[] => {
       created_at: new Date(
         baseDate.getTime() - 2 * 60 * 60 * 1000,
       ).toISOString(),
+      posted_at: new Date(
+        baseDate.getTime() - 2 * 60 * 60 * 1000,
+      ).toISOString(),
       url: "https://facebook.com/post/1",
     },
     {
@@ -68,6 +71,9 @@ const generateMockMentions = (): Mention[] => {
       topic: "service",
       credibility_score: 0.85,
       created_at: new Date(
+        baseDate.getTime() - 5 * 60 * 60 * 1000,
+      ).toISOString(),
+      posted_at: new Date(
         baseDate.getTime() - 5 * 60 * 60 * 1000,
       ).toISOString(),
       url: "https://tiktok.com/video/2",
@@ -85,6 +91,9 @@ const generateMockMentions = (): Mention[] => {
       created_at: new Date(
         baseDate.getTime() - 11 * 60 * 60 * 1000,
       ).toISOString(),
+      posted_at: new Date(
+        baseDate.getTime() - 11 * 60 * 60 * 1000,
+      ).toISOString(),
       url: "https://vnexpress.net/article-3",
     },
     {
@@ -98,6 +107,9 @@ const generateMockMentions = (): Mention[] => {
       topic: "experience",
       credibility_score: 0.88,
       created_at: new Date(
+        baseDate.getTime() - 22 * 60 * 60 * 1000,
+      ).toISOString(),
+      posted_at: new Date(
         baseDate.getTime() - 22 * 60 * 60 * 1000,
       ).toISOString(),
       url: "https://youtube.com/watch?v=4",
@@ -115,6 +127,9 @@ const generateMockMentions = (): Mention[] => {
       created_at: new Date(
         baseDate.getTime() - 32 * 60 * 60 * 1000,
       ).toISOString(),
+      posted_at: new Date(
+        baseDate.getTime() - 32 * 60 * 60 * 1000,
+      ).toISOString(),
       url: "https://facebook.com/post/5",
     },
     {
@@ -128,6 +143,9 @@ const generateMockMentions = (): Mention[] => {
       topic: "staff",
       credibility_score: 0.69,
       created_at: new Date(
+        baseDate.getTime() - 48 * 60 * 60 * 1000,
+      ).toISOString(),
+      posted_at: new Date(
         baseDate.getTime() - 48 * 60 * 60 * 1000,
       ).toISOString(),
       url: "https://tiktok.com/video/6",
@@ -145,6 +163,9 @@ const generateMockMentions = (): Mention[] => {
       created_at: new Date(
         baseDate.getTime() - 3 * 24 * 60 * 60 * 1000,
       ).toISOString(),
+      posted_at: new Date(
+        baseDate.getTime() - 3 * 24 * 60 * 60 * 1000,
+      ).toISOString(),
       url: "https://cafebiz.vn/article-7",
     },
     {
@@ -158,6 +179,9 @@ const generateMockMentions = (): Mention[] => {
       topic: "operation",
       credibility_score: 0.79,
       created_at: new Date(
+        baseDate.getTime() - 5 * 24 * 60 * 60 * 1000,
+      ).toISOString(),
+      posted_at: new Date(
         baseDate.getTime() - 5 * 24 * 60 * 60 * 1000,
       ).toISOString(),
       url: "https://24h.com.vn/article-8",
@@ -229,7 +253,7 @@ export function useMentionsData(options: UseMentionsOptions = {}) {
 
           // Normalize topic to valid enum values
           const rawTopic = String(data.baseline_topic || data.topic || "").toLowerCase();
-          const validTopics: Mention["topic"][] = ["quality", "price", "service", "staff", "delivery", "experience", "legal", "operation", "competitor", "other"];
+          const validTopics: Mention["topic"][] = ["quality", "price", "service", "staff", "delivery", "experience", "legal", "operation", "marketing", "competitor", "other"];
           const topic: Mention["topic"] = validTopics.find(t => rawTopic.includes(t)) || "other";
 
           // Use posted_at if available, fallback to analyzed_at or crawled_at
