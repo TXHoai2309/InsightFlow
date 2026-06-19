@@ -36,10 +36,10 @@ export function DashboardFilters({ workspaces }: DashboardFiltersProps) {
   );
 
   return (
-    <div className="bg-white border border-outline-variant rounded-xl p-6 shadow-sm mb-6">
-      <div className="flex flex-wrap justify-between items-center gap-6">
+    <div className="bg-white border border-outline-variant rounded-xl p-4 md:p-6 shadow-sm mb-4 md:mb-6">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:justify-between sm:items-center gap-4">
         <div>
-          <h2 className="font-bold text-2xl text-on-surface mb-1">
+          <h2 className="font-bold text-xl md:text-2xl text-on-surface mb-1">
             Tổng quan Dashboard
           </h2>
           <p className="text-sm text-on-surface-variant">
@@ -47,7 +47,7 @@ export function DashboardFilters({ workspaces }: DashboardFiltersProps) {
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-2 md:gap-3 w-full sm:w-auto">
           {/* Workspace Filter */}
           <div className="flex flex-col">
             <label className="text-xs font-bold text-outline uppercase mb-1">

@@ -62,7 +62,10 @@ const defaultFilters: DashboardFilters = {
   workspace_id: "all",
   time_range: "7d",
   platform: "all",
+  sentiment: "all",
+  topic: "all",
 };
+
 
 /** Tính timestamp cutoff từ time_range */
 function getCutoffMs(timeRange: DashboardFilters["time_range"]): number | null {
@@ -129,6 +132,46 @@ export const useDashboardStore = create<DashboardState>()(
         if (cutoff !== null && new Date(m.posted_at).getTime() < cutoff) return false;
         return true;
       });
+      const state = get();
+      let filtered = state.mentions;
+
+      // Filter by workspace
+      if (state.filters.workspace_id !== "all") {
+        filtered = filtered.filter(
+          (m) => m.workspace_id === state.filters.workspace_id,
+        );
+      }
+
+      // Filter by platform
+      if (state.filters.platform !== "all") {
+        filtered = filtered.filter(
+          (m) => m.platform === state.filters.platform,
+        );
+      }
+
+      // Filter by sentiment
+      if (state.filters.sentiment !== "all") {
+        filtered = filtered.filter(
+          (m) => m.sentiment === state.filters.sentiment,
+        );
+      }
+
+      // Filter by topic
+      if (state.filters.topic && state.filters.topic !== "all") {
+        filtered = filtered.filter((m) => m.topic === state.filters.topic);
+      }
+
+      // Filter by time_range
+      const now = new Date().getTime();
+      if (state.filters.time_range === "24h") {
+        filtered = filtered.filter((m) => (now - new Date(m.created_at).getTime()) <= 24 * 60 * 60 * 1000);
+      } else if (state.filters.time_range === "7d") {
+        filtered = filtered.filter((m) => (now - new Date(m.created_at).getTime()) <= 7 * 24 * 60 * 60 * 1000);
+      } else if (state.filters.time_range === "30d") {
+        filtered = filtered.filter((m) => (now - new Date(m.created_at).getTime()) <= 30 * 24 * 60 * 60 * 1000);
+      }
+
+      return filtered;
     },
 
     getFilteredAlerts: () => {

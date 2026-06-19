@@ -1,6 +1,21 @@
-import { redirect } from "next/navigation";
+import TopNavBar from "@/components/home/TopNavBar";
+import HeroSection from "@/components/home/HeroSection";
+import FeaturesSection from "@/components/home/FeaturesSection";
+import DashboardPreviewSection from "@/components/home/DashboardPreviewSection";
+import FinalCTASection from "@/components/home/FinalCTASection";
+import Footer from "@/components/home/Footer";
 
 export default function Home() {
-  // Redirect to dashboard for authenticated users
-  redirect("/dashboard");
+  return (
+    <div className="min-h-screen bg-[#f9f9ff]">
+      <TopNavBar />
+      <div className="pt-16">
+        <HeroSection />
+        <FeaturesSection />
+        <DashboardPreviewSection />
+        <FinalCTASection />
+        <Footer />
+      </div>
+    </div>
+  );
 }

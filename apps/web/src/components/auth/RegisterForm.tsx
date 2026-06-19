@@ -8,7 +8,7 @@ import {
   updateProfile,
   signInWithPopup,
   GoogleAuthProvider,
-  FacebookAuthProvider,
+  getAdditionalUserInfo,
 } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { doc, setDoc } from "firebase/firestore";
@@ -52,17 +52,17 @@ function AtmosphereDots() {
 // ─── Password strength indicator ──────────────────────────────────────────────
 function getPasswordStrength(pw: string): { label: string; color: string; width: string } {
   if (pw.length === 0) return { label: "", color: "", width: "0%" };
-  if (pw.length < 6)   return { label: "Yếu", color: "#ba1a1a", width: "25%" };
-  if (pw.length < 10)  return { label: "Trung bình", color: "#904900", width: "60%" };
+  if (pw.length < 6) return { label: "Yếu", color: "#ba1a1a", width: "25%" };
+  if (pw.length < 10) return { label: "Trung bình", color: "#904900", width: "60%" };
   return { label: "Mạnh", color: "#1a7a4a", width: "100%" };
 }
 
 // ─── Firebase error messages ───────────────────────────────────────────────────
 const FIREBASE_ERRORS: Record<string, string> = {
-  "auth/email-already-in-use": "Email này đã được sử dụng.",
-  "auth/invalid-email":        "Email không hợp lệ.",
-  "auth/weak-password":        "Mật khẩu phải có ít nhất 6 ký tự.",
-  "auth/too-many-requests":    "Quá nhiều yêu cầu. Vui lòng thử lại sau.",
+  "auth/email-already-in-use": "Tài khoản này đã tồn tại. Hãy quay lại đăng nhập.",
+  "auth/invalid-email": "Email không hợp lệ.",
+  "auth/weak-password": "Mật khẩu phải có ít nhất 6 ký tự.",
+  "auth/too-many-requests": "Quá nhiều yêu cầu. Vui lòng thử lại sau.",
   "auth/popup-closed-by-user": "", // silent — user intentionally closed
 };
 
@@ -70,13 +70,13 @@ const FIREBASE_ERRORS: Record<string, string> = {
 export default function RegisterForm() {
   const router = useRouter();
 
-  const [fullName, setFullName]           = useState("");
-  const [email, setEmail]                 = useState("");
-  const [password, setPassword]           = useState("");
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [error, setError]                 = useState("");
-  const [loading, setLoading]             = useState(false);
-  const [iconFill, setIconFill]           = useState<Record<string, string>>({});
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [iconFill, setIconFill] = useState<Record<string, string>>({});
 
   // Replicate the password-field focus FILL animation from the original HTML
   const handleIconFocus = (id: string) =>
@@ -108,7 +108,7 @@ export default function RegisterForm() {
     try {
       const credential = await createUserWithEmailAndPassword(auth, email, password);
       await updateProfile(credential.user, { displayName: fullName.trim() });
-      
+
       // Lưu thông tin người dùng vào Firestore
       await setDoc(doc(db, "users", credential.user.uid), {
         uid: credential.user.uid,
@@ -129,44 +129,30 @@ export default function RegisterForm() {
   const handleGoogle = async () => {
     setError("");
     try {
-      const credential = await signInWithPopup(auth, new GoogleAuthProvider());
-      
-      // Lưu hoặc cập nhật thông tin người dùng vào Firestore
-      await setDoc(doc(db, "users", credential.user.uid), {
-        uid: credential.user.uid,
-        email: credential.user.email,
-        displayName: credential.user.displayName || "",
-        photoURL: credential.user.photoURL || "",
-        createdAt: new Date().toISOString(),
-      }, { merge: true });
+      const result = await signInWithPopup(auth, new GoogleAuthProvider());
+      const additionalInfo = getAdditionalUserInfo(result);
 
-      router.push("/dashboard");
-    } catch (err: any) {
-      if (err.code !== "auth/popup-closed-by-user") {
-        setError("Đăng nhập Google thất bại.");
+      // Nếu tài khoản đã tồn tại (không phải user mới)
+      if (additionalInfo && !additionalInfo.isNewUser) {
+        setError("Tài khoản này đã tồn tại. Hãy quay lại đăng nhập.");
+        // Logout ngay lập tức để không cho phép họ login qua trang register
+        await auth.signOut();
+        return;
       }
-    }
-  };
 
-  // ── Facebook register ──
-  const handleFacebook = async () => {
-    setError("");
-    try {
-      const credential = await signInWithPopup(auth, new FacebookAuthProvider());
-      
-      // Lưu hoặc cập nhật thông tin người dùng vào Firestore
-      await setDoc(doc(db, "users", credential.user.uid), {
-        uid: credential.user.uid,
-        email: credential.user.email,
-        displayName: credential.user.displayName || "",
-        photoURL: credential.user.photoURL || "",
+      // Nếu là user mới, lưu vào Firestore
+      await setDoc(doc(db, "users", result.user.uid), {
+        uid: result.user.uid,
+        email: result.user.email,
+        displayName: result.user.displayName || "",
+        photoURL: result.user.photoURL || "",
         createdAt: new Date().toISOString(),
       }, { merge: true });
 
-      router.push("/dashboard");
+      router.push("/");
     } catch (err: any) {
       if (err.code !== "auth/popup-closed-by-user") {
-        setError("Đăng nhập Facebook thất bại.");
+        setError("Đăng ký với Google thất bại.");
       }
     }
   };
@@ -231,16 +217,12 @@ export default function RegisterForm() {
             </p>
 
             {/* Dashboard preview image */}
-            <div className="mt-8 relative rounded-xl overflow-hidden shadow-xl border border-[#c7c4d7]/30">
-              {/*
-                Thay src dưới bằng ảnh thực của bạn hoặc dùng Next.js <Image> component.
-                Ảnh gốc trong HTML dùng URL Google AI-generated, có thể expire.
-              */}
-              <div className="w-full h-[320px] bg-gradient-to-br from-[#e7eeff] to-[#dee8ff] flex items-center justify-center">
-                <span className="text-[#4648d4] text-[14px] font-medium opacity-60">
-                  Dashboard Preview
-                </span>
-              </div>
+            <div className="mt-8 relative rounded-xl overflow-hidden shadow-xl border border-[#c7c4d7]/30 group">
+              <img
+                className="w-full h-[320px] object-cover transition-transform duration-700 group-hover:scale-105"
+                alt="InsightFlow Dashboard Preview"
+                src="https://stitch.withgoogle.com/projects/9130814568656963951?node-id=7aca257138b4411894df12bf42794683"
+              />
               <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
             </div>
 
@@ -415,11 +397,10 @@ export default function RegisterForm() {
                         onFocus={() => handleIconFocus("confirm")}
                         onBlur={() => handleIconBlur("confirm")}
                         placeholder="••••••••"
-                        className={`w-full pl-10 pr-4 py-3 rounded-lg border bg-white focus:ring-2 outline-none transition-all text-[16px] placeholder:text-[#767586]/50 ${
-                          confirmPassword && confirmPassword !== password
-                            ? "border-[#ba1a1a] focus:ring-[#ba1a1a]/20 focus:border-[#ba1a1a]"
-                            : "border-[#c7c4d7] focus:ring-[#4648d4]/20 focus:border-[#4648d4]"
-                        }`}
+                        className={`w-full pl-10 pr-4 py-3 rounded-lg border bg-white focus:ring-2 outline-none transition-all text-[16px] placeholder:text-[#767586]/50 ${confirmPassword && confirmPassword !== password
+                          ? "border-[#ba1a1a] focus:ring-[#ba1a1a]/20 focus:border-[#ba1a1a]"
+                          : "border-[#c7c4d7] focus:ring-[#4648d4]/20 focus:border-[#4648d4]"
+                          }`}
                       />
                       {/* Match indicator */}
                       {confirmPassword.length > 0 && (
@@ -469,11 +450,11 @@ export default function RegisterForm() {
                 </div>
 
                 {/* Social buttons */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-4">
                   <button
                     type="button"
                     onClick={handleGoogle}
-                    className="flex items-center justify-center gap-2 py-3 border border-[#c7c4d7] rounded-lg text-[14px] font-medium text-[#111c2d] hover:bg-[#e7eeff] transition-colors"
+                    className="w-full flex items-center justify-center gap-2 py-3 border border-[#c7c4d7] rounded-lg text-[14px] font-medium text-[#111c2d] hover:bg-[#e7eeff] transition-colors"
                   >
                     <svg className="w-5 h-5" viewBox="0 0 24 24">
                       <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
@@ -481,18 +462,7 @@ export default function RegisterForm() {
                       <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05" />
                       <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
                     </svg>
-                    Google
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleFacebook}
-                    className="flex items-center justify-center gap-2 py-3 border border-[#c7c4d7] rounded-lg text-[14px] font-medium text-[#111c2d] hover:bg-[#e7eeff] transition-colors"
-                  >
-                    <svg className="w-5 h-5" fill="#1877F2" viewBox="0 0 24 24">
-                      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-                    </svg>
-                    Facebook
+                    Đăng ký với Google
                   </button>
                 </div>
               </form>
