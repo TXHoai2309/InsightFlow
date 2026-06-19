@@ -1,8 +1,10 @@
 "use client";
 
 /**
- * US-13: SentimentTrend Component
- * Hiển thị biểu đồ xu hướng cảm xúc theo ngày (7 ngày qua)
+ * SentimentTrend Component
+ * Hiển thị biểu đồ xu hướng cảm xúc từ dữ liệu thật (không random).
+ * - Nhận filteredMentions từ props (đã qua filter workspace/platform/time)
+ * - Hiển thị theo ngày ĐĂNG bài (posted_at), không phải ngày cào (crawled_at)
  */
 
 import React, { useEffect, useRef } from "react";
@@ -18,8 +20,10 @@ import {
   Legend,
   Filler,
 } from "chart.js";
+import { useDashboardStore } from "@/stores/dashboard.store";
+import { DashboardService } from "@/lib/services/dashboard";
+import type { Mention } from "@/types/dashboard";
 
-// Register ChartJS components
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -29,56 +33,31 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
-  Filler,
+  Filler
 );
 
 interface SentimentTrendProps {
-  timeRange: "24h" | "7d" | "30d";
+  /** Danh sách mentions đã được filter (workspace, platform, time) */
+  filteredMentions: Mention[];
 }
 
-interface TrendData {
-  date: string;
-  positive: number;
-  negative: number;
-  neutral: number;
-}
-
-export function SentimentTrend({ timeRange }: SentimentTrendProps) {
+export function SentimentTrend({ filteredMentions }: SentimentTrendProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const chartRef = useRef<any>(null);
+  const chartRef = useRef<ChartJS | null>(null);
 
-  // Mock data generation based on time range
-  const generateTrendData = (): TrendData[] => {
-    const days = timeRange === "24h" ? 6 : timeRange === "7d" ? 6 : 29;
-    const data: TrendData[] = [];
-
-    for (let i = days; i >= 0; i--) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-
-      data.push({
-        date: date.toLocaleDateString("vi-VN", {
-          day: "2-digit",
-          month: "2-digit",
-        }),
-        positive: Math.floor(Math.random() * 30) + 10,
-        negative: Math.floor(Math.random() * 20) + 5,
-        neutral: Math.floor(Math.random() * 25) + 8,
-      });
-    }
-
-    return data;
-  };
+  // Chỉ lấy time_range từ store để xác định granularity (giờ / ngày)
+  const timeRange = useDashboardStore((s) => s.filters.time_range);
 
   useEffect(() => {
     if (!canvasRef.current) return;
-
-    // Destroy existing chart before creating new one
     if (chartRef.current) {
       chartRef.current.destroy();
+      chartRef.current = null;
     }
 
-    const trendData = generateTrendData();
+    // Tính trend data từ filtered mentions (dùng posted_at trong service)
+    const trendData = DashboardService.calculateSentimentTrend(filteredMentions, timeRange);
+
     const ctx = canvasRef.current.getContext("2d");
     if (!ctx) return;
 
@@ -95,6 +74,7 @@ export function SentimentTrend({ timeRange }: SentimentTrendProps) {
             tension: 0.3,
             fill: true,
             borderWidth: 2,
+            pointRadius: trendData.length > 15 ? 2 : 4,
           },
           {
             label: "Tiêu cực",
@@ -104,6 +84,7 @@ export function SentimentTrend({ timeRange }: SentimentTrendProps) {
             tension: 0.3,
             fill: true,
             borderWidth: 2,
+            pointRadius: trendData.length > 15 ? 2 : 4,
           },
           {
             label: "Trung lập",
@@ -111,55 +92,92 @@ export function SentimentTrend({ timeRange }: SentimentTrendProps) {
             borderColor: "#c7c4d7",
             tension: 0.3,
             borderWidth: 2,
+            pointRadius: trendData.length > 15 ? 2 : 4,
           },
         ],
       },
       options: {
         responsive: true,
-        maintainAspectRatio: true,
+        maintainAspectRatio: false,
         plugins: {
-          legend: {
-            display: false,
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              title: (items) => `Ngày đăng: ${items[0]?.label}`,
+            },
           },
         },
         scales: {
           y: {
             beginAtZero: true,
+            ticks: { precision: 0 },
+          },
+          x: {
+            ticks: {
+              maxRotation: 45,
+              autoSkip: true,
+              maxTicksLimit: 12,
+            },
           },
         },
       },
     });
 
     return () => {
-      if (chartRef.current) {
-        chartRef.current.destroy();
-      }
+      chartRef.current?.destroy();
+      chartRef.current = null;
     };
-  }, [timeRange]);
+  }, [filteredMentions, timeRange]);
+
+  // Tính tổng để hiển thị badge
+  const trend = DashboardService.calculateSentimentTrend(filteredMentions, timeRange);
+  const totalInPeriod = trend.reduce(
+    (acc, d) => ({
+      positive: acc.positive + d.positive,
+      negative: acc.negative + d.negative,
+      neutral: acc.neutral + d.neutral,
+    }),
+    { positive: 0, negative: 0, neutral: 0 }
+  );
 
   return (
     <div className="bg-white border border-outline-variant rounded-lg p-6 shadow-sm h-full">
-      <h4 className="font-bold text-lg text-on-surface mb-4">
-        Xu hướng cảm xúc
-      </h4>
-      <div style={{ position: "relative", height: "300px" }}>
-        <canvas ref={canvasRef}></canvas>
+      <div className="flex items-center justify-between mb-4">
+        <h4 className="font-bold text-lg text-on-surface">Xu hướng cảm xúc</h4>
+        <span className="text-xs text-on-surface-variant">
+          {timeRange === "all"
+            ? "Toàn bộ thời gian"
+            : timeRange === "24h"
+            ? "24 giờ qua"
+            : timeRange === "7d"
+            ? "7 ngày qua"
+            : "30 ngày qua"}
+          {" · theo ngày đăng bài"}
+        </span>
       </div>
-      <div className="mt-4 flex justify-center gap-4 text-xs">
+
+      <div style={{ position: "relative", height: "280px" }}>
+        <canvas ref={canvasRef} />
+      </div>
+
+      <div className="mt-4 flex justify-center gap-6 text-xs">
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-primary"></div>
-          <span>Tích cực</span>
+          <div className="w-3 h-3 rounded-full bg-primary" />
+          <span>
+            Tích cực <span className="font-bold">{totalInPeriod.positive}</span>
+          </span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-error"></div>
-          <span>Tiêu cực</span>
+          <div className="w-3 h-3 rounded-full bg-error" />
+          <span>
+            Tiêu cực <span className="font-bold">{totalInPeriod.negative}</span>
+          </span>
         </div>
         <div className="flex items-center gap-2">
-          <div
-            className="w-3 h-3 rounded-full"
-            style={{ backgroundColor: "#c7c4d7" }}
-          ></div>
-          <span>Trung lập</span>
+          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: "#c7c4d7" }} />
+          <span>
+            Trung lập <span className="font-bold">{totalInPeriod.neutral}</span>
+          </span>
         </div>
       </div>
     </div>

@@ -1,26 +1,38 @@
 "use client";
 
 /**
- * US-13: DashboardFilters Component
- * Bộ lọc global cho Dashboard
+ * DashboardFilters Component
+ * Bộ lọc theo workspace, thời gian, platform (đã bỏ sentiment filter)
  */
 
 import React, { useCallback } from "react";
 import { useDashboardStore } from "@/stores/dashboard.store";
-import type { DashboardFilters, Workspace } from "@/types/dashboard";
+import { PLATFORM_META } from "@/lib/services/dashboard";
+import type { DashboardFilters, Workspace, Platform } from "@/types/dashboard";
 
 interface DashboardFiltersProps {
   workspaces: Workspace[];
 }
 
+// Thứ tự hiển thị platform trong dropdown
+const PLATFORM_ORDER: Platform[] = [
+  "facebook",
+  "tiktok",
+  "youtube",
+  "thread",
+  "be",
+  "google_maps",
+  "news",
+];
+
 export function DashboardFilters({ workspaces }: DashboardFiltersProps) {
   const { filters, setFilters } = useDashboardStore();
 
   const handleFilterChange = useCallback(
-    (key: keyof DashboardFilters, value: any) => {
-      setFilters({ [key]: value });
+    <K extends keyof DashboardFilters>(key: K, value: DashboardFilters[K]) => {
+      setFilters({ [key]: value } as Partial<DashboardFilters>);
     },
-    [setFilters],
+    [setFilters]
   );
 
   return (
@@ -39,16 +51,14 @@ export function DashboardFilters({ workspaces }: DashboardFiltersProps) {
           {/* Workspace Filter */}
           <div className="flex flex-col">
             <label className="text-xs font-bold text-outline uppercase mb-1">
-              Workspace
+              Thương hiệu
             </label>
             <select
               value={filters.workspace_id}
-              onChange={(e) =>
-                handleFilterChange("workspace_id", e.target.value)
-              }
+              onChange={(e) => handleFilterChange("workspace_id", e.target.value)}
               className="px-3 py-2 bg-white border border-outline-variant rounded-lg text-sm focus:ring-1 focus:ring-primary outline-none"
             >
-              <option value="all">Tất cả (F&B)</option>
+              <option value="all">Tất cả thương hiệu</option>
               {workspaces.map((ws) => (
                 <option key={ws.id} value={ws.id}>
                   {ws.brand_name}
@@ -65,10 +75,11 @@ export function DashboardFilters({ workspaces }: DashboardFiltersProps) {
             <select
               value={filters.time_range}
               onChange={(e) =>
-                handleFilterChange("time_range", e.target.value as any)
+                handleFilterChange("time_range", e.target.value as DashboardFilters["time_range"])
               }
               className="px-3 py-2 bg-white border border-outline-variant rounded-lg text-sm focus:ring-1 focus:ring-primary outline-none"
             >
+              <option value="all">Toàn bộ</option>
               <option value="24h">Hôm nay (24h)</option>
               <option value="7d">7 ngày qua</option>
               <option value="30d">30 ngày qua</option>
@@ -78,39 +89,21 @@ export function DashboardFilters({ workspaces }: DashboardFiltersProps) {
           {/* Platform Filter */}
           <div className="flex flex-col">
             <label className="text-xs font-bold text-outline uppercase mb-1">
-              Platform
+              Nền tảng
             </label>
             <select
               value={filters.platform}
               onChange={(e) =>
-                handleFilterChange("platform", e.target.value as any)
+                handleFilterChange("platform", e.target.value as DashboardFilters["platform"])
               }
               className="px-3 py-2 bg-white border border-outline-variant rounded-lg text-sm focus:ring-1 focus:ring-primary outline-none"
             >
-              <option value="all">Tất cả</option>
-              <option value="facebook">Facebook</option>
-              <option value="tiktok">TikTok</option>
-              <option value="news">Báo điện tử</option>
-              <option value="youtube">YouTube</option>
-            </select>
-          </div>
-
-          {/* Sentiment Filter */}
-          <div className="flex flex-col">
-            <label className="text-xs font-bold text-outline uppercase mb-1">
-              Sentiment
-            </label>
-            <select
-              value={filters.sentiment}
-              onChange={(e) =>
-                handleFilterChange("sentiment", e.target.value as any)
-              }
-              className="px-3 py-2 bg-white border border-outline-variant rounded-lg text-sm focus:ring-1 focus:ring-primary outline-none"
-            >
-              <option value="all">Tất cả</option>
-              <option value="positive">Tích cực</option>
-              <option value="neutral">Trung lập</option>
-              <option value="negative">Tiêu cực</option>
+              <option value="all">Tất cả nền tảng</option>
+              {PLATFORM_ORDER.map((p) => (
+                <option key={p} value={p}>
+                  {PLATFORM_META[p].label}
+                </option>
+              ))}
             </select>
           </div>
         </div>
