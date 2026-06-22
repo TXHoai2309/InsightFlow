@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
@@ -9,8 +9,15 @@ import { auth } from "@/lib/firebase";
 
 export default function TopNavBar() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const { user, loading } = useAuth();
   const router = useRouter();
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -22,7 +29,16 @@ export default function TopNavBar() {
   };
 
   return (
-    <nav className="bg-white border-b border-[#E2E4F0] fixed top-0 left-0 right-0 h-16 z-50 font-sans">
+    <nav
+      className="fixed top-0 left-0 right-0 h-16 z-50 font-sans transition-all duration-300"
+      style={{
+        background: scrolled ? "rgba(255,255,255,0.9)" : "#ffffff",
+        backdropFilter: scrolled ? "blur(12px)" : "none",
+        WebkitBackdropFilter: scrolled ? "blur(12px)" : "none",
+        borderBottom: scrolled ? "1px solid rgba(226,228,240,0.8)" : "1px solid #E2E4F0",
+        boxShadow: scrolled ? "0 2px 20px rgba(0,0,0,0.06)" : "none",
+      }}
+    >
       <div className="flex justify-between items-center w-full px-8 max-w-[1200px] mx-auto h-full">
         {/* Logo */}
         <Link href="/" className="flex items-center hover:opacity-80 transition-opacity w-[160px] md:w-[220px] h-full relative overflow-hidden">
@@ -85,15 +101,20 @@ export default function TopNavBar() {
             <>
               <Link
                 href="/login"
-                className="hidden md:block text-[#6C63FF] font-semibold text-[14px] hover:opacity-80 transition-all"
+                className="hidden md:block text-[#6D4CFF] font-semibold text-[14px] hover:opacity-80 transition-all"
               >
                 Đăng nhập
               </Link>
               <Link
                 href="/login"
-                className="flex items-center justify-center bg-[#6C63FF] text-white px-[24px] h-[40px] rounded-[10px] font-semibold text-[14px] hover:bg-[#5A52D5] active:scale-95 transition-all shadow-[0_4px_14px_rgba(108,99,255,0.35)]"
+                className="flex items-center justify-center gap-1.5 text-white px-5 h-[38px] rounded-[10px] font-bold text-[14px] active:scale-95 transition-all"
+                style={{
+                  background: "linear-gradient(135deg, #6D4CFF, #4234b6)",
+                  boxShadow: "0 4px 14px rgba(109,76,255,0.35)",
+                }}
               >
-                Bắt đầu
+                <i className="ti ti-rocket text-[14px]" />
+                Dùng thử miễn phí
               </Link>
             </>
           )}
