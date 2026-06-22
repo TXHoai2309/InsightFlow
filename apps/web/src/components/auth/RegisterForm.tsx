@@ -189,19 +189,14 @@ export default function RegisterForm() {
 
           {/* ── LEFT PANEL (desktop only) ── */}
           <div className="hidden lg:flex lg:col-span-6 flex-col gap-8">
-            <div className="flex items-center gap-2 mb-6">
-              <span
-                className="material-symbols-outlined text-[#4648d4] text-[40px]"
-                style={{ fontVariationSettings: "'FILL' 1" }}
-              >
-                insights
-              </span>
-              <h1
-                className="text-[24px] font-bold text-[#4648d4]"
-                style={{ fontFamily: "'Hanken Grotesk', sans-serif", letterSpacing: "-0.05em" }}
-              >
-                InsightFlow
-              </h1>
+            <div className="flex items-center mb-0">
+              <Link href="/" className="flex hover:opacity-80 transition-opacity w-[340px] h-[120px] relative">
+                <img 
+                  src="/logo.png" 
+                  alt="InsightFlow Logo" 
+                  className="absolute left-0 top-1/2 -translate-y-1/2 h-[220px] max-w-none mix-blend-multiply pointer-events-none" 
+                />
+              </Link>
             </div>
 
             <h2
@@ -221,7 +216,7 @@ export default function RegisterForm() {
               <img
                 className="w-full h-[320px] object-cover transition-transform duration-700 group-hover:scale-105"
                 alt="InsightFlow Dashboard Preview"
-                src="https://stitch.withgoogle.com/projects/9130814568656963951?node-id=7aca257138b4411894df12bf42794683"
+                src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=800&q=80"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
             </div>
@@ -252,19 +247,14 @@ export default function RegisterForm() {
             >
 
               {/* Mobile logo */}
-              <div className="lg:hidden flex items-center justify-center gap-2 mb-8">
-                <span
-                  className="material-symbols-outlined text-[#4648d4] text-[32px]"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >
-                  insights
-                </span>
-                <h1
-                  className="text-[20px] font-bold text-[#4648d4]"
-                  style={{ fontFamily: "'Hanken Grotesk', sans-serif", letterSpacing: "-0.05em" }}
-                >
-                  InsightFlow
-                </h1>
+              <div className="lg:hidden flex items-center justify-center mb-2">
+                <Link href="/" className="flex items-center justify-center hover:opacity-80 transition-opacity w-[340px] h-[120px] relative">
+                  <img 
+                    src="/logo.png" 
+                    alt="InsightFlow Logo" 
+                    className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[220px] max-w-none mix-blend-multiply pointer-events-none" 
+                  />
+                </Link>
               </div>
 
               <div className="text-center lg:text-left mb-8">
