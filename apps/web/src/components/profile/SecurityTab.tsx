@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, ChangeEvent, FormEvent } from "react";
+import { useState, FormEvent } from "react";
 
 interface Props {
   displayName: string;
@@ -8,14 +8,23 @@ interface Props {
 
 type StrengthLevel = 0 | 1 | 2 | 3 | 4;
 
+const strengthLabels = ["Chưa nhập", "Yếu", "Trung bình", "Khá mạnh", "Rất mạnh"];
+
 function getStrengthColor(level: StrengthLevel, barIndex: number): string {
-  if (barIndex >= level) return "bg-[#dee8ff]";
-  if (level <= 1) return "bg-red-500";
-  if (level <= 3) return "bg-amber-500";
-  return "bg-green-600";
+  if (barIndex >= level) return "bg-[#E2E4F0]"; // gray (empty)
+  if (level === 1) return "bg-[#EF4444]"; // red (weak)
+  if (level === 2) return "bg-[#F97316]"; // orange (fair)
+  if (level === 3) return "bg-[#EAB308]"; // yellow (good)
+  return "bg-[#22C55E]"; // green (strong)
 }
 
-const strengthLabels = ["Chưa nhập", "Yếu", "Trung bình", "Khá mạnh", "Rất mạnh"];
+function getStrengthTextColor(level: StrengthLevel): string {
+  if (level === 0) return "text-[#9898B0]";
+  if (level === 1) return "text-[#EF4444]";
+  if (level === 2) return "text-[#F97316]";
+  if (level === 3) return "text-[#EAB308]";
+  return "text-[#22C55E]";
+}
 
 export default function SecurityTab({ displayName }: Props) {
   const [currentPw, setCurrentPw] = useState("");
@@ -80,30 +89,29 @@ export default function SecurityTab({ displayName }: Props) {
   };
 
   const Req = ({ ok, label }: { ok: boolean; label: string }) => (
-    <li className={`flex items-center gap-2 text-[14px] transition-colors ${ok ? "text-green-600" : "text-[#464554]"}`}>
-      <span
-        className="material-symbols-outlined text-[18px]"
-        style={ok ? { fontVariationSettings: "'FILL' 1" } : undefined}
-      >
-        {ok ? "check_circle" : "radio_button_unchecked"}
-      </span>
+    <li className={`flex items-center gap-[8px] text-[13px] transition-colors ${ok ? "text-[#22C55E]" : "text-[#4A4A6A]"}`}>
+      {ok ? (
+        <i className="ti ti-circle-check-filled text-[18px] text-[#22C55E]"></i>
+      ) : (
+        <i className="ti ti-circle text-[18px] text-[#E2E4F0]"></i>
+      )}
       {label}
     </li>
   );
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-10 animate-in fade-in duration-300">
       {/* ── Left: Form ── */}
-      <div className="md:col-span-2 space-y-6">
+      <div className="md:col-span-2 space-y-8">
         <section>
-          <h2 className="text-[20px] leading-[28px] font-semibold text-[#111c2d] mb-6">
+          <h2 className="text-[20px] font-bold text-[#1A1A2E] mb-6">
             Đổi mật khẩu
           </h2>
 
-          <form className="space-y-5" onSubmit={handleSubmit}>
+          <form className="space-y-[24px]" onSubmit={handleSubmit}>
             {/* Current Password */}
-            <div className="space-y-2">
-              <label className="block text-[14px] font-medium text-[#464554]">
+            <div className="flex flex-col gap-[8px]">
+              <label className="text-[11px] font-semibold text-[#9898B0] uppercase tracking-[0.08em]">
                 Mật khẩu hiện tại
               </label>
               <div className="relative">
@@ -112,23 +120,21 @@ export default function SecurityTab({ displayName }: Props) {
                   value={currentPw}
                   onChange={(e) => setCurrentPw(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full px-4 py-3 pr-12 rounded-xl border border-[#c7c4d7] bg-white focus:ring-2 focus:ring-[#4648d4]/20 focus:border-[#4648d4] outline-none transition-all text-[16px]"
+                  className="w-full h-[44px] px-[16px] pr-12 rounded-[10px] border-[1.5px] border-[#E2E4F0] bg-white focus:ring-[3px] focus:ring-[#6C63FF]/12 focus:border-[#6C63FF] outline-none transition-all text-[14px] font-normal text-[#4A4A6A] placeholder:text-[#9898B0]"
                 />
                 <button
                   type="button"
                   onClick={() => setShowCurrent((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#767586] hover:text-[#4648d4] transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9898B0] hover:text-[#6C63FF] transition-colors"
                 >
-                  <span className="material-symbols-outlined text-[20px]">
-                    {showCurrent ? "visibility_off" : "visibility"}
-                  </span>
+                  <i className={`ti ${showCurrent ? "ti-eye-off" : "ti-eye"} text-[18px]`}></i>
                 </button>
               </div>
             </div>
 
             {/* New Password */}
-            <div className="space-y-2">
-              <label className="block text-[14px] font-medium text-[#464554]">
+            <div className="flex flex-col gap-[8px]">
+              <label className="text-[11px] font-semibold text-[#9898B0] uppercase tracking-[0.08em]">
                 Mật khẩu mới
               </label>
               <div className="relative">
@@ -137,39 +143,37 @@ export default function SecurityTab({ displayName }: Props) {
                   value={newPw}
                   onChange={(e) => setNewPw(e.target.value)}
                   placeholder="Nhập mật khẩu mới"
-                  className="w-full px-4 py-3 pr-12 rounded-xl border border-[#c7c4d7] bg-white focus:ring-2 focus:ring-[#4648d4]/20 focus:border-[#4648d4] outline-none transition-all text-[16px]"
+                  className="w-full h-[44px] px-[16px] pr-12 rounded-[10px] border-[1.5px] border-[#E2E4F0] bg-white focus:ring-[3px] focus:ring-[#6C63FF]/12 focus:border-[#6C63FF] outline-none transition-all text-[14px] font-normal text-[#4A4A6A] placeholder:text-[#9898B0]"
                 />
                 <button
                   type="button"
                   onClick={() => setShowNew((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#767586] hover:text-[#4648d4] transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9898B0] hover:text-[#6C63FF] transition-colors"
                 >
-                  <span className="material-symbols-outlined text-[20px]">
-                    {showNew ? "visibility_off" : "visibility"}
-                  </span>
+                  <i className={`ti ${showNew ? "ti-eye-off" : "ti-eye"} text-[18px]`}></i>
                 </button>
               </div>
 
               {/* Strength bars */}
-              <div className="flex gap-1 mt-2">
-                {[0, 1, 2, 3].map((i) => (
+              <div className="flex gap-[4px] mt-2">
+                {[1, 2, 3, 4].map((i) => (
                   <div
                     key={i}
-                    className={`h-1 flex-1 rounded-full transition-all duration-300 ${getStrengthColor(strength, i)}`}
+                    className={`h-[4px] flex-1 rounded-full transition-all duration-300 ${getStrengthColor(strength, i)}`}
                   />
                 ))}
               </div>
-              <p className="text-[12px] text-[#464554] mt-1">
+              <p className="text-[13px] mt-1 text-[#9898B0]">
                 Độ mạnh:{" "}
-                <span className={strength >= 4 ? "text-green-600 font-semibold" : strength >= 2 ? "text-amber-500 font-semibold" : strength >= 1 ? "text-red-500 font-semibold" : ""}>
-                  {newPw ? strengthLabels[strength] : "Chưa nhập"}
+                <span className={`font-semibold ${getStrengthTextColor(strength)}`}>
+                  {strengthLabels[strength]}
                 </span>
               </p>
             </div>
 
             {/* Confirm Password */}
-            <div className="space-y-2">
-              <label className="block text-[14px] font-medium text-[#464554]">
+            <div className="flex flex-col gap-[8px]">
+              <label className="text-[11px] font-semibold text-[#9898B0] uppercase tracking-[0.08em]">
                 Xác nhận mật khẩu mới
               </label>
               <div className="relative">
@@ -178,109 +182,87 @@ export default function SecurityTab({ displayName }: Props) {
                   value={confirmPw}
                   onChange={(e) => setConfirmPw(e.target.value)}
                   placeholder="Nhập lại mật khẩu mới"
-                  className={`w-full px-4 py-3 pr-12 rounded-xl border outline-none transition-all text-[16px] focus:ring-2 focus:ring-[#4648d4]/20 ${
-                    passwordsMatch
-                      ? "border-green-500 focus:border-green-500"
-                      : "border-[#c7c4d7] focus:border-[#4648d4]"
+                  className={`w-full h-[44px] px-[16px] pr-12 rounded-[10px] border-[1.5px] outline-none transition-all text-[14px] font-normal focus:ring-[3px] focus:ring-[#6C63FF]/12 text-[#4A4A6A] placeholder:text-[#9898B0] ${
+                    passwordsMatch && confirmPw.length > 0
+                      ? "border-[#22C55E] focus:border-[#22C55E] focus:ring-[#22C55E]/12"
+                      : "border-[#E2E4F0] focus:border-[#6C63FF]"
                   }`}
                 />
-                {passwordsMatch ? (
-                  <span
-                    className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-green-600 text-[20px]"
-                    style={{ fontVariationSettings: "'FILL' 1" }}
-                  >
-                    check_circle
-                  </span>
+                {passwordsMatch && confirmPw.length > 0 ? (
+                  <i className="ti ti-circle-check-filled absolute right-3 top-1/2 -translate-y-1/2 text-[#22C55E] text-[18px]"></i>
                 ) : (
                   <button
                     type="button"
                     onClick={() => setShowConfirm((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#767586] hover:text-[#4648d4] transition-colors"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9898B0] hover:text-[#6C63FF] transition-colors"
                   >
-                    <span className="material-symbols-outlined text-[20px]">
-                      {showConfirm ? "visibility_off" : "visibility"}
-                    </span>
+                    <i className={`ti ${showConfirm ? "ti-eye-off" : "ti-eye"} text-[18px]`}></i>
                   </button>
                 )}
               </div>
             </div>
 
             {/* Submit buttons */}
-            <div className="flex items-center gap-4 pt-2">
-              <button
-                type="submit"
-                disabled={!currentPw || !passwordsMatch || strength < 3 || isSubmitting}
-                className={`px-8 py-3 rounded-xl text-[14px] font-bold shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 min-w-[150px] ${
-                  submitted
-                    ? "bg-green-500 text-white shadow-green-200"
-                    : "bg-[#4648d4] text-white shadow-[#4648d4]/20 hover:bg-[#6063ee] disabled:opacity-50 disabled:cursor-not-allowed"
-                }`}
-              >
-                {isSubmitting && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-                {!isSubmitting && submitted ? (
-                  <span className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>
-                      check_circle
-                    </span>
-                    Đã cập nhật!
-                  </span>
-                ) : (
-                  !isSubmitting && "Lưu thay đổi"
-                )}
-                {isSubmitting && "Đang lưu..."}
-              </button>
+            <div className="flex justify-end gap-[12px] mt-[32px]">
               <button
                 type="button"
                 onClick={() => { setCurrentPw(""); setNewPw(""); setConfirmPw(""); }}
-                className="px-8 py-3 rounded-xl border border-[#c7c4d7] text-[#464554] text-[14px] font-medium hover:bg-[#f0f3ff] active:scale-95 transition-all"
+                className="bg-transparent text-[#4A4A6A] border-[1.5px] border-[#E2E4F0] rounded-[10px] px-[28px] py-[11px] font-semibold hover:border-[#6C63FF] hover:text-[#6C63FF] transition-colors text-[14px]"
               >
-                Hủy
+                Hủy thay đổi
+              </button>
+              <button
+                type="submit"
+                disabled={!currentPw || !passwordsMatch || strength < 3 || isSubmitting}
+                className={`rounded-[10px] px-[28px] py-[11px] font-semibold text-[14px] flex items-center justify-center gap-[8px] transition-all min-w-[150px] ${
+                  submitted
+                    ? "bg-[#22C55E] text-white"
+                    : "bg-[#6C63FF] text-white hover:bg-[#5A52D5] shadow-[0_4px_14px_rgba(108,99,255,0.35)] disabled:opacity-70 disabled:shadow-none disabled:cursor-not-allowed"
+                }`}
+              >
+                {isSubmitting && <span className="w-[16px] h-[16px] border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                {!isSubmitting && submitted ? (
+                  <span className="flex items-center gap-[8px]">
+                    <i className="ti ti-circle-check-filled text-[18px]"></i>
+                    Đã cập nhật!
+                  </span>
+                ) : (
+                  !isSubmitting && "Lưu mật khẩu"
+                )}
+                {isSubmitting && "Đang lưu..."}
               </button>
             </div>
           </form>
         </section>
 
-        {/* Remote logout */}
-        <div className="mt-10 pt-8 border-t border-[#e7eaf3]">
-          <div className="flex items-center justify-between gap-6">
-            <div>
-              <h4 className="text-[14px] font-semibold text-[#111c2d]">
-                Đăng xuất từ xa
-              </h4>
-              <p className="text-[14px] text-[#464554] mt-1">
-                Nếu bạn nghi ngờ có truy cập lạ, hãy đăng xuất khỏi tất cả
-                thiết bị khác.
-              </p>
-            </div>
-            <button className="shrink-0 flex items-center gap-2 text-[#ba1a1a] border border-[#ba1a1a]/20 hover:bg-[#ffdad6] px-5 py-2.5 rounded-xl text-[14px] font-medium transition-all active:scale-95">
-              <span className="material-symbols-outlined text-[18px]">logout</span>
-              Đăng xuất khỏi tất cả thiết bị
-            </button>
-          </div>
-        </div>
       </div>
 
       {/* ── Right: Requirements checklist ── */}
       <div className="md:col-span-1">
-        <div className="bg-[#f0f3ff] p-6 rounded-2xl border border-[#e7eaf3]">
-          <h3 className="text-[14px] font-semibold text-[#111c2d] mb-4">
-            Yêu cầu mật khẩu:
+        <div className="bg-[#F7F8FF] p-[20px] rounded-[12px] border-[1.5px] border-[#E2E4F0] sticky top-32">
+          <h3 className="text-[11px] font-semibold text-[#9898B0] mb-[16px] uppercase tracking-[0.08em]">
+            Yêu cầu mật khẩu
           </h3>
-          <ul className="space-y-3">
+          <ul className="space-y-[12px]">
             <Req ok={hasLen} label="Ít nhất 8 ký tự" />
             <Req ok={hasUpper} label="Chứa chữ cái in hoa" />
             <Req ok={hasNum} label="Chứa ít nhất một con số" />
-            <Req ok={hasSpec} label='Ký tự đặc biệt (@, #, $...)' />
+            <Req ok={hasSpec} label="Ký tự đặc biệt (@, #, $...)" />
           </ul>
-          <div className="mt-8 pt-6 border-t border-[#c7c4d7]">
-            <p className="text-[12px] text-[#464554] leading-relaxed">
-              Lưu ý: Bạn nên sử dụng mật khẩu mạnh để bảo vệ dữ liệu cá nhân
-              của <span className="font-semibold">{displayName}</span> khỏi các
-              truy cập trái phép.
-            </p>
+          
+          <div className="mt-[24px]">
+            <div className="bg-[#FFFBEB] border-l-[3px] border-[#F59E0B] p-[12px] rounded-[8px]">
+              <p className="text-[13px] text-[#4A4A6A] leading-relaxed">
+                <strong className="text-[#F59E0B] block mb-1">Lưu ý bảo mật</strong>
+                Nên sử dụng mật khẩu mạnh để bảo vệ dữ liệu cá nhân của 
+                <span className="font-semibold text-[#1A1A2E]"> {displayName} </span> 
+                khỏi các truy cập trái phép.
+              </p>
+            </div>
           </div>
         </div>
       </div>
     </div>
   );
 }
+

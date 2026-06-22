@@ -3,7 +3,6 @@ import HeroSection from "@/components/home/HeroSection";
 import FeaturesSection from "@/components/home/FeaturesSection";
 import DashboardPreviewSection from "@/components/home/DashboardPreviewSection";
 import FinalCTASection from "@/components/home/FinalCTASection";
-import Footer from "@/components/home/Footer";
 
 export default function Home() {
   return (
@@ -14,7 +13,6 @@ export default function Home() {
         <FeaturesSection />
         <DashboardPreviewSection />
         <FinalCTASection />
-        <Footer />
       </div>
     </div>
   );
