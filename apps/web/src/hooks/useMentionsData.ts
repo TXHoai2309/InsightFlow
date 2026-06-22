@@ -8,6 +8,25 @@ import { secondDb } from "@/lib/firebase";
 
 const now = () => new Date();
 
+const normalizeDate = (field: unknown, fallback = new Date().toISOString()) => {
+  if (!field) return fallback;
+
+  if (typeof (field as { toDate?: unknown }).toDate === "function") {
+    const date = (field as { toDate: () => Date }).toDate();
+    return Number.isNaN(date.getTime()) ? fallback : date.toISOString();
+  }
+
+  if (field instanceof Date) {
+    return Number.isNaN(field.getTime()) ? fallback : field.toISOString();
+  }
+
+  const raw = String(field).trim();
+  if (!raw || raw === "[object Object]") return fallback;
+
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime()) ? fallback : date.toISOString();
+};
+
 const generateMockWorkspaces = (): Workspace[] => [
   {
     id: "ws-1",
@@ -256,11 +275,14 @@ export function useMentionsData(options: UseMentionsOptions = {}) {
           const validTopics: Mention["topic"][] = ["quality", "price", "service", "staff", "delivery", "experience", "legal", "operation", "marketing", "competitor", "other"];
           const topic: Mention["topic"] = validTopics.find(t => rawTopic.includes(t)) || "other";
 
-          // Use posted_at if available, fallback to analyzed_at or crawled_at
-          let timeStr = data.posted_at;
-          if (!timeStr || timeStr === "") {
-            timeStr = data.analyzed_at || data.crawled_at || data.created_at || new Date().toISOString();
-          }
+          const fallbackTime = normalizeDate(
+            data.analyzed_at || data.crawled_at || data.created_at,
+          );
+          const postedAt = normalizeDate(
+            data.post_date || data.posted_at || data.created_at,
+            fallbackTime,
+          );
+          const createdAt = normalizeDate(data.crawled_at || data.analyzed_at, fallbackTime);
 
           return {
             id: doc.id,
@@ -271,7 +293,8 @@ export function useMentionsData(options: UseMentionsOptions = {}) {
             sentiment,
             topic,
             credibility_score: parseFloat(data.baseline_confidence) || data.credibility_score || 0.8,
-            created_at: timeStr,
+            created_at: createdAt,
+            posted_at: postedAt,
             url: data.url || "",
           } as Mention;
         });

@@ -23,9 +23,26 @@ const platformLabelMap: Record<string, string> = {
   news: "Báo chí",
   youtube: "YouTube",
   google_maps: "Google Maps",
+  thread: "Threads",
+  be: "BeFood",
+};
+
+const topicLabelMap: Record<string, string> = {
+  quality: "Sản phẩm",
+  price: "Giá cả",
+  service: "Dịch vụ khách hàng",
+  staff: "Nhân viên",
+  delivery: "Giao hàng",
+  experience: "Trải nghiệm",
+  legal: "Pháp lý",
+  operation: "Vận hành",
+  marketing: "Marketing",
+  competitor: "Đối thủ",
+  other: "Khác",
 };
 
 const timeRangeOptions = [
+  { value: "all", label: "Tất cả thời gian" },
   { value: "24h", label: "24 giờ" },
   { value: "7d", label: "7 ngày" },
   { value: "30d", label: "30 ngày" },
@@ -46,6 +63,15 @@ export function MentionFilters({ workspaces, filters, allMentions }: MentionFilt
     const platformSet = new Set<string>();
     allMentions.forEach(m => platformSet.add(m.platform));
     return Array.from(platformSet).sort();
+  }, [allMentions]);
+
+  // Derive available topics from actual data
+  const availableTopics = useMemo(() => {
+    const topicSet = new Set<string>();
+    allMentions.forEach(m => {
+      if (m.topic) topicSet.add(m.topic);
+    });
+    return Array.from(topicSet).sort();
   }, [allMentions]);
 
   // Get brand display name: check workspaces list, then fall back to raw value
@@ -137,14 +163,11 @@ export function MentionFilters({ workspaces, filters, allMentions }: MentionFilt
           className="bg-transparent border-none focus:ring-0 font-medium text-on-surface w-full p-0 text-sm"
         >
           <option value="all">Tất cả chủ đề</option>
-          <option value="quality">Sản phẩm</option>
-          <option value="service">Dịch vụ khách hàng</option>
-          <option value="price">Giá cả</option>
-          <option value="staff">Nhân viên</option>
-          <option value="delivery">Giao hàng</option>
-          <option value="experience">Trải nghiệm</option>
-          <option value="competitor">Đối thủ</option>
-          <option value="other">Khác</option>
+          {availableTopics.map((topic) => (
+            <option key={topic} value={topic}>
+              {topicLabelMap[topic] || topic}
+            </option>
+          ))}
         </select>
       </div>
 
