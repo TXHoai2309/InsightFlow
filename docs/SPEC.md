@@ -199,13 +199,24 @@ Mỗi **Tenant** (doanh nghiệp) có thể có nhiều **Workspace** (thương 
 
 **US-10: Phân tích Intent (Lead Generation)**
 
-- Input: mention đã có sentiment + topic
-- Output: `intent: "hot" | "warm" | "cold" | "none"`, `intent_signals: string[]`
-- Logic phân loại:
-  - **Hot Lead**: "cần mua ngay", "đang tìm", "giá bao nhiêu", có từ ngữ khẩn cấp
-  - **Warm Lead**: đang tìm hiểu, so sánh sản phẩm, hỏi thông tin
-  - **Cold Lead**: đề cập thương hiệu nhưng không có nhu cầu mua rõ ràng
-  - **None**: mention không liên quan đến purchase intent
+- Input: mention đã có sentiment + topic từ pipeline crawling & NLP deep-path
+- Output: `intent: "hot" | "warm" | "cold" | "none"`, `intent_signals: string[]`, `expiry_at: string`
+- **Quy tắc phát hiện Lead Candidate**:
+  - Phải liên quan đến thương hiệu (sentiment không trống).
+  - Không phải nội dung spam hoặc tin nhắn bot tự động.
+  - Có ít nhất một từ khóa nằm trong danh sách tín hiệu ý định (Intent Signals).
+- **Quy tắc phân loại và tính điểm (Scoring & Classification)**:
+  - Sử dụng phương pháp đối sánh từ khóa được phân nhóm trọng số:
+    - *Tín hiệu Hot* (`HOT_KEYWORDS`): "mua", "đặt hàng", "order", "cần gấp", "giá bao nhiêu", "bao nhiêu tiền", "giao hàng", "ship"... (Trọng số: +3 điểm).
+    - *Tín hiệu Warm* (`WARM_KEYWORDS`): "gợi ý", "recommend", "so sánh", "khác nhau", "tốt hơn", "còn không", "sẵn không"... (Trọng số: +1 điểm).
+    - *Tín hiệu Cold* (`COLD_KEYWORDS`): "ở đâu", "chi nhánh", "địa chỉ", "mở cửa", "giờ hoạt động"... (Trọng số: +0.3 điểm).
+  - **Negative Sentiment Penalty**: Nếu sentiment của mention là `negative` (phản ánh tiêu cực hoặc phàn nàn), nhân điểm số với hệ số phạt **0.6** nhằm hạ mức độ ưu tiên xử lý.
+  - **Phân nhóm ý định mua**:
+    - **Hot Lead**: Tổng điểm >= 5 (có từ 2+ tín hiệu hot hoặc từ ngữ khẩn cấp kèm hành động mua). Thời hạn xử lý: **30 phút**.
+    - **Warm Lead**: Tổng điểm từ 2 đến < 5 (có tín hiệu quan tâm, so sánh, hoặc hỏi hàng). Thời hạn xử lý: **24 giờ**.
+    - **Cold Lead**: Tổng điểm từ 0.5 đến < 2 (chỉ hỏi vị trí hoặc thông tin cơ bản). Thời hạn xử lý: **7 ngày**.
+    - **None**: Tổng điểm < 0.5. Bỏ qua không tạo lead.
+- **Expiry Expiry Policy**: Mỗi loại lead được ấn định thời hạn xử lý (`expiry_at`). Quá thời hạn này mà trạng thái vẫn là `new` hoặc `processing`, lead sẽ được coi là "Quá hạn" (Overdue) để hệ thống cảnh báo hoặc tự động chuyển trạng thái `skipped` nếu cấu hình.
 
 ---
 
