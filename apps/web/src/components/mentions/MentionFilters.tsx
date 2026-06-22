@@ -26,6 +26,7 @@ const platformLabelMap: Record<string, string> = {
 };
 
 const timeRangeOptions = [
+  { value: "all", label: "Tất cả thời gian" },
   { value: "24h", label: "24 giờ" },
   { value: "7d", label: "7 ngày" },
   { value: "30d", label: "30 ngày" },

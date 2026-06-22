@@ -58,7 +58,7 @@ interface DashboardState {
 
 const defaultFilters: DashboardFilters = {
   workspace_id: "all",
-  time_range: "7d",
+  time_range: "all",
   platform: "all",
   sentiment: "all",
   topic: "all",
