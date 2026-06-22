@@ -61,7 +61,7 @@ const topicTags: Record<Mention["topic"], string[]> = {
 export function MentionTable({ mentions, isLoading }: MentionTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
-  
+
   // Reset page when mentions change (e.g. filters applied)
   useEffect(() => {
     setCurrentPage(1);
@@ -82,22 +82,31 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
 
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) {
+      return { timeStr: "Không rõ", relativeTime: "Không rõ thời gian" };
+    }
+
     const now = new Date();
-    const diffHours = Math.floor(
-      (now.getTime() - date.getTime()) / (1000 * 60 * 60),
-    );
+    const diffMs = now.getTime() - date.getTime();
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
     const timeStr = date.toLocaleString("vi-VN", {
       hour: "2-digit",
       minute: "2-digit",
       day: "2-digit",
       month: "2-digit",
+      year: "numeric",
     });
 
     let relativeTime = "Vừa xong";
-    if (diffHours === 1) relativeTime = "1 giờ trước";
-    else if (diffHours > 1) relativeTime = `${diffHours} giờ trước`;
-    else if (diffHours === 0) relativeTime = "Vừa xong";
+    if (diffMs < 0) relativeTime = "Trong tương lai";
+    else if (diffDays >= 365) relativeTime = `${Math.floor(diffDays / 365.25)} năm trước`;
+    else if (diffDays >= 30) relativeTime = `${Math.floor(diffDays / 30.44)} tháng trước`;
+    else if (diffDays >= 1) relativeTime = `${diffDays} ngày trước`;
+    else if (diffHours >= 1) relativeTime = `${diffHours} giờ trước`;
+    else if (diffMinutes >= 1) relativeTime = `${diffMinutes} phút trước`;
 
     return { timeStr, relativeTime };
   };
@@ -117,7 +126,7 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
             </div>
           ) : (
             currentMentions.map((mention) => {
-              const { timeStr, relativeTime } = formatTime(mention.created_at);
+              const { timeStr, relativeTime } = formatTime(mention.posted_at);
               const tags = topicTags[mention.topic] || [];
 
               return (
@@ -225,7 +234,7 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
               ) : (
                 currentMentions.map((mention) => {
                   const { timeStr, relativeTime } = formatTime(
-                    mention.created_at,
+                    mention.posted_at,
                   );
                   const tags = topicTags[mention.topic] || [];
 
@@ -332,7 +341,7 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
               {mentions.length} đề cập
             </span>
             <div className="flex gap-2">
-              <button 
+              <button
                 onClick={handlePrevPage}
                 disabled={currentPage === 1}
                 className={`w-8 h-8 flex items-center justify-center rounded border border-outline-variant transition-colors ${currentPage === 1 ? 'text-outline-variant cursor-not-allowed' : 'text-on-surface-variant hover:bg-surface-container'}`}
@@ -341,18 +350,18 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                   chevron_left
                 </span>
               </button>
-              
+
               {/* Show simple pagination numbers (e.g. up to 5 visible) */}
               {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                 // Calculate which page numbers to show to keep the current page roughly in the middle
                 let startPage = Math.max(1, currentPage - 2);
                 if (startPage + 4 > totalPages) startPage = Math.max(1, totalPages - 4);
                 const pageNum = startPage + i;
-                
+
                 if (pageNum > totalPages) return null;
-                
+
                 return (
-                  <button 
+                  <button
                     key={pageNum}
                     onClick={() => setCurrentPage(pageNum)}
                     className={`w-8 h-8 flex items-center justify-center rounded font-medium text-sm transition-colors ${currentPage === pageNum ? 'bg-primary text-white' : 'border border-outline-variant text-on-surface-variant hover:bg-surface-container'}`}
@@ -361,8 +370,8 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                   </button>
                 );
               })}
-              
-              <button 
+
+              <button
                 onClick={handleNextPage}
                 disabled={currentPage === totalPages}
                 className={`w-8 h-8 flex items-center justify-center rounded border border-outline-variant transition-colors ${currentPage === totalPages ? 'text-outline-variant cursor-not-allowed' : 'text-on-surface-variant hover:bg-surface-container'}`}
