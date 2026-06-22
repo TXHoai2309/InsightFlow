@@ -53,6 +53,7 @@ const topicTags: Record<Mention["topic"], string[]> = {
   experience: ["#Experience", "#Feedback"],
   legal: ["#Legal", "#Compliance"],
   operation: ["#Operation", "#Process"],
+  marketing: ["#Marketing", "#Campaign"],
   competitor: ["#Competitor", "#Market"],
   other: ["#Other"],
 };
