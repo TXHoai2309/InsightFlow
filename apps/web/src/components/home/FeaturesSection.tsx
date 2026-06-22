@@ -1,72 +1,130 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+
 const features = [
   {
-    icon: "psychology",
-    title: "Sentiment Analysis",
-    description:
-      "Phân tích sắc thái ngôn ngữ tiếng Việt (Tích cực, Tiêu cực, Trung lập) với độ chính xác >90%.",
+    icon: "ti-brain",
+    emoji: "🤖",
+    title: "AI Analysis",
+    subtitle: "Phân tích cảm xúc",
+    description: "Phân tích cảm xúc tiếng Việt chính xác đến 98% — tích cực, tiêu cực, trung lập trên mọi kênh.",
+    accent: "#6D4CFF",
+    bg: "#f5f3ff",
   },
   {
-    icon: "notification_important",
-    title: "Cảnh báo sớm",
-    description:
-      "Hệ thống gửi thông báo ngay lập tức qua Telegram/Email khi có dấu hiệu khủng hoảng truyền thông.",
+    icon: "ti-chart-line",
+    emoji: "📊",
+    title: "Real-time",
+    subtitle: "Theo dõi 24/7",
+    description: "Cập nhật dữ liệu mỗi 5 phút từ Facebook, TikTok, YouTube, Báo chí. Không bỏ lỡ bất kỳ tín hiệu nào.",
+    accent: "#0ea5e9",
+    bg: "#f0f9ff",
   },
   {
-    icon: "auto_graph",
-    title: "Báo cáo tự động",
-    description:
-      "Xuất báo cáo định kỳ hàng ngày, hàng tuần chỉ với một cú nhấp chuột, đầy đủ biểu đồ trực quan.",
+    icon: "ti-shield-exclamation",
+    emoji: "🛡️",
+    title: "Crisis Alert",
+    subtitle: "Cảnh báo tức thì",
+    description: "Phát hiện dấu hiệu khủng hoảng và gửi thông báo ngay qua Telegram/Email trước khi tình huống leo thang.",
+    accent: "#ef4444",
+    bg: "#fff8f8",
   },
   {
-    icon: "dashboard_customize",
-    title: "Dashboard tổng quan",
-    description:
-      "Giao diện tập trung, theo dõi tất cả các kênh (Facebook, YouTube, TikTok, Báo chí) trên một màn hình.",
-  },
-  {
-    icon: "compare_arrows",
-    title: "Multi-brand",
-    description:
-      "So sánh chỉ số sức khỏe thương hiệu của bạn với đối thủ cạnh tranh trực tiếp trong cùng phân khúc.",
-  },
-  {
-    icon: "hub",
-    title: "Ngành chuyên sâu",
-    description:
-      "Dữ liệu được phân loại theo ngành hàng cụ thể: F&B, Bất động sản, Tài chính, Bán lẻ...",
+    icon: "ti-file-analytics",
+    emoji: "📋",
+    title: "Auto Report",
+    subtitle: "Báo cáo tự động",
+    description: "Xuất báo cáo định kỳ hàng ngày, hàng tuần với biểu đồ trực quan chuyên nghiệp chỉ với 1 cú nhấp.",
+    accent: "#16a34a",
+    bg: "#f0fdf4",
   },
 ];
 
-export default function FeaturesSection() {
+function FeatureCard({ feature, delay }: { feature: typeof features[0]; delay: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) setVisible(true); },
+      { threshold: 0.2 }
+    );
+    if (ref.current) observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <section id="features" className="py-[80px] px-6 max-w-[1200px] mx-auto">
-      <div className="text-center mb-16">
-        <p className="text-[#4234b6] font-semibold text-[14px] uppercase tracking-widest mb-2">
-          Dành riêng cho doanh nghiệp tại Việt Nam
-        </p>
-        <h2 className="text-[32px] leading-[40px] tracking-[-0.01em] font-bold text-[#1c1b23]">
-          Tính năng vượt trội
-        </h2>
+    <div
+      ref={ref}
+      className="group p-7 bg-white border border-[#E5E7EB] rounded-[16px] flex flex-col gap-4 cursor-pointer"
+      style={{
+        transition: "transform 0.3s ease, box-shadow 0.3s ease, opacity 0.5s ease",
+        transform: visible ? "translateY(0)" : "translateY(24px)",
+        opacity: visible ? 1 : 0,
+        transitionDelay: `${delay}ms`,
+        boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+      }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLDivElement).style.transform = "translateY(-8px)";
+        (e.currentTarget as HTMLDivElement).style.boxShadow = "0 12px 40px rgba(0,0,0,0.12)";
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLDivElement).style.transform = "translateY(0)";
+        (e.currentTarget as HTMLDivElement).style.boxShadow = "0 1px 4px rgba(0,0,0,0.06)";
+      }}
+    >
+      {/* Icon */}
+      <div
+        className="w-12 h-12 rounded-[14px] flex items-center justify-center text-[22px] transition-transform duration-300 group-hover:rotate-[10deg]"
+        style={{ background: feature.bg }}
+      >
+        <i className={`ti ${feature.icon}`} style={{ color: feature.accent, fontSize: 22 }} />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        {features.map((feature) => (
-          <div
-            key={feature.title}
-            className="p-6 border border-[#c8c4d6] rounded-2xl hover:bg-[#f6f2fd] transition-colors group"
-          >
-            <div className="w-12 h-12 rounded-lg bg-[#e4dfff] flex items-center justify-center text-[#4234b6] mb-6 group-hover:scale-110 transition-transform">
-              <span className="material-symbols-outlined text-[24px]">
-                {feature.icon}
-              </span>
-            </div>
-            <h4 className="text-[20px] leading-[28px] font-semibold text-[#1c1b23] mb-2">
-              {feature.title}
-            </h4>
-            <p className="text-[14px] leading-[20px] font-normal text-[#474554]">
-              {feature.description}
-            </p>
-          </div>
+      {/* Labels */}
+      <div>
+        <p className="text-[11px] font-bold uppercase tracking-widest mb-1" style={{ color: feature.accent }}>
+          {feature.emoji} {feature.title}
+        </p>
+        <h3 className="text-[19px] font-bold text-[#1c1b23] leading-tight">{feature.subtitle}</h3>
+      </div>
+
+      <p className="text-[14px] leading-[22px] text-[#6B7280]">{feature.description}</p>
+
+      {/* Learn more */}
+      <div
+        className="flex items-center gap-1 text-[13px] font-semibold mt-auto"
+        style={{ color: feature.accent }}
+      >
+        Tìm hiểu thêm
+        <i className="ti ti-arrow-right text-[14px] transition-transform duration-200 group-hover:translate-x-1" />
+      </div>
+    </div>
+  );
+}
+
+export default function FeaturesSection() {
+  return (
+    <section id="features" className="py-[72px] px-6 max-w-[1200px] mx-auto">
+      {/* Header */}
+      <div className="text-center mb-12">
+        <span className="inline-block px-4 py-1.5 rounded-full text-[12px] font-bold uppercase tracking-widest bg-[#e4dfff] text-[#4234b6] mb-4">
+          Tính năng
+        </span>
+        <h2 className="text-[34px] md:text-[40px] leading-tight tracking-[-0.02em] font-black text-[#1c1b23] mb-3">
+          Mọi thứ bạn cần để{" "}
+          <span style={{ color: "#6D4CFF" }}>làm chủ truyền thông</span>
+        </h2>
+        <p className="text-[15px] text-[#6B7280] max-w-xl mx-auto">
+          Bộ công cụ AI toàn diện được thiết kế riêng cho doanh nghiệp F&B tại Việt Nam.
+        </p>
+      </div>
+
+      {/* Cards grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+        {features.map((f, i) => (
+          <FeatureCard key={f.title} feature={f} delay={i * 100} />
         ))}
       </div>
     </section>
