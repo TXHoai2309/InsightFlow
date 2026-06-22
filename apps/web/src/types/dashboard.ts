@@ -124,9 +124,9 @@ export interface SentimentTrendPoint {
 
 /** Filter state của Dashboard — không có sentiment (đã bỏ) */
 export interface DashboardFilters {
-  workspace_id: string;            // "all" hoặc brand name cụ thể
+  workspace_id: string; // 'all' or specific workspace
   time_range: "all" | "24h" | "7d" | "30d";
-  platform: "all" | Platform;
+  platform: string;
   sentiment: "all" | "positive" | "negative" | "neutral";
   topic?: "all" | string;
   urgency?: "all" | "pending" | "urgent" | "overdue" | "handled";
