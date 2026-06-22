@@ -92,33 +92,33 @@ export default function NotificationsTab() {
         checked={checked} 
         onChange={onChange} 
       />
-      <div className="w-11 h-6 bg-[#c7c4d7] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#4648d4]"></div>
+      <div className="w-11 h-6 bg-[#D1D5DB] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#6C63FF]"></div>
     </label>
   );
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-300">
+    <div className="space-y-[32px] animate-in fade-in duration-300">
       {/* Header */}
       <div>
-        <h2 className="text-[20px] font-semibold text-[#111c2d] mb-1">
+        <h2 className="text-[20px] font-semibold text-[#1A1A2E] mb-2">
           Tùy chọn thông báo
         </h2>
-        <p className="text-[14px] text-[#464554]">
+        <p className="text-[14px] text-[#4A4A6A]">
           Chọn cách bạn muốn nhận cập nhật từ InsightFlow.
         </p>
       </div>
 
       {/* Toggles */}
-      <div className="space-y-4">
+      <div className="space-y-[12px]">
         {/* Email */}
-        <div className="flex items-start justify-between gap-4 p-4 rounded-xl hover:bg-[#f0f3ff] transition-colors border border-transparent hover:border-[#e7eaf3]">
-          <div className="flex gap-4">
-            <div className="w-10 h-10 shrink-0 rounded-lg bg-[#e1e0ff] flex items-center justify-center text-[#4648d4]">
-              <span className="material-symbols-outlined text-[20px]">mail</span>
+        <div className="flex items-center justify-between gap-4 px-[24px] py-[20px] rounded-[12px] bg-white border border-[#E2E4F0] hover:bg-[#F9F9FF] hover:border-[#C4C0FF] transition-all group">
+          <div className="flex items-center gap-[16px]">
+            <div className="w-[40px] h-[40px] shrink-0 rounded-full bg-[#EFF6FF] flex items-center justify-center text-[#3B82F6]">
+              <i className="ti ti-mail text-[22px]"></i>
             </div>
-            <div>
-              <h3 className="text-[14px] text-[#111c2d] font-bold">Thông báo Email</h3>
-              <p className="text-[14px] text-[#464554] max-w-md mt-1">
+            <div className="flex flex-col gap-[4px]">
+              <h3 className="text-[15px] text-[#1A1A2E] font-bold">Thông báo Email</h3>
+              <p className="text-[13px] text-[#9898B0] max-w-md">
                 Nhận cập nhật quan trọng và tóm tắt hoạt động trực tiếp vào hộp thư của bạn.
               </p>
             </div>
@@ -127,14 +127,14 @@ export default function NotificationsTab() {
         </div>
 
         {/* Push */}
-        <div className="flex items-start justify-between gap-4 p-4 rounded-xl hover:bg-[#f0f3ff] transition-colors border border-transparent hover:border-[#e7eaf3]">
-          <div className="flex gap-4">
-            <div className="w-10 h-10 shrink-0 rounded-lg bg-[#e2dfff] flex items-center justify-center text-[#4b41e1]">
-              <span className="material-symbols-outlined text-[20px]">notifications_active</span>
+        <div className="flex items-center justify-between gap-4 px-[24px] py-[20px] rounded-[12px] bg-white border border-[#E2E4F0] hover:bg-[#F9F9FF] hover:border-[#C4C0FF] transition-all group">
+          <div className="flex items-center gap-[16px]">
+            <div className="w-[40px] h-[40px] shrink-0 rounded-full bg-[#EEF0FF] flex items-center justify-center text-[#6C63FF]">
+              <i className="ti ti-bell-ringing text-[22px]"></i>
             </div>
-            <div>
-              <h3 className="text-[14px] text-[#111c2d] font-bold">Thông báo đẩy (Push)</h3>
-              <p className="text-[14px] text-[#464554] max-w-md mt-1">
+            <div className="flex flex-col gap-[4px]">
+              <h3 className="text-[15px] text-[#1A1A2E] font-bold">Thông báo đẩy (Push)</h3>
+              <p className="text-[13px] text-[#9898B0] max-w-md">
                 Nhận thông báo tức thì trên trình duyệt hoặc thiết bị di động khi có thay đổi.
               </p>
             </div>
@@ -143,14 +143,14 @@ export default function NotificationsTab() {
         </div>
 
         {/* Crisis Alerts */}
-        <div className="flex items-start justify-between gap-4 p-4 rounded-xl hover:bg-[#f0f3ff] transition-colors border border-transparent hover:border-[#e7eaf3]">
-          <div className="flex gap-4">
-            <div className="w-10 h-10 shrink-0 rounded-lg bg-[#ffdad6] flex items-center justify-center text-[#ba1a1a]">
-              <span className="material-symbols-outlined text-[20px]">warning</span>
+        <div className="flex items-center justify-between gap-4 px-[24px] py-[20px] rounded-[12px] bg-white border border-[#E2E4F0] hover:bg-[#F9F9FF] hover:border-[#C4C0FF] transition-all group">
+          <div className="flex items-center gap-[16px]">
+            <div className="w-[40px] h-[40px] shrink-0 rounded-full bg-[#FEF2F2] flex items-center justify-center text-[#EF4444]">
+              <i className="ti ti-alert-triangle text-[22px]"></i>
             </div>
-            <div>
-              <h3 className="text-[14px] text-[#111c2d] font-bold">Cảnh báo khủng hoảng (Crisis Alerts)</h3>
-              <p className="text-[14px] text-[#464554] max-w-md mt-1">
+            <div className="flex flex-col gap-[4px]">
+              <h3 className="text-[15px] text-[#1A1A2E] font-bold">Cảnh báo khủng hoảng (Crisis Alerts)</h3>
+              <p className="text-[13px] text-[#9898B0] max-w-md">
                 Cảnh báo ưu tiên cao về các sự cố nghiêm trọng ảnh hưởng đến hệ thống của bạn.
               </p>
             </div>
@@ -159,14 +159,14 @@ export default function NotificationsTab() {
         </div>
 
         {/* Daily Reports */}
-        <div className="flex items-start justify-between gap-4 p-4 rounded-xl hover:bg-[#f0f3ff] transition-colors border border-transparent hover:border-[#e7eaf3]">
-          <div className="flex gap-4">
-            <div className="w-10 h-10 shrink-0 rounded-lg bg-[#ffdcc5] flex items-center justify-center text-[#904900]">
-              <span className="material-symbols-outlined text-[20px]">summarize</span>
+        <div className="flex items-center justify-between gap-4 px-[24px] py-[20px] rounded-[12px] bg-white border border-[#E2E4F0] hover:bg-[#F9F9FF] hover:border-[#C4C0FF] transition-all group">
+          <div className="flex items-center gap-[16px]">
+            <div className="w-[40px] h-[40px] shrink-0 rounded-full bg-[#F0FDF4] flex items-center justify-center text-[#22C55E]">
+              <i className="ti ti-file-report text-[22px]"></i>
             </div>
-            <div>
-              <h3 className="text-[14px] text-[#111c2d] font-bold">Báo cáo hàng ngày</h3>
-              <p className="text-[14px] text-[#464554] max-w-md mt-1">
+            <div className="flex flex-col gap-[4px]">
+              <h3 className="text-[15px] text-[#1A1A2E] font-bold">Báo cáo hàng ngày</h3>
+              <p className="text-[13px] text-[#9898B0] max-w-md">
                 Bản tóm tắt phân tích dữ liệu và hiệu suất hệ thống gửi vào cuối mỗi ngày.
               </p>
             </div>
@@ -175,28 +175,26 @@ export default function NotificationsTab() {
         </div>
       </div>
 
-      <hr className="border-[#e7eaf3]" />
-
       {/* Action Buttons */}
-      <div className="flex justify-end gap-4 mt-8">
+      <div className="flex justify-end gap-[12px] mt-[32px]">
         <button 
           onClick={handleCancel}
-          className="px-6 py-2.5 text-[14px] font-medium text-[#464554] hover:bg-[#f0f3ff] transition-all rounded-xl border border-[#c7c4d7]"
+          className="bg-transparent text-[#4A4A6A] border-[1.5px] border-[#E2E4F0] rounded-[10px] px-[28px] py-[11px] font-semibold hover:border-[#6C63FF] hover:text-[#6C63FF] transition-colors text-[14px]"
         >
-          Hủy
+          Hủy thay đổi
         </button>
         <button 
           onClick={handleSave}
           disabled={savingState !== "idle"}
-          className={`px-6 py-2.5 text-[14px] font-bold transition-all rounded-xl shadow-md flex items-center justify-center gap-2 min-w-[140px]
-            ${savingState === "saved" ? "bg-green-600 text-white shadow-green-200" : "bg-[#4648d4] text-white hover:bg-[#6063ee] active:scale-95 disabled:opacity-70 disabled:scale-100"}
+          className={`rounded-[10px] px-[28px] py-[11px] font-semibold text-[14px] flex items-center justify-center gap-[8px] transition-all min-w-[150px]
+            ${savingState === "saved" ? "bg-[#22C55E] text-white" : "bg-[#6C63FF] text-white hover:bg-[#5A52D5] shadow-[0_4px_14px_rgba(108,99,255,0.35)] active:scale-95 disabled:opacity-70 disabled:shadow-none"}
           `}
         >
           {savingState === "saving" && (
-            <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            <span className="w-[16px] h-[16px] border-2 border-white/30 border-t-white rounded-full animate-spin" />
           )}
           {savingState === "saved" && (
-            <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
+            <i className="ti ti-circle-check-filled text-[18px]"></i>
           )}
           {savingState === "idle" && "Lưu thay đổi"}
           {savingState === "saving" && "Đang lưu..."}
@@ -205,19 +203,23 @@ export default function NotificationsTab() {
       </div>
 
       {/* Decoration / Atmospheric Context */}
-      <div className="mt-12 pt-8 grid grid-cols-1 md:grid-cols-2 gap-6 opacity-80">
-        <div className="p-6 rounded-2xl border border-[#e7eaf3] bg-[#f0f3ff] flex items-center gap-4">
-          <span className="material-symbols-outlined text-[36px] text-[#4648d4]/40">security</span>
+      <div className="mt-12 pt-8 grid grid-cols-1 md:grid-cols-2 gap-6 opacity-90 border-t border-[#E2E4F0]">
+        <div className="p-6 rounded-[12px] bg-[#F7F8FC] flex items-center gap-[16px]">
+          <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-sm text-[#6C63FF]">
+            <i className="ti ti-shield-lock text-[24px]"></i>
+          </div>
           <div>
-            <h4 className="text-[14px] font-semibold text-[#111c2d]">Mã hóa đầu cuối</h4>
-            <p className="text-[13px] text-[#464554] mt-0.5">Dữ liệu thông báo của bạn luôn được bảo vệ.</p>
+            <h4 className="text-[14px] font-semibold text-[#1A1A2E]">Mã hóa đầu cuối</h4>
+            <p className="text-[13px] text-[#9898B0] mt-0.5">Dữ liệu thông báo của bạn luôn được bảo vệ an toàn.</p>
           </div>
         </div>
-        <div className="p-6 rounded-2xl border border-[#e7eaf3] bg-[#f0f3ff] flex items-center gap-4">
-          <span className="material-symbols-outlined text-[36px] text-[#4648d4]/40">devices</span>
+        <div className="p-6 rounded-[12px] bg-[#F7F8FC] flex items-center gap-[16px]">
+          <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-sm text-[#6C63FF]">
+            <i className="ti ti-devices text-[24px]"></i>
+          </div>
           <div>
-            <h4 className="text-[14px] font-semibold text-[#111c2d]">Đồng bộ thiết bị</h4>
-            <p className="text-[13px] text-[#464554] mt-0.5">Cài đặt được áp dụng trên tất cả nền tảng.</p>
+            <h4 className="text-[14px] font-semibold text-[#1A1A2E]">Đồng bộ thiết bị</h4>
+            <p className="text-[13px] text-[#9898B0] mt-0.5">Cài đặt được áp dụng đồng bộ trên tất cả nền tảng.</p>
           </div>
         </div>
       </div>
