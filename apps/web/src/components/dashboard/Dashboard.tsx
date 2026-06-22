@@ -38,6 +38,7 @@ export function Dashboard({
     getFilteredMentions,
     getFilteredAlerts,
     getFilteredLeads,
+    getFilteredLeadsWithoutUrgency,
   } = useDashboardStore();
 
   const [isMounted, setIsMounted] = useState(false);
@@ -55,37 +56,48 @@ export function Dashboard({
   const filteredMentions = useMemo(
     () => getFilteredMentions(),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [filters, mentions]
+    [filters, mentions],
   );
 
   const filteredAlerts = useMemo(
     () => getFilteredAlerts(),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [filters, alerts]
+    [filters, alerts],
   );
 
   const filteredLeads = useMemo(
     () => getFilteredLeads(),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [filters, leads]
+    [filters, leads],
   );
 
-  // Stats tính lại từ filtered data
+  const filteredLeadsForStats = useMemo(
+    () => getFilteredLeadsWithoutUrgency(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filters, leads],
+  );
+
+  // Stats tính lại từ filtered data, hot leads count = tất cả hot leads theo filter Dashboard
   const stats = useMemo(
-    () => DashboardService.calculateStats(filteredMentions, filteredAlerts, filteredLeads),
-    [filteredMentions, filteredAlerts, filteredLeads]
+    () =>
+      DashboardService.calculateStats(
+        filteredMentions,
+        filteredAlerts,
+        filteredLeadsForStats,
+      ),
+    [filteredMentions, filteredAlerts, filteredLeadsForStats],
   );
 
   // Top sources tính từ toàn bộ mentions gốc trong firebase (không áp dụng lọc)
   const topSources = useMemo(
     () => DashboardService.calculateTopSources(mentions),
-    [mentions]
+    [mentions],
   );
 
   // Top topics tính lại từ filtered mentions
   const topTopics = useMemo(
     () => DashboardService.calculateTopTopics(filteredMentions),
-    [filteredMentions]
+    [filteredMentions],
   );
 
   // Conditional render (sau tất cả hooks)

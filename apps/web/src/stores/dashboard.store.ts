@@ -59,6 +59,7 @@ interface DashboardState {
   getFilteredMentions: () => Mention[];
   getFilteredAlerts: () => Alert[];
   getFilteredLeads: () => Lead[];
+  getFilteredLeadsWithoutUrgency: () => Lead[];
 }
 
 const defaultFilters: DashboardFilters = {
@@ -224,6 +225,25 @@ export const useDashboardStore = create<DashboardState>()(
         if (normFilter && normalizeBrandName(a.workspace_id) !== normFilter)
           return false;
         if (cutoff !== null && new Date(a.created_at).getTime() < cutoff)
+          return false;
+        return true;
+      });
+    },
+
+    getFilteredLeadsWithoutUrgency: () => {
+      const { leads, filters } = get();
+      const normFilter =
+        filters.workspace_id !== "all"
+          ? normalizeBrandName(filters.workspace_id)
+          : null;
+      const cutoff = getCutoffMs(filters.time_range);
+
+      return leads.filter((l) => {
+        if (normFilter && normalizeBrandName(l.workspace_id) !== normFilter)
+          return false;
+        if (filters.platform !== "all" && l.platform !== filters.platform)
+          return false;
+        if (cutoff !== null && new Date(l.created_at).getTime() < cutoff)
           return false;
         return true;
       });
