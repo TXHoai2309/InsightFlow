@@ -90,7 +90,7 @@ export interface TopTopic {
 
 export interface DashboardFilters {
   workspace_id: string; // 'all' or specific workspace
-  time_range: "24h" | "7d" | "30d";
+  time_range: "all" | "24h" | "7d" | "30d";
   platform: string;
   sentiment: "all" | "positive" | "negative" | "neutral";
   topic?: "all" | string;

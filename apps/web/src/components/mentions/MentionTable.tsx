@@ -1,8 +1,6 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import type { Mention } from "@/types/dashboard";
-import { useMentionReassign } from "@/hooks/useMentionReassign";
-import { MentionReassignModal } from "./MentionReassignModal";
 
 interface MentionTableProps {
   mentions: Mention[];
@@ -60,15 +58,6 @@ const topicTags: Record<Mention["topic"], string[]> = {
 };
 
 export function MentionTable({ mentions, isLoading }: MentionTableProps) {
-  const {
-    isOpen,
-    selectedMention,
-    isLoading: isReassigning,
-    openReassignModal,
-    closeReassignModal,
-    submitReassign,
-  } = useMentionReassign();
-
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   
@@ -181,12 +170,6 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                         {relativeTime}
                       </span>
                     </div>
-                    <button
-                      onClick={() => openReassignModal(mention)}
-                      className="px-4 py-2 border border-primary text-primary hover:bg-primary hover:text-white transition-all rounded-lg font-bold text-xs"
-                    >
-                      Gán lại
-                    </button>
                   </div>
                 </div>
               );
@@ -217,16 +200,13 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                 <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-40">
                   Thời gian
                 </th>
-                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-32">
-                  Hành động
-                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant/30">
               {isLoading ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={6}
                     className="py-20 text-center text-on-surface-variant"
                   >
                     Đang tải dữ liệu mentions...
@@ -235,7 +215,7 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
               ) : currentMentions.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={6}
                     className="py-20 text-center text-on-surface-variant"
                   >
                     Không tìm thấy mention phù hợp với bộ lọc.
@@ -335,16 +315,6 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                           </span>
                         </div>
                       </td>
-
-                      {/* Action */}
-                      <td className="px-4 py-4 align-top text-center">
-                        <button
-                          onClick={() => openReassignModal(mention)}
-                          className="px-3 py-2 border border-primary text-primary hover:bg-primary hover:text-white transition-all rounded-lg font-semibold whitespace-nowrap text-xs"
-                        >
-                          Gán lại
-                        </button>
-                      </td>
                     </tr>
                   );
                 })
@@ -404,14 +374,6 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
           </div>
         )}
       </div>
-
-      <MentionReassignModal
-        mention={selectedMention}
-        isOpen={isOpen}
-        onClose={closeReassignModal}
-        onSubmit={submitReassign}
-        isLoading={isReassigning}
-      />
     </>
   );
 }
