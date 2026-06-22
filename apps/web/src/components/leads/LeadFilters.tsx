@@ -45,18 +45,23 @@ export function LeadFilters({ workspaces }: LeadFiltersProps) {
             <label className="text-[10px] font-bold text-outline uppercase mb-1 tracking-wider">
               Thương hiệu
             </label>
-            <select
-              value={filters.workspace_id}
-              onChange={(e) => handleFilterChange("workspace_id", e.target.value)}
-              className="px-3 py-2 bg-white border border-outline-variant rounded-lg text-sm focus:ring-1 focus:ring-primary outline-none transition-all cursor-pointer text-on-surface"
-            >
-              <option value="all">Tất cả thương hiệu</option>
-              {workspaces.map((ws) => (
-                <option key={ws.id} value={ws.id}>
-                  {ws.brand_name}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <select
+                value={filters.workspace_id}
+                onChange={(e) => handleFilterChange("workspace_id", e.target.value)}
+                className="appearance-none pl-3 pr-9 py-2 bg-white border border-outline-variant rounded-lg text-sm focus:ring-1 focus:ring-primary outline-none transition-all cursor-pointer text-on-surface w-full"
+              >
+                <option value="all">Tất cả thương hiệu</option>
+                {workspaces.map((ws) => (
+                  <option key={ws.id} value={ws.id}>
+                    {ws.brand_name}
+                  </option>
+                ))}
+              </select>
+              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center text-on-surface-variant/70">
+                <span className="material-symbols-outlined text-sm">keyboard_arrow_down</span>
+              </div>
+            </div>
           </div>
 
           {/* Platform Filter */}
@@ -64,20 +69,25 @@ export function LeadFilters({ workspaces }: LeadFiltersProps) {
             <label className="text-[10px] font-bold text-outline uppercase mb-1 tracking-wider">
               Nền tảng
             </label>
-            <select
-              value={filters.platform}
-              onChange={(e) =>
-                handleFilterChange("platform", e.target.value as Filters["platform"])
-              }
-              className="px-3 py-2 bg-white border border-outline-variant rounded-lg text-sm focus:ring-1 focus:ring-primary outline-none transition-all cursor-pointer text-on-surface"
-            >
-              <option value="all">Tất cả nền tảng</option>
-              {PLATFORM_ORDER.map((p) => (
-                <option key={p} value={p}>
-                  {PLATFORM_META[p].label}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <select
+                value={filters.platform}
+                onChange={(e) =>
+                  handleFilterChange("platform", e.target.value as Filters["platform"])
+                }
+                className="appearance-none pl-3 pr-9 py-2 bg-white border border-outline-variant rounded-lg text-sm focus:ring-1 focus:ring-primary outline-none transition-all cursor-pointer text-on-surface w-full"
+              >
+                <option value="all">Tất cả nền tảng</option>
+                {PLATFORM_ORDER.map((p) => (
+                  <option key={p} value={p}>
+                    {PLATFORM_META[p].label}
+                  </option>
+                ))}
+              </select>
+              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center text-on-surface-variant/70">
+                <span className="material-symbols-outlined text-sm">keyboard_arrow_down</span>
+              </div>
+            </div>
           </div>
 
           {/* Urgency Filter */}
@@ -85,19 +95,24 @@ export function LeadFilters({ workspaces }: LeadFiltersProps) {
             <label className="text-[10px] font-bold text-outline uppercase mb-1 tracking-wider">
               Độ khẩn cấp
             </label>
-            <select
-              value={filters.urgency || "pending"}
-              onChange={(e) =>
-                handleFilterChange("urgency", e.target.value as Filters["urgency"])
-              }
-              className="px-3 py-2 bg-white border border-outline-variant rounded-lg text-sm focus:ring-1 focus:ring-primary outline-none transition-all cursor-pointer text-on-surface font-bold"
-            >
-              <option value="pending">🟢 Đang chờ xử lý</option>
-              <option value="urgent">🔥 Cần xử lý gấp</option>
-              <option value="overdue">🔴 Đã quá hạn</option>
-              <option value="handled">⚫ Đã xử lý / Bỏ qua</option>
-              <option value="all">🔵 Tất cả trạng thái</option>
-            </select>
+            <div className="relative">
+              <select
+                value={filters.urgency || "pending"}
+                onChange={(e) =>
+                  handleFilterChange("urgency", e.target.value as Filters["urgency"])
+                }
+                className="appearance-none pl-3 pr-9 py-2 bg-white border border-outline-variant rounded-lg text-sm focus:ring-1 focus:ring-primary outline-none transition-all cursor-pointer text-on-surface font-bold w-full"
+              >
+                <option value="pending">🟢 Đang chờ xử lý</option>
+                <option value="urgent">🔥 Cần xử lý gấp</option>
+                <option value="overdue">🔴 Đã quá hạn</option>
+                <option value="handled">⚫ Đã xử lý / Bỏ qua</option>
+                <option value="all">🔵 Tất cả trạng thái</option>
+              </select>
+              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center text-on-surface-variant/70">
+                <span className="material-symbols-outlined text-sm">keyboard_arrow_down</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
