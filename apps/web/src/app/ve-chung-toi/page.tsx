@@ -1,10 +1,11 @@
 import TopNavBar from "@/components/home/TopNavBar";
 import AboutHeroSection from "@/components/ve-chung-toi/AboutHeroSection";
+import AboutLogoSection from "@/components/ve-chung-toi/AboutLogoSection";
 import MissionVisionSection from "@/components/ve-chung-toi/MissionVisionSection";
 import CoreValuesSection from "@/components/ve-chung-toi/CoreValuesSection";
 import TeamSection from "@/components/ve-chung-toi/TeamSection";
 import PartnersSection from "@/components/ve-chung-toi/PartnersSection";
-import AboutCTASection from "@/components/ve-chung-toi/AboutCTASection";
+import FinalCTASection from "@/components/home/FinalCTASection";
 
 export const metadata = {
   title: "Về chúng tôi | InsightFlow - Giải pháp AI hàng đầu",
@@ -18,11 +19,12 @@ export default function VeChungToiPage() {
       <TopNavBar />
       <div className="pt-16">
         <AboutHeroSection />
+        <AboutLogoSection />
         <MissionVisionSection />
         <CoreValuesSection />
         <TeamSection />
         <PartnersSection />
-        <AboutCTASection />
+        <FinalCTASection />
       </div>
     </div>
   );
