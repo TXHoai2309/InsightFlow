@@ -121,7 +121,7 @@ export default function FinalCTASection() {
             {!loading && user ? (
               <Link href="/dashboard" className="cta-btn-primary justify-center">🚀 Vào Dashboard</Link>
             ) : (
-              <Link href="/login" className="cta-btn-primary justify-center">🚀 Trải nghiệm Dashboard</Link>
+              <Link href="/dashboard" className="cta-btn-primary justify-center">🚀 Trải nghiệm Dashboard</Link>
             )}
             <button className="cta-btn-ghost">Xem Demo</button>
           </div>
