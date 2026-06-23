@@ -29,7 +29,7 @@ export function TopTopics({ topics }: TopTopicsProps) {
         {topics.map((topic) => (
           <div
             key={topic.name}
-            className="px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-bold hover:bg-primary/20 transition-all cursor-pointer"
+            className="px-3 py-1 bg-[var(--color-brand-subtle)] text-[var(--color-brand)] border border-[var(--color-brand-border)] rounded-full text-xs font-bold hover:opacity-80 transition-all cursor-pointer"
             title={`P: ${topic.sentiment_breakdown.positive}, N: ${topic.sentiment_breakdown.negative}, Neu: ${topic.sentiment_breakdown.neutral}`}
           >
             {topic.name} ({topic.count})
@@ -37,8 +37,8 @@ export function TopTopics({ topics }: TopTopicsProps) {
         ))}
       </div>
 
-      <div className="mt-6 text-xs text-on-surface-variant">
-        <p className="font-bold mb-2 text-on-surface">
+      <div className="mt-6 text-xs text-[var(--color-text-secondary)]">
+        <p className="font-bold mb-2 text-[var(--color-text-primary)]">
           Cảnh báo: Các chủ đề liên quan đến
         </p>
         <ul className="space-y-1">

@@ -193,7 +193,7 @@ export function Dashboard({
 
       {/* Load more data indicator */}
       {isLoading && (
-        <div className="text-center py-4 text-on-surface-variant">
+        <div className="text-center py-4 text-[var(--color-text-secondary)]">
           <p className="text-sm">Đang tải dữ liệu...</p>
         </div>
       )}
