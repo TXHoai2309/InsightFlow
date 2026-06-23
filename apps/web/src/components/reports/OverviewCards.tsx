@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTranslation } from "react-i18next";
 
 interface OverviewCardsProps {
   overview: {
@@ -11,6 +12,7 @@ interface OverviewCardsProps {
 }
 
 export function OverviewCards({ overview }: OverviewCardsProps) {
+  const { t } = useTranslation();
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
       <div className="p-6 bg-surface-container-low rounded-2xl border border-outline-variant shadow-sm flex flex-col gap-2">

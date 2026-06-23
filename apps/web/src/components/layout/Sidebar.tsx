@@ -7,6 +7,7 @@
 
 import React, { useEffect } from "react";
 import Link from "next/link";
+import { useTranslation } from "react-i18next";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
@@ -19,12 +20,12 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: "dashboard" },
-  { href: "/mentions", label: "Mentions", icon: "forum" },
-  { href: "/alerts", label: "Alerts", icon: "notifications_active" },
-  { href: "/leads", label: "Leads", icon: "leaderboard" },
-  { href: "/reports", label: "Reports", icon: "assessment" },
-  { href: "/settings/brand", label: "Brands", icon: "settings" },
+  { href: "/dashboard", label: "nav.dashboard", icon: "dashboard" },
+  { href: "/mentions", label: "nav.mentions", icon: "forum" },
+  { href: "/alerts", label: "nav.alerts", icon: "notifications_active" },
+  { href: "/leads", label: "nav.leads", icon: "leaderboard" },
+  { href: "/reports", label: "nav.reports", icon: "assessment" },
+  { href: "/settings/brand", label: "nav.brands", icon: "settings" },
 ];
 
 interface SidebarProps {
@@ -35,6 +36,7 @@ interface SidebarProps {
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const { t } = useTranslation();
 
   // Đóng sidebar khi chuyển trang trên mobile
   useEffect(() => {
@@ -128,7 +130,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                 <span className="material-symbols-outlined text-xl">
                   {item.icon}
                 </span>
-                <span className="flex-1">{item.label}</span>
+                <span className="flex-1">{t(item.label)}</span>
                 {item.badge && item.badge > 0 && (
                   <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-bold">
                     {item.badge}
@@ -146,25 +148,21 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             className="w-full flex items-center gap-3 px-4 py-3 rounded text-on-surface-variant hover:bg-error/10 hover:text-error transition-all"
           >
             <span className="material-symbols-outlined text-xl">logout</span>
-            <span className="flex-1 text-left font-medium">Đăng xuất</span>
+            <span className="flex-1 text-left font-medium">{t("nav.logout")}</span>
           </button>
 
           <div className="bg-gradient-to-br from-primary-container to-secondary-container p-4 rounded-lg text-on-primary text-sm">
-            <p className="font-bold mb-2">💡 Báo cáo sẵn sàng</p>
-            <p className="text-xs mb-3 opacity-90">
-              AI hoàn tất tổng hợp dữ liệu ngày hôm qua
-            </p>
+            <p className="font-bold mb-2">{t("sidebar.reportReadyTitle")}</p>
+            <p className="text-xs mb-3 opacity-90">{t("sidebar.reportReadyDesc")}</p>
             <Link
               href="/reports"
               className="w-full inline-block py-2 bg-white text-primary font-bold rounded-lg hover:bg-opacity-95 text-xs transition-all text-center"
-            >
-              Xem báo cáo
-            </Link>
+            >{t("sidebar.viewReport")}</Link>
           </div>
 
           <div className="flex items-center gap-2 px-3 py-2 text-on-surface-variant">
             <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-            <span className="text-xs">System Active 24/7</span>
+            <span className="text-xs">{t("sidebar.systemActive")}</span>
           </div>
         </div>
       </aside>

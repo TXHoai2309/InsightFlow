@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import type { DashboardFilters, Workspace, Mention } from "@/types/dashboard";
 
@@ -49,6 +50,7 @@ const timeRangeOptions = [
 ];
 
 export function MentionFilters({ workspaces, filters, allMentions }: MentionFiltersProps) {
+  const { t } = useTranslation();
   const { setFilters } = useDashboardStore();
 
   // Derive available brands from actual data

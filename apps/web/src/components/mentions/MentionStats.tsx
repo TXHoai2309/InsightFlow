@@ -1,4 +1,5 @@
 import type { Mention } from "@/types/dashboard";
+import { useTranslation } from "react-i18next";
 
 interface MentionStatsProps {
   mentions: Mention[];
@@ -6,6 +7,7 @@ interface MentionStatsProps {
 }
 
 export function MentionStats({ mentions, isLoading }: MentionStatsProps) {
+  const { t } = useTranslation();
   const total = mentions.length;
   const positive = mentions.filter(
     (mention) => mention.sentiment === "positive",

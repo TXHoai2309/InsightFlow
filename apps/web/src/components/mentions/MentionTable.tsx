@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import Link from "next/link";
 import type { Mention } from "@/types/dashboard";
 
@@ -24,20 +25,20 @@ const getPlatformIcon = (platformStr: string) => {
 
 const sentimentMap: Record<
   Mention["sentiment"],
-  { label: string; icon: string; className: string }
+  { labelKey: string; icon: string; className: string }
 > = {
   positive: {
-    label: "Tích cực",
+    labelKey: "mentions.table.tags.positive",
     icon: "sentiment_satisfied",
     className: "bg-green-100 text-green-700",
   },
   negative: {
-    label: "Tiêu cực",
+    labelKey: "mentions.table.tags.negative",
     icon: "sentiment_very_dissatisfied",
     className: "bg-red-100 text-red-700",
   },
   neutral: {
-    label: "Trung lập",
+    labelKey: "mentions.table.tags.neutral",
     icon: "sentiment_neutral",
     className: "bg-blue-100 text-blue-700",
   },
@@ -59,6 +60,7 @@ const topicTags: Record<Mention["topic"], string[]> = {
 };
 
 export function MentionTable({ mentions, isLoading }: MentionTableProps) {
+  const { t } = useTranslation();
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -117,13 +119,9 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
         {/* Mobile View: Card List */}
         <div className="md:hidden divide-y divide-outline-variant/30">
           {isLoading ? (
-            <div className="py-20 text-center text-on-surface-variant">
-              Đang tải dữ liệu mentions...
-            </div>
+            <div className="py-20 text-center text-on-surface-variant">Đang tải dữ liệu mentions...</div>
           ) : currentMentions.length === 0 ? (
-            <div className="py-20 text-center text-on-surface-variant">
-              Không tìm thấy mention phù hợp với bộ lọc.
-            </div>
+            <div className="py-20 text-center text-on-surface-variant">Không tìm thấy mention phù hợp với bộ lọc.</div>
           ) : (
             currentMentions.map((mention) => {
               const { timeStr, relativeTime } = formatTime(mention.posted_at);
@@ -145,7 +143,7 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                     <span
                       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${sentimentMap[mention.sentiment].className}`}
                     >
-                      {sentimentMap[mention.sentiment].label}
+                      {t(sentimentMap[mention.sentiment].labelKey)}
                     </span>
                   </div>
 
@@ -192,24 +190,12 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
           <table className="w-full text-sm border-collapse">
             <thead>
               <tr className="bg-surface-container-low border-b border-outline-variant">
-                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-24">
-                  Nguồn
-                </th>
-                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-24">
-                  Độ tin cậy
-                </th>
-                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center">
-                  Nội dung tóm tắt
-                </th>
-                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-32">
-                  Sắc thái
-                </th>
-                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-32">
-                  Chủ đề
-                </th>
-                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-40">
-                  Thời gian
-                </th>
+                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-24">{t("mentions.table.platform")}</th>
+                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-24">Độ tin cậy</th>
+                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center">{t("mentions.table.content")}</th>
+                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-32">{t("mentions.table.sentiment")}</th>
+                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-32">Chủ đề</th>
+                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-40">{t("mentions.table.time")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant/30">
@@ -218,18 +204,14 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                   <td
                     colSpan={6}
                     className="py-20 text-center text-on-surface-variant"
-                  >
-                    Đang tải dữ liệu mentions...
-                  </td>
+                  >Đang tải dữ liệu mentions...</td>
                 </tr>
               ) : currentMentions.length === 0 ? (
                 <tr>
                   <td
                     colSpan={6}
                     className="py-20 text-center text-on-surface-variant"
-                  >
-                    Không tìm thấy mention phù hợp với bộ lọc.
-                  </td>
+                  >Không tìm thấy mention phù hợp với bộ lọc.</td>
                 </tr>
               ) : (
                 currentMentions.map((mention) => {
@@ -303,7 +285,7 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                           >
                             {sentimentMap[mention.sentiment].icon}
                           </span>
-                          {sentimentMap[mention.sentiment].label}
+                          {t(sentimentMap[mention.sentiment].labelKey)}
                         </span>
                       </td>
 

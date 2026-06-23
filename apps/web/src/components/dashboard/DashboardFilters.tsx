@@ -6,6 +6,7 @@
  */
 
 import React, { useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { PLATFORM_META } from "@/lib/services/dashboard";
 import type { DashboardFilters, Workspace, Platform } from "@/types/dashboard";
@@ -26,6 +27,7 @@ const PLATFORM_ORDER: Platform[] = [
 ];
 
 export function DashboardFilters({ workspaces }: DashboardFiltersProps) {
+  const { t } = useTranslation();
   const { filters, setFilters } = useDashboardStore();
 
   const handleFilterChange = useCallback(
@@ -81,8 +83,8 @@ export function DashboardFilters({ workspaces }: DashboardFiltersProps) {
             >
               <option value="all">Toàn bộ</option>
               <option value="24h">Hôm nay (24h)</option>
-              <option value="7d">7 ngày qua</option>
-              <option value="30d">30 ngày qua</option>
+              <option value="7d">{t("dashboard.filters.7days")}</option>
+              <option value="30d">{t("dashboard.filters.30days")}</option>
             </select>
           </div>
 
@@ -98,7 +100,7 @@ export function DashboardFilters({ workspaces }: DashboardFiltersProps) {
               }
               className="px-3 py-2 bg-white border border-outline-variant rounded-lg text-sm focus:ring-1 focus:ring-primary outline-none"
             >
-              <option value="all">Tất cả nền tảng</option>
+              <option value="all">{t("dashboard.filters.allPlatforms")}</option>
               {PLATFORM_ORDER.map((p) => (
                 <option key={p} value={p}>
                   {PLATFORM_META[p].label}

@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTranslation } from "react-i18next";
 
 interface TopTopic {
   topic: string;
@@ -26,6 +27,7 @@ const TOPIC_LABEL_MAP: Record<string, string> = {
 };
 
 export function TopTopicsList({ topics }: TopTopicsListProps) {
+  const { t } = useTranslation();
   if (topics.length === 0) {
     return <div className="text-center text-outline py-10">Chưa có dữ liệu chủ đề.</div>;
   }

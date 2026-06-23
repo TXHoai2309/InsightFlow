@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
 interface SentimentChartProps {
@@ -20,6 +21,7 @@ const LABEL_MAP: Record<string, string> = {
 };
 
 export function SentimentChart({ distribution }: SentimentChartProps) {
+  const { t } = useTranslation();
   const data = Object.entries(distribution).map(([key, value]) => ({
     name: LABEL_MAP[key] || key,
     value,

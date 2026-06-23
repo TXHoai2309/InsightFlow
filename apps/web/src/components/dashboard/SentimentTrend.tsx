@@ -8,6 +8,7 @@
  */
 
 import React, { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -42,6 +43,7 @@ interface SentimentTrendProps {
 }
 
 export function SentimentTrend({ filteredMentions }: SentimentTrendProps) {
+  const { t } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<ChartJS | null>(null);
 

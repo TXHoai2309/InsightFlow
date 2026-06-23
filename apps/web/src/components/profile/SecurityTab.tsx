@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, ChangeEvent, FormEvent } from "react";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   displayName: string;
@@ -15,9 +16,15 @@ function getStrengthColor(level: StrengthLevel, barIndex: number): string {
   return "bg-green-600";
 }
 
-const strengthLabels = ["Chưa nhập", "Yếu", "Trung bình", "Khá mạnh", "Rất mạnh"];
-
 export default function SecurityTab({ displayName }: Props) {
+  const { t } = useTranslation();
+  const strengthLabels = [
+    t("profile.security.strengthLabels.empty"),
+    t("profile.security.strengthLabels.weak"),
+    t("profile.security.strengthLabels.medium"),
+    t("profile.security.strengthLabels.strong"),
+    t("profile.security.strengthLabels.veryStrong")
+  ];
   const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
@@ -40,7 +47,7 @@ export default function SecurityTab({ displayName }: Props) {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!currentPw || !newPw || !passwordsMatch || strength < 3) {
-      alert("Vui lòng nhập mật khẩu hợp lệ (Độ mạnh từ Khá mạnh trở lên).");
+      alert(t("profile.security.errorInvalid"));
       return;
     }
     setIsSubmitting(true);
@@ -50,7 +57,7 @@ export default function SecurityTab({ displayName }: Props) {
       const user = auth.currentUser;
       
       if (!user || !user.email) {
-        alert("Không tìm thấy thông tin đăng nhập. Vui lòng tải lại trang.");
+        alert(t("profile.security.loginNotFound"));
         setIsSubmitting(false);
         return;
       }
@@ -70,9 +77,9 @@ export default function SecurityTab({ displayName }: Props) {
     } catch (error: any) {
       console.error("Error updating password:", error);
       if (error.code === "auth/invalid-credential" || error.code === "auth/wrong-password") {
-        alert("Mật khẩu hiện tại không chính xác.");
+        alert(t("profile.security.errorWrongCurrent"));
       } else {
-        alert("Có lỗi xảy ra: " + error.message);
+        alert(t("profile.security.errorGeneral") + error.message);
       }
     } finally {
       setIsSubmitting(false);
@@ -97,14 +104,14 @@ export default function SecurityTab({ displayName }: Props) {
       <div className="md:col-span-2 space-y-6">
         <section>
           <h2 className="text-[20px] leading-[28px] font-semibold text-[#111c2d] mb-6">
-            Đổi mật khẩu
+            {t("profile.security.title")}
           </h2>
 
           <form className="space-y-5" onSubmit={handleSubmit}>
             {/* Current Password */}
             <div className="space-y-2">
               <label className="block text-[14px] font-medium text-[#464554]">
-                Mật khẩu hiện tại
+                {t("profile.security.current")}
               </label>
               <div className="relative">
                 <input
@@ -129,14 +136,14 @@ export default function SecurityTab({ displayName }: Props) {
             {/* New Password */}
             <div className="space-y-2">
               <label className="block text-[14px] font-medium text-[#464554]">
-                Mật khẩu mới
+                {t("profile.security.new")}
               </label>
               <div className="relative">
                 <input
                   type={showNew ? "text" : "password"}
                   value={newPw}
                   onChange={(e) => setNewPw(e.target.value)}
-                  placeholder="Nhập mật khẩu mới"
+                  placeholder={t("profile.security.newPlaceholder")}
                   className="w-full px-4 py-3 pr-12 rounded-xl border border-[#c7c4d7] bg-white focus:ring-2 focus:ring-[#4648d4]/20 focus:border-[#4648d4] outline-none transition-all text-[16px]"
                 />
                 <button
@@ -160,9 +167,9 @@ export default function SecurityTab({ displayName }: Props) {
                 ))}
               </div>
               <p className="text-[12px] text-[#464554] mt-1">
-                Độ mạnh:{" "}
+                {t("profile.security.strength")}
                 <span className={strength >= 4 ? "text-green-600 font-semibold" : strength >= 2 ? "text-amber-500 font-semibold" : strength >= 1 ? "text-red-500 font-semibold" : ""}>
-                  {newPw ? strengthLabels[strength] : "Chưa nhập"}
+                  {strengthLabels[strength]}
                 </span>
               </p>
             </div>
@@ -170,14 +177,14 @@ export default function SecurityTab({ displayName }: Props) {
             {/* Confirm Password */}
             <div className="space-y-2">
               <label className="block text-[14px] font-medium text-[#464554]">
-                Xác nhận mật khẩu mới
+                {t("profile.security.confirm")}
               </label>
               <div className="relative">
                 <input
                   type={showConfirm ? "text" : "password"}
                   value={confirmPw}
                   onChange={(e) => setConfirmPw(e.target.value)}
-                  placeholder="Nhập lại mật khẩu mới"
+                  placeholder={t("profile.security.confirmPlaceholder")}
                   className={`w-full px-4 py-3 pr-12 rounded-xl border outline-none transition-all text-[16px] focus:ring-2 focus:ring-[#4648d4]/20 ${
                     passwordsMatch
                       ? "border-green-500 focus:border-green-500"
@@ -222,19 +229,19 @@ export default function SecurityTab({ displayName }: Props) {
                     <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>
                       check_circle
                     </span>
-                    Đã cập nhật!
+                    {t("profile.security.updated")}
                   </span>
                 ) : (
-                  !isSubmitting && "Lưu thay đổi"
+                  !isSubmitting && t("profile.security.saveChanges")
                 )}
-                {isSubmitting && "Đang lưu..."}
+                {isSubmitting && t("profile.security.saving")}
               </button>
               <button
                 type="button"
                 onClick={() => { setCurrentPw(""); setNewPw(""); setConfirmPw(""); }}
                 className="px-8 py-3 rounded-xl border border-[#c7c4d7] text-[#464554] text-[14px] font-medium hover:bg-[#f0f3ff] active:scale-95 transition-all"
               >
-                Hủy
+                {t("profile.security.cancel")}
               </button>
             </div>
           </form>
@@ -245,16 +252,15 @@ export default function SecurityTab({ displayName }: Props) {
           <div className="flex items-center justify-between gap-6">
             <div>
               <h4 className="text-[14px] font-semibold text-[#111c2d]">
-                Đăng xuất từ xa
+                {t("profile.security.remoteLogoutTitle")}
               </h4>
               <p className="text-[14px] text-[#464554] mt-1">
-                Nếu bạn nghi ngờ có truy cập lạ, hãy đăng xuất khỏi tất cả
-                thiết bị khác.
+                {t("profile.security.remoteLogoutDesc")}
               </p>
             </div>
             <button className="shrink-0 flex items-center gap-2 text-[#ba1a1a] border border-[#ba1a1a]/20 hover:bg-[#ffdad6] px-5 py-2.5 rounded-xl text-[14px] font-medium transition-all active:scale-95">
               <span className="material-symbols-outlined text-[18px]">logout</span>
-              Đăng xuất khỏi tất cả thiết bị
+              {t("profile.security.remoteLogoutBtn")}
             </button>
           </div>
         </div>
@@ -264,19 +270,17 @@ export default function SecurityTab({ displayName }: Props) {
       <div className="md:col-span-1">
         <div className="bg-[#f0f3ff] p-6 rounded-2xl border border-[#e7eaf3]">
           <h3 className="text-[14px] font-semibold text-[#111c2d] mb-4">
-            Yêu cầu mật khẩu:
+            {t("profile.security.req.title")}
           </h3>
           <ul className="space-y-3">
-            <Req ok={hasLen} label="Ít nhất 8 ký tự" />
-            <Req ok={hasUpper} label="Chứa chữ cái in hoa" />
-            <Req ok={hasNum} label="Chứa ít nhất một con số" />
-            <Req ok={hasSpec} label='Ký tự đặc biệt (@, #, $...)' />
+            <Req ok={hasLen} label={t("profile.security.req.len")} />
+            <Req ok={hasUpper} label={t("profile.security.req.upper")} />
+            <Req ok={hasNum} label={t("profile.security.req.num")} />
+            <Req ok={hasSpec} label={t("profile.security.req.spec")} />
           </ul>
           <div className="mt-8 pt-6 border-t border-[#c7c4d7]">
             <p className="text-[12px] text-[#464554] leading-relaxed">
-              Lưu ý: Bạn nên sử dụng mật khẩu mạnh để bảo vệ dữ liệu cá nhân
-              của <span className="font-semibold">{displayName}</span> khỏi các
-              truy cập trái phép.
+              {t("profile.security.note.part1")} <span className="font-semibold">{displayName}</span>{t("profile.security.note.part2")}
             </p>
           </div>
         </div>
