@@ -1,0 +1,42 @@
+
+> @insightflow/web@1.0.0 build
+> next build
+
+  ▲ Next.js 14.2.35
+  - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/16) ...
+   Generating static pages (4/16) 
+   Generating static pages (8/16) 
+   Generating static pages (12/16) 
+ ✓ Generating static pages (16/16)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                              Size     First Load JS
+┌ ○ /                                    7.86 kB         301 kB
+├ ○ /_not-found                          876 B          88.5 kB
+├ ○ /alerts                              11.7 kB         348 kB
+├ ○ /api/reports/latest                  0 B                0 B
+├ ○ /dashboard                           5.39 kB         359 kB
+├ ○ /leads                               6.93 kB         275 kB
+├ ○ /login                               3.65 kB         292 kB
+├ ○ /mentions                            7.92 kB         302 kB
+├ ○ /nganh                               6.1 kB          282 kB
+├ ○ /profile                             9.03 kB         297 kB
+├ ○ /register                            4.86 kB         293 kB
+├ ○ /reports                             156 kB          418 kB
+├ ○ /settings/brand                      3.5 kB         91.1 kB
+└ ○ /ve-chung-toi                        13 kB           289 kB
++ First Load JS shared by all            87.6 kB
+  ├ chunks/1dd3208c-8c353eb062229c72.js  53.6 kB
+  ├ chunks/528-f0ed8414fd4a5683.js       31.9 kB
+  └ other shared chunks (total)          2.09 kB
+
+
+○  (Static)  prerendered as static content
+
