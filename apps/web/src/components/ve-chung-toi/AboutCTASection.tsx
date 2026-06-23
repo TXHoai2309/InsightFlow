@@ -5,28 +5,60 @@ import Link from "next/link";
 export default function AboutCTASection() {
   return (
     <section className="px-6 md:px-10 py-24">
-      <div className="max-w-5xl mx-auto bg-[#4648d4] rounded-[40px] p-12 md:p-20 text-center text-white relative overflow-hidden shadow-2xl">
-        {/* Background decorations */}
-        <div className="absolute top-0 left-0 w-64 h-64 bg-white/10 rounded-full -translate-x-1/2 -translate-y-1/2 blur-2xl pointer-events-none" />
-        <div className="absolute bottom-0 right-0 w-96 h-96 bg-white/5 rounded-full translate-x-1/4 translate-y-1/4 blur-3xl pointer-events-none" />
+      <div 
+        className="max-w-5xl mx-auto rounded-[32px] p-12 md:p-20 text-center text-white relative overflow-hidden shadow-2xl"
+        style={{ background: "linear-gradient(135deg, #5B3FE8, #6D4CFF, #3B82F6)" }}
+      >
+        {/* Glow effect */}
+        <div 
+          className="absolute inset-0 pointer-events-none"
+          style={{ background: "radial-gradient(circle at center, rgba(109,76,255,0.8) 0%, transparent 60%)" }}
+        ></div>
 
-        <div className="relative z-10 space-y-8">
-          <h2 className="text-[40px] leading-[48px] tracking-[-0.02em] font-bold">
-            Sẵn sàng đưa thương hiệu của bạn vươn xa?
+        {/* Grid pattern overlay */}
+        <div 
+          className="absolute inset-0 pointer-events-none"
+          style={{ 
+            backgroundImage: "radial-gradient(#ffffff 2px, transparent 2px)", 
+            backgroundSize: "32px 32px", 
+            opacity: 0.04 
+          }}
+        ></div>
+
+        <div className="relative z-10 space-y-6">
+          <h2 className="text-[32px] md:text-[40px] leading-[1.2] tracking-tight font-bold text-white max-w-2xl mx-auto">
+            Sẵn sàng khám phá insight ẩn trong hàng triệu cuộc trò chuyện?
           </h2>
-          <p className="text-[18px] leading-[28px] opacity-90 max-w-2xl mx-auto">
-            Gia nhập cùng 500+ doanh nghiệp hàng đầu đã tin tưởng InsightFlow
-            để tối ưu hóa chiến lược truyền thông xã hội.
+          <p className="text-[18px] md:text-[20px] leading-[28px] opacity-90 max-w-2xl mx-auto pb-4">
+            🚀 Dùng thử miễn phí 14 ngày — Không cần thẻ tín dụng
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
             <Link
               href="/login"
-              className="bg-white text-[#4648d4] px-10 py-5 rounded-2xl text-[20px] font-semibold hover:bg-[#e7eeff] transition-all w-full sm:w-auto shadow-lg active:scale-95 text-center"
+              className="bg-white px-8 py-4 rounded-xl text-[16px] md:text-[18px] font-bold transition-all w-full sm:w-auto shadow-md text-center"
+              style={{ color: "#6D4CFF" }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.transform = "scale(1.03)";
+                e.currentTarget.style.boxShadow = "0 0 24px rgba(255,255,255,0.4)";
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.transform = "scale(1)";
+                e.currentTarget.style.boxShadow = "0 4px 6px -1px rgba(0, 0, 0, 0.1)";
+              }}
             >
-              Tham gia cùng chúng tôi
+              Bắt đầu ngay
             </Link>
-            <button className="border border-white/30 text-white px-10 py-5 rounded-2xl text-[20px] font-semibold hover:bg-white/10 transition-all w-full sm:w-auto">
-              Đặt lịch tư vấn (Miễn phí)
+            <button 
+              className="bg-transparent border-2 px-8 py-4 rounded-xl text-[16px] md:text-[18px] font-bold text-white transition-all w-full sm:w-auto"
+              style={{ borderColor: "rgba(255,255,255,0.5)" }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.1)";
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.backgroundColor = "transparent";
+              }}
+            >
+              Xem Demo
             </button>
           </div>
         </div>
