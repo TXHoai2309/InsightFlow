@@ -170,17 +170,17 @@ function ArchivedReportDetailModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
-      <div className="bg-surface p-6 rounded-2xl shadow-xl w-full max-w-2xl flex flex-col gap-5 my-8">
+      <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] p-6 rounded-2xl shadow-xl w-full max-w-2xl flex flex-col gap-5 my-8">
         {/* Header */}
-        <div className="flex justify-between items-start border-b border-outline-variant pb-3">
+        <div className="flex justify-between items-start border-b border-[var(--color-border)] pb-3">
           <div>
-            <span className="bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">
+            <span className="bg-[var(--color-brand)]/10 text-[var(--color-brand)] border border-[var(--color-brand)]/20 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">
               {report.id}
             </span>
-            <h2 className="text-lg font-bold text-on-surface mt-1">{report.title}</h2>
-            <p className="text-xs text-outline font-medium">Lưu trữ ngày: {report.dateStr}</p>
+            <h2 className="text-lg font-bold text-[var(--color-text-primary)] mt-1">{report.title}</h2>
+            <p className="text-xs text-[var(--color-text-muted)] font-medium">Lưu trữ ngày: {report.dateStr}</p>
           </div>
-          <button onClick={onClose} className="p-2 text-on-surface-variant hover:bg-surface-container rounded-full flex-shrink-0">
+          <button onClick={onClose} className="p-2 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-raised)] rounded-full flex-shrink-0">
             <span className="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -188,20 +188,20 @@ function ArchivedReportDetailModal({
         {/* Content Body */}
         <div className="flex flex-col gap-4 max-h-[60vh] overflow-y-auto pr-1">
           {/* Metadata Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-surface-container-low p-4 rounded-xl">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-[var(--color-bg-surface-raised)] p-4 rounded-xl border border-[var(--color-border)]">
             <div>
-              <p className="text-[10px] text-outline font-bold uppercase">Thương hiệu</p>
-              <p className="font-bold text-sm text-primary capitalize">{report.brand}</p>
+              <p className="text-[10px] text-[var(--color-text-muted)] font-bold uppercase">Thương hiệu</p>
+              <p className="font-bold text-sm text-[var(--color-brand)] capitalize">{report.brand}</p>
             </div>
             <div>
-              <p className="text-[10px] text-outline font-bold uppercase">Thời gian lọc</p>
-              <p className="font-bold text-sm text-on-surface">
+              <p className="text-[10px] text-[var(--color-text-muted)] font-bold uppercase">Thời gian lọc</p>
+              <p className="font-bold text-sm text-[var(--color-text-primary)]">
                 {report.startDate ? new Date(report.startDate).toLocaleDateString("vi-VN") : "N/A"} - {report.endDate ? new Date(report.endDate).toLocaleDateString("vi-VN") : "N/A"}
               </p>
             </div>
             <div className="col-span-2 sm:col-span-1">
-              <p className="text-[10px] text-outline font-bold uppercase">Bộ lọc</p>
-              <p className="font-bold text-xs text-on-surface truncate" title={report.filtersSummary}>
+              <p className="text-[10px] text-[var(--color-text-muted)] font-bold uppercase">Bộ lọc</p>
+              <p className="font-bold text-xs text-[var(--color-text-primary)] truncate" title={report.filtersSummary}>
                 {report.filtersSummary}
               </p>
             </div>
@@ -209,39 +209,39 @@ function ArchivedReportDetailModal({
 
           {/* Quick Stats Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="border border-outline-variant rounded-xl p-3 text-center bg-surface-bright">
-              <p className="text-[9px] text-outline font-bold uppercase">Đề cập</p>
-              <p className="text-xl font-bold text-on-surface mt-0.5">{stats.total}</p>
+            <div className="border border-[var(--color-border)] rounded-xl p-3 text-center bg-[var(--color-bg-surface)]">
+              <p className="text-[9px] text-[var(--color-text-muted)] font-bold uppercase">Đề cập</p>
+              <p className="text-xl font-bold text-[var(--color-text-primary)] mt-0.5">{stats.total}</p>
             </div>
-            <div className="border border-outline-variant rounded-xl p-3 text-center bg-surface-bright">
-              <p className="text-[9px] text-outline font-bold uppercase">Tích cực</p>
-              <p className="text-xl font-bold text-green-600 mt-0.5">
+            <div className="border border-[var(--color-border)] rounded-xl p-3 text-center bg-[var(--color-bg-surface)]">
+              <p className="text-[9px] text-[var(--color-text-muted)] font-bold uppercase">Tích cực</p>
+              <p className="text-xl font-bold text-[var(--color-success)] mt-0.5">
                 {stats.positive}
-                <span className="text-[10px] font-normal text-outline ml-1">({stats.total > 0 ? Math.round(stats.positive/stats.total*100) : 0}%)</span>
+                <span className="text-[10px] font-normal text-[var(--color-text-muted)] ml-1">({stats.total > 0 ? Math.round(stats.positive/stats.total*100) : 0}%)</span>
               </p>
             </div>
-            <div className="border border-outline-variant rounded-xl p-3 text-center bg-surface-bright">
-              <p className="text-[9px] text-outline font-bold uppercase">Tiêu cực</p>
-              <p className="text-xl font-bold text-red-600 mt-0.5">
+            <div className="border border-[var(--color-border)] rounded-xl p-3 text-center bg-[var(--color-bg-surface)]">
+              <p className="text-[9px] text-[var(--color-text-muted)] font-bold uppercase">Tiêu cực</p>
+              <p className="text-xl font-bold text-[var(--color-error)] mt-0.5">
                 {stats.negative}
-                <span className="text-[10px] font-normal text-outline ml-1">({stats.total > 0 ? Math.round(stats.negative/stats.total*100) : 0}%)</span>
+                <span className="text-[10px] font-normal text-[var(--color-text-muted)] ml-1">({stats.total > 0 ? Math.round(stats.negative/stats.total*100) : 0}%)</span>
               </p>
             </div>
-            <div className="border border-outline-variant rounded-xl p-3 text-center bg-surface-bright">
-              <p className="text-[9px] text-outline font-bold uppercase">Net Sentiment</p>
-              <p className={`text-xl font-bold mt-0.5 ${stats.score >= 50 ? "text-green-600" : stats.score > 0 ? "text-primary" : "text-red-600"}`}>
+            <div className="border border-[var(--color-border)] rounded-xl p-3 text-center bg-[var(--color-bg-surface)]">
+              <p className="text-[9px] text-[var(--color-text-muted)] font-bold uppercase">Net Sentiment</p>
+              <p className={`text-xl font-bold mt-0.5 ${stats.score >= 50 ? "text-[var(--color-success)]" : stats.score > 0 ? "text-[var(--color-brand)]" : "text-[var(--color-error)]"}`}>
                 {stats.score >= 0 ? "+" : ""}{stats.score}%
               </p>
             </div>
           </div>
 
           {/* AI Insights Panel */}
-          <div className="bg-primary/5 border border-primary/10 rounded-xl p-4 space-y-2">
-            <div className="flex items-center gap-1.5 text-primary">
+          <div className="bg-[var(--color-brand)]/5 border border-[var(--color-brand)]/10 rounded-xl p-4 space-y-2">
+            <div className="flex items-center gap-1.5 text-[var(--color-brand)]">
               <span className="material-symbols-outlined text-lg">psychology</span>
               <h4 className="text-xs font-bold uppercase tracking-wider">AI Insights phân tích tại thời điểm lưu</h4>
             </div>
-            <p className="text-xs text-on-surface-variant leading-relaxed whitespace-pre-wrap">
+            <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed whitespace-pre-wrap">
               {report.insights}
             </p>
           </div>
@@ -249,27 +249,27 @@ function ArchivedReportDetailModal({
           {/* Sample Mentions List (Up to 15 rows) */}
           {mentions.length > 0 && (
             <div className="space-y-2">
-              <h4 className="text-xs font-bold text-on-surface">Đề cập tiêu biểu ({Math.min(mentions.length, 15)} bài viết)</h4>
-              <div className="border border-outline-variant rounded-xl overflow-hidden text-xs">
+              <h4 className="text-xs font-bold text-[var(--color-text-primary)]">Đề cập tiêu biểu ({Math.min(mentions.length, 15)} bài viết)</h4>
+              <div className="border border-[var(--color-border)] rounded-xl overflow-hidden text-xs">
                 <table className="w-full text-left">
                   <thead>
-                    <tr className="bg-surface-container-low border-b border-outline-variant">
-                      <th className="px-3 py-2 font-bold text-on-surface-variant w-16">Nguồn</th>
-                      <th className="px-3 py-2 font-bold text-on-surface-variant">Nội dung</th>
-                      <th className="px-3 py-2 font-bold text-on-surface-variant w-20">Sắc thái</th>
+                    <tr className="bg-[var(--color-bg-surface-raised)] border-b border-[var(--color-border)]">
+                      <th className="px-3 py-2 font-bold text-[var(--color-text-muted)] w-16">Nguồn</th>
+                      <th className="px-3 py-2 font-bold text-[var(--color-text-muted)]">Nội dung</th>
+                      <th className="px-3 py-2 font-bold text-[var(--color-text-muted)] w-20">Sắc thái</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-outline-variant/40">
+                  <tbody className="divide-y divide-[var(--color-border)]/40">
                     {mentions.slice(0, 15).map((m, idx) => (
-                      <tr key={idx} className="hover:bg-surface-container-low/30 transition-colors">
-                        <td className="px-3 py-2 font-bold capitalize text-primary">{m.source}</td>
-                        <td className="px-3 py-2 text-on-surface-variant truncate max-w-[200px]" title={m.content}>
+                      <tr key={idx} className="hover:bg-[var(--color-bg-surface-raised)]/30 transition-colors">
+                        <td className="px-3 py-2 font-bold capitalize text-[var(--color-brand)]">{m.source}</td>
+                        <td className="px-3 py-2 text-[var(--color-text-secondary)] truncate max-w-[200px]" title={m.content}>
                           {m.content}
                         </td>
                         <td className="px-3 py-2">
                           <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${
-                            m.sentiment.toLowerCase().includes("pos") ? "text-green-600 bg-green-50 border-green-200" :
-                            m.sentiment.toLowerCase().includes("neg") ? "text-red-600 bg-red-50 border-red-200" : "text-gray-600 bg-gray-50 border-gray-200"
+                            m.sentiment.toLowerCase().includes("pos") ? "text-[var(--color-success)] bg-[var(--color-success-subtle)] border-[var(--color-success)]/30" :
+                            m.sentiment.toLowerCase().includes("neg") ? "text-[var(--color-error)] bg-[var(--color-error-subtle)] border-[var(--color-error)]/30" : "text-[var(--color-text-secondary)] bg-[var(--color-bg-surface-raised)] border-[var(--color-border)]"
                           }`}>
                             {m.sentiment === "positive" || m.sentiment === "pos" ? "Tích cực" : m.sentiment === "negative" || m.sentiment === "neg" ? "Tiêu cực" : "Trung lập"}
                           </span>
@@ -284,27 +284,27 @@ function ArchivedReportDetailModal({
         </div>
 
         {/* Footer Actions */}
-        <div className="flex justify-between items-center border-t border-outline-variant pt-3 mt-1">
+        <div className="flex justify-between items-center border-t border-[var(--color-border)] pt-3 mt-1">
           <button 
             onClick={() => {
               if (confirm("Bạn có chắc chắn muốn xóa báo cáo này khỏi kho lưu trữ?")) {
                 onDelete();
               }
             }}
-            className="flex items-center gap-1.5 px-3 py-2 text-red-600 hover:bg-red-50 rounded-xl font-bold text-xs transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 text-[var(--color-error)] hover:bg-[var(--color-error-subtle)] rounded-xl font-bold text-xs transition-colors"
           >
             <span className="material-symbols-outlined text-[16px]">delete</span>
             Xóa lưu trữ
           </button>
           
           <div className="flex gap-2">
-            <button onClick={onClose} className="px-4 py-2 rounded-xl text-on-surface-variant font-bold text-xs hover:bg-surface-container transition-colors">
+            <button onClick={onClose} className="px-4 py-2 rounded-xl text-[var(--color-text-secondary)] font-bold text-xs hover:bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] transition-colors">
               Đóng
             </button>
             <button 
               onClick={onExport} 
               disabled={isExporting || mentions.length === 0}
-              className="flex items-center gap-1.5 px-4 py-2 bg-primary text-white rounded-xl font-bold text-xs shadow-sm hover:opacity-90 disabled:opacity-50 transition-opacity"
+              className="flex items-center gap-1.5 px-4 py-2 bg-[var(--color-brand)] text-white rounded-xl font-bold text-xs shadow-sm hover:bg-[var(--color-brand-hover)] disabled:opacity-50 transition-colors"
             >
               {isExporting ? (
                 <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
@@ -1233,14 +1233,14 @@ export default function ReportsPage() {
               // Pulsing Loading State
               <div className="flex-1 flex flex-col items-center justify-center py-20 max-w-md mx-auto text-center space-y-5">
                 <div className="relative">
-                  <div className="w-16 h-16 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
-                  <div className="w-8 h-8 bg-primary/10 text-primary rounded-full flex items-center justify-center absolute inset-0 m-auto animate-pulse">
+                  <div className="w-16 h-16 border-4 border-[var(--color-brand)]/20 border-t-[var(--color-brand)] rounded-full animate-spin"></div>
+                  <div className="w-8 h-8 bg-[var(--color-brand)]/10 text-[var(--color-brand)] rounded-full flex items-center justify-center absolute inset-0 m-auto animate-pulse">
                     <span className="material-symbols-outlined text-base">psychology</span>
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <h3 className="text-lg font-bold text-on-surface">AI đang xử lý báo cáo...</h3>
-                  <p className="text-sm text-on-surface-variant min-h-[40px] animate-pulse">
+                  <h3 className="text-lg font-bold text-[var(--color-text-primary)]">AI đang xử lý báo cáo...</h3>
+                  <p className="text-sm text-[var(--color-text-secondary)] min-h-[40px] animate-pulse">
                     {loadingMessages[loadingStep]}
                   </p>
                 </div>
@@ -1248,47 +1248,25 @@ export default function ReportsPage() {
             ) : !customReportGenerated ? (
               // A: Configuration Form
               <div className="space-y-6 max-w-4xl">
-                {/* Tabs switcher inside custom config view since we hide the outer toolbar */}
-                <div className="flex gap-1 overflow-x-auto border-b border-outline-variant pb-3">
-                  <button 
-                    onClick={() => setActiveTab("periodic")}
-                    className="px-4 py-2 rounded-lg text-sm text-on-surface-variant hover:bg-surface-container transition-colors font-bold whitespace-nowrap flex-shrink-0"
-                  >
-                    Định kỳ
-                  </button>
-                  <button 
-                    onClick={() => setActiveTab("custom")}
-                    className="px-4 py-2 rounded-lg text-sm font-bold text-primary bg-primary/10 whitespace-nowrap flex-shrink-0"
-                  >
-                    Tùy chỉnh
-                  </button>
-                  <button 
-                    onClick={() => setActiveTab("archive")}
-                    className="px-4 py-2 rounded-lg text-sm text-on-surface-variant hover:bg-surface-container transition-colors font-bold whitespace-nowrap flex-shrink-0"
-                  >
-                    Lưu trữ
-                  </button>
-                </div>
-
                 <div>
-                  <h2 className="text-lg font-bold text-on-surface flex items-center gap-2">
-                    <span className="material-symbols-outlined text-primary">settings_suggest</span>
+                  <h2 className="text-lg font-bold text-[var(--color-text-primary)] flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[var(--color-brand)]">settings_suggest</span>
                     Thiết lập Báo cáo Tùy chỉnh
                   </h2>
-                  <p className="text-xs text-on-surface-variant mt-1">
+                  <p className="text-xs text-[var(--color-text-secondary)] mt-1">
                     Lọc dữ liệu mạng xã hội và truyền thông, sau đó yêu cầu AI lập báo cáo phân tích theo hướng đi cụ thể.
                   </p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   {/* Brand & Date range */}
-                  <div className="space-y-4 bg-surface-container-lowest p-4 rounded-xl border border-outline-variant/60">
+                  <div className="space-y-4 bg-[var(--color-bg-surface-raised)] p-4 rounded-xl border border-[var(--color-border)]">
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Chọn thương hiệu:</label>
+                      <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">Chọn thương hiệu:</label>
                       <select 
                         value={customBrand}
                         onChange={(e) => setCustomBrand(e.target.value)}
-                        className="bg-white border border-outline-variant rounded-lg text-sm py-2 px-3 outline-none font-bold focus:ring-2 focus:ring-primary/25"
+                        className="bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] border border-[var(--color-border)] rounded-lg text-sm py-2 px-3 outline-none font-bold focus:ring-2 focus:ring-[var(--color-brand)]/20"
                       >
                         <option value="all">Tất cả nhãn hàng</option>
                         {brands.map(b => (
@@ -1299,42 +1277,42 @@ export default function ReportsPage() {
 
                     <div className="grid grid-cols-2 gap-3">
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Từ ngày:</label>
+                        <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">Từ ngày:</label>
                         <input 
                           type="date"
                           value={customStartDate}
                           onChange={(e) => setCustomStartDate(e.target.value)}
-                          className="bg-white border border-outline-variant rounded-lg text-sm py-2 px-3 outline-none focus:ring-2 focus:ring-primary/25"
+                          className="bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] border border-[var(--color-border)] rounded-lg text-sm py-2 px-3 outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 w-full"
                         />
                       </div>
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Đến ngày:</label>
+                        <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">Đến ngày:</label>
                         <input 
                           type="date"
                           value={customEndDate}
                           onChange={(e) => setCustomEndDate(e.target.value)}
-                          className="bg-white border border-outline-variant rounded-lg text-sm py-2 px-3 outline-none focus:ring-2 focus:ring-primary/25"
+                          className="bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] border border-[var(--color-border)] rounded-lg text-sm py-2 px-3 outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 w-full"
                         />
                       </div>
                     </div>
                   </div>
 
                   {/* Sentiment Filter */}
-                  <div className="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant/60 space-y-3">
+                  <div className="bg-[var(--color-bg-surface-raised)] p-4 rounded-xl border border-[var(--color-border)] space-y-3">
                     <div className="flex justify-between items-center">
-                      <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Chọn sắc thái:</label>
+                      <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">Chọn sắc thái:</label>
                       <button 
                         onClick={() => setCustomSentiments(customSentiments.length === 3 ? [] : ["positive", "neutral", "negative"])}
-                        className="text-[10px] text-primary font-bold hover:underline"
+                        className="text-[10px] text-[var(--color-brand)] font-bold hover:underline"
                       >
                         {customSentiments.length === 3 ? "Bỏ chọn tất cả" : "Chọn tất cả"}
                       </button>
                     </div>
                     <div className="flex flex-wrap gap-2 pt-1">
                       {[
-                        { val: "positive", label: "Tích cực", icon: "mood", color: "text-green-600 bg-green-50 border-green-200" },
-                        { val: "neutral", label: "Trung lập", icon: "sentiment_neutral", color: "text-gray-600 bg-gray-50 border-gray-200" },
-                        { val: "negative", label: "Tiêu cực", icon: "sentiment_dissatisfied", color: "text-red-600 bg-red-50 border-red-200" }
+                        { val: "positive", label: "Tích cực", icon: "mood", activeColor: "text-[var(--color-success)] bg-[var(--color-success-subtle)] border-[var(--color-success)]/30" },
+                        { val: "neutral", label: "Trung lập", icon: "sentiment_neutral", activeColor: "text-[var(--color-text-primary)] bg-[var(--color-bg-surface-high)] border-[var(--color-border-strong)]" },
+                        { val: "negative", label: "Tiêu cực", icon: "sentiment_dissatisfied", activeColor: "text-[var(--color-error)] bg-[var(--color-error-subtle)] border-[var(--color-error)]/30" }
                       ].map(item => {
                         const active = customSentiments.includes(item.val);
                         return (
@@ -1342,7 +1320,7 @@ export default function ReportsPage() {
                             key={item.val}
                             onClick={() => toggleCheckbox(item.val, customSentiments, setCustomSentiments)}
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
-                              active ? `${item.color} shadow-sm` : "border-outline-variant bg-white text-on-surface-variant hover:bg-surface-container"
+                              active ? `${item.activeColor} shadow-sm` : "border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)]"
                             }`}
                           >
                             <span className="material-symbols-outlined text-[16px]">{item.icon}</span>
@@ -1357,12 +1335,12 @@ export default function ReportsPage() {
                 {/* Platforms & Topics selection */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   {/* Platforms */}
-                  <div className="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant/60 space-y-3">
+                  <div className="bg-[var(--color-bg-surface-raised)] p-4 rounded-xl border border-[var(--color-border)] space-y-3">
                     <div className="flex justify-between items-center">
-                      <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Nguồn dữ liệu (Nền tảng):</label>
+                      <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">Nguồn dữ liệu (Nền tảng):</label>
                       <button 
                         onClick={() => setCustomPlatforms(customPlatforms.length === 7 ? [] : ["facebook", "tiktok", "youtube", "thread", "be", "google_maps", "news"])}
-                        className="text-[10px] text-primary font-bold hover:underline"
+                        className="text-[10px] text-[var(--color-brand)] font-bold hover:underline"
                       >
                         {customPlatforms.length === 7 ? "Bỏ tất cả" : "Chọn tất cả"}
                       </button>
@@ -1379,12 +1357,12 @@ export default function ReportsPage() {
                       ].map(p => {
                         const active = customPlatforms.includes(p.val);
                         return (
-                          <label key={p.val} className="flex items-center gap-2 text-xs font-medium cursor-pointer p-1.5 rounded hover:bg-surface-container/50">
+                          <label key={p.val} className="flex items-center gap-2 text-xs font-medium cursor-pointer p-1.5 rounded text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-high)]">
                             <input 
                               type="checkbox"
                               checked={active}
                               onChange={() => toggleCheckbox(p.val, customPlatforms, setCustomPlatforms)}
-                              className="accent-primary w-4 h-4"
+                              className="accent-[var(--color-brand)] w-4 h-4"
                             />
                             {p.label}
                           </label>
@@ -1394,12 +1372,12 @@ export default function ReportsPage() {
                   </div>
 
                   {/* Topics */}
-                  <div className="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant/60 space-y-3">
+                  <div className="bg-[var(--color-bg-surface-raised)] p-4 rounded-xl border border-[var(--color-border)] space-y-3">
                     <div className="flex justify-between items-center">
-                      <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Chủ đề quan tâm:</label>
+                      <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">Chủ đề quan tâm:</label>
                       <button 
                         onClick={() => setCustomTopics(customTopics.length === 11 ? [] : ["quality", "price", "service", "staff", "delivery", "experience", "legal", "operation", "marketing", "competitor", "other"])}
-                        className="text-[10px] text-primary font-bold hover:underline"
+                        className="text-[10px] text-[var(--color-brand)] font-bold hover:underline"
                       >
                         {customTopics.length === 11 ? "Bỏ tất cả" : "Chọn tất cả"}
                       </button>
@@ -1420,12 +1398,12 @@ export default function ReportsPage() {
                       ].map(t => {
                         const active = customTopics.includes(t.val);
                         return (
-                          <label key={t.val} className="flex items-center gap-2 text-xs font-medium cursor-pointer p-1.5 rounded hover:bg-surface-container/50">
+                          <label key={t.val} className="flex items-center gap-2 text-xs font-medium cursor-pointer p-1.5 rounded text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-high)]">
                             <input 
                               type="checkbox"
                               checked={active}
                               onChange={() => toggleCheckbox(t.val, customTopics, setCustomTopics)}
-                              className="accent-primary w-4 h-4"
+                              className="accent-[var(--color-brand)] w-4 h-4"
                             />
                             {t.label}
                           </label>
@@ -1437,14 +1415,14 @@ export default function ReportsPage() {
 
                 {/* AI Guidance input */}
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">
+                  <label className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">
                     Định hướng phân tích cho AI (Tùy chọn):
                   </label>
                   <textarea
                     value={customPrompt}
                     onChange={(e) => setCustomPrompt(e.target.value)}
                     placeholder="Ví dụ: Tập trung làm rõ các phản hồi tiêu cực về chất lượng đồ uống và thái độ phục vụ của nhân viên, đưa ra so sánh nếu có ý kiến nhắc tới thương hiệu đối thủ..."
-                    className="bg-white border border-outline-variant rounded-xl p-4 text-sm outline-none focus:ring-2 focus:ring-primary/25 min-h-[100px] w-full"
+                    className="bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] border border-[var(--color-border)] rounded-xl p-4 text-sm outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 min-h-[100px] w-full"
                   />
                 </div>
 
@@ -1452,7 +1430,7 @@ export default function ReportsPage() {
                   <button
                     onClick={handleGenerateCustomReport}
                     disabled={customPlatforms.length === 0 || customTopics.length === 0 || customSentiments.length === 0}
-                    className="flex items-center gap-2 bg-primary text-white font-bold text-sm px-6 py-3 rounded-xl shadow-md hover:bg-primary/95 active:scale-[0.98] transition-all disabled:opacity-50"
+                    className="flex items-center gap-2 bg-[var(--color-brand)] text-white font-bold text-sm px-6 py-3 rounded-xl shadow-md hover:bg-[var(--color-brand-hover)] active:scale-[0.98] transition-all disabled:opacity-50"
                   >
                     <span className="material-symbols-outlined text-lg">science</span>
                     Tạo báo cáo với AI Insights
@@ -1463,10 +1441,10 @@ export default function ReportsPage() {
               // B: Results view
               <div className="space-y-6">
                 {/* Back and action buttons */}
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-outline-variant pb-4 gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-[var(--color-border)] pb-4 gap-3">
                   <button 
                     onClick={() => setCustomReportGenerated(false)}
-                    className="flex items-center gap-1.5 text-xs font-bold text-on-surface-variant hover:text-primary transition-colors"
+                    className="flex items-center gap-1.5 text-xs font-bold text-[var(--color-text-secondary)] hover:text-[var(--color-brand)] transition-colors"
                   >
                     <span className="material-symbols-outlined text-base">arrow_back</span>
                     Quay lại cấu hình bộ lọc
@@ -1475,7 +1453,7 @@ export default function ReportsPage() {
                   <div className="flex gap-2 w-full sm:w-auto">
                     <button 
                       onClick={handleArchiveReport}
-                      className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 bg-surface-container text-on-surface border border-outline-variant rounded-xl font-bold text-xs hover:bg-surface-container-high transition-colors"
+                      className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] border border-[var(--color-border)] rounded-xl font-bold text-xs hover:bg-[var(--color-bg-surface-high)] transition-colors"
                     >
                       <span className="material-symbols-outlined text-[16px]">archive</span>
                       Lưu trữ báo cáo
