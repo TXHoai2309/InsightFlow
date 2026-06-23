@@ -113,7 +113,13 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
 
   return (
     <>
-      <div className="bg-white rounded-2xl border border-outline-variant shadow-sm overflow-hidden">
+      <div
+        className="rounded-2xl shadow-sm overflow-hidden"
+        style={{
+          backgroundColor: "var(--color-bg-surface)",
+          border: "1px solid var(--color-border)",
+        }}
+      >
         {/* Mobile View: Card List */}
         <div className="md:hidden divide-y divide-outline-variant/30">
           {isLoading ? (
@@ -191,7 +197,7 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm border-collapse">
             <thead>
-              <tr className="bg-surface-container-low border-b border-outline-variant">
+              <tr className="" style={{ backgroundColor: "var(--color-bg-surface-raised)", borderBottom: "1px solid var(--color-border)" }}>
                 <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-24">
                   Nguồn
                 </th>
@@ -335,7 +341,13 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
 
         {/* Pagination */}
         {mentions.length > 0 && (
-          <div className="px-4 py-4 bg-surface-bright flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-outline-variant">
+          <div
+            className="px-4 py-4 flex flex-col sm:flex-row items-center justify-between gap-3"
+            style={{
+              backgroundColor: "var(--color-bg-surface-raised)",
+              borderTop: "1px solid var(--color-border)",
+            }}
+          >
             <span className="text-xs text-outline font-medium">
               Hiển thị {startIndex + 1}-{endIndex} trên tổng số{" "}
               {mentions.length} đề cập

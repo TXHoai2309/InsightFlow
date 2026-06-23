@@ -15,8 +15,14 @@ interface TopSourcesProps {
 
 export function TopSources({ sources }: TopSourcesProps) {
   return (
-    <div className="bg-white border border-outline-variant rounded-lg p-6 shadow-sm h-full">
-      <h4 className="font-bold text-lg text-on-surface mb-4">
+    <div
+      className="rounded-lg p-6 shadow-sm h-full"
+      style={{
+        backgroundColor: "var(--color-bg-surface)",
+        border: "1px solid var(--color-border)",
+      }}
+    >
+      <h4 className="font-bold text-lg mb-4" style={{ color: "var(--color-text-primary)" }}>
         Top nguồn dữ liệu
       </h4>
 
@@ -33,7 +39,7 @@ export function TopSources({ sources }: TopSourcesProps) {
                   {source.count} ({source.percentage}%)
                 </span>
               </div>
-              <div className="w-full bg-surface-container rounded-full h-2">
+              <div className="w-full rounded-full h-2" style={{ backgroundColor: "var(--color-bg-surface-raised)" }}>
                 <div
                   className="h-2 rounded-full transition-all"
                   style={{
