@@ -49,13 +49,8 @@ export function Header({ onMenuToggle }: HeaderProps) {
           <i className="ti ti-search text-[#9898B0] text-[18px]"></i>
           <input
             type="text"
-<<<<<<< HEAD
             placeholder={t("header.searchPlaceholder")}
-            className="bg-transparent border-none focus:ring-0 w-full ml-3 placeholder:text-outline/70 outline-none text-sm"
-=======
-            placeholder="Tìm kiếm mention, bài viết..."
             className="bg-transparent border-none focus:ring-0 w-full ml-3 placeholder:text-[#9898B0] outline-none text-[14px] text-[#4A4A6A]"
->>>>>>> origin/Lead
           />
         </div>
 
@@ -72,15 +67,10 @@ export function Header({ onMenuToggle }: HeaderProps) {
       {/* Right Section */}
       <div className="flex items-center gap-2 md:gap-6">
         {/* Simulation Controls — chỉ hiện trên desktop */}
-<<<<<<< HEAD
-        <div className="hidden md:flex items-center gap-2 bg-surface-container-low border border-outline-variant/80 rounded-lg px-3 py-1.5">
-          <span className="text-xs font-bold text-on-surface-variant uppercase">{t("header.simulation")}</span>
-=======
         <div className="hidden md:flex items-center gap-2 bg-[#F7F8FC] border-[1.5px] border-[#E2E4F0] rounded-[10px] px-3 h-[44px]">
           <span className="text-[11px] font-semibold text-[#9898B0] uppercase tracking-[0.08em] mr-1">
-            Giả lập:
+            {t("header.simulation")}
           </span>
->>>>>>> origin/Lead
           <button
             onClick={() => alert("Triggered Hot Lead simulation")}
             className="px-3 py-1 bg-[#6C63FF] text-white text-[12px] font-semibold rounded-[6px] hover:bg-[#5A52D5] transition-colors shadow-sm"
@@ -106,47 +96,28 @@ export function Header({ onMenuToggle }: HeaderProps) {
           </button>
 
           {showNotifications && (
-<<<<<<< HEAD
-            <div className="absolute right-0 top-12 w-72 md:w-80 bg-white border border-outline-variant rounded-lg shadow-lg z-50">
-              <div className="p-4 border-b border-outline-variant">
-                <h4 className="font-bold text-sm">{t("header.newNotifications")}</h4>
-              </div>
-              <div className="max-h-64 overflow-y-auto">
-                <div className="p-3 border-b border-outline-variant/50 hover:bg-surface-container-low cursor-pointer">
-                  <p className="text-xs font-bold">{t("header.newLead")}</p>
-                  <p className="text-xs text-on-surface-variant">{t("header.fromHighlands")}</p>
-                </div>
-                <div className="p-3 border-b border-outline-variant/50 hover:bg-surface-container-low cursor-pointer">
-                  <p className="text-xs font-bold">{t("header.crisisAlert")}</p>
-                  <p className="text-xs text-on-surface-variant">{t("header.spikeDetected")}</p>
-                </div>
-              </div>
-              <div className="p-3 text-center border-t border-outline-variant">
-                <button className="text-xs text-primary font-bold hover:underline">{t("header.viewAll")}</button>
-=======
             <div className="absolute right-0 top-12 w-72 md:w-80 bg-white border border-[#E2E4F0] rounded-[16px] shadow-[0_2px_12px_rgba(108,99,255,0.07)] z-50 overflow-hidden">
               <div className="p-4 border-b border-[#E2E4F0]">
-                <h4 className="font-semibold text-[14px] text-[#1A1A2E]">Thông báo mới (5)</h4>
+                <h4 className="font-semibold text-[14px] text-[#1A1A2E]">{t("header.newNotifications")}</h4>
               </div>
               <div className="max-h-64 overflow-y-auto">
                 <div className="p-3 border-b border-[#E2E4F0] hover:bg-[#F3F4FF] cursor-pointer transition-colors">
-                  <p className="text-[13px] font-semibold text-[#1A1A2E]">🔴 Hot Lead mới</p>
+                  <p className="text-[13px] font-semibold text-[#1A1A2E]">🔴 {t("header.newLead")}</p>
                   <p className="text-[12px] text-[#4A4A6A] mt-0.5">
-                    từ Highlands Coffee
+                    {t("header.fromHighlands")}
                   </p>
                 </div>
                 <div className="p-3 border-b border-[#E2E4F0] hover:bg-[#F3F4FF] cursor-pointer transition-colors">
-                  <p className="text-[13px] font-semibold text-[#1A1A2E]">🚨 Cảnh báo khủng hoảng</p>
+                  <p className="text-[13px] font-semibold text-[#1A1A2E]">🚨 {t("header.crisisAlert")}</p>
                   <p className="text-[12px] text-[#4A4A6A] mt-0.5">
-                    Spike detected: 3.2x
+                    {t("header.spikeDetected")}
                   </p>
                 </div>
               </div>
               <div className="p-3 text-center border-t border-[#E2E4F0] bg-[#F7F8FC]">
                 <button className="text-[13px] text-[#6C63FF] font-semibold hover:underline">
-                  Xem tất cả
+                  {t("header.viewAll")}
                 </button>
->>>>>>> origin/Lead
               </div>
             </div>
           )}
@@ -156,15 +127,9 @@ export function Header({ onMenuToggle }: HeaderProps) {
         <div className="flex items-center gap-2 md:gap-3 md:pl-6 md:border-l md:border-[#E2E4F0]">
           {/* Tên — chỉ hiện trên desktop */}
           <div className="hidden md:block text-right">
-<<<<<<< HEAD
-            <p className="font-bold text-sm text-on-surface">{userName}</p>
-            <p className="text-xs text-on-surface-variant">
-              {user ? t("header.administrator") : t("header.guest")}
-=======
             <p className="font-semibold text-[14px] text-[#1A1A2E]">{userName}</p>
             <p className="text-[12px] text-[#9898B0]">
-              {user ? "Quản trị viên" : "Guest"}
->>>>>>> origin/Lead
+              {user ? t("header.administrator") : t("header.guest")}
             </p>
           </div>
           <div className="w-[36px] h-[36px] rounded-full bg-gradient-to-tr from-[#6C63FF] to-[#9B8FF8] flex items-center justify-center font-bold text-white text-[13px] cursor-pointer hover:scale-105 transition-transform shadow-sm">
@@ -180,13 +145,8 @@ export function Header({ onMenuToggle }: HeaderProps) {
             <i className="ti ti-search text-[#9898B0] text-[18px]"></i>
             <input
               type="text"
-<<<<<<< HEAD
               placeholder={t("header.searchPlaceholder")}
-              className="bg-transparent border-none focus:ring-0 w-full ml-3 placeholder:text-outline/70 outline-none text-sm"
-=======
-              placeholder="Tìm kiếm..."
               className="bg-transparent border-none focus:ring-0 w-full ml-3 placeholder:text-[#9898B0] outline-none text-[14px] text-[#4A4A6A]"
->>>>>>> origin/Lead
               autoFocus
             />
             <button onClick={() => setShowSearch(false)} className="text-[#9898B0] hover:text-[#4A4A6A]">

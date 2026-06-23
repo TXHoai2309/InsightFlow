@@ -20,21 +20,12 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-<<<<<<< HEAD
-  { href: "/dashboard", label: "nav.dashboard", icon: "dashboard" },
-  { href: "/mentions", label: "nav.mentions", icon: "forum" },
-  { href: "/alerts", label: "nav.alerts", icon: "notifications_active" },
-  { href: "/leads", label: "nav.leads", icon: "leaderboard" },
-  { href: "/reports", label: "nav.reports", icon: "assessment" },
-  { href: "/settings/brand", label: "nav.brands", icon: "settings" },
-=======
-  { href: "/dashboard", label: "Dashboard", icon: "ti-layout-dashboard" },
-  { href: "/mentions", label: "Mentions", icon: "ti-message-circle" },
-  { href: "/alerts", label: "Alerts", icon: "ti-bell" },
-  { href: "/leads", label: "Leads", icon: "ti-chart-bar" },
-  { href: "/reports", label: "Reports", icon: "ti-file-analytics" },
-  { href: "/settings/brand", label: "Brands", icon: "ti-settings" },
->>>>>>> origin/Lead
+  { href: "/dashboard", label: "nav.dashboard", icon: "ti-layout-dashboard" },
+  { href: "/mentions", label: "nav.mentions", icon: "ti-message-circle" },
+  { href: "/alerts", label: "nav.alerts", icon: "ti-bell" },
+  { href: "/leads", label: "nav.leads", icon: "ti-chart-bar" },
+  { href: "/reports", label: "nav.reports", icon: "ti-file-analytics" },
+  { href: "/settings/brand", label: "nav.brands", icon: "ti-settings" },
 ];
 
 interface SidebarProps {
@@ -127,15 +118,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                   : "text-[#4A4A6A] font-medium border-l-[3px] border-transparent hover:bg-[#F3F4FF]"
                   }`}
               >
-<<<<<<< HEAD
-                <span className="material-symbols-outlined text-xl">
-                  {item.icon}
-                </span>
-                <span className="flex-1">{t(item.label)}</span>
-=======
                 <i className={`ti ${item.icon} text-[18px] mr-[10px]`}></i>
-                <span className="flex-1">{item.label}</span>
->>>>>>> origin/Lead
+                <span className="flex-1">{t(item.label)}</span>
                 {item.badge && item.badge > 0 && (
                   <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#6C63FF] text-white font-bold ml-2">
                     {item.badge}
@@ -152,45 +136,26 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             onClick={handleLogout}
             className="w-full px-4 py-[14px] text-left text-[14px] transition-colors duration-200 flex items-center rounded-r-[10px] text-[#EF4444] font-medium border-l-[3px] border-transparent hover:bg-[#FEF2F2]"
           >
-<<<<<<< HEAD
-            <span className="material-symbols-outlined text-xl">logout</span>
+            <i className="ti ti-logout text-[18px] mr-[10px]"></i>
             <span className="flex-1 text-left font-medium">{t("nav.logout")}</span>
           </button>
 
-          <div className="bg-gradient-to-br from-primary-container to-secondary-container p-4 rounded-lg text-on-primary text-sm">
-            <p className="font-bold mb-2">{t("sidebar.reportReadyTitle")}</p>
-            <p className="text-xs mb-3 opacity-90">{t("sidebar.reportReadyDesc")}</p>
-            <Link
-              href="/reports"
-              className="w-full inline-block py-2 bg-white text-primary font-bold rounded-lg hover:bg-opacity-95 text-xs transition-all text-center"
-            >{t("sidebar.viewReport")}</Link>
-          </div>
-
-          <div className="flex items-center gap-2 px-3 py-2 text-on-surface-variant">
-            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-            <span className="text-xs">{t("sidebar.systemActive")}</span>
-=======
-            <i className="ti ti-logout text-[18px] mr-[10px]"></i>
-            <span className="flex-1 text-left">Đăng xuất</span>
-          </button>
-
           <div className="bg-gradient-to-br from-[#6C63FF] to-[#9B8FF8] p-4 rounded-[12px] text-white text-sm shadow-[0_4px_14px_rgba(108,99,255,0.35)]">
-            <p className="font-bold mb-2 flex items-center gap-2"><i className="ti ti-bulb text-lg"></i> Báo cáo sẵn sàng</p>
+            <p className="font-bold mb-2 flex items-center gap-2"><i className="ti ti-bulb text-lg"></i> {t("sidebar.reportReadyTitle")}</p>
             <p className="text-[12px] mb-3 opacity-90">
-              AI hoàn tất tổng hợp dữ liệu ngày hôm qua
+              {t("sidebar.reportReadyDesc")}
             </p>
             <Link
               href="/reports"
               className="w-full inline-block py-2 bg-white text-[#6C63FF] font-semibold rounded-[8px] hover:bg-opacity-95 text-[12px] transition-colors duration-200 text-center"
             >
-              Xem báo cáo
+              {t("sidebar.viewReport")}
             </Link>
           </div>
 
           <div className="flex items-center gap-2 px-3 py-2 text-[#9898B0]">
             <span className="w-2 h-2 rounded-full bg-[#22C55E] animate-pulse"></span>
-            <span className="text-[12px] font-medium">System Active 24/7</span>
->>>>>>> origin/Lead
+            <span className="text-[12px] font-medium">{t("sidebar.systemActive")}</span>
           </div>
         </div>
       </aside>
