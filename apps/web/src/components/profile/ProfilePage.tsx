@@ -2,15 +2,17 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { signOut } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import SecurityTab from "@/components/profile/SecurityTab";
 import NotificationsTab from "@/components/profile/NotificationsTab";
-
+import TopNavBar from "@/components/home/TopNavBar";
 type Tab = "profile" | "security" | "notifications";
 
 export default function ProfilePage() {
+  const router = useRouter();
   const { user, loading } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>("profile");
   const [saved, setSaved] = useState(false);
@@ -99,139 +101,100 @@ export default function ProfilePage() {
 
   const handleLogout = async () => {
     await signOut(auth);
+    router.push("/");
   };
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] text-[#111c2d]">
-      {/* TopNavBar */}
-      <header className="w-full top-0 sticky z-50 bg-white shadow-sm border-b border-[#e7eaf3] flex justify-between items-center px-10 py-4">
-        <div className="flex items-center gap-12">
-          <Link
-            href="/"
-            className="text-[22px] font-bold text-[#4648d4] tracking-tight hover:opacity-80 transition-opacity"
-          >
-            InsightFlow
-          </Link>
-          <nav className="hidden md:flex gap-8 text-[14px]">
-            <Link
-              href="/#features"
-              className="text-[#464554] font-medium hover:text-[#4648d4] transition-colors"
-            >
-              Tính năng
-            </Link>
-            <Link
-              href="/nganh"
-              className="text-[#464554] font-medium hover:text-[#4648d4] transition-colors"
-            >
-              Ngành
-            </Link>
-            <Link
-              href="/ve-chung-toi"
-              className="text-[#464554] font-medium hover:text-[#4648d4] transition-colors"
-            >
-              Về chúng tôi
-            </Link>
-          </nav>
-        </div>
+    <div className="min-h-screen bg-[#F7F8FC] font-sans">
+      <TopNavBar />
 
-        <div className="flex items-center gap-4">
-          <div className="flex flex-col items-end mr-2">
-            <span className="text-[14px] font-medium text-[#111c2d]">
-              {displayName}
-            </span>
-            <span className="text-[12px] text-[#464554]">Quản trị viên</span>
+      <main className="flex justify-center pt-[104px] pb-[60px] px-[60px] w-full">
+        <div className="w-full max-w-[1200px] flex flex-col gap-8">
+          {/* Page heading */}
+          <div>
+            <h1 className="text-[28px] font-bold text-[#1A1A2E] mb-2">
+              Cài đặt tài khoản
+            </h1>
+            <p className="text-[#4A4A6A] text-[14px]">
+              Quản lý thông tin cá nhân và tùy chỉnh trải nghiệm của bạn.
+            </p>
           </div>
-          {/* Avatar circle */}
-          <Link
-            href="/profile"
-            className="w-10 h-10 rounded-full bg-[#4648d4] flex items-center justify-center text-white text-[14px] font-bold border-2 border-[#c0c1ff] hover:scale-105 transition-transform shadow-md"
-          >
-            {initials}
-          </Link>
-          <button
-            onClick={handleLogout}
-            className="text-[12px] font-semibold text-[#ef4444] hover:underline"
-          >
-            Đăng xuất
-          </button>
-        </div>
-      </header>
 
-      <main className="flex flex-col items-center py-12 px-4 md:px-0">
-        {/* Page heading */}
-        <div className="mb-8 w-full max-w-4xl">
-          <h1 className="text-[32px] leading-[40px] font-bold text-[#111c2d] mb-2">
-            Cài đặt tài khoản
-          </h1>
-          <p className="text-[#464554]">
-            Quản lý thông tin cá nhân và tùy chỉnh trải nghiệm của bạn.
-          </p>
-        </div>
+          <div className="flex gap-[32px]">
+            {/* Sidebar */}
+            <div className="w-[240px] shrink-0 flex flex-col">
+              {(
+                [
+                  { key: "profile", label: "Thông tin cá nhân", icon: "ti-user" },
+                  { key: "security", label: "Bảo mật", icon: "ti-shield-lock" },
+                  { key: "notifications", label: "Thông báo", icon: "ti-bell" },
+                ] as { key: Tab; label: string, icon: string }[]
+              ).map((tab) => (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`w-full px-4 py-[14px] text-left text-[14px] transition-colors flex items-center rounded-r-[10px] mb-1 ${
+                    activeTab === tab.key
+                      ? "bg-[#EEF0FF] border-l-[3px] border-[#6C63FF] text-[#6C63FF] font-semibold"
+                      : "text-[#4A4A6A] font-medium border-l-[3px] border-transparent hover:bg-[#F3F4FF]"
+                  }`}
+                >
+                  <i className={`ti ${tab.icon} text-[18px] mr-[10px]`}></i>
+                  {tab.label}
+                </button>
+              ))}
+              
+              <div className="my-[16px]"></div>
 
-        {/* Card */}
-        <div className="w-full max-w-4xl bg-white rounded-2xl overflow-hidden flex flex-col"
-          style={{ boxShadow: "0 4px 20px -2px rgba(70,72,212,0.06), 0 2px 8px -2px rgba(0,0,0,0.03)" }}
-        >
-          {/* Tab bar */}
-          <div className="flex border-b border-[#e7eaf3] px-6">
-            {(
-              [
-                { key: "profile", label: "Thông tin cá nhân" },
-                { key: "security", label: "Bảo mật" },
-                { key: "notifications", label: "Thông báo" },
-              ] as { key: Tab; label: string }[]
-            ).map((tab) => (
               <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`px-6 py-4 text-[14px] font-medium border-b-2 transition-colors ${
-                  activeTab === tab.key
-                    ? "text-[#4648d4] font-bold border-[#4648d4]"
-                    : "text-[#464554] border-transparent hover:text-[#4648d4]"
-                }`}
+                onClick={handleLogout}
+                className="w-full px-4 py-[14px] text-left text-[14px] transition-colors flex items-center rounded-r-[10px] text-[#EF4444] font-medium border-l-[3px] border-transparent hover:bg-[#FEF2F2]"
               >
-                {tab.label}
+                <i className="ti ti-logout text-[18px] mr-[10px]"></i>
+                Đăng xuất
               </button>
-            ))}
-          </div>
+            </div>
 
-          {/* Content */}
-          <div className="p-8">
-            {activeTab === "profile" && (
-              <div>
-                {/* User header */}
-                <div className="flex flex-col md:flex-row items-center gap-6 mb-10 pb-10 border-b border-[#e7eaf3]">
-                  {/* Avatar */}
-                  <div className="relative group">
-                    <div className="h-24 w-24 rounded-full bg-[#dee8ff] flex items-center justify-center text-[#4648d4] text-[28px] font-bold shadow-md overflow-hidden">
-                      {initials}
+            {/* Content */}
+            <div className="flex-1 bg-[#FFFFFF] rounded-[16px] shadow-[0_2px_12px_rgba(108,99,255,0.07)] p-[32px] min-h-[500px]">
+              {activeTab === "profile" && (
+                <div className="animate-in fade-in duration-300">
+                  {/* User header */}
+                  <div className="flex items-center gap-[24px]">
+                    {/* Avatar */}
+                    <div className="relative group shrink-0">
+                      <div className="h-[80px] w-[80px] rounded-full bg-gradient-to-tr from-[#6C63FF] to-[#9B8FF8] flex items-center justify-center text-white text-[24px] font-bold">
+                        {initials}
+                      </div>
+                      <button className="absolute bottom-0 right-0 w-[26px] h-[26px] bg-white rounded-full border-[2px] border-white shadow-[0_2px_6px_rgba(0,0,0,0.15)] flex items-center justify-center hover:scale-110 transition-transform text-[#6C63FF]">
+                        <i className="ti ti-pencil text-[14px]"></i>
+                      </button>
                     </div>
-                    <button className="absolute bottom-0 right-0 p-1.5 bg-[#4648d4] text-white rounded-full shadow-lg border-2 border-white hover:scale-110 transition-transform">
-                      <span className="material-symbols-outlined text-[18px]">
-                        photo_camera
-                      </span>
-                    </button>
-                  </div>
-                  {/* Name & role */}
-                  <div className="text-center md:text-left flex-1">
-                    <div className="flex flex-col md:flex-row items-center gap-3">
-                      <h2 className="text-[24px] font-semibold text-[#111c2d]">
-                        {displayName}
-                      </h2>
-                      <span className="px-3 py-1 bg-[#b55d00] text-white text-[10px] font-bold rounded-full tracking-widest uppercase">
-                        QUẢN TRỊ VIÊN
-                      </span>
+                    {/* Name & role */}
+                    <div className="flex flex-col gap-[4px]">
+                      <div className="flex items-center gap-[12px]">
+                        <h2 className="text-[22px] font-bold text-[#1A1A2E]">
+                          {displayName}
+                        </h2>
+                        <span className="bg-[#EEF0FF] text-[#6C63FF] rounded-[6px] text-[11px] font-bold px-[10px] py-[3px] uppercase tracking-[0.06em]">
+                          QUẢN TRỊ VIÊN
+                        </span>
+                      </div>
+                      <p className="text-[#9898B0] text-[14px] flex items-center gap-[8px]">
+                        <i className="ti ti-mail text-[16px]"></i>
+                        {email}
+                      </p>
                     </div>
-                    <p className="text-[#464554] text-[14px] mt-1">{email}</p>
                   </div>
-                </div>
 
-                {/* Form fields */}
-                <div className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Divider */}
+                  <div className="border-t border-[#E2E4F0] my-[24px]"></div>
+
+                  {/* Form fields */}
+                  <div className="grid grid-cols-2 gap-x-[24px] gap-y-[24px]">
                     {/* Name */}
-                    <div className="flex flex-col gap-2">
-                      <label className="text-[14px] font-medium text-[#464554]">
+                    <div className="flex flex-col gap-[8px]">
+                      <label className="text-[11px] font-semibold text-[#9898B0] uppercase tracking-[0.08em]">
                         Họ và tên
                       </label>
                       <input
@@ -239,13 +202,13 @@ export default function ProfilePage() {
                         value={formData.name}
                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                         placeholder="Họ và tên"
-                        className="w-full h-12 px-4 rounded-xl border border-[#c7c4d7] focus:ring-2 focus:ring-[#4648d4]/20 focus:border-[#4648d4] outline-none transition-all text-[16px]"
+                        className="w-full h-[44px] px-[16px] rounded-[10px] border-[1.5px] border-[#E2E4F0] focus:border-[#6C63FF] focus:ring-[3px] focus:ring-[#6C63FF]/12 outline-none transition-all text-[14px] font-normal text-[#4A4A6A] bg-white"
                       />
                     </div>
 
                     {/* Email (read-only) */}
-                    <div className="flex flex-col gap-2">
-                      <label className="text-[14px] font-medium text-[#464554]">
+                    <div className="flex flex-col gap-[8px]">
+                      <label className="text-[11px] font-semibold text-[#9898B0] uppercase tracking-[0.08em]">
                         Email
                       </label>
                       <div className="relative">
@@ -253,17 +216,15 @@ export default function ProfilePage() {
                           type="email"
                           value={email}
                           readOnly
-                          className="w-full h-12 pl-4 pr-10 rounded-xl border border-[#c7c4d7] bg-[#f0f3ff] text-[#464554] cursor-not-allowed outline-none text-[16px]"
+                          className="w-full h-[44px] pl-[16px] pr-[40px] rounded-[10px] border-[1.5px] border-[#E2E4F0] bg-[#F7F8FC] text-[#9898B0] cursor-not-allowed outline-none text-[14px] font-normal"
                         />
-                        <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-[#464554] text-[20px]">
-                          lock
-                        </span>
+                        <i className="ti ti-lock absolute right-[12px] top-1/2 -translate-y-1/2 text-[#9898B0] text-[18px]"></i>
                       </div>
                     </div>
 
                     {/* Phone */}
-                    <div className="flex flex-col gap-2">
-                      <label className="text-[14px] font-medium text-[#464554]">
+                    <div className="flex flex-col gap-[8px]">
+                      <label className="text-[11px] font-semibold text-[#9898B0] uppercase tracking-[0.08em]">
                         Số điện thoại
                       </label>
                       <input
@@ -271,13 +232,13 @@ export default function ProfilePage() {
                         value={formData.phoneNumber}
                         onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
                         placeholder="Ví dụ: 090 123 4567"
-                        className="w-full h-12 px-4 rounded-xl border border-[#c7c4d7] focus:ring-2 focus:ring-[#4648d4]/20 focus:border-[#4648d4] outline-none transition-all text-[16px]"
+                        className="w-full h-[44px] px-[16px] rounded-[10px] border-[1.5px] border-[#E2E4F0] focus:border-[#6C63FF] focus:ring-[3px] focus:ring-[#6C63FF]/12 outline-none transition-all text-[14px] font-normal text-[#4A4A6A] bg-white placeholder:text-[#9898B0]"
                       />
                     </div>
 
                     {/* Company */}
-                    <div className="flex flex-col gap-2">
-                      <label className="text-[14px] font-medium text-[#464554]">
+                    <div className="flex flex-col gap-[8px]">
+                      <label className="text-[11px] font-semibold text-[#9898B0] uppercase tracking-[0.08em]">
                         Công ty
                       </label>
                       <input
@@ -285,13 +246,13 @@ export default function ProfilePage() {
                         value={formData.company}
                         onChange={(e) => setFormData({ ...formData, company: e.target.value })}
                         placeholder="Tên công ty"
-                        className="w-full h-12 px-4 rounded-xl border border-[#c7c4d7] focus:ring-2 focus:ring-[#4648d4]/20 focus:border-[#4648d4] outline-none transition-all text-[16px]"
+                        className="w-full h-[44px] px-[16px] rounded-[10px] border-[1.5px] border-[#E2E4F0] focus:border-[#6C63FF] focus:ring-[3px] focus:ring-[#6C63FF]/12 outline-none transition-all text-[14px] font-normal text-[#4A4A6A] bg-white placeholder:text-[#9898B0]"
                       />
                     </div>
 
                     {/* Role */}
-                    <div className="flex flex-col gap-2">
-                      <label className="text-[14px] font-medium text-[#464554]">
+                    <div className="flex flex-col gap-[8px]">
+                      <label className="text-[11px] font-semibold text-[#9898B0] uppercase tracking-[0.08em]">
                         Vai trò
                       </label>
                       <input
@@ -299,63 +260,42 @@ export default function ProfilePage() {
                         value={formData.role}
                         onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                         placeholder="Vai trò của bạn"
-                        className="w-full h-12 px-4 rounded-xl border border-[#c7c4d7] focus:ring-2 focus:ring-[#4648d4]/20 focus:border-[#4648d4] outline-none transition-all text-[16px]"
-                      />
-                    </div>
-
-                    {/* Date joined (read-only) */}
-                    <div className="flex flex-col gap-2">
-                      <label className="text-[14px] font-medium text-[#464554]">
-                        Ngày tham gia
-                      </label>
-                      <input
-                        type="text"
-                        value={user?.metadata?.creationTime ? new Date(user.metadata.creationTime).toLocaleDateString("vi-VN") : "12/05/2023"}
-                        readOnly
-                        className="w-full h-12 px-4 rounded-xl border border-[#c7c4d7] bg-[#f0f3ff] text-[#464554] cursor-not-allowed outline-none text-[16px]"
+                        className="w-full h-[44px] px-[16px] rounded-[10px] border-[1.5px] border-[#E2E4F0] focus:border-[#6C63FF] focus:ring-[3px] focus:ring-[#6C63FF]/12 outline-none transition-all text-[14px] font-normal text-[#4A4A6A] bg-white placeholder:text-[#9898B0]"
                       />
                     </div>
                   </div>
 
                   {/* Action buttons */}
-                  <div className="flex items-center justify-end gap-4 pt-6">
+                  <div className="flex justify-end gap-[12px] mt-[32px]">
                     <button 
                       onClick={handleCancel}
-                      className="px-6 py-3 text-[#464554] font-medium hover:bg-[#dee8ff] rounded-xl transition-all active:scale-95 text-[14px]"
+                      className="bg-transparent text-[#4A4A6A] border-[1.5px] border-[#E2E4F0] rounded-[10px] px-[28px] py-[11px] font-semibold hover:border-[#6C63FF] hover:text-[#6C63FF] transition-colors text-[14px]"
                     >
-                      Hủy
+                      Hủy thay đổi
                     </button>
                     <button
                       onClick={handleSave}
                       disabled={isSaving}
-                      className={`px-8 py-3 font-bold rounded-xl shadow-md transition-all active:scale-95 text-[14px] min-w-[140px] flex items-center justify-center gap-2 ${
+                      className={`rounded-[10px] px-[28px] py-[11px] font-semibold text-[14px] flex items-center justify-center gap-[8px] transition-all min-w-[150px] ${
                         saved
-                          ? "bg-green-500 text-white shadow-green-200"
-                          : "bg-[#4648d4] text-white shadow-[#4648d4]/20 hover:bg-[#6063ee] disabled:opacity-70 disabled:scale-100"
+                          ? "bg-[#22C55E] text-white"
+                          : "bg-[#6C63FF] text-white hover:bg-[#5A52D5] shadow-[0_4px_14px_rgba(108,99,255,0.35)] disabled:opacity-70 disabled:shadow-none"
                       }`}
                     >
-                      {isSaving && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-                      {!isSaving && saved && <span className="material-symbols-outlined text-[18px]">check_circle</span>}
+                      {isSaving && <span className="w-[16px] h-[16px] border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                      {!isSaving && saved && <i className="ti ti-circle-check text-[18px]"></i>}
                       {!isSaving && saved && "Đã lưu!"}
                       {!isSaving && !saved && "Lưu thay đổi"}
                     </button>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {activeTab === "security" && <SecurityTab displayName={displayName} />}
+              {activeTab === "security" && <SecurityTab displayName={displayName} />}
 
-            {activeTab === "notifications" && <NotificationsTab />}
+              {activeTab === "notifications" && <NotificationsTab />}
+            </div>
           </div>
-        </div>
-
-        {/* Footer note */}
-        <div className="mt-8 text-center">
-          <p className="text-[12px] text-[#464554]">
-            © 2024 InsightFlow AI. Đã đăng ký bản quyền cho{" "}
-            <span className="font-semibold">{displayName}</span>.
-          </p>
         </div>
       </main>
     </div>
