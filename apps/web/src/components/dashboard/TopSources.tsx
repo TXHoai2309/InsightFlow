@@ -32,10 +32,10 @@ export function TopSources({ sources }: TopSourcesProps) {
           return (
             <div key={source.platform}>
               <div className="flex justify-between items-center mb-1">
-                <span className="text-sm font-bold">
+                <span className="text-sm font-bold text-[var(--color-text-primary)]">
                   {meta.label}
                 </span>
-                <span className="text-xs text-on-surface-variant">
+                <span className="text-xs text-[var(--color-text-secondary)]">
                   {source.count} ({source.percentage}%)
                 </span>
               </div>

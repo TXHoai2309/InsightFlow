@@ -2,7 +2,7 @@
 
 import React from "react";
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import { useTheme } from "@/hooks/useTheme";
+import { useTheme } from "@/contexts/ThemeContext";
 
 interface SentimentChartProps {
   distribution: Record<string, number>;

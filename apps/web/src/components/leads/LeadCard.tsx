@@ -23,27 +23,27 @@ const PLATFORM_ICONS: Record<string, string> = {
 const STATUS_META: Record<Lead["status"], { label: string; bg: string; text: string; dot: string }> = {
   new: {
     label: "Mới",
-    bg: "bg-primary-container/10 border-primary/20",
-    text: "text-primary",
-    dot: "bg-primary",
+    bg: "bg-[var(--color-brand-subtle)] border-[var(--color-brand-border)]",
+    text: "text-[var(--color-brand)]",
+    dot: "bg-[var(--color-brand)]",
   },
   processing: {
     label: "Đang xử lý",
-    bg: "bg-tertiary-container/15 border-tertiary/20",
-    text: "text-tertiary",
-    dot: "bg-tertiary",
+    bg: "bg-[var(--color-warning-subtle)] border-[var(--color-warning)]/20",
+    text: "text-[var(--color-warning)]",
+    dot: "bg-[var(--color-warning)]",
   },
   completed: {
     label: "Đã xử lý",
-    bg: "bg-green-50 border-green-200",
-    text: "text-green-700",
-    dot: "bg-green-600",
+    bg: "bg-[var(--color-success-subtle)] border-[var(--color-success)]/30",
+    text: "text-[var(--color-success)]",
+    dot: "bg-[var(--color-success)]",
   },
   skipped: {
     label: "Bỏ qua",
-    bg: "bg-outline-variant/10 border-outline-variant/30",
-    text: "text-on-surface-variant/80",
-    dot: "bg-outline",
+    bg: "bg-[var(--color-bg-surface-raised)] border-[var(--color-border)]",
+    text: "text-[var(--color-text-muted)]",
+    dot: "bg-[var(--color-text-muted)]",
   },
 };
 
@@ -186,7 +186,7 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
       const dateStr = new Date(expiryTime).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
       
       return (
-        <div className="flex items-center gap-1 text-on-surface-variant/80">
+        <div className="flex items-center gap-1 text-[var(--color-text-secondary)]">
           <span className="material-symbols-outlined text-[14px]">calendar_today</span>
           <span className="text-xs font-semibold">
             Hạn: {dateStr} (Còn {remainingDays} ngày)
@@ -210,24 +210,24 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
 
   const getBorderClass = () => {
     if (lead.status === "completed" || lead.status === "skipped") {
-      return "border-l-4 border-outline-variant/40 opacity-75 grayscale-[0.1]";
+      return "border-l-4 border-[var(--color-border)] opacity-75 grayscale-[0.1]";
     }
     if (lead.intent === "hot") {
-      return isExpired ? "border-l-4 border-outline-variant" : "border-l-4 border-error shadow-sm";
+      return isExpired ? "border-l-4 border-[var(--color-border)]" : "border-l-4 border-[var(--color-error)] shadow-sm";
     }
     if (lead.intent === "warm") {
-      return "border-l-4 border-secondary";
+      return "border-l-4 border-[var(--color-warning)]";
     }
-    return "border-l-4 border-outline-variant/40";
+    return "border-l-4 border-[var(--color-border)]";
   };
 
   const getAvatarBg = (name: string) => {
     const colors = [
-      "bg-blue-50 text-blue-700 border-blue-100",
-      "bg-purple-50 text-purple-700 border-purple-100",
-      "bg-orange-50 text-orange-700 border-orange-100",
-      "bg-pink-50 text-pink-700 border-pink-100",
-      "bg-teal-50 text-teal-700 border-teal-100",
+      "bg-[var(--color-info-subtle)] text-[var(--color-info)] border-[var(--color-info)]/20",
+      "bg-[var(--color-brand-subtle)] text-[var(--color-brand)] border-[var(--color-brand-border)]",
+      "bg-[var(--color-warning-subtle)] text-[var(--color-warning)] border-[var(--color-warning)]/20",
+      "bg-[var(--color-error-subtle)] text-[var(--color-error)] border-[var(--color-error)]/20",
+      "bg-[var(--color-success-subtle)] text-[var(--color-success)] border-[var(--color-success)]/20",
     ];
     let hash = 0;
     for (let i = 0; i < name.length; i++) {
@@ -267,7 +267,7 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
             </div>
             
             <div className="flex flex-col gap-0.5">
-              <h4 className="text-sm font-bold text-on-surface line-clamp-1">
+              <h4 className="text-sm font-bold text-[var(--color-text-primary)] line-clamp-1">
                 {lead.author || "Khách hàng"}
               </h4>
               <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
@@ -278,30 +278,30 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
 
           {/* Core Content & Intent Tags */}
           <div className="flex-1 space-y-2.5">
-            <p className="text-body-md text-on-surface leading-relaxed font-medium">
+            <p className="text-body-md text-[var(--color-text-primary)] leading-relaxed font-medium">
               {lead.content}
             </p>
             
             {/* Meta tags & Details line */}
             <div className="flex flex-wrap gap-1.5 items-center">
               {/* Brand Tag */}
-              <span className="bg-surface-container-high text-on-surface-variant px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider">
+              <span className="bg-[var(--color-bg-surface-raised)] text-[var(--color-text-muted)] px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border border-[var(--color-border)]">
                 {lead.workspace_id}
               </span>
 
               {/* Purchase Intent Tag */}
               {lead.intent === "hot" && (
-                <span className="bg-error-container text-on-error-container px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-0.5">
+                <span className="bg-[var(--color-error-subtle)] text-[var(--color-error)] px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-0.5">
                   <span className="material-symbols-outlined text-xs">local_fire_department</span> HOT
                 </span>
               )}
               {lead.intent === "warm" && (
-                <span className="bg-secondary-container text-on-secondary-container px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-0.5">
+                <span className="bg-[var(--color-warning-subtle)] text-[var(--color-warning)] px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-0.5">
                   <span className="material-symbols-outlined text-xs">analytics</span> WARM
                 </span>
               )}
               {lead.intent === "cold" && (
-                <span className="bg-surface-container-highest text-on-surface-variant px-2 py-0.5 rounded text-[10px] font-bold">
+                <span className="bg-[var(--color-bg-surface-high)] text-[var(--color-text-muted)] px-2 py-0.5 rounded text-[10px] font-bold">
                   COLD
                 </span>
               )}
@@ -310,7 +310,7 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
               {lead.intent_signals.map((sig, i) => (
                 <span
                   key={i}
-                  className="bg-surface-container-high text-on-surface-variant/80 px-2 py-0.5 rounded text-[10px] font-medium"
+                  className="bg-[var(--color-bg-surface-raised)] text-[var(--color-text-muted)] px-2 py-0.5 rounded text-[10px] font-medium"
                 >
                   {sig}
                 </span>
@@ -318,7 +318,7 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
 
               {/* Attempts tag */}
               {lead.contact_attempts && lead.contact_attempts > 0 ? (
-                <span className="bg-surface-container text-on-surface-variant px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-0.5">
+                <span className="bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)] px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-0.5 border border-[var(--color-border)]">
                   <span className="material-symbols-outlined text-xs">call_made</span> Đã tiếp cận {lead.contact_attempts} lần
                 </span>
               ) : null}
@@ -332,7 +332,7 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
                 value={lead.status}
                 disabled={isSaving}
                 onChange={(e) => handleStatusChange(e.target.value as Lead["status"])}
-                className={`appearance-none pl-3 pr-8 py-1.5 border rounded-full text-xs font-bold focus:ring-1 outline-none transition-all cursor-pointer flex items-center gap-1.5 shadow-sm ${statusInfo.bg} ${statusInfo.text} ${isSaving ? "opacity-50 cursor-not-allowed" : ""}`}
+                className={`appearance-none pl-3 pr-8 py-1.5 border rounded-full text-xs font-bold focus:ring-1 outline-none transition-all cursor-pointer shadow-sm ${statusInfo.bg} ${statusInfo.text} ${isSaving ? "opacity-50 cursor-not-allowed" : ""}`}
                 style={{ backgroundColor: "var(--color-bg-surface)" }}
               >
                 <option value="new">🟢 Mới</option>
@@ -342,9 +342,9 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
               </select>
               <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center">
                 {isSaving ? (
-                  <span className="w-3.5 h-3.5 border-2 border-primary/20 border-t-primary rounded-full animate-spin"></span>
+                  <span className="w-3.5 h-3.5 border-2 border-[var(--color-brand)]/20 border-t-[var(--color-brand)] rounded-full animate-spin"></span>
                 ) : (
-                  <span className="material-symbols-outlined text-sm text-on-surface-variant/70">keyboard_arrow_down</span>
+                  <span className="material-symbols-outlined text-sm text-[var(--color-text-muted)]">keyboard_arrow_down</span>
                 )}
               </div>
             </div>
@@ -353,7 +353,7 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
         </div>
 
         {/* Action / Contact Buttons and Notes section */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-3 border-t border-outline-variant/40">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-3 border-t" style={{ borderColor: "var(--color-border)" }}>
           
           {/* Direct Contact/Approach Buttons (UX Auto-Transition triggers) */}
           <div className="flex flex-wrap items-center gap-2">
@@ -389,7 +389,7 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
                 <button
                   onClick={() => handleContactAction("Call", `tel:${lead.phone}`)}
                   disabled={isSaving}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 rounded-lg text-xs font-bold transition-all"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--color-success-subtle)] hover:bg-[var(--color-success)]/20 text-[var(--color-success)] border border-[var(--color-success)]/30 rounded-lg text-xs font-bold transition-all"
                   title={`Gọi số điện thoại ${lead.phone}`}
                 >
                   <span className="material-symbols-outlined text-base">call</span>
@@ -400,7 +400,7 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
                     navigator.clipboard.writeText(lead.phone || "");
                     alert("Đã copy số điện thoại!");
                   }}
-                  className="p-1.5 hover:bg-surface-container-high rounded text-on-surface-variant/80 hover:text-on-surface transition-all flex items-center justify-center"
+                  className="p-1.5 hover:bg-[var(--color-bg-surface-raised)] rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-all flex items-center justify-center"
                   title="Copy SĐT"
                 >
                   <span className="material-symbols-outlined text-sm">content_copy</span>
@@ -429,7 +429,7 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
                     });
                   }
                 }}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-container hover:bg-surface-container-high text-on-surface-variant border border-outline-variant/60 rounded-lg text-xs font-bold transition-all"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--color-bg-surface-raised)] hover:bg-[var(--color-bg-surface-high)] text-[var(--color-text-secondary)] border border-[var(--color-border)] rounded-lg text-xs font-bold transition-all"
                 title="Xem bài đăng nguồn để lấy ngữ cảnh đầy đủ"
               >
                 <span className="material-symbols-outlined text-base">open_in_new</span>
@@ -477,7 +477,7 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
             </div>
             
             {showSaveSuccess && (
-              <span className="text-[10px] text-green-600 font-bold flex items-center gap-0.5 animate-bounce">
+              <span className="text-[10px] text-[var(--color-success)] font-bold flex items-center gap-0.5 animate-bounce">
                 <span className="material-symbols-outlined text-xs">check_circle</span> Đã lưu
               </span>
             )}
@@ -487,7 +487,7 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
 
         {/* Error / Last updated log row */}
         {(saveError || lead.last_contact_at) && (
-          <div className="flex items-center justify-between text-[10px] font-medium text-on-surface-variant pt-1">
+          <div className="flex items-center justify-between text-[10px] font-medium text-[var(--color-text-muted)] pt-1">
             <div>
               {lead.last_contact_at && (
                 <span>
@@ -503,7 +503,7 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
             </div>
             
             {saveError && (
-              <span className="text-error flex items-center gap-0.5 font-bold animate-pulse">
+              <span className="text-[var(--color-error)] flex items-center gap-0.5 font-bold animate-pulse">
                 <span className="material-symbols-outlined text-xs">error</span>
                 {saveError}
               </span>

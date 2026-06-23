@@ -21,7 +21,7 @@ export function MobileNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-outline-variant shadow-lg">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[var(--color-bg-surface)] border-t border-[var(--color-border)] shadow-lg">
       <div className="flex items-center justify-around px-1 py-2">
         {mobileNavItems.map((item) => {
           const isActive =
@@ -32,8 +32,8 @@ export function MobileNav() {
               href={item.href}
               className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg transition-all min-w-[52px] ${
                 isActive
-                  ? "text-primary"
-                  : "text-on-surface-variant"
+                  ? "text-[var(--color-brand)]"
+                  : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
               }`}
             >
               <span
@@ -49,7 +49,7 @@ export function MobileNav() {
               </span>
               {/* Active indicator dot */}
               {isActive && (
-                <span className="w-1 h-1 rounded-full bg-primary mt-0.5" />
+                <span className="w-1 h-1 rounded-full bg-[var(--color-brand)] mt-0.5" />
               )}
             </Link>
           );
