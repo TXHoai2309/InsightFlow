@@ -61,6 +61,7 @@ const defaultFilters: DashboardFilters = {
   time_range: "7d",
   platform: "all",
   sentiment: "all",
+  topic: "all",
 };
 
 export const useDashboardStore = create<DashboardState>()(
@@ -128,6 +129,13 @@ export const useDashboardStore = create<DashboardState>()(
       if (state.filters.sentiment !== "all") {
         filtered = filtered.filter(
           (m) => m.sentiment === state.filters.sentiment,
+        );
+      }
+
+      // Filter by topic
+      if (state.filters.topic && state.filters.topic !== "all") {
+        filtered = filtered.filter(
+          (m) => m.topic === state.filters.topic,
         );
       }
 
