@@ -7,18 +7,20 @@
 
 import React from "react";
 import Link from "next/link";
+import { useTranslation } from "react-i18next";
 import { usePathname } from "next/navigation";
 
 const mobileNavItems = [
-  { href: "/dashboard", label: "Dashboard", icon: "dashboard" },
-  { href: "/mentions", label: "Mentions", icon: "forum" },
-  { href: "/alerts", label: "Alerts", icon: "notifications_active" },
-  { href: "/leads", label: "Leads", icon: "leaderboard" },
-  { href: "/reports", label: "Reports", icon: "assessment" },
+  { href: "/dashboard", label: "nav.dashboard", icon: "dashboard" },
+  { href: "/mentions", label: "nav.mentions", icon: "forum" },
+  { href: "/alerts", label: "nav.alerts", icon: "notifications_active" },
+  { href: "/leads", label: "nav.leads", icon: "leaderboard" },
+  { href: "/reports", label: "nav.reports", icon: "assessment" },
 ];
 
 export function MobileNav() {
   const pathname = usePathname();
+  const { t } = useTranslation();
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-outline-variant shadow-lg">
@@ -45,7 +47,7 @@ export function MobileNav() {
                 {item.icon}
               </span>
               <span className={`text-[10px] font-medium leading-none ${isActive ? "font-bold" : ""}`}>
-                {item.label}
+                {t(item.label)}
               </span>
               {/* Active indicator dot */}
               {isActive && (

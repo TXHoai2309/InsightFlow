@@ -6,6 +6,7 @@
  */
 
 import React, { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Chart as ChartJS,
   ArcElement,
@@ -28,6 +29,7 @@ export function SentimentDonut({
   neutral,
   negative,
 }: SentimentDonutProps) {
+  const { t } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<any>(null);
 
@@ -45,7 +47,7 @@ export function SentimentDonut({
     chartRef.current = new ChartJS(ctx, {
       type: "doughnut",
       data: {
-        labels: ["Tích cực", "Trung lập", "Tiêu cực"],
+        labels: [t("dashboard.sentimentDonut.positive"), t("dashboard.sentimentDonut.neutral"), t("dashboard.sentimentDonut.negative")],
         datasets: [
           {
             data: [positive, neutral, negative],
@@ -76,25 +78,25 @@ export function SentimentDonut({
 
   return (
     <div className="bg-white border border-outline-variant rounded-lg p-6 shadow-sm h-full">
-      <h4 className="font-bold text-lg text-on-surface mb-4">Cơ cấu cảm xúc</h4>
+      <h4 className="font-bold text-lg text-on-surface mb-4">{t("dashboard.sentimentDonut.title")}</h4>
       <div style={{ position: "relative", height: "300px" }}>
         <canvas ref={canvasRef}></canvas>
       </div>
       <div className="mt-4 flex justify-center gap-4 text-xs">
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 rounded-full bg-primary"></div>
-          <span>Tích cực ({positive})</span>
+          <span>{t("dashboard.sentimentDonut.positive")} ({positive})</span>
         </div>
         <div className="flex items-center gap-2">
           <div
             className="w-3 h-3 rounded-full"
             style={{ backgroundColor: "#c7c4d7" }}
           ></div>
-          <span>Trung lập ({neutral})</span>
+          <span>{t("dashboard.sentimentDonut.neutral")} ({neutral})</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 rounded-full bg-error"></div>
-          <span>Tiêu cực ({negative})</span>
+          <span>{t("dashboard.sentimentDonut.negative")} ({negative})</span>
         </div>
       </div>
     </div>
