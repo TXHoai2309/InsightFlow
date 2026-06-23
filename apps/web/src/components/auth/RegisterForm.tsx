@@ -59,11 +59,12 @@ function getPasswordStrength(pw: string, t: any): { label: string; color: string
 }
 
 // ─── Firebase error messages ───────────────────────────────────────────────────
-const FIREBASE_ERRORS_KEYS: Record<string, string> = {
-  "auth/email-already-in-use": t("auth.register.emailInUse"),
-  "auth/invalid-email": t("auth.register.invalidEmail"),
-  "auth/weak-password": t("auth.register.weakPassword"),
-  "auth/too-many-requests": t("auth.register.tooManyRequests"),
+// Map error codes to i18n keys (NOT translated here — t() is not available at module level)
+const FIREBASE_ERROR_I18N_KEYS: Record<string, string> = {
+  "auth/email-already-in-use": "auth.register.emailInUse",
+  "auth/invalid-email": "auth.register.invalidEmail",
+  "auth/weak-password": "auth.register.weakPassword",
+  "auth/too-many-requests": "auth.register.tooManyRequests",
   "auth/popup-closed-by-user": "", // silent — user intentionally closed
 };
 
@@ -71,6 +72,14 @@ const FIREBASE_ERRORS_KEYS: Record<string, string> = {
 export default function RegisterForm() {
   const router = useRouter();
   const { t } = useTranslation();
+
+  // Translate Firebase error codes lazily (t is available here inside the component)
+  const getFirebaseError = (code: string) => {
+    const key = FIREBASE_ERROR_I18N_KEYS[code];
+    if (key === undefined) return t("auth.register.registerFailed");
+    if (key === "") return ""; // silent error
+    return t(key);
+  };
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -121,7 +130,7 @@ export default function RegisterForm() {
 
       router.push("/login");
     } catch (err: any) {
-      setError(FIREBASE_ERRORS[err.code] ?? t("auth.register.registerFailed"));
+      setError(getFirebaseError(err.code));
     } finally {
       setLoading(false);
     }
