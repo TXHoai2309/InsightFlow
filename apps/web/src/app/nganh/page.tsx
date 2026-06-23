@@ -1,5 +1,4 @@
 import TopNavBar from "@/components/home/TopNavBar";
-import Footer from "@/components/home/Footer";
 import IndustryHeroSection from "@/components/nganh/IndustryHeroSection";
 import IndustryGridSection from "@/components/nganh/IndustryGridSection";
 import IndustryBentoSection from "@/components/nganh/IndustryBentoSection";
@@ -20,7 +19,6 @@ export default function NganhPage() {
         <IndustryGridSection />
         <IndustryBentoSection />
         <IndustryCTASection />
-        <Footer />
       </div>
     </div>
   );
