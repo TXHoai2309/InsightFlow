@@ -93,13 +93,13 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         {/* Logo + Close button (mobile) */}
         <div className="flex items-center justify-center mb-4 relative">
           <Link href="/" className="flex items-center hover:scale-105 transition-transform duration-300">
+            {/* Container crop giống nhau cho cả 2 chế độ */}
             <div className="relative w-[300px] h-[80px] overflow-hidden flex items-center justify-center">
-              {/* Logo: sáng/tối tự động */}
               <img
                 src={isDark ? "/logo-dark.png" : "/logo.png"}
                 alt="InsightFlow Logo"
                 className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[220px] max-w-none pointer-events-none"
-                style={{ mixBlendMode: isDark ? "normal" : "multiply" }}
+                style={isDark ? undefined : { mixBlendMode: "multiply" }}
               />
             </div>
           </Link>

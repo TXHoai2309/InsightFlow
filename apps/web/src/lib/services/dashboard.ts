@@ -75,13 +75,13 @@ export function normalizeBrandName(name: string): string {
 
 // ─── Platform display info (dùng cho TopSources và DashboardFilters) ─────────
 export const PLATFORM_META: Record<Platform, { label: string; color: string }> = {
-  facebook: { label: "Facebook",      color: "#1877F2" },
-  tiktok:   { label: "TikTok",        color: "#010101" },
-  youtube:  { label: "YouTube",       color: "#FF0000" },
-  thread:   { label: "Threads",       color: "#1C1C1E" },
-  be:       { label: "Be / BeFood",   color: "#FFC107" },
-  google_maps: { label: "Google Maps", color: "#34A853" },
-  news:     { label: "Báo điện tử",   color: "#4648d4" },
+  facebook: { label: "Facebook",      color: "var(--color-platform-facebook)" },
+  tiktok:   { label: "TikTok",        color: "var(--color-platform-tiktok)" },
+  youtube:  { label: "YouTube",       color: "var(--color-platform-youtube)" },
+  thread:   { label: "Threads",       color: "var(--color-platform-thread)" },
+  be:       { label: "Be / BeFood",   color: "var(--color-platform-be)" },
+  google_maps: { label: "Google Maps", color: "var(--color-platform-google-maps)" },
+  news:     { label: "Báo điện tử",   color: "var(--color-platform-news)" },
 };
 
 // ─── Topic whitelist ─────────────────────────────────────────────────────────

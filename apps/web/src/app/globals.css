@@ -57,6 +57,15 @@
   --shadow-dropdown:         0 2px 12px rgba(108, 99, 255, 0.07);
   --transition-theme:        background-color 0.3s ease, color 0.3s ease,
                              border-color 0.3s ease, box-shadow 0.3s ease;
+
+  /* ── Platform Colors (Light Mode) ────────────────────────── */
+  --color-platform-facebook:    #1877F2;
+  --color-platform-tiktok:      #010101;
+  --color-platform-youtube:     #FF0000;
+  --color-platform-thread:      #1c1c1e;
+  --color-platform-be:          #FFC107;
+  --color-platform-google-maps: #34A853;
+  --color-platform-news:        #4648d4;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -109,6 +118,15 @@
   --shadow-card:             0 4px 20px -2px rgba(0, 0, 0, 0.3);
   --shadow-card-hover:       0 12px 30px -4px rgba(0, 0, 0, 0.4);
   --shadow-dropdown:         0 2px 16px rgba(0, 0, 0, 0.4);
+
+  /* ── Platform Colors (Dark Mode) ─────────────────────────── */
+  --color-platform-facebook:    #3b82f6;
+  --color-platform-tiktok:      #ffffff;
+  --color-platform-youtube:     #ef4444;
+  --color-platform-thread:      #e4e6eb;
+  --color-platform-be:          #fbbf24;
+  --color-platform-google-maps: #4ade80;
+  --color-platform-news:        #818cf8;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -251,6 +269,46 @@ body {
 .dark .bg-\[#F3F4FF\],
 .dark .bg-\[#f3f4ff\] {
   background-color: var(--color-brand-subtle) !important;
+}
+
+/* Nổi bật màu sắc văn bản & icon trong dark mode */
+.dark .text-primary {
+  color: var(--color-brand) !important;
+}
+.dark .text-green-600 {
+  color: var(--color-success) !important;
+}
+.dark .text-amber-600 {
+  color: var(--color-warning) !important;
+}
+.dark .text-red-600 {
+  color: var(--color-error) !important;
+}
+
+.dark .bg-primary\/10 {
+  background-color: var(--color-brand-subtle) !important;
+}
+.dark .bg-green-500\/10 {
+  background-color: var(--color-success-subtle) !important;
+}
+.dark .bg-amber-500\/10 {
+  background-color: var(--color-warning-subtle) !important;
+}
+.dark .bg-red-500\/10 {
+  background-color: var(--color-error-subtle) !important;
+}
+
+/* Premium Glassmorphic Cards trong Dark Mode */
+.dark .glass-card {
+  background: linear-gradient(135deg, rgba(28, 28, 36, 0.9) 0%, rgba(20, 20, 26, 0.9) 100%) !important;
+  border-color: rgba(255, 255, 255, 0.05) !important;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3) !important;
+  backdrop-filter: blur(8px);
+}
+
+.dark .glass-card:hover {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.4) !important;
 }
 
 /* ═══════════════════════════════════════════════════════════════
