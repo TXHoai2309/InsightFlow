@@ -103,7 +103,8 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
     });
 
     let relativeTime = "Vừa xong";
-    if (diffMs < 0) relativeTime = "Trong tương lai";
+    if (diffMs < -60000) relativeTime = "Trong tương lai";
+    else if (diffMs < 0) relativeTime = "Vừa xong"; // Handle minor clock skews
     else if (diffDays >= 365) relativeTime = `${Math.floor(diffDays / 365.25)} năm trước`;
     else if (diffDays >= 30) relativeTime = `${Math.floor(diffDays / 30.44)} tháng trước`;
     else if (diffDays >= 1) relativeTime = `${diffDays} ngày trước`;

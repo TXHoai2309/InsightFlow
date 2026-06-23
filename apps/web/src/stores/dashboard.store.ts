@@ -150,68 +150,39 @@ export const useDashboardStore = create<DashboardState>()(
     getFilteredMentions: () => {
       const { mentions, filters } = get();
       const cutoff = getCutoffMs(filters.time_range);
-      // Chuẩn hoá workspace filter để so sánh không phân biệt hoa thường và ký tự đặc biệt
+      
+      // Normalize workspace filter for case-insensitive matching
       const normFilter =
         filters.workspace_id !== "all"
           ? normalizeBrandName(filters.workspace_id)
           : null;
+
       return mentions.filter((m) => {
+        // 1. Filter by Brand (Workspace)
         if (normFilter && normalizeBrandName(m.workspace_id) !== normFilter)
           return false;
+        
+        // 2. Filter by Platform
         if (filters.platform !== "all" && m.platform !== filters.platform)
           return false;
-        if (cutoff !== null && new Date(m.posted_at).getTime() < cutoff)
+          
+        // 3. Filter by Sentiment
+        if (filters.sentiment !== "all" && m.sentiment !== filters.sentiment)
           return false;
+          
+        // 4. Filter by Topic
+        if (filters.topic && filters.topic !== "all" && m.topic !== filters.topic)
+          return false;
+          
+        // 5. Filter by Time Range
+        if (cutoff !== null) {
+          const time = new Date(m.posted_at).getTime();
+          // Filter out mentions older than cutoff AND mentions in the future
+          if (time < cutoff || time > Date.now()) return false;
+        }
+
         return true;
       });
-      const state = get();
-      let filtered = state.mentions;
-
-      // Filter by workspace
-      if (state.filters.workspace_id !== "all") {
-        filtered = filtered.filter(
-          (m) => m.workspace_id === state.filters.workspace_id,
-        );
-      }
-
-      // Filter by platform
-      if (state.filters.platform !== "all") {
-        filtered = filtered.filter(
-          (m) => m.platform === state.filters.platform,
-        );
-      }
-
-      // Filter by sentiment
-      if (state.filters.sentiment !== "all") {
-        filtered = filtered.filter(
-          (m) => m.sentiment === state.filters.sentiment,
-        );
-      }
-
-      // Filter by topic
-      if (state.filters.topic && state.filters.topic !== "all") {
-        filtered = filtered.filter((m) => m.topic === state.filters.topic);
-      }
-
-      // Filter by time_range
-      const now = new Date().getTime();
-      if (state.filters.time_range === "24h") {
-        filtered = filtered.filter(
-          (m) => now - new Date(m.created_at).getTime() <= 24 * 60 * 60 * 1000,
-        );
-      } else if (state.filters.time_range === "7d") {
-        filtered = filtered.filter(
-          (m) =>
-            now - new Date(m.created_at).getTime() <= 7 * 24 * 60 * 60 * 1000,
-        );
-      } else if (state.filters.time_range === "30d") {
-        filtered = filtered.filter(
-          (m) =>
-            now - new Date(m.created_at).getTime() <= 30 * 24 * 60 * 60 * 1000,
-        );
-      }
-
-      return filtered;
     },
 
     getFilteredAlerts: () => {
@@ -224,8 +195,10 @@ export const useDashboardStore = create<DashboardState>()(
       return alerts.filter((a) => {
         if (normFilter && normalizeBrandName(a.workspace_id) !== normFilter)
           return false;
-        if (cutoff !== null && new Date(a.created_at).getTime() < cutoff)
-          return false;
+        if (cutoff !== null) {
+          const time = new Date(a.created_at).getTime();
+          if (time < cutoff || time > Date.now()) return false;
+        }
         return true;
       });
     },
@@ -243,8 +216,10 @@ export const useDashboardStore = create<DashboardState>()(
           return false;
         if (filters.platform !== "all" && l.platform !== filters.platform)
           return false;
-        if (cutoff !== null && new Date(l.created_at).getTime() < cutoff)
-          return false;
+        if (cutoff !== null) {
+          const time = new Date(l.created_at).getTime();
+          if (time < cutoff || time > Date.now()) return false;
+        }
         return true;
       });
     },
@@ -264,8 +239,10 @@ export const useDashboardStore = create<DashboardState>()(
           return false;
 
         const cutoff = getCutoffMs(filters.time_range);
-        if (cutoff !== null && new Date(l.created_at).getTime() < cutoff)
-          return false;
+        if (cutoff !== null) {
+          const time = new Date(l.created_at).getTime();
+          if (time < cutoff || time > Date.now()) return false;
+        }
 
         return true;
       });
