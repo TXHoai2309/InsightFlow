@@ -70,8 +70,9 @@ export default function NotificationsTab() {
       const newPrefs = { emailNotif, pushNotif, crisisAlerts, dailyReports, language: selectedLang };
       
       if (selectedLang !== i18n.language) {
-        i18n.changeLanguage(selectedLang);
+        await i18n.changeLanguage(selectedLang);
       }
+      localStorage.setItem("insightflow_language", selectedLang);
       
       await setDoc(doc(db, "users", user.uid), {
         notifications: newPrefs,

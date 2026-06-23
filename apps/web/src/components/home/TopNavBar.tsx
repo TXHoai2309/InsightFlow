@@ -1,16 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter, usePathname } from "next/navigation";
-import { useAuth } from "@/hooks/useAuth";
+import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "firebase/auth";
+import { useTranslation } from "react-i18next";
+import { useAuth } from "@/hooks/useAuth";
 import { auth } from "@/lib/firebase";
 
 export default function TopNavBar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const { user, loading } = useAuth();
+  const { t } = useTranslation();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -31,15 +33,22 @@ export default function TopNavBar() {
   };
 
   const navLinks = [
-    { href: "/#features", label: "Tính năng" },
-    { href: "/nganh", label: "Ngành" },
-    { href: "/ve-chung-toi", label: "Về chúng tôi" },
+    { href: "/#features", label: t("nav.features") },
+    { href: "/nganh", label: t("nav.industries") },
+    { href: "/ve-chung-toi", label: t("nav.about") },
   ];
 
   const isActive = (href: string) => {
     if (href === "/#features") return pathname === "/";
     return pathname.startsWith(href);
   };
+
+  const initials = (user?.displayName || user?.email || "U")
+    .split(" ")
+    .map((word: string) => word[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
     <>
@@ -53,7 +62,9 @@ export default function TopNavBar() {
           boxShadow: scrolled ? "0 2px 20px rgba(0,0,0,0.08)" : "none",
         }}
       >
-        <style dangerouslySetInnerHTML={{__html: `
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `
           .nav-link {
             position: relative;
             color: #374151;
@@ -83,36 +94,22 @@ export default function TopNavBar() {
             color: #6D4CFF;
             font-weight: 600;
           }
-          .cta-button {
-            background: #6D4CFF;
-            color: white;
-            border-radius: 10px;
-            padding: 10px 20px;
-            font-weight: 600;
-            font-size: 14px;
-            transition: all 0.2s ease;
+          @media (prefers-reduced-motion: reduce) {
+            * { transition: none !important; animation: none !important; }
           }
-          .cta-button:hover {
-            background: #5B3FE8;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 16px rgba(109,76,255,0.35);
-          }
-          @media (prefers-reduced-motion: reduce) { 
-            * { transition: none !important; animation: none !important; } 
-          }
-        `}} />
+        `,
+          }}
+        />
 
         <div className="flex justify-between items-center w-full px-5 md:px-12 max-w-[1440px] mx-auto h-full">
-          {/* Logo */}
           <Link href="/" className="flex items-center hover:opacity-80 transition-opacity w-[180px] md:w-[260px] h-full relative overflow-hidden">
-            <img 
-              src="/logo.png" 
-              alt="InsightFlow Logo" 
-              className="absolute left-[-8px] md:left-[-12px] top-1/2 -translate-y-1/2 h-[120px] md:h-[160px] max-w-none mix-blend-multiply pointer-events-none" 
+            <img
+              src="/logo.png"
+              alt="InsightFlow Logo"
+              className="absolute left-[-8px] md:left-[-12px] top-1/2 -translate-y-1/2 h-[120px] md:h-[160px] max-w-none mix-blend-multiply pointer-events-none"
             />
           </Link>
 
-          {/* Desktop Nav */}
           <div className="hidden md:flex items-center space-x-8">
             {navLinks.map((link) => (
               <Link
@@ -125,56 +122,52 @@ export default function TopNavBar() {
             ))}
           </div>
 
-          {/* Right Actions */}
           <div className="flex items-center gap-4">
-
-            {/* Logged in: show avatar */}
             {!loading && user && (
               <div className="hidden md:flex items-center gap-3">
-                <Link
-                  href="/profile"
-                  className="flex items-center gap-[12px] group"
-                >
-                  <div className="w-[38px] h-[38px] rounded-full flex items-center justify-center text-white text-[14px] font-bold group-hover:scale-105 transition-transform shadow-sm shrink-0" style={{ background: "linear-gradient(135deg, #6D4CFF, #9B8FF8)" }}>
-                    {(user.displayName || user.email || "U")
-                      .split(" ")
-                      .map((w: string) => w[0])
-                      .join("")
-                      .slice(0, 2)
-                      .toUpperCase()}
+                <Link href="/profile" className="flex items-center gap-[12px] group">
+                  <div
+                    className="w-[38px] h-[38px] rounded-full flex items-center justify-center text-white text-[14px] font-bold group-hover:scale-105 transition-transform shadow-sm shrink-0"
+                    style={{ background: "linear-gradient(135deg, #6D4CFF, #9B8FF8)" }}
+                  >
+                    {initials}
                   </div>
                   <div className="flex flex-col items-start leading-tight">
                     <span className="text-[14px] font-semibold text-[#1a1a2e] group-hover:text-[#6D4CFF] transition-colors">
                       {user.displayName || user.email}
                     </span>
-                    <span className="text-[12px] text-[#9CA3AF]">Quản trị viên</span>
+                    <span className="text-[12px] text-[#9CA3AF]">{t("profile.adminRole")}</span>
                   </div>
                 </Link>
               </div>
             )}
 
-            {/* Logged out: show login + signup */}
             {!loading && !user && (
               <div className="hidden md:flex items-center gap-3">
                 <Link
                   href="/login"
                   className="text-[15px] font-medium text-[#374151] hover:text-[#6D4CFF] transition-colors"
                 >
-                  Đăng nhập
+                  {t("auth.login.loginBtn")}
                 </Link>
                 <Link
                   href="/dashboard"
                   className="text-[14px] font-semibold text-white px-5 py-2 rounded-[10px] transition-all"
                   style={{ background: "#6D4CFF" }}
-                  onMouseOver={(e) => { e.currentTarget.style.background = "#5B3FE8"; e.currentTarget.style.transform = "translateY(-1px)"; }}
-                  onMouseOut={(e) => { e.currentTarget.style.background = "#6D4CFF"; e.currentTarget.style.transform = "translateY(0)"; }}
+                  onMouseOver={(event) => {
+                    event.currentTarget.style.background = "#5B3FE8";
+                    event.currentTarget.style.transform = "translateY(-1px)";
+                  }}
+                  onMouseOut={(event) => {
+                    event.currentTarget.style.background = "#6D4CFF";
+                    event.currentTarget.style.transform = "translateY(0)";
+                  }}
                 >
-                  Dùng thử miễn phí
+                  {t("home.hero.freeTrialBtn")}
                 </Link>
               </div>
             )}
 
-            {/* Mobile hamburger */}
             <button
               className="md:hidden p-2 text-[#6D4CFF]"
               onClick={() => setMobileOpen(true)}
@@ -186,23 +179,21 @@ export default function TopNavBar() {
         </div>
       </nav>
 
-
-      {/* Mobile Drawer Overlay */}
       {mobileOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-[#1a1a2e]/40 backdrop-blur-sm z-[110] transition-opacity md:hidden"
           onClick={() => setMobileOpen(false)}
-        ></div>
+        />
       )}
 
-      {/* Mobile Drawer */}
-      <div 
+      <div
         className={`fixed top-0 right-0 bottom-0 w-[280px] bg-white z-[120] shadow-2xl transition-transform duration-300 md:hidden flex flex-col ${mobileOpen ? "translate-x-0" : "translate-x-full"}`}
       >
         <div className="p-5 flex justify-end">
-          <button 
+          <button
             onClick={() => setMobileOpen(false)}
             className="text-[#64748B] hover:text-[#1a1a2e]"
+            aria-label="Close menu"
           >
             <span className="material-symbols-outlined text-[28px]">close</span>
           </button>
@@ -222,37 +213,33 @@ export default function TopNavBar() {
 
           {!loading && user && (
             <div className="mt-4 border-t border-[#F1F0FF] px-[24px] py-[16px]">
-              <p className="text-[14px] font-medium text-[#9CA3AF] mb-3">Tài khoản</p>
+              <p className="text-[14px] font-medium text-[#9CA3AF] mb-3">{t("profile.title")}</p>
               <Link
                 href="/profile"
                 onClick={() => setMobileOpen(false)}
                 className="flex items-center gap-3 mb-4"
               >
-                <div className="w-[38px] h-[38px] rounded-full flex items-center justify-center text-white text-[14px] font-bold" style={{ background: "linear-gradient(135deg, #6D4CFF, #9B8FF8)" }}>
-                  {(user.displayName || user.email || "U")
-                    .split(" ")
-                    .map((w: string) => w[0])
-                    .join("")
-                    .slice(0, 2)
-                    .toUpperCase()}
+                <div
+                  className="w-[38px] h-[38px] rounded-full flex items-center justify-center text-white text-[14px] font-bold"
+                  style={{ background: "linear-gradient(135deg, #6D4CFF, #9B8FF8)" }}
+                >
+                  {initials}
                 </div>
                 <span className="text-[16px] font-semibold text-[#1a1a2e]">
                   {user.displayName || user.email}
                 </span>
               </Link>
-              <button 
+              <button
                 onClick={handleLogout}
                 className="text-[#EF4444] text-[16px] font-medium flex items-center gap-2"
               >
                 <span className="material-symbols-outlined text-[20px]">logout</span>
-                Đăng xuất
+                {t("profile.logout")}
               </button>
             </div>
           )}
         </div>
-
       </div>
     </>
   );
 }
-
