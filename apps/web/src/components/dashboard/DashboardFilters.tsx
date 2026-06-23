@@ -89,8 +89,8 @@ export function DashboardFilters({ workspaces }: DashboardFiltersProps) {
               >
                 <option value="all">Toàn bộ</option>
                 <option value="24h">Hôm nay (24h)</option>
-                <option value="7d">7 ngày qua</option>
-                <option value="30d">30 ngày qua</option>
+                <option value="7d">{t("dashboard.filters.7days")}</option>
+                <option value="30d">{t("dashboard.filters.30days")}</option>
               </select>
               <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center text-on-surface-variant/70">
                 <span className="material-symbols-outlined text-sm">keyboard_arrow_down</span>
