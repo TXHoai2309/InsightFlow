@@ -102,19 +102,11 @@ export default function NotificationsTab() {
     <div className="space-y-[32px] animate-in fade-in duration-300">
       {/* Header */}
       <div>
-<<<<<<< HEAD
-        <h2 className="text-[20px] font-semibold text-[#111c2d] mb-1">
+        <h2 className="text-[20px] font-semibold text-[#1A1A2E] mb-2">
           {t("notifications.title")}
         </h2>
-        <p className="text-[14px] text-[#464554]">
-          {t("notifications.subtitle")}
-=======
-        <h2 className="text-[20px] font-semibold text-[#1A1A2E] mb-2">
-          Tùy chọn thông báo
-        </h2>
         <p className="text-[14px] text-[#4A4A6A]">
-          Chọn cách bạn muốn nhận cập nhật từ InsightFlow.
->>>>>>> origin/Lead
+          {t("notifications.subtitle")}
         </p>
       </div>
 
@@ -126,17 +118,10 @@ export default function NotificationsTab() {
             <div className="w-[40px] h-[40px] shrink-0 rounded-full bg-[#EFF6FF] flex items-center justify-center text-[#3B82F6]">
               <i className="ti ti-mail text-[22px]"></i>
             </div>
-<<<<<<< HEAD
-            <div>
-              <h3 className="text-[14px] text-[#111c2d] font-bold">{t("notifications.email.title")}</h3>
-              <p className="text-[14px] text-[#464554] max-w-md mt-1">
-                {t("notifications.email.desc")}
-=======
             <div className="flex flex-col gap-[4px]">
-              <h3 className="text-[15px] text-[#1A1A2E] font-bold">Thông báo Email</h3>
+              <h3 className="text-[15px] text-[#1A1A2E] font-bold">{t("notifications.email.title")}</h3>
               <p className="text-[13px] text-[#9898B0] max-w-md">
-                Nhận cập nhật quan trọng và tóm tắt hoạt động trực tiếp vào hộp thư của bạn.
->>>>>>> origin/Lead
+                {t("notifications.email.desc")}
               </p>
             </div>
           </div>
@@ -149,17 +134,10 @@ export default function NotificationsTab() {
             <div className="w-[40px] h-[40px] shrink-0 rounded-full bg-[#EEF0FF] flex items-center justify-center text-[#6C63FF]">
               <i className="ti ti-bell-ringing text-[22px]"></i>
             </div>
-<<<<<<< HEAD
-            <div>
-              <h3 className="text-[14px] text-[#111c2d] font-bold">{t("notifications.push.title")}</h3>
-              <p className="text-[14px] text-[#464554] max-w-md mt-1">
-                {t("notifications.push.desc")}
-=======
             <div className="flex flex-col gap-[4px]">
-              <h3 className="text-[15px] text-[#1A1A2E] font-bold">Thông báo đẩy (Push)</h3>
+              <h3 className="text-[15px] text-[#1A1A2E] font-bold">{t("notifications.push.title")}</h3>
               <p className="text-[13px] text-[#9898B0] max-w-md">
-                Nhận thông báo tức thì trên trình duyệt hoặc thiết bị di động khi có thay đổi.
->>>>>>> origin/Lead
+                {t("notifications.push.desc")}
               </p>
             </div>
           </div>
@@ -172,17 +150,10 @@ export default function NotificationsTab() {
             <div className="w-[40px] h-[40px] shrink-0 rounded-full bg-[#FEF2F2] flex items-center justify-center text-[#EF4444]">
               <i className="ti ti-alert-triangle text-[22px]"></i>
             </div>
-<<<<<<< HEAD
-            <div>
-              <h3 className="text-[14px] text-[#111c2d] font-bold">{t("notifications.crisis.title")}</h3>
-              <p className="text-[14px] text-[#464554] max-w-md mt-1">
-                {t("notifications.crisis.desc")}
-=======
             <div className="flex flex-col gap-[4px]">
-              <h3 className="text-[15px] text-[#1A1A2E] font-bold">Cảnh báo khủng hoảng (Crisis Alerts)</h3>
+              <h3 className="text-[15px] text-[#1A1A2E] font-bold">{t("notifications.crisis.title")}</h3>
               <p className="text-[13px] text-[#9898B0] max-w-md">
-                Cảnh báo ưu tiên cao về các sự cố nghiêm trọng ảnh hưởng đến hệ thống của bạn.
->>>>>>> origin/Lead
+                {t("notifications.crisis.desc")}
               </p>
             </div>
           </div>
@@ -195,17 +166,10 @@ export default function NotificationsTab() {
             <div className="w-[40px] h-[40px] shrink-0 rounded-full bg-[#F0FDF4] flex items-center justify-center text-[#22C55E]">
               <i className="ti ti-file-report text-[22px]"></i>
             </div>
-<<<<<<< HEAD
-            <div>
-              <h3 className="text-[14px] text-[#111c2d] font-bold">{t("notifications.daily.title")}</h3>
-              <p className="text-[14px] text-[#464554] max-w-md mt-1">
-                {t("notifications.daily.desc")}
-=======
             <div className="flex flex-col gap-[4px]">
-              <h3 className="text-[15px] text-[#1A1A2E] font-bold">Báo cáo hàng ngày</h3>
+              <h3 className="text-[15px] text-[#1A1A2E] font-bold">{t("notifications.daily.title")}</h3>
               <p className="text-[13px] text-[#9898B0] max-w-md">
-                Bản tóm tắt phân tích dữ liệu và hiệu suất hệ thống gửi vào cuối mỗi ngày.
->>>>>>> origin/Lead
+                {t("notifications.daily.desc")}
               </p>
             </div>
           </div>
@@ -256,18 +220,15 @@ export default function NotificationsTab() {
           onClick={handleCancel}
           className="bg-transparent text-[#4A4A6A] border-[1.5px] border-[#E2E4F0] rounded-[10px] px-[28px] py-[11px] font-semibold hover:border-[#6C63FF] hover:text-[#6C63FF] transition-colors text-[14px]"
         >
-<<<<<<< HEAD
           {t("notifications.actions.cancel")}
-=======
-          Hủy thay đổi
->>>>>>> origin/Lead
         </button>
         <button 
           onClick={handleSave}
           disabled={savingState !== "idle"}
-          className={`rounded-[10px] px-[28px] py-[11px] font-semibold text-[14px] flex items-center justify-center gap-[8px] transition-all min-w-[150px]
-            ${savingState === "saved" ? "bg-[#22C55E] text-white" : "bg-[#6C63FF] text-white hover:bg-[#5A52D5] shadow-[0_4px_14px_rgba(108,99,255,0.35)] active:scale-95 disabled:opacity-70 disabled:shadow-none"}
-          `}
+          className={
+            "rounded-[10px] px-[28px] py-[11px] font-semibold text-[14px] flex items-center justify-center gap-[8px] transition-all min-w-[150px] " +
+            (savingState === "saved" ? "bg-[#22C55E] text-white" : "bg-[#6C63FF] text-white hover:bg-[#5A52D5] shadow-[0_4px_14px_rgba(108,99,255,0.35)] active:scale-95 disabled:opacity-70 disabled:shadow-none")
+          }
         >
           {savingState === "saving" && (
             <span className="w-[16px] h-[16px] border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -288,13 +249,8 @@ export default function NotificationsTab() {
             <i className="ti ti-shield-lock text-[24px]"></i>
           </div>
           <div>
-<<<<<<< HEAD
-            <h4 className="text-[14px] font-semibold text-[#111c2d]">{t("notifications.encryption.title")}</h4>
-            <p className="text-[13px] text-[#464554] mt-0.5">{t("notifications.encryption.desc")}</p>
-=======
-            <h4 className="text-[14px] font-semibold text-[#1A1A2E]">Mã hóa đầu cuối</h4>
-            <p className="text-[13px] text-[#9898B0] mt-0.5">Dữ liệu thông báo của bạn luôn được bảo vệ an toàn.</p>
->>>>>>> origin/Lead
+            <h4 className="text-[14px] font-semibold text-[#1A1A2E]">{t("notifications.encryption.title")}</h4>
+            <p className="text-[13px] text-[#9898B0] mt-0.5">{t("notifications.encryption.desc")}</p>
           </div>
         </div>
         <div className="p-6 rounded-[12px] bg-[#F7F8FC] flex items-center gap-[16px]">
@@ -302,13 +258,8 @@ export default function NotificationsTab() {
             <i className="ti ti-devices text-[24px]"></i>
           </div>
           <div>
-<<<<<<< HEAD
-            <h4 className="text-[14px] font-semibold text-[#111c2d]">{t("notifications.sync.title")}</h4>
-            <p className="text-[13px] text-[#464554] mt-0.5">{t("notifications.sync.desc")}</p>
-=======
-            <h4 className="text-[14px] font-semibold text-[#1A1A2E]">Đồng bộ thiết bị</h4>
-            <p className="text-[13px] text-[#9898B0] mt-0.5">Cài đặt được áp dụng đồng bộ trên tất cả nền tảng.</p>
->>>>>>> origin/Lead
+            <h4 className="text-[14px] font-semibold text-[#1A1A2E]">{t("notifications.sync.title")}</h4>
+            <p className="text-[13px] text-[#9898B0] mt-0.5">{t("notifications.sync.desc")}</p>
           </div>
         </div>
       </div>
