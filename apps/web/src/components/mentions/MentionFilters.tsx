@@ -85,8 +85,14 @@ export function MentionFilters({ workspaces, filters, allMentions }: MentionFilt
   return (
     <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
       {/* Brand Filter */}
-      <div className="bg-surface-bright p-4 rounded-2xl border border-outline-variant flex flex-col gap-3">
-        <label className="text-xs font-semibold text-outline uppercase tracking-wider">
+      <div
+        className="p-4 rounded-2xl flex flex-col gap-3"
+        style={{
+          backgroundColor: "var(--color-bg-surface)",
+          border: "1px solid var(--color-border)",
+        }}
+      >
+        <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--color-text-muted)" }}>
           Nhãn hàng (Brand)
         </label>
         <select
@@ -94,7 +100,8 @@ export function MentionFilters({ workspaces, filters, allMentions }: MentionFilt
           onChange={(event) =>
             setFilters({ workspace_id: event.target.value })
           }
-          className="bg-transparent border-none focus:ring-0 font-medium text-on-surface w-full p-0 text-sm"
+          className="bg-transparent border-none focus:ring-0 font-medium w-full p-0 text-sm outline-none"
+          style={{ color: "var(--color-text-primary)" }}
         >
           <option value="all">Tất cả nhãn hàng</option>
           {availableBrands.map((brand) => (
@@ -106,8 +113,14 @@ export function MentionFilters({ workspaces, filters, allMentions }: MentionFilt
       </div>
 
       {/* Sentiment Filter */}
-      <div className="bg-surface-bright p-4 rounded-2xl border border-outline-variant flex flex-col gap-3">
-        <label className="text-xs font-semibold text-outline uppercase tracking-wider">
+      <div
+        className="p-4 rounded-2xl flex flex-col gap-3"
+        style={{
+          backgroundColor: "var(--color-bg-surface)",
+          border: "1px solid var(--color-border)",
+        }}
+      >
+        <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--color-text-muted)" }}>
           Sắc thái (Sentiment)
         </label>
         <select
@@ -117,7 +130,8 @@ export function MentionFilters({ workspaces, filters, allMentions }: MentionFilt
               sentiment: event.target.value as DashboardFilters["sentiment"],
             })
           }
-          className="bg-transparent border-none focus:ring-0 font-medium text-on-surface w-full p-0 text-sm"
+          className="bg-transparent border-none focus:ring-0 font-medium w-full p-0 text-sm outline-none"
+          style={{ color: "var(--color-text-primary)" }}
         >
           {sentimentOptions.map((option) => (
             <option key={option.value} value={option.value}>
@@ -127,9 +141,15 @@ export function MentionFilters({ workspaces, filters, allMentions }: MentionFilt
         </select>
       </div>
 
-      {/* Platform Filter - dynamic from data */}
-      <div className="bg-surface-bright p-4 rounded-2xl border border-outline-variant flex flex-col gap-3">
-        <label className="text-xs font-semibold text-outline uppercase tracking-wider">
+      {/* Platform Filter */}
+      <div
+        className="p-4 rounded-2xl flex flex-col gap-3"
+        style={{
+          backgroundColor: "var(--color-bg-surface)",
+          border: "1px solid var(--color-border)",
+        }}
+      >
+        <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--color-text-muted)" }}>
           Nền tảng (Platform)
         </label>
         <select
@@ -139,7 +159,8 @@ export function MentionFilters({ workspaces, filters, allMentions }: MentionFilt
               platform: event.target.value as DashboardFilters["platform"],
             })
           }
-          className="bg-transparent border-none focus:ring-0 font-medium text-on-surface w-full p-0 text-sm"
+          className="bg-transparent border-none focus:ring-0 font-medium w-full p-0 text-sm outline-none"
+          style={{ color: "var(--color-text-primary)" }}
         >
           <option value="all">Tất cả nền tảng</option>
           {availablePlatforms.map((platform) => (
@@ -151,8 +172,14 @@ export function MentionFilters({ workspaces, filters, allMentions }: MentionFilt
       </div>
 
       {/* Topic Filter */}
-      <div className="bg-surface-bright p-4 rounded-2xl border border-outline-variant flex flex-col gap-3">
-        <label className="text-xs font-semibold text-outline uppercase tracking-wider">
+      <div
+        className="p-4 rounded-2xl flex flex-col gap-3"
+        style={{
+          backgroundColor: "var(--color-bg-surface)",
+          border: "1px solid var(--color-border)",
+        }}
+      >
+        <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--color-text-muted)" }}>
           Chủ đề (Topic)
         </label>
         <select
@@ -162,7 +189,8 @@ export function MentionFilters({ workspaces, filters, allMentions }: MentionFilt
               topic: event.target.value as DashboardFilters["topic"],
             })
           }
-          className="bg-transparent border-none focus:ring-0 font-medium text-on-surface w-full p-0 text-sm"
+          className="bg-transparent border-none focus:ring-0 font-medium w-full p-0 text-sm outline-none"
+          style={{ color: "var(--color-text-primary)" }}
         >
           <option value="all">Tất cả chủ đề</option>
           {availableTopics.map((topic) => (
@@ -174,8 +202,14 @@ export function MentionFilters({ workspaces, filters, allMentions }: MentionFilt
       </div>
 
       {/* Time Range Filter */}
-      <div className="bg-surface-bright p-4 rounded-2xl border border-outline-variant flex flex-col gap-3">
-        <label className="text-xs font-semibold text-outline uppercase tracking-wider">
+      <div
+        className="p-4 rounded-2xl flex flex-col gap-3"
+        style={{
+          backgroundColor: "var(--color-bg-surface)",
+          border: "1px solid var(--color-border)",
+        }}
+      >
+        <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--color-text-muted)" }}>
           Khoảng thời gian
         </label>
         <select
@@ -185,7 +219,8 @@ export function MentionFilters({ workspaces, filters, allMentions }: MentionFilt
               time_range: event.target.value as DashboardFilters["time_range"],
             })
           }
-          className="bg-transparent border-none focus:ring-0 font-medium text-on-surface w-full p-0 text-sm"
+          className="bg-transparent border-none focus:ring-0 font-medium w-full p-0 text-sm outline-none"
+          style={{ color: "var(--color-text-primary)" }}
         >
           {timeRangeOptions.map((option) => (
             <option key={option.value} value={option.value}>
@@ -197,3 +232,4 @@ export function MentionFilters({ workspaces, filters, allMentions }: MentionFilt
     </div>
   );
 }
+

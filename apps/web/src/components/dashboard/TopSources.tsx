@@ -17,8 +17,14 @@ interface TopSourcesProps {
 export function TopSources({ sources }: TopSourcesProps) {
   const { t } = useTranslation();
   return (
-    <div className="bg-white border border-outline-variant rounded-lg p-6 shadow-sm h-full">
-      <h4 className="font-bold text-lg text-on-surface mb-4">
+    <div
+      className="rounded-lg p-6 shadow-sm h-full"
+      style={{
+        backgroundColor: "var(--color-bg-surface)",
+        border: "1px solid var(--color-border)",
+      }}
+    >
+      <h4 className="font-bold text-lg mb-4" style={{ color: "var(--color-text-primary)" }}>
         Top nguồn dữ liệu
       </h4>
 
@@ -28,14 +34,14 @@ export function TopSources({ sources }: TopSourcesProps) {
           return (
             <div key={source.platform}>
               <div className="flex justify-between items-center mb-1">
-                <span className="text-sm font-bold">
+                <span className="text-sm font-bold text-[var(--color-text-primary)]">
                   {meta.label}
                 </span>
-                <span className="text-xs text-on-surface-variant">
+                <span className="text-xs text-[var(--color-text-secondary)]">
                   {source.count} ({source.percentage}%)
                 </span>
               </div>
-              <div className="w-full bg-surface-container rounded-full h-2">
+              <div className="w-full rounded-full h-2" style={{ backgroundColor: "var(--color-bg-surface-raised)" }}>
                 <div
                   className="h-2 rounded-full transition-all"
                   style={{

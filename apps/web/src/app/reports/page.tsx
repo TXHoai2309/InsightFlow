@@ -60,44 +60,44 @@ function ReportPreviewModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-surface p-6 rounded-2xl shadow-xl w-full max-w-lg flex flex-col gap-5">
-        <div className="flex justify-between items-center border-b border-outline-variant pb-3">
-          <h2 className="text-xl font-bold text-on-surface">Xem trước Báo cáo</h2>
-          <button onClick={onClose} className="p-2 text-on-surface-variant hover:bg-surface-container rounded-full">
+      <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] p-6 rounded-2xl shadow-xl w-full max-w-lg flex flex-col gap-5">
+        <div className="flex justify-between items-center border-b border-[var(--color-border)] pb-3">
+          <h2 className="text-xl font-bold text-[var(--color-text-primary)]">Xem trước Báo cáo</h2>
+          <button onClick={onClose} className="p-2 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-raised)] rounded-full">
             <span className="material-symbols-outlined">close</span>
           </button>
         </div>
 
         <div className="flex flex-col gap-4">
           <div>
-            <p className="text-sm text-outline font-medium">Thương hiệu</p>
-            <p className="font-bold text-lg text-primary capitalize">{report.brand}</p>
+            <p className="text-sm text-[var(--color-text-muted)] font-medium">Thương hiệu</p>
+            <p className="font-bold text-lg text-[var(--color-brand)] capitalize">{report.brand}</p>
           </div>
           <div>
-            <p className="text-sm text-outline font-medium">Ngày báo cáo</p>
-            <p className="font-bold text-lg text-on-surface">{report.dateStr}</p>
+            <p className="text-sm text-[var(--color-text-muted)] font-medium">Ngày báo cáo</p>
+            <p className="font-bold text-lg text-[var(--color-text-primary)]">{report.dateStr}</p>
           </div>
           
           <div className="grid grid-cols-2 gap-4">
-            <div className="bg-surface-container-low p-4 rounded-xl">
-              <p className="text-xs text-outline font-bold uppercase">Tổng lượt đề cập</p>
-              <p className="text-2xl font-bold text-on-surface mt-1">{total}</p>
+            <div className="bg-[var(--color-bg-surface-raised)] p-4 rounded-xl border border-[var(--color-border)]">
+              <p className="text-xs text-[var(--color-text-muted)] font-bold uppercase">Tổng lượt đề cập</p>
+              <p className="text-2xl font-bold text-[var(--color-text-primary)] mt-1">{total}</p>
             </div>
-            <div className="bg-surface-container-low p-4 rounded-xl">
-              <p className="text-xs text-outline font-bold uppercase">Chỉ số Cảm xúc</p>
+            <div className="bg-[var(--color-bg-surface-raised)] p-4 rounded-xl border border-[var(--color-border)]">
+              <p className="text-xs text-[var(--color-text-muted)] font-bold uppercase">Chỉ số Cảm xúc</p>
               <div className="flex gap-2 text-sm mt-1 font-medium">
-                <span className="text-green-600">{pos} Tốt</span>
-                <span className="text-red-600">{neg} Xấu</span>
+                <span className="text-[var(--color-success)]">{pos} Tốt</span>
+                <span className="text-[var(--color-error)]">{neg} Xấu</span>
               </div>
             </div>
           </div>
 
           {topTopics.length > 0 && (
-            <div className="bg-surface-container-low p-4 rounded-xl">
-              <p className="text-xs text-outline font-bold uppercase mb-2">Chủ đề nổi bật</p>
+            <div className="bg-[var(--color-bg-surface-raised)] p-4 rounded-xl border border-[var(--color-border)]">
+              <p className="text-xs text-[var(--color-text-muted)] font-bold uppercase mb-2">Chủ đề nổi bật</p>
               <div className="flex flex-wrap gap-2">
                 {topTopics.map(([t, count]) => (
-                  <span key={t} className="bg-white border border-outline-variant px-2 py-1 rounded text-xs font-semibold capitalize">
+                  <span key={t} className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] px-2 py-1 rounded text-xs font-semibold capitalize text-[var(--color-text-primary)]">
                     {t}: {count}
                   </span>
                 ))}
@@ -107,13 +107,13 @@ function ReportPreviewModal({
         </div>
 
         <div className="flex justify-end gap-3 mt-2">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl text-on-surface-variant font-bold hover:bg-surface-container">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-[var(--color-text-secondary)] font-bold hover:bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)]">
             Đóng
           </button>
           <button 
             onClick={onExport} 
             disabled={isExporting}
-            className="flex items-center gap-2 px-5 py-2 bg-primary text-white rounded-xl font-bold shadow-sm hover:opacity-90 disabled:opacity-50"
+            className="flex items-center gap-2 px-5 py-2 bg-[var(--color-brand)] text-white rounded-xl font-bold shadow-sm hover:bg-[var(--color-brand-hover)] disabled:opacity-50"
           >
             {isExporting ? <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></span> : <span className="material-symbols-outlined text-lg">download</span>}
             Tải PDF
@@ -951,8 +951,8 @@ export default function ReportsPage() {
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-on-surface">Trung tâm Báo cáo</h1>
-          <p className="text-sm text-on-surface-variant mt-1">
+          <h1 className="text-2xl md:text-3xl font-bold text-[var(--color-text-primary)]">Trung tâm Báo cáo</h1>
+          <p className="text-sm text-[var(--color-text-secondary)] mt-1">
             Quản lý và tải xuống các báo cáo phân tích định kỳ từ AI.
           </p>
         </div>
@@ -971,19 +971,19 @@ export default function ReportsPage() {
       {/* ── Stats Cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-5">
         <div className="glass-card p-4 md:p-6 rounded-xl relative overflow-hidden group">
-          <p className="text-[10px] md:text-xs text-on-surface-variant uppercase tracking-wider font-bold mb-2">Mentions tuần này</p>
-          <p className="text-2xl md:text-3xl font-bold text-primary">{stats.weeklyMentions.toLocaleString()}</p>
-          <div className="flex items-center gap-1 mt-2 text-green-600">
+          <p className="text-[10px] md:text-xs text-[var(--color-text-muted)] uppercase tracking-wider font-bold mb-2">Mentions tuần này</p>
+          <p className="text-2xl md:text-3xl font-bold text-[var(--color-brand)]">{stats.weeklyMentions.toLocaleString()}</p>
+          <div className="flex items-center gap-1 mt-2 text-[var(--color-success)]">
             <span className="material-symbols-outlined text-sm">trending_up</span>
             <span className="text-[10px] md:text-xs font-bold">Realtime</span>
           </div>
           <span className="absolute -right-3 -bottom-3 material-symbols-outlined text-[80px] md:text-[100px] opacity-5 hidden sm:block">analytics</span>
         </div>
 
-        <div className="glass-card p-4 md:p-6 rounded-xl relative overflow-hidden group border-l-4 border-secondary/30">
-          <p className="text-[10px] md:text-xs text-on-surface-variant uppercase tracking-wider font-bold mb-2">Sentiment Index</p>
-          <p className="text-2xl md:text-3xl font-bold text-secondary">{stats.sentimentScore}/100</p>
-          <div className="flex items-center gap-1 mt-2 text-primary">
+        <div className="glass-card p-4 md:p-6 rounded-xl relative overflow-hidden group border-l-4 border-[var(--color-brand)]/30">
+          <p className="text-[10px] md:text-xs text-[var(--color-text-muted)] uppercase tracking-wider font-bold mb-2">Sentiment Index</p>
+          <p className="text-2xl md:text-3xl font-bold text-[var(--color-brand)]">{stats.sentimentScore}/100</p>
+          <div className="flex items-center gap-1 mt-2 text-[var(--color-brand)]">
             <span className="material-symbols-outlined text-sm">{stats.sentimentIcon}</span>
             <span className="text-[10px] md:text-xs font-bold">{stats.sentimentLabel}</span>
           </div>
@@ -991,112 +991,111 @@ export default function ReportsPage() {
         </div>
 
         <div className="glass-card p-4 md:p-6 rounded-xl relative overflow-hidden group col-span-2 lg:col-span-1">
-          <p className="text-[10px] md:text-xs text-on-surface-variant uppercase tracking-wider font-bold mb-2">Báo cáo mới nhất</p>
-          <p className="text-lg md:text-xl font-bold text-on-surface truncate pr-6">{stats.latestReportName}</p>
-          <p className="text-[10px] md:text-xs text-outline mt-2 font-medium">{stats.latestReportTime}</p>
+          <p className="text-[10px] md:text-xs text-[var(--color-text-muted)] uppercase tracking-wider font-bold mb-2">Báo cáo mới nhất</p>
+          <p className="text-lg md:text-xl font-bold text-[var(--color-text-primary)] truncate pr-6">{stats.latestReportName}</p>
+          <p className="text-[10px] md:text-xs text-[var(--color-text-muted)] mt-2 font-medium">{stats.latestReportTime}</p>
           <span className="absolute -right-3 -bottom-3 material-symbols-outlined text-[80px] md:text-[100px] opacity-5 hidden sm:block">history</span>
         </div>
       </div>
 
       {/* ── Reports List ── */}
-      <div className="bg-white border border-outline-variant rounded-xl overflow-hidden shadow-sm flex flex-col min-h-[400px]">
+      <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-xl overflow-hidden shadow-sm flex flex-col min-h-[400px]">
 
-        {/* Toolbar Tabs (Only display tabs in periodic and archive. Custom has its own internal back button and custom filters layout) */}
-        {activeTab !== "custom" ? (
-          <div className="px-4 md:px-6 py-3 md:py-4 border-b border-outline-variant bg-surface-bright flex flex-col md:flex-row md:items-center gap-3">
-            {/* Tabs */}
-            <div className="flex gap-1 overflow-x-auto flex-1">
-              <button 
-                onClick={() => setActiveTab("periodic")}
-                className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap flex-shrink-0 transition-colors ${
-                  activeTab === "periodic" ? "text-primary bg-primary/10" : "text-on-surface-variant hover:bg-surface-container"
-                }`}
-              >
-                Định kỳ
-              </button>
-              <button 
-                onClick={() => setActiveTab("custom")}
-                className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap flex-shrink-0 transition-colors ${
-                  (activeTab as string) === "custom" ? "text-primary bg-primary/10" : "text-on-surface-variant hover:bg-surface-container"
-                }`}
-              >
-                Tùy chỉnh
-              </button>
-              <button 
-                onClick={() => setActiveTab("archive")}
-                className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap flex-shrink-0 transition-colors ${
-                  activeTab === "archive" ? "text-primary bg-primary/10" : "text-on-surface-variant hover:bg-surface-container"
-                }`}
-              >
-                Lưu trữ
-              </button>
-            </div>
-            {/* Filters - Fixed UI for wrap */}
-            {activeTab === "periodic" && (
-              <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-                <div className="flex items-center gap-2 flex-1 md:flex-none min-w-[140px]">
-                  <span className="text-[11px] text-outline font-bold uppercase tracking-wider hidden sm:block">Thương hiệu:</span>
-                  <select 
-                    value={selectedBrand}
-                    onChange={(e) => setSelectedBrand(e.target.value)}
-                    className="bg-surface-container-low border border-outline-variant rounded-lg text-xs py-2 px-3 outline-none font-bold focus:ring-2 focus:ring-primary/20 w-full"
-                  >
-                    <option value="all">Tất cả nhãn hàng</option>
-                    {brands.map(b => (
-                      <option key={b} value={b} className="capitalize">{b}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex items-center gap-2 flex-1 md:flex-none min-w-[120px]">
-                  <span className="text-[11px] text-outline font-bold uppercase tracking-wider hidden sm:block">Thời gian:</span>
-                  <select 
-                    value={timeFilter}
-                    onChange={(e) => setTimeFilter(e.target.value)}
-                    className="bg-surface-container-low border border-outline-variant rounded-lg text-xs py-2 px-3 outline-none font-bold focus:ring-2 focus:ring-primary/20 w-full"
-                  >
-                    <option value="all">Tất cả thời gian</option>
-                    <option value="today">Hôm nay</option>
-                    <option value="week">Tuần này</option>
-                    <option value="month">Tháng này</option>
-                  </select>
-                </div>
-              </div>
-            )}
+        {/* Toolbar */}
+        <div className="px-4 md:px-6 py-3 md:py-4 border-b border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] flex flex-col md:flex-row md:items-center gap-3">
+          {/* Tabs */}
+          <div className="flex gap-1 overflow-x-auto flex-1">
+            <button 
+              onClick={() => setActiveTab("periodic")}
+              className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap flex-shrink-0 transition-colors ${
+                activeTab === "periodic" ? "text-[var(--color-brand)] bg-[var(--color-brand-subtle)]" : "text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-high)]"
+              }`}
+            >
+              Định kỳ
+            </button>
+            <button 
+              onClick={() => { setActiveTab("custom"); setCustomReportGenerated(false); }}
+              className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap flex-shrink-0 transition-colors ${
+                activeTab === "custom" ? "text-[var(--color-brand)] bg-[var(--color-brand-subtle)]" : "text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-high)]"
+              }`}
+            >
+              Tùy chỉnh
+            </button>
+            <button 
+              onClick={() => setActiveTab("archive")}
+              className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap flex-shrink-0 transition-colors ${
+                activeTab === "archive" ? "text-[var(--color-brand)] bg-[var(--color-brand-subtle)]" : "text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-high)]"
+              }`}
+            >
+              Lưu trữ
+            </button>
           </div>
-        ) : null}
 
-        {/* ── Tab Content: Periodic (Original View) ── */}
+          {/* Filters */}
+          {activeTab === "periodic" && (
+            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+              <div className="flex items-center gap-2 flex-1 md:flex-none min-w-[140px]">
+                <span className="text-[11px] text-[var(--color-text-muted)] font-bold uppercase tracking-wider hidden sm:block">Thương hiệu:</span>
+                <select 
+                  value={selectedBrand}
+                  onChange={(e) => setSelectedBrand(e.target.value)}
+                  className="select-app border border-[var(--color-border)] rounded-lg text-xs py-2 px-3 outline-none font-bold focus:ring-2 focus:ring-[var(--color-brand)]/20 w-full"
+                >
+                  <option value="all">Tất cả nhãn hàng</option>
+                  {brands.map(b => (
+                    <option key={b} value={b} className="capitalize">{b}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-center gap-2 flex-1 md:flex-none min-w-[120px]">
+                <span className="text-[11px] text-[var(--color-text-muted)] font-bold uppercase tracking-wider hidden sm:block">Thời gian:</span>
+                <select 
+                  value={timeFilter}
+                  onChange={(e) => setTimeFilter(e.target.value)}
+                  className="select-app border border-[var(--color-border)] rounded-lg text-xs py-2 px-3 outline-none font-bold focus:ring-2 focus:ring-[var(--color-brand)]/20 w-full"
+                >
+                  <option value="all">Tất cả thời gian</option>
+                  <option value="today">Hôm nay</option>
+                  <option value="week">Tuần này</option>
+                  <option value="month">Tháng này</option>
+                </select>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Tab Content: Periodic ── */}
         {activeTab === "periodic" && (
           <>
             {loading ? (
-              <div className="flex-1 flex flex-col items-center justify-center py-20 text-on-surface-variant">
-                 <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
+              <div className="flex-1 flex flex-col items-center justify-center py-20 text-[var(--color-text-muted)]">
+                 <div className="w-8 h-8 border-4 border-[var(--color-brand)] border-t-transparent rounded-full animate-spin mb-4"></div>
                  <p className="font-bold">Đang tải dữ liệu báo cáo...</p>
               </div>
             ) : reportsList.length === 0 ? (
-              <div className="flex-1 flex flex-col items-center justify-center py-20 text-outline">
+              <div className="flex-1 flex flex-col items-center justify-center py-20 text-[var(--color-text-muted)]">
                 <span className="material-symbols-outlined text-5xl mb-2 opacity-50">description</span>
                 <p className="font-bold">Không tìm thấy báo cáo nào phù hợp.</p>
               </div>
             ) : (
               <>
                 {/* Mobile View */}
-                <div className="md:hidden divide-y divide-outline-variant/40">
+                <div className="md:hidden divide-y divide-[var(--color-border)]">
                   {paginatedReports.map((rpt) => (
-                    <div key={rpt.id} className="p-4 cursor-pointer hover:bg-surface-container-low/30 transition-colors" onClick={() => setPreviewReport(rpt)}>
+                    <div key={rpt.id} className="p-4 cursor-pointer hover:bg-[var(--color-bg-surface-raised)] transition-colors" onClick={() => setPreviewReport(rpt)}>
                       <div className="flex items-start gap-3 mb-3">
-                        <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                        <div className="w-10 h-10 rounded-xl bg-[var(--color-brand-subtle)] text-[var(--color-brand)] flex items-center justify-center flex-shrink-0">
                           <span className="material-symbols-outlined text-xl">description</span>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-bold text-on-surface leading-snug truncate pr-2 capitalize">Daily - {rpt.brand}</p>
-                          <p className="text-[11px] text-outline font-medium mt-0.5">{rpt.mentions.length} mentions</p>
+                          <p className="text-sm font-bold text-[var(--color-text-primary)] leading-snug truncate pr-2 capitalize">Daily - {rpt.brand}</p>
+                          <p className="text-[11px] text-[var(--color-text-muted)] font-medium mt-0.5">{rpt.mentions.length} mentions</p>
                         </div>
-                        <span className="bg-primary/10 text-primary px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap flex-shrink-0 border border-current/10">
+                        <span className="bg-[var(--color-brand-subtle)] text-[var(--color-brand)] px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap flex-shrink-0 border border-[var(--color-brand-border)]">
                           Hàng ngày
                         </span>
                       </div>
-                      <div className="flex items-center justify-between text-[11px] text-on-surface-variant font-bold mb-3 bg-surface-container-low rounded-lg px-3 py-2">
+                      <div className="flex items-center justify-between text-[11px] text-[var(--color-text-secondary)] font-bold mb-3 bg-[var(--color-bg-surface-raised)] rounded-lg px-3 py-2">
                         <span className="flex items-center gap-1.5">
                           <span className="material-symbols-outlined text-[14px]">calendar_today</span>
                           {rpt.dateStr}
@@ -1110,7 +1109,7 @@ export default function ReportsPage() {
                         <button 
                           onClick={(e) => { e.stopPropagation(); handleExportPDF(rpt); }}
                           disabled={generatingPdfId === rpt.id || rpt.mentions.length === 0}
-                          className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-outline-variant text-on-surface-variant hover:bg-primary hover:text-white hover:border-primary transition-all text-[11px] font-bold disabled:opacity-50"
+                          className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-brand)] hover:text-white hover:border-[var(--color-brand)] transition-all text-[11px] font-bold disabled:opacity-50"
                         >
                           {generatingPdfId === rpt.id ? (
                             <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
@@ -1119,11 +1118,11 @@ export default function ReportsPage() {
                           )}
                           {generatingPdfId === rpt.id ? "Đang tạo..." : "PDF"}
                         </button>
-                        <button className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-outline-variant text-on-surface-variant hover:bg-secondary hover:text-white hover:border-secondary transition-all text-[11px] font-bold">
+                        <button className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-brand)] hover:text-white hover:border-[var(--color-brand)] transition-all text-[11px] font-bold">
                           <span className="material-symbols-outlined text-[16px]">visibility</span>
                           Xem
                         </button>
-                        <button className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-outline-variant text-on-surface-variant hover:bg-surface-container transition-all text-[11px] font-bold">
+                        <button className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)] transition-all text-[11px] font-bold">
                           <span className="material-symbols-outlined text-[16px]">more_horiz</span>
                           Thêm
                         </button>
@@ -1136,40 +1135,40 @@ export default function ReportsPage() {
                 <div className="hidden md:block overflow-x-auto flex-1">
                   <table className="w-full text-left">
                     <thead>
-                      <tr className="border-b border-outline-variant bg-surface-container-low/40">
-                        <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-on-surface-variant">Tên Báo Cáo</th>
-                        <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-on-surface-variant w-32">Ngày Tạo</th>
-                        <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-on-surface-variant">Mentions</th>
-                        <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-on-surface-variant">Dung Lượng</th>
-                        <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-on-surface-variant text-right">Hành động</th>
+                      <tr className="border-b border-[var(--color-border)] bg-[var(--color-bg-surface-raised)]">
+                        <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-[var(--color-text-muted)]">Tên Báo Cáo</th>
+                        <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-[var(--color-text-muted)] w-32">Ngày Tạo</th>
+                        <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-[var(--color-text-muted)]">Mentions</th>
+                        <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-[var(--color-text-muted)]">Dung Lượng</th>
+                        <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-[var(--color-text-muted)] text-right">Hành động</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-outline-variant/40">
+                    <tbody className="divide-y divide-[var(--color-border)]">
                       {paginatedReports.map((rpt) => (
-                        <tr key={rpt.id} className="hover:bg-surface-container-low/50 transition-colors group cursor-pointer" onClick={() => setPreviewReport(rpt)}>
+                        <tr key={rpt.id} className="hover:bg-[var(--color-bg-surface-raised)] transition-colors group cursor-pointer" onClick={() => setPreviewReport(rpt)}>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-4">
-                              <div className={`w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0 ${rpt.mentions.length > 0 ? "text-primary" : "text-outline opacity-50"}`}>
+                              <div className={`w-10 h-10 rounded-xl bg-[var(--color-brand-subtle)] flex items-center justify-center flex-shrink-0 ${rpt.mentions.length > 0 ? "text-[var(--color-brand)]" : "text-[var(--color-text-muted)] opacity-50"}`}>
                                 <span className="material-symbols-outlined">description</span>
                               </div>
                               <div>
-                                <p className="text-sm font-bold text-on-surface capitalize">Daily Report - {rpt.brand}</p>
-                                <p className="text-[11px] text-outline font-medium mt-0.5">ID: {rpt.id}</p>
+                                <p className="text-sm font-bold text-[var(--color-text-primary)] capitalize">Daily Report - {rpt.brand}</p>
+                                <p className="text-[11px] text-[var(--color-text-muted)] font-medium mt-0.5">ID: {rpt.id}</p>
                               </div>
                             </div>
                           </td>
-                          <td className="px-6 py-4 text-sm text-on-surface-variant font-medium">
+                          <td className="px-6 py-4 text-sm text-[var(--color-text-secondary)] font-medium">
                             {rpt.dateStr}
                           </td>
-                          <td className="px-6 py-4 text-sm text-on-surface-variant font-medium">
-                            {rpt.mentions.length > 0 ? `${rpt.mentions.length} mentions` : <span className="text-outline italic">0 mentions</span>}
+                          <td className="px-6 py-4 text-sm text-[var(--color-text-secondary)] font-medium">
+                            {rpt.mentions.length > 0 ? `${rpt.mentions.length} mentions` : <span className="text-[var(--color-text-muted)] italic">0 mentions</span>}
                           </td>
-                          <td className="px-6 py-4 text-sm text-on-surface-variant font-medium">{rpt.size}</td>
+                          <td className="px-6 py-4 text-sm text-[var(--color-text-secondary)] font-medium">{rpt.size}</td>
                           <td className="px-6 py-4 text-right">
                             <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
                               <button 
                                 onClick={(e) => { e.stopPropagation(); setPreviewReport(rpt); }}
-                                className="p-2 rounded-lg text-on-surface-variant hover:text-secondary hover:bg-secondary/10 transition-colors" 
+                                className="p-2 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)] transition-colors" 
                                 title="Xem trước"
                               >
                                 <span className="material-symbols-outlined text-xl">visibility</span>
@@ -1177,7 +1176,7 @@ export default function ReportsPage() {
                               <button 
                                 onClick={(e) => { e.stopPropagation(); handleExportPDF(rpt); }}
                                 disabled={generatingPdfId === rpt.id || rpt.mentions.length === 0}
-                                className="p-2 rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors disabled:opacity-50" 
+                                className="p-2 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)] transition-colors disabled:opacity-50" 
                                 title="Xuất PDF"
                               >
                                 {generatingPdfId === rpt.id ? (
@@ -1484,7 +1483,7 @@ export default function ReportsPage() {
                     <button 
                       onClick={handleExportCustomPDF}
                       disabled={generatingPdfId === "custom-export"}
-                      className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-5 py-2 bg-primary text-white rounded-xl font-bold text-xs hover:opacity-90 transition-opacity disabled:opacity-50"
+                      className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-5 py-2 bg-[var(--color-brand)] text-white rounded-xl font-bold text-xs hover:bg-[var(--color-brand-hover)] transition-all disabled:opacity-50"
                     >
                       {generatingPdfId === "custom-export" ? (
                         <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
@@ -1498,13 +1497,13 @@ export default function ReportsPage() {
 
                 {/* Report Header metadata */}
                 <div>
-                  <span className="bg-primary/10 text-primary border border-primary/20 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                  <span className="bg-[var(--color-brand-subtle)] text-[var(--color-brand)] border border-[var(--color-brand-border)] px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider">
                     Báo cáo Tùy chỉnh (AI-generated)
                   </span>
-                  <h2 className="text-xl font-bold text-on-surface capitalize mt-2">
+                  <h2 className="text-xl font-bold text-[var(--color-text-primary)] capitalize mt-2">
                     Báo cáo phân tích: {customBrand === "all" ? "Tất Cả Nhãn Hàng" : customBrand}
                   </h2>
-                  <p className="text-xs text-on-surface-variant mt-1">
+                  <p className="text-xs text-[var(--color-text-secondary)] mt-1">
                     Phân tích trong khoảng thời gian từ {new Date(customStartDate).toLocaleDateString("vi-VN")} đến {new Date(customEndDate).toLocaleDateString("vi-VN")} dựa trên {customReportData?.mentions.length} đề cập phù hợp.
                   </p>
                 </div>
@@ -1512,27 +1511,27 @@ export default function ReportsPage() {
                 {/* Custom Report Metrics */}
                 {customReportData && (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div className="bg-surface-container-low p-4 rounded-xl border border-outline-variant/50">
-                      <p className="text-[10px] text-outline font-bold uppercase">Tổng số đề cập</p>
-                      <p className="text-2xl font-bold text-on-surface mt-1">{customReportData.stats.total}</p>
+                    <div className="bg-[var(--color-bg-surface-raised)] p-4 rounded-xl border border-[var(--color-border)]">
+                      <p className="text-[10px] text-[var(--color-text-muted)] font-bold uppercase">Tổng số đề cập</p>
+                      <p className="text-2xl font-bold text-[var(--color-text-primary)] mt-1">{customReportData.stats.total}</p>
                     </div>
-                    <div className="bg-surface-container-low p-4 rounded-xl border border-outline-variant/50">
-                      <p className="text-[10px] text-outline font-bold uppercase">Sắc thái Tích cực</p>
-                      <p className="text-2xl font-bold text-green-600 mt-1">
+                    <div className="bg-[var(--color-bg-surface-raised)] p-4 rounded-xl border border-[var(--color-border)]">
+                      <p className="text-[10px] text-[var(--color-text-muted)] font-bold uppercase">Sắc thái Tích cực</p>
+                      <p className="text-2xl font-bold text-[var(--color-success)] mt-1">
                         {customReportData.stats.positive}
-                        <span className="text-xs text-outline font-normal ml-1">({Math.round(customReportData.stats.positive/customReportData.stats.total*100)}%)</span>
+                        <span className="text-xs text-[var(--color-text-muted)] font-normal ml-1">({Math.round(customReportData.stats.positive/customReportData.stats.total*100)}%)</span>
                       </p>
                     </div>
-                    <div className="bg-surface-container-low p-4 rounded-xl border border-outline-variant/50">
-                      <p className="text-[10px] text-outline font-bold uppercase">Sắc thái Tiêu cực</p>
-                      <p className="text-2xl font-bold text-red-600 mt-1">
+                    <div className="bg-[var(--color-bg-surface-raised)] p-4 rounded-xl border border-[var(--color-border)]">
+                      <p className="text-[10px] text-[var(--color-text-muted)] font-bold uppercase">Sắc thái Tiêu cực</p>
+                      <p className="text-2xl font-bold text-[var(--color-error)] mt-1">
                         {customReportData.stats.negative}
-                        <span className="text-xs text-outline font-normal ml-1">({Math.round(customReportData.stats.negative/customReportData.stats.total*100)}%)</span>
+                        <span className="text-xs text-[var(--color-text-muted)] font-normal ml-1">({Math.round(customReportData.stats.negative/customReportData.stats.total*100)}%)</span>
                       </p>
                     </div>
-                    <div className="bg-surface-container-low p-4 rounded-xl border border-outline-variant/50">
-                      <p className="text-[10px] text-outline font-bold uppercase">Chỉ số Cảm xúc ròng</p>
-                      <p className={`text-2xl font-bold mt-1 ${customReportData.stats.score >= 50 ? "text-green-600" : customReportData.stats.score > 0 ? "text-primary" : "text-red-600"}`}>
+                    <div className="bg-[var(--color-bg-surface-raised)] p-4 rounded-xl border border-[var(--color-border)]">
+                      <p className="text-[10px] text-[var(--color-text-muted)] font-bold uppercase">Chỉ số Cảm xúc ròng</p>
+                      <p className={`text-2xl font-bold mt-1 ${customReportData.stats.score >= 50 ? "text-[var(--color-success)]" : customReportData.stats.score > 0 ? "text-[var(--color-brand)]" : "text-[var(--color-error)]"}`}>
                         {customReportData.stats.score >= 0 ? "+" : ""}{customReportData.stats.score}%
                       </p>
                     </div>
@@ -1541,17 +1540,17 @@ export default function ReportsPage() {
 
                 {/* AI Insights display area */}
                 {customReportData && (
-                  <div className="bg-primary/5 border border-primary/10 rounded-2xl p-5 md:p-6 space-y-4 shadow-sm relative overflow-hidden">
-                    <div className="absolute right-0 top-0 translate-x-6 -translate-y-6 w-24 h-24 bg-primary/10 rounded-full blur-2xl"></div>
+                  <div className="bg-[var(--color-brand)]/5 border border-[var(--color-brand)]/10 rounded-2xl p-5 md:p-6 space-y-4 shadow-sm relative overflow-hidden">
+                    <div className="absolute right-0 top-0 translate-x-6 -translate-y-6 w-24 h-24 bg-[var(--color-brand)]/10 rounded-full blur-2xl"></div>
                     
                     <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                      <div className="w-8 h-8 rounded-lg bg-[var(--color-brand-subtle)] text-[var(--color-brand)] flex items-center justify-center">
                         <span className="material-symbols-outlined text-lg">psychology</span>
                       </div>
-                      <h3 className="text-sm font-bold text-primary uppercase tracking-wider">AI Insights & Phân Tích Chuyên Sâu</h3>
+                      <h3 className="text-sm font-bold text-[var(--color-brand)] uppercase tracking-wider">AI Insights & Phân Tích Chuyên Sâu</h3>
                     </div>
 
-                    <div className="text-sm text-on-surface-variant leading-relaxed font-normal whitespace-pre-wrap">
+                    <div className="text-sm text-[var(--color-text-secondary)] leading-relaxed font-normal whitespace-pre-wrap">
                       {customReportData.aiInsights}
                     </div>
                   </div>
@@ -1559,24 +1558,24 @@ export default function ReportsPage() {
 
                 {/* Matched mentions table */}
                 <div className="space-y-3">
-                  <h3 className="text-sm font-bold text-on-surface">Các đề cập phù hợp tiêu chí (Tối đa 50 bài đăng mẫu)</h3>
+                  <h3 className="text-sm font-bold text-[var(--color-text-primary)]">Các đề cập phù hợp tiêu chí (Tối đa 50 bài đăng mẫu)</h3>
                   
-                  <div className="border border-outline-variant rounded-xl overflow-hidden shadow-sm">
+                  <div className="border border-[var(--color-border)] rounded-xl overflow-hidden shadow-sm">
                     {/* Responsive list of matches */}
-                    <div className="block md:hidden divide-y divide-outline-variant/40">
+                    <div className="block md:hidden divide-y divide-[var(--color-border)]">
                       {customReportData?.mentions.slice(0, 50).map((m, idx) => (
                         <div key={idx} className="p-3 text-xs space-y-2">
                           <div className="flex justify-between items-center">
-                            <span className="font-bold text-primary capitalize">{m.source}</span>
+                            <span className="font-bold text-[var(--color-brand)] capitalize">{m.source}</span>
                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                              m.sentiment.toLowerCase().includes("pos") ? "bg-green-50 text-green-700" :
-                              m.sentiment.toLowerCase().includes("neg") ? "bg-red-50 text-red-700" : "bg-gray-50 text-gray-700"
+                              m.sentiment.toLowerCase().includes("pos") ? "bg-[var(--color-success-subtle)] text-[var(--color-success)]" :
+                              m.sentiment.toLowerCase().includes("neg") ? "bg-[var(--color-error-subtle)] text-[var(--color-error)]" : "bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]"
                             }`}>
                               {m.sentiment}
                             </span>
                           </div>
-                          <p className="text-on-surface-variant">{m.content}</p>
-                          <div className="text-[10px] text-outline flex justify-between">
+                          <p className="text-[var(--color-text-secondary)]">{m.content}</p>
+                          <div className="text-[10px] text-[var(--color-text-muted)] flex justify-between">
                             <span>Chủ đề: {m.topic.toUpperCase()}</span>
                             <span>{new Date(m.posted_at).toLocaleDateString("vi-VN")}</span>
                           </div>
@@ -1586,31 +1585,31 @@ export default function ReportsPage() {
 
                     <table className="w-full text-left text-xs hidden md:table">
                       <thead>
-                        <tr className="bg-surface-container-low/50 border-b border-outline-variant">
-                          <th className="px-4 py-3 font-bold text-on-surface-variant w-24">Nguồn</th>
-                          <th className="px-4 py-3 font-bold text-on-surface-variant">Nội dung đề cập</th>
-                          <th className="px-4 py-3 font-bold text-on-surface-variant w-24">Sắc thái</th>
-                          <th className="px-4 py-3 font-bold text-on-surface-variant w-28">Chủ đề</th>
-                          <th className="px-4 py-3 font-bold text-on-surface-variant w-28">Ngày đăng</th>
+                        <tr className="bg-[var(--color-bg-surface-raised)] border-b border-[var(--color-border)]">
+                          <th className="px-4 py-3 font-bold text-[var(--color-text-muted)] w-24">Nguồn</th>
+                          <th className="px-4 py-3 font-bold text-[var(--color-text-muted)]">Nội dung đề cập</th>
+                          <th className="px-4 py-3 font-bold text-[var(--color-text-muted)] w-24">Sắc thái</th>
+                          <th className="px-4 py-3 font-bold text-[var(--color-text-muted)] w-28">Chủ đề</th>
+                          <th className="px-4 py-3 font-bold text-[var(--color-text-muted)] w-28">Ngày đăng</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-outline-variant/40">
+                      <tbody className="divide-y divide-[var(--color-border)]">
                         {customReportData?.mentions.slice(0, 50).map((m, idx) => (
-                          <tr key={idx} className="hover:bg-surface-container-low/30 transition-colors">
-                            <td className="px-4 py-3 font-bold capitalize text-primary">{m.source}</td>
-                            <td className="px-4 py-3 text-on-surface-variant font-medium max-w-xs truncate" title={m.content}>
+                          <tr key={idx} className="hover:bg-[var(--color-bg-surface-raised)]/50 transition-colors">
+                            <td className="px-4 py-3 font-bold capitalize text-[var(--color-brand)]">{m.source}</td>
+                            <td className="px-4 py-3 text-[var(--color-text-secondary)] font-medium max-w-xs truncate" title={m.content}>
                               {m.content}
                             </td>
                             <td className="px-4 py-3">
                               <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                                m.sentiment.toLowerCase().includes("pos") ? "text-green-600 bg-green-50 border-green-200" :
-                                m.sentiment.toLowerCase().includes("neg") ? "text-red-600 bg-red-50 border-red-200" : "text-gray-600 bg-gray-50 border-gray-200"
+                                m.sentiment.toLowerCase().includes("pos") ? "text-[var(--color-success)] bg-[var(--color-success-subtle)] border-[var(--color-success)]/30" :
+                                m.sentiment.toLowerCase().includes("neg") ? "text-[var(--color-error)] bg-[var(--color-error-subtle)] border-[var(--color-error)]/30" : "text-[var(--color-text-secondary)] bg-[var(--color-bg-surface-raised)] border-[var(--color-border)]"
                               }`}>
                                 {m.sentiment === "positive" ? "Tích cực" : m.sentiment === "negative" ? "Tiêu cực" : "Trung lập"}
                               </span>
                             </td>
-                            <td className="px-4 py-3 font-bold text-on-surface-variant capitalize">{m.topic}</td>
-                            <td className="px-4 py-3 text-outline font-medium">
+                            <td className="px-4 py-3 font-bold text-[var(--color-text-secondary)] capitalize">{m.topic}</td>
+                            <td className="px-4 py-3 text-[var(--color-text-muted)] font-medium">
                               {new Date(m.posted_at).toLocaleDateString("vi-VN")}
                             </td>
                           </tr>
@@ -1629,35 +1628,35 @@ export default function ReportsPage() {
           <div className="p-4 md:p-6 space-y-5 flex-1">
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
               <div>
-                <h2 className="text-lg font-bold text-on-surface flex items-center gap-2">
-                  <span className="material-symbols-outlined text-primary">archive</span>
+                <h2 className="text-lg font-bold text-[var(--color-text-primary)] flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[var(--color-brand)]">archive</span>
                   Báo cáo đã Lưu trữ
                 </h2>
-                <p className="text-xs text-on-surface-variant mt-1">
+                <p className="text-xs text-[var(--color-text-secondary)] mt-1">
                   Các bản báo cáo Snapshot tĩnh đã được phê duyệt lưu giữ lâu dài để theo dõi sự phát triển thương hiệu.
                 </p>
               </div>
             </div>
 
             {/* Search & Filter Toolbar */}
-            <div className="flex flex-col sm:flex-row gap-3 bg-surface-container-low/40 p-4 rounded-xl border border-outline-variant/60">
+            <div className="flex flex-col sm:flex-row gap-3 bg-[var(--color-bg-surface-raised)] p-4 rounded-xl border border-[var(--color-border)]">
               <div className="flex-1 relative flex items-center">
-                <span className="material-symbols-outlined text-outline absolute left-3 pointer-events-none text-lg">search</span>
+                <span className="material-symbols-outlined text-[var(--color-text-muted)] absolute left-3 pointer-events-none text-lg">search</span>
                 <input 
                   type="text"
                   placeholder="Tìm kiếm theo tiêu đề, nhãn hàng, mã..."
                   value={archiveSearchQuery}
                   onChange={(e) => setArchiveSearchQuery(e.target.value)}
-                  className="bg-white border border-outline-variant rounded-lg text-xs pl-10 pr-3 py-2.5 outline-none font-semibold focus:ring-2 focus:ring-primary/20 w-full"
+                  className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-lg text-xs pl-10 pr-3 py-2.5 outline-none font-semibold focus:ring-2 focus:ring-[var(--color-brand)]/20 w-full text-[var(--color-text-primary)]"
                 />
               </div>
               
               <div className="flex items-center gap-2 min-w-[180px]">
-                <span className="text-[11px] text-outline font-bold uppercase tracking-wider hidden sm:block whitespace-nowrap">Lọc nhãn:</span>
+                <span className="text-[11px] text-[var(--color-text-muted)] font-bold uppercase tracking-wider hidden sm:block whitespace-nowrap">Lọc nhãn:</span>
                 <select 
                   value={archiveBrandFilter}
                   onChange={(e) => setArchiveBrandFilter(e.target.value)}
-                  className="bg-white border border-outline-variant rounded-lg text-xs py-2.5 px-3 outline-none font-bold focus:ring-2 focus:ring-primary/20 w-full"
+                  className="select-app border border-[var(--color-border)] rounded-lg text-xs py-2.5 px-3 outline-none font-bold focus:ring-2 focus:ring-[var(--color-brand)]/20 w-full"
                 >
                   <option value="all">Tất cả nhãn hàng</option>
                   {brands.map(b => (
@@ -1668,42 +1667,42 @@ export default function ReportsPage() {
             </div>
 
             {filteredArchivedReports.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-outline bg-surface-bright rounded-xl border border-dashed border-outline-variant">
+              <div className="flex flex-col items-center justify-center py-20 text-[var(--color-text-muted)] bg-[var(--color-bg-surface-raised)] rounded-xl border border-dashed border-[var(--color-border)]">
                 <span className="material-symbols-outlined text-5xl mb-2 opacity-50">archive</span>
                 <p className="font-bold text-sm">Không tìm thấy báo cáo lưu trữ nào phù hợp.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4">
                 {filteredArchivedReports.map((rpt) => (
-                  <div key={rpt.id} className="p-4 rounded-xl border border-outline-variant bg-surface-bright hover:shadow-sm hover:border-primary/20 transition-all flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div key={rpt.id} className="p-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] hover:shadow-sm hover:border-[var(--color-brand)]/25 transition-all flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                     <div className="space-y-1.5 flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="bg-surface-container-high text-on-surface-variant text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider border border-outline-variant/60">
+                        <span className="bg-[var(--color-bg-surface-high)] text-[var(--color-text-secondary)] text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider border border-[var(--color-border)]">
                           {rpt.id}
                         </span>
-                        <span className="text-[11px] text-outline font-semibold">
+                        <span className="text-[11px] text-[var(--color-text-muted)] font-semibold">
                           Lưu ngày: {rpt.dateStr}
                         </span>
                         {rpt.brand && (
-                          <span className="bg-primary/10 text-primary text-[10px] px-2 py-0.5 rounded font-bold capitalize">
+                          <span className="bg-[var(--color-brand-subtle)] text-[var(--color-brand)] text-[10px] px-2 py-0.5 rounded font-bold capitalize">
                             {rpt.brand}
                           </span>
                         )}
                       </div>
-                      <h3 className="font-bold text-sm text-on-surface truncate pr-4">{rpt.title}</h3>
-                      <p className="text-xs text-on-surface-variant line-clamp-2 max-w-2xl font-normal leading-relaxed">
+                      <h3 className="font-bold text-sm text-[var(--color-text-primary)] truncate pr-4">{rpt.title}</h3>
+                      <p className="text-xs text-[var(--color-text-secondary)] line-clamp-2 max-w-2xl font-normal leading-relaxed">
                         {rpt.insights}
                       </p>
                     </div>
 
-                    <div className="flex items-center gap-3 w-full md:w-auto border-t md:border-t-0 border-outline-variant/40 pt-3 md:pt-0">
+                    <div className="flex items-center gap-3 w-full md:w-auto border-t md:border-t-0 border-[var(--color-border)] pt-3 md:pt-0">
                       <div className="text-left md:text-right hidden sm:block mr-2">
-                        <p className="text-[10px] text-outline font-bold uppercase">Lượt đề cập</p>
-                        <p className="text-xs font-bold text-on-surface">{rpt.mentionsCount} mentions</p>
+                        <p className="text-[10px] text-[var(--color-text-muted)] font-bold uppercase">Lượt đề cập</p>
+                        <p className="text-xs font-bold text-[var(--color-text-primary)]">{rpt.mentionsCount} mentions</p>
                       </div>
                       <button 
                         onClick={() => setPreviewArchiveReport(rpt)}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-1 px-3 py-2.5 bg-surface-container text-on-surface border border-outline-variant rounded-xl font-bold text-xs hover:bg-surface-container-high transition-colors"
+                        className="flex-1 md:flex-none flex items-center justify-center gap-1 px-3 py-2.5 bg-[var(--color-bg-surface-high)] text-[var(--color-text-primary)] border border-[var(--color-border)] rounded-xl font-bold text-xs hover:bg-[var(--color-border)] transition-colors"
                       >
                         <span className="material-symbols-outlined text-[16px]">visibility</span>
                         Xem
@@ -1711,7 +1710,7 @@ export default function ReportsPage() {
                       <button 
                         onClick={() => handleExportArchivedPDF(rpt)}
                         disabled={generatingPdfId === rpt.id}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-1 px-4 py-2.5 bg-primary/10 text-primary border border-primary/20 rounded-xl font-bold text-xs hover:bg-primary/25 transition-colors disabled:opacity-50"
+                        className="flex-1 md:flex-none flex items-center justify-center gap-1 px-4 py-2.5 bg-[var(--color-brand)]/10 text-[var(--color-brand)] border border-[var(--color-brand)]/20 rounded-xl font-bold text-xs hover:bg-[var(--color-brand)]/25 transition-colors disabled:opacity-50"
                       >
                         {generatingPdfId === rpt.id ? (
                           <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
@@ -1732,14 +1731,14 @@ export default function ReportsPage() {
       {/* ── Promotional Banners ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 pb-4">
         {/* Email Banner */}
-        <div className="relative overflow-hidden rounded-2xl bg-primary-container text-on-primary-container p-6 md:p-8 flex flex-col justify-center min-h-[180px] md:min-h-[220px]">
+        <div className="relative overflow-hidden rounded-2xl bg-[var(--color-brand)] text-white p-6 md:p-8 flex flex-col justify-center min-h-[180px] md:min-h-[220px]">
           <div className="relative z-10">
             <p className="text-[10px] font-bold uppercase tracking-widest opacity-60 mb-2">Tự động hóa</p>
             <h3 className="text-xl md:text-2xl font-bold mb-2">Gửi báo cáo qua Email</h3>
             <p className="text-sm opacity-80 mb-5 max-w-sm">
               Cấu hình gửi báo cáo AI tự động vào hộp thư lúc 8:00 sáng mỗi ngày.
             </p>
-            <button className="bg-white text-primary px-6 py-2.5 rounded-xl font-bold text-sm hover:shadow-lg active:scale-95 transition-all w-fit">
+            <button className="bg-white text-[var(--color-brand)] px-6 py-2.5 rounded-xl font-bold text-sm hover:shadow-lg active:scale-95 transition-all w-fit">
               Thiết lập ngay
             </button>
           </div>
@@ -1752,24 +1751,24 @@ export default function ReportsPage() {
         </div>
 
         {/* AI Trend Banner */}
-        <div className="relative overflow-hidden rounded-2xl bg-inverse-surface text-white p-6 md:p-8 flex flex-col sm:flex-row items-center gap-5 min-h-[180px] md:min-h-[220px]">
+        <div className="relative overflow-hidden rounded-2xl bg-[var(--color-bg-surface-high)] border border-[var(--color-border)] p-6 md:p-8 flex flex-col sm:flex-row items-center gap-5 min-h-[180px] md:min-h-[220px]">
           <div className="flex-1 relative z-10 text-center sm:text-left">
             <div className="inline-flex items-center gap-2 mb-3">
-              <span className="bg-primary text-white text-[9px] font-bold uppercase tracking-widest px-2 py-1 rounded-lg">Mới</span>
+              <span className="bg-[var(--color-brand)] text-white text-[9px] font-bold uppercase tracking-widest px-2 py-1 rounded-lg">Mới</span>
             </div>
-            <h3 className="text-xl md:text-2xl font-bold mb-2">Phân tích Xu hướng AI</h3>
-            <p className="text-sm opacity-75 mb-5">
+            <h3 className="text-xl md:text-2xl font-bold mb-2 text-[var(--color-text-primary)]">Phân tích Xu hướng AI</h3>
+            <p className="text-sm text-[var(--color-text-secondary)] opacity-75 mb-5">
               Dùng LLM tóm tắt biến động thị trường quan trọng nhất trong tuần.
             </p>
             <a
               href="#"
-              className="inline-flex items-center gap-1 text-primary-fixed-dim hover:text-white font-bold text-sm transition-colors"
+              className="inline-flex items-center gap-1 text-[var(--color-brand)] hover:text-[var(--color-brand-hover)] font-bold text-sm transition-colors"
             >
               Khám phá ngay
               <span className="material-symbols-outlined text-lg">arrow_forward</span>
             </a>
           </div>
-          <div className="w-24 h-24 md:w-32 md:h-32 rounded-2xl overflow-hidden shadow-2xl border-2 border-white/10 flex-shrink-0 rotate-3 hidden sm:block relative z-10">
+          <div className="w-24 h-24 md:w-32 md:h-32 rounded-2xl overflow-hidden shadow-2xl border-2 border-[var(--color-border)] flex-shrink-0 rotate-3 hidden sm:block relative z-10">
             <img
               src="https://lh3.googleusercontent.com/aida-public/AB6AXuDFCABMvUN8JyM7a3E2elTgaODiz73B5O5e6t0CG4tqShjMiOpQt34ZqJsvkeVwSxzqY0Cq4Ev06YARyRjjEyW1vN2-3_33fBGzU12y6RBh0xm8_ZNFF5LAn3l7k0Yt3zdPvTj5Lmd6tlyM2dwsDzs4MIZNaXD76ohyzbXFkcNWO-hKAYON9biih5GUW4oV3RfVXy04Zc3FAfQuioapcW7o_sjM2865Oh8xGp62uIWVdNouDsgCvqGRdJihgGOCo9T26pmf4QIDXkY"
               alt="AI Visualization"

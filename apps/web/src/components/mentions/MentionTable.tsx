@@ -30,17 +30,17 @@ const sentimentMap: Record<
   positive: {
     labelKey: "mentions.table.tags.positive",
     icon: "sentiment_satisfied",
-    className: "bg-green-100 text-green-700",
+    className: "bg-[var(--color-success-subtle)] text-[var(--color-success)]",
   },
   negative: {
     labelKey: "mentions.table.tags.negative",
     icon: "sentiment_very_dissatisfied",
-    className: "bg-red-100 text-red-700",
+    className: "bg-[var(--color-error-subtle)] text-[var(--color-error)]",
   },
   neutral: {
     labelKey: "mentions.table.tags.neutral",
     icon: "sentiment_neutral",
-    className: "bg-blue-100 text-blue-700",
+    className: "bg-[var(--color-info-subtle)] text-[var(--color-info)]",
   },
 };
 
@@ -116,13 +116,19 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
 
   return (
     <>
-      <div className="bg-white rounded-2xl border border-outline-variant shadow-sm overflow-hidden">
+      <div
+        className="rounded-2xl shadow-sm overflow-hidden"
+        style={{
+          backgroundColor: "var(--color-bg-surface)",
+          border: "1px solid var(--color-border)",
+        }}
+      >
         {/* Mobile View: Card List */}
-        <div className="md:hidden divide-y divide-outline-variant/30">
+        <div className="md:hidden divide-y" style={{ borderColor: "var(--color-border)" }}>
           {isLoading ? (
-            <div className="py-20 text-center text-on-surface-variant">Đang tải dữ liệu mentions...</div>
+            <div className="py-20 text-center text-[var(--color-text-muted)]">Đang tải dữ liệu mentions...</div>
           ) : currentMentions.length === 0 ? (
-            <div className="py-20 text-center text-on-surface-variant">Không tìm thấy mention phù hợp với bộ lọc.</div>
+            <div className="py-20 text-center text-[var(--color-text-muted)]">Không tìm thấy mention phù hợp với bộ lọc.</div>
           ) : (
             currentMentions.map((mention) => {
               const { timeStr, relativeTime } = formatTime(mention.posted_at);
@@ -137,7 +143,7 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                       >
                         {getPlatformIcon(mention.platform).icon}
                       </span>
-                      <span className="text-xs font-bold text-outline uppercase tracking-wider">
+                    <span className="text-xs font-bold text-[var(--color-text-muted)] uppercase tracking-wider">
                         {mention.platform}
                       </span>
                     </div>
@@ -151,31 +157,31 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                   <Link
                     href={mention.url || "#"}
                     target="_blank"
-                    className="text-sm leading-relaxed text-on-surface hover:text-primary line-clamp-3"
+                    className="text-sm leading-relaxed text-[var(--color-text-primary)] hover:text-[var(--color-brand)] line-clamp-3"
                   >
                     "{mention.content}"
                   </Link>
 
                   <div className="flex flex-wrap gap-2">
-                    <span className="px-2 py-0.5 bg-primary/5 text-primary rounded text-[10px] font-bold uppercase border border-primary/10">
+                    <span className="px-2 py-0.5 bg-[var(--color-brand-subtle)] text-[var(--color-brand)] rounded text-[10px] font-bold uppercase border border-[var(--color-brand-border)]">
                       {mention.topic}
                     </span>
                     {tags.map((tag) => (
                       <span
                         key={tag}
-                        className="px-2 py-0.5 bg-surface-container text-outline rounded text-[10px] font-bold uppercase"
+                        className="px-2 py-0.5 bg-[var(--color-bg-surface-raised)] text-[var(--color-text-muted)] rounded text-[10px] font-bold uppercase"
                       >
                         {tag}
                       </span>
                     ))}
                   </div>
 
-                  <div className="flex items-center justify-between mt-2 pt-4 border-t border-outline-variant/30">
+                  <div className="flex items-center justify-between mt-2 pt-4 border-t" style={{ borderColor: "var(--color-border)" }}>
                     <div className="flex flex-col">
-                      <span className="text-xs font-medium text-on-surface">
+                      <span className="text-xs font-medium text-[var(--color-text-primary)]">
                         {timeStr}
                       </span>
-                      <span className="text-[10px] text-outline">
+                      <span className="text-[10px] text-[var(--color-text-muted)]">
                         {relativeTime}
                       </span>
                     </div>
@@ -190,7 +196,7 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm border-collapse">
             <thead>
-              <tr className="bg-surface-container-low border-b border-outline-variant">
+              <tr className="" style={{ backgroundColor: "var(--color-bg-surface-raised)", borderBottom: "1px solid var(--color-border)" }}>
                 <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-24">{t("mentions.table.platform")}</th>
                 <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-24">Độ tin cậy</th>
                 <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center">{t("mentions.table.content")}</th>
@@ -204,14 +210,14 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                 <tr>
                   <td
                     colSpan={6}
-                    className="py-20 text-center text-on-surface-variant"
+                    className="py-20 text-center text-[var(--color-text-muted)]"
                   >Đang tải dữ liệu mentions...</td>
                 </tr>
               ) : currentMentions.length === 0 ? (
                 <tr>
                   <td
                     colSpan={6}
-                    className="py-20 text-center text-on-surface-variant"
+                    className="py-20 text-center text-[var(--color-text-muted)]"
                   >Không tìm thấy mention phù hợp với bộ lọc.</td>
                 </tr>
               ) : (
@@ -224,7 +230,7 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                   return (
                     <tr
                       key={mention.id}
-                      className="hover:bg-surface-container-low transition-colors"
+                      className="hover:bg-[var(--color-bg-surface-raised)] transition-colors"
                     >
                       {/* Platform */}
                       <td className="px-4 py-4 align-top text-center">
@@ -240,12 +246,12 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                       {/* Credibility Score with Progress Bar */}
                       <td className="px-4 py-4 align-top">
                         <div className="flex flex-col gap-2">
-                          <span className="font-bold text-on-surface text-center">
+                          <span className="font-bold text-[var(--color-text-primary)] text-center">
                             {Math.round(mention.credibility_score * 100)}%
                           </span>
-                          <div className="w-24 h-2 bg-surface-container rounded-full overflow-hidden">
+                          <div className="w-24 h-2 bg-[var(--color-bg-surface-raised)] rounded-full overflow-hidden">
                             <div
-                              className="bg-primary h-full rounded-full"
+                              className="bg-[var(--color-brand)] h-full rounded-full"
                               style={{
                                 width: `${mention.credibility_score * 100}%`,
                               }}
@@ -259,7 +265,7 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                         <Link
                           href={mention.url || "#"}
                           target="_blank"
-                          className="text-sm leading-relaxed line-clamp-2 text-on-surface hover:text-primary"
+                          className="text-sm leading-relaxed line-clamp-2 text-[var(--color-text-primary)] hover:text-[var(--color-brand)]"
                         >
                           "{mention.content}"
                         </Link>
@@ -267,7 +273,7 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                           {tags.map((tag) => (
                             <span
                               key={tag}
-                              className="px-2 py-1 bg-surface-container text-outline rounded text-xs font-bold uppercase"
+                              className="px-2 py-1 bg-[var(--color-bg-surface-raised)] text-[var(--color-text-muted)] rounded text-xs font-bold uppercase"
                             >
                               {tag}
                             </span>
@@ -292,7 +298,7 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
 
                       {/* Topic */}
                       <td className="px-4 py-4 align-top text-center">
-                        <span className="px-2 py-1 bg-primary/5 text-primary rounded text-xs font-bold uppercase border border-primary/10">
+                        <span className="px-2 py-1 bg-[var(--color-brand-subtle)] text-[var(--color-brand)] rounded text-xs font-bold uppercase border border-[var(--color-brand-border)]">
                           {mention.topic}
                         </span>
                       </td>
@@ -300,10 +306,10 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                       {/* Time */}
                       <td className="px-4 py-4 align-top whitespace-nowrap">
                         <div className="flex flex-col text-center">
-                          <span className="font-medium text-on-surface text-sm">
+                          <span className="font-medium text-[var(--color-text-primary)] text-sm">
                             {timeStr}
                           </span>
-                          <span className="text-xs text-outline">
+                          <span className="text-xs text-[var(--color-text-muted)]">
                             {relativeTime}
                           </span>
                         </div>
@@ -318,8 +324,14 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
 
         {/* Pagination */}
         {mentions.length > 0 && (
-          <div className="px-4 py-4 bg-surface-bright flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-outline-variant">
-            <span className="text-xs text-outline font-medium">
+          <div
+            className="px-4 py-4 flex flex-col sm:flex-row items-center justify-between gap-3"
+            style={{
+              backgroundColor: "var(--color-bg-surface-raised)",
+              borderTop: "1px solid var(--color-border)",
+            }}
+          >
+            <span className="text-xs text-[var(--color-text-muted)] font-medium">
               Hiển thị {startIndex + 1}-{endIndex} trên tổng số{" "}
               {mentions.length} đề cập
             </span>
@@ -327,7 +339,11 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
               <button
                 onClick={handlePrevPage}
                 disabled={currentPage === 1}
-                className={`w-8 h-8 flex items-center justify-center rounded border border-outline-variant transition-colors ${currentPage === 1 ? 'text-outline-variant cursor-not-allowed' : 'text-on-surface-variant hover:bg-surface-container'}`}
+                className={`w-8 h-8 flex items-center justify-center rounded border transition-colors ${
+                  currentPage === 1
+                    ? 'text-[var(--color-text-disabled)] cursor-not-allowed border-[var(--color-border)]'
+                    : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-high)] border-[var(--color-border)]'
+                }`}
               >
                 <span className="material-symbols-outlined text-lg">
                   chevron_left
@@ -347,7 +363,11 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                   <button
                     key={pageNum}
                     onClick={() => setCurrentPage(pageNum)}
-                    className={`w-8 h-8 flex items-center justify-center rounded font-medium text-sm transition-colors ${currentPage === pageNum ? 'bg-primary text-white' : 'border border-outline-variant text-on-surface-variant hover:bg-surface-container'}`}
+                    className={`w-8 h-8 flex items-center justify-center rounded font-medium text-sm transition-colors ${
+                      currentPage === pageNum
+                        ? 'bg-[var(--color-brand)] text-white'
+                        : 'border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-high)]'
+                    }`}
                   >
                     {pageNum}
                   </button>
@@ -357,7 +377,11 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
               <button
                 onClick={handleNextPage}
                 disabled={currentPage === totalPages}
-                className={`w-8 h-8 flex items-center justify-center rounded border border-outline-variant transition-colors ${currentPage === totalPages ? 'text-outline-variant cursor-not-allowed' : 'text-on-surface-variant hover:bg-surface-container'}`}
+                className={`w-8 h-8 flex items-center justify-center rounded border transition-colors ${
+                  currentPage === totalPages
+                    ? 'text-[var(--color-text-disabled)] cursor-not-allowed border-[var(--color-border)]'
+                    : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-high)] border-[var(--color-border)]'
+                }`}
               >
                 <span className="material-symbols-outlined text-lg">
                   chevron_right
