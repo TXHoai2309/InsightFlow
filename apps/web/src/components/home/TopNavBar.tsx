@@ -126,9 +126,9 @@ export default function TopNavBar() {
           </div>
 
           {/* Right Actions */}
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-4">
 
-            {/* Avatar user */}
+            {/* Logged in: show avatar */}
             {!loading && user && (
               <div className="hidden md:flex items-center gap-3">
                 <Link
@@ -153,6 +153,27 @@ export default function TopNavBar() {
               </div>
             )}
 
+            {/* Logged out: show login + signup */}
+            {!loading && !user && (
+              <div className="hidden md:flex items-center gap-3">
+                <Link
+                  href="/login"
+                  className="text-[15px] font-medium text-[#374151] hover:text-[#6D4CFF] transition-colors"
+                >
+                  Đăng nhập
+                </Link>
+                <Link
+                  href="/dashboard"
+                  className="text-[14px] font-semibold text-white px-5 py-2 rounded-[10px] transition-all"
+                  style={{ background: "#6D4CFF" }}
+                  onMouseOver={(e) => { e.currentTarget.style.background = "#5B3FE8"; e.currentTarget.style.transform = "translateY(-1px)"; }}
+                  onMouseOut={(e) => { e.currentTarget.style.background = "#6D4CFF"; e.currentTarget.style.transform = "translateY(0)"; }}
+                >
+                  Dùng thử miễn phí
+                </Link>
+              </div>
+            )}
+
             {/* Mobile hamburger */}
             <button
               className="md:hidden p-2 text-[#6D4CFF]"
@@ -164,6 +185,7 @@ export default function TopNavBar() {
           </div>
         </div>
       </nav>
+
 
       {/* Mobile Drawer Overlay */}
       {mobileOpen && (
