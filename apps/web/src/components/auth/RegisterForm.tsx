@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslation } from "react-i18next";
 import Link from "next/link";
 import {
   createUserWithEmailAndPassword,
@@ -50,25 +51,26 @@ function AtmosphereDots() {
 }
 
 // ─── Password strength indicator ──────────────────────────────────────────────
-function getPasswordStrength(pw: string): { label: string; color: string; width: string } {
+function getPasswordStrength(pw: string, t: any): { label: string; color: string; width: string } {
   if (pw.length === 0) return { label: "", color: "", width: "0%" };
-  if (pw.length < 6) return { label: "Yếu", color: "#ba1a1a", width: "25%" };
-  if (pw.length < 10) return { label: "Trung bình", color: "#904900", width: "60%" };
-  return { label: "Mạnh", color: "#1a7a4a", width: "100%" };
+  if (pw.length < 6) return { label: t("auth.register.passwordWeak"), color: "#ba1a1a", width: "25%" };
+  if (pw.length < 10) return { label: t("auth.register.passwordMedium"), color: "#904900", width: "60%" };
+  return { label: t("auth.register.passwordStrong"), color: "#1a7a4a", width: "100%" };
 }
 
 // ─── Firebase error messages ───────────────────────────────────────────────────
-const FIREBASE_ERRORS: Record<string, string> = {
-  "auth/email-already-in-use": "Tài khoản này đã tồn tại. Hãy quay lại đăng nhập.",
-  "auth/invalid-email": "Email không hợp lệ.",
-  "auth/weak-password": "Mật khẩu phải có ít nhất 6 ký tự.",
-  "auth/too-many-requests": "Quá nhiều yêu cầu. Vui lòng thử lại sau.",
+const FIREBASE_ERRORS_KEYS: Record<string, string> = {
+  "auth/email-already-in-use": t("auth.register.emailInUse"),
+  "auth/invalid-email": t("auth.register.invalidEmail"),
+  "auth/weak-password": t("auth.register.weakPassword"),
+  "auth/too-many-requests": t("auth.register.tooManyRequests"),
   "auth/popup-closed-by-user": "", // silent — user intentionally closed
 };
 
 // ─── Main component ────────────────────────────────────────────────────────────
 export default function RegisterForm() {
   const router = useRouter();
+  const { t } = useTranslation();
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -84,7 +86,7 @@ export default function RegisterForm() {
   const handleIconBlur = (id: string) =>
     setIconFill((prev) => ({ ...prev, [id]: "'FILL' 0" }));
 
-  const pwStrength = getPasswordStrength(password);
+  const pwStrength = getPasswordStrength(password, t);
 
   // ── Email / Password register ──
   const handleRegister = async (e: React.FormEvent) => {
@@ -92,15 +94,15 @@ export default function RegisterForm() {
     setError("");
 
     if (!fullName.trim()) {
-      setError("Vui lòng nhập họ và tên.");
+      setError(t("auth.register.nameRequired"));
       return;
     }
     if (password !== confirmPassword) {
-      setError("Mật khẩu xác nhận không khớp.");
+      setError(t("auth.register.passwordMismatch"));
       return;
     }
     if (password.length < 6) {
-      setError("Mật khẩu phải có ít nhất 6 ký tự.");
+      setError(t("auth.register.weakPassword"));
       return;
     }
 
@@ -119,7 +121,7 @@ export default function RegisterForm() {
 
       router.push("/login");
     } catch (err: any) {
-      setError(FIREBASE_ERRORS[err.code] ?? "Đăng ký thất bại. Vui lòng thử lại.");
+      setError(FIREBASE_ERRORS[err.code] ?? t("auth.register.registerFailed"));
     } finally {
       setLoading(false);
     }
@@ -134,7 +136,7 @@ export default function RegisterForm() {
 
       // Nếu tài khoản đã tồn tại (không phải user mới)
       if (additionalInfo && !additionalInfo.isNewUser) {
-        setError("Tài khoản này đã tồn tại. Hãy quay lại đăng nhập.");
+        setError(t("auth.register.emailInUse"));
         // Logout ngay lập tức để không cho phép họ login qua trang register
         await auth.signOut();
         return;
@@ -152,7 +154,7 @@ export default function RegisterForm() {
       router.push("/");
     } catch (err: any) {
       if (err.code !== "auth/popup-closed-by-user") {
-        setError("Đăng ký với Google thất bại.");
+        setError(t("auth.register.googleFailed"));
       }
     }
   };
@@ -207,14 +209,9 @@ export default function RegisterForm() {
             <h2
               className="text-[40px] leading-[48px] font-bold tracking-[-0.02em] text-[#111c2d]"
               style={{ fontFamily: "'Hanken Grotesk', sans-serif" }}
-            >
-              Khám phá sức mạnh của{" "}
-              <span className="text-[#4648d4]">dữ liệu thông minh</span>.
-            </h2>
+            >{t("auth.register.heroTitle1")} <span className="text-[#4648d4]">{t("auth.register.heroTitle2")}</span>.</h2>
 
-            <p className="text-[18px] leading-[28px] text-[#464554] max-w-md">
-              Tham gia cùng hàng nghìn chuyên gia đang tối ưu hóa quy trình làm việc và đưa ra quyết định dựa trên dữ liệu thực tế.
-            </p>
+            <p className="text-[18px] leading-[28px] text-[#464554] max-w-md">{t("auth.register.heroDesc")}</p>
 
             {/* Dashboard preview image */}
             <div className="mt-8 relative rounded-xl overflow-hidden shadow-xl border border-[#c7c4d7]/30 group">
@@ -238,9 +235,7 @@ export default function RegisterForm() {
                   </div>
                 ))}
               </div>
-              <p className="text-[14px] text-[#464554]">
-                <span className="font-bold text-[#111c2d]">+10,000</span> người dùng đã tin tưởng
-              </p>
+              <p className="text-[14px] text-[#464554]"><span className="font-bold text-[#111c2d]">+10,000</span> {t("auth.register.trustedBy")}</p>
             </div>
           </div>
 
@@ -271,12 +266,8 @@ export default function RegisterForm() {
                 <h2
                   className="text-[24px] leading-[32px] font-semibold text-[#111c2d] mb-1"
                   style={{ fontFamily: "'Hanken Grotesk', sans-serif" }}
-                >
-                  Tạo tài khoản mới
-                </h2>
-                <p className="text-[14px] text-[#464554]">
-                  Bắt đầu hành trình phân tích dữ liệu của bạn ngay hôm nay.
-                </p>
+                >{t("auth.register.title")}</h2>
+                <p className="text-[14px] text-[#464554]">{t("auth.register.subtitle")}</p>
               </div>
 
               {/* Error banner */}
@@ -291,9 +282,7 @@ export default function RegisterForm() {
 
                 {/* Full name */}
                 <div className="flex flex-col gap-1">
-                  <label htmlFor="full_name" className="text-[14px] font-medium text-[#111c2d]">
-                    Họ và tên
-                  </label>
+                  <label htmlFor="full_name" className="text-[14px] font-medium text-[#111c2d]">{t("auth.register.nameLabel")}</label>
                   <div className="relative group">
                     <span
                       className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#767586] text-[20px] group-focus-within:text-[#4648d4] transition-colors"
@@ -306,7 +295,7 @@ export default function RegisterForm() {
                       required
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
-                      placeholder="Nguyễn Văn A"
+                      placeholder={t("auth.register.namePlaceholder")}
                       className="w-full pl-10 pr-4 py-3 rounded-lg border border-[#c7c4d7] bg-white focus:ring-2 focus:ring-[#4648d4]/20 focus:border-[#4648d4] outline-none transition-all text-[16px] text-[#111c2d] placeholder:text-[#767586]/50"
                     />
                   </div>
@@ -314,9 +303,7 @@ export default function RegisterForm() {
 
                 {/* Email */}
                 <div className="flex flex-col gap-1">
-                  <label htmlFor="email" className="text-[14px] font-medium text-[#111c2d]">
-                    Email
-                  </label>
+                  <label htmlFor="email" className="text-[14px] font-medium text-[#111c2d]">{t("auth.register.emailLabel")}</label>
                   <div className="relative group">
                     <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#767586] text-[20px] group-focus-within:text-[#4648d4] transition-colors">
                       mail
@@ -338,9 +325,7 @@ export default function RegisterForm() {
 
                   {/* Password */}
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="password" className="text-[14px] font-medium text-[#111c2d]">
-                      Mật khẩu
-                    </label>
+                    <label htmlFor="password" className="text-[14px] font-medium text-[#111c2d]">{t("auth.register.passwordLabel")}</label>
                     <div className="relative group">
                       <span
                         className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#767586] text-[20px] group-focus-within:text-[#4648d4] transition-colors"
@@ -378,9 +363,7 @@ export default function RegisterForm() {
 
                   {/* Confirm password */}
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="confirm_password" className="text-[14px] font-medium text-[#111c2d]">
-                      Xác nhận
-                    </label>
+                    <label htmlFor="confirm_password" className="text-[14px] font-medium text-[#111c2d]">{t("auth.register.confirmLabel")}</label>
                     <div className="relative group">
                       <span
                         className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#767586] text-[20px] group-focus-within:text-[#4648d4] transition-colors"
@@ -430,11 +413,11 @@ export default function RegisterForm() {
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                       </svg>
-                      <span>Đang tạo tài khoản...</span>
+                      <span>{t("auth.register.registering")}</span>
                     </>
                   ) : (
                     <>
-                      <span>Đăng ký</span>
+                      <span>{t("auth.register.registerBtn")}</span>
                       <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
                     </>
                   )}
@@ -443,9 +426,7 @@ export default function RegisterForm() {
                 {/* Divider */}
                 <div className="flex items-center gap-4 my-1">
                   <div className="flex-grow h-[1px] bg-[#c7c4d7]/50" />
-                  <span className="text-[12px] font-medium text-[#767586] uppercase tracking-wider">
-                    Hoặc đăng ký bằng
-                  </span>
+                  <span className="text-[12px] font-medium text-[#767586] uppercase tracking-wider">{t("auth.register.orRegisterWith")}</span>
                   <div className="flex-grow h-[1px] bg-[#c7c4d7]/50" />
                 </div>
 
@@ -462,18 +443,15 @@ export default function RegisterForm() {
                       <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05" />
                       <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
                     </svg>
-                    Đăng ký với Google
-                  </button>
+                    {t("auth.register.googleBtn")}</button>
                 </div>
               </form>
 
               {/* Footer link */}
               <div className="mt-8 text-center">
                 <p className="text-[14px] text-[#464554]">
-                  Đã có tài khoản?{" "}
-                  <Link href="/login" className="text-[#4648d4] font-semibold hover:underline">
-                    Đăng nhập ngay
-                  </Link>
+                  {t("auth.register.hasAccount")} {" "}
+                  <Link href="/login" className="text-[#4648d4] font-semibold hover:underline">{t("auth.register.loginNow")}</Link>
                 </p>
               </div>
             </div>
@@ -484,11 +462,9 @@ export default function RegisterForm() {
       {/* ── FOOTER ── */}
       <footer className="py-8 px-4 md:px-10 border-t border-[#c7c4d7]/30 bg-[#f9f9ff]">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
-          <p className="text-[12px] font-medium text-[#767586]">
-            © 2025 InsightFlow. Bảo lưu mọi quyền.
-          </p>
+          <p className="text-[12px] font-medium text-[#767586]">{t("auth.register.footerCopyright")}</p>
           <nav className="flex gap-8">
-            {["Điều khoản dịch vụ", "Chính sách bảo mật", "Trung tâm hỗ trợ"].map((label) => (
+            {[t("auth.register.footerTerms"), t("auth.register.footerPrivacy"), t("auth.register.footerSupport")].map((label) => (
               <Link
                 key={label}
                 href="#"

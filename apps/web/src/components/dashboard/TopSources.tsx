@@ -6,6 +6,7 @@
  */
 
 import React from "react";
+import { useTranslation } from "react-i18next";
 import type { TopSource } from "@/types/dashboard";
 import { PLATFORM_META } from "@/lib/services/dashboard";
 
@@ -14,6 +15,7 @@ interface TopSourcesProps {
 }
 
 export function TopSources({ sources }: TopSourcesProps) {
+  const { t } = useTranslation();
   return (
     <div className="bg-white border border-outline-variant rounded-lg p-6 shadow-sm h-full">
       <h4 className="font-bold text-lg text-on-surface mb-4">

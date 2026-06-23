@@ -2,9 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { useTranslation } from "react-i18next";
 
 export default function NotificationsTab() {
   const { user } = useAuth();
+  const { t, i18n } = useTranslation();
   
   const [emailNotif, setEmailNotif] = useState(true);
   const [pushNotif, setPushNotif] = useState(true);
@@ -66,7 +68,7 @@ export default function NotificationsTab() {
       setTimeout(() => setSavingState("idle"), 2000);
     } catch (error) {
       console.error("Error saving notifications:", error);
-      alert("Lỗi khi lưu cài đặt thông báo!");
+      alert(t("notifications.errorSave"));
       setSavingState("idle");
     }
   };
@@ -101,10 +103,10 @@ export default function NotificationsTab() {
       {/* Header */}
       <div>
         <h2 className="text-[20px] font-semibold text-[#111c2d] mb-1">
-          Tùy chọn thông báo
+          {t("notifications.title")}
         </h2>
         <p className="text-[14px] text-[#464554]">
-          Chọn cách bạn muốn nhận cập nhật từ InsightFlow.
+          {t("notifications.subtitle")}
         </p>
       </div>
 
@@ -117,9 +119,9 @@ export default function NotificationsTab() {
               <span className="material-symbols-outlined text-[20px]">mail</span>
             </div>
             <div>
-              <h3 className="text-[14px] text-[#111c2d] font-bold">Thông báo Email</h3>
+              <h3 className="text-[14px] text-[#111c2d] font-bold">{t("notifications.email.title")}</h3>
               <p className="text-[14px] text-[#464554] max-w-md mt-1">
-                Nhận cập nhật quan trọng và tóm tắt hoạt động trực tiếp vào hộp thư của bạn.
+                {t("notifications.email.desc")}
               </p>
             </div>
           </div>
@@ -133,9 +135,9 @@ export default function NotificationsTab() {
               <span className="material-symbols-outlined text-[20px]">notifications_active</span>
             </div>
             <div>
-              <h3 className="text-[14px] text-[#111c2d] font-bold">Thông báo đẩy (Push)</h3>
+              <h3 className="text-[14px] text-[#111c2d] font-bold">{t("notifications.push.title")}</h3>
               <p className="text-[14px] text-[#464554] max-w-md mt-1">
-                Nhận thông báo tức thì trên trình duyệt hoặc thiết bị di động khi có thay đổi.
+                {t("notifications.push.desc")}
               </p>
             </div>
           </div>
@@ -149,9 +151,9 @@ export default function NotificationsTab() {
               <span className="material-symbols-outlined text-[20px]">warning</span>
             </div>
             <div>
-              <h3 className="text-[14px] text-[#111c2d] font-bold">Cảnh báo khủng hoảng (Crisis Alerts)</h3>
+              <h3 className="text-[14px] text-[#111c2d] font-bold">{t("notifications.crisis.title")}</h3>
               <p className="text-[14px] text-[#464554] max-w-md mt-1">
-                Cảnh báo ưu tiên cao về các sự cố nghiêm trọng ảnh hưởng đến hệ thống của bạn.
+                {t("notifications.crisis.desc")}
               </p>
             </div>
           </div>
@@ -165,13 +167,50 @@ export default function NotificationsTab() {
               <span className="material-symbols-outlined text-[20px]">summarize</span>
             </div>
             <div>
-              <h3 className="text-[14px] text-[#111c2d] font-bold">Báo cáo hàng ngày</h3>
+              <h3 className="text-[14px] text-[#111c2d] font-bold">{t("notifications.daily.title")}</h3>
               <p className="text-[14px] text-[#464554] max-w-md mt-1">
-                Bản tóm tắt phân tích dữ liệu và hiệu suất hệ thống gửi vào cuối mỗi ngày.
+                {t("notifications.daily.desc")}
               </p>
             </div>
           </div>
           <Toggle checked={dailyReports} onChange={() => setDailyReports(!dailyReports)} />
+        </div>
+
+        {/* Language */}
+        <div className="flex items-start justify-between gap-4 p-4 rounded-xl hover:bg-[#f0f3ff] transition-colors border border-transparent hover:border-[#e7eaf3]">
+          <div className="flex gap-4">
+            <div className="w-10 h-10 shrink-0 rounded-lg bg-[#dee8ff] flex items-center justify-center text-[#4648d4]">
+              <span className="material-symbols-outlined text-[20px]">translate</span>
+            </div>
+            <div>
+              <h3 className="text-[14px] text-[#111c2d] font-bold">{t("notifications.language.title")}</h3>
+              <p className="text-[14px] text-[#464554] max-w-md mt-1">
+                {t("notifications.language.desc")}
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-1 shrink-0">
+            <button
+              onClick={() => i18n.changeLanguage('vi')}
+              className={`px-3 py-1.5 text-[13px] font-semibold rounded-lg transition-all ${
+                i18n.language === 'vi'
+                  ? 'bg-[#4648d4] text-white shadow-md'
+                  : 'bg-[#f0f3ff] text-[#464554] hover:bg-[#dee8ff]'
+              }`}
+            >
+              VI
+            </button>
+            <button
+              onClick={() => i18n.changeLanguage('en')}
+              className={`px-3 py-1.5 text-[13px] font-semibold rounded-lg transition-all ${
+                i18n.language === 'en'
+                  ? 'bg-[#4648d4] text-white shadow-md'
+                  : 'bg-[#f0f3ff] text-[#464554] hover:bg-[#dee8ff]'
+              }`}
+            >
+              EN
+            </button>
+          </div>
         </div>
       </div>
 
@@ -183,7 +222,7 @@ export default function NotificationsTab() {
           onClick={handleCancel}
           className="px-6 py-2.5 text-[14px] font-medium text-[#464554] hover:bg-[#f0f3ff] transition-all rounded-xl border border-[#c7c4d7]"
         >
-          Hủy
+          {t("notifications.actions.cancel")}
         </button>
         <button 
           onClick={handleSave}
@@ -198,9 +237,9 @@ export default function NotificationsTab() {
           {savingState === "saved" && (
             <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
           )}
-          {savingState === "idle" && "Lưu thay đổi"}
-          {savingState === "saving" && "Đang lưu..."}
-          {savingState === "saved" && "Đã lưu!"}
+          {savingState === "idle" && t("notifications.actions.save")}
+          {savingState === "saving" && t("notifications.actions.saving")}
+          {savingState === "saved" && t("notifications.actions.saved")}
         </button>
       </div>
 
@@ -209,15 +248,15 @@ export default function NotificationsTab() {
         <div className="p-6 rounded-2xl border border-[#e7eaf3] bg-[#f0f3ff] flex items-center gap-4">
           <span className="material-symbols-outlined text-[36px] text-[#4648d4]/40">security</span>
           <div>
-            <h4 className="text-[14px] font-semibold text-[#111c2d]">Mã hóa đầu cuối</h4>
-            <p className="text-[13px] text-[#464554] mt-0.5">Dữ liệu thông báo của bạn luôn được bảo vệ.</p>
+            <h4 className="text-[14px] font-semibold text-[#111c2d]">{t("notifications.encryption.title")}</h4>
+            <p className="text-[13px] text-[#464554] mt-0.5">{t("notifications.encryption.desc")}</p>
           </div>
         </div>
         <div className="p-6 rounded-2xl border border-[#e7eaf3] bg-[#f0f3ff] flex items-center gap-4">
           <span className="material-symbols-outlined text-[36px] text-[#4648d4]/40">devices</span>
           <div>
-            <h4 className="text-[14px] font-semibold text-[#111c2d]">Đồng bộ thiết bị</h4>
-            <p className="text-[13px] text-[#464554] mt-0.5">Cài đặt được áp dụng trên tất cả nền tảng.</p>
+            <h4 className="text-[14px] font-semibold text-[#111c2d]">{t("notifications.sync.title")}</h4>
+            <p className="text-[13px] text-[#464554] mt-0.5">{t("notifications.sync.desc")}</p>
           </div>
         </div>
       </div>

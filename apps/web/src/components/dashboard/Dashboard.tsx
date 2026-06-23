@@ -7,6 +7,7 @@
  */
 
 import React, { useEffect, useState, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { DashboardService } from "@/lib/services/dashboard";
 import { StatCard } from "./StatCard";
@@ -39,6 +40,8 @@ export function Dashboard({
     getFilteredAlerts,
     getFilteredLeads,
   } = useDashboardStore();
+
+  const { t } = useTranslation();
 
   const [isMounted, setIsMounted] = useState(false);
 
@@ -96,10 +99,10 @@ export function Dashboard({
   // ── Derived display values ────────────────────────────────────────────────
   const sentimentBadge =
     stats.net_sentiment > 20
-      ? { text: "Tích Cực", color: "bg-green-500/10 text-green-700" }
+      ? { text: t("dashboard.filters.positive"), color: "bg-green-500/10 text-green-700" }
       : stats.net_sentiment < -5
-        ? { text: "Tiêu Cực", color: "bg-red-500/10 text-red-700" }
-        : { text: "Ổn định", color: "bg-slate-500/10 text-slate-700" };
+        ? { text: t("dashboard.filters.negative"), color: "bg-red-500/10 text-red-700" }
+        : { text: t("dashboard.filters.neutral"), color: "bg-slate-500/10 text-slate-700" };
 
   return (
     <div className="space-y-4 md:space-y-6">
@@ -109,7 +112,7 @@ export function Dashboard({
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
         <StatCard
-          title="Tổng lượt nhắc đến"
+          title={t("dashboard.stats.totalMentions")}
           value={stats.total_mentions.toLocaleString("vi-VN")}
           icon={
             <span className="material-symbols-outlined text-primary">
@@ -121,7 +124,7 @@ export function Dashboard({
         />
 
         <StatCard
-          title="Chỉ số Net Sentiment"
+          title={t("dashboard.stats.sentimentScore")}
           value={`${stats.net_sentiment}%`}
           subtitle={sentimentBadge.text}
           icon={
@@ -140,7 +143,7 @@ export function Dashboard({
         />
 
         <StatCard
-          title="Hot Leads"
+          title={t("dashboard.stats.hotLeads")}
           value={stats.hot_leads_today}
           icon={
             <span className="material-symbols-outlined text-amber-600">

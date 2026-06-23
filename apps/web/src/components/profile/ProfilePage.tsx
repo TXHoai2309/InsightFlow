@@ -7,11 +7,13 @@ import { signOut } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import SecurityTab from "@/components/profile/SecurityTab";
 import NotificationsTab from "@/components/profile/NotificationsTab";
+import { useTranslation } from "react-i18next";
 
 type Tab = "profile" | "security" | "notifications";
 
 export default function ProfilePage() {
   const { user, loading } = useAuth();
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<Tab>("profile");
   const [saved, setSaved] = useState(false);
 
@@ -87,7 +89,7 @@ export default function ProfilePage() {
       setTimeout(() => setSaved(false), 2000);
     } catch (error) {
       console.error("Error saving profile:", error);
-      alert("Có lỗi xảy ra khi lưu. Vui lòng thử lại.");
+      alert(t("profile.errorSave"));
     } finally {
       setIsSaving(false);
     }
@@ -117,19 +119,19 @@ export default function ProfilePage() {
               href="/#features"
               className="text-[#464554] font-medium hover:text-[#4648d4] transition-colors"
             >
-              Tính năng
+              {t("nav.features")}
             </Link>
             <Link
               href="/nganh"
               className="text-[#464554] font-medium hover:text-[#4648d4] transition-colors"
             >
-              Ngành
+              {t("nav.industries")}
             </Link>
             <Link
               href="/ve-chung-toi"
               className="text-[#464554] font-medium hover:text-[#4648d4] transition-colors"
             >
-              Về chúng tôi
+              {t("nav.about")}
             </Link>
           </nav>
         </div>
@@ -139,7 +141,7 @@ export default function ProfilePage() {
             <span className="text-[14px] font-medium text-[#111c2d]">
               {displayName}
             </span>
-            <span className="text-[12px] text-[#464554]">Quản trị viên</span>
+            <span className="text-[12px] text-[#464554]">{t("profile.adminRole")}</span>
           </div>
           {/* Avatar circle */}
           <Link
@@ -152,7 +154,7 @@ export default function ProfilePage() {
             onClick={handleLogout}
             className="text-[12px] font-semibold text-[#ef4444] hover:underline"
           >
-            Đăng xuất
+            {t("profile.logout")}
           </button>
         </div>
       </header>
@@ -161,10 +163,10 @@ export default function ProfilePage() {
         {/* Page heading */}
         <div className="mb-8 w-full max-w-4xl">
           <h1 className="text-[32px] leading-[40px] font-bold text-[#111c2d] mb-2">
-            Cài đặt tài khoản
+            {t("profile.title")}
           </h1>
           <p className="text-[#464554]">
-            Quản lý thông tin cá nhân và tùy chỉnh trải nghiệm của bạn.
+            {t("profile.subtitle")}
           </p>
         </div>
 
@@ -176,9 +178,9 @@ export default function ProfilePage() {
           <div className="flex border-b border-[#e7eaf3] px-6">
             {(
               [
-                { key: "profile", label: "Thông tin cá nhân" },
-                { key: "security", label: "Bảo mật" },
-                { key: "notifications", label: "Thông báo" },
+                { key: "profile", label: t("profile.tabs.personal") },
+                { key: "security", label: t("profile.tabs.security") },
+                { key: "notifications", label: t("profile.tabs.notifications") },
               ] as { key: Tab; label: string }[]
             ).map((tab) => (
               <button
@@ -219,7 +221,7 @@ export default function ProfilePage() {
                         {displayName}
                       </h2>
                       <span className="px-3 py-1 bg-[#b55d00] text-white text-[10px] font-bold rounded-full tracking-widest uppercase">
-                        QUẢN TRỊ VIÊN
+                        {t("profile.adminBadge")}
                       </span>
                     </div>
                     <p className="text-[#464554] text-[14px] mt-1">{email}</p>
@@ -232,13 +234,13 @@ export default function ProfilePage() {
                     {/* Name */}
                     <div className="flex flex-col gap-2">
                       <label className="text-[14px] font-medium text-[#464554]">
-                        Họ và tên
+                        {t("profile.form.name")}
                       </label>
                       <input
                         type="text"
                         value={formData.name}
                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        placeholder="Họ và tên"
+                        placeholder={t("profile.form.name")}
                         className="w-full h-12 px-4 rounded-xl border border-[#c7c4d7] focus:ring-2 focus:ring-[#4648d4]/20 focus:border-[#4648d4] outline-none transition-all text-[16px]"
                       />
                     </div>
@@ -246,7 +248,7 @@ export default function ProfilePage() {
                     {/* Email (read-only) */}
                     <div className="flex flex-col gap-2">
                       <label className="text-[14px] font-medium text-[#464554]">
-                        Email
+                        {t("profile.form.email")}
                       </label>
                       <div className="relative">
                         <input
@@ -264,13 +266,13 @@ export default function ProfilePage() {
                     {/* Phone */}
                     <div className="flex flex-col gap-2">
                       <label className="text-[14px] font-medium text-[#464554]">
-                        Số điện thoại
+                        {t("profile.form.phone")}
                       </label>
                       <input
                         type="tel"
                         value={formData.phoneNumber}
                         onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
-                        placeholder="Ví dụ: 090 123 4567"
+                        placeholder={t("profile.form.phonePlaceholder")}
                         className="w-full h-12 px-4 rounded-xl border border-[#c7c4d7] focus:ring-2 focus:ring-[#4648d4]/20 focus:border-[#4648d4] outline-none transition-all text-[16px]"
                       />
                     </div>
@@ -278,13 +280,13 @@ export default function ProfilePage() {
                     {/* Company */}
                     <div className="flex flex-col gap-2">
                       <label className="text-[14px] font-medium text-[#464554]">
-                        Công ty
+                        {t("profile.form.company")}
                       </label>
                       <input
                         type="text"
                         value={formData.company}
                         onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-                        placeholder="Tên công ty"
+                        placeholder={t("profile.form.companyPlaceholder")}
                         className="w-full h-12 px-4 rounded-xl border border-[#c7c4d7] focus:ring-2 focus:ring-[#4648d4]/20 focus:border-[#4648d4] outline-none transition-all text-[16px]"
                       />
                     </div>
@@ -292,13 +294,13 @@ export default function ProfilePage() {
                     {/* Role */}
                     <div className="flex flex-col gap-2">
                       <label className="text-[14px] font-medium text-[#464554]">
-                        Vai trò
+                        {t("profile.form.role")}
                       </label>
                       <input
                         type="text"
                         value={formData.role}
                         onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                        placeholder="Vai trò của bạn"
+                        placeholder={t("profile.form.rolePlaceholder")}
                         className="w-full h-12 px-4 rounded-xl border border-[#c7c4d7] focus:ring-2 focus:ring-[#4648d4]/20 focus:border-[#4648d4] outline-none transition-all text-[16px]"
                       />
                     </div>
@@ -306,7 +308,7 @@ export default function ProfilePage() {
                     {/* Date joined (read-only) */}
                     <div className="flex flex-col gap-2">
                       <label className="text-[14px] font-medium text-[#464554]">
-                        Ngày tham gia
+                        {t("profile.form.dateJoined")}
                       </label>
                       <input
                         type="text"
@@ -323,7 +325,7 @@ export default function ProfilePage() {
                       onClick={handleCancel}
                       className="px-6 py-3 text-[#464554] font-medium hover:bg-[#dee8ff] rounded-xl transition-all active:scale-95 text-[14px]"
                     >
-                      Hủy
+                      {t("profile.actions.cancel")}
                     </button>
                     <button
                       onClick={handleSave}
@@ -336,8 +338,8 @@ export default function ProfilePage() {
                     >
                       {isSaving && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                       {!isSaving && saved && <span className="material-symbols-outlined text-[18px]">check_circle</span>}
-                      {!isSaving && saved && "Đã lưu!"}
-                      {!isSaving && !saved && "Lưu thay đổi"}
+                      {!isSaving && saved && t("profile.actions.saved")}
+                      {!isSaving && !saved && t("profile.actions.save")}
                     </button>
                   </div>
                 </div>
@@ -353,7 +355,7 @@ export default function ProfilePage() {
         {/* Footer note */}
         <div className="mt-8 text-center">
           <p className="text-[12px] text-[#464554]">
-            © 2024 InsightFlow AI. Đã đăng ký bản quyền cho{" "}
+            {t("profile.footer.copyright")}
             <span className="font-semibold">{displayName}</span>.
           </p>
         </div>
