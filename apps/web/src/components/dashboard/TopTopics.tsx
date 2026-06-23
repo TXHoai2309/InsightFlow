@@ -39,21 +39,22 @@ export function TopTopics({ topics }: TopTopicsProps) {
         ))}
       </div>
 
-      <div className="mt-6 text-xs text-[var(--color-text-secondary)]">
-        <p className="font-bold mb-2 text-[var(--color-text-primary)]">
+      <div className="mt-6 p-4 rounded-lg border border-[var(--color-warning)]/20 text-xs transition-all duration-300" style={{ backgroundColor: "var(--color-warning-subtle)" }}>
+        <p className="font-bold mb-2 flex items-center gap-1 text-[var(--color-warning)]">
+          <span className="material-symbols-outlined text-[16px]">warning</span>
           Cảnh báo: Các chủ đề liên quan đến
         </p>
-        <ul className="space-y-1">
+        <ul className="space-y-1.5" style={{ color: "var(--color-text-secondary)" }}>
           <li>
-            • <span className="font-bold">Chất lượng (quality)</span> - sản
+            • <span className="font-bold" style={{ color: "var(--color-text-primary)" }}>Chất lượng (quality)</span> - sản
             phẩm, dịch vụ
           </li>
           <li>
-            • <span className="font-bold">Giá cả (price)</span> - tính cạnh
+            • <span className="font-bold" style={{ color: "var(--color-text-primary)" }}>Giá cả (price)</span> - tính cạnh
             tranh
           </li>
           <li>
-            • <span className="font-bold">Dịch vụ (service)</span> - chăm sóc
+            • <span className="font-bold" style={{ color: "var(--color-text-primary)" }}>Dịch vụ (service)</span> - chăm sóc
             khách hàng
           </li>
         </ul>
