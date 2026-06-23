@@ -14,8 +14,14 @@ interface TopTopicsProps {
 
 export function TopTopics({ topics }: TopTopicsProps) {
   return (
-    <div className="bg-white border border-outline-variant rounded-lg p-6 shadow-sm h-full">
-      <h4 className="font-bold text-lg text-on-surface mb-4">
+    <div
+      className="rounded-lg p-6 shadow-sm h-full"
+      style={{
+        backgroundColor: "var(--color-bg-surface)",
+        border: "1px solid var(--color-border)",
+      }}
+    >
+      <h4 className="font-bold text-lg mb-4" style={{ color: "var(--color-text-primary)" }}>
         Chủ đề thảo luận chính
       </h4>
 

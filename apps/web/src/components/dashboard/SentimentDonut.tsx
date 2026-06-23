@@ -2,7 +2,8 @@
 
 /**
  * US-13: SentimentDonut Component
- * Hiển thị biểu đồ tròn cơ cấu cảm xúc (Positive/Neutral/Negative)
+ * Biểu đồ tròn cơ cấu cảm xúc — hỗ trợ Dark Mode.
+ * Màu sắc tự động chuyển sang Pastel Neon khi dark mode.
  */
 
 import React, { useEffect, useRef } from "react";
@@ -13,8 +14,8 @@ import {
   Legend,
   DoughnutController,
 } from "chart.js";
+import { useTheme } from "@/contexts/ThemeContext";
 
-// Register ChartJS components (include controller for doughnut)
 ChartJS.register(ArcElement, DoughnutController, Tooltip, Legend);
 
 interface SentimentDonutProps {
@@ -23,6 +24,20 @@ interface SentimentDonutProps {
   negative: number;
 }
 
+/* ── Chart color palettes ───────────────────────────────────── */
+const CHART_COLORS = {
+  light: {
+    positive: "#4648d4",
+    neutral: "#c7c4d7",
+    negative: "#ba1a1a",
+  },
+  dark: {
+    positive: "#818cf8",   /* Indigo pastel — dịu mắt trên nền tối */
+    neutral: "#94a3b8",    /* Slate */
+    negative: "#f87171",   /* Red pastel */
+  },
+};
+
 export function SentimentDonut({
   positive,
   neutral,
@@ -30,11 +45,13 @@ export function SentimentDonut({
 }: SentimentDonutProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<any>(null);
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+  const colors = isDark ? CHART_COLORS.dark : CHART_COLORS.light;
 
   useEffect(() => {
     if (!canvasRef.current) return;
 
-    // Destroy existing chart before creating new one
     if (chartRef.current) {
       chartRef.current.destroy();
     }
@@ -49,7 +66,7 @@ export function SentimentDonut({
         datasets: [
           {
             data: [positive, neutral, negative],
-            backgroundColor: ["#4648d4", "#c7c4d7", "#ba1a1a"],
+            backgroundColor: [colors.positive, colors.neutral, colors.negative],
             borderWidth: 0,
             borderRadius: 0,
           },
@@ -59,8 +76,14 @@ export function SentimentDonut({
         responsive: true,
         maintainAspectRatio: true,
         plugins: {
-          legend: {
-            display: false,
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: isDark ? "#252530" : "#ffffff",
+            titleColor: isDark ? "#e4e6eb" : "#111c2d",
+            bodyColor: isDark ? "#a0a0b8" : "#4a4a6a",
+            borderColor: isDark ? "#2e2e3a" : "#e2e4f0",
+            borderWidth: 1,
+            cornerRadius: 8,
           },
         },
         cutout: "70%",
@@ -72,29 +95,49 @@ export function SentimentDonut({
         chartRef.current.destroy();
       }
     };
-  }, [positive, neutral, negative]);
+  }, [positive, neutral, negative, theme]);
 
   return (
-    <div className="bg-white border border-outline-variant rounded-lg p-6 shadow-sm h-full">
-      <h4 className="font-bold text-lg text-on-surface mb-4">Cơ cấu cảm xúc</h4>
+    <div
+      className="rounded-lg p-6 shadow-sm h-full"
+      style={{
+        backgroundColor: "var(--color-bg-surface)",
+        border: "1px solid var(--color-border)",
+      }}
+    >
+      <h4 className="font-bold text-lg mb-4" style={{ color: "var(--color-text-primary)" }}>
+        Cơ cấu cảm xúc
+      </h4>
       <div style={{ position: "relative", height: "300px" }}>
         <canvas ref={canvasRef}></canvas>
       </div>
       <div className="mt-4 flex justify-center gap-4 text-xs">
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-primary"></div>
-          <span>Tích cực ({positive})</span>
+          <div
+            className="w-3 h-3 rounded-full"
+            style={{ backgroundColor: colors.positive }}
+          />
+          <span style={{ color: "var(--color-text-secondary)" }}>
+            Tích cực ({positive})
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <div
             className="w-3 h-3 rounded-full"
-            style={{ backgroundColor: "#c7c4d7" }}
-          ></div>
-          <span>Trung lập ({neutral})</span>
+            style={{ backgroundColor: colors.neutral }}
+          />
+          <span style={{ color: "var(--color-text-secondary)" }}>
+            Trung lập ({neutral})
+          </span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-error"></div>
-          <span>Tiêu cực ({negative})</span>
+          <div
+            className="w-3 h-3 rounded-full"
+            style={{ backgroundColor: colors.negative }}
+          />
+          <span style={{ color: "var(--color-text-secondary)" }}>
+            Tiêu cực ({negative})
+          </span>
         </div>
       </div>
     </div>

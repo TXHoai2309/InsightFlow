@@ -2,9 +2,7 @@
 
 /**
  * SentimentTrend Component
- * Hiển thị biểu đồ xu hướng cảm xúc từ dữ liệu thật (không random).
- * - Nhận filteredMentions từ props (đã qua filter workspace/platform/time)
- * - Hiển thị theo ngày ĐĂNG bài (posted_at), không phải ngày cào (crawled_at)
+ * Biểu đồ xu hướng cảm xúc — hỗ trợ Dark Mode với grid/ticks thích nghi.
  */
 
 import React, { useEffect, useRef } from "react";
@@ -22,6 +20,7 @@ import {
 } from "chart.js";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { DashboardService } from "@/lib/services/dashboard";
+import { useTheme } from "@/contexts/ThemeContext";
 import type { Mention } from "@/types/dashboard";
 
 ChartJS.register(
@@ -37,16 +36,42 @@ ChartJS.register(
 );
 
 interface SentimentTrendProps {
-  /** Danh sách mentions đã được filter (workspace, platform, time) */
   filteredMentions: Mention[];
 }
+
+/* ── Chart color palettes ───────────────────────────────────── */
+const PALETTE = {
+  light: {
+    positive:    { line: "#4648d4", fill: "rgba(70,72,212,0.10)" },
+    negative:    { line: "#ba1a1a", fill: "rgba(186,26,26,0.05)" },
+    neutral:     { line: "#c7c4d7", fill: "rgba(199,196,215,0.10)" },
+    gridColor:   "rgba(0,0,0,0.06)",
+    tickColor:   "#9898b0",
+    tooltipBg:   "#ffffff",
+    tooltipTitle:"#111c2d",
+    tooltipBody: "#4a4a6a",
+    tooltipBorder:"#e2e4f0",
+  },
+  dark: {
+    positive:    { line: "#818cf8", fill: "rgba(129,140,248,0.15)" },
+    negative:    { line: "#f87171", fill: "rgba(248,113,113,0.10)" },
+    neutral:     { line: "#94a3b8", fill: "rgba(148,163,184,0.12)" },
+    gridColor:   "rgba(255,255,255,0.07)",
+    tickColor:   "#6e6e88",
+    tooltipBg:   "#252530",
+    tooltipTitle:"#e4e6eb",
+    tooltipBody: "#a0a0b8",
+    tooltipBorder:"#2e2e3a",
+  },
+};
 
 export function SentimentTrend({ filteredMentions }: SentimentTrendProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<ChartJS | null>(null);
-
-  // Chỉ lấy time_range từ store để xác định granularity (giờ / ngày)
   const timeRange = useDashboardStore((s) => s.filters.time_range);
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+  const p = isDark ? PALETTE.dark : PALETTE.light;
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -55,9 +80,7 @@ export function SentimentTrend({ filteredMentions }: SentimentTrendProps) {
       chartRef.current = null;
     }
 
-    // Tính trend data từ filtered mentions (dùng posted_at trong service)
     const trendData = DashboardService.calculateSentimentTrend(filteredMentions, timeRange);
-
     const ctx = canvasRef.current.getContext("2d");
     if (!ctx) return;
 
@@ -69,30 +92,34 @@ export function SentimentTrend({ filteredMentions }: SentimentTrendProps) {
           {
             label: "Tích cực",
             data: trendData.map((d) => d.positive),
-            borderColor: "#4648d4",
-            backgroundColor: "rgba(70,72,212,0.1)",
+            borderColor: p.positive.line,
+            backgroundColor: p.positive.fill,
             tension: 0.3,
             fill: true,
             borderWidth: 2,
             pointRadius: trendData.length > 15 ? 2 : 4,
+            pointBackgroundColor: p.positive.line,
           },
           {
             label: "Tiêu cực",
             data: trendData.map((d) => d.negative),
-            borderColor: "#ba1a1a",
-            backgroundColor: "rgba(186,26,26,0.05)",
+            borderColor: p.negative.line,
+            backgroundColor: p.negative.fill,
             tension: 0.3,
             fill: true,
             borderWidth: 2,
             pointRadius: trendData.length > 15 ? 2 : 4,
+            pointBackgroundColor: p.negative.line,
           },
           {
             label: "Trung lập",
             data: trendData.map((d) => d.neutral),
-            borderColor: "#c7c4d7",
+            borderColor: p.neutral.line,
+            backgroundColor: p.neutral.fill,
             tension: 0.3,
             borderWidth: 2,
             pointRadius: trendData.length > 15 ? 2 : 4,
+            pointBackgroundColor: p.neutral.line,
           },
         ],
       },
@@ -102,6 +129,12 @@ export function SentimentTrend({ filteredMentions }: SentimentTrendProps) {
         plugins: {
           legend: { display: false },
           tooltip: {
+            backgroundColor: p.tooltipBg,
+            titleColor: p.tooltipTitle,
+            bodyColor: p.tooltipBody,
+            borderColor: p.tooltipBorder,
+            borderWidth: 1,
+            cornerRadius: 8,
             callbacks: {
               title: (items) => `Ngày đăng: ${items[0]?.label}`,
             },
@@ -110,13 +143,29 @@ export function SentimentTrend({ filteredMentions }: SentimentTrendProps) {
         scales: {
           y: {
             beginAtZero: true,
-            ticks: { precision: 0 },
+            ticks: {
+              precision: 0,
+              color: p.tickColor,
+            },
+            grid: {
+              color: p.gridColor,
+            },
+            border: {
+              color: p.gridColor,
+            },
           },
           x: {
             ticks: {
               maxRotation: 45,
               autoSkip: true,
               maxTicksLimit: 12,
+              color: p.tickColor,
+            },
+            grid: {
+              color: p.gridColor,
+            },
+            border: {
+              color: p.gridColor,
             },
           },
         },
@@ -127,9 +176,8 @@ export function SentimentTrend({ filteredMentions }: SentimentTrendProps) {
       chartRef.current?.destroy();
       chartRef.current = null;
     };
-  }, [filteredMentions, timeRange]);
+  }, [filteredMentions, timeRange, theme]);
 
-  // Tính tổng để hiển thị badge
   const trend = DashboardService.calculateSentimentTrend(filteredMentions, timeRange);
   const totalInPeriod = trend.reduce(
     (acc, d) => ({
@@ -140,11 +188,21 @@ export function SentimentTrend({ filteredMentions }: SentimentTrendProps) {
     { positive: 0, negative: 0, neutral: 0 }
   );
 
+  const pal = isDark ? PALETTE.dark : PALETTE.light;
+
   return (
-    <div className="bg-white border border-outline-variant rounded-lg p-6 shadow-sm h-full">
+    <div
+      className="rounded-lg p-6 shadow-sm h-full"
+      style={{
+        backgroundColor: "var(--color-bg-surface)",
+        border: "1px solid var(--color-border)",
+      }}
+    >
       <div className="flex items-center justify-between mb-4">
-        <h4 className="font-bold text-lg text-on-surface">Xu hướng cảm xúc</h4>
-        <span className="text-xs text-on-surface-variant">
+        <h4 className="font-bold text-lg" style={{ color: "var(--color-text-primary)" }}>
+          Xu hướng cảm xúc
+        </h4>
+        <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>
           {timeRange === "all"
             ? "Toàn bộ thời gian"
             : timeRange === "24h"
@@ -161,24 +219,18 @@ export function SentimentTrend({ filteredMentions }: SentimentTrendProps) {
       </div>
 
       <div className="mt-4 flex justify-center gap-6 text-xs">
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-primary" />
-          <span>
-            Tích cực <span className="font-bold">{totalInPeriod.positive}</span>
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-error" />
-          <span>
-            Tiêu cực <span className="font-bold">{totalInPeriod.negative}</span>
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: "#c7c4d7" }} />
-          <span>
-            Trung lập <span className="font-bold">{totalInPeriod.neutral}</span>
-          </span>
-        </div>
+        {[
+          { color: pal.positive.line, label: "Tích cực", count: totalInPeriod.positive },
+          { color: pal.negative.line, label: "Tiêu cực", count: totalInPeriod.negative },
+          { color: pal.neutral.line, label: "Trung lập", count: totalInPeriod.neutral },
+        ].map(({ color, label, count }) => (
+          <div key={label} className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
+            <span style={{ color: "var(--color-text-secondary)" }}>
+              {label} <span className="font-bold">{count}</span>
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   );

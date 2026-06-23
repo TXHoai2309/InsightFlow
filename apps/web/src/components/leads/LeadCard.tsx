@@ -256,8 +256,8 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
                 {getInitials(lead.author || "Khách hàng")}
               </div>
               <div
-                className="absolute -bottom-1 -right-1 bg-white p-0.5 rounded-full border border-outline-variant shadow-sm flex items-center justify-center"
-                style={{ color: platformMeta.color }}
+                className="absolute -bottom-1 -right-1 p-0.5 rounded-full border shadow-sm flex items-center justify-center"
+                style={{ color: platformMeta.color, backgroundColor: "var(--color-bg-surface)", borderColor: "var(--color-border)" }}
                 title={platformMeta.label}
               >
                 <span className="material-symbols-outlined text-[13px]" style={{ fontVariationSettings: "'FILL' 1" }}>
@@ -332,7 +332,8 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
                 value={lead.status}
                 disabled={isSaving}
                 onChange={(e) => handleStatusChange(e.target.value as Lead["status"])}
-                className={`appearance-none pl-3 pr-8 py-1.5 bg-white border rounded-full text-xs font-bold focus:ring-1 focus:ring-primary outline-none transition-all cursor-pointer text-on-surface flex items-center gap-1.5 shadow-sm ${statusInfo.bg} ${statusInfo.text} ${isSaving ? "opacity-50 cursor-not-allowed" : ""}`}
+                className={`appearance-none pl-3 pr-8 py-1.5 border rounded-full text-xs font-bold focus:ring-1 outline-none transition-all cursor-pointer flex items-center gap-1.5 shadow-sm ${statusInfo.bg} ${statusInfo.text} ${isSaving ? "opacity-50 cursor-not-allowed" : ""}`}
+                style={{ backgroundColor: "var(--color-bg-surface)" }}
               >
                 <option value="new">🟢 Mới</option>
                 <option value="processing">🟡 Đang xử lý</option>
@@ -452,7 +453,12 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
                   if (e.key === "Enter") handleSaveNote();
                 }}
                 disabled={isSavingNote}
-                className="w-full pl-3 pr-9 py-1.5 bg-surface-container-low border border-outline-variant rounded-lg text-xs outline-none focus:ring-1 focus:ring-primary focus:bg-white text-on-surface transition-all placeholder:text-on-surface-variant/40"
+                className="w-full pl-3 pr-9 py-1.5 border rounded-lg text-xs outline-none focus:ring-1 focus:ring-primary transition-all"
+                style={{
+                  backgroundColor: "var(--color-bg-surface-raised)",
+                  borderColor: "var(--color-border)",
+                  color: "var(--color-text-primary)",
+                }}
               />
               {isEditingNote && (
                 <button

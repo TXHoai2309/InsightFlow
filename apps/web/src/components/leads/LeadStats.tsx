@@ -63,9 +63,9 @@ export function LeadStats({ leads, isLoading }: LeadStatsProps) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
         {[...Array(4)].map((_, i) => (
           <div key={i} className="glass-card p-4 md:p-6 rounded-xl animate-pulse flex flex-col gap-2">
-            <div className="h-4 bg-outline-variant/30 rounded w-2/3"></div>
-            <div className="h-8 bg-outline-variant/40 rounded w-1/2 mt-1"></div>
-            <div className="h-3 bg-outline-variant/20 rounded w-3/4 mt-2"></div>
+            <div className="h-4 bg-[var(--color-border)] opacity-30 rounded w-2/3"></div>
+            <div className="h-8 bg-[var(--color-border)] opacity-40 rounded w-1/2 mt-1"></div>
+            <div className="h-3 bg-[var(--color-border)] opacity-20 rounded w-3/4 mt-2"></div>
           </div>
         ))}
       </div>
@@ -76,44 +76,44 @@ export function LeadStats({ leads, isLoading }: LeadStatsProps) {
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
       {/* Total New Leads */}
       <div className="glass-card p-4 md:p-6 rounded-xl flex flex-col gap-1 hover:shadow-sm transition-all duration-300">
-        <span className="text-on-surface-variant text-xs md:text-sm font-medium">Tổng Lead mới</span>
-        <span className="text-2xl md:text-3xl font-bold text-on-surface">
+        <span className="text-[var(--color-text-secondary)] text-xs md:text-sm font-medium">Tổng Lead mới</span>
+        <span className="text-2xl md:text-3xl font-bold text-[var(--color-text-primary)]">
           {stats.totalNew}
         </span>
-        <span className="text-primary text-[10px] md:text-xs font-bold flex items-center gap-1 mt-1">
+        <span className="text-[var(--color-brand)] text-[10px] md:text-xs font-bold flex items-center gap-1 mt-1">
           <span className="material-symbols-outlined text-sm">hourglass_empty</span> Cần tiếp cận ngay
         </span>
       </div>
 
       {/* Response/Conversion Rate */}
       <div className="glass-card p-4 md:p-6 rounded-xl flex flex-col gap-1 hover:shadow-sm transition-all duration-300">
-        <span className="text-on-surface-variant text-xs md:text-sm font-medium">Tỉ lệ chuyển đổi</span>
-        <span className="text-2xl md:text-3xl font-bold text-on-surface">
+        <span className="text-[var(--color-text-secondary)] text-xs md:text-sm font-medium">Tỉ lệ chuyển đổi</span>
+        <span className="text-2xl md:text-3xl font-bold text-[var(--color-text-primary)]">
           {stats.conversionRate}%
         </span>
-        <span className="text-secondary text-[10px] md:text-xs font-bold flex items-center gap-1 mt-1">
+        <span className="text-[var(--color-success)] text-[10px] md:text-xs font-bold flex items-center gap-1 mt-1">
           <span className="material-symbols-outlined text-sm">check_circle</span> Phản hồi thành công
         </span>
       </div>
 
       {/* Urgent Leads Count */}
-      <div className="glass-card p-4 md:p-6 rounded-xl flex flex-col gap-1 border-l-4 border-error hover:shadow-sm transition-all duration-300">
-        <span className="text-on-surface-variant text-xs md:text-sm font-medium">Sắp hết hạn</span>
-        <span className="text-2xl md:text-3xl font-bold text-error">
+      <div className="glass-card p-4 md:p-6 rounded-xl flex flex-col gap-1 border-l-4 border-[var(--color-error)] hover:shadow-sm transition-all duration-300">
+        <span className="text-[var(--color-text-secondary)] text-xs md:text-sm font-medium">Sắp hết hạn</span>
+        <span className="text-2xl md:text-3xl font-bold text-[var(--color-error)]">
           {String(stats.urgentCount).padStart(2, "0")}
         </span>
-        <span className="text-error text-[10px] md:text-xs font-bold flex items-center gap-1 mt-1">
+        <span className="text-[var(--color-error)] text-[10px] md:text-xs font-bold flex items-center gap-1 mt-1">
           <span className="material-symbols-outlined text-sm animate-pulse">timer</span> Cần ưu tiên xử lý
         </span>
       </div>
 
       {/* Processed Leads */}
       <div className="glass-card p-4 md:p-6 rounded-xl flex flex-col gap-1 hover:shadow-sm transition-all duration-300">
-        <span className="text-on-surface-variant text-xs md:text-sm font-medium">Đã xử lý (chốt)</span>
-        <span className="text-2xl md:text-3xl font-bold text-on-surface">
+        <span className="text-[var(--color-text-secondary)] text-xs md:text-sm font-medium">Đã xử lý (chốt)</span>
+        <span className="text-2xl md:text-3xl font-bold text-[var(--color-text-primary)]">
           {stats.completed}
         </span>
-        <span className="text-on-surface-variant text-[10px] md:text-xs font-medium mt-1">
+        <span className="text-[var(--color-text-muted)] text-[10px] md:text-xs font-medium mt-1">
           Mục tiêu: chốt 100% lead
         </span>
       </div>

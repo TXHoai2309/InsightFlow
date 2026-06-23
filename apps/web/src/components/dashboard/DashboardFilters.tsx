@@ -36,13 +36,19 @@ export function DashboardFilters({ workspaces }: DashboardFiltersProps) {
   );
 
   return (
-    <div className="bg-white border border-outline-variant rounded-xl p-4 md:p-6 shadow-sm mb-4 md:mb-6">
+    <div
+      className="rounded-xl p-4 md:p-6 shadow-sm mb-4 md:mb-6"
+      style={{
+        backgroundColor: "var(--color-bg-surface)",
+        border: "1px solid var(--color-border)",
+      }}
+    >
       <div className="flex flex-col sm:flex-row sm:flex-wrap sm:justify-between sm:items-center gap-4">
         <div>
-          <h2 className="font-bold text-xl md:text-2xl text-on-surface mb-1">
+          <h2 className="font-bold text-xl md:text-2xl mb-1" style={{ color: "var(--color-text-primary)" }}>
             Tổng quan Dashboard
           </h2>
-          <p className="text-sm text-on-surface-variant">
+          <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
             Giám sát thông tin F&B thời gian thực được tổng hợp tự động
           </p>
         </div>
@@ -50,14 +56,19 @@ export function DashboardFilters({ workspaces }: DashboardFiltersProps) {
         <div className="flex flex-wrap gap-2 md:gap-3 w-full sm:w-auto">
           {/* Workspace Filter */}
           <div className="flex flex-col">
-            <label className="text-xs font-bold text-outline uppercase mb-1">
+            <label className="text-xs font-bold uppercase mb-1" style={{ color: "var(--color-text-muted)" }}>
               Thương hiệu
             </label>
             <div className="relative">
               <select
                 value={filters.workspace_id}
                 onChange={(e) => handleFilterChange("workspace_id", e.target.value)}
-                className="appearance-none pl-3 pr-9 py-2 bg-white border border-outline-variant rounded-lg text-sm focus:ring-1 focus:ring-primary outline-none cursor-pointer text-on-surface w-full min-w-[160px]"
+                className="appearance-none pl-3 pr-9 py-2 rounded-lg text-sm focus:ring-1 outline-none cursor-pointer w-full min-w-[160px]"
+                style={{
+                  backgroundColor: "var(--color-bg-surface)",
+                  border: "1px solid var(--color-border)",
+                  color: "var(--color-text-primary)",
+                }}
               >
                 <option value="all">Tất cả thương hiệu</option>
                 {workspaces.map((ws) => (
@@ -66,7 +77,7 @@ export function DashboardFilters({ workspaces }: DashboardFiltersProps) {
                   </option>
                 ))}
               </select>
-              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center text-on-surface-variant/70">
+              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center" style={{ color: "var(--color-text-muted)" }}>
                 <span className="material-symbols-outlined text-sm">keyboard_arrow_down</span>
               </div>
             </div>
@@ -74,7 +85,7 @@ export function DashboardFilters({ workspaces }: DashboardFiltersProps) {
 
           {/* Time Range Filter */}
           <div className="flex flex-col">
-            <label className="text-xs font-bold text-outline uppercase mb-1">
+            <label className="text-xs font-bold uppercase mb-1" style={{ color: "var(--color-text-muted)" }}>
               Thời gian
             </label>
             <div className="relative">
@@ -83,14 +94,19 @@ export function DashboardFilters({ workspaces }: DashboardFiltersProps) {
                 onChange={(e) =>
                   handleFilterChange("time_range", e.target.value as DashboardFilters["time_range"])
                 }
-                className="appearance-none pl-3 pr-9 py-2 bg-white border border-outline-variant rounded-lg text-sm focus:ring-1 focus:ring-primary outline-none cursor-pointer text-on-surface w-full min-w-[120px]"
+                className="appearance-none pl-3 pr-9 py-2 rounded-lg text-sm focus:ring-1 outline-none cursor-pointer w-full min-w-[120px]"
+                style={{
+                  backgroundColor: "var(--color-bg-surface)",
+                  border: "1px solid var(--color-border)",
+                  color: "var(--color-text-primary)",
+                }}
               >
                 <option value="all">Toàn bộ</option>
                 <option value="24h">Hôm nay (24h)</option>
                 <option value="7d">7 ngày qua</option>
                 <option value="30d">30 ngày qua</option>
               </select>
-              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center text-on-surface-variant/70">
+              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center" style={{ color: "var(--color-text-muted)" }}>
                 <span className="material-symbols-outlined text-sm">keyboard_arrow_down</span>
               </div>
             </div>
@@ -98,7 +114,7 @@ export function DashboardFilters({ workspaces }: DashboardFiltersProps) {
 
           {/* Platform Filter */}
           <div className="flex flex-col">
-            <label className="text-xs font-bold text-outline uppercase mb-1">
+            <label className="text-xs font-bold uppercase mb-1" style={{ color: "var(--color-text-muted)" }}>
               Nền tảng
             </label>
             <div className="relative">
@@ -107,7 +123,12 @@ export function DashboardFilters({ workspaces }: DashboardFiltersProps) {
                 onChange={(e) =>
                   handleFilterChange("platform", e.target.value as DashboardFilters["platform"])
                 }
-                className="appearance-none pl-3 pr-9 py-2 bg-white border border-outline-variant rounded-lg text-sm focus:ring-1 focus:ring-primary outline-none cursor-pointer text-on-surface w-full min-w-[140px]"
+                className="appearance-none pl-3 pr-9 py-2 rounded-lg text-sm focus:ring-1 outline-none cursor-pointer w-full min-w-[140px]"
+                style={{
+                  backgroundColor: "var(--color-bg-surface)",
+                  border: "1px solid var(--color-border)",
+                  color: "var(--color-text-primary)",
+                }}
               >
                 <option value="all">Tất cả nền tảng</option>
                 {PLATFORM_ORDER.map((p) => (
@@ -116,7 +137,7 @@ export function DashboardFilters({ workspaces }: DashboardFiltersProps) {
                   </option>
                 ))}
               </select>
-              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center text-on-surface-variant/70">
+              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center" style={{ color: "var(--color-text-muted)" }}>
                 <span className="material-symbols-outlined text-sm">keyboard_arrow_down</span>
               </div>
             </div>

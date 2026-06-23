@@ -2,37 +2,52 @@
 
 import React from "react";
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { useTheme } from "@/hooks/useTheme";
 
 interface SentimentChartProps {
   distribution: Record<string, number>;
 }
 
-const COLORS = {
-  positive: "#22c55e", // green-500
-  neutral: "#3b82f6",  // blue-500
-  negative: "#ef4444"  // red-500
+const COLORS_LIGHT = {
+  positive: "#22c55e",
+  neutral: "#3b82f6",
+  negative: "#ef4444",
+};
+
+const COLORS_DARK = {
+  positive: "#4ade80",  // green pastel
+  neutral: "#60a5fa",   // blue pastel
+  negative: "#f87171",  // red pastel
 };
 
 const LABEL_MAP: Record<string, string> = {
   positive: "Tích cực",
   neutral: "Trung lập",
-  negative: "Tiêu cực"
+  negative: "Tiêu cực",
 };
 
 export function SentimentChart({ distribution }: SentimentChartProps) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+  const COLORS = isDark ? COLORS_DARK : COLORS_LIGHT;
+
   const data = Object.entries(distribution).map(([key, value]) => ({
     name: LABEL_MAP[key] || key,
     value,
-    originalKey: key
+    originalKey: key,
   }));
 
-  if (data.length === 0 || data.every(d => d.value === 0)) {
-    return <div className="text-center text-outline py-10">Chưa có dữ liệu cảm xúc.</div>;
+  if (data.length === 0 || data.every((d) => d.value === 0)) {
+    return (
+      <div className="text-center text-[var(--color-text-muted)] py-10">
+        Chưa có dữ liệu cảm xúc.
+      </div>
+    );
   }
 
   return (
-    <div className="bg-white p-6 rounded-2xl border border-outline-variant shadow-sm h-full flex flex-col">
-      <h3 className="text-lg font-bold text-on-surface mb-6">Phân bố cảm xúc</h3>
+    <div className="bg-[var(--color-bg-surface)] p-6 rounded-2xl border border-[var(--color-border)] shadow-sm h-full flex flex-col">
+      <h3 className="text-lg font-bold text-[var(--color-text-primary)] mb-6">Phân bố cảm xúc</h3>
       <div className="flex-1 min-h-[300px]">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
@@ -47,14 +62,29 @@ export function SentimentChart({ distribution }: SentimentChartProps) {
               stroke="none"
             >
               {data.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={COLORS[entry.originalKey as keyof typeof COLORS] || "#cccccc"} />
+                <Cell
+                  key={`cell-${index}`}
+                  fill={COLORS[entry.originalKey as keyof typeof COLORS] || (isDark ? "#4b5563" : "#cccccc")}
+                />
               ))}
             </Pie>
             <Tooltip
-              formatter={(value: number) => [`${value.toLocaleString()} lượt`, 'Số lượng']}
-              contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+              formatter={(value: number) => [`${value.toLocaleString()} lượt`, "Số lượng"]}
+              contentStyle={{
+                borderRadius: "8px",
+                border: `1px solid var(--color-border)`,
+                backgroundColor: "var(--color-bg-surface)",
+                color: "var(--color-text-primary)",
+                boxShadow: "var(--shadow-dropdown)",
+              }}
+              labelStyle={{ color: "var(--color-text-secondary)" }}
             />
-            <Legend verticalAlign="bottom" height={36} iconType="circle" />
+            <Legend
+              verticalAlign="bottom"
+              height={36}
+              iconType="circle"
+              wrapperStyle={{ color: "var(--color-text-secondary)" }}
+            />
           </PieChart>
         </ResponsiveContainer>
       </div>
