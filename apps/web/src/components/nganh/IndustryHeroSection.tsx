@@ -16,13 +16,13 @@ export default function IndustryHeroSection() {
 
       {/* Headline */}
       <h1 className="text-[40px] leading-[48px] tracking-[-0.02em] font-bold text-[#111c2d] mb-6 max-w-4xl mx-auto">
-        Tối ưu hóa hiệu suất truyền thông cho mọi lĩnh vực
+        Tối ưu hóa hiệu suất truyền thông cho ngành F&B
       </h1>
 
       {/* Subtext */}
       <p className="text-[18px] leading-[28px] font-normal text-[#464554] max-w-2xl mx-auto">
-        Hệ thống AI của InsightFlow được tinh chỉnh để thấu hiểu ngôn ngữ và
-        hành vi khách hàng trong từng ngành nghề chuyên biệt tại Việt Nam.
+        Hệ thống AI của InsightFlow được tinh chỉnh để thấu hiểu ngôn ngữ, review ẩm thực và
+        hành vi của thực khách trên mạng xã hội tại Việt Nam.
       </p>
     </section>
   );

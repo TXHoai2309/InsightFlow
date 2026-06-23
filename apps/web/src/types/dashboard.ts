@@ -54,6 +54,7 @@ export interface Lead {
   id: string;
   workspace_id: string;
   platform: Platform;
+  author?: string;
   content: string;
   intent: "hot" | "warm" | "cold" | "none";
   intent_signals: string[];
@@ -61,6 +62,19 @@ export interface Lead {
   created_at: string;
   expiry_at?: string;
   url?: string;
+  
+  // Contact Info
+  phone?: string;
+  email?: string;
+  zalo_id?: string;
+  messenger_id?: string;
+  social_profile_url?: string;
+  
+  // CRM Tracking
+  contact_attempts?: number;
+  last_contact_at?: string;
+  notes?: string;
+  posted_at?: string;
 }
 
 export interface Workspace {
@@ -115,4 +129,5 @@ export interface DashboardFilters {
   platform: string;
   sentiment: "all" | "positive" | "negative" | "neutral";
   topic?: "all" | string;
+  urgency?: "all" | "pending" | "urgent" | "overdue" | "handled";
 }

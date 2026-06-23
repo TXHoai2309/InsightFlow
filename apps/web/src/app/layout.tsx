@@ -7,6 +7,7 @@ import "./globals.css";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { MobileNav } from "@/components/layout/MobileNav";
+import Footer from "@/components/home/Footer";
 
 export default function RootLayout({
   children,
@@ -34,12 +35,19 @@ export default function RootLayout({
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
         />
+        <link
+          rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css"
+        />
         <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
         <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
       </head>
       <body style={{ margin: 0, padding: 0, backgroundColor: "#f9f9ff" }}>
         {hideShell ? (
-          <main className="min-h-screen">{children}</main>
+          <div className="flex flex-col min-h-screen">
+            <main className="flex-1">{children}</main>
+            <Footer />
+          </div>
         ) : (
           <div className="flex h-screen w-screen overflow-hidden">
             <Sidebar

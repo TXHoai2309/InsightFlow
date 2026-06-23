@@ -1,5 +1,4 @@
 import TopNavBar from "@/components/home/TopNavBar";
-import Footer from "@/components/home/Footer";
 import AboutHeroSection from "@/components/ve-chung-toi/AboutHeroSection";
 import MissionVisionSection from "@/components/ve-chung-toi/MissionVisionSection";
 import CoreValuesSection from "@/components/ve-chung-toi/CoreValuesSection";
@@ -24,7 +23,6 @@ export default function VeChungToiPage() {
         <TeamSection />
         <PartnersSection />
         <AboutCTASection />
-        <Footer />
       </div>
     </div>
   );

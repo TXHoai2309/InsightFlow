@@ -7,50 +7,42 @@ export default function FinalCTASection() {
   const { user, loading } = useAuth();
 
   return (
-    <section className="py-[80px] px-6">
+    <section className="py-[60px] px-6">
       <div
-        className="max-w-[1200px] mx-auto p-12 md:p-20 text-center relative overflow-hidden"
+        className="max-w-[1000px] mx-auto p-8 md:p-14 text-center relative overflow-hidden shadow-[0_12px_40px_-10px_rgba(108,99,255,0.3)]"
         style={{
-          background:
-            "linear-gradient(135deg, rgb(46, 42, 79) 0%, rgb(59, 54, 95) 50%, rgb(38, 35, 63) 100%)",
+          background: "linear-gradient(135deg, #6157e8 0%, #8C82FF 100%)",
           borderRadius: "24px",
         }}
       >
         {/* Decorative blobs */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-[#4234b6] opacity-20 blur-[100px] pointer-events-none"></div>
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#5f52a8] opacity-10 blur-[100px] pointer-events-none"></div>
+        <div className="absolute top-[-20%] right-[-10%] w-[300px] h-[300px] bg-white opacity-10 rounded-full blur-[60px] pointer-events-none"></div>
+        <div className="absolute bottom-[-20%] left-[-10%] w-[200px] h-[200px] bg-[#38B2AC] opacity-20 rounded-full blur-[60px] pointer-events-none"></div>
 
-        <div className="relative z-10 space-y-8">
-          <h2
-            className="font-bold text-white"
-            style={{ fontSize: "36px", lineHeight: "44px" }}
-          >
+        <div className="relative z-10 space-y-6">
+          <h2 className="font-bold text-white text-[28px] md:text-[36px] leading-tight tracking-[-0.01em]">
             Sẵn sàng để làm chủ thông tin thương hiệu?
           </h2>
-          <p
-            className="max-w-2xl mx-auto"
-            style={{ color: "rgb(217, 216, 243)", fontSize: "16px", lineHeight: "24px" }}
-          >
-            Bắt đầu theo dõi thương hiệu của bạn ngay hôm nay với AI và dữ
-            liệu thời gian thực.
+          <p className="max-w-xl mx-auto text-white/90 text-[16px] md:text-[18px] leading-relaxed font-light">
+            Bắt đầu theo dõi thương hiệu của bạn ngay hôm nay với AI và dữ liệu thời gian thực.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mt-8">
             {!loading && user ? (
               <Link
                 href="/dashboard"
-                className="bg-[#5b4fcf] text-white px-10 py-4 rounded-xl text-[20px] font-semibold hover:opacity-90 active:scale-95 transition-all flex items-center justify-center"
+                className="bg-white text-[#6157e8] px-8 py-3.5 rounded-[12px] text-[16px] font-bold hover:shadow-[0_4px_16px_rgba(255,255,255,0.25)] active:scale-95 transition-all flex items-center justify-center min-w-[160px]"
               >
                 Vào Dashboard
               </Link>
             ) : (
               <Link
                 href="/login"
-                className="bg-[#5b4fcf] text-white px-10 py-4 rounded-xl text-[20px] font-semibold hover:opacity-90 active:scale-95 transition-all flex items-center justify-center"
+                className="bg-white text-[#6157e8] px-8 py-3.5 rounded-[12px] text-[16px] font-bold hover:shadow-[0_4px_16px_rgba(255,255,255,0.25)] active:scale-95 transition-all flex items-center justify-center min-w-[160px]"
               >
                 Bắt đầu ngay
               </Link>
             )}
-            <button className="bg-transparent border border-white/35 text-white px-10 py-4 rounded-xl text-[20px] font-semibold hover:bg-white/10 transition-all">
+            <button className="bg-transparent border-[1.5px] border-white/40 text-white px-8 py-3.5 rounded-[12px] text-[16px] font-bold hover:bg-white/10 hover:border-white transition-all min-w-[160px]">
               Liên hệ tư vấn
             </button>
           </div>

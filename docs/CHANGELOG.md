@@ -68,8 +68,50 @@ Tính toán Sentiment & Topic Distribution: phân phối sentiment tổng thể,
 Lưu kết quả report summary vào Firestore (collection reports_demo), kèm field generated_at để theo dõi thời điểm tạo báo cáo, đảm bảo dữ liệu có cấu trúc rõ ràng, dễ đọc cho API SP1-02.
 Thêm bộ lọc theo Nhãn hàng/Thương hiệu (Brand Filter) trên trang Reports: cho phép người dùng xem nhanh chỉ số tổng hợp và phân phối sentiment/topic riêng theo từng brand, sử dụng dữ liệu by_brand_breakdown đã tính sẵn (không gọi lại API khi đổi bộ lọc).
 ## [Unreleased] - 2026-06-19
+## [Unreleased] - 2026-06-22
 
 ### Added / Updated
+
+- **Trang Quản lý khách hàng tiềm năng (`/leads`)**:
+  - Tích hợp Firestore real-time listener / query cho danh sách Lead.
+  - Thiết kế và phát triển bộ ba components chuyên biệt cho trang Leads:
+    1. **`LeadStats` (Thống kê Lead)**: Hiển thị 4 chỉ số quan trọng theo thời gian thực bao gồm: *Tổng Lead mới* (cần tiếp cận ngay), *Tỉ lệ chuyển đổi* (đã phản hồi thành công / tổng số lead), *Sắp hết hạn* (độ ưu tiên cao), và *Đã xử lý (chốt)*. Hỗ trợ hiệu ứng skeleton loading khi đang tải dữ liệu.
+    2. **`LeadFilters` (Bộ lọc Lead)**: Hỗ trợ lọc theo Thương hiệu (Workspace), Nền tảng (Platform: Facebook, TikTok, YouTube, Threads, Be/BeFood, Google Maps, Báo điện tử) và Độ khẩn cấp (Urgency: Đang chờ xử lý, Cần xử lý gấp, Đã quá hạn, Đã xử lý / Bỏ qua, Tất cả trạng thái).
+    3. **`LeadCard` (Thẻ Lead chi tiết)**: 
+       - Hiển thị thông tin khách hàng, avatar phối màu tự động dựa trên tên, icon nền tảng cào dữ liệu, nội dung tương tác và các tag ý định mua hàng (intent: Hot, Warm, Cold) cùng từ khóa tín hiệu.
+       - Tích hợp **Đồng hồ đếm ngược thời gian xử lý (Lead Expiry Countdown)**: tự động tính thời hạn xử lý dựa trên Intent (Hot: 30 phút, Warm: 24 giờ, Cold: 7 ngày), đếm ngược thời gian thực, đổi màu và rung nháy cảnh báo đỏ khi sắp quá hạn hoặc chuyển sang trạng thái "Quá hạn" khi hết thời gian xử lý.
+       - Hỗ trợ cập nhật nhanh trạng thái Lead (Mới, Đang xử lý, Đã xử lý, Bỏ qua) đồng bộ trực tiếp lên Firestore.
+       - Tích hợp CRM mini: ô nhập ghi chú nhanh (`notes`) tự động lưu trên Firestore khi nhấn Enter hoặc bấm icon check, hiển thị nhật ký thời gian liên hệ cuối.
+       - Tích hợp phím tắt tiếp cận trực tiếp qua Zalo chat (`zalo.me`), Facebook Messenger (`m.me`), gọi điện (`tel:`) và link xem bài viết gốc trên nền tảng nguồn. Khi click tiếp cận, hệ thống tự động chuyển trạng thái lead sang "Đang xử lý" và tăng số lần tiếp cận chăm sóc (`contact_attempts`).
+  - Nâng cấp **Zustand store (`dashboard.store.ts`)**:
+    - Quản lý trạng thái leads, bộ lọc, và tích hợp các hàm client-side filtering: lọc theo thương hiệu, nền tảng, khoảng thời gian.
+    - Xây dựng thuật toán **Sắp xếp theo thứ tự ưu tiên xử lý (Priority Sorting)** cho Leads: ưu tiên hiển thị Lead còn hạn xử lý gần nhất trước (tính theo thời gian đếm ngược), tiếp đến là Lead đã quá hạn (thời gian cào mới nhất xếp trên), và cuối cùng là các Lead đã xử lý/bỏ qua (thời gian tạo mới nhất).
+    - Thêm hàm `getFilteredLeadsWithoutUrgency` để tính toán chính xác chỉ số Hot Leads hiển thị trên Dashboard tổng quan mà không bị ảnh hưởng bởi bộ lọc Độ khẩn cấp (Urgency) của trang Leads.
+- **Tài liệu đặc tả (`docs/SPEC.md`)**:
+  - Bổ sung quy tắc nghiệp vụ cho **US-10: Phân tích Intent (Lead Generation)**:
+    - Quy tắc phát hiện Lead Candidate.
+    - Công thức tính điểm ý định mua hàng dựa trên nhóm từ khóa Hot (trọng số +3), Warm (+1), Cold (+0.3) kết hợp phạt cảm xúc tiêu cực (Negative Sentiment Penalty nhân hệ số 0.6).
+    - Quy định cụ thể thời gian hết hạn xử lý (SLA) cho từng phân nhóm: Hot Lead (30 phút), Warm Lead (24 giờ), Cold Lead (7 ngày).
+
+---
+
+## [Unreleased] - 2026-06-19
+
+### Added / Updated / Fixed
+
+- **Trang chủ (`/`)**:
+  - Tái thiết kế Hero Section: thêm dashboard mini hiển thị trực quan (SVG/HTML) tích hợp glassmorphism và góc nghiêng 3D thay vì ảnh tĩnh.
+  - Tích hợp hiệu ứng số nhảy đếm ngược KPI và Animation trượt/nổi bật mượt mà.
+  - Nâng cấp phần Social Proof (`TrustedBySection`) sử dụng hiệu ứng Marquee tự động cuộn ngang mượt mà cho logo thương hiệu.
+  - Cải thiện Navbar: Áp dụng hiệu ứng `backdrop-filter: blur(12px)`.
+  - Sửa lỗi 2 Footer bị đè lên nhau (xóa `<Footer />` thừa ở `page.tsx`).
+  - Sửa lỗi Hydration Mismatch ở SSR: Chuyển toàn bộ `@keyframes` animation vào `globals.css`.
+
+- **Xác thực / Authentication (`/login`, `/register`)**:
+  - Phóng to kích thước Logo chuyên nghiệp hơn (chiều cao ảnh lên 220px).
+  - Khắc phục triệt để lỗi viền trắng quanh ảnh Logo bằng kĩ thuật CSS `mix-blend-multiply` trực tiếp trên thẻ `<img>`, loại bỏ cản trở từ `overflow-hidden`.
+  - Căn chỉnh thẩm mỹ, giảm khoảng trống (margin) giữa Logo và Form.
+  - Thay thế link ảnh preview bị hỏng ở cột trái trang đăng ký bằng ảnh Unsplash Dashboard mẫu nét và đẹp hơn.
 
 - **Trang Ngành (`/nganh`)**:
   - Giao diện Landing độc lập (ẩn Dashboard Shell).
@@ -85,6 +127,12 @@ Thêm bộ lọc theo Nhãn hàng/Thương hiệu (Brand Filter) trên trang Rep
     2. **Bảo mật:** Form đổi mật khẩu hoàn chỉnh sử dụng `reauthenticateWithCredential` và `updatePassword` của Firebase Auth, hiển thị độ mạnh mật khẩu và checklist thời gian thực.
     3. **Thông báo:** Quản lý tùy chọn nhận thông báo (Email, Push, Khủng hoảng, Báo cáo ngày). Lưu trạng thái người dùng lên Firestore (`users/{uid}/notifications`).
   - Toàn bộ 3 tab đều hỗ trợ tính năng Hủy (trả về trạng thái cũ) và Lưu (có hiệu ứng loading và thông báo thành công).
+- **Dashboard tổng quan (`/dashboard`)**:
+  - Hoàn thiện trang Dashboard tổng quan với dashboard shell, bộ lọc theo thương hiệu, thời gian và nền tảng.
+  - Thống kê số lượng mention, chỉ số Net Sentiment, số Hot Lead và số Alerts.
+  - Biểu đồ xu hướng cảm xúc theo posted_at và biểu đồ tròn phân bố sentiment.
+  - Top Sources theo nền tảng và Top Topics theo chủ đề, cập nhật dựa trên dữ liệu Firestore.
+  - Tự động fetch/refresh dữ liệu Dashboard mỗi 60 giây từ Firestore.
 
 ---
 
@@ -96,6 +144,7 @@ Thêm bộ lọc theo Nhãn hàng/Thương hiệu (Brand Filter) trên trang Rep
 ## [1.2.0] - 2026-06-17
 
 ### Added
+
 - Thiết kế giao diện màn hình **Dashboard**.
 - Thiết kế giao diện màn hình **Brands**: cấu hình từ khóa theo dõi cho từng thương hiệu.
 - Thiết kế giao diện màn hình **Mentions**: hiển thị chi tiết từng bài đăng, hỗ trợ lọc theo Sentiment, Topic, Platform.
@@ -105,30 +154,33 @@ Thêm bộ lọc theo Nhãn hàng/Thương hiệu (Brand Filter) trên trang Rep
 - Bổ sung giao diện **Responsive** cho toàn bộ các màn hình trên (Dashboard, Brands, Mentions, Leads, Alerts, Reports), đảm bảo hiển thị tốt trên các kích thước màn hình (desktop, tablet, mobile).
 
 ## [1.1.0] - 2026-06-16
+
 - Phiên bản khởi tạo đầu tiên của ứng dụng InsightFlow.
 - Tích hợp Firebase Authentication và Firestore.
 - Giao diện Landing Page cơ bản.
 - Chức năng Đăng nhập/Đăng ký cơ bản.
+
 ### Thêm (Added)
+
 - Triển khai duy trì phiên đăng nhập (`setPersistence`) với `browserLocalPersistence` trong Firebase, giúp giữ trạng thái đăng nhập lên đến 1 tháng.
 - Thêm lời chào cá nhân hóa "Chào mừng, [Tên người dùng]" và nút Đăng xuất trên thanh điều hướng (`TopNavBar`) khi đã đăng nhập.
 - Thêm logic chuyển hướng động cho các nút "Bắt đầu" trên trang chủ: Chuyển thành "Vào Dashboard" nếu đã đăng nhập.
 
 ### Thay đổi (Changed)
+
 - Cấu trúc lại luồng chuyển hướng:
-    - Đăng ký thành công -> Chuyển hướng sang trang Đăng nhập (`/login`).
-    - Đăng nhập thành công -> Chuyển hướng về Trang chủ (`/`).
+  - Đăng ký thành công -> Chuyển hướng sang trang Đăng nhập (`/login`).
+  - Đăng nhập thành công -> Chuyển hướng về Trang chủ (`/`).
 - Chuyển đổi `HeroSection` và `FinalCTASection` sang Client Components để hỗ trợ xử lý trạng thái đăng nhập thời gian thực.
 - Cập nhật các nút hành động từ `<button>` sang `<Link>` để tối ưu hóa điều hướng trong Next.js.
 
 ### Sửa lỗi (Fixed)
+
 - Khắc phục lỗi runtime `useAuth is not a function` do sử dụng React Hooks trong Server Components.
 - Sửa lỗi các nút trên trang chủ không nhận diện được trạng thái phiên đăng nhập hiện tại.
 
-
-
-
 ### Added
+
 - Xây dựng pipeline crawler thu thập dữ liệu công khai từ báo điện tử, Fanpage và Group MXH theo từ khóa tùy biến.
 - Tích hợp Brand Mention Detection — tự động xác định nội dung đề cập đúng thương hiệu, loại bỏ trùng từ khóa ngẫu nhiên.
 - Thiết lập Campaign Management — cấu hình chiến dịch theo dõi riêng biệt cho từng thương hiệu (từ khóa chính, từ đồng nghĩa, tên sản phẩm, chi nhánh).
@@ -146,6 +198,7 @@ Thêm bộ lọc theo Nhãn hàng/Thương hiệu (Brand Filter) trên trang Rep
 - Thiết lập PII Anonymization Pipeline — tự động ẩn danh hóa thông tin định danh cá nhân trước khi lưu vào cơ sở dữ liệu.
 
 ### Security
+
 - Giới hạn crawler chỉ thu thập dữ liệu công khai, tuân thủ Luật An ninh mạng và nghị định VNDP về bảo vệ dữ liệu cá nhân.
 - Lưu trữ nội dung báo điện tử dưới dạng headline, đoạn tóm tắt ngắn và URL gốc — không sao chép toàn văn bài báo.
 
@@ -156,6 +209,7 @@ Thêm bộ lọc theo Nhãn hàng/Thương hiệu (Brand Filter) trên trang Rep
 > _Phiên bản chưa phát hành. Ngày tháng sẽ được cập nhật khi hoàn thành Giai đoạn 1._
 
 ### Added
+
 - Khởi tạo pipeline crawler cơ bản và bản end-to-end demo cho 9 thương hiệu F&B mục tiêu.
 - Thiết lập Brand Mention Detection và Campaign Management ở mức cơ bản.
 
@@ -166,6 +220,7 @@ Thêm bộ lọc theo Nhãn hàng/Thương hiệu (Brand Filter) trên trang Rep
 > _Phiên bản chưa phát hành. Ngày tháng sẽ được cập nhật khi hoàn thành MVP._
 
 ### Added
+
 - Phát hành MVP chính thức với đầy đủ 5 tính năng cốt lõi: theo dõi từ khóa, tổng hợp mention, phân loại cảm xúc, cảnh báo Crisis qua Telegram/Zalo, và báo cáo tự động hàng ngày.
 - Hoàn thiện Dashboard real-time và Crisis Alert Engine trên môi trường production.
 - Áp dụng toàn bộ lớp bảo mật dữ liệu (PII Anonymization, tuân thủ VNDP) trên môi trường production.
