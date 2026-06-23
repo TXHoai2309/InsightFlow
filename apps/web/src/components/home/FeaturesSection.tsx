@@ -2,46 +2,19 @@
 
 import { useEffect, useRef, useState } from "react";
 
-const features = [
-  {
-    icon: "ti-brain",
-    emoji: "🤖",
-    title: "AI Analysis",
-    subtitle: "Phân tích cảm xúc",
-    description: "Phân tích cảm xúc tiếng Việt chính xác đến 98% — tích cực, tiêu cực, trung lập trên mọi kênh.",
-    accent: "#6D4CFF",
-    bg: "#f5f3ff",
-  },
-  {
-    icon: "ti-chart-line",
-    emoji: "📊",
-    title: "Real-time",
-    subtitle: "Theo dõi 24/7",
-    description: "Cập nhật dữ liệu mỗi 5 phút từ Facebook, TikTok, YouTube, Báo chí. Không bỏ lỡ bất kỳ tín hiệu nào.",
-    accent: "#0ea5e9",
-    bg: "#f0f9ff",
-  },
-  {
-    icon: "ti-shield-exclamation",
-    emoji: "🛡️",
-    title: "Crisis Alert",
-    subtitle: "Cảnh báo tức thì",
-    description: "Phát hiện dấu hiệu khủng hoảng và gửi thông báo ngay qua Telegram/Email trước khi tình huống leo thang.",
-    accent: "#ef4444",
-    bg: "#fff8f8",
-  },
-  {
-    icon: "ti-file-analytics",
-    emoji: "📋",
-    title: "Auto Report",
-    subtitle: "Báo cáo tự động",
-    description: "Xuất báo cáo định kỳ hàng ngày, hàng tuần với biểu đồ trực quan chuyên nghiệp chỉ với 1 cú nhấp.",
-    accent: "#16a34a",
-    bg: "#f0fdf4",
-  },
-];
+import { useTranslation } from "react-i18next";
 
-function FeatureCard({ feature, delay }: { feature: typeof features[0]; delay: number }) {
+type FeatureType = {
+  icon: string;
+  emoji: string;
+  title: string;
+  subtitle: string;
+  description: string;
+  accent: string;
+  bg: string;
+};
+
+function FeatureCard({ feature, delay, learnMoreText }: { feature: FeatureType; delay: number; learnMoreText: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
 
@@ -97,7 +70,7 @@ function FeatureCard({ feature, delay }: { feature: typeof features[0]; delay: n
         className="flex items-center gap-1 text-[13px] font-semibold mt-auto"
         style={{ color: feature.accent }}
       >
-        Tìm hiểu thêm
+        {learnMoreText}
         <i className="ti ti-arrow-right text-[14px] transition-transform duration-200 group-hover:translate-x-1" />
       </div>
     </div>
@@ -105,26 +78,67 @@ function FeatureCard({ feature, delay }: { feature: typeof features[0]; delay: n
 }
 
 export default function FeaturesSection() {
+  const { t } = useTranslation();
+
+  const features: FeatureType[] = [
+    {
+      icon: "ti-brain",
+      emoji: "🤖",
+      title: "AI Analysis",
+      subtitle: t("home.features.ai.subtitle"),
+      description: t("home.features.ai.desc"),
+      accent: "#6D4CFF",
+      bg: "#f5f3ff",
+    },
+    {
+      icon: "ti-chart-line",
+      emoji: "📊",
+      title: "Real-time",
+      subtitle: t("home.features.rt.subtitle"),
+      description: t("home.features.rt.desc"),
+      accent: "#0ea5e9",
+      bg: "#f0f9ff",
+    },
+    {
+      icon: "ti-shield-exclamation",
+      emoji: "🛡️",
+      title: "Crisis Alert",
+      subtitle: t("home.features.crisis.subtitle"),
+      description: t("home.features.crisis.desc"),
+      accent: "#ef4444",
+      bg: "#fff8f8",
+    },
+    {
+      icon: "ti-file-analytics",
+      emoji: "📋",
+      title: "Auto Report",
+      subtitle: t("home.features.report.subtitle"),
+      description: t("home.features.report.desc"),
+      accent: "#16a34a",
+      bg: "#f0fdf4",
+    },
+  ];
+
   return (
     <section id="features" className="py-[72px] px-6 max-w-[1200px] mx-auto">
       {/* Header */}
       <div className="text-center mb-12">
         <span className="inline-block px-4 py-1.5 rounded-full text-[12px] font-bold uppercase tracking-widest bg-[#e4dfff] text-[#4234b6] mb-4">
-          Tính năng
+          {t("home.features.badge")}
         </span>
         <h2 className="text-[34px] md:text-[40px] leading-tight tracking-[-0.02em] font-black text-[#1c1b23] mb-3">
-          Mọi thứ bạn cần để{" "}
-          <span style={{ color: "#6D4CFF" }}>làm chủ truyền thông</span>
+          {t("home.features.title1")}{" "}
+          <span style={{ color: "#6D4CFF" }}>{t("home.features.titleHighlight")}</span>
         </h2>
         <p className="text-[15px] text-[#6B7280] max-w-xl mx-auto">
-          Bộ công cụ AI toàn diện được thiết kế riêng cho doanh nghiệp F&B tại Việt Nam.
+          {t("home.features.subtitle")}
         </p>
       </div>
 
       {/* Cards grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         {features.map((f, i) => (
-          <FeatureCard key={f.title} feature={f} delay={i * 100} />
+          <FeatureCard key={f.title} feature={f} delay={i * 100} learnMoreText={t("home.features.learnMore")} />
         ))}
       </div>
     </section>

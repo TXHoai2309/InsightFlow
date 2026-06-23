@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 /* ─── KPI Counter Hook ─── */
 function useCountUp(target: number, duration = 1800, started = false) {
@@ -24,6 +25,7 @@ function useCountUp(target: number, duration = 1800, started = false) {
 
 /* ─── Mini Dashboard SVG Component ─── */
 function DashboardDemo() {
+  const { t } = useTranslation();
   return (
     <div
       className="relative w-full rounded-2xl overflow-hidden"
@@ -51,7 +53,7 @@ function DashboardDemo() {
         <div className="grid grid-cols-3 gap-3">
           {/* Sentiment Score */}
           <div className="bg-[#faf9ff] border border-[#ede9ff] rounded-[14px] p-3 col-span-1">
-            <p className="text-[9px] text-[#9898B0] font-semibold uppercase tracking-wide mb-1">Sentiment</p>
+            <p className="text-[9px] text-[#9898B0] font-semibold uppercase tracking-wide mb-1">{t("home.hero.demo.sentiment")}</p>
             <div className="flex items-baseline gap-1">
               <span className="text-[22px] font-bold text-[#6D4CFF] leading-none">71%</span>
               <span className="text-[12px]">😊</span>
@@ -67,12 +69,12 @@ function DashboardDemo() {
                 }}
               />
             </div>
-            <p className="text-[8px] text-[#9898B0] mt-1">Tích cực</p>
+            <p className="text-[8px] text-[#9898B0] mt-1">{t("home.hero.demo.positive")}</p>
           </div>
 
           {/* Trend */}
           <div className="bg-[#f0fdf4] border border-[#bbf7d0] rounded-[14px] p-3 col-span-1">
-            <p className="text-[9px] text-[#9898B0] font-semibold uppercase tracking-wide mb-1">Trend</p>
+            <p className="text-[9px] text-[#9898B0] font-semibold uppercase tracking-wide mb-1">{t("home.hero.demo.trend")}</p>
             <div className="flex items-baseline gap-1">
               <span className="text-[22px] font-bold text-[#16a34a] leading-none">+43%</span>
               <span className="text-[11px]">📈</span>
@@ -93,29 +95,29 @@ function DashboardDemo() {
 
           {/* Crisis Alert */}
           <div className="bg-[#fff8f8] border border-[#fed7d7] rounded-[14px] p-3 col-span-1 relative overflow-hidden">
-            <p className="text-[9px] text-[#9898B0] font-semibold uppercase tracking-wide mb-1">Crisis</p>
+            <p className="text-[9px] text-[#9898B0] font-semibold uppercase tracking-wide mb-1">{t("home.hero.demo.crisis")}</p>
             <div className="flex items-center gap-1 mt-1">
               <span
                 className="w-2 h-2 rounded-full bg-[#ef4444]"
                 style={{ animation: "pulse 1.2s infinite" }}
               />
-              <span className="text-[11px] font-bold text-[#ef4444]">Alert ⚠️</span>
+              <span className="text-[11px] font-bold text-[#ef4444]">{t("home.hero.demo.alert")} ⚠️</span>
             </div>
-            <p className="text-[8px] text-[#ef4444] mt-1 font-medium">2 vấn đề mới</p>
+            <p className="text-[8px] text-[#ef4444] mt-1 font-medium">{t("home.hero.demo.newIssues")}</p>
             <div className="absolute -bottom-2 -right-2 w-10 h-10 rounded-full bg-[#fee2e2] opacity-60" />
           </div>
         </div>
 
         {/* Row 2: Top Keywords bar chart */}
         <div className="bg-[#faf9ff] border border-[#ede9ff] rounded-[14px] p-3">
-          <p className="text-[9px] text-[#9898B0] font-semibold uppercase tracking-wide mb-2">Top Keywords</p>
+          <p className="text-[9px] text-[#9898B0] font-semibold uppercase tracking-wide mb-2">{t("home.hero.demo.topKeywords")}</p>
           <div className="space-y-1.5">
             {[
-              { label: "Chất lượng", pct: 88 },
-              { label: "Giao hàng", pct: 72 },
-              { label: "Giá", pct: 60 },
-              { label: "Dịch vụ", pct: 51 },
-              { label: "Khuyến mãi", pct: 38 },
+              { label: t("home.hero.demo.kw.quality"), pct: 88 },
+              { label: t("home.hero.demo.kw.delivery"), pct: 72 },
+              { label: t("home.hero.demo.kw.price"), pct: 60 },
+              { label: t("home.hero.demo.kw.service"), pct: 51 },
+              { label: t("home.hero.demo.kw.promo"), pct: 38 },
             ].map((kw, i) => (
               <div key={kw.label} className="flex items-center gap-2">
                 <span className="text-[8px] text-[#4A4A6A] w-14 shrink-0 font-medium">{kw.label}</span>
@@ -137,18 +139,18 @@ function DashboardDemo() {
 
         {/* Row 3: Word cloud */}
         <div className="bg-[#faf9ff] border border-[#ede9ff] rounded-[14px] px-3 py-2.5">
-          <p className="text-[9px] text-[#9898B0] font-semibold uppercase tracking-wide mb-2">Từ khóa nổi bật</p>
+          <p className="text-[9px] text-[#9898B0] font-semibold uppercase tracking-wide mb-2">{t("home.hero.demo.wordCloud")}</p>
           <div className="flex flex-wrap gap-1.5 items-center">
             {[
-              { word: "ngon", size: 14, color: "#6D4CFF" },
-              { word: "nhanh", size: 11, color: "#9B8FF8" },
-              { word: "phục vụ tốt", size: 12, color: "#4234b6" },
-              { word: "giá rẻ", size: 13, color: "#6D4CFF" },
-              { word: "sạch", size: 10, color: "#9B8FF8" },
-              { word: "chậm", size: 9, color: "#ef4444" },
-              { word: "tươi", size: 12, color: "#16a34a" },
-              { word: "đông", size: 10, color: "#f59e0b" },
-              { word: "thân thiện", size: 11, color: "#6D4CFF" },
+              { word: t("home.hero.demo.wc.delicious"), size: 14, color: "#6D4CFF" },
+              { word: t("home.hero.demo.wc.fast"), size: 11, color: "#9B8FF8" },
+              { word: t("home.hero.demo.wc.goodService"), size: 12, color: "#4234b6" },
+              { word: t("home.hero.demo.wc.cheap"), size: 13, color: "#6D4CFF" },
+              { word: t("home.hero.demo.wc.clean"), size: 10, color: "#9B8FF8" },
+              { word: t("home.hero.demo.wc.slow"), size: 9, color: "#ef4444" },
+              { word: t("home.hero.demo.wc.fresh"), size: 12, color: "#16a34a" },
+              { word: t("home.hero.demo.wc.crowded"), size: 10, color: "#f59e0b" },
+              { word: t("home.hero.demo.wc.friendly"), size: 11, color: "#6D4CFF" },
             ].map((w) => (
               <span
                 key={w.word}
@@ -167,6 +169,7 @@ function DashboardDemo() {
 
 /* ─── KPI Stats Bar ─── */
 function KpiBar() {
+  const { t } = useTranslation();
   const ref = useRef<HTMLDivElement>(null);
   const [started, setStarted] = useState(false);
 
@@ -184,10 +187,10 @@ function KpiBar() {
   const accuracy = useCountUp(98, 1400, started);
 
   const stats = [
-    { value: `${businesses}+`, label: "Doanh nghiệp" },
-    { value: `${articles * 10000 >= 2000000 ? "2M+" : (articles * 10000).toLocaleString()}`, label: "Bài phân tích" },
-    { value: `${accuracy}%`, label: "Độ chính xác" },
-    { value: "24/7", label: "Theo dõi", static: true },
+    { value: `${businesses}+`, label: t("home.hero.kpi.businesses") },
+    { value: `${articles * 10000 >= 2000000 ? "2M+" : (articles * 10000).toLocaleString()}`, label: t("home.hero.kpi.articles") },
+    { value: `${accuracy}%`, label: t("home.hero.kpi.accuracy") },
+    { value: "24/7", label: t("home.hero.kpi.monitoring"), static: true },
   ];
 
   return (
@@ -213,6 +216,7 @@ function KpiBar() {
 /* ─── Main HeroSection ─── */
 export default function HeroSection() {
   const { user, loading } = useAuth();
+  const { t } = useTranslation();
 
   return (
     <section
@@ -247,12 +251,12 @@ export default function HeroSection() {
               style={{ background: "#e4dfff", color: "#4234b6" }}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-[#6D4CFF] animate-pulse inline-block" />
-              AI Brand Monitoring · F&B Specialist
+              {t("home.hero.badge")}
             </span>
 
             {/* Headline */}
             <h1 className="text-[40px] md:text-[52px] leading-[1.1] tracking-[-0.02em] font-black text-[#1c1b23]">
-              Theo dõi thương hiệu{" "}
+              {t("home.hero.title1")}{" "}
               <span
                 className="relative inline-block"
                 style={{
@@ -261,16 +265,14 @@ export default function HeroSection() {
                   WebkitTextFillColor: "transparent",
                 }}
               >
-                thông minh hơn
+                {t("home.hero.titleHighlight")}
               </span>{" "}
-              với AI
+              {t("home.hero.title2")}
             </h1>
 
             {/* Subtext */}
             <p className="text-[17px] leading-[28px] text-[#474554] max-w-lg">
-              Lắng nghe mạng xã hội, phân tích cảm xúc thực khách và cảnh báo
-              khủng hoảng truyền thông trong thời gian thực — dành riêng cho
-              doanh nghiệp F&B Việt Nam.
+              {t("home.hero.subtitle")}
             </p>
 
             {/* CTA Buttons */}
@@ -285,7 +287,7 @@ export default function HeroSection() {
                   }}
                 >
                   <i className="ti ti-layout-dashboard text-[16px]" />
-                  Vào Dashboard
+                  {t("home.hero.dashboardBtn")}
                 </Link>
               ) : (
                 <Link
@@ -297,7 +299,7 @@ export default function HeroSection() {
                   }}
                 >
                   <i className="ti ti-rocket text-[16px]" />
-                  Dùng thử miễn phí
+                  {t("home.hero.freeTrialBtn")}
                 </Link>
               )}
               <Link
@@ -305,7 +307,7 @@ export default function HeroSection() {
                 className="flex items-center justify-center gap-2 border-2 border-[#6D4CFF] text-[#6D4CFF] px-7 py-3.5 rounded-[12px] font-bold text-[15px] hover:bg-[#f3f0ff] transition-all active:scale-95"
               >
                 <i className="ti ti-player-play text-[16px]" />
-                Xem Demo
+                {t("home.hero.demoBtn")}
               </Link>
             </div>
 
