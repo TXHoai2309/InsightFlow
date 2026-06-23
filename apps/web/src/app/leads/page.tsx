@@ -1,238 +1,148 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
+import { useDashboard } from "@/hooks/useDashboardData";
+import { useDashboardStore } from "@/stores/dashboard.store";
+import { LeadFilters, LeadStats, LeadCard } from "@/components/leads";
+
+import { normalizeBrandName } from "@/lib/services/dashboard";
 
 /**
  * Lead Management Page
- * Theo dõi và chuyển đổi Lead từ các tín hiệu mạng xã hội
- * Hỗ trợ mobile responsive
+ * Theo dõi và chuyển đổi Lead từ các tín hiệu mạng xã hội sử dụng dữ liệu thật từ Firebase
+ * Hỗ trợ mobile responsive và đếm ngược thời gian thực
  */
 export default function LeadsPage() {
   const [activeTab, setActiveTab] = useState<"hot" | "warm" | "cold">("hot");
+  const [currentTime, setCurrentTime] = useState<number>(Date.now());
 
-  // Timers state for mock countdowns
-  const [timers, setTimers] = useState({
-    "timer-1": 1455, // 24m 15s
-    "timer-2": 724,  // 12m 04s
-  });
+  // 1. Tự động tải dữ liệu và cập nhật định kỳ từ Firebase (Project 2: datainsight)
+  useDashboard({ autoFetch: true, refetchInterval: 60000 });
 
+  const { getFilteredLeads, workspaces, filters, leads, isLoading, error } = useDashboardStore();
+
+  // 2. Chạy đồng hồ ticking giây để cập nhật countdown cho toàn bộ Hot Lead Card đồng thời
   useEffect(() => {
+    setCurrentTime(Date.now());
     const interval = setInterval(() => {
-      setTimers((prev) => {
-        const next = { ...prev };
-        if (next["timer-1"] > 0) next["timer-1"] -= 1;
-        if (next["timer-2"] > 0) next["timer-2"] -= 1;
-        return next;
-      });
+      setCurrentTime(Date.now());
     }, 1000);
     return () => clearInterval(interval);
   }, []);
 
-  const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m}:${s < 10 ? "0" + s : s}s`;
-  };
+  // 3. Lọc danh sách lead động theo bộ lọc của store và theo Tab ý định mua hàng hiện tại
+  const allFilteredLeads = useMemo(() => {
+    return getFilteredLeads();
+  }, [getFilteredLeads, filters, leads]);
+
+  // Lọc theo Brand và Platform (không lọc theo urgency) để làm đầu vào tính toán stats chính xác
+  const brandPlatformFilteredLeads = useMemo(() => {
+    const normFilter = filters.workspace_id !== "all" ? normalizeBrandName(filters.workspace_id) : null;
+    return leads.filter((l) => {
+      if (normFilter && normalizeBrandName(l.workspace_id) !== normFilter) return false;
+      if (filters.platform !== "all" && l.platform !== filters.platform) return false;
+      return true;
+    });
+  }, [leads, filters.workspace_id, filters.platform]);
+
+  const currentTabLeads = useMemo(() => {
+    return allFilteredLeads.filter((l) => l.intent === activeTab);
+  }, [allFilteredLeads, activeTab]);
 
   return (
     <div className="p-4 md:p-8 space-y-5 md:space-y-8 animate-in fade-in duration-500">
+      
       {/* Header Section */}
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4">
+      <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4">
         <div>
-          <h2 className="text-2xl md:text-3xl text-on-surface font-bold">Quản lý Khách hàng Tiềm năng</h2>
+          <h2 className="text-2xl md:text-3xl text-on-surface font-bold">
+            Quản lý Khách hàng Tiềm năng
+          </h2>
           <p className="text-body-md text-on-surface-variant mt-1">
-            Theo dõi và chuyển đổi Lead từ các tín hiệu mạng xã hội
+            Theo dõi và chuyển đổi Lead trực tiếp từ dữ liệu cào mạng xã hội thời gian thực.
           </p>
         </div>
+        
         {/* Tab switcher */}
-        <div className="flex gap-1 bg-surface-container-low p-1 rounded-xl border border-outline-variant self-start sm:self-auto">
+        <div className="flex gap-1 bg-surface-container-low p-1 rounded-xl border border-outline-variant self-start lg:self-auto shadow-sm">
           {(["hot", "warm", "cold"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-4 md:px-8 py-2 rounded-lg text-sm font-medium transition-all ${
+              className={`px-4 md:px-8 py-2 rounded-lg text-sm font-medium transition-all duration-300 flex items-center gap-1.5 ${
                 activeTab === tab
                   ? "bg-white text-primary shadow-sm ring-1 ring-outline-variant/20 font-bold"
-                  : "text-on-surface-variant hover:bg-surface-container"
+                  : "text-on-surface-variant hover:bg-surface-container-high"
               }`}
             >
-              {tab === "hot" ? "🔥 Hot" : tab.charAt(0).toUpperCase() + tab.slice(1)}
+              <span>
+                {tab === "hot" ? "🔥 Hot" : tab === "warm" ? "⚡ Warm" : "❄️ Cold"}
+              </span>
+              <span>
+                ({allFilteredLeads.filter((l) => l.intent === tab).length})
+              </span>
             </button>
           ))}
         </div>
       </div>
 
-      {/* Stats Grid — 2 cols mobile, 4 cols desktop */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
-        <div className="glass-card p-4 md:p-6 rounded-xl flex flex-col gap-1">
-          <span className="text-on-surface-variant text-xs md:text-sm font-medium">Tổng Lead mới</span>
-          <span className="text-2xl md:text-3xl font-bold text-on-surface">1,284</span>
-          <span className="text-primary text-xs font-bold flex items-center gap-1">
-            <span className="material-symbols-outlined text-sm">trending_up</span> +12% hôm nay
-          </span>
-        </div>
-        <div className="glass-card p-4 md:p-6 rounded-xl flex flex-col gap-1">
-          <span className="text-on-surface-variant text-xs md:text-sm font-medium">Tỉ lệ phản hồi</span>
-          <span className="text-2xl md:text-3xl font-bold text-on-surface">92.4%</span>
-          <span className="text-secondary text-xs font-bold">TB: 14m</span>
-        </div>
-        <div className="glass-card p-4 md:p-6 rounded-xl flex flex-col gap-1 border-l-4 border-error">
-          <span className="text-on-surface-variant text-xs md:text-sm font-medium">Sắp hết hạn</span>
-          <span className="text-2xl md:text-3xl font-bold text-error">08</span>
-          <span className="text-on-surface-variant text-xs italic">Cần ưu tiên</span>
-        </div>
-        <div className="glass-card p-4 md:p-6 rounded-xl flex flex-col gap-1">
-          <span className="text-on-surface-variant text-xs md:text-sm font-medium">Đã xử lý</span>
-          <span className="text-2xl md:text-3xl font-bold text-on-surface">156</span>
-          <span className="text-on-surface-variant text-xs font-medium">Mục tiêu: 200</span>
-        </div>
-      </div>
+      {/* Stats Grid */}
+      <LeadStats leads={brandPlatformFilteredLeads} isLoading={isLoading} />
+
+      {/* Lead Filters */}
+      <LeadFilters workspaces={workspaces} />
 
       {/* Leads List */}
       <div className="space-y-4">
+        {error && (
+          <div className="p-4 bg-error-container text-on-error-container rounded-xl border border-error/20 text-sm font-medium flex items-center gap-2">
+            <span className="material-symbols-outlined">error</span>
+            <span>Không thể tải dữ liệu: {error}. Vui lòng thử lại.</span>
+          </div>
+        )}
 
-        {/* Lead Item 1 — Hot */}
-        <div className="glass-card rounded-xl overflow-hidden hover:shadow-md transition-all border-l-4 border-error">
-          <div className="p-4 md:p-6">
-            {/* Mobile: stack layout | Desktop: grid */}
-            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-              {/* Avatar + Name */}
+        {isLoading && currentTabLeads.length === 0 ? (
+          // Shimmer loading skeleton
+          [...Array(3)].map((_, i) => (
+            <div key={i} className="glass-card p-6 rounded-xl animate-pulse flex flex-col sm:flex-row sm:items-center gap-4">
               <div className="flex items-center gap-3 sm:w-56 flex-shrink-0">
-                <div className="relative">
-                  <img
-                    alt="Lead Avatar"
-                    className="w-12 h-12 rounded-full border border-outline-variant"
-                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuAg0xd4yIS0U-dYEghTj-m6V_9NEcCYLRAZYBOPPRcixk4ZNlmk5EUAKft04J7dAJq6K_LeGFkV6z1xu4Iy3zaLox7Oz3B1jZLH9DpRNlC5Ah-S1C_1UtoIP_dG5_9YkcKCnVIHw8xTIG9hbkYB1fzkhhbg9QBrb9ZAXkFsL6KmIGgZdUXs_H6IJ_Me8xQGkOTkeCajxvL0iBT8TVbcWLGijbAK9KW2z-hzXuumh5PeJmgvqSmTXxl_KrvcAhf8AFFdpdSduCdgYg4"
-                  />
-                  <div className="absolute -bottom-1 -right-1 bg-white p-0.5 rounded-full border border-outline-variant">
-                    <span className="material-symbols-outlined text-[14px] text-[#25D366]" style={{ fontVariationSettings: "'FILL' 1" }}>chat</span>
-                  </div>
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-on-surface">Nguyễn Văn An</h4>
-                  <div className="flex items-center gap-1 animate-pulse">
-                    <span className="material-symbols-outlined text-error text-[15px]">timer</span>
-                    <span className="text-error font-bold text-xs">{formatTime(timers["timer-1"])}</span>
-                  </div>
+                <div className="w-12 h-12 rounded-full bg-outline-variant/30"></div>
+                <div className="space-y-2 flex-1">
+                  <div className="h-4 bg-outline-variant/30 rounded w-2/3"></div>
+                  <div className="h-3 bg-outline-variant/20 rounded w-1/2"></div>
                 </div>
               </div>
-
-              {/* Tags */}
-              <div className="flex flex-wrap gap-2 flex-1">
-                <span className="bg-error-container text-on-error-container px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1">
-                  <span className="material-symbols-outlined text-sm">local_fire_department</span> Ý định mua cao
-                </span>
-                <span className="bg-surface-container-high text-on-surface-variant px-2.5 py-1 rounded-full text-xs font-bold">So sánh giá</span>
-                <span className="bg-surface-container-high text-on-surface-variant px-2.5 py-1 rounded-full text-xs font-bold">Comment "Ib"</span>
+              <div className="flex-1 space-y-2">
+                <div className="h-4 bg-outline-variant/35 rounded w-full"></div>
+                <div className="h-3.5 bg-outline-variant/20 rounded w-3/4"></div>
               </div>
-
-              {/* Status + Actions */}
-              <div className="flex items-center justify-between sm:justify-end gap-3 sm:flex-shrink-0">
-                <span className="inline-flex items-center gap-2 px-3 py-1 bg-primary-container/10 text-primary border border-primary/20 rounded-full text-xs font-bold">
-                  <span className="w-2 h-2 rounded-full bg-primary"></span> Mới
-                </span>
-                <div className="flex gap-2">
-                  <button className="p-2 rounded-full border border-outline-variant hover:bg-surface-container transition-all" title="Chat">
-                    <span className="material-symbols-outlined text-on-surface-variant text-xl">chat</span>
-                  </button>
-                  <button className="flex items-center gap-1.5 bg-primary text-on-primary px-4 py-2 rounded-lg text-sm font-bold hover:shadow-lg transition-all active:scale-95">
-                    <span className="material-symbols-outlined text-lg">call</span>
-                    <span className="hidden sm:inline">Gửi ngay</span>
-                  </button>
-                </div>
+              <div className="sm:w-48 flex items-center justify-between sm:justify-end gap-2">
+                <div className="h-6 bg-outline-variant/30 rounded w-20"></div>
+                <div className="h-8 bg-outline-variant/40 rounded w-24"></div>
               </div>
             </div>
-          </div>
-        </div>
-
-        {/* Lead Item 2 */}
-        <div className="glass-card rounded-xl overflow-hidden hover:shadow-md transition-all border-l-4 border-error">
-          <div className="p-4 md:p-6">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-              {/* Avatar + Name */}
-              <div className="flex items-center gap-3 sm:w-56 flex-shrink-0">
-                <div className="relative">
-                  <img
-                    alt="Lead Avatar"
-                    className="w-12 h-12 rounded-full border border-outline-variant"
-                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuBR3C2yRo2gu7Il0zvutCcjm5-6z7awi4rt3TlEjypiU3gNZOS9C9q6lNGIM8ZoDMib3oNFMXi6Nji4NPOvcAXW8n2ROvJkxVjCBq4jsalmIeJe8UysbNcMGr_WGQsYJVgckpSgIbQ2ZwUMy4WNGdVm_xM0Hkn_BhWXV9zY79xId9_pVCsfALmR14hjC3-GCfwUsjK7yRKuOO-M3D28TtsDEVftmXJXM6xGhGSYrFKEjZmauEEtQLXRtKVpb_eP_MxwGzRvJhLwb4E"
-                  />
-                  <div className="absolute -bottom-1 -right-1 bg-white p-0.5 rounded-full border border-outline-variant">
-                    <span className="material-symbols-outlined text-[14px] text-blue-500" style={{ fontVariationSettings: "'FILL' 1" }}>face_nod</span>
-                  </div>
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-on-surface">Lê Minh Tú</h4>
-                  <div className="flex items-center gap-1">
-                    <span className="material-symbols-outlined text-error text-[15px]">timer</span>
-                    <span className="text-error font-bold text-xs">{formatTime(timers["timer-2"])}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Tags */}
-              <div className="flex flex-wrap gap-2 flex-1">
-                <span className="bg-error-container text-on-error-container px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1">
-                  <span className="material-symbols-outlined text-sm">verified</span> Khách cũ
-                </span>
-                <span className="bg-surface-container-high text-on-surface-variant px-2.5 py-1 rounded-full text-xs font-bold">Hỏi về kho</span>
-              </div>
-
-              {/* Status + Actions */}
-              <div className="flex items-center justify-between sm:justify-end gap-3 sm:flex-shrink-0">
-                <span className="inline-flex items-center gap-2 px-3 py-1 bg-tertiary-container/10 text-tertiary border border-tertiary/20 rounded-full text-xs font-bold">
-                  <span className="w-2 h-2 rounded-full bg-tertiary"></span> Đang xử lý
-                </span>
-                <div className="flex gap-2">
-                  <button className="p-2 rounded-full border border-outline-variant hover:bg-surface-container transition-all" title="Zalo">
-                    <span className="material-symbols-outlined text-on-surface-variant text-xl">alternate_email</span>
-                  </button>
-                  <button className="flex items-center gap-1.5 bg-primary text-on-primary px-4 py-2 rounded-lg text-sm font-bold hover:shadow-lg transition-all active:scale-95">
-                    <span className="material-symbols-outlined text-lg">call</span>
-                    <span className="hidden sm:inline">Gửi ngay</span>
-                  </button>
-                </div>
-              </div>
+          ))
+        ) : currentTabLeads.length === 0 ? (
+          // Empty State
+          <div className="glass-card p-12 text-center rounded-xl flex flex-col items-center justify-center gap-3 border border-dashed border-outline-variant/80">
+            <div className="w-16 h-16 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant/70">
+              <span className="material-symbols-outlined text-3xl">inbox</span>
+            </div>
+            <div>
+              <h4 className="font-bold text-on-surface text-lg">Chưa có lead nào</h4>
+              <p className="text-sm text-on-surface-variant mt-1">
+                Không tìm thấy khách hàng tiềm năng nào phù hợp với bộ lọc hiện tại trong tab này.
+              </p>
             </div>
           </div>
-        </div>
-
-        {/* Lead Item 3 — Done */}
-        <div className="glass-card rounded-xl overflow-hidden hover:shadow-sm transition-all opacity-75 grayscale-[0.2]">
-          <div className="p-4 md:p-6">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-              {/* Avatar + Name */}
-              <div className="flex items-center gap-3 sm:w-56 flex-shrink-0">
-                <div className="relative">
-                  <img
-                    alt="Lead Avatar"
-                    className="w-12 h-12 rounded-full border border-outline-variant"
-                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuAxp_hSxx_hY33CU35fLvGvCRePeV4Sr54yN5KR9zlxnM58lG0VBAena1KoFwTSBFob45rduTJzI3kxiq9M9gd5RehJfZXsZMpVAeZMpxMqL-GpQyPR_Ct2b2E7HpWOBnVuTkQD3RtgrRQz3ifU4Kb0PLSvGpcG_AjqAKpge-2lKDwZXU67MVdno6OfCF8zJgVu6yFjZCPQgNhX9OcjnSa8FKEZQyuWxTX0dsN834ni1FrAdarykkucYXzJm8FpTtjkkf2NKNwsDZc"
-                  />
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-on-surface">Phan Hoàng Anh</h4>
-                  <span className="text-on-surface-variant text-xs font-medium">Đã kết thúc lúc 09:30</span>
-                </div>
-              </div>
-
-              {/* Tags */}
-              <div className="flex flex-wrap gap-2 flex-1">
-                <span className="bg-surface-container-high text-on-surface-variant px-2.5 py-1 rounded-full text-xs font-bold">Đơn hàng thành công</span>
-              </div>
-
-              {/* Status + Actions */}
-              <div className="flex items-center justify-between sm:justify-end gap-3 sm:flex-shrink-0">
-                <span className="inline-flex items-center gap-2 px-3 py-1 bg-green-100 text-green-700 border border-green-200 rounded-full text-xs font-bold">
-                  <span className="w-2 h-2 rounded-full bg-green-600"></span> Đã xử lý
-                </span>
-                <button className="text-primary text-sm font-bold px-4 py-2 hover:underline">Xem chi tiết</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
+        ) : (
+          // Lead Cards List
+          currentTabLeads.map((lead) => (
+            <LeadCard key={lead.id} lead={lead} currentTime={currentTime} />
+          ))
+        )}
       </div>
+
     </div>
   );
 }

@@ -1,6 +1,11 @@
+/* apps/web/src/app/globals.css */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+html {
+  scroll-behavior: smooth;
+}
 
 * {
   box-sizing: border-box;
@@ -9,26 +14,13 @@
 body {
   margin: 0;
   background-color: #f9f9ff;
-  font-family: "Inter", sans-serif;
+  font-family: 'Inter', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-  font-family: "Hanken Grotesk", sans-serif;
-}
-
 .material-symbols-outlined {
-  font-variation-settings:
-    "FILL" 0,
-    "wght" 400,
-    "GRAD" 0,
-    "opsz" 24;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
   display: inline-block;
   vertical-align: middle;
   line-height: 1;
@@ -46,35 +38,56 @@ h6 {
   box-shadow: 0 12px 30px -4px rgba(73, 75, 214, 0.08);
 }
 
+/* Hover lift for industry cards */
+.hover-lift {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.hover-lift:hover {
+  transform: translateY(-8px);
+  box-shadow:
+    0 20px 25px -5px rgba(0, 0, 0, 0.05),
+    0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
 /* Color scheme from DESIGN.md */
 @layer components {
   .surface {
     @apply bg-surface;
   }
+
   .surface-container-low {
     @apply bg-surface-container-low;
   }
+
   .surface-container {
     @apply bg-surface-container;
   }
+
   .surface-container-high {
     @apply bg-surface-container-high;
   }
+
   .primary {
     @apply text-primary;
   }
+
   .on-surface {
     @apply text-on-surface;
   }
+
   .on-surface-variant {
     @apply text-on-surface-variant;
   }
+
   .outline {
     @apply text-outline;
   }
+
   .outline-variant {
     @apply text-outline-variant;
   }
+
   .error {
     @apply text-error;
   }
@@ -83,9 +96,11 @@ h6 {
   .badge-positive {
     @apply px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-bold;
   }
+
   .badge-negative {
     @apply px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-bold;
   }
+
   .badge-neutral {
     @apply px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs font-bold;
   }
@@ -108,4 +123,33 @@ h6 {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #767586;
+}
+
+/* ── Home page animations (moved from components to fix SSR hydration) ── */
+@keyframes heroSlideUp {
+  from { opacity: 0; transform: translateY(28px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes heroDashboard {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes growBar {
+  from { width: 0%; }
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%  { opacity: 0.5; transform: scale(1.4); }
+}
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

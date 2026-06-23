@@ -1,26 +1,40 @@
 "use client";
 
 /**
- * US-13: DashboardFilters Component
- * Bộ lọc global cho Dashboard
+ * DashboardFilters Component
+ * Bộ lọc theo workspace, thời gian, platform (đã bỏ sentiment filter)
  */
 
 import React, { useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { useDashboardStore } from "@/stores/dashboard.store";
-import type { DashboardFilters, Workspace } from "@/types/dashboard";
+import { PLATFORM_META } from "@/lib/services/dashboard";
+import type { DashboardFilters, Workspace, Platform } from "@/types/dashboard";
 
 interface DashboardFiltersProps {
   workspaces: Workspace[];
 }
 
+// Thứ tự hiển thị platform trong dropdown
+const PLATFORM_ORDER: Platform[] = [
+  "facebook",
+  "tiktok",
+  "youtube",
+  "thread",
+  "be",
+  "google_maps",
+  "news",
+];
+
 export function DashboardFilters({ workspaces }: DashboardFiltersProps) {
+  const { t } = useTranslation();
   const { filters, setFilters } = useDashboardStore();
 
   const handleFilterChange = useCallback(
-    (key: keyof DashboardFilters, value: any) => {
-      setFilters({ [key]: value });
+    <K extends keyof DashboardFilters>(key: K, value: DashboardFilters[K]) => {
+      setFilters({ [key]: value } as Partial<DashboardFilters>);
     },
-    [setFilters],
+    [setFilters]
   );
 
   return (
@@ -39,22 +53,25 @@ export function DashboardFilters({ workspaces }: DashboardFiltersProps) {
           {/* Workspace Filter */}
           <div className="flex flex-col">
             <label className="text-xs font-bold text-outline uppercase mb-1">
-              Workspace
+              Thương hiệu
             </label>
-            <select
-              value={filters.workspace_id}
-              onChange={(e) =>
-                handleFilterChange("workspace_id", e.target.value)
-              }
-              className="px-3 py-2 bg-white border border-outline-variant rounded-lg text-sm focus:ring-1 focus:ring-primary outline-none"
-            >
-              <option value="all">Tất cả (F&B)</option>
-              {workspaces.map((ws) => (
-                <option key={ws.id} value={ws.id}>
-                  {ws.brand_name}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <select
+                value={filters.workspace_id}
+                onChange={(e) => handleFilterChange("workspace_id", e.target.value)}
+                className="appearance-none pl-3 pr-9 py-2 bg-white border border-outline-variant rounded-lg text-sm focus:ring-1 focus:ring-primary outline-none cursor-pointer text-on-surface w-full min-w-[160px]"
+              >
+                <option value="all">Tất cả thương hiệu</option>
+                {workspaces.map((ws) => (
+                  <option key={ws.id} value={ws.id}>
+                    {ws.brand_name}
+                  </option>
+                ))}
+              </select>
+              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center text-on-surface-variant/70">
+                <span className="material-symbols-outlined text-sm">keyboard_arrow_down</span>
+              </div>
+            </div>
           </div>
 
           {/* Time Range Filter */}
@@ -62,56 +79,49 @@ export function DashboardFilters({ workspaces }: DashboardFiltersProps) {
             <label className="text-xs font-bold text-outline uppercase mb-1">
               Thời gian
             </label>
-            <select
-              value={filters.time_range}
-              onChange={(e) =>
-                handleFilterChange("time_range", e.target.value as any)
-              }
-              className="px-3 py-2 bg-white border border-outline-variant rounded-lg text-sm focus:ring-1 focus:ring-primary outline-none"
-            >
-              <option value="24h">Hôm nay (24h)</option>
-              <option value="7d">7 ngày qua</option>
-              <option value="30d">30 ngày qua</option>
-            </select>
+            <div className="relative">
+              <select
+                value={filters.time_range}
+                onChange={(e) =>
+                  handleFilterChange("time_range", e.target.value as DashboardFilters["time_range"])
+                }
+                className="appearance-none pl-3 pr-9 py-2 bg-white border border-outline-variant rounded-lg text-sm focus:ring-1 focus:ring-primary outline-none cursor-pointer text-on-surface w-full min-w-[120px]"
+              >
+                <option value="all">Toàn bộ</option>
+                <option value="24h">Hôm nay (24h)</option>
+                <option value="7d">{t("dashboard.filters.7days")}</option>
+                <option value="30d">{t("dashboard.filters.30days")}</option>
+              </select>
+              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center text-on-surface-variant/70">
+                <span className="material-symbols-outlined text-sm">keyboard_arrow_down</span>
+              </div>
+            </div>
           </div>
 
           {/* Platform Filter */}
           <div className="flex flex-col">
             <label className="text-xs font-bold text-outline uppercase mb-1">
-              Platform
+              Nền tảng
             </label>
-            <select
-              value={filters.platform}
-              onChange={(e) =>
-                handleFilterChange("platform", e.target.value as any)
-              }
-              className="px-3 py-2 bg-white border border-outline-variant rounded-lg text-sm focus:ring-1 focus:ring-primary outline-none"
-            >
-              <option value="all">Tất cả</option>
-              <option value="facebook">Facebook</option>
-              <option value="tiktok">TikTok</option>
-              <option value="news">Báo điện tử</option>
-              <option value="youtube">YouTube</option>
-            </select>
-          </div>
-
-          {/* Sentiment Filter */}
-          <div className="flex flex-col">
-            <label className="text-xs font-bold text-outline uppercase mb-1">
-              Sentiment
-            </label>
-            <select
-              value={filters.sentiment}
-              onChange={(e) =>
-                handleFilterChange("sentiment", e.target.value as any)
-              }
-              className="px-3 py-2 bg-white border border-outline-variant rounded-lg text-sm focus:ring-1 focus:ring-primary outline-none"
-            >
-              <option value="all">Tất cả</option>
-              <option value="positive">Tích cực</option>
-              <option value="neutral">Trung lập</option>
-              <option value="negative">Tiêu cực</option>
-            </select>
+            <div className="relative">
+              <select
+                value={filters.platform}
+                onChange={(e) =>
+                  handleFilterChange("platform", e.target.value as DashboardFilters["platform"])
+                }
+                className="appearance-none pl-3 pr-9 py-2 bg-white border border-outline-variant rounded-lg text-sm focus:ring-1 focus:ring-primary outline-none cursor-pointer text-on-surface w-full min-w-[140px]"
+              >
+                <option value="all">Tất cả nền tảng</option>
+                {PLATFORM_ORDER.map((p) => (
+                  <option key={p} value={p}>
+                    {PLATFORM_META[p].label}
+                  </option>
+                ))}
+              </select>
+              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center text-on-surface-variant/70">
+                <span className="material-symbols-outlined text-sm">keyboard_arrow_down</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>

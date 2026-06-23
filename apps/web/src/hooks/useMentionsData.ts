@@ -5,7 +5,6 @@ import { useDashboardStore } from "@/stores/dashboard.store";
 import type { Mention, Workspace, DashboardStats } from "@/types/dashboard";
 import { dbSecond } from "@/lib/firebase";
 import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
-
 const now = () => new Date();
 
 function normalizeBrandId(brand: string): string {
@@ -50,6 +49,43 @@ function parseDate(field: any): string {
   if (!s) return new Date().toISOString();
   return s.includes("+") || s.endsWith("Z") ? s : s + "Z";
 }
+
+
+
+const normalizeDate = (field: unknown, fallback = new Date().toISOString()) => {
+  if (!field) return fallback;
+
+  if (typeof (field as { toDate?: unknown }).toDate === "function") {
+    const date = (field as { toDate: () => Date }).toDate();
+    return Number.isNaN(date.getTime()) ? fallback : date.toISOString();
+  }
+
+  if (field instanceof Date) {
+    return Number.isNaN(field.getTime()) ? fallback : field.toISOString();
+  }
+
+  let raw = String(field).trim();
+  if (!raw || raw === "[object Object]") return fallback;
+
+  // Handle DD/MM/YYYY or DD/MM/YYYY HH:mm:ss format commonly used in the DB
+  const vnDateMatch = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+  if (vnDateMatch) {
+    const day = parseInt(vnDateMatch[1], 10);
+    const month = parseInt(vnDateMatch[2], 10) - 1;
+    const year = parseInt(vnDateMatch[3], 10);
+    const hour = vnDateMatch[4] ? parseInt(vnDateMatch[4], 10) : 0;
+    const minute = vnDateMatch[5] ? parseInt(vnDateMatch[5], 10) : 0;
+    const second = vnDateMatch[6] ? parseInt(vnDateMatch[6], 10) : 0;
+    
+    const parsedDate = new Date(year, month, day, hour, minute, second);
+    if (!Number.isNaN(parsedDate.getTime())) {
+      return parsedDate.toISOString();
+    }
+  }
+
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime()) ? fallback : date.toISOString();
+};
 
 const generateMockWorkspaces = (): Workspace[] => [
   {
@@ -97,6 +133,9 @@ const generateMockMentions = (): Mention[] => {
       created_at: new Date(
         baseDate.getTime() - 2 * 60 * 60 * 1000,
       ).toISOString(),
+      posted_at: new Date(
+        baseDate.getTime() - 2 * 60 * 60 * 1000,
+      ).toISOString(),
       url: "https://facebook.com/post/1",
     },
     {
@@ -111,6 +150,9 @@ const generateMockMentions = (): Mention[] => {
       topic: "service",
       credibility_score: 0.85,
       created_at: new Date(
+        baseDate.getTime() - 5 * 60 * 60 * 1000,
+      ).toISOString(),
+      posted_at: new Date(
         baseDate.getTime() - 5 * 60 * 60 * 1000,
       ).toISOString(),
       url: "https://tiktok.com/video/2",
@@ -128,6 +170,9 @@ const generateMockMentions = (): Mention[] => {
       created_at: new Date(
         baseDate.getTime() - 11 * 60 * 60 * 1000,
       ).toISOString(),
+      posted_at: new Date(
+        baseDate.getTime() - 11 * 60 * 60 * 1000,
+      ).toISOString(),
       url: "https://vnexpress.net/article-3",
     },
     {
@@ -141,6 +186,9 @@ const generateMockMentions = (): Mention[] => {
       topic: "experience",
       credibility_score: 0.88,
       created_at: new Date(
+        baseDate.getTime() - 22 * 60 * 60 * 1000,
+      ).toISOString(),
+      posted_at: new Date(
         baseDate.getTime() - 22 * 60 * 60 * 1000,
       ).toISOString(),
       url: "https://youtube.com/watch?v=4",
@@ -158,6 +206,9 @@ const generateMockMentions = (): Mention[] => {
       created_at: new Date(
         baseDate.getTime() - 32 * 60 * 60 * 1000,
       ).toISOString(),
+      posted_at: new Date(
+        baseDate.getTime() - 32 * 60 * 60 * 1000,
+      ).toISOString(),
       url: "https://facebook.com/post/5",
     },
     {
@@ -171,6 +222,9 @@ const generateMockMentions = (): Mention[] => {
       topic: "staff",
       credibility_score: 0.69,
       created_at: new Date(
+        baseDate.getTime() - 48 * 60 * 60 * 1000,
+      ).toISOString(),
+      posted_at: new Date(
         baseDate.getTime() - 48 * 60 * 60 * 1000,
       ).toISOString(),
       url: "https://tiktok.com/video/6",
@@ -188,6 +242,9 @@ const generateMockMentions = (): Mention[] => {
       created_at: new Date(
         baseDate.getTime() - 3 * 24 * 60 * 60 * 1000,
       ).toISOString(),
+      posted_at: new Date(
+        baseDate.getTime() - 3 * 24 * 60 * 60 * 1000,
+      ).toISOString(),
       url: "https://cafebiz.vn/article-7",
     },
     {
@@ -201,6 +258,9 @@ const generateMockMentions = (): Mention[] => {
       topic: "operation",
       credibility_score: 0.79,
       created_at: new Date(
+        baseDate.getTime() - 5 * 24 * 60 * 60 * 1000,
+      ).toISOString(),
+      posted_at: new Date(
         baseDate.getTime() - 5 * 24 * 60 * 60 * 1000,
       ).toISOString(),
       url: "https://24h.com.vn/article-8",
@@ -244,9 +304,69 @@ export function useMentionsData(options: UseMentionsOptions = {}) {
     try {
       setLoading(true);
       
-      let fetchedMentions: Mention[] = [];
       let fetchedWorkspaces: Workspace[] = [];
       let fetchedFromReal = false;
+      // Fetch from Firebase
+      let fetchedMentions: Mention[] = [];
+      try {
+        const mentionsRef = collection(dbSecond, "mentions_nlp_demo");
+        const snapshot = await getDocs(mentionsRef);
+
+        fetchedMentions = snapshot.docs.map(doc => {
+          const data = doc.data();
+          
+          // Map platform from source
+          let platform = data.source || "unknown";
+          
+          // Map workspace from brand
+          let workspace_id = "ws-1";
+          const brandStr = String(data.brand || "").toLowerCase();
+          if (brandStr.includes("highland")) workspace_id = "ws-1";
+          else if (brandStr.includes("phúc long") || brandStr.includes("phuclong")) workspace_id = "ws-2";
+          else if (brandStr.includes("katinat")) workspace_id = "ws-3";
+          else workspace_id = data.brand || "ws-1";
+
+          // Normalize sentiment to valid enum values
+          const rawSentiment = String(data.baseline_sentiment || data.sentiment || "").toLowerCase();
+          let sentiment: Mention["sentiment"] = "neutral";
+          if (rawSentiment.includes("positive") || rawSentiment.includes("pos")) sentiment = "positive";
+          else if (rawSentiment.includes("negative") || rawSentiment.includes("neg")) sentiment = "negative";
+
+          // Normalize topic to valid enum values
+          const rawTopic = String(data.baseline_topic || data.topic || "").toLowerCase();
+          const validTopics: Mention["topic"][] = ["quality", "price", "service", "staff", "delivery", "experience", "legal", "operation", "marketing", "competitor", "other"];
+          const topic: Mention["topic"] = validTopics.find(t => rawTopic.includes(t)) || "other";
+
+          const fallbackTime = normalizeDate(
+            data.analyzed_at || data.crawled_at || data.created_at,
+          );
+          const postedAt = normalizeDate(
+            data.post_date || data.posted_at || data.created_at,
+            fallbackTime,
+          );
+          const createdAt = normalizeDate(data.crawled_at || data.analyzed_at, fallbackTime);
+
+          return {
+            id: doc.id,
+            workspace_id: workspace_id,
+            platform: platform,
+            content: data.content || data.text || "(Không có nội dung)",
+            author: data.author_name || data.author || "Khách hàng",
+            sentiment,
+            topic,
+            credibility_score: parseFloat(data.baseline_confidence) || data.credibility_score || 0.8,
+            created_at: createdAt,
+            posted_at: postedAt,
+            url: data.url || "",
+          } as Mention;
+        });
+      } catch (err) {
+        console.error("Error fetching from Firebase:", err);
+      }
+
+      // Use fetched data or fallback to mock if empty
+      const mentions = fetchedMentions.length > 0 ? fetchedMentions : generateMockMentions();
+      const workspaces = generateMockWorkspaces();
 
       if (dbSecond) {
         try {
@@ -290,7 +410,8 @@ export function useMentionsData(options: UseMentionsOptions = {}) {
                 sentiment: (sentiment === "positive" || sentiment === "negative" || sentiment === "neutral" ? sentiment : "neutral") as any,
                 topic: topic as any,
                 credibility_score: Number(d.baseline_confidence || 0.8),
-                created_at: parseDate(d.posted_at || d.crawled_at || d.created_at),
+                created_at: parseDate(d.crawled_at || d.analyzed_at || d.created_at),
+                posted_at: parseDate(d.post_date || d.posted_at || d.created_at || d.crawled_at),
                 url: String(d.url || d.post_url || d.permalink || d.source_url || "")
               };
             });
@@ -336,6 +457,7 @@ export function useMentionsData(options: UseMentionsOptions = {}) {
                 topic: m.topic,
                 credibility_score: m.credibility_score,
                 created_at: m.created_at,
+                posted_at: m.posted_at,
                 url: m.url
               };
             });

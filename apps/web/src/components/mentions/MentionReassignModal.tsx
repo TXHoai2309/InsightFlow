@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { Mention } from "@/types/dashboard";
 
 interface MentionReassignModalProps {
@@ -31,20 +31,26 @@ const SENTIMENT_OPTIONS = [
   {
     value: "positive" as const,
     label: "Tích cực",
-    icon: "mood",
-    color: "text-green-600",
+    emoji: "😊",
+    activeClass: "border-green-500 bg-green-50 ring-2 ring-green-100 ring-offset-0",
+    textClass: "text-green-600 font-bold",
+    hoverClass: "hover:bg-green-50 hover:border-green-200",
   },
   {
     value: "neutral" as const,
     label: "Trung lập",
-    icon: "sentiment_neutral",
-    color: "text-outline",
+    emoji: "😐",
+    activeClass: "border-indigo-500 bg-indigo-50 ring-2 ring-indigo-100 ring-offset-0",
+    textClass: "text-indigo-600 font-bold",
+    hoverClass: "hover:bg-indigo-50 hover:border-indigo-200",
   },
   {
     value: "negative" as const,
     label: "Tiêu cực",
-    icon: "mood_bad",
-    color: "text-error",
+    emoji: "☹️",
+    activeClass: "border-red-500 bg-red-50 ring-2 ring-red-100 ring-offset-0",
+    textClass: "text-red-600 font-bold",
+    hoverClass: "hover:bg-red-50 hover:border-red-200",
   },
 ];
 
@@ -60,6 +66,21 @@ export function MentionReassignModal({
   >("neutral");
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
+
+  // Update internal state when a new mention is selected
+  useEffect(() => {
+    if (mention) {
+      setSelectedSentiment(mention.sentiment);
+      // Attempt to match the mention's topic with TOPIC_OPTIONS, 
+      // or default to empty if "other" or not found.
+      const matchedTopic = TOPIC_OPTIONS.find((t) => 
+        t.toLowerCase().includes(mention.topic.toLowerCase()) || 
+        mention.topic.toLowerCase().includes(t.toLowerCase())
+      );
+      setSelectedTopics(matchedTopic ? [matchedTopic] : []);
+      setNotes("");
+    }
+  }, [mention]);
 
   if (!isOpen || !mention) return null;
 
@@ -77,209 +98,175 @@ export function MentionReassignModal({
     });
   };
 
+  // Format date
+  const dateObj = new Date(mention.created_at);
+  const timeString = dateObj.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+  const dateString = dateObj.toLocaleDateString("vi-VN", { day: "numeric", month: "numeric", year: "2-digit" });
+  const formattedDate = `${timeString} ${dateString}`;
+
   return (
-    <div className="fixed inset-0 bg-on-background/20 z-50 flex items-center justify-center p-md overflow-y-auto">
-      {/* Glass Modal */}
-      <div className="glass-modal w-full max-w-[780px] rounded-2xl shadow-xl border border-outline-variant flex flex-col animate-in fade-in zoom-in duration-300 overflow-hidden my-md">
-        {/* Modal Header */}
-        <header className="p-lg border-b border-outline-variant flex justify-between items-center bg-surface-bright">
-          <div className="flex items-center gap-sm">
-            <div className="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center text-on-primary-container">
-              <span
-                className="material-symbols-outlined"
-                style={{ fontVariationSettings: "'FILL' 1" }}
-              >
-                auto_awesome
-              </span>
+    <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+      {/* Modal Container */}
+      <main className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200 my-4">
+        {/* Header */}
+        <header className="px-6 py-4 border-b border-gray-200 flex justify-between items-start">
+          <div>
+            <div className="flex items-center gap-2">
+              <svg className="h-5 w-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+              </svg>
+              <h1 className="text-xl font-bold text-gray-900 font-sans tracking-tight">Hiệu chỉnh phân tích AI</h1>
             </div>
-            <div>
-              <h2 className="font-headline-sm text-headline-sm text-on-background">
-                Hiệu chỉnh phân tích AI
-              </h2>
-              <p className="font-label-sm text-label-sm text-on-surface-variant">
-                Cải thiện độ chính xác cho mô hình huấn luyện
-              </p>
-            </div>
+            <p className="text-sm text-gray-500 mt-0.5">Cải thiện độ chính xác cho mô hình huấn luyện</p>
           </div>
-          <button
+          <button 
             onClick={onClose}
-            className="p-xs hover:bg-surface-container transition-colors rounded-full text-outline hover:text-on-surface"
             disabled={isLoading}
+            className="text-gray-400 hover:text-gray-600 transition-colors p-1"
           >
-            <span className="material-symbols-outlined">close</span>
+            <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
           </button>
         </header>
 
-        {/* Modal Content */}
-        <div className="flex-1 overflow-y-auto p-lg custom-scrollbar flex flex-col gap-xl">
-          {/* Original Mention Context */}
-          <section className="bg-surface-container-low p-lg rounded-lg border border-outline-variant/30">
-            <div className="flex items-center justify-between mb-xs">
-              <span className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">
-                Nội dung gốc
+        {/* Body */}
+        <div className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
+          {/* Original Content */}
+          <section>
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Nội dung gốc</h3>
+              <span className="text-xs text-gray-400 flex items-center gap-1 font-medium">
+                {mention.platform} • {formattedDate}
               </span>
-              <div className="flex gap-base">
-                <span className="text-xs bg-surface-variant px-2 py-0.5 rounded text-on-surface-variant font-medium">
-                  {mention.platform}
-                </span>
-                <span className="text-xs text-outline italic">
-                  {new Date(mention.created_at).toLocaleString("vi-VN", {
-                    day: "numeric",
-                    month: "numeric",
-                    year: "2-digit",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </span>
-              </div>
             </div>
-            <p className="font-body-sm text-body-sm text-on-surface line-clamp-3 leading-relaxed">
-              {mention.content}
-            </p>
+            <div className="bg-indigo-50/50 border border-indigo-100/50 p-4 rounded-xl">
+              <p className="text-gray-800 text-base md:text-lg leading-relaxed font-medium">
+                {mention.content}
+              </p>
+            </div>
           </section>
 
           {/* Sentiment Selection */}
-          <section className="flex flex-col gap-md">
-            <label className="font-headline-sm text-label-md text-on-background flex items-center gap-xs">
-              <span className="material-symbols-outlined text-[18px]">
-                sentiment_satisfied
-              </span>
-              Xác định lại Sắc thái
-            </label>
-            <div className="grid grid-cols-3 gap-md">
-              {SENTIMENT_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  onClick={() => setSelectedSentiment(option.value)}
-                  disabled={isLoading}
-                  className={`flex flex-col items-center justify-center gap-sm p-lg border-2 rounded-xl transition-all group ${
-                    selectedSentiment === option.value
-                      ? "border-primary bg-primary/5 shadow-[0_0_10px_rgba(70,72,212,0.1)]"
-                      : "border-outline-variant hover:border-primary/40 hover:bg-surface-container"
-                  } ${isLoading ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
-                >
-                  <span
-                    className={`material-symbols-outlined text-5xl transition-transform ${option.color} ${
-                      selectedSentiment === option.value
-                        ? "scale-110"
-                        : "group-hover:scale-110"
-                    }`}
-                    style={{
-                      fontVariationSettings:
-                        selectedSentiment === option.value
-                          ? "'FILL' 1"
-                          : "'FILL' 0",
-                    }}
+          <section>
+            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-1">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Xác định lại sắc thái
+            </h3>
+            <div className="grid grid-cols-3 gap-3">
+              {SENTIMENT_OPTIONS.map((option) => {
+                const isActive = selectedSentiment === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    onClick={() => setSelectedSentiment(option.value)}
+                    disabled={isLoading}
+                    className={`flex flex-col items-center justify-center p-4 border rounded-xl transition-all group ${
+                      isActive 
+                        ? option.activeClass
+                        : `border-gray-200 ${option.hoverClass}`
+                    } ${isLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                   >
-                    {option.icon}
-                  </span>
-                  <span
-                    className={`font-body-sm transition-colors ${
-                      selectedSentiment === option.value
-                        ? "text-primary font-bold"
-                        : "text-on-surface-variant"
-                    }`}
-                  >
-                    {option.label}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </section>
-
-          {/* Topic Selection */}
-          <section className="flex flex-col gap-md">
-            <label className="font-headline-sm text-label-md text-on-background flex items-center gap-xs">
-              <span className="material-symbols-outlined text-[18px]">
-                label
-              </span>
-              Gán nhãn Chủ đề
-            </label>
-            <div className="flex flex-wrap gap-sm">
-              {TOPIC_OPTIONS.map((topic) => (
-                <button
-                  key={topic}
-                  onClick={() => handleTopicToggle(topic)}
-                  disabled={isLoading}
-                  className={`px-sm py-1.5 rounded-full font-label-md border transition-all ${
-                    selectedTopics.includes(topic)
-                      ? "bg-primary text-on-primary border-primary"
-                      : "bg-surface-container text-on-surface-variant border-outline-variant hover:border-primary-container"
-                  } ${isLoading ? "opacity-50 cursor-not-allowed" : "cursor-pointer"} flex items-center gap-xs`}
-                >
-                  <span>{topic}</span>
-                  {selectedTopics.includes(topic) && (
-                    <span className="material-symbols-outlined text-[16px]">
-                      check
+                    <span className={`text-3xl mb-2 transition-all duration-300 ${isActive ? 'scale-110' : 'grayscale group-hover:grayscale-0 group-hover:scale-110'}`}>
+                      {option.emoji}
                     </span>
-                  )}
-                </button>
-              ))}
+                    <span className={`text-sm ${isActive ? option.textClass : 'font-medium text-gray-600'}`}>
+                      {option.label}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </section>
 
-          {/* Additional Notes */}
-          <section className="flex flex-col gap-md">
-            <label className="font-headline-sm text-label-md text-on-background flex items-center gap-xs">
-              <span className="material-symbols-outlined text-[18px]">
-                sticky_note_2
-              </span>
+          {/* Topic Tagging */}
+          <section>
+            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-1">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+              </svg>
+              Gán nhãn Chủ đề
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {TOPIC_OPTIONS.map((topic) => {
+                const isActive = selectedTopics.includes(topic);
+                return (
+                  <button
+                    key={topic}
+                    onClick={() => handleTopicToggle(topic)}
+                    disabled={isLoading}
+                    className={`px-4 py-1.5 border rounded-full text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                      isActive
+                        ? "bg-indigo-600 border-indigo-600 text-white shadow-sm"
+                        : "bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-200 hover:border-gray-300"
+                    } ${isLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                  >
+                    {topic}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          {/* Feedback Notes */}
+          <section>
+            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-1">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
               Ghi chú thêm (không bắt buộc)
-            </label>
+            </h3>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               disabled={isLoading}
-              className="w-full h-32 bg-surface border border-outline-variant rounded-lg p-md font-body-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all placeholder:text-outline disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full h-24 p-4 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all outline-none text-sm placeholder:text-gray-400 disabled:opacity-50 resize-none"
               placeholder="Nhập phản hồi hoặc lý do bạn gán lại kết quả này..."
             />
           </section>
         </div>
 
-        {/* Modal Footer */}
-        <footer className="p-lg bg-surface-container-low border-t border-outline-variant rounded-b-xl flex items-center justify-between">
-          <div className="flex items-center gap-xs text-outline font-label-sm">
-            <span className="material-symbols-outlined text-[16px]">info</span>
-            <span>Dữ liệu sẽ được gửi về máy chủ huấn luyện</span>
+        {/* Footer */}
+        <footer className="px-6 py-4 border-t border-gray-200 flex items-center justify-between bg-gray-50">
+          <div className="flex items-center gap-1.5 text-[10px] text-gray-400 uppercase font-semibold">
+            <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Dữ liệu sẽ được gửi về máy chủ huấn luyện
           </div>
-          <div className="flex gap-md">
+          <div className="flex gap-3">
             <button
               onClick={onClose}
               disabled={isLoading}
-              className="px-lg py-md rounded-lg font-label-md text-on-surface-variant hover:bg-surface-container transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-5 py-2 text-sm font-semibold text-gray-600 hover:text-gray-800 transition-colors disabled:opacity-50"
             >
               Hủy
             </button>
             <button
               onClick={handleSubmit}
               disabled={isLoading}
-              className="px-lg py-md bg-primary text-on-primary rounded-lg font-label-md shadow-sm hover:bg-primary-container active:scale-95 transition-all flex items-center gap-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold flex items-center gap-2 hover:bg-indigo-700 shadow-sm shadow-indigo-200 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <span
-                className="material-symbols-outlined text-[18px]"
-                style={{ fontVariationSettings: "'FILL' 1" }}
-              >
-                upgrade
-              </span>
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
               {isLoading ? "Đang xử lý..." : "Cập nhật & Huấn luyện AI"}
             </button>
           </div>
         </footer>
-      </div>
+      </main>
 
       <style>{`
-        .glass-modal {
-          background: rgba(255, 255, 255, 0.95);
-          backdrop-filter: blur(10px);
-        }
         .custom-scrollbar::-webkit-scrollbar {
-          width: 4px;
+          width: 6px;
         }
         .custom-scrollbar::-webkit-scrollbar-track {
           background: transparent;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #e2e8f0;
+          background: #D1D5DB;
           border-radius: 10px;
         }
       `}</style>
