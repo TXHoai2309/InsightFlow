@@ -2,7 +2,7 @@ import TopNavBar from "@/components/home/TopNavBar";
 import IndustryHeroSection from "@/components/nganh/IndustryHeroSection";
 import IndustryGridSection from "@/components/nganh/IndustryGridSection";
 import IndustryBentoSection from "@/components/nganh/IndustryBentoSection";
-import IndustryCTASection from "@/components/nganh/IndustryCTASection";
+import FinalCTASection from "@/components/home/FinalCTASection";
 
 export const metadata = {
   title: "Ngành | InsightFlow AI Media Monitoring",
@@ -18,7 +18,7 @@ export default function NganhPage() {
         <IndustryHeroSection />
         <IndustryGridSection />
         <IndustryBentoSection />
-        <IndustryCTASection />
+        <FinalCTASection />
       </div>
     </div>
   );

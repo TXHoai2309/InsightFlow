@@ -1,38 +1,81 @@
 "use client";
 
+import { useIntersectionObserver, useCountUp } from "@/hooks/useIntersectionObserver";
+
 export default function IndustryBentoSection() {
+  const { ref: chartRef, hasIntersected: chartVisible } = useIntersectionObserver();
+  const { ref: statsRef, hasIntersected: statsVisible } = useIntersectionObserver();
+  const { ref: bottomCardsRef, hasIntersected: bottomCardsVisible } = useIntersectionObserver();
+
+  const accuracyCount = useCountUp(98, 2000, statsVisible);
+
   return (
-    <section className="py-[80px] px-6 max-w-[1200px] mx-auto">
+    <section className="py-[60px] px-6 max-w-[1200px] mx-auto overflow-hidden">
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes fadeInUp {
+          from { opacity: 0; transform: translateY(40px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in-up {
+          animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .bento-card-bottom {
+          background: #FFFFFF;
+          border: 1px solid rgba(109,76,255,0.12);
+          border-radius: 20px;
+          box-shadow: 0 4px 20px rgba(109,76,255,0.06);
+          transition: all 0.3s ease;
+        }
+        .bento-card-bottom:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 12px 32px rgba(109,76,255,0.12);
+        }
+      `}} />
       <div className="grid grid-cols-12 gap-6">
         {/* Main data visualization card */}
-        <div className="col-span-12 md:col-span-8 bg-[#dee8ff] rounded-3xl p-8 relative overflow-hidden h-[400px]">
+        <div 
+          ref={chartRef}
+          className="col-span-12 md:col-span-8 bg-white rounded-3xl p-6 relative overflow-hidden h-[340px]"
+          style={{ border: "1px solid #E5E7EB" }}
+        >
           <div className="relative z-10 max-w-md">
-            <h3 className="text-[32px] leading-[40px] tracking-[-0.02em] font-bold text-[#4648d4] mb-4">
+            <h3 
+              className="text-[28px] leading-[36px] tracking-[-0.02em] font-bold mb-3"
+              style={{ background: "linear-gradient(90deg, #6D4CFF, #3B82F6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}
+            >
               Dữ liệu thông minh, Hành động kịp thời
             </h3>
-            <p className="text-[16px] leading-[24px] text-[#464554]">
+            <p className="text-[14px] leading-[22px] text-[#64748B]">
               Hệ thống của chúng tôi thu thập hàng triệu mẩu tin mỗi ngày từ
               Facebook, TikTok, YouTube và Báo chí để đưa ra cái nhìn toàn cảnh
               nhất.
             </p>
           </div>
           {/* Decorative visualization mock */}
-          <div className="absolute right-6 bottom-6 w-[55%] h-[75%] flex items-end justify-end">
-            <div className="w-full h-full rounded-2xl bg-white/60 backdrop-blur-md border border-white shadow-xl flex flex-col justify-end p-4 gap-2">
+          <div className="absolute right-4 bottom-4 w-[60%] h-[75%] flex items-end justify-end">
+            <div className="w-full h-full rounded-2xl bg-white/60 backdrop-blur-md border border-[#E5E7EB] shadow-xl flex flex-col justify-end p-4 gap-3">
               {/* Mock bar chart */}
               {[
-                { label: "Facebook", width: "w-[90%]", color: "bg-[#4648d4]" },
-                { label: "TikTok", width: "w-[70%]", color: "bg-[#6063ee]" },
-                { label: "YouTube", width: "w-[55%]", color: "bg-[#c0c1ff]" },
-                { label: "Báo chí", width: "w-[40%]", color: "bg-[#e1e0ff]" },
+                { label: "Facebook", width: 90, color: "#6D4CFF" },
+                { label: "TikTok", width: 70, color: "#3B82F6" },
+                { label: "YouTube", width: 55, color: "#A78BFA" },
+                { label: "Báo chí", width: 40, color: "#60A5FA" },
               ].map((bar) => (
                 <div key={bar.label} className="flex items-center gap-2">
-                  <span className="text-[11px] text-[#464554] w-14 text-right shrink-0">
+                  <span className="text-[12px] font-medium text-[#64748B] w-16 text-right shrink-0">
                     {bar.label}
                   </span>
-                  <div
-                    className={`h-5 ${bar.width} ${bar.color} rounded-full transition-all duration-700`}
-                  />
+                  <div className="flex-1 bg-gray-100 rounded-full h-6 relative overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-1000 ease-out flex items-center px-2 text-[10px] font-bold text-white"
+                      style={{ 
+                        width: chartVisible ? `${bar.width}%` : "0%", 
+                        background: bar.color 
+                      }}
+                    >
+                      {chartVisible ? `${bar.width}%` : ""}
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
@@ -40,58 +83,87 @@ export default function IndustryBentoSection() {
         </div>
 
         {/* Accuracy badge */}
-        <div className="col-span-12 md:col-span-4 bg-[#4648d4] rounded-3xl p-8 flex flex-col justify-center text-white">
-          <div className="text-[64px] leading-none font-bold mb-4">98%</div>
-          <h4 className="text-[20px] font-semibold mb-2">
-            Độ chính xác AI Tiếng Việt
-          </h4>
-          <p className="text-[14px] leading-[20px] opacity-90">
-            Mô hình ngôn ngữ lớn (LLM) được huấn luyện riêng cho ngữ cảnh và
-            tiếng lóng của người Việt trên mạng xã hội.
-          </p>
+        <div 
+          ref={statsRef}
+          className="col-span-12 md:col-span-4 rounded-3xl p-6 flex flex-col justify-center text-white relative overflow-hidden"
+          style={{ background: "linear-gradient(135deg, #5B3FE8, #6D4CFF, #7C3AED)" }}
+        >
+          {/* Vòng tròn trang trí mờ */}
+          <div 
+            className="absolute top-[-20%] right-[-10%] rounded-full bg-white opacity-10 pointer-events-none"
+            style={{ width: "200px", height: "200px" }}
+          ></div>
+          <div 
+            className="absolute bottom-[-10%] left-[-20%] rounded-full bg-white opacity-10 pointer-events-none"
+            style={{ width: "150px", height: "150px" }}
+          ></div>
+
+          <div className="relative z-10">
+            <div className="text-[52px] leading-none font-bold mb-3">{accuracyCount}%</div>
+            <h4 className="text-[18px] font-semibold mb-2">
+              Độ chính xác AI Tiếng Việt
+            </h4>
+            <p className="text-[13px] leading-[20px] text-white/90">
+              Mô hình ngôn ngữ lớn (LLM) được huấn luyện riêng cho ngữ cảnh và
+              tiếng lóng của người Việt trên mạng xã hội.
+            </p>
+          </div>
         </div>
 
-        {/* Real-time card */}
-        <div className="col-span-12 md:col-span-4 bg-[#d8e3fb] rounded-3xl p-8 flex flex-col items-center text-center">
-          <span className="material-symbols-outlined text-[48px] text-[#4648d4] mb-4">
-            speed
-          </span>
-          <h4 className="text-[20px] font-semibold text-[#111c2d] mb-2">
-            Thời gian thực
-          </h4>
-          <p className="text-[14px] leading-[20px] text-[#464554]">
-            Cập nhật dữ liệu mỗi 5 phút, đảm bảo bạn không bỏ lỡ bất kỳ biến
-            động nào của thị trường.
-          </p>
-        </div>
-
-        {/* Scalable card */}
-        <div className="col-span-12 md:col-span-8 bg-[#d8e3fb] rounded-3xl p-8 flex items-center gap-8">
-          {/* Icon illustration */}
-          <div className="w-1/3 shrink-0 flex items-center justify-center">
-            <div className="w-28 h-28 rounded-2xl bg-white/70 flex items-center justify-center shadow-md">
-              <span
-                className="material-symbols-outlined text-[56px] text-[#4648d4]"
-                style={{ fontVariationSettings: "'FILL' 1" }}
-              >
-                corporate_fare
+        {/* Nửa dưới với nền nhẹ */}
+        <div ref={bottomCardsRef} className="col-span-12 grid grid-cols-12 gap-6 p-4 -mx-4 bg-[#f8f7ff] rounded-3xl mt-0">
+          {/* Real-time card */}
+          <div className={`col-span-12 md:col-span-4 bento-card-bottom p-6 flex flex-col items-center text-center opacity-0 ${bottomCardsVisible ? 'animate-fade-in-up' : ''}`} style={{ animationDelay: "0s" }}>
+            <div 
+              className="inline-flex items-center justify-center rounded-[12px] p-3 mb-4"
+              style={{ background: "rgba(109,76,255,0.08)" }}
+            >
+              <span className="material-symbols-outlined text-[28px]" style={{ color: "#6D4CFF", fontVariationSettings: "'FILL' 1" }}>
+                speed
               </span>
             </div>
-          </div>
-          <div>
-            <h4 className="text-[20px] font-semibold text-[#111c2d] mb-2">
-              Phù hợp cho mọi quy mô
+            <h4 className="text-[18px] font-semibold text-[#1a1a2e] mb-2">
+              Thời gian thực
             </h4>
-            <p className="text-[14px] leading-[20px] text-[#464554] mb-4">
-              Từ doanh nghiệp Startup đến các tập đoàn đa quốc gia, InsightFlow
-              cung cấp các gói dịch vụ linh hoạt theo nhu cầu thực tế.
+            <p className="text-[14px] leading-[22px] text-[#64748B]">
+              Cập nhật dữ liệu mỗi 5 phút, đảm bảo bạn không bỏ lỡ bất kỳ biến
+              động nào của thị trường.
             </p>
-            <button className="text-[#4648d4] font-bold text-[14px] flex items-center gap-1 hover:underline transition-all">
-              Tìm hiểu thêm
-              <span className="material-symbols-outlined text-[18px]">
-                arrow_forward
-              </span>
-            </button>
+          </div>
+
+          {/* Scalable card */}
+          <div className={`col-span-12 md:col-span-8 bento-card-bottom p-6 flex items-center gap-6 opacity-0 ${bottomCardsVisible ? 'animate-fade-in-up' : ''}`} style={{ animationDelay: "0.1s" }}>
+            {/* Icon illustration */}
+            <div className="w-1/3 shrink-0 flex items-center justify-center hidden sm:flex">
+              <div className="w-24 h-24 rounded-2xl bg-[#f8f7ff] flex items-center justify-center shadow-sm border border-gray-100">
+                <div 
+                  className="inline-flex items-center justify-center rounded-[12px] p-3"
+                  style={{ background: "rgba(109,76,255,0.08)" }}
+                >
+                  <span
+                    className="material-symbols-outlined text-[40px]"
+                    style={{ fontVariationSettings: "'FILL' 1", color: "#6D4CFF" }}
+                  >
+                    corporate_fare
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <h4 className="text-[18px] font-semibold text-[#1a1a2e] mb-2">
+                Phù hợp cho mọi quy mô
+              </h4>
+              <p className="text-[14px] leading-[22px] text-[#64748B] mb-3">
+                Từ doanh nghiệp Startup đến các tập đoàn đa quốc gia, InsightFlow
+                cung cấp các gói dịch vụ linh hoạt theo nhu cầu thực tế.
+              </p>
+              <button className="font-bold text-[14px] flex items-center gap-1 hover:underline transition-all" style={{ color: "#6D4CFF" }}>
+                Tìm hiểu thêm
+                <span className="material-symbols-outlined text-[18px]">
+                  arrow_forward
+                </span>
+              </button>
+            </div>
           </div>
         </div>
       </div>

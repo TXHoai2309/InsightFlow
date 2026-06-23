@@ -289,7 +289,7 @@ export default function HeroSection() {
                 </Link>
               ) : (
                 <Link
-                  href="/login"
+                  href="/dashboard"
                   className="flex items-center justify-center gap-2 text-white px-7 py-3.5 rounded-[12px] font-bold text-[15px] transition-all active:scale-95"
                   style={{
                     background: "linear-gradient(135deg, #6D4CFF, #4234b6)",
