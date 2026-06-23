@@ -20,8 +20,24 @@ const normalizeDate = (field: unknown, fallback = new Date().toISOString()) => {
     return Number.isNaN(field.getTime()) ? fallback : field.toISOString();
   }
 
-  const raw = String(field).trim();
+  let raw = String(field).trim();
   if (!raw || raw === "[object Object]") return fallback;
+
+  // Handle DD/MM/YYYY or DD/MM/YYYY HH:mm:ss format commonly used in the DB
+  const vnDateMatch = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+  if (vnDateMatch) {
+    const day = parseInt(vnDateMatch[1], 10);
+    const month = parseInt(vnDateMatch[2], 10) - 1;
+    const year = parseInt(vnDateMatch[3], 10);
+    const hour = vnDateMatch[4] ? parseInt(vnDateMatch[4], 10) : 0;
+    const minute = vnDateMatch[5] ? parseInt(vnDateMatch[5], 10) : 0;
+    const second = vnDateMatch[6] ? parseInt(vnDateMatch[6], 10) : 0;
+    
+    const parsedDate = new Date(year, month, day, hour, minute, second);
+    if (!Number.isNaN(parsedDate.getTime())) {
+      return parsedDate.toISOString();
+    }
+  }
 
   const date = new Date(raw);
   return Number.isNaN(date.getTime()) ? fallback : date.toISOString();
