@@ -3,17 +3,155 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ═══════════════════════════════════════════════════════════════
+   DESIGN TOKEN SYSTEM — CSS Custom Properties
+   Đây là nguồn sự thật duy nhất (Single Source of Truth) cho màu sắc.
+   Developer chỉ cần dùng var(--color-*) hoặc Tailwind class tương ứng.
+   ═══════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Backgrounds ─────────────────────────────────────────── */
+  --color-bg-primary:        #f9f9ff;   /* Nền chính của trang */
+  --color-bg-surface:        #ffffff;   /* Nền card, modal, sidebar */
+  --color-bg-surface-raised: #f0f3ff;   /* Nền raised (hover, header search) */
+  --color-bg-surface-high:   #e7eeff;   /* Nền elevated cao hơn */
+  --color-bg-overlay:        #dee8ff;   /* Nền overlay / highlight */
+
+  /* ── Borders ─────────────────────────────────────────────── */
+  --color-border:            #e2e4f0;   /* Border mặc định */
+  --color-border-strong:     #c7c4d7;   /* Border đậm hơn */
+
+  /* ── Text ────────────────────────────────────────────────── */
+  --color-text-primary:      #111c2d;   /* Chữ chính (heading, body) */
+  --color-text-secondary:    #4a4a6a;   /* Chữ phụ (sub-text) */
+  --color-text-muted:        #9898b0;   /* Chữ mờ (placeholder, meta) */
+  --color-text-disabled:     #c7c4d7;   /* Chữ disabled */
+
+  /* ── Brand / Primary ─────────────────────────────────────── */
+  --color-brand:             #6c63ff;   /* Màu thương hiệu chính */
+  --color-brand-hover:       #5a52d5;   /* Brand hover state */
+  --color-brand-subtle:      #eef0ff;   /* Brand background nhẹ */
+  --color-brand-border:      #d8d6ff;   /* Brand border */
+
+  /* ── Semantic Status ─────────────────────────────────────── */
+  --color-success:           #22c55e;
+  --color-success-subtle:    #dcfce7;
+  --color-warning:           #f59e0b;
+  --color-warning-subtle:    #fef3c7;
+  --color-error:             #ef4444;
+  --color-error-subtle:      #fee2e2;
+  --color-info:              #3b82f6;
+  --color-info-subtle:       #dbeafe;
+
+  /* ── Chart Colors (Light Mode) ───────────────────────────── */
+  --chart-positive:          #4648d4;   /* Tích cực */
+  --chart-positive-bg:       rgba(70, 72, 212, 0.10);
+  --chart-negative:          #ba1a1a;   /* Tiêu cực */
+  --chart-negative-bg:       rgba(186, 26, 26, 0.05);
+  --chart-neutral:           #c7c4d7;   /* Trung lập */
+  --chart-neutral-bg:        rgba(199, 196, 215, 0.15);
+
+  /* ── Misc ────────────────────────────────────────────────── */
+  --shadow-card:             0 4px 20px -2px rgba(73, 75, 214, 0.04);
+  --shadow-card-hover:       0 12px 30px -4px rgba(73, 75, 214, 0.08);
+  --shadow-dropdown:         0 2px 12px rgba(108, 99, 255, 0.07);
+  --transition-theme:        background-color 0.3s ease, color 0.3s ease,
+                             border-color 0.3s ease, box-shadow 0.3s ease;
+
+  /* ── Platform Colors (Light Mode) ────────────────────────── */
+  --color-platform-facebook:    #1877F2;
+  --color-platform-tiktok:      #010101;
+  --color-platform-youtube:     #FF0000;
+  --color-platform-thread:      #1c1c1e;
+  --color-platform-be:          #FFC107;
+  --color-platform-google-maps: #34A853;
+  --color-platform-news:        #4648d4;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   DARK MODE OVERRIDES
+   Thêm class "dark" vào <html> để kích hoạt Dark Mode.
+   ═══════════════════════════════════════════════════════════════ */
+.dark {
+  /* ── Backgrounds ─────────────────────────────────────────── */
+  --color-bg-primary:        #111318;   /* Nền chính — xanh đen sâu */
+  --color-bg-surface:        #1c1c24;   /* Nền card — tối hơn 1 tông */
+  --color-bg-surface-raised: #252530;   /* Nền raised */
+  --color-bg-surface-high:   #2e2e3a;   /* Nền elevated */
+  --color-bg-overlay:        #363645;   /* Overlay / highlight */
+
+  /* ── Borders ─────────────────────────────────────────────── */
+  --color-border:            #2e2e3a;   /* Border tối */
+  --color-border-strong:     #44445a;   /* Border đậm */
+
+  /* ── Text ────────────────────────────────────────────────── */
+  --color-text-primary:      #e4e6eb;   /* Chữ chính — trắng mờ WCAG AA */
+  --color-text-secondary:    #a0a0b8;   /* Chữ phụ — xám trung tính */
+  --color-text-muted:        #6e6e88;   /* Chữ mờ */
+  --color-text-disabled:     #44445a;   /* Disabled */
+
+  /* ── Brand / Primary ─────────────────────────────────────── */
+  --color-brand:             #7b74ff;   /* Brand sáng hơn cho nền tối */
+  --color-brand-hover:       #9b8ff8;
+  --color-brand-subtle:      #252538;   /* Brand bg nhẹ (dark) */
+  --color-brand-border:      #3a3860;
+
+  /* ── Semantic Status (Dark) ──────────────────────────────── */
+  --color-success:           #4ade80;
+  --color-success-subtle:    #14301f;
+  --color-warning:           #fbbf24;
+  --color-warning-subtle:    #2d2008;
+  --color-error:             #f87171;
+  --color-error-subtle:      #2d0a0a;
+  --color-info:              #60a5fa;
+  --color-info-subtle:       #0d1f3c;
+
+  /* ── Chart Colors (Dark — Pastel Neon, dịu mắt trên nền tối) */
+  --chart-positive:          #818cf8;   /* Indigo pastel */
+  --chart-positive-bg:       rgba(129, 140, 248, 0.15);
+  --chart-negative:          #f87171;   /* Red pastel */
+  --chart-negative-bg:       rgba(248, 113, 113, 0.10);
+  --chart-neutral:           #94a3b8;   /* Slate */
+  --chart-neutral-bg:        rgba(148, 163, 184, 0.12);
+
+  /* ── Misc ────────────────────────────────────────────────── */
+  --shadow-card:             0 4px 20px -2px rgba(0, 0, 0, 0.3);
+  --shadow-card-hover:       0 12px 30px -4px rgba(0, 0, 0, 0.4);
+  --shadow-dropdown:         0 2px 16px rgba(0, 0, 0, 0.4);
+
+  /* ── Platform Colors (Dark Mode) ─────────────────────────── */
+  --color-platform-facebook:    #3b82f6;
+  --color-platform-tiktok:      #ffffff;
+  --color-platform-youtube:     #ef4444;
+  --color-platform-thread:      #e4e6eb;
+  --color-platform-be:          #fbbf24;
+  --color-platform-google-maps: #4ade80;
+  --color-platform-news:        #818cf8;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   GLOBAL BASE STYLES
+   ═══════════════════════════════════════════════════════════════ */
 html {
   scroll-behavior: smooth;
 }
 
 * {
   box-sizing: border-box;
+  /* Smooth theme transition cho tất cả elements */
+  transition: background-color 0.3s ease, border-color 0.3s ease,
+    color 0.15s ease, box-shadow 0.3s ease;
+}
+
+/* Override transition cho elements không cần (performance) */
+*, *::before, *::after {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  background-color: #f9f9ff;
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
   font-family: 'Inter', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -26,16 +164,27 @@ body {
   line-height: 1;
 }
 
-/* Glass Card Style */
+/* ═══════════════════════════════════════════════════════════════
+   COMPONENT CLASSES (Token-based)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Glass Card — light & dark aware */
 .glass-card {
-  @apply bg-white/85 backdrop-blur-lg border border-surface-container-high;
-  box-shadow: 0 4px 20px -2px rgba(73, 75, 214, 0.04);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background-color: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-card);
+  transition: var(--transition-theme), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .glass-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 12px 30px -4px rgba(73, 75, 214, 0.08);
+  box-shadow: var(--shadow-card-hover);
+}
+
+/* Dark mode glass card override for backdrop-blur */
+.dark .glass-card {
+  background-color: var(--color-bg-surface);
 }
 
 /* Hover lift for industry cards */
@@ -46,86 +195,203 @@ body {
 .hover-lift:hover {
   transform: translateY(-8px);
   box-shadow:
-    0 20px 25px -5px rgba(0, 0, 0, 0.05),
+    0 20px 25px -5px rgba(0, 0, 0, 0.1),
     0 10px 10px -5px rgba(0, 0, 0, 0.04);
 }
 
-/* Color scheme from DESIGN.md */
+/* ── App Surface Utility Classes ────────────────────────────── */
 @layer components {
-  .surface {
-    @apply bg-surface;
+  .bg-app {
+    background-color: var(--color-bg-primary);
+  }
+  .bg-surface-card {
+    background-color: var(--color-bg-surface);
+  }
+  .bg-surface-raised {
+    background-color: var(--color-bg-surface-raised);
+  }
+  .border-app {
+    border-color: var(--color-border);
+  }
+  .text-app-primary {
+    color: var(--color-text-primary);
+  }
+  .text-app-secondary {
+    color: var(--color-text-secondary);
+  }
+  .text-app-muted {
+    color: var(--color-text-muted);
   }
 
-  .surface-container-low {
-    @apply bg-surface-container-low;
-  }
-
-  .surface-container {
-    @apply bg-surface-container;
-  }
-
-  .surface-container-high {
-    @apply bg-surface-container-high;
-  }
-
-  .primary {
-    @apply text-primary;
-  }
-
-  .on-surface {
-    @apply text-on-surface;
-  }
-
-  .on-surface-variant {
-    @apply text-on-surface-variant;
-  }
-
-  .outline {
-    @apply text-outline;
-  }
-
-  .outline-variant {
-    @apply text-outline-variant;
-  }
-
-  .error {
-    @apply text-error;
-  }
-
-  /* Sentiment badges */
+  /* Sentiment badges — dark aware */
   .badge-positive {
-    @apply px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-bold;
+    @apply px-2 py-1 rounded text-xs font-bold;
+    background-color: var(--color-success-subtle);
+    color: var(--color-success);
   }
 
   .badge-negative {
-    @apply px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-bold;
+    @apply px-2 py-1 rounded text-xs font-bold;
+    background-color: var(--color-error-subtle);
+    color: var(--color-error);
   }
 
   .badge-neutral {
-    @apply px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs font-bold;
+    @apply px-2 py-1 rounded text-xs font-bold;
+    background-color: var(--color-bg-surface-raised);
+    color: var(--color-text-secondary);
+  }
+
+  /* Select / Input dark mode reset */
+  .select-app {
+    background-color: var(--color-bg-surface);
+    color: var(--color-text-primary);
+    border-color: var(--color-border);
+  }
+
+  .select-app option {
+    background-color: var(--color-bg-surface);
+    color: var(--color-text-primary);
   }
 }
 
-/* Scrollbar styling */
+/* ── Tailwind semantic dark overrides ───────────────────────── */
+/* Khi dùng bg-white, bg-surface-container-low, etc trong dark mode */
+.dark .bg-white {
+  background-color: var(--color-bg-surface) !important;
+}
+
+.dark .bg-\[#F7F8FC\],
+.dark .bg-\[#f7f8fc\] {
+  background-color: var(--color-bg-surface-raised) !important;
+}
+
+.dark .bg-\[#F3F4FF\],
+.dark .bg-\[#f3f4ff\] {
+  background-color: var(--color-brand-subtle) !important;
+}
+
+/* Nổi bật màu sắc văn bản & icon trong dark mode */
+.dark .text-primary {
+  color: var(--color-brand) !important;
+}
+.dark .text-green-600 {
+  color: var(--color-success) !important;
+}
+.dark .text-amber-600 {
+  color: var(--color-warning) !important;
+}
+.dark .text-red-600 {
+  color: var(--color-error) !important;
+}
+
+.dark .bg-primary\/10 {
+  background-color: var(--color-brand-subtle) !important;
+}
+.dark .bg-green-500\/10 {
+  background-color: var(--color-success-subtle) !important;
+}
+.dark .bg-amber-500\/10 {
+  background-color: var(--color-warning-subtle) !important;
+}
+.dark .bg-red-500\/10 {
+  background-color: var(--color-error-subtle) !important;
+}
+
+/* Premium Glassmorphic Cards trong Dark Mode */
+.dark .glass-card {
+  background: linear-gradient(135deg, rgba(28, 28, 36, 0.9) 0%, rgba(20, 20, 26, 0.9) 100%) !important;
+  border-color: rgba(255, 255, 255, 0.05) !important;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3) !important;
+  backdrop-filter: blur(8px);
+}
+
+.dark .glass-card:hover {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.4) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SCROLLBAR STYLING
+   ═══════════════════════════════════════════════════════════════ */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f0f3ff;
+  background: var(--color-bg-surface-raised);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c7c4d7;
+  background: var(--color-border-strong);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #767586;
+  background: var(--color-text-muted);
 }
 
-/* ── Home page animations (moved from components to fix SSR hydration) ── */
+/* ═══════════════════════════════════════════════════════════════
+   FORM ELEMENTS — Dark Mode
+   ═══════════════════════════════════════════════════════════════ */
+.dark select,
+.dark input,
+.dark textarea {
+  color-scheme: dark;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   THEME TOGGLE BUTTON
+   ═══════════════════════════════════════════════════════════════ */
+.theme-toggle {
+  position: relative;
+  width: 52px;
+  height: 28px;
+  border-radius: 100px;
+  background-color: var(--color-bg-surface-raised);
+  border: 1.5px solid var(--color-border);
+  cursor: pointer;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+  display: flex;
+  align-items: center;
+  padding: 2px;
+  outline: none;
+}
+
+.theme-toggle:focus-visible {
+  box-shadow: 0 0 0 3px var(--color-brand-border);
+}
+
+.dark .theme-toggle {
+  background-color: var(--color-brand-subtle);
+  border-color: var(--color-brand-border);
+}
+
+.theme-toggle-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--color-brand);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 12px;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+    background-color 0.3s ease;
+  transform: translateX(0);
+  flex-shrink: 0;
+}
+
+.dark .theme-toggle-thumb {
+  transform: translateX(22px);
+  background: var(--color-brand);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   HOME PAGE ANIMATIONS (SSR-safe)
+   ═══════════════════════════════════════════════════════════════ */
 @keyframes heroSlideUp {
   from { opacity: 0; transform: translateY(28px); }
   to   { opacity: 1; transform: translateY(0); }

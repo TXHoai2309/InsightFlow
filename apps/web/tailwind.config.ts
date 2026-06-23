@@ -6,9 +6,15 @@ const config: Config = {
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
   ],
+  /**
+   * darkMode: 'class' — class="dark" on <html> toggles Dark Mode.
+   * ThemeContext.tsx manages this class + persists to localStorage.
+   */
+  darkMode: "class",
   theme: {
     extend: {
       colors: {
+        /* ── Material Design 3 tokens (giữ nguyên) ─────────────── */
         surface: "#f9f9ff",
         "surface-dim": "#cfdaf2",
         "surface-bright": "#f9f9ff",
@@ -56,6 +62,26 @@ const config: Config = {
         background: "#f9f9ff",
         "on-background": "#111c2d",
         "surface-variant": "#d8e3fb",
+
+        /* ── Semantic CSS-Variable tokens (Dark Mode-aware) ──────
+           Dùng các class này trong component để tự động đồng bộ
+           khi chuyển đổi Light/Dark Mode.                         */
+        "app-bg": "var(--color-bg-primary)",
+        "app-surface": "var(--color-bg-surface)",
+        "app-surface-raised": "var(--color-bg-surface-raised)",
+        "app-surface-high": "var(--color-bg-surface-high)",
+        "app-border": "var(--color-border)",
+        "app-border-strong": "var(--color-border-strong)",
+        "app-text": "var(--color-text-primary)",
+        "app-text-secondary": "var(--color-text-secondary)",
+        "app-text-muted": "var(--color-text-muted)",
+        "app-brand": "var(--color-brand)",
+        "app-brand-subtle": "var(--color-brand-subtle)",
+
+        /* ── Chart tokens ──────────────────────────────────────── */
+        "chart-positive": "var(--chart-positive)",
+        "chart-negative": "var(--chart-negative)",
+        "chart-neutral": "var(--chart-neutral)",
       },
       spacing: {
         "max-container": "1200px",
@@ -94,6 +120,7 @@ const config: Config = {
       boxShadow: {
         soft: "0px 4px 12px rgba(36, 16, 107, 0.04)",
         hover: "0px 8px 24px rgba(36, 16, 107, 0.08)",
+        "card-dark": "0px 4px 20px -2px rgba(0, 0, 0, 0.30)",
       },
     },
   },

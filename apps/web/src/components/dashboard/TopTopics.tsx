@@ -16,8 +16,14 @@ interface TopTopicsProps {
 export function TopTopics({ topics }: TopTopicsProps) {
   const { t } = useTranslation();
   return (
-    <div className="bg-white border border-outline-variant rounded-lg p-6 shadow-sm h-full">
-      <h4 className="font-bold text-lg text-on-surface mb-4">
+    <div
+      className="rounded-lg p-6 shadow-sm h-full"
+      style={{
+        backgroundColor: "var(--color-bg-surface)",
+        border: "1px solid var(--color-border)",
+      }}
+    >
+      <h4 className="font-bold text-lg mb-4" style={{ color: "var(--color-text-primary)" }}>
         Chủ đề thảo luận chính
       </h4>
 
@@ -25,7 +31,7 @@ export function TopTopics({ topics }: TopTopicsProps) {
         {topics.map((topic) => (
           <div
             key={topic.name}
-            className="px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-bold hover:bg-primary/20 transition-all cursor-pointer"
+            className="px-3 py-1 bg-[var(--color-brand-subtle)] text-[var(--color-brand)] border border-[var(--color-brand-border)] rounded-full text-xs font-bold hover:opacity-80 transition-all cursor-pointer"
             title={`P: ${topic.sentiment_breakdown.positive}, N: ${topic.sentiment_breakdown.negative}, Neu: ${topic.sentiment_breakdown.neutral}`}
           >
             {topic.name} ({topic.count})
@@ -33,21 +39,22 @@ export function TopTopics({ topics }: TopTopicsProps) {
         ))}
       </div>
 
-      <div className="mt-6 text-xs text-on-surface-variant">
-        <p className="font-bold mb-2 text-on-surface">
+      <div className="mt-6 p-4 rounded-lg border border-[var(--color-warning)]/20 text-xs transition-all duration-300" style={{ backgroundColor: "var(--color-warning-subtle)" }}>
+        <p className="font-bold mb-2 flex items-center gap-1 text-[var(--color-warning)]">
+          <span className="material-symbols-outlined text-[16px]">warning</span>
           Cảnh báo: Các chủ đề liên quan đến
         </p>
-        <ul className="space-y-1">
+        <ul className="space-y-1.5" style={{ color: "var(--color-text-secondary)" }}>
           <li>
-            • <span className="font-bold">Chất lượng (quality)</span> - sản
+            • <span className="font-bold" style={{ color: "var(--color-text-primary)" }}>Chất lượng (quality)</span> - sản
             phẩm, dịch vụ
           </li>
           <li>
-            • <span className="font-bold">Giá cả (price)</span> - tính cạnh
+            • <span className="font-bold" style={{ color: "var(--color-text-primary)" }}>Giá cả (price)</span> - tính cạnh
             tranh
           </li>
           <li>
-            • <span className="font-bold">Dịch vụ (service)</span> - chăm sóc
+            • <span className="font-bold" style={{ color: "var(--color-text-primary)" }}>Dịch vụ (service)</span> - chăm sóc
             khách hàng
           </li>
         </ul>
