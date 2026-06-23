@@ -312,7 +312,6 @@ export default function ReportsPage() {
       {previewReport && (
         <ReportPreviewModal 
           report={previewReport} 
-          brandName={previewReport.brand}
           onClose={() => setPreviewReport(null)}
           onExport={() => {
             handleExportPDF(previewReport);
