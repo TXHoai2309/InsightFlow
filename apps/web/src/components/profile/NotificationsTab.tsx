@@ -12,12 +12,14 @@ export default function NotificationsTab() {
   const [pushNotif, setPushNotif] = useState(true);
   const [crisisAlerts, setCrisisAlerts] = useState(true);
   const [dailyReports, setDailyReports] = useState(false);
+  const [selectedLang, setSelectedLang] = useState(i18n.language || 'vi');
   
   const [originalState, setOriginalState] = useState({
     emailNotif: true,
     pushNotif: true,
     crisisAlerts: true,
     dailyReports: false,
+    language: i18n.language || 'vi',
   });
 
   const [savingState, setSavingState] = useState<"idle" | "saving" | "saved">("idle");
@@ -35,11 +37,20 @@ export default function NotificationsTab() {
           setPushNotif(prefs.pushNotif ?? true);
           setCrisisAlerts(prefs.crisisAlerts ?? true);
           setDailyReports(prefs.dailyReports ?? false);
+          
+          if (prefs.language) {
+            setSelectedLang(prefs.language);
+            if (prefs.language !== i18n.language) {
+              i18n.changeLanguage(prefs.language);
+            }
+          }
+          
           setOriginalState({
             emailNotif: prefs.emailNotif ?? true,
             pushNotif: prefs.pushNotif ?? true,
             crisisAlerts: prefs.crisisAlerts ?? true,
             dailyReports: prefs.dailyReports ?? false,
+            language: prefs.language ?? i18n.language ?? 'vi',
           });
         }
       } catch (e) {
@@ -56,7 +67,11 @@ export default function NotificationsTab() {
       const { doc, setDoc } = await import("firebase/firestore");
       const { db } = await import("@/lib/firebase");
       
-      const newPrefs = { emailNotif, pushNotif, crisisAlerts, dailyReports };
+      const newPrefs = { emailNotif, pushNotif, crisisAlerts, dailyReports, language: selectedLang };
+      
+      if (selectedLang !== i18n.language) {
+        i18n.changeLanguage(selectedLang);
+      }
       
       await setDoc(doc(db, "users", user.uid), {
         notifications: newPrefs,
@@ -78,6 +93,7 @@ export default function NotificationsTab() {
     setPushNotif(originalState.pushNotif);
     setCrisisAlerts(originalState.crisisAlerts);
     setDailyReports(originalState.dailyReports);
+    setSelectedLang(originalState.language);
   };
 
   const Toggle = ({ 
@@ -191,9 +207,9 @@ export default function NotificationsTab() {
           </div>
           <div className="flex gap-1 shrink-0">
             <button
-              onClick={() => i18n.changeLanguage('vi')}
+              onClick={() => setSelectedLang('vi')}
               className={`px-3 py-1.5 text-[13px] font-semibold rounded-lg transition-all ${
-                i18n.language === 'vi'
+                selectedLang === 'vi'
                   ? 'bg-[#4648d4] text-white shadow-md'
                   : 'bg-[#f0f3ff] text-[#464554] hover:bg-[#dee8ff]'
               }`}
@@ -201,9 +217,9 @@ export default function NotificationsTab() {
               VI
             </button>
             <button
-              onClick={() => i18n.changeLanguage('en')}
+              onClick={() => setSelectedLang('en')}
               className={`px-3 py-1.5 text-[13px] font-semibold rounded-lg transition-all ${
-                i18n.language === 'en'
+                selectedLang === 'en'
                   ? 'bg-[#4648d4] text-white shadow-md'
                   : 'bg-[#f0f3ff] text-[#464554] hover:bg-[#dee8ff]'
               }`}
