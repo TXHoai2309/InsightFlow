@@ -8,6 +8,24 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { MobileNav } from "@/components/layout/MobileNav";
 import Footer from "@/components/home/Footer";
+import { ThemeProvider } from "@/contexts/ThemeContext";
+
+/**
+ * Anti-FOUC (Flash of Unstyled Content) Script.
+ * Được inject trực tiếp vào <head> TRƯỚC khi React hydrate.
+ * Đọc localStorage và set class "dark" lên <html> ngay lập tức
+ * để tránh màn hình trắng nháy khi reload trang ở dark mode.
+ */
+const antiFoucScript = `
+(function() {
+  try {
+    var t = localStorage.getItem('insightflow-theme');
+    if (t === 'dark') {
+      document.documentElement.classList.add('dark');
+    }
+  } catch(e) {}
+})();
+`;
 
 export default function RootLayout({
   children,
@@ -19,8 +37,10 @@ export default function RootLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <html lang="vi">
+    <html lang="vi" suppressHydrationWarning>
       <head>
+        {/* Anti-FOUC: set dark class trước React render để tránh flash */}
+        <script dangerouslySetInnerHTML={{ __html: antiFoucScript }} />
         <title>InsightFlow · Biến dữ liệu thành insight</title>
         <meta
           name="description"
@@ -42,27 +62,32 @@ export default function RootLayout({
         <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
         <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
       </head>
-      <body style={{ margin: 0, padding: 0, backgroundColor: "#f9f9ff" }}>
-        {hideShell ? (
-          <div className="flex flex-col min-h-screen">
-            <main className="flex-1">{children}</main>
-            <Footer />
-          </div>
-        ) : (
-          <div className="flex h-screen w-screen overflow-hidden">
-            <Sidebar
-              isOpen={sidebarOpen}
-              onClose={() => setSidebarOpen(false)}
-            />
-            {/* Trên desktop: ml-64 để nhường chỗ cho sidebar cố định */}
-            {/* Trên mobile: ml-0 vì sidebar là drawer overlay */}
-            <div className="flex flex-col flex-1 md:ml-64">
-              <Header onMenuToggle={() => setSidebarOpen((prev) => !prev)} />
-              <main className="flex-1 overflow-y-auto mt-16 pb-16 md:pb-0">{children}</main>
-              <MobileNav />
+      <body style={{ margin: 0, padding: 0, backgroundColor: "var(--color-bg-primary)" }}>
+        <ThemeProvider>
+          {hideShell ? (
+            <div className="flex flex-col min-h-screen">
+              <main className="flex-1">{children}</main>
+              <Footer />
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="flex h-screen w-screen overflow-hidden" style={{ backgroundColor: "var(--color-bg-primary)" }}>
+              <Sidebar
+                isOpen={sidebarOpen}
+                onClose={() => setSidebarOpen(false)}
+              />
+              <div className="flex flex-col flex-1 md:ml-64">
+                <Header onMenuToggle={() => setSidebarOpen((prev) => !prev)} />
+                <main
+                  className="flex-1 overflow-y-auto mt-16 pb-16 md:pb-0"
+                  style={{ backgroundColor: "var(--color-bg-primary)" }}
+                >
+                  {children}
+                </main>
+                <MobileNav />
+              </div>
+            </div>
+          )}
+        </ThemeProvider>
       </body>
     </html>
   );
