@@ -103,21 +103,17 @@ export default function LoginForm() {
         <div className="absolute bottom-[-10%] left-[-5%] w-[35vw] h-[35vw] rounded-full bg-[#645efb]/10 blur-[100px]" />
       </div>
 
-      <main className="w-full max-w-[480px] z-10">
+      <main className="w-full max-w-[480px]">
 
         {/* Logo */}
-        <div className="flex flex-col items-center mb-8">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-10 h-10 bg-[#4648d4] flex items-center justify-center rounded-lg shadow-lg">
-              <span className="material-symbols-outlined text-white text-[24px]"
-                style={{ fontVariationSettings: "'FILL' 1" }}>
-                insights
-              </span>
-            </div>
-            <span className="font-['Hanken_Grotesk'] text-2xl font-semibold text-[#111c2d] tracking-tight">
-              InsightFlow
-            </span>
-          </div>
+        <div className="flex flex-col items-center mb-2">
+          <Link href="/" className="flex items-center justify-center hover:opacity-80 transition-opacity w-[340px] h-[120px] relative">
+            <img 
+              src="/logo.png" 
+              alt="InsightFlow Logo" 
+              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[220px] max-w-none mix-blend-multiply pointer-events-none" 
+            />
+          </Link>
         </div>
 
         {/* Card */}

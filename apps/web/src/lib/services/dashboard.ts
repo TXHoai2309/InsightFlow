@@ -18,6 +18,8 @@ import {
   startAfter,
   QueryDocumentSnapshot,
   DocumentData,
+  doc,
+  updateDoc,
 } from "firebase/firestore";
 import type {
   Mention,
@@ -242,6 +244,7 @@ export class DashboardService {
             id: doc.id,
             workspace_id: String(d.workspace_id || d.brand || ""),
             platform: mapSourceToPlatform(d.source || d.platform || ""),
+            author: String(d.author || "Khách hàng"),
             content: String(d.content || d.text || ""),
             intent: d.intent || "none",
             intent_signals: d.intent_signals || [],
@@ -249,6 +252,17 @@ export class DashboardService {
             created_at: parseDate(d.created_at),
             expiry_at: d.expiry_at ? parseDate(d.expiry_at) : undefined,
             url: String(d.url || ""),
+            // Extended Contact Info
+            phone: d.phone ? String(d.phone) : undefined,
+            email: d.email ? String(d.email) : undefined,
+            zalo_id: d.zalo_id ? String(d.zalo_id) : undefined,
+            messenger_id: d.messenger_id ? String(d.messenger_id) : undefined,
+            social_profile_url: d.social_profile_url ? String(d.social_profile_url) : undefined,
+            // Extended CRM Tracking
+            contact_attempts: typeof d.contact_attempts === "number" ? d.contact_attempts : 0,
+            last_contact_at: d.last_contact_at ? parseDate(d.last_contact_at) : undefined,
+            notes: d.notes ? String(d.notes) : undefined,
+            posted_at: d.posted_at ? parseDate(d.posted_at) : undefined,
           };
         });
       } catch {
@@ -258,6 +272,34 @@ export class DashboardService {
       return { workspaces, mentions, alerts, leads, lastMentionDoc };
     } catch (error) {
       console.error("[DashboardService] fetchRawData error:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Cập nhật trạng thái của lead trên Firestore
+   */
+  static async updateLeadStatus(id: string, status: Lead["status"]): Promise<void> {
+    try {
+      const leadRef = doc(dbData, COLLECTION_NAMES.leads, id);
+      await updateDoc(leadRef, { status });
+    } catch (error) {
+      console.error("[DashboardService] updateLeadStatus error:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Cập nhật các thông tin chi tiết nhật ký chăm sóc của lead trên Firestore
+   */
+  static async updateLeadDetails(id: string, data: Partial<Lead>): Promise<void> {
+    try {
+      const leadRef = doc(dbData, COLLECTION_NAMES.leads, id);
+      const cleanData = { ...data };
+      delete cleanData.id;
+      await updateDoc(leadRef, cleanData);
+    } catch (error) {
+      console.error("[DashboardService] updateLeadDetails error:", error);
       throw error;
     }
   }
