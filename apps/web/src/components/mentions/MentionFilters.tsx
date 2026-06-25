@@ -53,12 +53,21 @@ export function MentionFilters({ workspaces, filters, allMentions }: MentionFilt
   const { t } = useTranslation();
   const { setFilters } = useDashboardStore();
 
-  // Derive available brands from actual data
+  // Keep the product scope fixed to the three tracked brands.
   const availableBrands = useMemo(() => {
-    const brandSet = new Set<string>();
-    allMentions.forEach(m => brandSet.add(m.workspace_id));
-    return Array.from(brandSet).sort();
-  }, [allMentions]);
+    const order = ["highlandcoffee", "starbucks", "mixue"];
+    return [...workspaces].sort((a, b) => {
+      const aIndex = order.findIndex((key) =>
+        a.id.toLowerCase().includes(key) ||
+        a.brand_name.toLowerCase().replace(/[\s\-_.]/g, "").includes(key),
+      );
+      const bIndex = order.findIndex((key) =>
+        b.id.toLowerCase().includes(key) ||
+        b.brand_name.toLowerCase().replace(/[\s\-_.]/g, "").includes(key),
+      );
+      return (aIndex === -1 ? 99 : aIndex) - (bIndex === -1 ? 99 : bIndex);
+    });
+  }, [workspaces]);
 
   // Derive available platforms from actual data
   const availablePlatforms = useMemo(() => {
@@ -79,7 +88,10 @@ export function MentionFilters({ workspaces, filters, allMentions }: MentionFilt
   // Get brand display name: check workspaces list, then fall back to raw value
   const getBrandName = (brandId: string) => {
     const ws = workspaces.find(w => w.id === brandId);
-    return ws ? ws.brand_name : brandId;
+    if (!ws) return brandId;
+    return ws.brand_name.toLowerCase().includes("highland")
+      ? "Highland Coffee"
+      : ws.brand_name;
   };
 
   return (
@@ -105,8 +117,8 @@ export function MentionFilters({ workspaces, filters, allMentions }: MentionFilt
         >
           <option value="all">Tất cả nhãn hàng</option>
           {availableBrands.map((brand) => (
-            <option key={brand} value={brand}>
-              {getBrandName(brand)}
+            <option key={brand.id} value={brand.id}>
+              {getBrandName(brand.id)}
             </option>
           ))}
         </select>

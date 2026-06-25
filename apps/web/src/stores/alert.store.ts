@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 import { dbSecond } from "@/lib/firebase";
-import { collection, getDocs, query, orderBy, limit, doc, updateDoc } from "firebase/firestore";
+import { collection, doc, getDocs, limit, query, updateDoc } from "firebase/firestore";
 
 export interface AlertData {
   id: string;
@@ -42,80 +42,119 @@ interface AlertState {
   updateAlertStatus: (id: string, newStatus: string) => Promise<void>;
 }
 
-// Helper to parse Firestore/general dates into ISO String
-function parseDate(field: any): string {
+function parseDate(field: unknown): string {
   if (!field) return new Date().toISOString();
-  if (typeof field.toDate === "function") {
-    return field.toDate().toISOString();
+  if (typeof (field as any).toDate === "function") {
+    return (field as any).toDate().toISOString();
   }
   if (field instanceof Date) return field.toISOString();
-  if (field && typeof field.seconds === "number") {
-    return new Date(field.seconds * 1000).toISOString();
-  }
-  const s = String(field).trim();
-  if (!s) return new Date().toISOString();
-
-  // Try to parse custom date format "HH:mm dd/MM/yyyy" or "dd/MM/yyyy HH:mm"
-  if (s.includes("/")) {
-    try {
-      const parts = s.split(" ");
-      let timePart = "00:00";
-      let datePart = "";
-      if (parts.length === 2) {
-        if (parts[0].includes(":")) {
-          timePart = parts[0];
-          datePart = parts[1];
-        } else {
-          datePart = parts[0];
-          timePart = parts[1];
-        }
-      } else if (parts.length === 1) {
-        datePart = parts[0];
-      }
-
-      if (datePart && datePart.includes("/")) {
-        const dParts = datePart.split("/");
-        if (dParts.length === 3) {
-          const day = parseInt(dParts[0], 10);
-          const month = parseInt(dParts[1], 10) - 1; // 0-indexed month
-          const year = parseInt(dParts[2], 10);
-          
-          const tParts = timePart.split(":");
-          const hour = tParts.length >= 1 ? parseInt(tParts[0], 10) : 0;
-          const min = tParts.length >= 2 ? parseInt(tParts[1], 10) : 0;
-          const sec = tParts.length >= 3 ? parseInt(tParts[2], 10) : 0;
-
-          const date = new Date(year, month, day, hour, min, sec);
-          if (!isNaN(date.getTime())) {
-            return date.toISOString();
-          }
-        }
-      }
-    } catch (e) {
-      console.warn("[AlertStore] Custom format parsing failed:", s, e);
-    }
+  if (typeof (field as any).seconds === "number") {
+    return new Date((field as any).seconds * 1000).toISOString();
   }
 
-  return s.includes("+") || s.endsWith("Z") ? s : s + "Z";
+  const value = String(field).trim();
+  if (!value) return new Date().toISOString();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return `${value}T00:00:00Z`;
+  return value.includes("+") || value.endsWith("Z") ? value : `${value}Z`;
+}
+
+function normalizeBrandKey(brand: string): string {
+  const normalized = String(brand || "")
+    .toLowerCase()
+    .replace(/[\s\-_.]/g, "")
+    .trim();
+
+  if (normalized.includes("highland")) return "highlandcoffee";
+  if (normalized.includes("starbuck")) return "starbucks";
+  if (normalized.includes("mixue")) return "mixue";
+  return normalized;
+}
+
+function formatBrandName(brand: string): string {
+  const key = normalizeBrandKey(brand);
+  if (key === "highlandcoffee") return "Highland Coffee";
+  if (key === "starbucks") return "Starbucks";
+  if (key === "mixue") return "Mixue";
+  return brand || "Unknown";
+}
+
+function normalizeSource(source: string): string {
+  const normalized = String(source || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+  if (normalized.includes("facebook")) return "facebook";
+  if (normalized.includes("tiktok")) return "tiktok";
+  if (normalized.includes("youtube")) return "youtube";
+  if (normalized.includes("google")) return "google_maps";
+  if (normalized.includes("bao") || normalized.includes("news")) return "news";
+  return normalized || "news";
+}
+
+function normalizeTopic(topic: unknown): string {
+  const firstTopic = Array.isArray(topic) ? topic[0] : topic;
+  const normalized = String(firstTopic || "other").toLowerCase().trim();
+  const validTopics = new Set([
+    "quality",
+    "price",
+    "service",
+    "staff",
+    "delivery",
+    "experience",
+    "legal",
+    "operation",
+    "competitor",
+    "other",
+  ]);
+
+  return validTopics.has(normalized) ? normalized : "other";
+}
+
+function calculateSeverity(data: any): string {
+  const labels = data.labels || {};
+  const urgency = String(labels.urgency || data.urgency || "").toLowerCase();
+  const topic = normalizeTopic(labels.topic || data.topic);
+  const content = String(data.clean_text || data.original_text || "").toLowerCase();
+
+  if (
+    urgency === "critical" ||
+    topic === "legal" ||
+    content.includes("ngộ độc") ||
+    content.includes("tẩy chay") ||
+    content.includes("khủng hoảng")
+  ) {
+    return "critical";
+  }
+
+  if (urgency === "high" || topic === "service" || topic === "quality") {
+    return "high";
+  }
+
+  return "medium";
 }
 
 function applyFilters(rawAlerts: AlertData[], filters: AlertFilters): AlertData[] {
-  let result = [...rawAlerts];
-
-  // Sort: Newest first
-  result.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  let result = [...rawAlerts].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+  );
 
   if (filters.brand !== "all") {
-    const bLower = filters.brand.toLowerCase();
-    result = result.filter((a) => a.brand.toLowerCase().includes(bLower));
+    const brandKey = normalizeBrandKey(filters.brand);
+    result = result.filter((alert) => normalizeBrandKey(alert.brand) === brandKey);
   }
+
   if (filters.status !== "all") {
-    const sLower = filters.status.toLowerCase();
-    result = result.filter((a) => a.status.toLowerCase() === sLower);
+    result = result.filter(
+      (alert) => alert.status.toLowerCase() === filters.status.toLowerCase(),
+    );
   }
+
   if (filters.severity !== "all") {
-    const sevLower = filters.severity.toLowerCase();
-    result = result.filter((a) => a.severity.toLowerCase() === sevLower);
+    result = result.filter(
+      (alert) => alert.severity.toLowerCase() === filters.severity.toLowerCase(),
+    );
   }
 
   return result;
@@ -125,7 +164,7 @@ export const useAlertStore = create<AlertState>()(
   subscribeWithSelector((set, get) => ({
     rawAlerts: [],
     alerts: [],
-    brands: [],
+    brands: ["Highland Coffee", "Starbucks", "Mixue"],
     isLoading: false,
     error: null,
     filters: {
@@ -133,270 +172,122 @@ export const useAlertStore = create<AlertState>()(
       status: "all",
       severity: "all",
     },
+
     setFilters: (newFilters) => {
       set((state) => {
         const nextFilters = { ...state.filters, ...newFilters };
-        const filtered = applyFilters(state.rawAlerts, nextFilters);
         return {
           filters: nextFilters,
-          alerts: filtered,
+          alerts: applyFilters(state.rawAlerts, nextFilters),
         };
       });
     },
+
     fetchAlerts: async () => {
       set({ isLoading: true, error: null });
+
       try {
-        let fetchedAlerts: AlertData[] = [];
-        let fetchedFromReal = false;
-
-        // 1. Try client-side Firestore connection to the second database (DataInsight) first
-        if (dbSecond) {
-          try {
-            console.log("[AlertStore] Querying client-side Firestore (alerts_demo)...");
-            const alertsRef = collection(dbSecond, "alerts_demo");
-            const q = query(alertsRef, orderBy("created_at", "desc"), limit(100));
-            const snap = await getDocs(q);
-
-            if (!snap.empty) {
-              fetchedAlerts = snap.docs.map((doc) => {
-                const d = doc.data();
-                return {
-                  id: doc.id,
-                  brand: String(d.brand || d.workspace_id || ""),
-                  source: String(d.source || d.platform || ""),
-                  text: String(d.text || d.message || d.content || ""),
-                  sentiment: String(d.sentiment || "negative"),
-                  topic: String(d.topic || "other"),
-                  severity: String(d.severity || "medium"),
-                  created_at: parseDate(d.created_at || d.triggered_at),
-                  status: String(d.status || "new"),
-                  resolved_at: d.resolved_at ? parseDate(d.resolved_at) : undefined,
-                  collectionName: "alerts_demo",
-                  url: String(d.url || d.post_url || d.permalink || d.source_url || ""),
-                  reach: Number(d.reach || d.views || d.views_count || d.view_count || d.reach_count || 0),
-                  likes: Number(d.likes || d.like_count || d.likes_count || 0),
-                  comments: Number(d.comments || d.comment_count || d.comments_count || 0),
-                  shares: Number(d.shares || d.share_count || d.shares_count || 0),
-                  author: String(d.author || d.author_name || d.username || d.owner || ""),
-                  title: String(d.title || d.headline || ""),
-                };
-              });
-              fetchedFromReal = true;
-              console.log(`[AlertStore] Loaded ${fetchedAlerts.length} alerts from alerts_demo.`);
-            }
-
-            // If alerts_demo has no data, fallback to mentions_nlp_demo (where crawled documents reside)
-            if (!fetchedFromReal) {
-              console.log("[AlertStore] alerts_demo empty, loading candidates from mentions_nlp_demo...");
-              const mentionsRef = collection(dbSecond, "mentions_nlp_demo");
-              const qMentions = query(mentionsRef, orderBy("crawled_at", "desc"), limit(150));
-              const snapMentions = await getDocs(qMentions);
-
-              if (!snapMentions.empty) {
-                const candidates = snapMentions.docs.map((doc) => {
-                  const d = doc.data();
-                  
-                  let calculatedSeverity = "medium";
-                  if (d.baseline_sentiment === "negative") {
-                    const parsedConf = parseFloat(String(d.baseline_confidence || 0.5));
-                    const conf = isNaN(parsedConf) ? 0.5 : parsedConf;
-                    if (conf >= 0.8) calculatedSeverity = "critical";
-                    else if (conf >= 0.6) calculatedSeverity = "high";
-                    else calculatedSeverity = "medium";
-                  } else {
-                    calculatedSeverity = "low";
-                  }
-
-                  return {
-                    id: doc.id,
-                    brand: String(d.brand || d.workspace_id || ""),
-                    source: String(d.source || d.platform || ""),
-                    text: String(d.processed_text || d.text || d.content || ""),
-                    sentiment: String(d.baseline_sentiment || d.sentiment || "neutral"),
-                    topic: String(d.baseline_topic || d.topic || "other"),
-                    severity: calculatedSeverity,
-                    created_at: parseDate(d.posted_at || d.crawled_at || d.created_at),
-                    status: String(d.status || "new"),
-                    resolved_at: d.resolved_at ? parseDate(d.resolved_at) : undefined,
-                    risk_flag: d.risk_flag === true,
-                    collectionName: "mentions_nlp_demo",
-                    url: String(d.url || d.post_url || d.permalink || d.source_url || ""),
-                    reach: Number(d.reach || d.views || d.views_count || d.view_count || d.reach_count || 0),
-                    likes: Number(d.likes || d.like_count || d.likes_count || 0),
-                    comments: Number(d.comments || d.comment_count || d.comments_count || 0),
-                    shares: Number(d.shares || d.share_count || d.shares_count || 0),
-                    author: String(d.author || d.author_name || d.username || d.owner || ""),
-                    title: String(d.title || d.headline || ""),
-                  };
-                });
-
-                // Filter out candidates that are classified as negative sentiment or flagged
-                fetchedAlerts = candidates.filter(
-                  (c: any) => c.risk_flag || c.sentiment === "negative"
-                );
-                fetchedFromReal = true;
-                console.log(`[AlertStore] Loaded ${fetchedAlerts.length} alerts from mentions_nlp_demo.`);
-              }
-            }
-          } catch (err: any) {
-            console.warn("[AlertStore] Client-side Firestore query failed, falling back to backend API:", err.message);
-          }
+        if (!dbSecond) {
+          throw new Error("Firebase data project is not configured.");
         }
 
-        // 2. Fallback to API if client-side query failed or was empty
-        if (!fetchedFromReal) {
-          const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
-          const response = await fetch(`${apiUrl}/api/alerts?limit=100`);
-          if (response.ok) {
-            const json = await response.json();
-            if (json.success && json.data && json.data.length > 0) {
-              fetchedAlerts = json.data;
-              fetchedFromReal = true;
-              console.log(`[AlertStore] Loaded ${fetchedAlerts.length} alerts from backend API.`);
-            }
-          }
-        }
-
-        // 3. Fallback to simulated data if both failed
-        if (!fetchedFromReal || fetchedAlerts.length === 0) {
-          console.log("[AlertStore] No real alerts loaded. Using simulated fallback data.");
-          fetchedAlerts = [
-            {
-              id: "simulated-alert-1",
-              brand: "Highlands Coffee",
-              source: "facebook",
-              text: "Phát hiện gia tăng đột ngột của bài đăng phàn nàn về vệ sinh tại chi nhánh Quận 1. Tiếp cận 45k+ người.",
-              sentiment: "negative",
-              topic: "quality",
-              severity: "critical",
-              created_at: new Date().toISOString(),
-              status: "new",
-              url: "https://www.facebook.com/groups/congdongreview/posts/1029381923",
-              reach: 45000,
-              likes: 1200,
-              comments: 450,
-              shares: 180,
-              author: "Nguyễn Minh Anh",
-              title: "Sự cố vệ sinh thực phẩm chi nhánh Quận 1",
-            },
-            {
-              id: "simulated-alert-2",
-              brand: "Phúc Long Tea",
-              source: "tiktok",
-              text: "Video KOL @HoangMedia chia sẻ nội dung so sánh tiêu cực: Tiếp cận 150k+ người.",
-              sentiment: "negative",
-              topic: "service",
-              severity: "high",
-              created_at: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
-              status: "new",
-              url: "https://www.tiktok.com/@hoangmedia/video/71239849102",
-              reach: 150000,
-              likes: 25000,
-              comments: 1800,
-              shares: 4200,
-              author: "Hoàng Media",
-              title: "Video review tiêu cực từ KOL @HoangMedia",
-            },
-            {
-              id: "simulated-alert-3",
-              brand: "The Coffee House",
-              source: "news",
-              text: "Đánh giá 1 sao hàng loạt phản ánh thái độ nhân viên chi nhánh Nguyễn Trãi thiếu tôn trọng khách hàng.",
-              sentiment: "negative",
-              topic: "staff",
-              severity: "medium",
-              created_at: new Date(Date.now() - 3 * 3600 * 1000).toISOString(),
-              status: "new",
-              url: "https://vnexpress.net/the-coffee-house-nguyen-trai-bi-phan-anh-thai-do-phuc-vu-459201.html",
-              reach: 85000,
-              likes: 340,
-              comments: 120,
-              shares: 45,
-              author: "VnExpress",
-              title: "Báo chí phản ánh sự cố nhân viên chi nhánh Nguyễn Trãi",
-            },
-            {
-              id: "simulated-alert-4",
-              brand: "Highlands Coffee",
-              source: "youtube",
-              text: "Vlog đánh giá đồ uống mới của Highlands nhận xét tiêu cực về độ ngọt vượt mức cho phép.",
-              sentiment: "negative",
-              topic: "quality",
-              severity: "low",
-              created_at: new Date(Date.now() - 5 * 3600 * 1000).toISOString(),
-              status: "new",
-              url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-              reach: 12000,
-              likes: 850,
-              comments: 95,
-              shares: 32,
-              author: "Khoai Lang Thang",
-              title: "Vlog đánh giá sản phẩm đồ uống mới",
-            }
-          ];
-        }
-
-        // Extract all unique brands from the unfiltered fetchedAlerts
-        const uniqueBrands = Array.from(
-          new Set(fetchedAlerts.map((a) => a.brand.toLowerCase().trim()).filter(Boolean))
+        const snapshot = await getDocs(
+          query(collection(dbSecond, "insightflow_labels"), limit(500)),
         );
 
-        // Apply filters in memory
-        const filtered = applyFilters(fetchedAlerts, get().filters);
+        const fetchedAlerts: AlertData[] = [];
+        snapshot.docs.forEach((document) => {
+          const data = document.data();
+          const labels = data.labels || {};
+          const sentiment = String(
+            labels.sentiment || data.sentiment || "neutral",
+          ).toLowerCase();
+
+          if (sentiment !== "negative") return;
+
+          const text = String(
+            data.clean_text ||
+              data.original_text ||
+              data.text ||
+              data.content ||
+              "",
+          );
+
+          fetchedAlerts.push({
+            id: String(data.id || document.id),
+            brand: formatBrandName(String(data.brand || "")),
+            source: normalizeSource(String(data.source || "")),
+            text,
+            sentiment,
+            topic: normalizeTopic(labels.topic || data.topic),
+            severity: calculateSeverity(data),
+            created_at: parseDate(
+              data.labeled_at ||
+                data.uploaded_at ||
+                data.posted_at ||
+                data.created_at,
+            ),
+            status: String(data.status || "new"),
+            resolved_at: data.resolved_at ? parseDate(data.resolved_at) : undefined,
+            collectionName: "insightflow_labels",
+            url: String(data.url || ""),
+            reach: Number(data.reach || data.views || 0),
+            likes: Number(data.likes || data.like_count || 0),
+            comments: Number(data.comments || data.comment_count || 0),
+            shares: Number(data.shares || data.share_count || 0),
+            author: String(data.author || data.author_name || "Ẩn danh"),
+            title: text.slice(0, 120),
+          });
+        });
 
         set({
           rawAlerts: fetchedAlerts,
-          alerts: filtered,
-          brands: uniqueBrands,
+          alerts: applyFilters(fetchedAlerts, get().filters),
+          brands: ["Highland Coffee", "Starbucks", "Mixue"],
+          error: null,
         });
-      } catch (err: any) {
-        set({ error: err.message || "Failed to load alerts" });
-        console.error("fetchAlerts error:", err);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Không thể tải dữ liệu cảnh báo";
+        set({ error: message });
+        console.error("[AlertStore] fetchAlerts error:", message, error);
       } finally {
         set({ isLoading: false });
       }
     },
-    updateAlertStatus: async (id, newStatus) => {
-      const resolvedAt = newStatus === "resolved" ? new Date().toISOString() : undefined;
 
-      // Optimistically update rawAlerts and alerts for real-time interaction
+    updateAlertStatus: async (id, newStatus) => {
+      const resolvedAt =
+        newStatus === "resolved" ? new Date().toISOString() : undefined;
+
       set((state) => {
-        const nextRawAlerts = state.rawAlerts.map((a) =>
-          a.id === id
+        const nextRawAlerts = state.rawAlerts.map((alert) =>
+          alert.id === id
             ? {
-                ...a,
+                ...alert,
                 status: newStatus,
-                ...(newStatus === "resolved" ? { resolved_at: resolvedAt } : {}),
+                ...(resolvedAt ? { resolved_at: resolvedAt } : {}),
               }
-            : a
+            : alert,
         );
-        const nextAlerts = applyFilters(nextRawAlerts, state.filters);
+
         return {
           rawAlerts: nextRawAlerts,
-          alerts: nextAlerts,
+          alerts: applyFilters(nextRawAlerts, state.filters),
         };
       });
 
-      // Persist to Firestore if dbSecond is available
-      if (dbSecond) {
-        try {
-          const alert = get().rawAlerts.find((a) => a.id === id);
-          const collName = alert?.collectionName || "alerts_demo";
-          const docRef = doc(dbSecond, collName, id);
-          
-          const updateData: Record<string, any> = {
-            status: newStatus,
-          };
-          if (newStatus === "resolved") {
-            updateData.resolved_at = resolvedAt;
-          }
-          
-          await updateDoc(docRef, updateData);
-          console.log(`[AlertStore] Status successfully persisted to Firestore (${collName}/${id}): ${newStatus}`);
-        } catch (err: any) {
-          console.error(`[AlertStore] Failed to persist status to Firestore:`, err);
-        }
+      if (!dbSecond) return;
+
+      try {
+        const documentRef = doc(dbSecond, "insightflow_labels", id);
+        await updateDoc(documentRef, {
+          status: newStatus,
+          ...(resolvedAt ? { resolved_at: resolvedAt } : {}),
+        });
+      } catch (error) {
+        console.error("[AlertStore] Failed to persist alert status:", error);
       }
     },
-  }))
+  })),
 );

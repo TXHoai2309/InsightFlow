@@ -112,7 +112,7 @@ Mỗi **Tenant** (doanh nghiệp) có thể có nhiều **Workspace** (thương 
 - Actor: Brand Admin
 - Mô tả: Tạo workspace theo từng thương hiệu để theo dõi
 - Inputs:
-  - Tên thương hiệu (bắt buộc, thuộc 9 thương hiệu F&B mục tiêu: Highlands Coffee, Phúc Long, Cộng Cà Phê, KATINAT, Phê La, Pizza 4P's, XLIII Coffee, Maison Marou, Laha Cafe)
+  - Tên thương hiệu (bắt buộc, thuộc 3 thương hiệu F&B mục tiêu: Highland Coffee, Starbucks, Mixue)
   - Phân nhóm quy mô thương hiệu (Nhóm Nhỏ / Nhóm Vừa / Nhóm Lớn)
   - Danh sách từ khóa chính (tên thương hiệu, tên sản phẩm, tên founder, tên chi nhánh)
   - Danh sách từ đồng nghĩa / biến thể cách viết (slang, teencode)

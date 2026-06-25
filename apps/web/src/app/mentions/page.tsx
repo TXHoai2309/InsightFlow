@@ -14,7 +14,7 @@ export default function MentionsPage() {
     useDashboardStore();
   const mentions = useMemo(
     () => getFilteredMentions(),
-    [getFilteredMentions, filters],
+    [getFilteredMentions, filters, allMentions],
   );
 
   return (
