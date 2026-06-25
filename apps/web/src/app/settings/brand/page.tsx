@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Workspace } from "@/types/dashboard";
 
 /**
@@ -8,6 +9,7 @@ import { Workspace } from "@/types/dashboard";
  * Cho phép người dùng quản lý các thương hiệu (workspace), cấu hình từ khóa và theo dõi trạng thái dữ liệu.
  */
 export default function BrandManagementPage() {
+  const { t } = useTranslation();
   const [selectedWorkspace, setSelectedWorkspace] = useState<string>("1");
   const [isAiSuggestEnabled, setIsAiSuggestEnabled] = useState(true);
 
@@ -52,12 +54,16 @@ export default function BrandManagementPage() {
     },
   ];
 
+  const selectedWs = workspaces.find((w) => w.id === selectedWorkspace) || workspaces[0];
+
   return (
     <div className="p-4 md:p-8 space-y-6 md:space-y-8">
       {/* Header Section */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-3">
         <div>
-          <h2 className="text-headline-lg text-[var(--color-text-primary)] font-bold">Quản lý Thương hiệu</h2>
+          <h2 className="text-headline-lg text-[var(--color-text-primary)] font-bold">
+            {t("brands.header.title")}
+          </h2>
         </div>
       </div>
 
@@ -66,7 +72,9 @@ export default function BrandManagementPage() {
         {/* Workspace List (Left Column) */}
         <div className="col-span-12 lg:col-span-4 space-y-6">
           <div className="glass-card rounded-xl p-6">
-            <h3 className="text-headline-sm mb-4 text-[var(--color-text-primary)] font-bold">Danh sách Thương hiệu</h3>
+            <h3 className="text-headline-sm mb-4 text-[var(--color-text-primary)] font-bold">
+              {t("brands.list.title")}
+            </h3>
             <div className="space-y-3">
               {workspaces.map((ws) => (
                 <div
@@ -93,7 +101,7 @@ export default function BrandManagementPage() {
                         {ws.brand_name}
                       </p>
                       <p className="text-label-sm text-[var(--color-text-secondary)]">
-                        {ws.keywordCount} từ khóa • {ws.region}
+                        {t("brands.list.keywordCount", { count: ws.keywordCount })} • {ws.region}
                       </p>
                     </div>
                   </div>
@@ -109,7 +117,9 @@ export default function BrandManagementPage() {
 
           {/* Data Source Health Card */}
           <div className="glass-card rounded-xl p-6">
-            <h3 className="text-headline-sm mb-4 text-[var(--color-text-primary)] font-bold">Trạng thái Nguồn dữ liệu</h3>
+            <h3 className="text-headline-sm mb-4 text-[var(--color-text-primary)] font-bold">
+              {t("brands.dataSource.title")}
+            </h3>
             <div className="space-y-3">
               {[
                 { name: "Facebook Ads/API", icon: "face_nod", color: "#1877F2", status: "healthy" },
@@ -123,7 +133,7 @@ export default function BrandManagementPage() {
                   </div>
                   <span className={`flex items-center gap-1 text-label-sm font-bold ${source.status === 'healthy' ? 'text-[var(--color-success)]' : 'text-[var(--color-error)]'}`}>
                     <span className={`w-2 h-2 rounded-full ${source.status === 'healthy' ? 'bg-[var(--color-success)] animate-pulse' : 'bg-[var(--color-error)]'}`}></span>
-                    {source.status === 'healthy' ? 'Khỏe mạnh' : 'Lỗi kết nối'}
+                    {source.status === 'healthy' ? t("brands.dataSource.healthy") : t("brands.dataSource.error")}
                   </span>
                 </div>
               ))}
@@ -139,17 +149,19 @@ export default function BrandManagementPage() {
             
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-6 md:mb-8 relative z-10">
               <div>
-                <h3 className="text-headline-md text-[var(--color-text-primary)] font-bold">Cấu hình Từ khóa Theo dõi</h3>
+                <h3 className="text-headline-md text-[var(--color-text-primary)] font-bold">
+                  {t("brands.config.title")}
+                </h3>
                 <p className="text-body-sm text-[var(--color-text-secondary)]">
-                  Thiết lập bộ lọc AI để thu thập dữ liệu chính xác nhất cho <strong>Highlands Coffee</strong>.
+                  {t("brands.config.desc")} <strong>{selectedWs.brand_name}</strong>.
                 </p>
               </div>
               <div className="flex gap-2">
                 <button className="px-6 py-2 border border-[var(--color-border)] rounded-lg font-label-md text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)] transition-colors">
-                  Hủy
+                  {t("brands.config.cancel")}
                 </button>      
                 <button className="px-6 py-2 bg-[var(--color-brand)] text-white rounded-lg font-label-md shadow-sm hover:bg-[var(--color-brand-hover)] transition-all">
-                  Lưu cấu hình
+                  {t("brands.config.save")}
                 </button>
               </div>
             </div>
@@ -157,56 +169,78 @@ export default function BrandManagementPage() {
             <form className="space-y-8 relative z-10">
               {/* Primary Keywords */}
               <div className="space-y-2">
-                <label className="text-label-md text-[var(--color-text-primary)] block font-bold">Từ khóa chính (Primary Keywords)</label>
+                <label className="text-label-md text-[var(--color-text-primary)] block font-bold">
+                  {t("brands.config.primaryKeywords")}
+                </label>
                 <div className="p-2 bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-lg focus-within:ring-2 focus-within:ring-[var(--color-brand)]/20 focus-within:border-[var(--color-brand)] transition-all flex flex-wrap gap-2">
                   {["Highlands Coffee", "Cà phê Highlands"].map((tag, i) => (
                     <span key={i} className="bg-[var(--color-brand-subtle)] text-[var(--color-brand)] px-3 py-1 rounded-full text-label-sm flex items-center gap-1 group hover:-translate-y-0.5 transition-transform border border-[var(--color-brand-border)]">
                       {tag} <span className="material-symbols-outlined text-[14px] cursor-pointer">close</span>
                     </span>
                   ))}
-                  <input className="border-none focus:ring-0 text-body-sm p-1 flex-1 min-w-[120px] outline-none bg-transparent text-[var(--color-text-primary)]" placeholder="Thêm từ khóa..." type="text" />
+                  <input
+                    className="border-none focus:ring-0 text-body-sm p-1 flex-1 min-w-[120px] outline-none bg-transparent text-[var(--color-text-primary)]"
+                    placeholder={t("brands.config.addKeyword")}
+                    type="text"
+                  />
                 </div>
-                <p className="text-label-sm text-[var(--color-text-secondary)]">Các từ khóa định danh thương hiệu chính của bạn.</p>
+                <p className="text-label-sm text-[var(--color-text-secondary)]">
+                  {t("brands.config.primaryKeywordsDesc")}
+                </p>
               </div>
 
               {/* Synonyms/LSI */}
               <div className="space-y-2">
-                <label className="text-label-md text-[var(--color-text-primary)] block font-bold">Từ đồng nghĩa &amp; Liên quan</label>
+                <label className="text-label-md text-[var(--color-text-primary)] block font-bold">
+                  {t("brands.config.synonyms")}
+                </label>
                 <textarea 
                   className="w-full bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-lg p-4 text-body-sm focus:ring-2 focus:ring-[var(--color-brand)]/20 focus:border-[var(--color-brand)] transition-all outline-none text-[var(--color-text-primary)]" 
-                  placeholder="Ví dụ: PhinDi, Freeze, trà sen vàng, bánh mì Highlands..." 
+                  placeholder={t("brands.config.synonymsPlaceholder")}
                   rows={3}
                 ></textarea>
-                <p className="text-label-sm text-[var(--color-text-secondary)]">Giúp AI mở rộng phạm vi thu thập nhưng vẫn giữ đúng ngữ cảnh.</p>
+                <p className="text-label-sm text-[var(--color-text-secondary)]">
+                  {t("brands.config.synonymsDesc")}
+                </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
                 {/* Exclusion Keywords */}
                 <div className="space-y-2">
-                  <label className="text-label-md text-[var(--color-text-primary)] block font-bold">Từ khóa loại trừ (Negative)</label>
+                  <label className="text-label-md text-[var(--color-text-primary)] block font-bold">
+                    {t("brands.config.exclusions")}
+                  </label>
                   <div className="p-2 bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-lg flex flex-wrap gap-2 min-h-[100px] content-start">
                     {["tuyển dụng", "việc làm"].map((tag, i) => (
                       <span key={i} className="bg-[var(--color-error-subtle)] text-[var(--color-error)] px-3 py-1 rounded-full text-label-sm flex items-center gap-1">
                         {tag} <span className="material-symbols-outlined text-[14px] cursor-pointer">close</span>
                       </span>
                     ))}
-                    <input className="border-none focus:ring-0 text-body-sm p-1 w-full outline-none bg-transparent text-[var(--color-text-primary)]" placeholder="Loại trừ..." type="text" />
+                    <input
+                      className="border-none focus:ring-0 text-body-sm p-1 w-full outline-none bg-transparent text-[var(--color-text-primary)]"
+                      placeholder={t("brands.config.exclusionsPlaceholder")}
+                      type="text"
+                    />
                   </div>
                 </div>
 
                 {/* Platform Selection */}
                 <div className="space-y-2">
-                  <label className="text-label-md text-[var(--color-text-primary)] block font-bold">Phạm vi theo dõi</label>
+                  <label className="text-label-md text-[var(--color-text-primary)] block font-bold">
+                    {t("brands.config.scope")}
+                  </label>
                   <div className="grid grid-cols-2 gap-2">
                     {[
-                      { name: "Facebook", checked: true },
-                      { name: "TikTok", checked: true },
-                      { name: "Báo chí Online", checked: false },
-                      { name: "YouTube", checked: true },
+                      { name: "Facebook", nameKey: null, checked: true },
+                      { name: "TikTok", nameKey: null, checked: true },
+                      { name: "Báo chí Online", nameKey: "brands.platform.onlineNews", checked: false },
+                      { name: "YouTube", nameKey: null, checked: true },
                     ].map((platform, i) => (
                       <label key={i} className="flex items-center gap-2 p-3 border border-[var(--color-border)] rounded-lg cursor-pointer hover:bg-[var(--color-bg-surface-raised)] transition-colors">
                         <input type="checkbox" checked={platform.checked} readOnly className="rounded text-[var(--color-brand)] focus:ring-[var(--color-brand)]" />
-                        <span className="text-label-md text-[var(--color-text-primary)]">{platform.name}</span>
+                        <span className="text-label-md text-[var(--color-text-primary)]">
+                          {platform.nameKey ? t(platform.nameKey) : platform.name}
+                        </span>
                       </label>
                     ))}
                   </div>
@@ -217,7 +251,9 @@ export default function BrandManagementPage() {
               <div className="pt-6 border-t border-[var(--color-border)] flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="material-symbols-outlined text-[var(--color-brand)]">auto_fix_high</span>
-                  <span className="font-label-md text-[var(--color-text-primary)] font-bold">Tự động gợi ý từ khóa bằng AI</span>
+                  <span className="font-label-md text-[var(--color-text-primary)] font-bold">
+                    {t("brands.config.aiSuggest")}
+                  </span>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input 
@@ -235,21 +271,23 @@ export default function BrandManagementPage() {
           {/* Usage Statistics Card */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6">
             <div className="glass-card rounded-xl p-6 text-center">
-              <p className="text-label-sm text-[var(--color-text-secondary)] mb-2">Data Usage</p>
+              <p className="text-label-sm text-[var(--color-text-secondary)] mb-2">{t("brands.stats.dataUsage")}</p>
               <h4 className="text-headline-md text-[var(--color-brand)] font-bold">74%</h4>
               <div className="w-full bg-[var(--color-bg-surface-raised)] h-1.5 rounded-full mt-3">
                 <div className="bg-[var(--color-brand)] h-full rounded-full" style={{ width: "74%" }}></div>
               </div>
             </div>
             <div className="glass-card rounded-xl p-6 text-center">
-              <p className="text-label-sm text-[var(--color-text-secondary)] mb-2">Active Alerts</p>
+              <p className="text-label-sm text-[var(--color-text-secondary)] mb-2">{t("brands.stats.activeAlerts")}</p>
               <h4 className="text-headline-md text-[var(--color-text-primary)] font-bold">12</h4>
-              <p className="text-[10px] text-[var(--color-brand)] mt-2 font-bold">+2 so với tuần trước</p>
+              <p className="text-[10px] text-[var(--color-brand)] mt-2 font-bold">
+                {t("brands.stats.vsLastWeek", { count: 2 })}
+              </p>
             </div>
             <div className="glass-card rounded-xl p-6 text-center">
-              <p className="text-label-sm text-[var(--color-text-secondary)] mb-2">Keywords</p>
+              <p className="text-label-sm text-[var(--color-text-secondary)] mb-2">{t("brands.stats.keywords")}</p>
               <h4 className="text-headline-md text-[var(--color-text-primary)] font-bold">128/500</h4>
-              <p className="text-[10px] text-[var(--color-text-secondary)] mt-2">Hạng mức Pro Plan</p>
+              <p className="text-[10px] text-[var(--color-text-secondary)] mt-2">{t("brands.stats.planLimit")}</p>
             </div>
           </div>
         </div>

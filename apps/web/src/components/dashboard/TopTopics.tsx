@@ -24,7 +24,7 @@ export function TopTopics({ topics }: TopTopicsProps) {
       }}
     >
       <h4 className="font-bold text-lg mb-4" style={{ color: "var(--color-text-primary)" }}>
-        Chủ đề thảo luận chính
+        {t("dashboard.topTopics.title")}
       </h4>
 
       <div className="flex flex-wrap gap-2">
@@ -34,7 +34,7 @@ export function TopTopics({ topics }: TopTopicsProps) {
             className="px-3 py-1 bg-[var(--color-brand-subtle)] text-[var(--color-brand)] border border-[var(--color-brand-border)] rounded-full text-xs font-bold hover:opacity-80 transition-all cursor-pointer"
             title={`P: ${topic.sentiment_breakdown.positive}, N: ${topic.sentiment_breakdown.negative}, Neu: ${topic.sentiment_breakdown.neutral}`}
           >
-            {topic.name} ({topic.count})
+            {t(`dashboard.topics.${topic.name}`, { defaultValue: topic.name })} ({topic.count})
           </div>
         ))}
       </div>
@@ -42,20 +42,17 @@ export function TopTopics({ topics }: TopTopicsProps) {
       <div className="mt-6 p-4 rounded-lg border border-[var(--color-warning)]/20 text-xs transition-all duration-300" style={{ backgroundColor: "var(--color-warning-subtle)" }}>
         <p className="font-bold mb-2 flex items-center gap-1 text-[var(--color-warning)]">
           <span className="material-symbols-outlined text-[16px]">warning</span>
-          Cảnh báo: Các chủ đề liên quan đến
+          {t("dashboard.topTopics.warningTitle")}
         </p>
         <ul className="space-y-1.5" style={{ color: "var(--color-text-secondary)" }}>
           <li>
-            • <span className="font-bold" style={{ color: "var(--color-text-primary)" }}>Chất lượng (quality)</span> - sản
-            phẩm, dịch vụ
+            • <span className="font-bold" style={{ color: "var(--color-text-primary)" }}>{t("dashboard.topics.quality")} (quality)</span> - {t("dashboard.topTopics.qualityDesc")}
           </li>
           <li>
-            • <span className="font-bold" style={{ color: "var(--color-text-primary)" }}>Giá cả (price)</span> - tính cạnh
-            tranh
+            • <span className="font-bold" style={{ color: "var(--color-text-primary)" }}>{t("dashboard.topics.price")} (price)</span> - {t("dashboard.topTopics.priceDesc")}
           </li>
           <li>
-            • <span className="font-bold" style={{ color: "var(--color-text-primary)" }}>Dịch vụ (service)</span> - chăm sóc
-            khách hàng
+            • <span className="font-bold" style={{ color: "var(--color-text-primary)" }}>{t("dashboard.topics.service")} (service)</span> - {t("dashboard.topTopics.serviceDesc")}
           </li>
         </ul>
       </div>

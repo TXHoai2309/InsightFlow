@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslation } from "react-i18next";
+
 /* ─── TrustedBySection — Social Proof ─── */
 
 const brands = [
@@ -13,12 +15,14 @@ const brands = [
 ];
 
 export default function TrustedBySection() {
+  const { t } = useTranslation();
+
   return (
     <section className="py-10 px-6 border-y border-[#F0ECFF]" style={{ background: "#faf9ff" }}>
       <div className="max-w-[1200px] mx-auto">
         <p className="text-center text-[13px] text-[#9898B0] font-semibold uppercase tracking-widest mb-7">
-          Được tin dùng bởi hơn{" "}
-          <span className="text-[#6D4CFF]">500 doanh nghiệp</span>
+          {t("home.trustedBy.text")}{" "}
+          <span className="text-[#6D4CFF]">{t("home.trustedBy.highlight")}</span>
         </p>
 
         {/* Marquee wrapper */}

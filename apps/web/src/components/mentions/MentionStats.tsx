@@ -7,7 +7,7 @@ interface MentionStatsProps {
 }
 
 export function MentionStats({ mentions, isLoading }: MentionStatsProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const total = mentions.length;
   const positive = mentions.filter(
     (mention) => mention.sentiment === "positive",
@@ -33,11 +33,10 @@ export function MentionStats({ mentions, isLoading }: MentionStatsProps) {
         <div className="flex flex-col sm:flex-row justify-between items-start gap-4 sm:gap-0">
           <div>
             <h3 className="text-xl md:text-2xl font-bold text-[var(--color-text-primary)]">
-              Phân tích sắc thái tổng thể
+              {t("mentions.stats.overallAnalysis")}
             </h3>
             <p className="text-xs md:text-sm text-[var(--color-text-secondary)] mt-1">
-              Dựa trên {isLoading ? "..." : total.toLocaleString("vi-VN")} đề
-              cập trong 7 ngày qua
+              {t("mentions.stats.summary", { count: isLoading ? "..." : total.toLocaleString(i18n.language === "vi" ? "vi-VN" : "en-US") })}
             </p>
           </div>
           <div className="bg-[var(--color-bg-surface-raised)] px-3 py-2 rounded-lg border border-[var(--color-border)]">
@@ -45,7 +44,7 @@ export function MentionStats({ mentions, isLoading }: MentionStatsProps) {
               {isLoading
                 ? "..."
                 : `${netSentiment > 0 ? "+" : ""}${netSentiment}%`}{" "}
-              so với tuần trước
+              {t("mentions.stats.vsLastWeek")}
             </span>
           </div>
         </div>
@@ -78,19 +77,19 @@ export function MentionStats({ mentions, isLoading }: MentionStatsProps) {
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-[var(--color-success)] flex-shrink-0"></span>
               <span className="text-xs md:text-sm text-[var(--color-text-secondary)]">
-                Tích cực ({positive.toLocaleString("vi-VN")})
+                {t("dashboard.filters.positive")} ({positive.toLocaleString(i18n.language === "vi" ? "vi-VN" : "en-US")})
               </span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-[var(--color-info)] flex-shrink-0"></span>
               <span className="text-xs md:text-sm text-[var(--color-text-secondary)]">
-                Trung lập ({neutral.toLocaleString("vi-VN")})
+                {t("dashboard.filters.neutral")} ({neutral.toLocaleString(i18n.language === "vi" ? "vi-VN" : "en-US")})
               </span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-[var(--color-error)] flex-shrink-0"></span>
               <span className="text-xs md:text-sm text-[var(--color-text-secondary)]">
-                Tiêu cực ({negative.toLocaleString("vi-VN")})
+                {t("dashboard.filters.negative")} ({negative.toLocaleString(i18n.language === "vi" ? "vi-VN" : "en-US")})
               </span>
             </div>
           </div>

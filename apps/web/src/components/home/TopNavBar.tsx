@@ -6,11 +6,15 @@ import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { useTranslation } from "react-i18next";
 
 export default function TopNavBar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const { user, loading } = useAuth();
+  const { language, toggleLanguage } = useLanguage();
+  const { t } = useTranslation();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -31,9 +35,9 @@ export default function TopNavBar() {
   };
 
   const navLinks = [
-    { href: "/#features", label: "Tính năng" },
-    { href: "/nganh", label: "Ngành" },
-    { href: "/ve-chung-toi", label: "Về chúng tôi" },
+    { href: "/#features", label: t("nav.features") },
+    { href: "/nganh", label: t("nav.industries") },
+    { href: "/ve-chung-toi", label: t("nav.about") },
   ];
 
   const isActive = (href: string) => {
@@ -147,7 +151,7 @@ export default function TopNavBar() {
                     <span className="text-[14px] font-semibold text-[#1a1a2e] group-hover:text-[#6D4CFF] transition-colors">
                       {user.displayName || user.email}
                     </span>
-                    <span className="text-[12px] text-[#9CA3AF]">Quản trị viên</span>
+                    <span className="text-[12px] text-[#9CA3AF]">{t("header.administrator")}</span>
                   </div>
                 </Link>
               </div>
@@ -160,7 +164,7 @@ export default function TopNavBar() {
                   href="/login"
                   className="text-[15px] font-medium text-[#374151] hover:text-[#6D4CFF] transition-colors"
                 >
-                  Đăng nhập
+                  {t("auth.login.loginBtn")}
                 </Link>
                 <Link
                   href="/dashboard"
@@ -169,11 +173,25 @@ export default function TopNavBar() {
                   onMouseOver={(e) => { e.currentTarget.style.background = "#5B3FE8"; e.currentTarget.style.transform = "translateY(-1px)"; }}
                   onMouseOut={(e) => { e.currentTarget.style.background = "#6D4CFF"; e.currentTarget.style.transform = "translateY(0)"; }}
                 >
-                  Dùng thử miễn phí
+                  {t("home.hero.freeTrialBtn")}
                 </Link>
               </div>
             )}
 
+            {/* Language Toggle */}
+            <button
+              onClick={toggleLanguage}
+              title={language === "vi" ? "Switch to English" : "Chuyển sang Tiếng Việt"}
+              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-[13px] font-bold border transition-all duration-200 select-none"
+              style={{ borderColor: "#E5E3FA", color: "#6D4CFF", background: "#F8F7FF" }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "#6D4CFF"; e.currentTarget.style.color = "white"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "#F8F7FF"; e.currentTarget.style.color = "#6D4CFF"; }}
+            >
+              <span style={{ fontSize: "16px", lineHeight: 1 }}>
+                {language === "vi" ? "🇻🇳" : "🇬🇧"}
+              </span>
+              <span>{language === "vi" ? "VI" : "EN"}</span>
+            </button>
             {/* Mobile hamburger */}
             <button
               className="md:hidden p-2 text-[#6D4CFF]"
@@ -220,9 +238,20 @@ export default function TopNavBar() {
             </Link>
           ))}
 
+          {/* Language toggle in mobile drawer */}
+          <div className="px-[24px] py-[16px] border-t border-[#F1F0FF]">
+            <button
+              onClick={() => { toggleLanguage(); setMobileOpen(false); }}
+              className="flex items-center gap-3 w-full text-[18px] font-medium text-[#374151]"
+            >
+              <span style={{ fontSize: "22px" }}>{language === "vi" ? "🇬🇧" : "🇻🇳"}</span>
+              <span>{language === "vi" ? "Switch to English" : "Chuyển sang Tiếng Việt"}</span>
+            </button>
+          </div>
+
           {!loading && user && (
             <div className="mt-4 border-t border-[#F1F0FF] px-[24px] py-[16px]">
-              <p className="text-[14px] font-medium text-[#9CA3AF] mb-3">Tài khoản</p>
+              <p className="text-[14px] font-medium text-[#9CA3AF] mb-3">{t("nav.account")}</p>
               <Link
                 href="/profile"
                 onClick={() => setMobileOpen(false)}
@@ -245,7 +274,7 @@ export default function TopNavBar() {
                 className="text-[#EF4444] text-[16px] font-medium flex items-center gap-2"
               >
                 <span className="material-symbols-outlined text-[20px]">logout</span>
-                Đăng xuất
+                {t("profile.logout")}
               </button>
             </div>
           )}

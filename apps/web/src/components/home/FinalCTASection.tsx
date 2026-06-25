@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
+import { useTranslation } from "react-i18next";
 
 const particles = [
   { top: "18%", left: "7%", size: 4, dur: "4s", delay: "0s", opacity: 0.12 },
@@ -15,6 +16,7 @@ const particles = [
 
 export default function FinalCTASection() {
   const { user, loading } = useAuth();
+  const { t } = useTranslation();
 
   return (
     <section className="px-6 md:px-10 py-12">
@@ -108,35 +110,35 @@ export default function FinalCTASection() {
             fontSize: "clamp(22px,5vw,33px)", lineHeight: 1.2,
             textShadow: "0 2px 16px rgba(0,0,0,0.15)", marginBottom: "12px"
           }}>
-            Biến hàng triệu cuộc trò chuyện thành insight kinh doanh
+            {t("home.cta.heading")}
           </h2>
 
           {/* Subtags */}
           <p style={{ color: "rgba(255,255,255,0.72)", fontSize: "15px", marginBottom: "32px" }}>
-            Theo dõi thương hiệu&nbsp;•&nbsp;Phân tích cảm xúc&nbsp;•&nbsp;Phát hiện xu hướng
+            {t("home.cta.subtags")}
           </p>
 
           {/* Buttons */}
           <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
             {!loading && user ? (
-              <Link href="/dashboard" className="cta-btn-primary justify-center">🚀 Vào Dashboard</Link>
+              <Link href="/dashboard" className="cta-btn-primary justify-center">{t("home.cta.dashboardBtn")}</Link>
             ) : (
-              <Link href="/dashboard" className="cta-btn-primary justify-center">🚀 Trải nghiệm Dashboard</Link>
+              <Link href="/dashboard" className="cta-btn-primary justify-center">{t("home.cta.tryDashboardBtn")}</Link>
             )}
-            <button className="cta-btn-ghost">Xem Demo</button>
+            <button className="cta-btn-ghost" onClick={() => alert("Watch Demo triggered")}>{t("home.cta.demoBtn")}</button>
           </div>
 
           {/* Trust */}
           <div className="mt-8 flex flex-col items-center gap-2">
             <div style={{ color: "rgba(255,255,255,0.78)", fontSize: "13px" }}>
-              ⭐⭐⭐⭐⭐&nbsp;&nbsp;4.9/5 đánh giá từ khách hàng
+              {t("home.cta.rating")}
             </div>
             <div className="flex flex-wrap justify-center gap-x-4 gap-y-1" style={{ fontSize: "12px" }}>
-              <span><span className="text-white font-bold">500+</span><span style={{ color: "rgba(255,255,255,0.6)" }}> Doanh nghiệp</span></span>
+              <span><span className="text-white font-bold">500+</span><span style={{ color: "rgba(255,255,255,0.6)" }}> {t("home.cta.businessesCount")}</span></span>
               <span style={{ color: "rgba(255,255,255,0.3)" }}>·</span>
-              <span><span className="text-white font-bold">2M+</span><span style={{ color: "rgba(255,255,255,0.6)" }}> Bài phân tích/ngày</span></span>
+              <span><span className="text-white font-bold">2M+</span><span style={{ color: "rgba(255,255,255,0.6)" }}> {t("home.cta.articlesCount")}</span></span>
               <span style={{ color: "rgba(255,255,255,0.3)" }}>·</span>
-              <span><span className="text-white font-bold">98%</span><span style={{ color: "rgba(255,255,255,0.6)" }}> Độ chính xác</span></span>
+              <span><span className="text-white font-bold">98%</span><span style={{ color: "rgba(255,255,255,0.6)" }}> {t("home.cta.accuracyCount")}</span></span>
             </div>
           </div>
         </div>

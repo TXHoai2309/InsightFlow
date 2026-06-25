@@ -21,16 +21,18 @@ const COLORS_DARK = {
   negative: "#f87171",  // red pastel
 };
 
-const LABEL_MAP: Record<string, string> = {
-  positive: "Tích cực",
-  neutral: "Trung lập",
-  negative: "Tiêu cực",
-};
-
 export function SentimentChart({ distribution }: SentimentChartProps) {
+  const { t } = useTranslation();
   const { theme } = useTheme();
   const isDark = theme === "dark";
   const COLORS = isDark ? COLORS_DARK : COLORS_LIGHT;
+
+  const LABEL_MAP: Record<string, string> = {
+    positive: t("reports.sentiment.positive", { defaultValue: "Tích cực" }),
+    neutral: t("reports.sentiment.neutral", { defaultValue: "Trung lập" }),
+    negative: t("reports.sentiment.negative", { defaultValue: "Tiêu cực" }),
+  };
+
   const data = Object.entries(distribution).map(([key, value]) => ({
     name: LABEL_MAP[key] || key,
     value,
@@ -40,14 +42,16 @@ export function SentimentChart({ distribution }: SentimentChartProps) {
   if (data.length === 0 || data.every((d) => d.value === 0)) {
     return (
       <div className="text-center text-[var(--color-text-muted)] py-10">
-        Chưa có dữ liệu cảm xúc.
+        {t("reports.sentiment.noData", { defaultValue: "Chưa có dữ liệu cảm xúc." })}
       </div>
     );
   }
 
   return (
     <div className="bg-[var(--color-bg-surface)] p-6 rounded-2xl border border-[var(--color-border)] shadow-sm h-full flex flex-col">
-      <h3 className="text-lg font-bold text-[var(--color-text-primary)] mb-6">Phân bố cảm xúc</h3>
+      <h3 className="text-lg font-bold text-[var(--color-text-primary)] mb-6">
+        {t("reports.sentiment.distribution", { defaultValue: "Phân bố cảm xúc" })}
+      </h3>
       <div className="flex-1 min-h-[300px]">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
@@ -69,7 +73,10 @@ export function SentimentChart({ distribution }: SentimentChartProps) {
               ))}
             </Pie>
             <Tooltip
-              formatter={(value: number) => [`${value.toLocaleString()} lượt`, "Số lượng"]}
+              formatter={(value: number) => [
+                `${value.toLocaleString()} ${t("reports.sentiment.mentionsCount", { defaultValue: "lượt" })}`,
+                t("reports.sentiment.quantity", { defaultValue: "Số lượng" })
+              ]}
               contentStyle={{
                 borderRadius: "8px",
                 border: `1px solid var(--color-border)`,
