@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { useRouter } from "next/navigation";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { useAlertStore } from "@/stores/alert.store";
@@ -21,20 +22,20 @@ import {
 
 
 // Helper function to calculate relative time
-function getRelativeTime(isoString: string): string {
+function getRelativeTime(isoString: string, t: (key: string, t) => string): string {
   try {
     const date = new Date(isoString);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / 60000);
-    if (diffMins < 1) return "Vừa xong";
-    if (diffMins < 60) return `${diffMins} phút trước`;
+    if (diffMins < 1) return t("alerts.time.justNow");
+    if (diffMins < 60) return `${diffMins} ${t("alerts.time.minutesAgo")}`;
     const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `${diffHours} giờ trước`;
+    if (diffHours < 24) return `${diffHours} ${t("alerts.time.hoursAgo")}`;
     const diffDays = Math.floor(diffHours / 24);
-    return `${diffDays} ngày trước`;
+    return `${diffDays} ${t("alerts.time.daysAgo")}`;
   } catch (e) {
-    return "Vừa xong";
+    return t("alerts.time.justNow");
   }
 }
 
@@ -180,6 +181,7 @@ function getFormattedSourceUrl(url: string, text: string): string {
  * Quản lý cảnh báo khủng hoảng thương hiệu real-time
  */
 export default function AlertsPage() {
+  const { t } = useTranslation();
   const [spikeValue, setSpikeValue] = useState(40);
   const [reachValue, setReachValue] = useState(105000);
   const [signalFilter, setSignalFilter] = useState("all");
@@ -300,7 +302,7 @@ export default function AlertsPage() {
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-[var(--color-text-primary)]">Quản lý Cảnh báo</h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-[var(--color-text-primary)]">{t("alerts.title")}</h1>
           <p className="text-sm text-[var(--color-text-secondary)] mt-1 max-w-xl">
             Giám sát chỉ số tiêu cực và phản ứng tự động từ Firebase Firestore để bảo vệ thương hiệu.
           </p>
@@ -319,7 +321,7 @@ export default function AlertsPage() {
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-5">
         {/* Card 1 */}
         <div className="glass-card rounded-xl p-4 md:p-6 flex flex-col gap-2">
-          <span className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-widest font-bold">Tổng hôm nay</span>
+          <span className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-widest font-bold">{t("alerts.stats.total")}</span>
           <div className="flex items-end justify-between gap-2">
             <span className="text-3xl md:text-4xl font-black text-[var(--color-text-primary)]">
               {isLoading ? "..." : String(totalCount).padStart(2, "0")}
@@ -353,7 +355,7 @@ export default function AlertsPage() {
               ? "text-[var(--color-success)] bg-[var(--color-success-subtle)] text-[9px] px-2 py-1 rounded-full font-bold border border-[var(--color-success)]/30" 
               : "text-[var(--color-error)] bg-[var(--color-error-subtle)] text-[9px] px-2 py-1 rounded-full font-bold border border-[var(--color-error)]/30"
             }>
-              {isSlaOk ? "Đạt chuẩn" : "Trễ SLA"}
+              {isSlaOk ? t("alerts.sla.ok") : t("alerts.sla.late")}
             </span>
           </div>
         </div>
@@ -367,7 +369,7 @@ export default function AlertsPage() {
             onChange={(e) => setFilters({ brand: e.target.value })}
             className="col-span-2 lg:col-span-1 w-full select-app border border-[var(--color-border)] rounded-xl text-xs md:text-sm py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 font-medium"
           >
-            <option value="all">Workspace: Tất cả</option>
+            <option value="all">{t("alerts.filters.workspace")}</option>
             {brands.map((b) => (
               <option key={b} value={b}>
                 {formatBrandName(b)}
@@ -379,17 +381,17 @@ export default function AlertsPage() {
             onChange={(e) => setFilters({ status: e.target.value })}
             className="w-full select-app border border-[var(--color-border)] rounded-xl text-xs md:text-sm py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 font-medium"
           >
-            <option value="all">Trạng thái: Tất cả</option>
-            <option value="new">Mới</option>
-            <option value="acknowledged">Đã xác nhận</option>
-            <option value="resolved">Đã xử lý</option>
+            <option value="all">{t("alerts.filters.status.all")}</option>
+            <option value="new">{t("alerts.filters.status.new")}</option>
+            <option value="acknowledged">{t("alerts.filters.status.acknowledged")}</option>
+            <option value="resolved">{t("alerts.filters.status.resolved")}</option>
           </select>
           <select
             value={filters.severity}
             onChange={(e) => setFilters({ severity: e.target.value })}
             className="w-full select-app border border-[var(--color-border)] rounded-xl text-xs md:text-sm py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 font-medium"
           >
-            <option value="all">Mức độ: Tất cả</option>
+            <option value="all">{t("alerts.filters.severity.all")}</option>
             <option value="critical">Critical</option>
             <option value="high">High</option>
             <option value="medium">Medium</option>
@@ -400,7 +402,7 @@ export default function AlertsPage() {
             onChange={(e) => setSignalFilter(e.target.value)}
             className="w-full select-app border border-[var(--color-border)] rounded-xl text-xs md:text-sm py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 font-medium"
           >
-            <option value="all">Tín hiệu: Tất cả</option>
+            <option value="all">{t("alerts.filters.signal.all")}</option>
             <option value="spike">Spike mentions</option>
             <option value="reach">High-reach</option>
             <option value="sensitive">Sensitive topic</option>
@@ -417,13 +419,13 @@ export default function AlertsPage() {
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
             </svg>
             <p className="text-sm font-medium text-on-surface-variant animate-pulse">
-              Đang tải danh sách cảnh báo từ Firebase...
+              {t("alerts.loading")}
             </p>
           </div>
         ) : error ? (
           <div className="flex flex-col items-center justify-center p-8 space-y-3 glass-card rounded-2xl border-l-4 border-error">
             <span className="material-symbols-outlined text-error text-3xl">error</span>
-            <p className="text-sm font-bold text-error">Không thể tải dữ liệu cảnh báo</p>
+            <p className="text-sm font-bold text-error">{t("alerts.error")}</p>
             <p className="text-xs text-on-surface-variant text-center max-w-md">{error}</p>
             <button
               onClick={() => fetchAlerts()}
@@ -435,9 +437,9 @@ export default function AlertsPage() {
         ) : filteredAlerts.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-12 space-y-3 glass-card rounded-2xl">
             <span className="material-symbols-outlined text-on-surface-variant text-4xl">notifications_off</span>
-            <p className="text-sm font-bold text-on-surface">Không tìm thấy cảnh báo</p>
+            <p className="text-sm font-bold text-on-surface">{t("alerts.empty.title")}</p>
             <p className="text-xs text-on-surface-variant text-center">
-              Không có cảnh báo nào khớp với các bộ lọc được lựa chọn.
+              {t("alerts.empty.desc")}
             </p>
           </div>
         ) : (
@@ -544,7 +546,7 @@ export default function AlertsPage() {
                       </h2>
                     </div>
                     <span className="text-[11px] font-bold text-[var(--color-text-secondary)] bg-[var(--color-bg-surface-raised)] px-3 py-1.5 rounded-xl flex-shrink-0 w-fit">
-                      {getRelativeTime(alert.created_at)}
+                      {getRelativeTime(alert.created_at, t)}
                     </span>
                   </div>
 
@@ -651,7 +653,7 @@ export default function AlertsPage() {
           </div>
           <div>
             <h2 className="text-lg md:text-xl font-bold text-[var(--color-text-primary)]">Cấu hình Ngưỡng &amp; Phản ứng</h2>
-            <p className="text-xs text-[var(--color-text-secondary)] font-medium hidden sm:block">Thiết lập điều kiện kích hoạt và kênh gửi cảnh báo</p>
+            <p className="text-xs text-[var(--color-text-secondary)] font-medium hidden sm:block">{t("alerts.rule.title")}</p>
           </div>
         </div>
 
@@ -714,7 +716,7 @@ export default function AlertsPage() {
                     onClick={() => setShowAddKeywordInput(!showAddKeywordInput)}
                     className="text-[10px] font-black text-[var(--color-brand)] border border-[var(--color-brand-border)] px-2.5 py-1 rounded-lg hover:bg-[var(--color-brand-subtle)] transition-colors"
                   >
-                    {showAddKeywordInput ? "HỦY" : "+ THÊM"}
+                    {showAddKeywordInput ? t("alerts.keyword.cancel") : t("alerts.keyword.add")}
                   </button>
                 </div>
 
@@ -722,7 +724,7 @@ export default function AlertsPage() {
                   <div className="flex gap-2 mb-3">
                     <input
                       type="text"
-                      placeholder="Nhập từ khóa mới..."
+                      placeholder={t("alerts.keyword.placeholder")}
                       value={newKeyword}
                       onChange={(e) => setNewKeyword(e.target.value)}
                       onKeyDown={(e) => {
@@ -766,7 +768,7 @@ export default function AlertsPage() {
               </div>
               <div>
                 <p className="font-bold text-[var(--color-text-primary)] text-sm md:text-base">Kênh Thông báo</p>
-                <p className="text-xs text-[var(--color-text-secondary)] font-medium">Nơi nhận cảnh báo real-time</p>
+                <p className="text-xs text-[var(--color-text-secondary)] font-medium">{t("alerts.channel.subtitle")}</p>
               </div>
             </div>
 

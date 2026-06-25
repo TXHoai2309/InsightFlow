@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import type { Lead } from "@/types/dashboard";
 
 interface LeadStatsProps {
@@ -9,53 +10,33 @@ interface LeadStatsProps {
 }
 
 export function LeadStats({ leads, isLoading }: LeadStatsProps) {
+  const { t } = useTranslation();
+
   const stats = useMemo(() => {
     if (leads.length === 0) {
-      return {
-        totalNew: 0,
-        completed: 0,
-        urgentCount: 0,
-        conversionRate: 0,
-      };
+      return { totalNew: 0, completed: 0, urgentCount: 0, conversionRate: 0 };
     }
 
     const totalNew = leads.filter((l) => l.status === "new").length;
     const completed = leads.filter((l) => l.status === "completed").length;
-    
-    // Conversion/Response Rate: Completed / Total leads
-    const conversionRate = leads.length > 0 
-      ? Math.round((completed / leads.length) * 100) 
+    const conversionRate = leads.length > 0
+      ? Math.round((completed / leads.length) * 100)
       : 0;
 
-    // Urgent leads: pending leads (new/processing) that are close to expiring:
-    // - Hot leads with remaining time < 10 minutes (600 seconds)
-    // - Warm leads with remaining time < 2 hours (7200 seconds)
     const nowMs = Date.now();
     const urgentCount = leads.filter((l) => {
       if (l.status !== "new" && l.status !== "processing") return false;
-      
-      const expiryTime = l.expiry_at 
+      const expiryTime = l.expiry_at
         ? new Date(l.expiry_at).getTime()
         : new Date(l.created_at).getTime() + (l.intent === "hot" ? 30 : l.intent === "warm" ? 24 * 60 : 7 * 24 * 60) * 60 * 1000;
-      
       const remainingMs = expiryTime - nowMs;
-      if (remainingMs <= 0) return false; // already expired
-      
-      if (l.intent === "hot") {
-        return remainingMs < 10 * 60 * 1000; // < 10 mins
-      }
-      if (l.intent === "warm") {
-        return remainingMs < 2 * 60 * 60 * 1000; // < 2 hours
-      }
+      if (remainingMs <= 0) return false;
+      if (l.intent === "hot") return remainingMs < 10 * 60 * 1000;
+      if (l.intent === "warm") return remainingMs < 2 * 60 * 60 * 1000;
       return false;
     }).length;
 
-    return {
-      totalNew,
-      completed,
-      urgentCount,
-      conversionRate,
-    };
+    return { totalNew, completed, urgentCount, conversionRate };
   }, [leads]);
 
   if (isLoading) {
@@ -76,45 +57,45 @@ export function LeadStats({ leads, isLoading }: LeadStatsProps) {
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
       {/* Total New Leads */}
       <div className="glass-card p-4 md:p-6 rounded-xl flex flex-col gap-1 hover:shadow-sm transition-all duration-300">
-        <span className="text-[var(--color-text-secondary)] text-xs md:text-sm font-medium">Tổng Lead mới</span>
+        <span className="text-[var(--color-text-secondary)] text-xs md:text-sm font-medium">{t("leads.stats.totalNew")}</span>
         <span className="text-2xl md:text-3xl font-bold text-[var(--color-text-primary)]">
           {stats.totalNew}
         </span>
         <span className="text-[var(--color-brand)] text-[10px] md:text-xs font-bold flex items-center gap-1 mt-1">
-          <span className="material-symbols-outlined text-sm">hourglass_empty</span> Cần tiếp cận ngay
+          <span className="material-symbols-outlined text-sm">hourglass_empty</span> {t("leads.stats.needContact")}
         </span>
       </div>
 
       {/* Response/Conversion Rate */}
       <div className="glass-card p-4 md:p-6 rounded-xl flex flex-col gap-1 hover:shadow-sm transition-all duration-300">
-        <span className="text-[var(--color-text-secondary)] text-xs md:text-sm font-medium">Tỉ lệ chuyển đổi</span>
+        <span className="text-[var(--color-text-secondary)] text-xs md:text-sm font-medium">{t("leads.stats.conversion")}</span>
         <span className="text-2xl md:text-3xl font-bold text-[var(--color-text-primary)]">
           {stats.conversionRate}%
         </span>
         <span className="text-[var(--color-success)] text-[10px] md:text-xs font-bold flex items-center gap-1 mt-1">
-          <span className="material-symbols-outlined text-sm">check_circle</span> Phản hồi thành công
+          <span className="material-symbols-outlined text-sm">check_circle</span> {t("leads.stats.successReply")}
         </span>
       </div>
 
       {/* Urgent Leads Count */}
       <div className="glass-card p-4 md:p-6 rounded-xl flex flex-col gap-1 border-l-4 border-[var(--color-error)] hover:shadow-sm transition-all duration-300">
-        <span className="text-[var(--color-text-secondary)] text-xs md:text-sm font-medium">Sắp hết hạn</span>
+        <span className="text-[var(--color-text-secondary)] text-xs md:text-sm font-medium">{t("leads.stats.expiringSoon")}</span>
         <span className="text-2xl md:text-3xl font-bold text-[var(--color-error)]">
           {String(stats.urgentCount).padStart(2, "0")}
         </span>
         <span className="text-[var(--color-error)] text-[10px] md:text-xs font-bold flex items-center gap-1 mt-1">
-          <span className="material-symbols-outlined text-sm animate-pulse">timer</span> Cần ưu tiên xử lý
+          <span className="material-symbols-outlined text-sm animate-pulse">timer</span> {t("leads.stats.prioritize")}
         </span>
       </div>
 
       {/* Processed Leads */}
       <div className="glass-card p-4 md:p-6 rounded-xl flex flex-col gap-1 hover:shadow-sm transition-all duration-300">
-        <span className="text-[var(--color-text-secondary)] text-xs md:text-sm font-medium">Đã xử lý (chốt)</span>
+        <span className="text-[var(--color-text-secondary)] text-xs md:text-sm font-medium">{t("leads.stats.closed")}</span>
         <span className="text-2xl md:text-3xl font-bold text-[var(--color-text-primary)]">
           {stats.completed}
         </span>
         <span className="text-[var(--color-text-muted)] text-[10px] md:text-xs font-medium mt-1">
-          Mục tiêu: chốt 100% lead
+          {t("leads.stats.goal")}
         </span>
       </div>
     </div>

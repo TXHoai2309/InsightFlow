@@ -3,8 +3,12 @@ import fs from "fs";
 import path from "path";
 import { initializeApp, getApps, cert, applicationDefault } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
+import { getAuth } from "firebase-admin/auth";
 
-// Attempt to load .env.local
+const SERVICE_ACCOUNT_PATH = path.join(process.cwd(), "service-account.json");
+const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_SECOND_PROJECT_ID || "insightflow-6ce1f";
+
+// Attempt to load .env.local for other variables
 const possiblePaths = [
   path.join(process.cwd(), ".env.local"),
   path.join(process.cwd(), "..", "..", ".env.local"),
@@ -15,18 +19,15 @@ for (const p of possiblePaths) {
   if (fs.existsSync(p)) {
     try {
       const content = fs.readFileSync(p, "utf8");
-      content.split(/\r?\n/).forEach((line) => {
-        const trimmed = line.trim();
-        if (trimmed && !trimmed.startsWith("#") && trimmed.includes("=")) {
-          const parts = trimmed.split("=");
-          const key = parts[0].trim();
-          const val = parts.slice(1).join("=").trim();
-          if (!process.env[key]) {
-            process.env[key] = val;
-          }
+      const regex = /^([A-Z0-9_]+)=(['"]([\s\S]*?)['"]|([^\n\r]*))/gm;
+      let match;
+      while ((match = regex.exec(content)) !== null) {
+        const key = match[1];
+        const value = match[3] || match[4];
+        if (value !== undefined && !process.env[key]) {
+          process.env[key] = value.trim();
         }
-      });
-      console.log(`[Firebase Admin] Loaded environment variables from: ${p}`);
+      }
       break;
     } catch (err: any) {
       console.warn(`Failed to read env file at ${p}:`, err.message);
@@ -34,43 +35,30 @@ for (const p of possiblePaths) {
   }
 }
 
-const projectId = process.env.NEXT_PUBLIC_FIREBASE_SECOND_PROJECT_ID || "datainsight-330eb";
-
 if (getApps().length === 0) {
-  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-
-  if (serviceAccountJson) {
+  if (fs.existsSync(SERVICE_ACCOUNT_PATH)) {
     try {
-      const serviceAccount = JSON.parse(serviceAccountJson);
+      const serviceAccount = require(SERVICE_ACCOUNT_PATH);
       initializeApp({
         credential: cert(serviceAccount),
-        projectId,
+        projectId: PROJECT_ID,
       });
-      console.log(`[Firebase Admin] Initialized with service account for project: ${projectId}`);
+      console.log(`[Firebase Admin] Initialized with service-account.json for project: ${PROJECT_ID}`);
     } catch (e: any) {
-      console.error("[Firebase Admin] Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON, falling back:", e.message);
-      initializeApp({ projectId });
+      console.error("[Firebase Admin] Failed to load service-account.json:", e.message);
+      initializeApp({ projectId: PROJECT_ID });
     }
   } else {
+    console.warn("[Firebase Admin] service-account.json not found. Attempting basic initialization...");
     try {
-      // Attempt default credentials or emulator connection
-      initializeApp({
-        projectId,
-      });
-      console.log(`[Firebase Admin] Initialized with project ID: ${projectId}`);
-    } catch (e: any) {
-      console.warn("[Firebase Admin] Failed basic initialization, attempting applicationDefault:", e.message);
-      try {
-        initializeApp({
-          credential: applicationDefault(),
-          projectId,
-        });
-      } catch (err: any) {
-        console.error("[Firebase Admin] Critical: All initialization attempts failed.", err.message);
-      }
+      initializeApp({ projectId: PROJECT_ID });
+      console.log(`[Firebase Admin] Initialized with project ID: ${PROJECT_ID}`);
+    } catch (err: any) {
+      console.error("[Firebase Admin] Critical: Initialization failed.", err.message);
     }
   }
 }
 
 export const db = getFirestore();
+export const authAdmin = getAuth();
 export default getApps()[0];

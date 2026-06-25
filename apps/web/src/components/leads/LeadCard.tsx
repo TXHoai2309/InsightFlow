@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { PLATFORM_META } from "@/lib/services/dashboard";
 import type { Lead } from "@/types/dashboard";
@@ -20,50 +21,24 @@ const PLATFORM_ICONS: Record<string, string> = {
   news: "newspaper",
 };
 
-const STATUS_META: Record<Lead["status"], { label: string; bg: string; text: string; dot: string }> = {
-  new: {
-    label: "Mới",
-    bg: "bg-[var(--color-brand-subtle)] border-[var(--color-brand-border)]",
-    text: "text-[var(--color-brand)]",
-    dot: "bg-[var(--color-brand)]",
-  },
-  processing: {
-    label: "Đang xử lý",
-    bg: "bg-[var(--color-warning-subtle)] border-[var(--color-warning)]/20",
-    text: "text-[var(--color-warning)]",
-    dot: "bg-[var(--color-warning)]",
-  },
-  completed: {
-    label: "Đã xử lý",
-    bg: "bg-[var(--color-success-subtle)] border-[var(--color-success)]/30",
-    text: "text-[var(--color-success)]",
-    dot: "bg-[var(--color-success)]",
-  },
-  skipped: {
-    label: "Bỏ qua",
-    bg: "bg-[var(--color-bg-surface-raised)] border-[var(--color-border)]",
-    text: "text-[var(--color-text-muted)]",
-    dot: "bg-[var(--color-text-muted)]",
-  },
-};
-
 export function LeadCard({ lead, currentTime }: LeadCardProps) {
   const { updateLeadDetails } = useDashboardStore();
+  const { t } = useTranslation();
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Notes state
   const [noteText, setNoteText] = useState(lead.notes || "");
   const [isEditingNote, setIsEditingNote] = useState(false);
   const [isSavingNote, setIsSavingNote] = useState(false);
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
 
-  // Sync state notes when lead changes
   useEffect(() => {
     setNoteText(lead.notes || "");
   }, [lead.notes]);
 
-  // Compute Expiry Time based on intent
+  const platformMeta = PLATFORM_META[lead.platform] || { label: lead.platform, color: "#888" };
+  const platformIcon = PLATFORM_ICONS[lead.platform] || "public";
+
   const getExpiryTime = () => {
     if (lead.expiry_at) return new Date(lead.expiry_at).getTime();
     const durationMin = lead.intent === "hot" ? 30 : lead.intent === "warm" ? 24 * 60 : 7 * 24 * 60;
@@ -74,49 +49,47 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
   const remainingSeconds = Math.max(0, Math.floor((expiryTime - currentTime) / 1000));
   const isExpired = remainingSeconds === 0;
 
-  // Handle direct contact action
+  const statusMeta = {
+    new: { label: t("leads.statusLabel.new"), bg: "bg-[var(--color-brand-subtle)] border-[var(--color-brand-border)]", text: "text-[var(--color-brand)]", dot: "bg-[var(--color-brand)]" },
+    processing: { label: t("leads.statusLabel.processing"), bg: "bg-[var(--color-warning-subtle)] border-[var(--color-warning)]/20", text: "text-[var(--color-warning)]", dot: "bg-[var(--color-warning)]" },
+    completed: { label: t("leads.statusLabel.completed"), bg: "bg-[var(--color-success-subtle)] border-[var(--color-success)]/30", text: "text-[var(--color-success)]", dot: "bg-[var(--color-success)]" },
+    skipped: { label: t("leads.statusLabel.skipped"), bg: "bg-[var(--color-bg-surface-raised)] border-[var(--color-border)]", text: "text-[var(--color-text-muted)]", dot: "bg-[var(--color-text-muted)]" },
+  };
+
+  const statusInfo = statusMeta[lead.status] || statusMeta.new;
+
   const handleContactAction = async (channel: string, link: string) => {
     try {
       setIsSaving(true);
       setSaveError(null);
-
-      // Auto-transition: Status from "new" to "processing" and increment contact attempts
       const updatedData: Partial<Lead> = {
         contact_attempts: (lead.contact_attempts || 0) + 1,
         last_contact_at: new Date().toISOString(),
       };
-
-      if (lead.status === "new") {
-        updatedData.status = "processing";
-      }
-
+      if (lead.status === "new") updatedData.status = "processing";
       await updateLeadDetails(lead.id, updatedData);
-      
-      // Open contact link in new tab
       window.open(link, "_blank");
     } catch (err) {
-      setSaveError(`Lỗi liên hệ qua ${channel}`);
+      setSaveError(`${t("leads.contact.error")} ${channel}`);
       console.error(err);
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Status select changes
   const handleStatusChange = async (newStatus: Lead["status"]) => {
     try {
       setIsSaving(true);
       setSaveError(null);
       await updateLeadDetails(lead.id, { status: newStatus });
     } catch (err) {
-      setSaveError("Không thể cập nhật trạng thái");
+      setSaveError(t("leads.note.errorStatus"));
       console.error(err);
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Notes update
   const handleSaveNote = async () => {
     try {
       setIsSavingNote(true);
@@ -126,21 +99,26 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
       setShowSaveSuccess(true);
       setTimeout(() => setShowSaveSuccess(false), 2000);
     } catch (err) {
-      setSaveError("Không thể lưu ghi chú");
+      setSaveError(t("leads.note.errorSave"));
       console.error(err);
     } finally {
       setIsSavingNote(false);
     }
   };
 
-  // Expiry layout calculations
+  const getInitials = (name: string) => {
+    const parts = name.trim().split(" ");
+    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
+
   const renderExpiryIndicator = () => {
     if (lead.status === "completed" || lead.status === "skipped") return null;
 
     if (isExpired) {
       return (
         <span className="inline-flex items-center gap-1 bg-error-container/10 border border-error/20 text-error px-2 py-0.5 rounded text-[11px] font-bold">
-          <span className="material-symbols-outlined text-[13px]">warning</span> Quá hạn
+          <span className="material-symbols-outlined text-[13px]">warning</span> {t("leads.expiry.overdue")}
         </span>
       );
     }
@@ -150,15 +128,10 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
       const s = remainingSeconds % 60;
       const formatted = `${m}:${s < 10 ? "0" + s : s}s`;
       const isUrgent = remainingSeconds < 10 * 60;
-
       return (
         <div className="flex items-center gap-1">
-          <span className={`material-symbols-outlined text-[14px] ${isUrgent ? "text-error animate-pulse" : "text-primary"}`}>
-            timer
-          </span>
-          <span className={`font-bold text-xs ${isUrgent ? "text-error animate-pulse font-extrabold" : "text-primary"}`}>
-            {formatted}
-          </span>
+          <span className={`material-symbols-outlined text-[14px] ${isUrgent ? "text-error animate-pulse" : "text-primary"}`}>timer</span>
+          <span className={`font-bold text-xs ${isUrgent ? "text-error animate-pulse font-extrabold" : "text-primary"}`}>{formatted}</span>
         </div>
       );
     }
@@ -166,30 +139,24 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
     if (lead.intent === "warm") {
       const h = Math.floor(remainingSeconds / 3600);
       const m = Math.floor((remainingSeconds % 3600) / 60);
-      const formatted = h > 0 ? `Còn ${h}h ${m}p` : `Còn ${m}p`;
-      const isUrgent = remainingSeconds < 2 * 60 * 60; // < 2h
-
+      const formatted = h > 0 ? `${t("leads.expiry.remaining")} ${h}h ${m}m` : `${t("leads.expiry.remaining")} ${m}m`;
+      const isUrgent = remainingSeconds < 2 * 60 * 60;
       return (
         <div className="flex items-center gap-1 text-secondary">
-          <span className={`material-symbols-outlined text-[14px] ${isUrgent ? "animate-bounce" : ""}`}>
-            schedule
-          </span>
-          <span className={`font-bold text-xs ${isUrgent ? "text-secondary font-extrabold" : ""}`}>
-            {formatted}
-          </span>
+          <span className={`material-symbols-outlined text-[14px] ${isUrgent ? "animate-bounce" : ""}`}>schedule</span>
+          <span className={`font-bold text-xs ${isUrgent ? "text-secondary font-extrabold" : ""}`}>{formatted}</span>
         </div>
       );
     }
 
     if (lead.intent === "cold") {
       const remainingDays = Math.ceil(remainingSeconds / (24 * 60 * 60));
-      const dateStr = new Date(expiryTime).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
-      
+      const dateStr = new Date(expiryTime).toLocaleDateString(undefined, { day: "2-digit", month: "2-digit" });
       return (
         <div className="flex items-center gap-1 text-[var(--color-text-secondary)]">
           <span className="material-symbols-outlined text-[14px]">calendar_today</span>
           <span className="text-xs font-semibold">
-            Hạn: {dateStr} (Còn {remainingDays} ngày)
+            {t("leads.expiry.deadline")}: {dateStr} ({t("leads.expiry.remaining")} {remainingDays} {t("leads.expiry.days")})
           </span>
         </div>
       );
@@ -198,26 +165,9 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
     return null;
   };
 
-  const getInitials = (name: string) => {
-    if (!name) return "KH";
-    return name.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase();
-  };
-
-  // Styling helpers
-  const platformMeta = PLATFORM_META[lead.platform] || { label: "Khác", color: "#666" };
-  const platformIcon = PLATFORM_ICONS[lead.platform] || "public";
-  const statusInfo = STATUS_META[lead.status];
-
   const getBorderClass = () => {
-    if (lead.status === "completed" || lead.status === "skipped") {
-      return "border-l-4 border-[var(--color-border)] opacity-75 grayscale-[0.1]";
-    }
-    if (lead.intent === "hot") {
-      return isExpired ? "border-l-4 border-[var(--color-border)]" : "border-l-4 border-[var(--color-error)] shadow-sm";
-    }
-    if (lead.intent === "warm") {
-      return "border-l-4 border-[var(--color-warning)]";
-    }
+    if (lead.intent === "hot") return "border-l-4 border-[var(--color-error)]";
+    if (lead.intent === "warm") return "border-l-4 border-[var(--color-warning)]";
     return "border-l-4 border-[var(--color-border)]";
   };
 
@@ -230,66 +180,43 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
       "bg-[var(--color-success-subtle)] text-[var(--color-success)] border-[var(--color-success)]/20",
     ];
     let hash = 0;
-    for (let i = 0; i < name.length; i++) {
-      hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    }
+    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
     return colors[Math.abs(hash) % colors.length];
   };
 
+  const customerLabel = t("leads.customer");
+
   return (
-    <div
-      className={`glass-card rounded-xl overflow-hidden hover:shadow-md hover:-translate-y-[1px] transition-all duration-300 ${getBorderClass()}`}
-    >
+    <div className={`glass-card rounded-xl overflow-hidden hover:shadow-md hover:-translate-y-[1px] transition-all duration-300 ${getBorderClass()}`}>
       <div className="p-4 md:p-6 space-y-4">
-        
-        {/* Core Layout Grid */}
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-          
-          {/* Avatar + Author Details */}
+          {/* Avatar + Author */}
           <div className="flex items-center gap-3 sm:w-56 flex-shrink-0">
             <div className="relative">
-              <div
-                className={`w-12 h-12 rounded-full border flex items-center justify-center font-bold text-sm shadow-sm ${getAvatarBg(
-                  lead.author || "Khách hàng"
-                )}`}
-              >
-                {getInitials(lead.author || "Khách hàng")}
+              <div className={`w-12 h-12 rounded-full border flex items-center justify-center font-bold text-sm shadow-sm ${getAvatarBg(lead.author || customerLabel)}`}>
+                {getInitials(lead.author || customerLabel)}
               </div>
               <div
                 className="absolute -bottom-1 -right-1 p-0.5 rounded-full border shadow-sm flex items-center justify-center"
                 style={{ color: platformMeta.color, backgroundColor: "var(--color-bg-surface)", borderColor: "var(--color-border)" }}
                 title={platformMeta.label}
               >
-                <span className="material-symbols-outlined text-[13px]" style={{ fontVariationSettings: "'FILL' 1" }}>
-                  {platformIcon}
-                </span>
+                <span className="material-symbols-outlined text-[13px]" style={{ fontVariationSettings: "'FILL' 1" }}>{platformIcon}</span>
               </div>
             </div>
-            
             <div className="flex flex-col gap-0.5">
-              <h4 className="text-sm font-bold text-[var(--color-text-primary)] line-clamp-1">
-                {lead.author || "Khách hàng"}
-              </h4>
-              <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
-                {renderExpiryIndicator()}
-              </div>
+              <h4 className="text-sm font-bold text-[var(--color-text-primary)] line-clamp-1">{lead.author || customerLabel}</h4>
+              <div className="flex flex-wrap items-center gap-1.5 mt-0.5">{renderExpiryIndicator()}</div>
             </div>
           </div>
 
-          {/* Core Content & Intent Tags */}
+          {/* Content & Tags */}
           <div className="flex-1 space-y-2.5">
-            <p className="text-body-md text-[var(--color-text-primary)] leading-relaxed font-medium">
-              {lead.content}
-            </p>
-            
-            {/* Meta tags & Details line */}
+            <p className="text-body-md text-[var(--color-text-primary)] leading-relaxed font-medium">{lead.content}</p>
             <div className="flex flex-wrap gap-1.5 items-center">
-              {/* Brand Tag */}
               <span className="bg-[var(--color-bg-surface-raised)] text-[var(--color-text-muted)] px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border border-[var(--color-border)]">
                 {lead.workspace_id}
               </span>
-
-              {/* Purchase Intent Tag */}
               {lead.intent === "hot" && (
                 <span className="bg-[var(--color-error-subtle)] text-[var(--color-error)] px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-0.5">
                   <span className="material-symbols-outlined text-xs">local_fire_department</span> HOT
@@ -301,25 +228,15 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
                 </span>
               )}
               {lead.intent === "cold" && (
-                <span className="bg-[var(--color-bg-surface-high)] text-[var(--color-text-muted)] px-2 py-0.5 rounded text-[10px] font-bold">
-                  COLD
-                </span>
+                <span className="bg-[var(--color-bg-surface-high)] text-[var(--color-text-muted)] px-2 py-0.5 rounded text-[10px] font-bold">COLD</span>
               )}
-
-              {/* Keyword Signals */}
               {lead.intent_signals.map((sig, i) => (
-                <span
-                  key={i}
-                  className="bg-[var(--color-bg-surface-raised)] text-[var(--color-text-muted)] px-2 py-0.5 rounded text-[10px] font-medium"
-                >
-                  {sig}
-                </span>
+                <span key={i} className="bg-[var(--color-bg-surface-raised)] text-[var(--color-text-muted)] px-2 py-0.5 rounded text-[10px] font-medium">{sig}</span>
               ))}
-
-              {/* Attempts tag */}
               {lead.contact_attempts && lead.contact_attempts > 0 ? (
                 <span className="bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)] px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-0.5 border border-[var(--color-border)]">
-                  <span className="material-symbols-outlined text-xs">call_made</span> Đã tiếp cận {lead.contact_attempts} lần
+                  <span className="material-symbols-outlined text-xs">call_made</span>
+                  {t("leads.contact.attempts")} {lead.contact_attempts} {t("leads.contact.attemptsSuffix")}
                 </span>
               ) : null}
             </div>
@@ -335,10 +252,10 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
                 className={`appearance-none pl-3 pr-8 py-1.5 border rounded-full text-xs font-bold focus:ring-1 outline-none transition-all cursor-pointer shadow-sm ${statusInfo.bg} ${statusInfo.text} ${isSaving ? "opacity-50 cursor-not-allowed" : ""}`}
                 style={{ backgroundColor: "var(--color-bg-surface)" }}
               >
-                <option value="new">🟢 Mới</option>
-                <option value="processing">🟡 Đang xử lý</option>
-                <option value="completed">🔵 Đã xử lý</option>
-                <option value="skipped">⚫ Bỏ qua</option>
+                <option value="new">{t("leads.status.new")}</option>
+                <option value="processing">{t("leads.status.processing")}</option>
+                <option value="completed">{t("leads.status.completed")}</option>
+                <option value="skipped">{t("leads.status.skipped")}</option>
               </select>
               <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center">
                 {isSaving ? (
@@ -349,124 +266,70 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
               </div>
             </div>
           </div>
-
         </div>
 
-        {/* Action / Contact Buttons and Notes section */}
+        {/* Actions & Notes */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-3 border-t" style={{ borderColor: "var(--color-border)" }}>
-          
-          {/* Direct Contact/Approach Buttons (UX Auto-Transition triggers) */}
           <div className="flex flex-wrap items-center gap-2">
-            {/* Zalo Contact */}
             {lead.zalo_id && (
-              <button
-                onClick={() => handleContactAction("Zalo", `https://zalo.me/${lead.zalo_id}`)}
-                disabled={isSaving}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0068ff]/10 hover:bg-[#0068ff]/20 text-[#0068ff] border border-[#0068ff]/20 rounded-lg text-xs font-bold transition-all"
-                title="Mở Zalo chat"
-              >
+              <button onClick={() => handleContactAction("Zalo", `https://zalo.me/${lead.zalo_id}`)} disabled={isSaving}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0068ff]/10 hover:bg-[#0068ff]/20 text-[#0068ff] border border-[#0068ff]/20 rounded-lg text-xs font-bold transition-all">
                 <span className="material-symbols-outlined text-base">forum</span>
-                Zalo
+                {t("leads.contact.zalo")}
               </button>
             )}
-
-            {/* Messenger Contact */}
             {lead.messenger_id && (
-              <button
-                onClick={() => handleContactAction("Messenger", `https://m.me/${lead.messenger_id}`)}
-                disabled={isSaving}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0084FF]/10 hover:bg-[#0084FF]/20 text-[#0084FF] border border-[#0084FF]/20 rounded-lg text-xs font-bold transition-all"
-                title="Mở Facebook Messenger"
-              >
+              <button onClick={() => handleContactAction("Messenger", `https://m.me/${lead.messenger_id}`)} disabled={isSaving}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0084FF]/10 hover:bg-[#0084FF]/20 text-[#0084FF] border border-[#0084FF]/20 rounded-lg text-xs font-bold transition-all">
                 <span className="material-symbols-outlined text-base">chat</span>
-                Messenger
+                {t("leads.contact.messenger")}
               </button>
             )}
-
-            {/* Call Phone Link */}
             {lead.phone && (
               <>
-                <button
-                  onClick={() => handleContactAction("Call", `tel:${lead.phone}`)}
-                  disabled={isSaving}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--color-success-subtle)] hover:bg-[var(--color-success)]/20 text-[var(--color-success)] border border-[var(--color-success)]/30 rounded-lg text-xs font-bold transition-all"
-                  title={`Gọi số điện thoại ${lead.phone}`}
-                >
+                <button onClick={() => handleContactAction("Call", `tel:${lead.phone}`)} disabled={isSaving}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--color-success-subtle)] hover:bg-[var(--color-success)]/20 text-[var(--color-success)] border border-[var(--color-success)]/30 rounded-lg text-xs font-bold transition-all">
                   <span className="material-symbols-outlined text-base">call</span>
-                  Gọi điện ({lead.phone.slice(-4)})
+                  {t("leads.contact.call")} ({lead.phone.slice(-4)})
                 </button>
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(lead.phone || "");
-                    alert("Đã copy số điện thoại!");
-                  }}
-                  className="p-1.5 hover:bg-[var(--color-bg-surface-raised)] rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-all flex items-center justify-center"
-                  title="Copy SĐT"
-                >
+                <button onClick={() => { navigator.clipboard.writeText(lead.phone || ""); alert(t("leads.contact.copyPhone")); }}
+                  className="p-1.5 hover:bg-[var(--color-bg-surface-raised)] rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-all flex items-center justify-center">
                   <span className="material-symbols-outlined text-sm">content_copy</span>
                 </button>
               </>
             )}
-
-            {/* Original Post */}
             {lead.url && (
-              <a
-                href={lead.url}
-                target="_blank"
-                rel="noopener noreferrer"
+              <a href={lead.url} target="_blank" rel="noopener noreferrer"
                 onClick={() => {
-                  // Increments attempt but does not block URL open
                   if (lead.status === "new") {
-                    updateLeadDetails(lead.id, {
-                      status: "processing",
-                      contact_attempts: (lead.contact_attempts || 0) + 1,
-                      last_contact_at: new Date().toISOString()
-                    });
+                    updateLeadDetails(lead.id, { status: "processing", contact_attempts: (lead.contact_attempts || 0) + 1, last_contact_at: new Date().toISOString() });
                   } else {
-                    updateLeadDetails(lead.id, {
-                      contact_attempts: (lead.contact_attempts || 0) + 1,
-                      last_contact_at: new Date().toISOString()
-                    });
+                    updateLeadDetails(lead.id, { contact_attempts: (lead.contact_attempts || 0) + 1, last_contact_at: new Date().toISOString() });
                   }
                 }}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--color-bg-surface-raised)] hover:bg-[var(--color-bg-surface-high)] text-[var(--color-text-secondary)] border border-[var(--color-border)] rounded-lg text-xs font-bold transition-all"
-                title="Xem bài đăng nguồn để lấy ngữ cảnh đầy đủ"
-              >
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--color-bg-surface-raised)] hover:bg-[var(--color-bg-surface-high)] text-[var(--color-text-secondary)] border border-[var(--color-border)] rounded-lg text-xs font-bold transition-all">
                 <span className="material-symbols-outlined text-base">open_in_new</span>
-                Xem bài viết gốc
+                {t("leads.contact.viewPost")}
               </a>
             )}
           </div>
 
-          {/* CRM Note Field */}
+          {/* Note field */}
           <div className="flex-1 max-w-md flex items-center gap-2 self-stretch lg:self-auto mt-2 lg:mt-0">
             <div className="relative flex-1">
               <input
                 type="text"
                 value={noteText}
-                placeholder="Nhập ghi chú nhanh chăm sóc..."
-                onChange={(e) => {
-                  setNoteText(e.target.value);
-                  setIsEditingNote(true);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleSaveNote();
-                }}
+                placeholder={t("leads.note.placeholder")}
+                onChange={(e) => { setNoteText(e.target.value); setIsEditingNote(true); }}
+                onKeyDown={(e) => { if (e.key === "Enter") handleSaveNote(); }}
                 disabled={isSavingNote}
                 className="w-full pl-3 pr-9 py-1.5 border rounded-lg text-xs outline-none focus:ring-1 focus:ring-primary transition-all"
-                style={{
-                  backgroundColor: "var(--color-bg-surface-raised)",
-                  borderColor: "var(--color-border)",
-                  color: "var(--color-text-primary)",
-                }}
+                style={{ backgroundColor: "var(--color-bg-surface-raised)", borderColor: "var(--color-border)", color: "var(--color-text-primary)" }}
               />
               {isEditingNote && (
-                <button
-                  onClick={handleSaveNote}
-                  disabled={isSavingNote}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-primary hover:bg-primary/10 rounded flex items-center justify-center transition-all"
-                  title="Lưu ghi chú"
-                >
+                <button onClick={handleSaveNote} disabled={isSavingNote} title={t("leads.note.save")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-primary hover:bg-primary/10 rounded flex items-center justify-center transition-all">
                   {isSavingNote ? (
                     <span className="w-3.5 h-3.5 border border-primary/20 border-t-primary rounded-full animate-spin"></span>
                   ) : (
@@ -475,33 +338,24 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
                 </button>
               )}
             </div>
-            
             {showSaveSuccess && (
               <span className="text-[10px] text-[var(--color-success)] font-bold flex items-center gap-0.5 animate-bounce">
-                <span className="material-symbols-outlined text-xs">check_circle</span> Đã lưu
+                <span className="material-symbols-outlined text-xs">check_circle</span> {t("leads.note.saved")}
               </span>
             )}
           </div>
-
         </div>
 
-        {/* Error / Last updated log row */}
+        {/* Error / Last contact row */}
         {(saveError || lead.last_contact_at) && (
           <div className="flex items-center justify-between text-[10px] font-medium text-[var(--color-text-muted)] pt-1">
             <div>
               {lead.last_contact_at && (
                 <span>
-                  Liên hệ cuối: {new Date(lead.last_contact_at).toLocaleTimeString("vi-VN", {
-                    hour: "2-digit",
-                    minute: "2-digit"
-                  })} ngày {new Date(lead.last_contact_at).toLocaleDateString("vi-VN", {
-                    day: "2-digit",
-                    month: "2-digit"
-                  })}
+                  {t("leads.lastContact")} {new Date(lead.last_contact_at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })} {new Date(lead.last_contact_at).toLocaleDateString(undefined, { day: "2-digit", month: "2-digit" })}
                 </span>
               )}
             </div>
-            
             {saveError && (
               <span className="text-[var(--color-error)] flex items-center gap-0.5 font-bold animate-pulse">
                 <span className="material-symbols-outlined text-xs">error</span>
@@ -510,7 +364,6 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
             )}
           </div>
         )}
-
       </div>
     </div>
   );

@@ -2,20 +2,15 @@
 
 import { useState } from "react";
 import { usePathname } from "next/navigation";
-import "../i18n";
+import "../../i18n";
 import "./globals.css";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { MobileNav } from "@/components/layout/MobileNav";
 import Footer from "@/components/home/Footer";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import { I18nProvider } from "@/contexts/I18nProvider";
 
-/**
- * Anti-FOUC (Flash of Unstyled Content) Script.
- * Được inject trực tiếp vào <head> TRƯỚC khi React hydrate.
- * Đọc localStorage và set class "dark" lên <html> ngay lập tức
- * để tránh màn hình trắng nháy khi reload trang ở dark mode.
- */
 const antiFoucScript = `
 (function() {
   try {
@@ -33,13 +28,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const hideShell = ["/", "/login", "/register", "/nganh", "/ve-chung-toi", "/profile"].includes(pathname || "");
+  const hideShell = ["/", "/login", "/register", "/forgot-password", "/nganh", "/ve-chung-toi", "/profile"].includes(pathname || "");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
     <html lang="vi" suppressHydrationWarning>
       <head>
-        {/* Anti-FOUC: set dark class trước React render để tránh flash */}
         <script dangerouslySetInnerHTML={{ __html: antiFoucScript }} />
         <title>InsightFlow · Biến dữ liệu thành insight</title>
         <meta
@@ -64,29 +58,32 @@ export default function RootLayout({
       </head>
       <body style={{ margin: 0, padding: 0, backgroundColor: "var(--color-bg-primary)" }}>
         <ThemeProvider>
-          {hideShell ? (
-            <div className="flex flex-col min-h-screen">
-              <main className="flex-1">{children}</main>
-              <Footer />
-            </div>
-          ) : (
-            <div className="flex h-screen w-screen overflow-hidden" style={{ backgroundColor: "var(--color-bg-primary)" }}>
-              <Sidebar
-                isOpen={sidebarOpen}
-                onClose={() => setSidebarOpen(false)}
-              />
-              <div className="flex flex-col flex-1 md:ml-64">
-                <Header onMenuToggle={() => setSidebarOpen((prev) => !prev)} />
-                <main
-                  className="flex-1 overflow-y-auto mt-16 pb-16 md:pb-0"
-                  style={{ backgroundColor: "var(--color-bg-primary)" }}
-                >
-                  {children}
-                </main>
-                <MobileNav />
+          {/* I18nProvider: đọc localStorage và apply ngôn ngữ SAU khi client mount */}
+          <I18nProvider>
+            {hideShell ? (
+              <div className="flex flex-col min-h-screen">
+                <main className="flex-1">{children}</main>
+                <Footer />
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="flex h-screen w-screen overflow-hidden" style={{ backgroundColor: "var(--color-bg-primary)" }}>
+                <Sidebar
+                  isOpen={sidebarOpen}
+                  onClose={() => setSidebarOpen(false)}
+                />
+                <div className="flex flex-col flex-1 md:ml-64">
+                  <Header onMenuToggle={() => setSidebarOpen((prev) => !prev)} />
+                  <main
+                    className="flex-1 overflow-y-auto mt-16 pb-16 md:pb-0"
+                    style={{ backgroundColor: "var(--color-bg-primary)" }}
+                  >
+                    {children}
+                  </main>
+                  <MobileNav />
+                </div>
+              </div>
+            )}
+          </I18nProvider>
         </ThemeProvider>
       </body>
     </html>

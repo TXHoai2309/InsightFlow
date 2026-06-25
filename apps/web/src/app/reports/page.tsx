@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslation } from "react-i18next";
+
 import React, { useState, useEffect, useMemo } from "react";
 import { generateDailyReportPDF, generateCustomReportPDF } from "@/lib/pdfExport";
 import { collection, getDocs } from "firebase/firestore";
@@ -214,14 +216,14 @@ function ArchivedReportDetailModal({
               <p className="text-xl font-bold text-on-surface mt-0.5">{stats.total}</p>
             </div>
             <div className="border border-outline-variant rounded-xl p-3 text-center bg-surface-bright">
-              <p className="text-[9px] text-outline font-bold uppercase">Tích cực</p>
+              <p className="text-[9px] text-outline font-bold uppercase">{t("reports.sentiment.positive")}</p>
               <p className="text-xl font-bold text-green-600 mt-0.5">
                 {stats.positive}
                 <span className="text-[10px] font-normal text-outline ml-1">({stats.total > 0 ? Math.round(stats.positive/stats.total*100) : 0}%)</span>
               </p>
             </div>
             <div className="border border-outline-variant rounded-xl p-3 text-center bg-surface-bright">
-              <p className="text-[9px] text-outline font-bold uppercase">Tiêu cực</p>
+              <p className="text-[9px] text-outline font-bold uppercase">{t("reports.sentiment.negative")}</p>
               <p className="text-xl font-bold text-red-600 mt-0.5">
                 {stats.negative}
                 <span className="text-[10px] font-normal text-outline ml-1">({stats.total > 0 ? Math.round(stats.negative/stats.total*100) : 0}%)</span>
@@ -271,7 +273,7 @@ function ArchivedReportDetailModal({
                             m.sentiment.toLowerCase().includes("pos") ? "text-green-600 bg-green-50 border-green-200" :
                             m.sentiment.toLowerCase().includes("neg") ? "text-red-600 bg-red-50 border-red-200" : "text-gray-600 bg-gray-50 border-gray-200"
                           }`}>
-                            {m.sentiment === "positive" || m.sentiment === "pos" ? "Tích cực" : m.sentiment === "negative" || m.sentiment === "neg" ? "Tiêu cực" : "Trung lập"}
+                            {m.sentiment === "positive" || m.sentiment === "pos" ? t("reports.sentiment.positive") : m.sentiment === "negative" || m.sentiment === "neg" ? t("reports.sentiment.negative") : t("reports.sentiment.neutral")}
                           </span>
                         </td>
                       </tr>
@@ -287,7 +289,7 @@ function ArchivedReportDetailModal({
         <div className="flex justify-between items-center border-t border-outline-variant pt-3 mt-1">
           <button 
             onClick={() => {
-              if (confirm("Bạn có chắc chắn muốn xóa báo cáo này khỏi kho lưu trữ?")) {
+              if (confirm(t("reports.deleteConfirm"))) {
                 onDelete();
               }
             }}
@@ -338,7 +340,7 @@ function formatBrandName(brand: string): string {
 
 function generateAIInsights(brand: string, mentions: Mention[], prompt: string): string {
   const total = mentions.length;
-  if (total === 0) return "Không có dữ liệu đề cập để phân tích.";
+  if (total === 0) return t("reports.noData");
 
   let positive = 0;
   let negative = 0;
@@ -445,6 +447,7 @@ function generateAIInsights(brand: string, mentions: Mention[], prompt: string):
 }
 
 export default function ReportsPage() {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<"periodic" | "custom" | "archive">("periodic");
   const [selectedBrand, setSelectedBrand] = useState("all");
   const [timeFilter, setTimeFilter] = useState("all"); // "all", "today", "week", "month"
@@ -452,6 +455,7 @@ export default function ReportsPage() {
   const [mentions, setMentions] = useState<Mention[]>([]);
   const [brands, setBrands] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   
   const [generatingPdfId, setGeneratingPdfId] = useState<string | null>(null);
   const [previewReport, setPreviewReport] = useState<DailyReport | null>(null);
@@ -556,7 +560,27 @@ export default function ReportsPage() {
     async function fetchData() {
       try {
         setLoading(true);
+        setFetchError(null);
+
+        // Check if secondDb is properly initialized
+        if (!secondDb) {
+          console.error("[Reports] secondDb is null — Firebase second project not initialized. Check NEXT_PUBLIC_FIREBASE_SECOND_* env vars.");
+          setFetchError("Không thể kết nối Firebase. Vui lòng kiểm tra cấu hình biến môi trường (NEXT_PUBLIC_FIREBASE_SECOND_*).");
+          setLoading(false);
+          return;
+        }
+
+        console.log("[Reports] Fetching mentions from mentions_nlp_demo...");
         const snapshot = await getDocs(collection(secondDb, "mentions_nlp_demo"));
+        console.log(`[Reports] Fetched ${snapshot.size} documents from Firestore.`);
+
+        if (snapshot.empty) {
+          console.warn("[Reports] Collection mentions_nlp_demo is empty — no documents found.");
+          setFetchError("Collection 'mentions_nlp_demo' trống — không tìm thấy dữ liệu nào trong Firestore.");
+          setLoading(false);
+          return;
+        }
+
         const data: Mention[] = [];
         const brandSet = new Set<string>();
 
@@ -568,29 +592,55 @@ export default function ReportsPage() {
             brandSet.add(b);
           }
 
-          let postedRaw = d.posted_at || d.created_at || d.analyzed_at || new Date().toISOString();
+          // Try multiple date fields (matching useMentionsData logic)
+          let postedRaw = d.post_date || d.posted_at || d.created_at || d.crawled_at || d.analyzed_at || new Date().toISOString();
           let posted = "";
           if (typeof postedRaw === "object" && typeof postedRaw.toDate === "function") {
             posted = postedRaw.toDate().toISOString();
+          } else if (typeof postedRaw === "object" && typeof postedRaw.seconds === "number") {
+            posted = new Date(postedRaw.seconds * 1000).toISOString();
           } else {
-            posted = String(postedRaw);
+            const rawStr = String(postedRaw).trim();
+            // Handle DD/MM/YYYY or DD/MM/YYYY HH:mm:ss format
+            const vnDateMatch = rawStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+            if (vnDateMatch) {
+              const day = parseInt(vnDateMatch[1], 10);
+              const month = parseInt(vnDateMatch[2], 10) - 1;
+              const year = parseInt(vnDateMatch[3], 10);
+              const hour = vnDateMatch[4] ? parseInt(vnDateMatch[4], 10) : 0;
+              const minute = vnDateMatch[5] ? parseInt(vnDateMatch[5], 10) : 0;
+              const second = vnDateMatch[6] ? parseInt(vnDateMatch[6], 10) : 0;
+              const parsedDate = new Date(year, month, day, hour, minute, second);
+              posted = !isNaN(parsedDate.getTime()) ? parsedDate.toISOString() : rawStr;
+            } else {
+              posted = rawStr;
+            }
           }
           
           data.push({
             id: doc.id,
             brand: b,
             source: d.source || d.platform || "unknown",
-            content: d.content || d.text || "",
+            content: d.content || d.processed_text || d.text || "",
             sentiment: d.baseline_sentiment || d.sentiment || "neutral",
             topic: d.baseline_topic || d.topic || "other",
             posted_at: posted
           });
         });
 
+        console.log(`[Reports] Processed ${data.length} mentions, ${brandSet.size} brands: [${Array.from(brandSet).join(", ")}]`);
+        
+        // Log sample dates for debugging
+        if (data.length > 0) {
+          const sampleDates = data.slice(0, 3).map(m => `${m.brand}: ${m.posted_at}`);
+          console.log("[Reports] Sample posted_at dates:", sampleDates);
+        }
+
         setMentions(data);
         setBrands(Array.from(brandSet).sort());
-      } catch (err) {
-        console.error("Error fetching mentions:", err);
+      } catch (err: any) {
+        console.error("[Reports] Error fetching mentions:", err);
+        setFetchError(`Lỗi khi tải dữ liệu: ${err?.message || "Không xác định"}. Kiểm tra Firestore rules và kết nối mạng.`);
       } finally {
         setLoading(false);
       }
@@ -603,10 +653,6 @@ export default function ReportsPage() {
     const targetBrands = selectedBrand === "all" ? brands : [selectedBrand];
     if (targetBrands.length === 0) return [];
 
-    let daysToGenerate = 30; // default for "all" and "month"
-    if (timeFilter === "today") daysToGenerate = 1;
-    if (timeFilter === "week") daysToGenerate = 7;
-    
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
@@ -614,6 +660,8 @@ export default function ReportsPage() {
 
     // Pre-group mentions by brand and date string for quick lookup
     const groupedMentions: Record<string, Record<string, Mention[]>> = {};
+    let earliestDate: Date | null = null;
+    
     mentions.forEach(m => {
       let d: Date;
       const match = m.posted_at.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
@@ -624,6 +672,11 @@ export default function ReportsPage() {
       }
       if (isNaN(d.getTime())) return;
 
+      // Track earliest date for "all" filter
+      if (!earliestDate || d < earliestDate) {
+        earliestDate = d;
+      }
+
       const dateStr = d.toLocaleDateString("vi-VN", { day: '2-digit', month: '2-digit', year: 'numeric' });
       const b = m.brand;
       
@@ -632,6 +685,18 @@ export default function ReportsPage() {
       groupedMentions[b][dateStr].push(m);
     });
 
+    // Determine date range based on filter
+    let daysToGenerate = 30;
+    if (timeFilter === "today") daysToGenerate = 1;
+    else if (timeFilter === "week") daysToGenerate = 7;
+    else if (timeFilter === "all" && earliestDate) {
+      // Calculate days from earliest mention to today
+      const diffMs = today.getTime() - (earliestDate as Date).getTime();
+      daysToGenerate = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)) + 1);
+      // Cap at 365 days to avoid performance issues
+      daysToGenerate = Math.min(daysToGenerate, 365);
+    }
+
     for (let i = 0; i < daysToGenerate; i++) {
       const d = new Date(today);
       d.setDate(d.getDate() - i);
@@ -639,6 +704,9 @@ export default function ReportsPage() {
 
       targetBrands.forEach(b => {
         const arr = (groupedMentions[b] && groupedMentions[b][dateStr]) ? groupedMentions[b][dateStr] : [];
+        // Only include if there are mentions (for "all" filter to avoid too many empty rows)
+        if (timeFilter === "all" && arr.length === 0) return;
+        
         result.push({
           id: `RPT-${b.replace(/\s+/g, '')}-${dateStr.replace(/\//g, "")}`,
           dateStr,
@@ -693,7 +761,7 @@ export default function ReportsPage() {
       });
     });
     const sentimentScore = totalSent > 0 ? Math.round((pos / totalSent) * 100) : 0;
-    const sentimentLabel = sentimentScore >= 50 ? "Tích cực" : sentimentScore > 0 ? "Tiêu cực" : "Chưa có";
+    const sentimentLabel = sentimentScore >= 50 ? t("reports.sentiment.positive") : sentimentScore > 0 ? t("reports.sentiment.negative") : "Chưa có";
     const sentimentIcon = sentimentScore >= 50 ? "sentiment_satisfied" : sentimentScore > 0 ? "sentiment_dissatisfied" : "sentiment_neutral";
 
     // 3. Báo cáo gần nhất
@@ -1072,6 +1140,19 @@ export default function ReportsPage() {
                  <div className="w-8 h-8 border-4 border-[var(--color-brand)] border-t-transparent rounded-full animate-spin mb-4"></div>
                  <p className="font-bold">Đang tải dữ liệu báo cáo...</p>
               </div>
+            ) : fetchError ? (
+              <div className="flex-1 flex flex-col items-center justify-center py-20 text-center px-4">
+                <span className="material-symbols-outlined text-5xl mb-3 text-[var(--color-error)]">error_outline</span>
+                <p className="font-bold text-[var(--color-error)] mb-2">Không thể tải dữ liệu</p>
+                <p className="text-sm text-[var(--color-text-muted)] max-w-md mb-4">{fetchError}</p>
+                <button 
+                  onClick={() => window.location.reload()}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-[var(--color-brand)] text-white rounded-xl font-bold text-sm hover:bg-[var(--color-brand-hover)] transition-colors"
+                >
+                  <span className="material-symbols-outlined text-lg">refresh</span>
+                  Thử lại
+                </button>
+              </div>
             ) : reportsList.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center py-20 text-[var(--color-text-muted)]">
                 <span className="material-symbols-outlined text-5xl mb-2 opacity-50">description</span>
@@ -1332,9 +1413,9 @@ export default function ReportsPage() {
                     </div>
                     <div className="flex flex-wrap gap-2 pt-1">
                       {[
-                        { val: "positive", label: "Tích cực", icon: "mood", color: "text-green-600 bg-green-50 border-green-200" },
-                        { val: "neutral", label: "Trung lập", icon: "sentiment_neutral", color: "text-gray-600 bg-gray-50 border-gray-200" },
-                        { val: "negative", label: "Tiêu cực", icon: "sentiment_dissatisfied", color: "text-red-600 bg-red-50 border-red-200" }
+                        { val: "positive", label: t("reports.sentiment.positive"), icon: "mood", color: "text-green-600 bg-green-50 border-green-200" },
+                        { val: "neutral", label: t("reports.sentiment.neutral"), icon: "sentiment_neutral", color: "text-gray-600 bg-gray-50 border-gray-200" },
+                        { val: "negative", label: t("reports.sentiment.negative"), icon: "sentiment_dissatisfied", color: "text-red-600 bg-red-50 border-red-200" }
                       ].map(item => {
                         const active = customSentiments.includes(item.val);
                         return (
@@ -1605,7 +1686,7 @@ export default function ReportsPage() {
                                 m.sentiment.toLowerCase().includes("pos") ? "text-[var(--color-success)] bg-[var(--color-success-subtle)] border-[var(--color-success)]/30" :
                                 m.sentiment.toLowerCase().includes("neg") ? "text-[var(--color-error)] bg-[var(--color-error-subtle)] border-[var(--color-error)]/30" : "text-[var(--color-text-secondary)] bg-[var(--color-bg-surface-raised)] border-[var(--color-border)]"
                               }`}>
-                                {m.sentiment === "positive" ? "Tích cực" : m.sentiment === "negative" ? "Tiêu cực" : "Trung lập"}
+                                {m.sentiment === "positive" ? t("reports.sentiment.positive") : m.sentiment === "negative" ? t("reports.sentiment.negative") : t("reports.sentiment.neutral")}
                               </span>
                             </td>
                             <td className="px-4 py-3 font-bold text-[var(--color-text-secondary)] capitalize">{m.topic}</td>

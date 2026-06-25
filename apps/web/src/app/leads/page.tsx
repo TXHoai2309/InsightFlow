@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useDashboard } from "@/hooks/useDashboardData";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { LeadFilters, LeadStats, LeadCard } from "@/components/leads";
@@ -13,6 +14,7 @@ import { normalizeBrandName } from "@/lib/services/dashboard";
  * Hỗ trợ mobile responsive và đếm ngược thời gian thực
  */
 export default function LeadsPage() {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<"hot" | "warm" | "cold">("hot");
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
 
