@@ -1,10 +1,11 @@
 /**
  * US-13: Dashboard Store
- * Zustand store để quản lý state dashboard
+ * Zustand store quản lý state dashboard với filter thật (workspace, time, platform)
  */
 
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
+import { normalizeBrandName, DashboardService } from "@/lib/services/dashboard";
 import type {
   DashboardStats,
   DashboardFilters,
@@ -14,10 +15,11 @@ import type {
   Workspace,
   TopSource,
   TopTopic,
+  SentimentTrendPoint,
 } from "@/types/dashboard";
 
 interface DashboardState {
-  // Data
+  // ── Raw data từ Firestore ─────────────────────────────────────────────────
   stats: DashboardStats;
   mentions: Mention[];
   alerts: Alert[];
@@ -25,15 +27,16 @@ interface DashboardState {
   workspaces: Workspace[];
   topSources: TopSource[];
   topTopics: TopTopic[];
+  trendData: SentimentTrendPoint[];
 
-  // Filters
+  // ── Filter state ──────────────────────────────────────────────────────────
   filters: DashboardFilters;
 
-  // UI State
+  // ── UI State ──────────────────────────────────────────────────────────────
   isLoading: boolean;
   error: string | null;
 
-  // Actions
+  // ── Actions ───────────────────────────────────────────────────────────────
   setStats: (stats: DashboardStats) => void;
   setMentions: (mentions: Mention[]) => void;
   setAlerts: (alerts: Alert[]) => void;
@@ -41,32 +44,43 @@ interface DashboardState {
   setWorkspaces: (workspaces: Workspace[]) => void;
   setTopSources: (sources: TopSource[]) => void;
   setTopTopics: (topics: TopTopic[]) => void;
+  setTrendData: (trend: SentimentTrendPoint[]) => void;
 
-  // Filter actions
   setFilters: (filters: Partial<DashboardFilters>) => void;
   resetFilters: () => void;
 
-  // Loading & Error
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
 
-  // Computed
+  updateLeadStatus: (id: string, status: Lead["status"]) => Promise<void>;
+  updateLeadDetails: (id: string, data: Partial<Lead>) => Promise<void>;
+
+  // ── Computed (client-side filtering) ─────────────────────────────────────
   getFilteredMentions: () => Mention[];
   getFilteredAlerts: () => Alert[];
   getFilteredLeads: () => Lead[];
+  getFilteredLeadsWithoutUrgency: () => Lead[];
 }
 
 const defaultFilters: DashboardFilters = {
   workspace_id: "all",
-  time_range: "7d",
+  time_range: "all",
   platform: "all",
   sentiment: "all",
   topic: "all",
+  urgency: "pending",
 };
+
+/** Tính timestamp cutoff từ time_range */
+function getCutoffMs(timeRange: DashboardFilters["time_range"]): number | null {
+  if (timeRange === "all") return null;
+  const ms = { "24h": 1, "7d": 7, "30d": 30 };
+  return Date.now() - ms[timeRange] * 24 * 60 * 60 * 1000;
+}
 
 export const useDashboardStore = create<DashboardState>()(
   subscribeWithSelector((set, get) => ({
-    // Initial state
+    // ── Initial state ───────────────────────────────────────────────────────
     stats: {
       total_mentions: 0,
       positive_count: 0,
@@ -83,11 +97,12 @@ export const useDashboardStore = create<DashboardState>()(
     workspaces: [],
     topSources: [],
     topTopics: [],
+    trendData: [],
     filters: defaultFilters,
     isLoading: false,
     error: null,
 
-    // Setters
+    // ── Setters ─────────────────────────────────────────────────────────────
     setStats: (stats) => set({ stats }),
     setMentions: (mentions) => set({ mentions }),
     setAlerts: (alerts) => set({ alerts }),
@@ -95,6 +110,7 @@ export const useDashboardStore = create<DashboardState>()(
     setWorkspaces: (workspaces) => set({ workspaces }),
     setTopSources: (sources) => set({ topSources: sources }),
     setTopTopics: (topics) => set({ topTopics: topics }),
+    setTrendData: (trendData) => set({ trendData }),
 
     setFilters: (newFilters) =>
       set((state) => ({
@@ -106,64 +122,207 @@ export const useDashboardStore = create<DashboardState>()(
     setLoading: (loading) => set({ isLoading: loading }),
     setError: (error) => set({ error }),
 
-    // Computed
+    updateLeadStatus: async (id, status) => {
+      try {
+        await DashboardService.updateLeadStatus(id, status);
+        set((state) => ({
+          leads: state.leads.map((l) => (l.id === id ? { ...l, status } : l)),
+        }));
+      } catch (error) {
+        console.error("[DashboardStore] updateLeadStatus error:", error);
+        throw error;
+      }
+    },
+
+    updateLeadDetails: async (id, data) => {
+      try {
+        await DashboardService.updateLeadDetails(id, data);
+        set((state) => ({
+          leads: state.leads.map((l) => (l.id === id ? { ...l, ...data } : l)),
+        }));
+      } catch (error) {
+        console.error("[DashboardStore] updateLeadDetails error:", error);
+        throw error;
+      }
+    },
+
+    // ── Client-side filtered views ──────────────────────────────────────────────
     getFilteredMentions: () => {
-      const state = get();
-      let filtered = state.mentions;
+      const { mentions, filters } = get();
+      const cutoff = getCutoffMs(filters.time_range);
+      
+      // Normalize workspace filter for case-insensitive matching
+      const normFilter =
+        filters.workspace_id !== "all"
+          ? normalizeBrandName(filters.workspace_id)
+          : null;
 
-      // Filter by workspace
-      if (state.filters.workspace_id !== "all") {
-        filtered = filtered.filter(
-          (m) => m.workspace_id === state.filters.workspace_id,
-        );
-      }
+      return mentions.filter((m) => {
+        // 1. Filter by Brand (Workspace)
+        if (normFilter && normalizeBrandName(m.workspace_id) !== normFilter)
+          return false;
+        
+        // 2. Filter by Platform
+        if (filters.platform !== "all" && m.platform !== filters.platform)
+          return false;
+          
+        // 3. Filter by Sentiment
+        if (filters.sentiment !== "all" && m.sentiment !== filters.sentiment)
+          return false;
+          
+        // 4. Filter by Topic
+        if (filters.topic && filters.topic !== "all" && m.topic !== filters.topic)
+          return false;
+          
+        // 5. Filter by Time Range
+        if (cutoff !== null) {
+          const time = new Date(m.posted_at).getTime();
+          // Filter out mentions older than cutoff AND mentions in the future
+          if (time < cutoff || time > Date.now()) return false;
+        }
 
-      // Filter by platform
-      if (state.filters.platform !== "all") {
-        filtered = filtered.filter(
-          (m) => m.platform === state.filters.platform,
-        );
-      }
-
-      // Filter by sentiment
-      if (state.filters.sentiment !== "all") {
-        filtered = filtered.filter(
-          (m) => m.sentiment === state.filters.sentiment,
-        );
-      }
-
-      // Filter by topic
-      if (state.filters.topic !== "all") {
-        filtered = filtered.filter((m) => m.topic === state.filters.topic);
-      }
-
-      return filtered;
+        return true;
+      });
     },
 
     getFilteredAlerts: () => {
-      const state = get();
-      let filtered = state.alerts;
+      const { alerts, filters } = get();
+      const cutoff = getCutoffMs(filters.time_range);
+      const normFilter =
+        filters.workspace_id !== "all"
+          ? normalizeBrandName(filters.workspace_id)
+          : null;
+      return alerts.filter((a) => {
+        if (normFilter && normalizeBrandName(a.workspace_id) !== normFilter)
+          return false;
+        if (cutoff !== null) {
+          const time = new Date(a.created_at).getTime();
+          if (time < cutoff || time > Date.now()) return false;
+        }
+        return true;
+      });
+    },
 
-      if (state.filters.workspace_id !== "all") {
-        filtered = filtered.filter(
-          (a) => a.workspace_id === state.filters.workspace_id,
-        );
-      }
+    getFilteredLeadsWithoutUrgency: () => {
+      const { leads, filters } = get();
+      const normFilter =
+        filters.workspace_id !== "all"
+          ? normalizeBrandName(filters.workspace_id)
+          : null;
+      const cutoff = getCutoffMs(filters.time_range);
 
-      return filtered;
+      return leads.filter((l) => {
+        if (normFilter && normalizeBrandName(l.workspace_id) !== normFilter)
+          return false;
+        if (filters.platform !== "all" && l.platform !== filters.platform)
+          return false;
+        if (cutoff !== null) {
+          const time = new Date(l.created_at).getTime();
+          if (time < cutoff || time > Date.now()) return false;
+        }
+        return true;
+      });
     },
 
     getFilteredLeads: () => {
-      const state = get();
-      let filtered = state.leads;
+      const { leads, filters } = get();
+      const normFilter =
+        filters.workspace_id !== "all"
+          ? normalizeBrandName(filters.workspace_id)
+          : null;
 
-      if (state.filters.workspace_id !== "all") {
-        filtered = filtered.filter(
-          (l) => l.workspace_id === state.filters.workspace_id,
-        );
+      // 1. Basic brand, platform and time range filters
+      let result = leads.filter((l) => {
+        if (normFilter && normalizeBrandName(l.workspace_id) !== normFilter)
+          return false;
+        if (filters.platform !== "all" && l.platform !== filters.platform)
+          return false;
+
+        const cutoff = getCutoffMs(filters.time_range);
+        if (cutoff !== null) {
+          const time = new Date(l.created_at).getTime();
+          if (time < cutoff || time > Date.now()) return false;
+        }
+
+        return true;
+      });
+
+      // 2. Urgency and status filters
+      const nowMs = Date.now();
+      const getExpiryTime = (lead: Lead) => {
+        if (lead.expiry_at) return new Date(lead.expiry_at).getTime();
+        const durationMin =
+          lead.intent === "hot"
+            ? 30
+            : lead.intent === "warm"
+              ? 24 * 60
+              : 7 * 24 * 60;
+        return new Date(lead.created_at).getTime() + durationMin * 60 * 1000;
+      };
+
+      const urgency = filters.urgency || "pending";
+      if (urgency !== "all") {
+        result = result.filter((l) => {
+          const isPending = l.status === "new" || l.status === "processing";
+          const expiryTime = getExpiryTime(l);
+          const isExpired = expiryTime <= nowMs;
+
+          if (urgency === "pending") {
+            return isPending;
+          }
+          if (urgency === "urgent") {
+            if (!isPending || isExpired) return false;
+            const remainingMs = expiryTime - nowMs;
+            if (l.intent === "hot") {
+              return remainingMs > 0 && remainingMs < 10 * 60 * 1000; // < 10 mins
+            }
+            if (l.intent === "warm") {
+              return remainingMs > 0 && remainingMs < 2 * 60 * 60 * 1000; // < 2 hours
+            }
+            return false;
+          }
+          if (urgency === "overdue") {
+            return isPending && isExpired;
+          }
+          if (urgency === "handled") {
+            return l.status === "completed" || l.status === "skipped";
+          }
+          return true;
+        });
       }
 
-      return filtered;
+      // 3. Priority Sorting:
+      // Group 1: Pending (new/processing) and not expired, sorted by remaining time ascending (closest to expiry first)
+      // Group 2: Pending (new/processing) and expired, sorted by creation date descending (newest first)
+      // Group 3: Handled (completed/skipped), sorted by creation date descending
+      return [...result].sort((a, b) => {
+        const aPending = a.status === "new" || a.status === "processing";
+        const bPending = b.status === "new" || b.status === "processing";
+
+        const aExpiry = getExpiryTime(a);
+        const bExpiry = getExpiryTime(b);
+        const aExpired = aExpiry <= nowMs;
+        const bExpired = bExpiry <= nowMs;
+
+        if (aPending && !aExpired && (!bPending || bExpired)) return -1;
+        if (bPending && !bExpired && (!aPending || aExpired)) return 1;
+
+        if (aPending && !aExpired && bPending && !bExpired) {
+          return aExpiry - bExpiry; // closest expiry first
+        }
+
+        if (aPending && aExpired && bPending && bExpired) {
+          return bExpiry - aExpiry; // expired newest first
+        }
+
+        if (aPending && aExpired && !bPending) return -1;
+        if (bPending && bExpired && !aPending) return 1;
+
+        // Both are handled, sort by creation date descending
+        return (
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+      });
     },
   })),
 );

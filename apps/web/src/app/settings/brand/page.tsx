@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Workspace } from "@/types/dashboard";
 
 /**
@@ -8,56 +9,65 @@ import { Workspace } from "@/types/dashboard";
  * Cho phép người dùng quản lý các thương hiệu (workspace), cấu hình từ khóa và theo dõi trạng thái dữ liệu.
  */
 export default function BrandManagementPage() {
+  const { t } = useTranslation();
   const [selectedWorkspace, setSelectedWorkspace] = useState<string>("1");
   const [isAiSuggestEnabled, setIsAiSuggestEnabled] = useState(true);
 
-  // Mock data cho danh sách thương hiệu
-  const workspaces: (Workspace & { logo: string; keywordCount: number; region: string; status?: string })[] = [
+  // Mock data cho danh sách thương hiệu (cập nhật theo yêu cầu)
+  const workspaces: (Workspace & {
+    logo: string;
+    keywordCount: number;
+    region: string;
+    status?: string;
+  })[] = [
     {
       id: "1",
-      brand_name: "Highlands Coffee",
+      brand_name: "Highland Coffee",
       scale: "large",
-      keywords: ["Highlands Coffee", "Cà phê Highlands"],
-      synonyms: ["PhinDi", "Freeze", "trà sen vàng", "bánh mì Highlands"],
+      keywords: ["Highland Coffee", "Cà phê Highland"],
+      synonyms: ["Phin", "Cold Brew", "cà phê đá"],
       priority: true,
       created_at: new Date().toISOString(),
-      logo: "https://lh3.googleusercontent.com/aida-public/AB6AXuDvIqD73Dqthp8F5i213Hn-0FmMftvJ5cF4JSWZBw6SjjUmJtFnwd6C2lMunjy5ic_1s2fVRFqxagRSMrJvoGJ4nk9XhxrsJKDgz7jx0OSMp4bDJ5LwsZJ2TkRp5BKqPT04Y0ivjV9cumaupuFopWXrN2GNc5s83tgDLslaUQKFTBWe6TVne_s6FtmWe8G2Nc3P3X9pOrIm1qOG-VReNkIybssPHpTr8-TI41cTZaJlZbxEUyRKLFntSx2tjio7v4GZpXLfsuBbCN4",
+      logo: "",
       keywordCount: 128,
       region: "Toàn quốc",
     },
     {
       id: "2",
-      brand_name: "Phúc Long Tea",
-      scale: "medium",
-      keywords: ["Phúc Long", "Phúc Long Tea"],
-      synonyms: ["Trà Phúc Long", "Trà sữa Phúc Long"],
-      priority: false,
+      brand_name: "Starbucks",
+      scale: "large",
+      keywords: ["Starbucks", "Starbucks Vietnam"],
+      synonyms: ["Frappuccino", "Latte", "Starbucks"],
+      priority: true,
       created_at: new Date().toISOString(),
-      logo: "https://lh3.googleusercontent.com/aida-public/AB6AXuCIA43BR0U4cUOUji2nVO3r_QA-xk0qVSKCiS-ieRXBXJ2uixfSiAN0-btIs8_8W86VWhyBtSQ8dvNGr8gOajXKpLAvHK3ZbQ1oqKJcljL3u15QSL-FOyWWhpSHDHRRCGIt6yoMbZNE9M_UhQfxx03KQjec9XthSQVB_gsG4LpGsAbZVbBGt_HsxOfq9hiDmjjWZhTbXGOH0D8nPBQHTLqE-9_m4cxu4v069n6MPDR5FCDX2eyVJYxlncQtt4GvvVWY_De4oxzSGnI",
-      keywordCount: 85,
-      region: "Miền Nam",
+      logo: "",
+      keywordCount: 110,
+      region: "Toàn quốc",
     },
     {
       id: "3",
-      brand_name: "Trung Nguyên Legend",
-      scale: "large",
-      keywords: ["Trung Nguyên", "Trung Nguyên Legend"],
-      synonyms: ["G7", "Cà phê Trung Nguyên"],
+      brand_name: "Mixue",
+      scale: "medium",
+      keywords: ["Mixue", "Mixue Vietnam"],
+      synonyms: ["kem Mixue", "trà sữa Mixue"],
       priority: false,
       created_at: new Date().toISOString(),
-      logo: "", // Empty for icon placeholder
+      logo: "",
       keywordCount: 42,
-      region: "Đang tạm dừng",
-      status: "paused",
+      region: "Toàn quốc",
     },
   ];
+
+  const selectedWs = workspaces.find((w) => w.id === selectedWorkspace) || workspaces[0];
 
   return (
     <div className="p-4 md:p-8 space-y-6 md:space-y-8">
       {/* Header Section */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-3">
         <div>
-          <h2 className="text-headline-lg text-on-surface font-bold">Quản lý Thương hiệu</h2>
+          <h2 className="text-headline-lg text-[var(--color-text-primary)] font-bold">
+            Quản lý Thương hiệu
+          </h2>
         </div>
       </div>
 
@@ -66,7 +76,9 @@ export default function BrandManagementPage() {
         {/* Workspace List (Left Column) */}
         <div className="col-span-12 lg:col-span-4 space-y-6">
           <div className="glass-card rounded-xl p-6">
-            <h3 className="text-headline-sm mb-4 text-on-surface font-bold">Danh sách Thương hiệu</h3>
+            <h3 className="text-headline-sm mb-4 text-[var(--color-text-primary)] font-bold">
+              Danh sách Thương hiệu
+            </h3>
             <div className="space-y-3">
               {workspaces.map((ws) => (
                 <div
@@ -74,33 +86,43 @@ export default function BrandManagementPage() {
                   onClick={() => setSelectedWorkspace(ws.id)}
                   className={`p-4 rounded-lg flex items-center justify-between cursor-pointer transition-all border ${
                     selectedWorkspace === ws.id
-                      ? "bg-primary-fixed-dim border-primary/20"
-                      : "hover:bg-surface-container border-transparent"
+                      ? "bg-[var(--color-brand-subtle)] border-[var(--color-brand-border)]"
+                      : "hover:bg-[var(--color-bg-surface-raised)] border-[var(--color-border)] border-transparent"
                   }`}
                 >
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-lg bg-white p-1 flex items-center justify-center border border-outline-variant">
+                    <div className="w-12 h-12 rounded-lg bg-[var(--color-bg-surface)] p-1 flex items-center justify-center border border-[var(--color-border)]">
                       {ws.logo ? (
-                        <img src={ws.logo} alt={ws.brand_name} className="max-h-full" />
+                        <img
+                          src={ws.logo}
+                          alt={ws.brand_name}
+                          className="max-h-full"
+                        />
                       ) : (
-                        <span className="material-symbols-outlined text-on-surface-variant text-2xl">
+                        <span className="material-symbols-outlined text-[var(--color-text-muted)] text-2xl">
                           store
                         </span>
                       )}
                     </div>
                     <div>
-                      <p className={`text-label-md font-bold ${selectedWorkspace === ws.id ? "text-primary" : "text-on-surface"}`}>
+                      <p
+                        className={`text-label-md font-bold ${selectedWorkspace === ws.id ? "text-[var(--color-brand)]" : "text-[var(--color-text-primary)]"}`}
+                      >
                         {ws.brand_name}
                       </p>
-                      <p className="text-label-sm text-on-surface-variant">
-                        {ws.keywordCount} từ khóa • {ws.region}
+                      <p className="text-label-sm text-[var(--color-text-secondary)]">
+                        {t("brands.list.keywordCount", { count: ws.keywordCount })} • {ws.region}
                       </p>
                     </div>
                   </div>
                   {selectedWorkspace === ws.id ? (
-                    <span className="material-symbols-outlined text-primary">check_circle</span>
+                    <span className="material-symbols-outlined text-[var(--color-brand)]">
+                      check_circle
+                    </span>
                   ) : (
-                    <span className="material-symbols-outlined text-outline-variant">chevron_right</span>
+                    <span className="material-symbols-outlined text-[var(--color-text-muted)]">
+                      chevron_right
+                    </span>
                   )}
                 </div>
               ))}
@@ -109,21 +131,52 @@ export default function BrandManagementPage() {
 
           {/* Data Source Health Card */}
           <div className="glass-card rounded-xl p-6">
-            <h3 className="text-headline-sm mb-4 text-on-surface font-bold">Trạng thái Nguồn dữ liệu</h3>
+            <h3 className="text-headline-sm mb-4 text-[var(--color-text-primary)] font-bold">
+              Trạng thái Nguồn dữ liệu
+            </h3>
             <div className="space-y-3">
               {[
-                { name: "Facebook Ads/API", icon: "face_nod", color: "#1877F2", status: "healthy" },
-                { name: "TikTok Shop", icon: "video_library", color: "#000000", status: "error" },
-                { name: "YouTube Mentions", icon: "movie", color: "#FF0000", status: "healthy" },
+                {
+                  name: "Facebook Ads/API",
+                  icon: "face_nod",
+                  color: "#1877F2",
+                  status: "healthy",
+                },
+                {
+                  name: "TikTok Shop",
+                  icon: "video_library",
+                  color: "#000000",
+                  status: "error",
+                },
+                {
+                  name: "YouTube Mentions",
+                  icon: "movie",
+                  color: "#FF0000",
+                  status: "healthy",
+                },
               ].map((source, index) => (
-                <div key={index} className="flex items-center justify-between p-3 bg-surface-container-low rounded-lg border border-outline-variant">
+                <div
+                  key={index}
+                  className="flex items-center justify-between p-3 bg-[var(--color-bg-surface-raised)] rounded-lg border border-[var(--color-border)]"
+                >
                   <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-lg" style={{ color: source.color }}>{source.icon}</span>
-                    <span className="text-label-md">{source.name}</span>
+                    <span
+                      className="material-symbols-outlined text-lg"
+                      style={{ color: source.color }}
+                    >
+                      {source.icon}
+                    </span>
+                    <span className="text-label-md text-[var(--color-text-primary)]">
+                      {source.name}
+                    </span>
                   </div>
-                  <span className={`flex items-center gap-1 text-label-sm font-bold ${source.status === 'healthy' ? 'text-primary' : 'text-error'}`}>
-                    <span className={`w-2 h-2 rounded-full ${source.status === 'healthy' ? 'bg-primary animate-pulse' : 'bg-error'}`}></span>
-                    {source.status === 'healthy' ? 'Khỏe mạnh' : 'Lỗi kết nối'}
+                  <span
+                    className={`flex items-center gap-1 text-label-sm font-bold ${source.status === "healthy" ? "text-[var(--color-success)]" : "text-[var(--color-error)]"}`}
+                  >
+                    <span
+                      className={`w-2 h-2 rounded-full ${source.status === "healthy" ? "bg-[var(--color-success)] animate-pulse" : "bg-[var(--color-error)]"}`}
+                    ></span>
+                    {source.status === "healthy" ? "Khỏe mạnh" : "Lỗi kết nối"}
                   </span>
                 </div>
               ))}
@@ -136,20 +189,23 @@ export default function BrandManagementPage() {
           <div className="glass-card rounded-xl p-8 relative overflow-hidden">
             {/* Abstract decoration */}
             <div className="absolute -top-12 -right-12 w-48 h-48 bg-primary/5 rounded-full blur-3xl"></div>
-            
+
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-6 md:mb-8 relative z-10">
               <div>
-                <h3 className="text-headline-md text-on-surface font-bold">Cấu hình Từ khóa Theo dõi</h3>
-                <p className="text-body-sm text-on-surface-variant">
-                  Thiết lập bộ lọc AI để thu thập dữ liệu chính xác nhất cho <strong>Highlands Coffee</strong>.
+                <h3 className="text-headline-md text-[var(--color-text-primary)] font-bold">
+                  Cấu hình Từ khóa Theo dõi
+                </h3>
+                <p className="text-body-sm text-[var(--color-text-secondary)]">
+                  Thiết lập bộ lọc AI để thu thập dữ liệu chính xác nhất cho{" "}
+                  <strong>Highland Coffee</strong>.
                 </p>
               </div>
               <div className="flex gap-2">
-                <button className="px-6 py-2 border border-outline-variant rounded-lg font-label-md text-on-surface-variant hover:bg-surface-container transition-colors">
+                <button className="px-6 py-2 border border-[var(--color-border)] rounded-lg font-label-md text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)] transition-colors">
                   Hủy
-                </button>      
-                <button className="px-6 py-2 bg-primary text-on-primary rounded-lg font-label-md shadow-sm hover:shadow-md transition-all">
-                  Lưu cấu hình
+                </button>
+                <button className="px-6 py-2 bg-[var(--color-brand)] text-white rounded-lg font-label-md shadow-sm hover:bg-[var(--color-brand-hover)] transition-all">
+                  {t("brands.config.save")}
                 </button>
               </div>
             </div>
@@ -157,56 +213,98 @@ export default function BrandManagementPage() {
             <form className="space-y-8 relative z-10">
               {/* Primary Keywords */}
               <div className="space-y-2">
-                <label className="text-label-md text-on-surface block font-bold">Từ khóa chính (Primary Keywords)</label>
-                <div className="p-2 bg-white border border-outline-variant rounded-lg focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-all flex flex-wrap gap-2">
-                  {["Highlands Coffee", "Cà phê Highlands"].map((tag, i) => (
-                    <span key={i} className="bg-primary-fixed-dim text-on-primary-fixed-variant px-3 py-1 rounded-full text-label-sm flex items-center gap-1 group hover:-translate-y-0.5 transition-transform">
-                      {tag} <span className="material-symbols-outlined text-[14px] cursor-pointer">close</span>
+                <label className="text-label-md text-[var(--color-text-primary)] block font-bold">
+                  Từ khóa chính (Primary Keywords)
+                </label>
+                <div className="p-2 bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-lg focus-within:ring-2 focus-within:ring-[var(--color-brand)]/20 focus-within:border-[var(--color-brand)] transition-all flex flex-wrap gap-2">
+                  {["Highland Coffee", "Cà phê Highland"].map((tag, i) => (
+                    <span
+                      key={i}
+                      className="bg-[var(--color-brand-subtle)] text-[var(--color-brand)] px-3 py-1 rounded-full text-label-sm flex items-center gap-1 group hover:-translate-y-0.5 transition-transform border border-[var(--color-brand-border)]"
+                    >
+                      {tag}{" "}
+                      <span className="material-symbols-outlined text-[14px] cursor-pointer">
+                        close
+                      </span>
                     </span>
                   ))}
-                  <input className="border-none focus:ring-0 text-body-sm p-1 flex-1 min-w-[120px] outline-none" placeholder="Thêm từ khóa..." type="text" />
+                  <input
+                    className="border-none focus:ring-0 text-body-sm p-1 flex-1 min-w-[120px] outline-none bg-transparent text-[var(--color-text-primary)]"
+                    placeholder="Thêm từ khóa..."
+                    type="text"
+                  />
                 </div>
-                <p className="text-label-sm text-on-surface-variant">Các từ khóa định danh thương hiệu chính của bạn.</p>
+                <p className="text-label-sm text-[var(--color-text-secondary)]">
+                  Các từ khóa định danh thương hiệu chính của bạn.
+                </p>
               </div>
 
               {/* Synonyms/LSI */}
               <div className="space-y-2">
-                <label className="text-label-md text-on-surface block font-bold">Từ đồng nghĩa & Liên quan</label>
-                <textarea 
-                  className="w-full bg-white border border-outline-variant rounded-lg p-4 text-body-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none" 
-                  placeholder="Ví dụ: PhinDi, Freeze, trà sen vàng, bánh mì Highlands..." 
+                <label className="text-label-md text-[var(--color-text-primary)] block font-bold">
+                  Từ đồng nghĩa &amp; Liên quan
+                </label>
+                <textarea
+                  className="w-full bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-lg p-4 text-body-sm focus:ring-2 focus:ring-[var(--color-brand)]/20 focus:border-[var(--color-brand)] transition-all outline-none text-[var(--color-text-primary)]"
+                  placeholder="Ví dụ: PhinDi, Freeze, trà sen vàng, bánh mì Highlands..."
                   rows={3}
                 ></textarea>
-                <p className="text-label-sm text-on-surface-variant">Giúp AI mở rộng phạm vi thu thập nhưng vẫn giữ đúng ngữ cảnh.</p>
+                <p className="text-label-sm text-[var(--color-text-secondary)]">
+                  Giúp AI mở rộng phạm vi thu thập nhưng vẫn giữ đúng ngữ cảnh.
+                </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
                 {/* Exclusion Keywords */}
                 <div className="space-y-2">
-                  <label className="text-label-md text-on-surface block font-bold">Từ khóa loại trừ (Negative)</label>
-                  <div className="p-2 bg-white border border-outline-variant rounded-lg flex flex-wrap gap-2 min-h-[100px] content-start">
+                  <label className="text-label-md text-[var(--color-text-primary)] block font-bold">
+                    Từ khóa loại trừ (Negative)
+                  </label>
+                  <div className="p-2 bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-lg flex flex-wrap gap-2 min-h-[100px] content-start">
                     {["tuyển dụng", "việc làm"].map((tag, i) => (
-                      <span key={i} className="bg-error-container text-on-error-container px-3 py-1 rounded-full text-label-sm flex items-center gap-1">
-                        {tag} <span className="material-symbols-outlined text-[14px] cursor-pointer">close</span>
+                      <span
+                        key={i}
+                        className="bg-[var(--color-error-subtle)] text-[var(--color-error)] px-3 py-1 rounded-full text-label-sm flex items-center gap-1"
+                      >
+                        {tag}{" "}
+                        <span className="material-symbols-outlined text-[14px] cursor-pointer">
+                          close
+                        </span>
                       </span>
                     ))}
-                    <input className="border-none focus:ring-0 text-body-sm p-1 w-full outline-none" placeholder="Loại trừ..." type="text" />
+                    <input
+                      className="border-none focus:ring-0 text-body-sm p-1 w-full outline-none bg-transparent text-[var(--color-text-primary)]"
+                      placeholder="Loại trừ..."
+                      type="text"
+                    />
                   </div>
                 </div>
 
                 {/* Platform Selection */}
                 <div className="space-y-2">
-                  <label className="text-label-md text-on-surface block font-bold">Phạm vi theo dõi</label>
+                  <label className="text-label-md text-[var(--color-text-primary)] block font-bold">
+                    Phạm vi theo dõi
+                  </label>
                   <div className="grid grid-cols-2 gap-2">
                     {[
-                      { name: "Facebook", checked: true },
-                      { name: "TikTok", checked: true },
-                      { name: "Báo chí Online", checked: false },
-                      { name: "YouTube", checked: true },
+                      { name: "Facebook", nameKey: null, checked: true },
+                      { name: "TikTok", nameKey: null, checked: true },
+                      { name: "Báo chí Online", nameKey: "brands.platform.onlineNews", checked: false },
+                      { name: "YouTube", nameKey: null, checked: true },
                     ].map((platform, i) => (
-                      <label key={i} className="flex items-center gap-2 p-3 border border-outline-variant rounded-lg cursor-pointer hover:bg-surface-container transition-colors">
-                        <input type="checkbox" checked={platform.checked} readOnly className="rounded text-primary focus:ring-primary" />
-                        <span className="text-label-md">{platform.name}</span>
+                      <label
+                        key={i}
+                        className="flex items-center gap-2 p-3 border border-[var(--color-border)] rounded-lg cursor-pointer hover:bg-[var(--color-bg-surface-raised)] transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={platform.checked}
+                          readOnly
+                          className="rounded text-[var(--color-brand)] focus:ring-[var(--color-brand)]"
+                        />
+                        <span className="text-label-md text-[var(--color-text-primary)]">
+                          {platform.name}
+                        </span>
                       </label>
                     ))}
                   </div>
@@ -214,19 +312,23 @@ export default function BrandManagementPage() {
               </div>
 
               {/* Advanced Settings Toggle */}
-              <div className="pt-6 border-t border-outline-variant flex items-center justify-between">
+              <div className="pt-6 border-t border-[var(--color-border)] flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-primary">auto_fix_high</span>
-                  <span className="font-label-md text-on-surface font-bold">Tự động gợi ý từ khóa bằng AI</span>
+                  <span className="material-symbols-outlined text-[var(--color-brand)]">
+                    auto_fix_high
+                  </span>
+                  <span className="font-label-md text-[var(--color-text-primary)] font-bold">
+                    Tự động gợi ý từ khóa bằng AI
+                  </span>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
-                  <input 
-                    type="checkbox" 
-                    className="sr-only peer" 
+                  <input
+                    type="checkbox"
+                    className="sr-only peer"
                     checked={isAiSuggestEnabled}
                     onChange={() => setIsAiSuggestEnabled(!isAiSuggestEnabled)}
                   />
-                  <div className="w-11 h-6 bg-outline-variant peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                  <div className="w-11 h-6 bg-[var(--color-border)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--color-brand)]"></div>
                 </label>
               </div>
             </form>
@@ -235,21 +337,40 @@ export default function BrandManagementPage() {
           {/* Usage Statistics Card */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6">
             <div className="glass-card rounded-xl p-6 text-center">
-              <p className="text-label-sm text-on-surface-variant mb-2">Data Usage</p>
-              <h4 className="text-headline-md text-primary font-bold">74%</h4>
-              <div className="w-full bg-surface-container h-1.5 rounded-full mt-3">
-                <div className="bg-primary h-full rounded-full" style={{ width: "74%" }}></div>
+              <p className="text-label-sm text-[var(--color-text-secondary)] mb-2">
+                Data Usage
+              </p>
+              <h4 className="text-headline-md text-[var(--color-brand)] font-bold">
+                74%
+              </h4>
+              <div className="w-full bg-[var(--color-bg-surface-raised)] h-1.5 rounded-full mt-3">
+                <div
+                  className="bg-[var(--color-brand)] h-full rounded-full"
+                  style={{ width: "74%" }}
+                ></div>
               </div>
             </div>
             <div className="glass-card rounded-xl p-6 text-center">
-              <p className="text-label-sm text-on-surface-variant mb-2">Active Alerts</p>
-              <h4 className="text-headline-md text-on-surface font-bold">12</h4>
-              <p className="text-[10px] text-primary mt-2 font-bold">+2 so với tuần trước</p>
+              <p className="text-label-sm text-[var(--color-text-secondary)] mb-2">
+                Active Alerts
+              </p>
+              <h4 className="text-headline-md text-[var(--color-text-primary)] font-bold">
+                12
+              </h4>
+              <p className="text-[10px] text-[var(--color-brand)] mt-2 font-bold">
+                +2 so với tuần trước
+              </p>
             </div>
             <div className="glass-card rounded-xl p-6 text-center">
-              <p className="text-label-sm text-on-surface-variant mb-2">Keywords</p>
-              <h4 className="text-headline-md text-on-surface font-bold">128/500</h4>
-              <p className="text-[10px] text-on-surface-variant mt-2">Hạng mức Pro Plan</p>
+              <p className="text-label-sm text-[var(--color-text-secondary)] mb-2">
+                Keywords
+              </p>
+              <h4 className="text-headline-md text-[var(--color-text-primary)] font-bold">
+                128/500
+              </h4>
+              <p className="text-[10px] text-[var(--color-text-secondary)] mt-2">
+                Hạng mức Pro Plan
+              </p>
             </div>
           </div>
         </div>

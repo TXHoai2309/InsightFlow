@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { useMentionsData } from "@/hooks/useMentionsData";
 import { MentionFilters } from "@/components/mentions/MentionFilters";
@@ -9,12 +10,13 @@ import { MentionStats } from "@/components/mentions/MentionStats";
 
 export default function MentionsPage() {
   useMentionsData({ autoFetch: true, refetchInterval: 120000 });
+  const { t } = useTranslation();
 
-  const { getFilteredMentions, filters, workspaces, isLoading } =
+  const { getFilteredMentions, filters, workspaces, mentions: allMentions, isLoading } =
     useDashboardStore();
   const mentions = useMemo(
     () => getFilteredMentions(),
-    [getFilteredMentions, filters],
+    [getFilteredMentions, filters, allMentions],
   );
 
   return (
@@ -22,30 +24,30 @@ export default function MentionsPage() {
       {/* Header Section */}
       <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl md:text-4xl font-bold text-on-surface">
-            Khám phá Đề cập
+          <h1 className="text-2xl md:text-4xl font-bold text-[var(--color-text-primary)]">
+            {t("mentions.pageTitle")}
           </h1>
-          <p className="text-base text-on-surface-variant mt-2">
-            Theo dõi và quản lý các phản hồi từ đa nền tảng thời gian thực.
+          <p className="text-base text-[var(--color-text-secondary)] mt-2">
+            {t("mentions.pageSubtitle")}
           </p>
         </div>
         <div className="flex gap-2 md:gap-3 flex-wrap">
-          <button className="flex items-center gap-2 px-4 py-3 bg-surface-container-high text-on-surface-variant rounded-lg border border-outline-variant hover:bg-surface-container-highest transition-all font-medium text-sm">
+          <button className="flex items-center gap-2 px-4 py-3 bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)] rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-bg-surface-high)] transition-all font-medium text-sm">
             <span className="material-symbols-outlined text-lg">
               file_download
             </span>
-            Xuất báo cáo
+            {t("mentions.exportBtn")}
           </button>
-          <button className="flex items-center gap-2 px-4 py-3 bg-primary text-white rounded-lg shadow-sm hover:opacity-90 transition-all font-medium text-sm">
+          <button className="flex items-center gap-2 px-4 py-3 bg-[var(--color-brand)] text-white rounded-lg shadow-sm hover:bg-[var(--color-brand-hover)] transition-all font-medium text-sm">
             <span className="material-symbols-outlined text-lg">refresh</span>
-            Làm mới
+            {t("mentions.refreshBtn")}
           </button>
         </div>
       </div>
 
-      {/* Filters Bar - 4 Column Bento Style */}
+      {/* Filters Bar */}
       <div className="mb-6">
-        <MentionFilters workspaces={workspaces} filters={filters} />
+        <MentionFilters workspaces={workspaces} filters={filters} allMentions={allMentions} />
       </div>
 
       {/* Mentions Table */}

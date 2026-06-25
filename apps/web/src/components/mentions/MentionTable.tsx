@@ -1,9 +1,7 @@
-"use client";
-
+import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import Link from "next/link";
 import type { Mention } from "@/types/dashboard";
-import { useMentionReassign } from "@/hooks/useMentionReassign";
-import { MentionReassignModal } from "./MentionReassignModal";
 
 interface MentionTableProps {
   mentions: Mention[];
@@ -11,33 +9,43 @@ interface MentionTableProps {
 }
 
 const platformIconMap: Record<
-  Mention["platform"],
+  string,
   { icon: string; color: string }
 > = {
   facebook: { icon: "face", color: "text-blue-600" },
   tiktok: { icon: "music_video", color: "text-pink-600" },
   news: { icon: "newspaper", color: "text-slate-600" },
   youtube: { icon: "play_circle", color: "text-red-600" },
+  google_maps: { icon: "location_on", color: "text-green-600" },
+};
+
+const getPlatformIcon = (platformStr: string) => {
+  return platformIconMap[platformStr.toLowerCase()] || { icon: "public", color: "text-gray-600" };
+};
+
+const formatCredibilityScore = (score: number) => {
+  const percentage = score <= 1 ? score * 100 : score;
+  return Math.max(0, Math.min(100, Math.round(percentage)));
 };
 
 const sentimentMap: Record<
   Mention["sentiment"],
-  { label: string; icon: string; className: string }
+  { labelKey: string; icon: string; className: string }
 > = {
   positive: {
-    label: "Tích cực",
+    labelKey: "mentions.table.tags.positive",
     icon: "sentiment_satisfied",
-    className: "bg-green-100 text-green-700",
+    className: "bg-[var(--color-success-subtle)] text-[var(--color-success)]",
   },
   negative: {
-    label: "Tiêu cực",
+    labelKey: "mentions.table.tags.negative",
     icon: "sentiment_very_dissatisfied",
-    className: "bg-red-100 text-red-700",
+    className: "bg-[var(--color-error-subtle)] text-[var(--color-error)]",
   },
   neutral: {
-    label: "Trung lập",
+    labelKey: "mentions.table.tags.neutral",
     icon: "sentiment_neutral",
-    className: "bg-blue-100 text-blue-700",
+    className: "bg-[var(--color-info-subtle)] text-[var(--color-info)]",
   },
 };
 
@@ -57,53 +65,81 @@ const topicTags: Record<Mention["topic"], string[]> = {
 };
 
 export function MentionTable({ mentions, isLoading }: MentionTableProps) {
-  const {
-    isOpen,
-    selectedMention,
-    isLoading: isReassigning,
-    openReassignModal,
-    closeReassignModal,
-    submitReassign,
-  } = useMentionReassign();
+  const { t, i18n } = useTranslation();
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  // Reset page when mentions change (e.g. filters applied)
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [mentions]);
+
+  const totalPages = Math.ceil(mentions.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage, mentions.length);
+  const currentMentions = mentions.slice(startIndex, endIndex);
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) setCurrentPage(prev => prev + 1);
+  };
+
+  const handlePrevPage = () => {
+    if (currentPage > 1) setCurrentPage(prev => prev - 1);
+  };
 
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
-    const now = new Date();
-    const diffHours = Math.floor(
-      (now.getTime() - date.getTime()) / (1000 * 60 * 60),
-    );
+    if (Number.isNaN(date.getTime())) {
+      return { 
+        timeStr: t("mentions.table.unknownTime"), 
+        relativeTime: t("mentions.table.unknownTimeDesc") 
+      };
+    }
 
-    const timeStr = date.toLocaleString("vi-VN", {
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    const timeStr = date.toLocaleString(i18n.language === "vi" ? "vi-VN" : "en-US", {
       hour: "2-digit",
       minute: "2-digit",
       day: "2-digit",
       month: "2-digit",
+      year: "numeric",
     });
 
-    let relativeTime = "Vừa xong";
-    if (diffHours === 1) relativeTime = "1 giờ trước";
-    else if (diffHours > 1) relativeTime = `${diffHours} giờ trước`;
-    else if (diffHours === 0) relativeTime = "Vừa xong";
+    let relativeTime = t("mentions.table.justNow");
+    if (diffMs < -60000) relativeTime = t("mentions.table.future");
+    else if (diffMs < 0) relativeTime = t("mentions.table.justNow"); // Handle minor clock skews
+    else if (diffDays >= 365) relativeTime = t("mentions.table.yearsAgo", { count: Math.floor(diffDays / 365.25) });
+    else if (diffDays >= 30) relativeTime = t("mentions.table.monthsAgo", { count: Math.floor(diffDays / 30.44) });
+    else if (diffDays >= 1) relativeTime = t("mentions.table.daysAgo", { count: diffDays });
+    else if (diffHours >= 1) relativeTime = t("mentions.table.hoursAgo", { count: diffHours });
+    else if (diffMinutes >= 1) relativeTime = t("mentions.table.minutesAgo", { count: diffMinutes });
 
     return { timeStr, relativeTime };
   };
 
   return (
     <>
-      <div className="bg-white rounded-2xl border border-outline-variant shadow-sm overflow-hidden">
+      <div
+        className="rounded-2xl shadow-sm overflow-hidden"
+        style={{
+          backgroundColor: "var(--color-bg-surface)",
+          border: "1px solid var(--color-border)",
+        }}
+      >
         {/* Mobile View: Card List */}
-        <div className="md:hidden divide-y divide-outline-variant/30">
+        <div className="md:hidden divide-y" style={{ borderColor: "var(--color-border)" }}>
           {isLoading ? (
-            <div className="py-20 text-center text-on-surface-variant">
-              Đang tải dữ liệu mentions...
-            </div>
-          ) : mentions.length === 0 ? (
-            <div className="py-20 text-center text-on-surface-variant">
-              Không tìm thấy mention phù hợp với bộ lọc.
-            </div>
+            <div className="py-20 text-center text-[var(--color-text-muted)]">{t("mentions.table.loading")}</div>
+          ) : currentMentions.length === 0 ? (
+            <div className="py-20 text-center text-[var(--color-text-muted)]">{t("mentions.table.noData")}</div>
           ) : (
-            mentions.map((mention) => {
-              const { timeStr, relativeTime } = formatTime(mention.created_at);
+            currentMentions.map((mention) => {
+              const { timeStr, relativeTime } = formatTime(mention.posted_at);
               const tags = topicTags[mention.topic] || [];
 
               return (
@@ -111,58 +147,52 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                   <div className="flex justify-between items-start">
                     <div className="flex items-center gap-2">
                       <span
-                        className={`material-symbols-outlined ${platformIconMap[mention.platform].color}`}
+                        className={`material-symbols-outlined ${getPlatformIcon(mention.platform).color}`}
                       >
-                        {platformIconMap[mention.platform].icon}
+                        {getPlatformIcon(mention.platform).icon}
                       </span>
-                      <span className="text-xs font-bold text-outline uppercase tracking-wider">
-                        {mention.platform}
+                    <span className="text-xs font-bold text-[var(--color-text-muted)] uppercase tracking-wider">
+                        {t(`dashboard.filters.${mention.platform.toLowerCase()}`, { defaultValue: mention.platform })}
                       </span>
                     </div>
                     <span
                       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${sentimentMap[mention.sentiment].className}`}
                     >
-                      {sentimentMap[mention.sentiment].label}
+                      {t(sentimentMap[mention.sentiment].labelKey)}
                     </span>
                   </div>
 
                   <Link
                     href={mention.url || "#"}
                     target="_blank"
-                    className="text-sm leading-relaxed text-on-surface hover:text-primary line-clamp-3"
+                    className="text-sm leading-relaxed text-[var(--color-text-primary)] hover:text-[var(--color-brand)] line-clamp-3"
                   >
                     "{mention.content}"
                   </Link>
 
                   <div className="flex flex-wrap gap-2">
-                    <span className="px-2 py-0.5 bg-primary/5 text-primary rounded text-[10px] font-bold uppercase border border-primary/10">
-                      {mention.topic}
+                    <span className="px-2 py-0.5 bg-[var(--color-brand-subtle)] text-[var(--color-brand)] rounded text-[10px] font-bold uppercase border border-[var(--color-brand-border)]">
+                      {t(`dashboard.topics.${mention.topic.toLowerCase()}`, { defaultValue: mention.topic })}
                     </span>
                     {tags.map((tag) => (
                       <span
                         key={tag}
-                        className="px-2 py-0.5 bg-surface-container text-outline rounded text-[10px] font-bold uppercase"
+                        className="px-2 py-0.5 bg-[var(--color-bg-surface-raised)] text-[var(--color-text-muted)] rounded text-[10px] font-bold uppercase"
                       >
                         {tag}
                       </span>
                     ))}
                   </div>
 
-                  <div className="flex items-center justify-between mt-2 pt-4 border-t border-outline-variant/30">
+                  <div className="flex items-center justify-between mt-2 pt-4 border-t" style={{ borderColor: "var(--color-border)" }}>
                     <div className="flex flex-col">
-                      <span className="text-xs font-medium text-on-surface">
+                      <span className="text-xs font-medium text-[var(--color-text-primary)]">
                         {timeStr}
                       </span>
-                      <span className="text-[10px] text-outline">
+                      <span className="text-[10px] text-[var(--color-text-muted)]">
                         {relativeTime}
                       </span>
                     </div>
-                    <button
-                      onClick={() => openReassignModal(mention)}
-                      className="px-4 py-2 border border-primary text-primary hover:bg-primary hover:text-white transition-all rounded-lg font-bold text-xs"
-                    >
-                      Gán lại
-                    </button>
                   </div>
                 </div>
               );
@@ -174,68 +204,49 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm border-collapse">
             <thead>
-              <tr className="bg-surface-container-low border-b border-outline-variant">
-                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-24">
-                  Nguồn
-                </th>
-                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-24">
-                  Độ tin cậy
-                </th>
-                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center">
-                  Nội dung tóm tắt
-                </th>
-                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-32">
-                  Sắc thái
-                </th>
-                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-32">
-                  Chủ đề
-                </th>
-                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-40">
-                  Thời gian
-                </th>
-                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-32">
-                  Hành động
-                </th>
+              <tr className="" style={{ backgroundColor: "var(--color-bg-surface-raised)", borderBottom: "1px solid var(--color-border)" }}>
+                 <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-24">{t("mentions.table.platform")}</th>
+                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-24">{t("mentions.table.credibility")}</th>
+                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center">{t("mentions.table.content")}</th>
+                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-32">{t("mentions.table.sentiment")}</th>
+                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-32">{t("mentions.table.topic")}</th>
+                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-40">{t("mentions.table.time")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant/30">
               {isLoading ? (
                 <tr>
                   <td
-                    colSpan={7}
-                    className="py-20 text-center text-on-surface-variant"
-                  >
-                    Đang tải dữ liệu mentions...
-                  </td>
+                    colSpan={6}
+                    className="py-20 text-center text-[var(--color-text-muted)]"
+                  >{t("mentions.table.loading")}</td>
                 </tr>
-              ) : mentions.length === 0 ? (
+              ) : currentMentions.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={7}
-                    className="py-20 text-center text-on-surface-variant"
-                  >
-                    Không tìm thấy mention phù hợp với bộ lọc.
-                  </td>
+                    colSpan={6}
+                    className="py-20 text-center text-[var(--color-text-muted)]"
+                  >{t("mentions.table.noData")}</td>
                 </tr>
               ) : (
-                mentions.map((mention) => {
+                currentMentions.map((mention) => {
                   const { timeStr, relativeTime } = formatTime(
-                    mention.created_at,
+                    mention.posted_at,
                   );
                   const tags = topicTags[mention.topic] || [];
 
                   return (
                     <tr
                       key={mention.id}
-                      className="hover:bg-surface-container-low transition-colors"
+                      className="hover:bg-[var(--color-bg-surface-raised)] transition-colors"
                     >
                       {/* Platform */}
                       <td className="px-4 py-4 align-top text-center">
                         <div className="flex items-center justify-center">
                           <span
-                            className={`material-symbols-outlined ${platformIconMap[mention.platform].color}`}
+                            className={`material-symbols-outlined ${getPlatformIcon(mention.platform).color}`}
                           >
-                            {platformIconMap[mention.platform].icon}
+                            {getPlatformIcon(mention.platform).icon}
                           </span>
                         </div>
                       </td>
@@ -243,14 +254,14 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                       {/* Credibility Score with Progress Bar */}
                       <td className="px-4 py-4 align-top">
                         <div className="flex flex-col gap-2">
-                          <span className="font-bold text-on-surface text-center">
-                            {Math.round(mention.credibility_score * 100)}%
+                          <span className="font-bold text-[var(--color-text-primary)] text-center">
+                            {formatCredibilityScore(mention.credibility_score)}%
                           </span>
-                          <div className="w-24 h-2 bg-surface-container rounded-full overflow-hidden">
+                          <div className="w-24 h-2 bg-[var(--color-bg-surface-raised)] rounded-full overflow-hidden">
                             <div
-                              className="bg-primary h-full rounded-full"
+                              className="bg-[var(--color-brand)] h-full rounded-full"
                               style={{
-                                width: `${mention.credibility_score * 100}%`,
+                                width: `${formatCredibilityScore(mention.credibility_score)}%`,
                               }}
                             />
                           </div>
@@ -262,7 +273,7 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                         <Link
                           href={mention.url || "#"}
                           target="_blank"
-                          className="text-sm leading-relaxed line-clamp-2 text-on-surface hover:text-primary"
+                          className="text-sm leading-relaxed line-clamp-2 text-[var(--color-text-primary)] hover:text-[var(--color-brand)]"
                         >
                           "{mention.content}"
                         </Link>
@@ -270,7 +281,7 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                           {tags.map((tag) => (
                             <span
                               key={tag}
-                              className="px-2 py-1 bg-surface-container text-outline rounded text-xs font-bold uppercase"
+                              className="px-2 py-1 bg-[var(--color-bg-surface-raised)] text-[var(--color-text-muted)] rounded text-xs font-bold uppercase"
                             >
                               {tag}
                             </span>
@@ -289,37 +300,27 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                           >
                             {sentimentMap[mention.sentiment].icon}
                           </span>
-                          {sentimentMap[mention.sentiment].label}
+                          {t(sentimentMap[mention.sentiment].labelKey)}
                         </span>
                       </td>
 
                       {/* Topic */}
                       <td className="px-4 py-4 align-top text-center">
-                        <span className="px-2 py-1 bg-primary/5 text-primary rounded text-xs font-bold uppercase border border-primary/10">
-                          {mention.topic}
+                        <span className="px-2 py-1 bg-[var(--color-brand-subtle)] text-[var(--color-brand)] rounded text-xs font-bold uppercase border border-[var(--color-brand-border)]">
+                          {t(`dashboard.topics.${mention.topic.toLowerCase()}`, { defaultValue: mention.topic })}
                         </span>
                       </td>
 
                       {/* Time */}
                       <td className="px-4 py-4 align-top whitespace-nowrap">
                         <div className="flex flex-col text-center">
-                          <span className="font-medium text-on-surface text-sm">
+                          <span className="font-medium text-[var(--color-text-primary)] text-sm">
                             {timeStr}
                           </span>
-                          <span className="text-xs text-outline">
+                          <span className="text-xs text-[var(--color-text-muted)]">
                             {relativeTime}
                           </span>
                         </div>
-                      </td>
-
-                      {/* Action */}
-                      <td className="px-4 py-4 align-top text-center">
-                        <button
-                          onClick={() => openReassignModal(mention)}
-                          className="px-3 py-2 border border-primary text-primary hover:bg-primary hover:text-white transition-all rounded-lg font-semibold whitespace-nowrap text-xs"
-                        >
-                          Gán lại
-                        </button>
                       </td>
                     </tr>
                   );
@@ -330,42 +331,73 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
         </div>
 
         {/* Pagination */}
-        <div className="px-4 py-4 bg-surface-bright flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-outline-variant">
-          <span className="text-xs text-outline font-medium">
-            Hiển thị 1-{Math.min(mentions.length, 4)} trên tổng số{" "}
-            {mentions.length} đề cập
-          </span>
-          <div className="flex gap-2">
-            <button className="w-8 h-8 flex items-center justify-center rounded border border-outline-variant text-on-surface-variant hover:bg-surface-container transition-colors">
-              <span className="material-symbols-outlined text-lg">
-                chevron_left
-              </span>
-            </button>
-            <button className="w-8 h-8 flex items-center justify-center rounded bg-primary text-white font-medium text-sm">
-              1
-            </button>
-            <button className="w-8 h-8 flex items-center justify-center rounded border border-outline-variant text-on-surface-variant hover:bg-surface-container transition-colors font-medium text-sm">
-              2
-            </button>
-            <button className="w-8 h-8 flex items-center justify-center rounded border border-outline-variant text-on-surface-variant hover:bg-surface-container transition-colors font-medium text-sm">
-              3
-            </button>
-            <button className="w-8 h-8 flex items-center justify-center rounded border border-outline-variant text-on-surface-variant hover:bg-surface-container transition-colors">
-              <span className="material-symbols-outlined text-lg">
-                chevron_right
-              </span>
-            </button>
-          </div>
-        </div>
-      </div>
+        {mentions.length > 0 && (
+          <div
+            className="px-4 py-4 flex flex-col sm:flex-row items-center justify-between gap-3"
+            style={{
+              backgroundColor: "var(--color-bg-surface-raised)",
+              borderTop: "1px solid var(--color-border)",
+            }}
+          >
+            <span className="text-xs text-[var(--color-text-muted)] font-medium">
+              {t("mentions.table.paginationInfo", { start: startIndex + 1, end: endIndex, total: mentions.length })}
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={handlePrevPage}
+                disabled={currentPage === 1}
+                className={`w-8 h-8 flex items-center justify-center rounded border transition-colors ${
+                  currentPage === 1
+                    ? 'text-[var(--color-text-disabled)] cursor-not-allowed border-[var(--color-border)]'
+                    : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-high)] border-[var(--color-border)]'
+                }`}
+              >
+                <span className="material-symbols-outlined text-lg">
+                  chevron_left
+                </span>
+              </button>
 
-      <MentionReassignModal
-        mention={selectedMention}
-        isOpen={isOpen}
-        onClose={closeReassignModal}
-        onSubmit={submitReassign}
-        isLoading={isReassigning}
-      />
+              {/* Show simple pagination numbers (e.g. up to 5 visible) */}
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                // Calculate which page numbers to show to keep the current page roughly in the middle
+                let startPage = Math.max(1, currentPage - 2);
+                if (startPage + 4 > totalPages) startPage = Math.max(1, totalPages - 4);
+                const pageNum = startPage + i;
+
+                if (pageNum > totalPages) return null;
+
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`w-8 h-8 flex items-center justify-center rounded font-medium text-sm transition-colors ${
+                      currentPage === pageNum
+                        ? 'bg-[var(--color-brand)] text-white'
+                        : 'border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-high)]'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+
+              <button
+                onClick={handleNextPage}
+                disabled={currentPage === totalPages}
+                className={`w-8 h-8 flex items-center justify-center rounded border transition-colors ${
+                  currentPage === totalPages
+                    ? 'text-[var(--color-text-disabled)] cursor-not-allowed border-[var(--color-border)]'
+                    : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-high)] border-[var(--color-border)]'
+                }`}
+              >
+                <span className="material-symbols-outlined text-lg">
+                  chevron_right
+                </span>
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </>
   );
 }

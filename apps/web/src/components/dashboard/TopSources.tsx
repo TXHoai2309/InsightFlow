@@ -6,55 +6,53 @@
  */
 
 import React from "react";
+import { useTranslation } from "react-i18next";
 import type { TopSource } from "@/types/dashboard";
+import { PLATFORM_META } from "@/lib/services/dashboard";
 
 interface TopSourcesProps {
   sources: TopSource[];
 }
 
-const platformColors: Record<string, string> = {
-  facebook: "#1877F2",
-  tiktok: "#000000",
-  news: "#4648d4",
-  youtube: "#FF0000",
-};
-
-const platformNames: Record<string, string> = {
-  facebook: "Facebook",
-  tiktok: "TikTok",
-  news: "Báo điện tử",
-  youtube: "YouTube",
-};
-
 export function TopSources({ sources }: TopSourcesProps) {
+  const { t } = useTranslation();
   return (
-    <div className="bg-white border border-outline-variant rounded-lg p-6 shadow-sm h-full">
-      <h4 className="font-bold text-lg text-on-surface mb-4">
-        Top nguồn dữ liệu
+    <div
+      className="rounded-lg p-6 shadow-sm h-full"
+      style={{
+        backgroundColor: "var(--color-bg-surface)",
+        border: "1px solid var(--color-border)",
+      }}
+    >
+      <h4 className="font-bold text-lg mb-4" style={{ color: "var(--color-text-primary)" }}>
+        {t("dashboard.topSources.title")}
       </h4>
 
       <div className="space-y-4">
-        {sources.map((source) => (
-          <div key={source.platform}>
-            <div className="flex justify-between items-center mb-1">
-              <span className="text-sm font-bold capitalize">
-                {platformNames[source.platform]}
-              </span>
-              <span className="text-xs text-on-surface-variant">
-                {source.count} ({source.percentage}%)
-              </span>
+        {sources.map((source) => {
+          const meta = PLATFORM_META[source.platform] ?? { label: source.platform, color: "#999" };
+          return (
+            <div key={source.platform}>
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-sm font-bold text-[var(--color-text-primary)]">
+                  {t(`dashboard.filters.${source.platform}`)}
+                </span>
+                <span className="text-xs text-[var(--color-text-secondary)]">
+                  {source.count} ({source.percentage}%)
+                </span>
+              </div>
+              <div className="w-full rounded-full h-2" style={{ backgroundColor: "var(--color-bg-surface-raised)" }}>
+                <div
+                  className="h-2 rounded-full transition-all"
+                  style={{
+                    width: `${source.percentage}%`,
+                    backgroundColor: meta.color,
+                  }}
+                />
+              </div>
             </div>
-            <div className="w-full bg-surface-container rounded-full h-2">
-              <div
-                className="h-2 rounded-full transition-all"
-                style={{
-                  width: `${source.percentage}%`,
-                  backgroundColor: platformColors[source.platform],
-                }}
-              ></div>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

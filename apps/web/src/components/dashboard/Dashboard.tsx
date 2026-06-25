@@ -2,11 +2,14 @@
 
 /**
  * US-13: Dashboard Component
- * Tổng quan Dashboard - hiển thị stats, charts, top sources, topics, alerts, leads
+ * Tổng quan Dashboard - hiển thị stats, charts, top sources, topics, alerts, leads.
+ * Tất cả widgets đều được tính toán lại từ filtered mentions khi filter thay đổi.
  */
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useDashboardStore } from "@/stores/dashboard.store";
+import { DashboardService } from "@/lib/services/dashboard";
 import { StatCard } from "./StatCard";
 import { SentimentDonut } from "./SentimentDonut";
 import { SentimentTrend } from "./SentimentTrend";
@@ -25,47 +28,93 @@ export function Dashboard({
   initialWorkspaces = [],
 }: DashboardProps) {
   const {
-    stats,
-    topSources,
-    topTopics,
+    mentions,
+    alerts,
+    leads,
     workspaces,
     filters,
     isLoading,
     setStats,
     setWorkspaces,
+    getFilteredMentions,
+    getFilteredAlerts,
+    getFilteredLeads,
+    getFilteredLeadsWithoutUrgency,
   } = useDashboardStore();
+
+  const { t } = useTranslation();
 
   const [isMounted, setIsMounted] = useState(false);
 
   // Initialize data
   useEffect(() => {
     setIsMounted(true);
-
-    if (initialStats) {
-      setStats(initialStats);
-    }
-
-    if (initialWorkspaces.length > 0) {
-      setWorkspaces(initialWorkspaces);
-    }
+    if (initialStats) setStats(initialStats);
+    if (initialWorkspaces.length > 0) setWorkspaces(initialWorkspaces);
   }, []);
 
+  // ── Re-calculate tất cả metrics từ filtered mentions ─────────────────────
+  // Hooks phải được gọi trước bất kỳ conditional return nào
+  // mentions/alerts/leads được thêm vào deps để re-calc khi Firestore data load xong
+  const filteredMentions = useMemo(
+    () => getFilteredMentions(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filters, mentions],
+  );
+
+  const filteredAlerts = useMemo(
+    () => getFilteredAlerts(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filters, alerts],
+  );
+
+  const filteredLeads = useMemo(
+    () => getFilteredLeads(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filters, leads],
+  );
+
+  const filteredLeadsForStats = useMemo(
+    () => getFilteredLeadsWithoutUrgency(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filters, leads],
+  );
+
+  // Stats tính lại từ filtered data, hot leads count = tất cả hot leads theo filter Dashboard
+  const stats = useMemo(
+    () =>
+      DashboardService.calculateStats(
+        filteredMentions,
+        filteredAlerts,
+        filteredLeadsForStats,
+      ),
+    [filteredMentions, filteredAlerts, filteredLeadsForStats],
+  );
+
+  // Top sources tính từ toàn bộ mentions gốc trong firebase (không áp dụng lọc)
+  const topSources = useMemo(
+    () => DashboardService.calculateTopSources(mentions),
+    [mentions],
+  );
+
+  // Top topics tính lại từ filtered mentions
+  const topTopics = useMemo(
+    () => DashboardService.calculateTopTopics(filteredMentions),
+    [filteredMentions],
+  );
+
+  // Conditional render (sau tất cả hooks)
   if (!isMounted) {
     return <div className="p-8">Loading...</div>;
   }
 
-  // Calculate sentiment metrics
-  const total = stats.total_mentions || 1;
-  const positivePercent = Math.round((stats.positive_count / total) * 100) || 0;
-  const negativePercent = Math.round((stats.negative_count / total) * 100) || 0;
-  const neutralPercent = Math.round((stats.neutral_count / total) * 100) || 0;
-
+  // ── Derived display values ────────────────────────────────────────────────
   const sentimentBadge =
     stats.net_sentiment > 20
-      ? { text: "Tích Cực", color: "bg-green-500/10 text-green-700" }
+      ? { text: t("dashboard.filters.positive"), color: "bg-green-500/10 text-green-700" }
       : stats.net_sentiment < -5
-        ? { text: "Tiêu Cực", color: "bg-red-500/10 text-red-700" }
-        : { text: "Ổn định", color: "bg-slate-500/10 text-slate-700" };
+        ? { text: t("dashboard.filters.negative"), color: "bg-red-500/10 text-red-700" }
+        : { text: t("dashboard.filters.neutral"), color: "bg-slate-500/10 text-slate-700" };
 
   return (
     <div className="space-y-4 md:space-y-6">
@@ -75,9 +124,8 @@ export function Dashboard({
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
         <StatCard
-          title="Tổng lượt nhắc đến"
+          title={t("dashboard.stats.totalMentions")}
           value={stats.total_mentions.toLocaleString("vi-VN")}
-          trend={{ value: 12, isPositive: true }}
           icon={
             <span className="material-symbols-outlined text-primary">
               analytics
@@ -88,7 +136,7 @@ export function Dashboard({
         />
 
         <StatCard
-          title="Chỉ số Net Sentiment"
+          title={t("dashboard.stats.sentimentScore")}
           value={`${stats.net_sentiment}%`}
           subtitle={sentimentBadge.text}
           icon={
@@ -107,7 +155,7 @@ export function Dashboard({
         />
 
         <StatCard
-          title="Hot Leads (30 phút)"
+          title={t("dashboard.stats.hotLeads")}
           value={stats.hot_leads_today}
           icon={
             <span className="material-symbols-outlined text-amber-600">
@@ -120,11 +168,13 @@ export function Dashboard({
       </div>
 
       {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 md:gap-6">
-        <div className="lg:col-span-3">
-          <SentimentTrend timeRange={filters.time_range} />
+      <div className="grid grid-cols-5 gap-6">
+        <div className="col-span-3">
+          {/* SentimentTrend nhận filteredMentions — hiển thị theo posted_at */}
+          <SentimentTrend filteredMentions={filteredMentions} />
         </div>
-        <div className="lg:col-span-2">
+        <div className="col-span-2">
+          {/* SentimentDonut dùng counts từ filtered stats */}
           <SentimentDonut
             positive={stats.positive_count}
             neutral={stats.neutral_count}
@@ -141,28 +191,12 @@ export function Dashboard({
 
         <div className="lg:col-span-2 space-y-4 md:space-y-6">
           <TopTopics topics={topTopics} />
-
-          <div className="bg-secondary/5 border border-secondary/15 rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-2 text-secondary font-bold text-xs">
-              <span className="material-symbols-outlined text-sm">
-                psychology
-              </span>
-              <span className="uppercase tracking-wide">
-                Tóm tắt phân tích AI
-              </span>
-            </div>
-            <p className="text-xs italic text-on-surface-variant leading-relaxed">
-              {workspaces.length > 0
-                ? `${workspaces.length} thương hiệu F&B được theo dõi. Nhận diện ${stats.total_mentions} lượt nhắc đến với ${stats.net_sentiment > 0 ? "xu hướng tích cực" : "xu hướng tiêu cực"}. Chủ yếu liên quan đến chất lượng sản phẩm và trải nghiệm khách hàng.`
-                : "Thêm workspace để bắt đầu giám sát thương hiệu của bạn."}
-            </p>
-          </div>
         </div>
       </div>
 
       {/* Load more data indicator */}
       {isLoading && (
-        <div className="text-center py-4 text-on-surface-variant">
+        <div className="text-center py-4 text-[var(--color-text-secondary)]">
           <p className="text-sm">Đang tải dữ liệu...</p>
         </div>
       )}

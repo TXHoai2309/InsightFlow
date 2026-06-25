@@ -2,14 +2,16 @@
 
 /**
  * Sidebar Component
- * Điều hướng chính của ứng dụng — hỗ trợ mobile drawer
+ * Điều hướng chính của ứng dụng — hỗ trợ mobile drawer + Dark Mode.
  */
 
 import React, { useEffect } from "react";
 import Link from "next/link";
+import { useTranslation } from "react-i18next";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
+import { useTheme } from "@/contexts/ThemeContext";
 
 interface NavItem {
   href: string;
@@ -19,12 +21,12 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: "dashboard" },
-  { href: "/mentions", label: "Mentions", icon: "forum" },
-  { href: "/alerts", label: "Alerts", icon: "notifications_active" },
-  { href: "/leads", label: "Leads", icon: "leaderboard" },
-  { href: "/reports", label: "Reports", icon: "assessment" },
-  { href: "/settings/brand", label: "Brands", icon: "settings" },
+  { href: "/dashboard", label: "nav.dashboard", icon: "ti-layout-dashboard" },
+  { href: "/mentions", label: "nav.mentions", icon: "ti-message-circle" },
+  { href: "/alerts", label: "nav.alerts", icon: "ti-bell" },
+  { href: "/leads", label: "nav.leads", icon: "ti-chart-bar" },
+  { href: "/reports", label: "nav.reports", icon: "ti-file-analytics" },
+  { href: "/settings/brand", label: "nav.brands", icon: "ti-settings" },
 ];
 
 interface SidebarProps {
@@ -35,6 +37,9 @@ interface SidebarProps {
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const { t } = useTranslation();
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
 
   // Đóng sidebar khi chuyển trang trên mobile
   useEffect(() => {
@@ -62,9 +67,9 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   return (
     <>
-      {/* Backdrop overlay — chỉ hiện trên mobile khi sidebar mở */}
+      {/* Backdrop overlay — mobile only */}
       <div
-        className={`fixed inset-0 bg-black/40 z-30 md:hidden transition-opacity duration-300 ${
+        className={`fixed inset-0 bg-black/50 z-30 md:hidden transition-opacity duration-300 ${
           isOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
         }`}
         onClick={onClose}
@@ -74,39 +79,41 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       {/* Sidebar panel */}
       <aside
         className={`
-          w-64 bg-white border-r border-outline-variant flex flex-col py-6 px-4
+          w-[240px] flex flex-col py-6 pr-4 shrink-0
           fixed h-screen left-0 top-0 z-40
-          transition-transform duration-300 ease-in-out
+          transition-transform duration-200 ease-in-out
           md:translate-x-0
           ${isOpen ? "translate-x-0" : "-translate-x-full"}
         `}
+        style={{
+          backgroundColor: "var(--color-bg-surface)",
+          borderRight: "1px solid var(--color-border)",
+        }}
       >
         {/* Logo + Close button (mobile) */}
-        <div className="flex items-center justify-between mb-8">
-          <Link
-            href="/"
-            className="flex items-center gap-3 px-2 hover:opacity-80 transition-all"
-          >
-            <div className="p-2.5 bg-primary/10 rounded-lg">
-              <span className="material-symbols-outlined text-primary text-2xl">
-                query_stats
-              </span>
-            </div>
-            <div>
-              <h1 className="font-bold text-primary text-lg">InsightFlow</h1>
-              <p className="text-xs font-medium text-on-surface-variant uppercase tracking-wide">
-                AI Media Monitoring
-              </p>
+        <div className="flex items-center justify-center mb-4 relative">
+          <Link href="/" className="flex items-center hover:scale-105 transition-transform duration-300">
+            {/* Container crop giống nhau cho cả 2 chế độ */}
+            <div className="relative w-[300px] h-[80px] overflow-hidden flex items-center justify-center">
+              <img
+                src={isDark ? "/logo-dark.png" : "/logo.png"}
+                alt="InsightFlow Logo"
+                className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[220px] max-w-none pointer-events-none"
+                style={isDark ? undefined : { mixBlendMode: "multiply" }}
+              />
             </div>
           </Link>
 
-          {/* Nút đóng — chỉ hiện trên mobile */}
+          {/* Nút đóng — mobile only */}
           <button
-            className="md:hidden p-2 rounded-full hover:bg-surface-container-low transition-all text-on-surface-variant"
+            className="md:hidden absolute right-4 top-2 p-2 rounded-full transition-colors duration-200"
+            style={{ color: "var(--color-text-secondary)" }}
             onClick={onClose}
             aria-label="Đóng menu"
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--color-brand-subtle)")}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
           >
-            <span className="material-symbols-outlined text-xl">close</span>
+            <i className="ti ti-x text-xl"></i>
           </button>
         </div>
 
@@ -119,18 +126,39 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-r transition-all ${
+                className="w-full px-4 py-[14px] text-left text-[14px] transition-colors duration-200 flex items-center rounded-r-[10px]"
+                style={
                   isActive
-                    ? "text-primary font-bold border-r-4 border-primary bg-surface-container"
-                    : "text-on-surface-variant hover:bg-surface-container-low"
-                }`}
+                    ? {
+                        backgroundColor: "var(--color-brand-subtle)",
+                        borderLeft: "3px solid var(--color-brand)",
+                        color: "var(--color-brand)",
+                        fontWeight: "600",
+                      }
+                    : {
+                        color: "var(--color-text-secondary)",
+                        fontWeight: "500",
+                        borderLeft: "3px solid transparent",
+                      }
+                }
+                onMouseEnter={(e) => {
+                  if (!isActive) {
+                    (e.currentTarget as HTMLElement).style.backgroundColor = "var(--color-brand-subtle)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) {
+                    (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
+                  }
+                }}
               >
-                <span className="material-symbols-outlined text-xl">
-                  {item.icon}
-                </span>
-                <span className="flex-1">{item.label}</span>
+                <i className={`ti ${item.icon} text-[18px] mr-[10px]`}></i>
+                <span className="flex-1">{t(item.label)}</span>
                 {item.badge && item.badge > 0 && (
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-bold">
+                  <span
+                    className="text-[11px] px-2 py-0.5 rounded-full text-white font-bold ml-2"
+                    style={{ backgroundColor: "var(--color-brand)" }}
+                  >
                     {item.badge}
                   </span>
                 )}
@@ -140,31 +168,43 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         </nav>
 
         {/* Bottom Section */}
-        <div className="mt-auto space-y-3 pt-4 border-t border-outline-variant">
+        <div
+          className="mt-auto space-y-3 pt-4 pl-4"
+          style={{ borderTop: "1px solid var(--color-border)" }}
+        >
           <button
             onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded text-on-surface-variant hover:bg-error/10 hover:text-error transition-all"
+            className="w-full px-4 py-[14px] text-left text-[14px] transition-colors duration-200 flex items-center rounded-r-[10px] font-medium border-l-[3px] border-transparent"
+            style={{ color: "var(--color-error)" }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--color-error-subtle)")}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
           >
-            <span className="material-symbols-outlined text-xl">logout</span>
-            <span className="flex-1 text-left font-medium">Đăng xuất</span>
+            <i className="ti ti-logout text-[18px] mr-[10px]"></i>
+            <span className="flex-1 text-left font-medium">{t("nav.logout")}</span>
           </button>
 
-          <div className="bg-gradient-to-br from-primary-container to-secondary-container p-4 rounded-lg text-on-primary text-sm">
-            <p className="font-bold mb-2">💡 Báo cáo sẵn sàng</p>
-            <p className="text-xs mb-3 opacity-90">
-              AI hoàn tất tổng hợp dữ liệu ngày hôm qua
+          {/* AI Report Banner */}
+          <div className="bg-gradient-to-br from-[#6C63FF] to-[#9B8FF8] p-4 rounded-[12px] text-white text-sm shadow-[0_4px_14px_rgba(108,99,255,0.35)]">
+            <p className="font-bold mb-2 flex items-center gap-2"><i className="ti ti-bulb text-lg"></i> {t("sidebar.reportReadyTitle")}</p>
+            <p className="text-[12px] mb-3 opacity-90">
+              {t("sidebar.reportReadyDesc")}
             </p>
             <Link
               href="/reports"
-              className="w-full inline-block py-2 bg-white text-primary font-bold rounded-lg hover:bg-opacity-95 text-xs transition-all text-center"
+              className="w-full inline-block py-2 font-semibold rounded-[8px] hover:bg-opacity-95 text-[12px] transition-colors duration-200 text-center"
+              style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-brand)" }}
             >
-              Xem báo cáo
+              {t("sidebar.viewReport")}
             </Link>
           </div>
 
-          <div className="flex items-center gap-2 px-3 py-2 text-on-surface-variant">
-            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-            <span className="text-xs">System Active 24/7</span>
+          {/* System Status */}
+          <div
+            className="flex items-center gap-2 px-3 py-2"
+            style={{ color: "var(--color-text-muted)" }}
+          >
+            <span className="w-2 h-2 rounded-full bg-[#22C55E] animate-pulse"></span>
+            <span className="text-[12px] font-medium">{t("sidebar.systemActive")}</span>
           </div>
         </div>
       </aside>

@@ -1,4 +1,5 @@
 import type { Mention } from "@/types/dashboard";
+import { useTranslation } from "react-i18next";
 
 interface MentionStatsProps {
   mentions: Mention[];
@@ -6,6 +7,7 @@ interface MentionStatsProps {
 }
 
 export function MentionStats({ mentions, isLoading }: MentionStatsProps) {
+  const { t, i18n } = useTranslation();
   const total = mentions.length;
   const positive = mentions.filter(
     (mention) => mention.sentiment === "positive",
@@ -25,46 +27,45 @@ export function MentionStats({ mentions, isLoading }: MentionStatsProps) {
     : 0;
 
   return (
-    <div className="relative md:h-64 rounded-3xl overflow-hidden shadow-sm border border-outline-variant bg-white p-6 md:p-8 group">
+    <div className="relative md:h-64 rounded-3xl overflow-hidden shadow-sm border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 md:p-8 group">
       <div className="relative z-10 flex flex-col h-full justify-between gap-6 md:gap-0">
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start gap-4 sm:gap-0">
           <div>
-            <h3 className="text-xl md:text-2xl font-bold text-on-surface">
-              Phân tích sắc thái tổng thể
+            <h3 className="text-xl md:text-2xl font-bold text-[var(--color-text-primary)]">
+              {t("mentions.stats.overallAnalysis")}
             </h3>
-            <p className="text-xs md:text-sm text-on-surface-variant mt-1">
-              Dựa trên {isLoading ? "..." : total.toLocaleString("vi-VN")} đề
-              cập trong 7 ngày qua
+            <p className="text-xs md:text-sm text-[var(--color-text-secondary)] mt-1">
+              {t("mentions.stats.summary", { count: isLoading ? "..." : total.toLocaleString(i18n.language === "vi" ? "vi-VN" : "en-US") })}
             </p>
           </div>
-          <div className="bg-surface-container-low px-3 py-2 rounded-lg border border-outline-variant">
-            <span className="text-xs md:text-sm font-bold text-primary">
+          <div className="bg-[var(--color-bg-surface-raised)] px-3 py-2 rounded-lg border border-[var(--color-border)]">
+            <span className="text-xs md:text-sm font-bold text-[var(--color-brand)]">
               {isLoading
                 ? "..."
                 : `${netSentiment > 0 ? "+" : ""}${netSentiment}%`}{" "}
-              so với tuần trước
+              {t("mentions.stats.vsLastWeek")}
             </span>
           </div>
         </div>
 
         {/* Stacked Progress Bar */}
         <div className="space-y-4 md:space-y-6">
-          <div className="flex h-10 md:h-12 w-full rounded-xl md:rounded-2xl overflow-hidden shadow-sm">
+          <div className="flex h-10 md:h-12 w-full rounded-xl md:rounded-2xl overflow-hidden shadow-sm border border-[var(--color-border)]">
             <div
-              className="bg-green-100 flex items-center justify-center text-green-700 font-bold text-xs md:text-base"
+              className="bg-[var(--color-success-subtle)] flex items-center justify-center text-[var(--color-success)] font-bold text-xs md:text-base transition-all duration-300"
               style={{ width: `${positivePct}%` }}
             >
               {positivePct > 5 && `${positivePct}%`}
             </div>
             <div
-              className="bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-xs md:text-base"
+              className="bg-[var(--color-info-subtle)] flex items-center justify-center text-[var(--color-info)] font-bold text-xs md:text-base transition-all duration-300"
               style={{ width: `${neutralPct}%` }}
             >
               {neutralPct > 5 && `${neutralPct}%`}
             </div>
             <div
-              className="bg-red-100 flex items-center justify-center text-red-700 font-bold text-xs md:text-base"
+              className="bg-[var(--color-error-subtle)] flex items-center justify-center text-[var(--color-error)] font-bold text-xs md:text-base transition-all duration-300"
               style={{ width: `${negativePct}%` }}
             >
               {negativePct > 5 && `${negativePct}%`}
@@ -74,21 +75,21 @@ export function MentionStats({ mentions, isLoading }: MentionStatsProps) {
           {/* Legend */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
             <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-green-600 flex-shrink-0"></span>
-              <span className="text-xs md:text-sm text-on-surface-variant">
-                Tích cực ({positive.toLocaleString("vi-VN")})
+              <span className="w-3 h-3 rounded-full bg-[var(--color-success)] flex-shrink-0"></span>
+              <span className="text-xs md:text-sm text-[var(--color-text-secondary)]">
+                {t("dashboard.filters.positive")} ({positive.toLocaleString(i18n.language === "vi" ? "vi-VN" : "en-US")})
               </span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-blue-700 flex-shrink-0"></span>
-              <span className="text-xs md:text-sm text-on-surface-variant">
-                Trung lập ({neutral.toLocaleString("vi-VN")})
+              <span className="w-3 h-3 rounded-full bg-[var(--color-info)] flex-shrink-0"></span>
+              <span className="text-xs md:text-sm text-[var(--color-text-secondary)]">
+                {t("dashboard.filters.neutral")} ({neutral.toLocaleString(i18n.language === "vi" ? "vi-VN" : "en-US")})
               </span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-red-500 flex-shrink-0"></span>
-              <span className="text-xs md:text-sm text-on-surface-variant">
-                Tiêu cực ({negative.toLocaleString("vi-VN")})
+              <span className="w-3 h-3 rounded-full bg-[var(--color-error)] flex-shrink-0"></span>
+              <span className="text-xs md:text-sm text-[var(--color-text-secondary)]">
+                {t("dashboard.filters.negative")} ({negative.toLocaleString(i18n.language === "vi" ? "vi-VN" : "en-US")})
               </span>
             </div>
           </div>
@@ -96,7 +97,7 @@ export function MentionStats({ mentions, isLoading }: MentionStatsProps) {
       </div>
 
       {/* Gradient Background Blob */}
-      <div className="absolute -right-16 -bottom-16 w-64 h-64 bg-primary/5 rounded-full blur-3xl group-hover:scale-110 transition-transform duration-700"></div>
+      <div className="absolute -right-16 -bottom-16 w-64 h-64 bg-[var(--color-brand)] opacity-5 rounded-full blur-3xl group-hover:scale-110 transition-transform duration-700"></div>
     </div>
   );
 }
