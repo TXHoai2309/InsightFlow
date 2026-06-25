@@ -1,16 +1,19 @@
 "use client";
 
 import { useCountUp } from "@/hooks/useIntersectionObserver";
+import { useTheme } from "@/contexts/ThemeContext";
 
 export default function IndustryHeroSection() {
   const kpiDoanhNghiep = useCountUp(500, 2000, true);
   const kpiReview = useCountUp(2, 2000, true);
   const kpiAccuracy = useCountUp(98, 2000, true);
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
 
   return (
     <section 
       className="relative py-[60px] md:py-[80px] px-6 text-center overflow-hidden"
-      style={{ background: "linear-gradient(135deg, #f8f7ff 0%, #eef4ff 100%)" }}
+      style={{ background: isDark ? "linear-gradient(135deg, #111318 0%, #1a1a2e 100%)" : "linear-gradient(135deg, #f8f7ff 0%, #eef4ff 100%)" }}
     >
       {/* Decorative Blobs */}
       <div 
@@ -42,12 +45,12 @@ export default function IndustryHeroSection() {
         </div>
 
         {/* Headline */}
-        <h1 className="text-[32px] md:text-[44px] leading-[1.2] tracking-tight font-[800] text-[#1a1a2e] mb-4 max-w-4xl mx-auto">
+        <h1 className="text-[32px] md:text-[44px] leading-[1.2] tracking-tight font-[800] mb-4 max-w-4xl mx-auto" style={{ color: isDark ? "var(--color-text-primary)" : "#1a1a2e" }}>
           Tối ưu hóa hiệu suất truyền thông cho ngành <span style={{ background: "linear-gradient(90deg, #6D4CFF, #3B82F6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>F&B</span>
         </h1>
 
         {/* Subtext */}
-        <p className="text-[16px] md:text-[18px] leading-[1.6] font-normal text-[#64748B] max-w-2xl mx-auto mb-8">
+        <p className="text-[16px] md:text-[18px] leading-[1.6] font-normal max-w-2xl mx-auto mb-8" style={{ color: isDark ? "var(--color-text-muted)" : "#64748B" }}>
           Hệ thống AI của InsightFlow được tinh chỉnh để thấu hiểu ngôn ngữ, review ẩm thực và
           hành vi của thực khách trên mạng xã hội tại Việt Nam.
         </p>
@@ -56,17 +59,17 @@ export default function IndustryHeroSection() {
         <div className="flex flex-wrap justify-center items-center gap-3 text-[14px] md:text-[16px] font-medium">
           <div className="flex items-center gap-2">
             <span className="text-[#6D4CFF] font-bold text-[18px]">{kpiDoanhNghiep}+</span>
-            <span className="text-[#64748B]">Doanh nghiệp F&B</span>
+            <span style={{ color: isDark ? "var(--color-text-muted)" : "#64748B" }}>Doanh nghiệp F&B</span>
           </div>
           <span className="text-[#CBD5E1] hidden sm:block">•</span>
           <div className="flex items-center gap-2">
             <span className="text-[#6D4CFF] font-bold text-[18px]">{kpiReview}M+</span>
-            <span className="text-[#64748B]">Review phân tích</span>
+            <span style={{ color: isDark ? "var(--color-text-muted)" : "#64748B" }}>Review phân tích</span>
           </div>
           <span className="text-[#CBD5E1] hidden sm:block">•</span>
           <div className="flex items-center gap-2">
             <span className="text-[#6D4CFF] font-bold text-[18px]">{kpiAccuracy}%</span>
-            <span className="text-[#64748B]">Độ chính xác</span>
+            <span style={{ color: isDark ? "var(--color-text-muted)" : "#64748B" }}>Độ chính xác</span>
           </div>
         </div>
       </div>

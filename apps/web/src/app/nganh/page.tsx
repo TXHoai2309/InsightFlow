@@ -12,7 +12,7 @@ export const metadata = {
 
 export default function NganhPage() {
   return (
-    <div className="min-h-screen bg-[#f9f9ff]">
+    <div className="min-h-screen bg-app text-app-primary">
       <TopNavBar />
       <div className="pt-16">
         <IndustryHeroSection />

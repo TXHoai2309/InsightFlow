@@ -3,10 +3,13 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useTranslation } from "react-i18next";
+import { useTheme } from "@/contexts/ThemeContext";
 
 export default function NotificationsTab() {
   const { user } = useAuth();
   const { t, i18n } = useTranslation();
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
   
   const [emailNotif, setEmailNotif] = useState(true);
   const [pushNotif, setPushNotif] = useState(true);
@@ -110,7 +113,13 @@ export default function NotificationsTab() {
         checked={checked} 
         onChange={onChange} 
       />
-      <div className="w-11 h-6 bg-[#D1D5DB] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#6C63FF]"></div>
+      <div 
+        className="w-11 h-6 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#6C63FF]"
+        style={{
+          backgroundColor: checked ? (isDark ? "var(--color-brand)" : "#6C63FF") : (isDark ? "var(--color-bg-surface)" : "#D1D5DB"),
+          border: isDark ? "1px solid var(--color-border)" : "none"
+        }}
+      ></div>
     </label>
   );
 
@@ -118,10 +127,10 @@ export default function NotificationsTab() {
     <div className="space-y-[32px] animate-in fade-in duration-300">
       {/* Header */}
       <div>
-        <h2 className="text-[20px] font-semibold text-[#1A1A2E] mb-2">
+        <h2 className="text-[20px] font-semibold mb-2" style={{ color: isDark ? "var(--color-text-primary)" : "#1A1A2E" }}>
           {t("notifications.title")}
         </h2>
-        <p className="text-[14px] text-[#4A4A6A]">
+        <p className="text-[14px]" style={{ color: isDark ? "var(--color-text-secondary)" : "#4A4A6A" }}>
           {t("notifications.subtitle")}
         </p>
       </div>
@@ -129,14 +138,35 @@ export default function NotificationsTab() {
       {/* Toggles */}
       <div className="space-y-[12px]">
         {/* Email */}
-        <div className="flex items-center justify-between gap-4 px-[24px] py-[20px] rounded-[12px] bg-white border border-[#E2E4F0] hover:bg-[#F9F9FF] hover:border-[#C4C0FF] transition-all group">
+        <div 
+          className="flex items-center justify-between gap-4 px-[24px] py-[20px] rounded-[12px] transition-all group border"
+          style={{
+            backgroundColor: isDark ? "var(--color-bg-surface-raised)" : "#ffffff",
+            borderColor: isDark ? "var(--color-border)" : "#E2E4F0"
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = isDark ? "var(--color-bg-surface)" : "#F9F9FF";
+            e.currentTarget.style.borderColor = isDark ? "var(--color-brand)" : "#C4C0FF";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = isDark ? "var(--color-bg-surface-raised)" : "#ffffff";
+            e.currentTarget.style.borderColor = isDark ? "var(--color-border)" : "#E2E4F0";
+          }}
+        >
           <div className="flex items-center gap-[16px]">
-            <div className="w-[40px] h-[40px] shrink-0 rounded-full bg-[#EFF6FF] flex items-center justify-center text-[#3B82F6]">
+            <div 
+              className="w-[40px] h-[40px] shrink-0 rounded-full flex items-center justify-center"
+              style={{
+                backgroundColor: isDark ? "var(--color-bg-surface)" : "#EFF6FF",
+                color: isDark ? "var(--color-brand)" : "#3B82F6",
+                border: isDark ? "1px solid var(--color-border)" : "none"
+              }}
+            >
               <i className="ti ti-mail text-[22px]"></i>
             </div>
             <div className="flex flex-col gap-[4px]">
-              <h3 className="text-[15px] text-[#1A1A2E] font-bold">{t("notifications.email.title")}</h3>
-              <p className="text-[13px] text-[#9898B0] max-w-md">
+              <h3 className="text-[15px] font-bold" style={{ color: isDark ? "var(--color-text-primary)" : "#1A1A2E" }}>{t("notifications.email.title")}</h3>
+              <p className="text-[13px] max-w-md" style={{ color: isDark ? "var(--color-text-muted)" : "#9898B0" }}>
                 {t("notifications.email.desc")}
               </p>
             </div>
@@ -145,14 +175,35 @@ export default function NotificationsTab() {
         </div>
 
         {/* Push */}
-        <div className="flex items-center justify-between gap-4 px-[24px] py-[20px] rounded-[12px] bg-white border border-[#E2E4F0] hover:bg-[#F9F9FF] hover:border-[#C4C0FF] transition-all group">
+        <div 
+          className="flex items-center justify-between gap-4 px-[24px] py-[20px] rounded-[12px] transition-all group border"
+          style={{
+            backgroundColor: isDark ? "var(--color-bg-surface-raised)" : "#ffffff",
+            borderColor: isDark ? "var(--color-border)" : "#E2E4F0"
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = isDark ? "var(--color-bg-surface)" : "#F9F9FF";
+            e.currentTarget.style.borderColor = isDark ? "var(--color-brand)" : "#C4C0FF";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = isDark ? "var(--color-bg-surface-raised)" : "#ffffff";
+            e.currentTarget.style.borderColor = isDark ? "var(--color-border)" : "#E2E4F0";
+          }}
+        >
           <div className="flex items-center gap-[16px]">
-            <div className="w-[40px] h-[40px] shrink-0 rounded-full bg-[#EEF0FF] flex items-center justify-center text-[#6C63FF]">
+            <div 
+              className="w-[40px] h-[40px] shrink-0 rounded-full flex items-center justify-center"
+              style={{
+                backgroundColor: isDark ? "var(--color-bg-surface)" : "#EEF0FF",
+                color: isDark ? "var(--color-brand)" : "#6C63FF",
+                border: isDark ? "1px solid var(--color-border)" : "none"
+              }}
+            >
               <i className="ti ti-bell-ringing text-[22px]"></i>
             </div>
             <div className="flex flex-col gap-[4px]">
-              <h3 className="text-[15px] text-[#1A1A2E] font-bold">{t("notifications.push.title")}</h3>
-              <p className="text-[13px] text-[#9898B0] max-w-md">
+              <h3 className="text-[15px] font-bold" style={{ color: isDark ? "var(--color-text-primary)" : "#1A1A2E" }}>{t("notifications.push.title")}</h3>
+              <p className="text-[13px] max-w-md" style={{ color: isDark ? "var(--color-text-muted)" : "#9898B0" }}>
                 {t("notifications.push.desc")}
               </p>
             </div>
@@ -161,14 +212,35 @@ export default function NotificationsTab() {
         </div>
 
         {/* Crisis Alerts */}
-        <div className="flex items-center justify-between gap-4 px-[24px] py-[20px] rounded-[12px] bg-white border border-[#E2E4F0] hover:bg-[#F9F9FF] hover:border-[#C4C0FF] transition-all group">
+        <div 
+          className="flex items-center justify-between gap-4 px-[24px] py-[20px] rounded-[12px] transition-all group border"
+          style={{
+            backgroundColor: isDark ? "var(--color-bg-surface-raised)" : "#ffffff",
+            borderColor: isDark ? "var(--color-border)" : "#E2E4F0"
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = isDark ? "var(--color-bg-surface)" : "#F9F9FF";
+            e.currentTarget.style.borderColor = isDark ? "var(--color-brand)" : "#C4C0FF";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = isDark ? "var(--color-bg-surface-raised)" : "#ffffff";
+            e.currentTarget.style.borderColor = isDark ? "var(--color-border)" : "#E2E4F0";
+          }}
+        >
           <div className="flex items-center gap-[16px]">
-            <div className="w-[40px] h-[40px] shrink-0 rounded-full bg-[#FEF2F2] flex items-center justify-center text-[#EF4444]">
+            <div 
+              className="w-[40px] h-[40px] shrink-0 rounded-full flex items-center justify-center"
+              style={{
+                backgroundColor: isDark ? "var(--color-bg-surface)" : "#FEF2F2",
+                color: "#EF4444",
+                border: isDark ? "1px solid var(--color-border)" : "none"
+              }}
+            >
               <i className="ti ti-alert-triangle text-[22px]"></i>
             </div>
             <div className="flex flex-col gap-[4px]">
-              <h3 className="text-[15px] text-[#1A1A2E] font-bold">{t("notifications.crisis.title")}</h3>
-              <p className="text-[13px] text-[#9898B0] max-w-md">
+              <h3 className="text-[15px] font-bold" style={{ color: isDark ? "var(--color-text-primary)" : "#1A1A2E" }}>{t("notifications.crisis.title")}</h3>
+              <p className="text-[13px] max-w-md" style={{ color: isDark ? "var(--color-text-muted)" : "#9898B0" }}>
                 {t("notifications.crisis.desc")}
               </p>
             </div>
@@ -177,14 +249,35 @@ export default function NotificationsTab() {
         </div>
 
         {/* Daily Reports */}
-        <div className="flex items-center justify-between gap-4 px-[24px] py-[20px] rounded-[12px] bg-white border border-[#E2E4F0] hover:bg-[#F9F9FF] hover:border-[#C4C0FF] transition-all group">
+        <div 
+          className="flex items-center justify-between gap-4 px-[24px] py-[20px] rounded-[12px] transition-all group border"
+          style={{
+            backgroundColor: isDark ? "var(--color-bg-surface-raised)" : "#ffffff",
+            borderColor: isDark ? "var(--color-border)" : "#E2E4F0"
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = isDark ? "var(--color-bg-surface)" : "#F9F9FF";
+            e.currentTarget.style.borderColor = isDark ? "var(--color-brand)" : "#C4C0FF";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = isDark ? "var(--color-bg-surface-raised)" : "#ffffff";
+            e.currentTarget.style.borderColor = isDark ? "var(--color-border)" : "#E2E4F0";
+          }}
+        >
           <div className="flex items-center gap-[16px]">
-            <div className="w-[40px] h-[40px] shrink-0 rounded-full bg-[#F0FDF4] flex items-center justify-center text-[#22C55E]">
+            <div 
+              className="w-[40px] h-[40px] shrink-0 rounded-full flex items-center justify-center"
+              style={{
+                backgroundColor: isDark ? "var(--color-bg-surface)" : "#F0FDF4",
+                color: "#22C55E",
+                border: isDark ? "1px solid var(--color-border)" : "none"
+              }}
+            >
               <i className="ti ti-file-report text-[22px]"></i>
             </div>
             <div className="flex flex-col gap-[4px]">
-              <h3 className="text-[15px] text-[#1A1A2E] font-bold">{t("notifications.daily.title")}</h3>
-              <p className="text-[13px] text-[#9898B0] max-w-md">
+              <h3 className="text-[15px] font-bold" style={{ color: isDark ? "var(--color-text-primary)" : "#1A1A2E" }}>{t("notifications.daily.title")}</h3>
+              <p className="text-[13px] max-w-md" style={{ color: isDark ? "var(--color-text-muted)" : "#9898B0" }}>
                 {t("notifications.daily.desc")}
               </p>
             </div>
@@ -193,14 +286,34 @@ export default function NotificationsTab() {
         </div>
 
         {/* Language */}
-        <div className="flex items-start justify-between gap-4 p-4 rounded-xl hover:bg-[#f0f3ff] transition-colors border border-transparent hover:border-[#e7eaf3]">
+        <div 
+          className="flex items-start justify-between gap-4 p-4 rounded-xl border transition-colors"
+          style={{
+            borderColor: isDark ? "var(--color-border)" : "transparent"
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = isDark ? "var(--color-bg-surface-raised)" : "#f0f3ff";
+            e.currentTarget.style.borderColor = isDark ? "var(--color-border)" : "#e7eaf3";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = "transparent";
+            e.currentTarget.style.borderColor = isDark ? "var(--color-border)" : "transparent";
+          }}
+        >
           <div className="flex gap-4">
-            <div className="w-10 h-10 shrink-0 rounded-lg bg-[#dee8ff] flex items-center justify-center text-[#4648d4]">
+            <div 
+              className="w-10 h-10 shrink-0 rounded-lg flex items-center justify-center"
+              style={{
+                backgroundColor: isDark ? "var(--color-bg-surface)" : "#dee8ff",
+                color: isDark ? "var(--color-brand)" : "#4648d4",
+                border: isDark ? "1px solid var(--color-border)" : "none"
+              }}
+            >
               <span className="material-symbols-outlined text-[20px]">translate</span>
             </div>
             <div>
-              <h3 className="text-[14px] text-[#111c2d] font-bold">{t("notifications.language.title")}</h3>
-              <p className="text-[14px] text-[#464554] max-w-md mt-1">
+              <h3 className="text-[14px] font-bold" style={{ color: isDark ? "var(--color-text-primary)" : "#111c2d" }}>{t("notifications.language.title")}</h3>
+              <p className="text-[14px] max-w-md mt-1" style={{ color: isDark ? "var(--color-text-secondary)" : "#464554" }}>
                 {t("notifications.language.desc")}
               </p>
             </div>
@@ -208,21 +321,27 @@ export default function NotificationsTab() {
           <div className="flex gap-1 shrink-0">
             <button
               onClick={() => setSelectedLang('vi')}
-              className={`px-3 py-1.5 text-[13px] font-semibold rounded-lg transition-all ${
-                selectedLang === 'vi'
-                  ? 'bg-[#4648d4] text-white shadow-md'
-                  : 'bg-[#f0f3ff] text-[#464554] hover:bg-[#dee8ff]'
-              }`}
+              className="px-3 py-1.5 text-[13px] font-semibold rounded-lg transition-all"
+              style={selectedLang === 'vi' ? {
+                backgroundColor: isDark ? "var(--color-brand)" : "#4648d4",
+                color: "white",
+              } : {
+                backgroundColor: isDark ? "var(--color-bg-surface-raised)" : "#f0f3ff",
+                color: isDark ? "var(--color-text-secondary)" : "#464554",
+              }}
             >
               VI
             </button>
             <button
               onClick={() => setSelectedLang('en')}
-              className={`px-3 py-1.5 text-[13px] font-semibold rounded-lg transition-all ${
-                selectedLang === 'en'
-                  ? 'bg-[#4648d4] text-white shadow-md'
-                  : 'bg-[#f0f3ff] text-[#464554] hover:bg-[#dee8ff]'
-              }`}
+              className="px-3 py-1.5 text-[13px] font-semibold rounded-lg transition-all"
+              style={selectedLang === 'en' ? {
+                backgroundColor: isDark ? "var(--color-brand)" : "#4648d4",
+                color: "white",
+              } : {
+                backgroundColor: isDark ? "var(--color-bg-surface-raised)" : "#f0f3ff",
+                color: isDark ? "var(--color-text-secondary)" : "#464554",
+              }}
             >
               EN
             </button>
@@ -234,7 +353,19 @@ export default function NotificationsTab() {
       <div className="flex justify-end gap-[12px] mt-[32px]">
         <button 
           onClick={handleCancel}
-          className="bg-transparent text-[#4A4A6A] border-[1.5px] border-[#E2E4F0] rounded-[10px] px-[28px] py-[11px] font-semibold hover:border-[#6C63FF] hover:text-[#6C63FF] transition-colors text-[14px]"
+          className="bg-transparent border-[1.5px] rounded-[10px] px-[28px] py-[11px] font-semibold transition-colors text-[14px]"
+          style={{
+            borderColor: isDark ? "var(--color-border)" : "#E2E4F0",
+            color: isDark ? "var(--color-text-secondary)" : "#4A4A6A",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = isDark ? "var(--color-brand)" : "#6C63FF";
+            e.currentTarget.style.color = isDark ? "var(--color-brand)" : "#6C63FF";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = isDark ? "var(--color-border)" : "#E2E4F0";
+            e.currentTarget.style.color = isDark ? "var(--color-text-secondary)" : "#4A4A6A";
+          }}
         >
           {t("notifications.actions.cancel")}
         </button>
@@ -259,26 +390,53 @@ export default function NotificationsTab() {
       </div>
 
       {/* Decoration / Atmospheric Context */}
-      <div className="mt-12 pt-8 grid grid-cols-1 md:grid-cols-2 gap-6 opacity-90 border-t border-[#E2E4F0]">
-        <div className="p-6 rounded-[12px] bg-[#F7F8FC] flex items-center gap-[16px]">
-          <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-sm text-[#6C63FF]">
+      <div className="mt-12 pt-8 grid grid-cols-1 md:grid-cols-2 gap-6 opacity-90 border-t" style={{ borderColor: isDark ? "var(--color-border)" : "#E2E4F0" }}>
+        <div 
+          className="p-6 rounded-[12px] flex items-center gap-[16px] border"
+          style={{
+            backgroundColor: isDark ? "var(--color-bg-surface-raised)" : "#F7F8FC",
+            borderColor: isDark ? "var(--color-border)" : "transparent"
+          }}
+        >
+          <div 
+            className="w-12 h-12 rounded-full flex items-center justify-center shadow-sm"
+            style={{
+              backgroundColor: isDark ? "var(--color-bg-surface)" : "#ffffff",
+              color: isDark ? "var(--color-brand)" : "#6C63FF",
+              border: isDark ? "1px solid var(--color-border)" : "none"
+            }}
+          >
             <i className="ti ti-shield-lock text-[24px]"></i>
           </div>
           <div>
-            <h4 className="text-[14px] font-semibold text-[#1A1A2E]">{t("notifications.encryption.title")}</h4>
-            <p className="text-[13px] text-[#9898B0] mt-0.5">{t("notifications.encryption.desc")}</p>
+            <h4 className="text-[14px] font-semibold" style={{ color: isDark ? "var(--color-text-primary)" : "#1A1A2E" }}>{t("notifications.encryption.title")}</h4>
+            <p className="text-[13px] mt-0.5" style={{ color: isDark ? "var(--color-text-muted)" : "#9898B0" }}>{t("notifications.encryption.desc")}</p>
           </div>
         </div>
-        <div className="p-6 rounded-[12px] bg-[#F7F8FC] flex items-center gap-[16px]">
-          <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-sm text-[#6C63FF]">
+        <div 
+          className="p-6 rounded-[12px] flex items-center gap-[16px] border"
+          style={{
+            backgroundColor: isDark ? "var(--color-bg-surface-raised)" : "#F7F8FC",
+            borderColor: isDark ? "var(--color-border)" : "transparent"
+          }}
+        >
+          <div 
+            className="w-12 h-12 rounded-full flex items-center justify-center shadow-sm"
+            style={{
+              backgroundColor: isDark ? "var(--color-bg-surface)" : "#ffffff",
+              color: isDark ? "var(--color-brand)" : "#6C63FF",
+              border: isDark ? "1px solid var(--color-border)" : "none"
+            }}
+          >
             <i className="ti ti-devices text-[24px]"></i>
           </div>
           <div>
-            <h4 className="text-[14px] font-semibold text-[#1A1A2E]">{t("notifications.sync.title")}</h4>
-            <p className="text-[13px] text-[#9898B0] mt-0.5">{t("notifications.sync.desc")}</p>
+            <h4 className="text-[14px] font-semibold" style={{ color: isDark ? "var(--color-text-primary)" : "#1A1A2E" }}>{t("notifications.sync.title")}</h4>
+            <p className="text-[13px] mt-0.5" style={{ color: isDark ? "var(--color-text-muted)" : "#9898B0" }}>{t("notifications.sync.desc")}</p>
           </div>
         </div>
       </div>
     </div>
   );
 }
+

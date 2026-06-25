@@ -1,5 +1,7 @@
 "use client";
 
+import { useTheme } from "@/contexts/ThemeContext";
+
 const partners = [
   "VINAGROUP",
   "TECH-SOL",
@@ -11,10 +13,17 @@ const partners = [
 ];
 
 export default function PartnersSection() {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+
   return (
     <section 
       className="py-[40px] overflow-hidden"
-      style={{ background: "#F8F7FF", borderTop: "1px solid #E5E7EB", borderBottom: "1px solid #E5E7EB" }}
+      style={{ 
+        background: isDark ? "var(--color-bg-surface)" : "#F8F7FF", 
+        borderTop: `1px solid ${isDark ? "var(--color-border)" : "#E5E7EB"}`, 
+        borderBottom: `1px solid ${isDark ? "var(--color-border)" : "#E5E7EB"}` 
+      }}
     >
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes marquee {
@@ -35,7 +44,7 @@ export default function PartnersSection() {
       `}} />
 
       <div className="max-w-7xl mx-auto px-6 md:px-10 flex flex-col items-center">
-        <p className="text-[16px] md:text-[18px] font-medium text-[#64748B] mb-8 text-center">
+        <p className="text-[16px] md:text-[18px] font-medium mb-8 text-center" style={{ color: isDark ? "var(--color-text-secondary)" : "#64748B" }}>
           Được tin tưởng bởi 500+ doanh nghiệp hàng đầu
         </p>
       </div>
@@ -45,7 +54,16 @@ export default function PartnersSection() {
           {[...partners, ...partners].map((partner, idx) => (
             <div
               key={idx}
-              className="text-[18px] font-bold text-[#9CA3AF] hover:text-[#6D4CFF] hover:scale-105 transition-all duration-200 cursor-pointer whitespace-nowrap"
+              className="text-[18px] font-bold transition-all duration-200 cursor-pointer whitespace-nowrap"
+              style={{ color: isDark ? "var(--color-text-disabled)" : "#9CA3AF" }}
+              onMouseEnter={(e) => {
+                (e.target as HTMLDivElement).style.color = isDark ? "var(--color-brand)" : "#6D4CFF";
+                (e.target as HTMLDivElement).style.transform = "scale(1.05)";
+              }}
+              onMouseLeave={(e) => {
+                (e.target as HTMLDivElement).style.color = isDark ? "var(--color-text-disabled)" : "#9CA3AF";
+                (e.target as HTMLDivElement).style.transform = "scale(1)";
+              }}
             >
               {partner}
             </div>
@@ -55,3 +73,4 @@ export default function PartnersSection() {
     </section>
   );
 }
+

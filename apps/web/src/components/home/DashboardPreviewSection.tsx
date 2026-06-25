@@ -2,12 +2,16 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { useTheme } from "@/contexts/ThemeContext";
 
-/* ─── Light-theme Brand Dashboard ─── */
+/* ─── Brand Dashboard SVG ─── */
 function BrandDashboardSVG({ animate }: { animate: boolean }) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+
   const sources = [
     { label: "Facebook", color: "#1877F2", pct: 68 },
-    { label: "TikTok", color: "#FF0050", pct: 42 },
+    { label: "TikTok", color: isDark ? "#ffffff" : "#010101", pct: 42 },
     { label: "Zalo", color: "#0068FF", pct: 28 },
   ];
 
@@ -21,12 +25,12 @@ function BrandDashboardSVG({ animate }: { animate: boolean }) {
   return (
     <div
       style={{
-        background: "#FFFFFF",
-        border: "1px solid #E5E7EB",
+        background: isDark ? "var(--color-bg-surface)" : "#FFFFFF",
+        border: isDark ? "1px solid var(--color-border)" : "1px solid #E5E7EB",
         borderRadius: 20,
-        boxShadow: "0 20px 60px rgba(109,76,255,0.13)",
+        boxShadow: isDark ? "0 20px 60px rgba(0,0,0,0.3)" : "0 20px 60px rgba(109,76,255,0.13)",
         overflow: "hidden",
-        filter: "drop-shadow(0 0 40px rgba(109,76,255,0.10))",
+        filter: isDark ? "drop-shadow(0 0 40px rgba(123,116,255,0.06))" : "drop-shadow(0 0 40px rgba(109,76,255,0.10))",
         transform: animate ? "perspective(1000px) rotateY(0deg)" : "perspective(1000px) rotateY(-3deg)",
         transition: "transform 0.4s ease",
       }}
@@ -34,33 +38,33 @@ function BrandDashboardSVG({ animate }: { animate: boolean }) {
       {/* Header bar */}
       <div
         style={{
-          background: "linear-gradient(135deg, #F3F0FF 0%, #EEF4FF 100%)",
+          background: isDark ? "var(--color-bg-surface-raised)" : "linear-gradient(135deg, #F3F0FF 0%, #EEF4FF 100%)",
           padding: "12px 16px",
-          borderBottom: "1px solid #E5E7EB",
+          borderBottom: isDark ? "1px solid var(--color-border)" : "1px solid #E5E7EB",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#6D4CFF" }} />
-          <span style={{ fontSize: 12, fontWeight: 700, color: "#4234b6" }}>InsightFlow</span>
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: isDark ? "var(--color-brand)" : "#6D4CFF" }} />
+          <span style={{ fontSize: 12, fontWeight: 700, color: isDark ? "var(--color-brand)" : "#4234b6" }}>InsightFlow</span>
         </div>
         <div
           style={{
-            background: "#fff",
-            border: "1px solid #E5E7EB",
+            background: isDark ? "var(--color-bg-surface)" : "#fff",
+            border: isDark ? "1px solid var(--color-border)" : "1px solid #E5E7EB",
             borderRadius: 8,
             padding: "3px 10px",
             fontSize: 11,
-            color: "#4A4A6A",
+            color: isDark ? "var(--color-text-primary)" : "#4A4A6A",
             fontWeight: 600,
             display: "flex",
             alignItems: "center",
             gap: 4,
           }}
         >
-          Thương hiệu A <span style={{ color: "#9898B0" }}>▾</span>
+          Thương hiệu A <span style={{ color: "var(--color-text-muted)" }}>▾</span>
         </div>
       </div>
 
@@ -70,22 +74,22 @@ function BrandDashboardSVG({ animate }: { animate: boolean }) {
           {/* Share of Voice */}
           <div
             style={{
-              background: "#FAFAFE",
-              border: "1px solid #EDE9FF",
+              background: isDark ? "var(--color-bg-surface-raised)" : "#FAFAFE",
+              border: isDark ? "1px solid var(--color-border)" : "1px solid #EDE9FF",
               borderRadius: 12,
               padding: "12px 14px",
             }}
           >
-            <p style={{ fontSize: 9, color: "#9898B0", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>
+            <p style={{ fontSize: 9, color: isDark ? "var(--color-text-muted)" : "#9898B0", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>
               Share of Voice
             </p>
-            <div style={{ fontSize: 28, fontWeight: 900, color: "#6D4CFF", lineHeight: 1 }}>34%</div>
+            <div style={{ fontSize: 28, fontWeight: 900, color: isDark ? "var(--color-brand)" : "#6D4CFF", lineHeight: 1 }}>34%</div>
             <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 6 }}>
               <div
                 style={{
                   height: 6,
                   borderRadius: 999,
-                  background: "#EDE9FF",
+                  background: isDark ? "var(--color-bg-surface)" : "#EDE9FF",
                   overflow: "hidden",
                   flex: 1,
                 }}
@@ -101,31 +105,31 @@ function BrandDashboardSVG({ animate }: { animate: boolean }) {
                 />
               </div>
             </div>
-            <p style={{ fontSize: 9, color: "#22c55e", fontWeight: 700, marginTop: 4 }}>▲ +12% so tháng trước</p>
+            <p style={{ fontSize: 9, color: "var(--color-success)", fontWeight: 700, marginTop: 4 }}>▲ +12% so tháng trước</p>
           </div>
 
           {/* Trend Line Chart */}
           <div
             style={{
-              background: "#FAFAFE",
-              border: "1px solid #EDE9FF",
+              background: isDark ? "var(--color-bg-surface-raised)" : "#FAFAFE",
+              border: isDark ? "1px solid var(--color-border)" : "1px solid #EDE9FF",
               borderRadius: 12,
               padding: "10px 12px",
             }}
           >
-            <p style={{ fontSize: 9, color: "#9898B0", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
-              📈 Xu hướng 3 tháng
+            <p style={{ fontSize: 9, color: isDark ? "var(--color-text-muted)" : "#9898B0", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
+              Xu hướng 3 tháng
             </p>
             <svg viewBox="0 0 96 60" style={{ width: "100%", height: 52 }}>
               <defs>
                 <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#6D4CFF" stopOpacity="0.18" />
-                  <stop offset="100%" stopColor="#6D4CFF" stopOpacity="0" />
+                  <stop offset="0%" stopColor={isDark ? "var(--color-brand)" : "#6D4CFF"} stopOpacity="0.18" />
+                  <stop offset="100%" stopColor={isDark ? "var(--color-brand)" : "#6D4CFF"} stopOpacity="0" />
                 </linearGradient>
               </defs>
               {/* Grid lines */}
               {[15, 30, 45].map((y) => (
-                <line key={y} x1="0" y1={y} x2="96" y2={y} stroke="#F0ECFF" strokeWidth="0.8" />
+                <line key={y} x1="0" y1={y} x2="96" y2={y} stroke={isDark ? "var(--color-border)" : "#F0ECFF"} strokeWidth="0.8" />
               ))}
               {/* Area fill */}
               <path d={areaD} fill="url(#areaGrad)" />
@@ -133,13 +137,13 @@ function BrandDashboardSVG({ animate }: { animate: boolean }) {
               <path
                 d={pathD}
                 fill="none"
-                stroke="#6D4CFF"
+                stroke={isDark ? "var(--color-brand)" : "#6D4CFF"}
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
               {/* End dot */}
-              <circle cx="96" cy="6" r="3" fill="#6D4CFF" />
+              <circle cx="96" cy="6" r="3" fill={isDark ? "var(--color-brand)" : "#6D4CFF"} />
             </svg>
           </div>
         </div>
@@ -147,21 +151,21 @@ function BrandDashboardSVG({ animate }: { animate: boolean }) {
         {/* Row 2: Source breakdown */}
         <div
           style={{
-            background: "#FAFAFE",
-            border: "1px solid #EDE9FF",
+            background: isDark ? "var(--color-bg-surface-raised)" : "#FAFAFE",
+            border: isDark ? "1px solid var(--color-border)" : "1px solid #EDE9FF",
             borderRadius: 12,
             padding: "12px 14px",
           }}
         >
-          <p style={{ fontSize: 9, color: "#9898B0", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+          <p style={{ fontSize: 9, color: isDark ? "var(--color-text-muted)" : "#9898B0", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
             Nguồn thảo luận hàng đầu
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
             {sources.map((s) => (
               <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <div style={{ width: 8, height: 8, borderRadius: "50%", background: s.color, flexShrink: 0 }} />
-                <span style={{ fontSize: 10, color: "#4A4A6A", fontWeight: 600, width: 56, flexShrink: 0 }}>{s.label}</span>
-                <div style={{ flex: 1, height: 7, borderRadius: 999, background: "#EDE9FF", overflow: "hidden" }}>
+                <span style={{ fontSize: 10, color: isDark ? "var(--color-text-secondary)" : "#4A4A6A", fontWeight: 600, width: 56, flexShrink: 0 }}>{s.label}</span>
+                <div style={{ flex: 1, height: 7, borderRadius: 999, background: isDark ? "var(--color-bg-surface)" : "#EDE9FF", overflow: "hidden" }}>
                   <div
                     style={{
                       width: animate ? `${s.pct}%` : "0%",
@@ -172,7 +176,7 @@ function BrandDashboardSVG({ animate }: { animate: boolean }) {
                     }}
                   />
                 </div>
-                <span style={{ fontSize: 10, fontWeight: 700, color: "#6D4CFF", width: 28, textAlign: "right" }}>{s.pct}%</span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: isDark ? "var(--color-brand)" : "#6D4CFF", width: 28, textAlign: "right" }}>{s.pct}%</span>
               </div>
             ))}
           </div>
@@ -181,8 +185,8 @@ function BrandDashboardSVG({ animate }: { animate: boolean }) {
         {/* Row 3: Top KOLs */}
         <div
           style={{
-            background: "#FAFAFE",
-            border: "1px solid #EDE9FF",
+            background: isDark ? "var(--color-bg-surface-raised)" : "#FAFAFE",
+            border: isDark ? "1px solid var(--color-border)" : "1px solid #EDE9FF",
             borderRadius: 12,
             padding: "10px 14px",
             display: "flex",
@@ -190,10 +194,10 @@ function BrandDashboardSVG({ animate }: { animate: boolean }) {
             gap: 10,
           }}
         >
-          <span style={{ fontSize: 9, color: "#9898B0", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", flexShrink: 0 }}>
+          <span style={{ fontSize: 9, color: isDark ? "var(--color-text-muted)" : "#9898B0", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", flexShrink: 0 }}>
             Top KOLs
           </span>
-          <div style={{ width: 1, height: 16, background: "#E5E7EB" }} />
+          <div style={{ width: 1, height: 16, background: isDark ? "var(--color-border)" : "#E5E7EB" }} />
           {["Nguyễn A", "Trần B", "Lê C"].map((kol, i) => (
             <div
               key={kol}
@@ -208,18 +212,19 @@ function BrandDashboardSVG({ animate }: { animate: boolean }) {
                   width: 22,
                   height: 22,
                   borderRadius: "50%",
-                  background: ["#EDE9FF", "#DBEAFE", "#FEF9C3"][i],
+                  background: isDark ? "var(--color-bg-surface)" : ["#EDE9FF", "#DBEAFE", "#FEF9C3"][i],
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   fontSize: 9,
                   fontWeight: 800,
-                  color: ["#6D4CFF", "#2563EB", "#B45309"][i],
+                  color: isDark ? "var(--color-brand)" : ["#6D4CFF", "#2563EB", "#B45309"][i],
+                  border: isDark ? "1px solid var(--color-border)" : "none",
                 }}
               >
                 {kol[0]}
               </div>
-              <span style={{ fontSize: 10, color: "#4A4A6A", fontWeight: 600 }}>{kol}</span>
+              <span style={{ fontSize: 10, color: isDark ? "var(--color-text-secondary)" : "#4A4A6A", fontWeight: 600 }}>{kol}</span>
             </div>
           ))}
         </div>
@@ -242,6 +247,8 @@ function FeatureCard({
   visible: boolean;
   delay: number;
 }) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
   const [hovered, setHovered] = useState(false);
 
   return (
@@ -249,11 +256,15 @@ function FeatureCard({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        background: hovered ? "#F3F0FF" : "#FAFAFE",
-        borderLeft: hovered ? "3px solid #4234b6" : "3px solid #6D4CFF",
-        borderTop: "1px solid #EDE9FF",
-        borderRight: "1px solid #EDE9FF",
-        borderBottom: "1px solid #EDE9FF",
+        background: isDark 
+          ? (hovered ? "var(--color-bg-surface-raised)" : "var(--color-bg-surface)") 
+          : (hovered ? "#F3F0FF" : "#FAFAFE"),
+        borderLeft: hovered 
+          ? (isDark ? "3px solid var(--color-brand-hover)" : "3px solid #4234b6") 
+          : (isDark ? "3px solid var(--color-brand)" : "3px solid #6D4CFF"),
+        borderTop: isDark ? "1px solid var(--color-border)" : "1px solid #EDE9FF",
+        borderRight: isDark ? "1px solid var(--color-border)" : "1px solid #EDE9FF",
+        borderBottom: isDark ? "1px solid var(--color-border)" : "1px solid #EDE9FF",
         borderRadius: 10,
         padding: "16px 20px",
         position: "relative",
@@ -276,7 +287,7 @@ function FeatureCard({
           top: 8,
           fontSize: 32,
           fontWeight: 900,
-          color: "#EDE9FF",
+          color: isDark ? "var(--color-bg-surface-raised)" : "#EDE9FF",
           lineHeight: 1,
           userSelect: "none",
           fontVariantNumeric: "tabular-nums",
@@ -285,14 +296,16 @@ function FeatureCard({
         {num}
       </span>
 
-      <p style={{ fontSize: 15, fontWeight: 700, color: "#1c1b23", marginBottom: 4 }}>{title}</p>
-      <p style={{ fontSize: 13, color: "#6B7280", lineHeight: 1.5 }}>{desc}</p>
+      <p style={{ fontSize: 15, fontWeight: 700, color: isDark ? "var(--color-text-primary)" : "#1c1b23", marginBottom: 4 }}>{title}</p>
+      <p style={{ fontSize: 13, color: isDark ? "var(--color-text-muted)" : "#6B7280", lineHeight: 1.5 }}>{desc}</p>
     </div>
   );
 }
 
 /* ─── Main Section ─── */
 export default function DashboardPreviewSection() {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
 
@@ -325,7 +338,7 @@ export default function DashboardPreviewSection() {
 
   return (
     <section
-      style={{ background: "linear-gradient(180deg, #FFFFFF 0%, #F8F7FF 100%)" }}
+      style={{ background: isDark ? "linear-gradient(180deg, var(--color-bg-surface) 0%, var(--color-bg-primary) 100%)" : "linear-gradient(180deg, #FFFFFF 0%, #F8F7FF 100%)" }}
       className="px-6 py-[60px]"
     >
       <div className="max-w-[1200px] mx-auto">
@@ -361,19 +374,19 @@ export default function DashboardPreviewSection() {
             {/* Label */}
             <span
               className="inline-block px-4 py-1.5 rounded-full text-[12px] font-bold uppercase tracking-widest"
-              style={{ background: "#E4DFFF", color: "#4234b6" }}
+              style={{ background: isDark ? "rgba(123,116,255,0.15)" : "#E4DFFF", color: isDark ? "#9B8FF8" : "#4234b6" }}
             >
               Brand Intelligence
             </span>
 
             {/* Heading */}
-            <h2 className="text-[32px] md:text-[38px] leading-tight tracking-[-0.02em] font-black text-[#1c1b23]">
+            <h2 className="text-[32px] md:text-[38px] leading-tight tracking-[-0.02em] font-black" style={{ color: isDark ? "var(--color-text-primary)" : "#1c1b23" }}>
               Trải nghiệm quản trị{" "}
               <span
                 style={{
-                  color: "#6D4CFF",
+                  color: isDark ? "var(--color-brand)" : "#6D4CFF",
                   textDecoration: "underline",
-                  textDecorationColor: "#C4B8FF",
+                  textDecorationColor: isDark ? "rgba(123,116,255,0.3)" : "#C4B8FF",
                   textDecorationThickness: 3,
                   textUnderlineOffset: 4,
                 }}
@@ -384,7 +397,7 @@ export default function DashboardPreviewSection() {
             </h2>
 
             {/* Subtext */}
-            <p className="text-[16px] leading-[26px] text-[#474554]">
+            <p className="text-[16px] leading-[26px]" style={{ color: isDark ? "var(--color-text-secondary)" : "#474554" }}>
               InsightFlow cung cấp cái nhìn 360° về mọi khía cạnh của thương hiệu
               trên không gian số — từ Share of Voice đến cảm xúc từng phân khúc khách hàng.
             </p>
@@ -407,7 +420,7 @@ export default function DashboardPreviewSection() {
             <a
               href="/dashboard"
               className="inline-flex items-center gap-2 font-semibold text-[14px] group"
-              style={{ color: "#6D4CFF" }}
+              style={{ color: isDark ? "var(--color-brand)" : "#6D4CFF" }}
             >
               Xem demo thực tế
               <i
@@ -417,7 +430,6 @@ export default function DashboardPreviewSection() {
           </div>
         </div>
       </div>
-
     </section>
   );
 }

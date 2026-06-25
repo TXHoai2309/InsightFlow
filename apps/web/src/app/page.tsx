@@ -1,13 +1,19 @@
+"use client";
+
 import TopNavBar from "@/components/home/TopNavBar";
 import HeroSection from "@/components/home/HeroSection";
 import TrustedBySection from "@/components/home/TrustedBySection";
 import FeaturesSection from "@/components/home/FeaturesSection";
 import DashboardPreviewSection from "@/components/home/DashboardPreviewSection";
 import FinalCTASection from "@/components/home/FinalCTASection";
+import { useTheme } from "@/contexts/ThemeContext";
 
 export default function Home() {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+
   return (
-    <div className="min-h-screen" style={{ background: "linear-gradient(135deg, #f8f7ff 0%, #eef4ff 100%)" }}>
+    <div className="min-h-screen transition-colors duration-300" style={{ background: isDark ? "linear-gradient(135deg, #111318 0%, #1a1a2e 100%)" : "linear-gradient(135deg, #f8f7ff 0%, #eef4ff 100%)" }}>
       <TopNavBar />
       <div className="pt-16">
         {/* Hero: SVG dashboard + KPI counters + animated blobs */}
@@ -29,3 +35,4 @@ export default function Home() {
     </div>
   );
 }
+
