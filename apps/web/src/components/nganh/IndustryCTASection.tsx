@@ -1,8 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslation } from "react-i18next";
 
 export default function IndustryCTASection() {
+  const { t } = useTranslation();
+
   return (
     <section className="py-[60px] px-6 max-w-[1200px] mx-auto">
       <div 
@@ -21,11 +24,10 @@ export default function IndustryCTASection() {
 
         <div className="relative z-10">
           <h2 className="text-[28px] md:text-[36px] leading-[1.2] tracking-tight font-bold text-white mb-4">
-            Sẵn sàng nâng tầm thương hiệu của bạn?
+            {t("industries.cta.title")}
           </h2>
           <p className="text-[16px] leading-[26px] text-white/90 mb-8 max-w-2xl mx-auto">
-            Tham gia cùng 500+ doanh nghiệp hàng đầu tại Việt Nam đang sử dụng
-            InsightFlow để làm chủ truyền thông.
+            {t("industries.cta.desc")}
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
             <Link
@@ -41,7 +43,7 @@ export default function IndustryCTASection() {
                 e.currentTarget.style.boxShadow = "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)";
               }}
             >
-              Bắt đầu miễn phí
+              {t("industries.cta.start")}
             </Link>
             <button 
               className="bg-transparent border-2 px-8 py-3 rounded-xl text-[16px] font-bold text-white transition-all w-full sm:w-auto"
@@ -53,7 +55,7 @@ export default function IndustryCTASection() {
                 e.currentTarget.style.backgroundColor = "transparent";
               }}
             >
-              Yêu cầu Demo
+              {t("industries.cta.demo")}
             </button>
           </div>
         </div>

@@ -730,6 +730,7 @@ function generateAIInsights(
 }
 
 export default function ReportsPage() {
+  const { t, i18n } = useTranslation();
   const [activeTab, setActiveTab] = useState<"periodic" | "custom" | "archive">(
     "periodic",
   );
@@ -2096,11 +2097,12 @@ export default function ReportsPage() {
                         { val: "marketing", label: "Marketing" },
                         { val: "competitor", label: "Đối thủ" },
                         { val: "other", label: "Khác" },
-                      ].map((t) => {
-                        const active = customTopics.includes(t.val);
+                      ].map((topic) => {
+                        const active = customTopics.includes(topic.val);
+                        const topicLabel = t(`reports.topics.${topic.val}`, { defaultValue: topic.label });
                         return (
                           <label
-                            key={t.val}
+                            key={topic.val}
                             className="flex items-center gap-2 text-xs font-medium cursor-pointer p-1.5 rounded hover:bg-surface-container/50"
                           >
                             <input
@@ -2108,14 +2110,14 @@ export default function ReportsPage() {
                               checked={active}
                               onChange={() =>
                                 toggleCheckbox(
-                                  t.val,
+                                  topic.val,
                                   customTopics,
                                   setCustomTopics,
                                 )
                               }
                               className="accent-primary w-4 h-4"
                             />
-                            {label}
+                            {topicLabel}
                           </label>
                         );
                       })}

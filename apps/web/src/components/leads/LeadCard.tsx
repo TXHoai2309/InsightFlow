@@ -23,7 +23,7 @@ const PLATFORM_ICONS: Record<string, string> = {
 
 const STATUS_META: Record<
   Lead["status"],
-  { label: string; bg: string; text: string; dot: string }
+  { bg: string; text: string; dot: string }
 > = {
   new: {
     bg: "bg-[var(--color-brand-subtle)] border-[var(--color-brand-border)]",
