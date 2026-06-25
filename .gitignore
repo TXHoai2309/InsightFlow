@@ -33,3 +33,8 @@ __pycache__/
 venv/
 .venv/
 env/
+
+# Firebase / Google Cloud credentials
+apps/api/service-account.json
+*.json.key
+*service-account*.json
