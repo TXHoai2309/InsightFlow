@@ -11,30 +11,39 @@ interface MentionFiltersProps {
   allMentions: Mention[];
 }
 
+const sentimentOptions = [
+  { value: "all", label: "Tất cả Sắc thái" },
+  { value: "positive", label: "Tích cực" },
+  { value: "neutral", label: "Trung lập" },
+  { value: "negative", label: "Tiêu cực" },
+];
+
+const timeRangeOptions = [
+  { value: "all", label: "Tất cả thời gian" },
+  { value: "today", label: "Hôm nay (24h)" },
+  { value: "7days", label: "7 ngày qua" },
+  { value: "30days", label: "30 ngày qua" },
+];
+
 export function MentionFilters({ workspaces, filters, allMentions }: MentionFiltersProps) {
   const { t } = useTranslation();
   const { setFilters } = useDashboardStore();
 
-  const sentimentOptions = [
-    { value: "all", label: t("mentions.filters.allSentiments") },
-    { value: "positive", label: t("dashboard.filters.positive") },
-    { value: "negative", label: t("dashboard.filters.negative") },
-    { value: "neutral", label: t("dashboard.filters.neutral") },
-  ];
-
-  const timeRangeOptions = [
-    { value: "all", label: t("mentions.filters.allTime") },
-    { value: "24h", label: t("mentions.filters.24h") },
-    { value: "7d", label: t("mentions.filters.7days") },
-    { value: "30d", label: t("mentions.filters.30days") },
-  ];
-
-  // Derive available brands from actual data
+  // Keep the product scope fixed to the three tracked brands.
   const availableBrands = useMemo(() => {
-    const brandSet = new Set<string>();
-    allMentions.forEach(m => brandSet.add(m.workspace_id));
-    return Array.from(brandSet).sort();
-  }, [allMentions]);
+    const order = ["highlandcoffee", "starbucks", "mixue"];
+    return [...workspaces].sort((a, b) => {
+      const aIndex = order.findIndex((key) =>
+        a.id.toLowerCase().includes(key) ||
+        a.brand_name.toLowerCase().replace(/[\s\-_.]/g, "").includes(key),
+      );
+      const bIndex = order.findIndex((key) =>
+        b.id.toLowerCase().includes(key) ||
+        b.brand_name.toLowerCase().replace(/[\s\-_.]/g, "").includes(key),
+      );
+      return (aIndex === -1 ? 99 : aIndex) - (bIndex === -1 ? 99 : bIndex);
+    });
+  }, [workspaces]);
 
   // Derive available platforms from actual data
   const availablePlatforms = useMemo(() => {
@@ -55,7 +64,10 @@ export function MentionFilters({ workspaces, filters, allMentions }: MentionFilt
   // Get brand display name: check workspaces list, then fall back to raw value
   const getBrandName = (brandId: string) => {
     const ws = workspaces.find(w => w.id === brandId);
-    return ws ? ws.brand_name : brandId;
+    if (!ws) return brandId;
+    return ws.brand_name.toLowerCase().includes("highland")
+      ? "Highland Coffee"
+      : ws.brand_name;
   };
 
   return (
@@ -83,8 +95,8 @@ export function MentionFilters({ workspaces, filters, allMentions }: MentionFilt
             {t("mentions.filters.allBrands")}
           </option>
           {availableBrands.map((brand) => (
-            <option key={brand} value={brand} style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
-              {getBrandName(brand)}
+            <option key={brand.id} value={brand.id}>
+              {getBrandName(brand.id)}
             </option>
           ))}
         </select>

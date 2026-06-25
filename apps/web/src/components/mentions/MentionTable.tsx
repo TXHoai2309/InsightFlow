@@ -23,6 +23,11 @@ const getPlatformIcon = (platformStr: string) => {
   return platformIconMap[platformStr.toLowerCase()] || { icon: "public", color: "text-gray-600" };
 };
 
+const formatCredibilityScore = (score: number) => {
+  const percentage = score <= 1 ? score * 100 : score;
+  return Math.max(0, Math.min(100, Math.round(percentage)));
+};
+
 const sentimentMap: Record<
   Mention["sentiment"],
   { labelKey: string; icon: string; className: string }
@@ -250,13 +255,13 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                       <td className="px-4 py-4 align-top">
                         <div className="flex flex-col gap-2">
                           <span className="font-bold text-[var(--color-text-primary)] text-center">
-                            {Math.round(mention.credibility_score * 100)}%
+                            {formatCredibilityScore(mention.credibility_score)}%
                           </span>
                           <div className="w-24 h-2 bg-[var(--color-bg-surface-raised)] rounded-full overflow-hidden">
                             <div
                               className="bg-[var(--color-brand)] h-full rounded-full"
                               style={{
-                                width: `${mention.credibility_score * 100}%`,
+                                width: `${formatCredibilityScore(mention.credibility_score)}%`,
                               }}
                             />
                           </div>

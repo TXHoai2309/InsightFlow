@@ -43,12 +43,9 @@ function getRelativeTime(isoString: string, t: any): string {
 function normalizeBrandId(brand: string): string {
   if (!brand) return "other";
   let b = brand.toLowerCase().trim();
-  if (b.includes("laha")) return "laha-cafe";
   if (b.includes("mixue")) return "mixue";
-  if (b.includes("marou")) return "maison-marou";
-  if (b.includes("highlands")) return "highlands-coffee";
-  if (b.includes("phúc long") || b.includes("phuclong")) return "phuc-long";
-  if (b.includes("katinat")) return "katinat";
+  if (b.includes("starbuck")) return "starbucks";
+  if (b.includes("highland")) return "highland-coffee";
   
   return b.replace(/[^a-z0-9]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
 }
@@ -58,8 +55,8 @@ function formatBrandName(brand: string): string {
   if (!brand) return "";
   const lower = brand.toLowerCase();
   if (lower === "mixue") return "Mixue";
-  if (lower === "laha-cafe" || lower === "laha coffee" || lower === "laha_coffee") return "Laha Coffee";
-  if (lower === "maison-marou" || lower === "maison_marou") return "Maison Marou";
+  if (lower.includes("starbuck")) return "Starbucks";
+  if (lower.includes("highland")) return "Highland Coffee";
   
   // Otherwise, clean up and capitalize each word
   return brand
@@ -961,27 +958,37 @@ function TrendModal({ alert, onClose }: TrendModalProps) {
 
       try {
         if (dbSecond) {
-          // 1. Fetch from Firestore mentions_nlp_demo
-          const mentionsRef = collection(dbSecond, "mentions_nlp_demo");
+          // 1. Fetch from the real labeled data collection.
+          const mentionsRef = collection(dbSecond, "insightflow_labels");
           const snap = await getDocs(mentionsRef);
 
           if (active) {
             // 2. Parse and filter docs in-memory
             const rawDocs = snap.docs.map(doc => {
               const d = doc.data();
+              const labels = d.labels || {};
+              const firstTopic = Array.isArray(labels.topic) ? labels.topic[0] : labels.topic;
               return {
                 brand: String(d.brand || d.workspace_id || ""),
-                sentiment: String(d.baseline_sentiment || d.sentiment || ""),
-                topic: String(d.baseline_topic || d.topic || ""),
-                date: new Date(parseDateToISOString(d.posted_at || d.crawled_at || d.created_at))
+                sentiment: String(labels.sentiment || d.sentiment || ""),
+                topic: String(firstTopic || d.topic || ""),
+                date: new Date(parseDateToISOString(d.labeled_at || d.uploaded_at || d.posted_at || d.created_at))
               };
             });
 
             const targetBrand = alert.brand.toLowerCase().trim();
             const targetTopic = alert.topic.toLowerCase().trim();
+            const normalizeBrandForTrend = (brand: string) => {
+              const normalized = brand.toLowerCase().replace(/[\s\-_.]/g, "").trim();
+              if (normalized.includes("highland")) return "highlandcoffee";
+              if (normalized.includes("starbuck")) return "starbucks";
+              if (normalized.includes("mixue")) return "mixue";
+              return normalized;
+            };
+            const targetBrandKey = normalizeBrandForTrend(targetBrand);
 
             const matches = rawDocs.filter(d => {
-              const brandMatch = d.brand.toLowerCase().includes(targetBrand) || targetBrand.includes(d.brand.toLowerCase());
+              const brandMatch = normalizeBrandForTrend(d.brand) === targetBrandKey;
               const topicMatch = d.topic.toLowerCase() === targetTopic;
               const sentimentMatch = d.sentiment.toLowerCase() === "negative";
               return brandMatch && topicMatch && sentimentMatch;
