@@ -24,7 +24,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
   const { user } = useAuth();
   const { t } = useTranslation();
   const { theme, toggleTheme } = useTheme();
-  const { language, toggleLanguage } = useLanguage();
+  const { language, setLanguage } = useLanguage();
   const getInitials = (name: string | null | undefined) => {
     if (!name) return "U";
     const parts = name.trim().split(" ");
@@ -224,8 +224,39 @@ export function Header({ onMenuToggle }: HeaderProps) {
         </button>
 
         {/* ── Language Toggle ────────────────────────────────── */}
+        <div className="flex gap-1 shrink-0">
+          <button
+            onClick={() => setLanguage("vi")}
+            className="px-3 py-1.5 text-[13px] font-semibold rounded-lg transition-all"
+            aria-pressed={language === "vi"}
+            style={language === "vi" ? {
+              backgroundColor: isDark ? "var(--color-brand)" : "#4648d4",
+              color: "white",
+            } : {
+              backgroundColor: isDark ? "var(--color-bg-surface-raised)" : "#f0f3ff",
+              color: isDark ? "var(--color-text-secondary)" : "#464554",
+            }}
+          >
+            VI
+          </button>
+          <button
+            onClick={() => setLanguage("en")}
+            className="px-3 py-1.5 text-[13px] font-semibold rounded-lg transition-all"
+            aria-pressed={language === "en"}
+            style={language === "en" ? {
+              backgroundColor: isDark ? "var(--color-brand)" : "#4648d4",
+              color: "white",
+            } : {
+              backgroundColor: isDark ? "var(--color-bg-surface-raised)" : "#f0f3ff",
+              color: isDark ? "var(--color-text-secondary)" : "#464554",
+            }}
+          >
+            EN
+          </button>
+        </div>
+        {false && (
         <button
-          onClick={toggleLanguage}
+          onClick={() => setLanguage(language === "vi" ? "en" : "vi")}
           title={language === "vi" ? "Switch to English" : "Chuyển sang Tiếng Việt"}
           aria-label={language === "vi" ? "Switch to English" : "Chuyển sang Tiếng Việt"}
           className="flex items-center gap-1.5 px-2.5 h-[34px] rounded-[8px] border font-bold text-[12px] transition-all duration-200 select-none"
@@ -252,6 +283,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
             {language === "vi" ? "VI" : "EN"}
           </span>
         </button>
+        )}
 
         {/* User Profile */}
         <div

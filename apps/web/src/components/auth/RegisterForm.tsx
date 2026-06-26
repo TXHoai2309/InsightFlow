@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
+import { useTheme } from "@/contexts/ThemeContext";
 import Link from "next/link";
 import {
   createUserWithEmailAndPassword,
@@ -13,9 +14,8 @@ import {
 } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { doc, setDoc } from "firebase/firestore";
-import { useTheme } from "@/contexts/ThemeContext";
 
-// ─── Atmospheric floating dots (replaces the JS createAtmosphere()) ───────────
+// ─── Atmospheric floating dots ───────────
 function AtmosphereDots() {
   const dots = useRef<{ size: number; left: number; top: number; color: string }[]>([]);
 
@@ -59,30 +59,12 @@ function getPasswordStrength(pw: string, t: any): { label: string; color: string
   return { label: t("auth.register.passwordStrong"), color: "#1a7a4a", width: "100%" };
 }
 
-// ─── Firebase error messages ───────────────────────────────────────────────────
-// Map error codes to i18n keys (NOT translated here — t() is not available at module level)
-const FIREBASE_ERROR_I18N_KEYS: Record<string, string> = {
-  "auth/email-already-in-use": "auth.register.emailInUse",
-  "auth/invalid-email": "auth.register.invalidEmail",
-  "auth/weak-password": "auth.register.weakPassword",
-  "auth/too-many-requests": "auth.register.tooManyRequests",
-  "auth/popup-closed-by-user": "", // silent — user intentionally closed
-};
-
 // ─── Main component ────────────────────────────────────────────────────────────
 export default function RegisterForm() {
   const router = useRouter();
   const { t } = useTranslation();
   const { theme } = useTheme();
   const isDark = theme === "dark";
-
-  // Translate Firebase error codes lazily (t is available here inside the component)
-  const getFirebaseError = (code: string) => {
-    const key = FIREBASE_ERROR_I18N_KEYS[code];
-    if (key === undefined) return t("auth.register.registerFailed");
-    if (key === "") return ""; // silent error
-    return t(key);
-  };
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -92,7 +74,6 @@ export default function RegisterForm() {
   const [loading, setLoading] = useState(false);
   const [iconFill, setIconFill] = useState<Record<string, string>>({});
 
-  // Replicate the password-field focus FILL animation from the original HTML
   const handleIconFocus = (id: string) =>
     setIconFill((prev) => ({ ...prev, [id]: "'FILL' 1" }));
   const handleIconBlur = (id: string) =>
@@ -100,7 +81,6 @@ export default function RegisterForm() {
 
   const pwStrength = getPasswordStrength(password, t);
 
-  // ── Email / Password register ──
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -123,7 +103,6 @@ export default function RegisterForm() {
       const credential = await createUserWithEmailAndPassword(auth, email, password);
       await updateProfile(credential.user, { displayName: fullName.trim() });
 
-      // Lưu thông tin người dùng vào Firestore
       await setDoc(doc(db, "users", credential.user.uid), {
         uid: credential.user.uid,
         email: credential.user.email,
@@ -133,28 +112,24 @@ export default function RegisterForm() {
 
       router.push("/login");
     } catch (err: any) {
-      setError(getFirebaseError(err.code));
+      setError(t("auth.register.registerFailed"));
     } finally {
       setLoading(false);
     }
   };
 
-  // ── Google register ──
   const handleGoogle = async () => {
     setError("");
     try {
       const result = await signInWithPopup(auth, new GoogleAuthProvider());
       const additionalInfo = getAdditionalUserInfo(result);
 
-      // Nếu tài khoản đã tồn tại (không phải user mới)
       if (additionalInfo && !additionalInfo.isNewUser) {
         setError(t("auth.register.emailInUse"));
-        // Logout ngay lập tức để không cho phép họ login qua trang register
         await auth.signOut();
         return;
       }
 
-      // Nếu là user mới, lưu vào Firestore
       await setDoc(doc(db, "users", result.user.uid), {
         uid: result.user.uid,
         email: result.user.email,
@@ -173,116 +148,48 @@ export default function RegisterForm() {
 
   return (
     <div
-      className="min-h-screen flex flex-col transition-colors duration-300"
-      style={{
-        backgroundColor: isDark ? "#0A0612" : "#f9f9ff",
-        color: isDark ? "#F5F1FF" : "#111c2d",
-        fontFamily: "'Inter', sans-serif"
-      }}
+      className="min-h-screen flex flex-col"
+      style={{ backgroundColor: isDark ? "#111c2d" : "#f9f9ff", color: isDark ? "#fff" : "#111c2d", fontFamily: "'Inter', sans-serif" }}
     >
       <AtmosphereDots />
 
-      {/* ── MAIN ── */}
       <main className="flex-grow flex items-center justify-center relative py-12 px-4 md:px-10 overflow-hidden">
-
-        {/* Background blobs */}
-        <div
-          className="absolute top-[-10%] left-[-5%] w-[400px] h-[400px] rounded-full -z-10"
-          style={{
-            background: isDark ? "rgba(139,92,246,0.18)" : "rgba(70,72,212,0.05)",
-            filter: "blur(48px)",
-            animation: "float 6s ease-in-out infinite",
-          }}
-        />
-        <div
-          className="absolute bottom-[-5%] right-[-5%] w-[350px] h-[350px] rounded-full -z-10"
-          style={{
-            background: isDark ? "rgba(244,114,182,0.10)" : "rgba(75,65,225,0.05)",
-            filter: "blur(48px)",
-            animation: "float 8s ease-in-out infinite reverse",
-          }}
-        />
-
         <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
 
-          {/* ── LEFT PANEL (desktop only) ── */}
           <div className="hidden lg:flex lg:col-span-6 flex-col gap-8">
             <div className="flex items-center mb-0">
               <Link href="/" className="flex hover:opacity-80 transition-opacity w-[340px] h-[120px] relative">
                 <img 
-                  src="/logo.png" 
+                  src={isDark ? "/logo.png" : "/logo-dark.png"}
                   alt="InsightFlow Logo" 
-                  className="absolute left-0 top-1/2 -translate-y-1/2 h-[220px] max-w-none mix-blend-multiply pointer-events-none" 
+                  className="absolute left-0 top-1/2 -translate-y-1/2 h-[220px] max-w-none pointer-events-none"
                 />
               </Link>
             </div>
-
-            <h2
-              className="text-[40px] leading-[48px] font-bold tracking-[-0.02em]"
-              style={{ fontFamily: "'Hanken Grotesk', sans-serif", color: isDark ? "#F5F1FF" : "#111c2d" }}
-            >{t("auth.register.heroTitle1")} <span style={{ color: isDark ? "var(--color-brand)" : "#4648d4" }}>{t("auth.register.heroTitle2")}</span>.</h2>
-
-            <p className="text-[18px] leading-[28px] max-w-md" style={{ color: isDark ? "rgba(245,241,255,0.55)" : "#464554" }}>{t("auth.register.heroDesc")}</p>
-
-            {/* Dashboard preview image */}
-            <div className="mt-8 relative rounded-xl overflow-hidden shadow-xl border border-[#c7c4d7]/30 group">
-              <img
-                className="w-full h-[320px] object-cover transition-transform duration-700 group-hover:scale-105"
-                alt="InsightFlow Dashboard Preview"
-                src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=800&q=80"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
-            </div>
-
-            {/* Social proof */}
-            <div className="flex items-center gap-6 mt-6">
-              <div className="flex -space-x-3">
-                {["AB6AXuDSGH", "AB6AXuAp8V", "AB6AXuCnXY"].map((seed, i) => (
-                  <div
-                    key={i}
-                    className="w-10 h-10 rounded-full border-2 border-[#f9f9ff] bg-[#e7eeff] flex items-center justify-center text-[10px] font-bold text-[#4648d4]"
-                  >
-                    {String.fromCharCode(65 + i)}
-                  </div>
-                ))}
-              </div>
-              <p className="text-[14px] text-[#464554]"><span className="font-bold text-[#111c2d]">+10,000</span> {t("auth.register.trustedBy")}</p>
-            </div>
+            <h2 className="text-[40px] leading-[48px] font-bold tracking-[-0.02em]">{t("auth.register.heroTitle1")} <span className="text-[#4648d4]">{t("auth.register.heroTitle2")}</span>.</h2>
+            <p className="text-[18px] leading-[28px] text-[#464554] max-w-md">{t("auth.register.heroDesc")}</p>
           </div>
 
-          {/* ── RIGHT PANEL: FORM ── */}
           <div className="lg:col-span-6 flex justify-center lg:justify-end">
             <div
-              className="auth-card w-full max-w-md p-8 md:p-12 rounded-xl relative z-10 transition-all duration-300"
-              style={{
-                background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.95)",
-                backdropFilter: "blur(20px)",
-                WebkitBackdropFilter: "blur(20px)",
-                border: isDark ? "1px solid rgba(255,255,255,0.10)" : "1px solid rgba(199,196,215,0.2)",
-                boxShadow: isDark ? "0 8px 32px rgba(0,0,0,0.4)" : "0 4px 20px rgba(0,0,0,0.04)"
-              }}
+              className={`w-full max-w-md p-8 md:p-12 rounded-xl border border-[#c7c4d7]/20 relative z-10 ${isDark ? "bg-[#1f2937]" : "bg-white"}`}
+              style={{ boxShadow: "0 4px 20px rgba(0,0,0,0.04)" }}
             >
-
-              {/* Mobile logo */}
               <div className="lg:hidden flex items-center justify-center mb-2">
                 <Link href="/" className="flex items-center justify-center hover:opacity-80 transition-opacity w-[340px] h-[120px] relative">
-                  <img
-                    src={isDark ? "/logo-dark.png" : "/logo.png"}
-                    alt="InsightFlow Logo"
-                    className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[220px] max-w-none pointer-events-none ${isDark ? "" : "mix-blend-multiply"}`}
+                  <img 
+                    src={isDark ? "/logo.png" : "/logo-dark.png"}
+                    alt="InsightFlow Logo" 
+                    className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[220px] max-w-none pointer-events-none"
                   />
                 </Link>
               </div>
 
               <div className="text-center lg:text-left mb-8">
-                <h2
-                  className="text-[24px] leading-[32px] font-semibold mb-1"
-                  style={{ fontFamily: "'Hanken Grotesk', sans-serif", color: isDark ? "#F5F1FF" : "#111c2d" }}
-                >{t("auth.register.title")}</h2>
-                <p className="text-[14px]" style={{ color: isDark ? "rgba(245,241,255,0.55)" : "#464554" }}>{t("auth.register.subtitle")}</p>
+                <h2 className="text-[24px] leading-[32px] font-semibold mb-1">{t("auth.register.title")}</h2>
+                <p className="text-[14px] text-gray-500">{t("auth.register.subtitle")}</p>
               </div>
 
-              {/* Error banner */}
               {error && (
                 <div className="mb-6 px-4 py-3 bg-[#ffdad6] border border-[#ba1a1a]/20 rounded-lg flex items-center gap-2">
                   <span className="material-symbols-outlined text-[#ba1a1a] text-[18px]">error</span>
@@ -291,219 +198,72 @@ export default function RegisterForm() {
               )}
 
               <form onSubmit={handleRegister} className="flex flex-col gap-6">
-
-                {/* Full name */}
                 <div className="flex flex-col gap-1">
-                  <label htmlFor="full_name" className="text-[14px] font-medium" style={{ color: isDark ? "rgba(245,241,255,0.7)" : "#111c2d" }}>{t("auth.register.nameLabel")}</label>
-                  <div className="relative group">
-                    <span
-                      className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[20px] transition-colors"
-                      style={{ color: isDark ? "rgba(245,241,255,0.35)" : "#767586" }}
-                    >
-                      person
-                    </span>
-                    <input
-                      id="full_name"
-                      type="text"
-                      required
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
-                      placeholder={t("auth.register.namePlaceholder")}
-                      className="auth-input w-full pl-10 pr-4 py-3 rounded-lg outline-none transition-all text-[16px]"
-                      style={{
-                        background: isDark ? "rgba(255,255,255,0.05)" : "#ffffff",
-                        border: isDark ? "1px solid rgba(255,255,255,0.12)" : "1px solid #c7c4d7",
-                        color: isDark ? "#F5F1FF" : "#111c2d",
-                      }}
-                    />
-                  </div>
+                  <label htmlFor="full_name" className="text-[14px] font-medium">{t("auth.register.nameLabel")}</label>
+                  <input
+                    id="full_name"
+                    type="text"
+                    required
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder={t("auth.register.namePlaceholder")}
+                    className="w-full pl-4 pr-4 py-3 rounded-lg border border-[#c7c4d7] bg-white focus:ring-2 focus:ring-[#4648d4]/20 focus:border-[#4648d4] outline-none transition-all text-[16px] text-[#111c2d]"
+                  />
                 </div>
 
-                {/* Email */}
                 <div className="flex flex-col gap-1">
-                  <label htmlFor="email" className="text-[14px] font-medium" style={{ color: isDark ? "rgba(245,241,255,0.7)" : "#111c2d" }}>{t("auth.register.emailLabel")}</label>
-                  <div className="relative group">
-                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[20px] transition-colors" style={{ color: isDark ? "rgba(245,241,255,0.35)" : "#767586" }}>
-                      mail
-                    </span>
-                    <input
-                      id="email"
-                      type="email"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="example@insightflow.com"
-                      className="auth-input w-full pl-10 pr-4 py-3 rounded-lg outline-none transition-all text-[16px]"
-                      style={{
-                        background: isDark ? "rgba(255,255,255,0.05)" : "#ffffff",
-                        border: isDark ? "1px solid rgba(255,255,255,0.12)" : "1px solid #c7c4d7",
-                        color: isDark ? "#F5F1FF" : "#111c2d",
-                      }}
-                    />
-                  </div>
+                  <label htmlFor="email" className="text-[14px] font-medium">{t("auth.register.emailLabel")}</label>
+                  <input
+                    id="email"
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="example@insightflow.com"
+                    className="w-full pl-4 pr-4 py-3 rounded-lg border border-[#c7c4d7] bg-white focus:ring-2 focus:ring-[#4648d4]/20 focus:border-[#4648d4] outline-none transition-all text-[16px] text-[#111c2d]"
+                  />
                 </div>
 
-                {/* Password + Confirm — 2 columns */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-                  {/* Password */}
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="password" className="text-[14px] font-medium" style={{ color: isDark ? "rgba(245,241,255,0.7)" : "#111c2d" }}>{t("auth.register.passwordLabel")}</label>
-                    <div className="relative group">
-                      <span
-                        className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[20px] transition-colors"
-                        style={{ color: isDark ? "rgba(245,241,255,0.35)" : "#767586", fontVariationSettings: iconFill["password"] ?? "'FILL' 0" }}
-                      >
-                        lock
-                      </span>
-                      <input
-                        id="password"
-                        type="password"
-                        required
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        onFocus={() => handleIconFocus("password")}
-                        onBlur={() => handleIconBlur("password")}
-                        placeholder="••••••••"
-                        className="auth-input w-full pl-10 pr-4 py-3 rounded-lg outline-none transition-all text-[16px]"
-                        style={{
-                          background: isDark ? "rgba(255,255,255,0.05)" : "#ffffff",
-                          border: isDark ? "1px solid rgba(255,255,255,0.12)" : "1px solid #c7c4d7",
-                          color: isDark ? "#F5F1FF" : "#111c2d",
-                        }}
-                      />
-                    </div>
-                    {/* Strength bar */}
-                    {password.length > 0 && (
-                      <div className="mt-1 space-y-1">
-                        <div className="h-1 w-full rounded-full overflow-hidden" style={{ background: isDark ? "rgba(255,255,255,0.10)" : "#e7eeff" }}>
-                          <div
-                            className="h-full rounded-full transition-all duration-300"
-                            style={{ width: pwStrength.width, backgroundColor: pwStrength.color }}
-                          />
-                        </div>
-                        <p className="text-[11px]" style={{ color: pwStrength.color }}>
-                          {pwStrength.label}
-                        </p>
-                      </div>
-                    )}
+                    <label htmlFor="password" className="text-[14px] font-medium">{t("auth.register.passwordLabel")}</label>
+                    <input
+                      id="password"
+                      type="password"
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full pl-4 pr-4 py-3 rounded-lg border border-[#c7c4d7] bg-white focus:ring-2 focus:ring-[#4648d4]/20 focus:border-[#4648d4] outline-none transition-all text-[16px]"
+                    />
                   </div>
-
-                  {/* Confirm password */}
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="confirm_password" className="text-[14px] font-medium" style={{ color: isDark ? "rgba(245,241,255,0.7)" : "#111c2d" }}>{t("auth.register.confirmLabel")}</label>
-                    <div className="relative group">
-                      <span
-                        className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[20px] transition-colors"
-                        style={{ color: isDark ? "rgba(245,241,255,0.35)" : "#767586", fontVariationSettings: iconFill["confirm"] ?? "'FILL' 0" }}
-                      >
-                        lock_reset
-                      </span>
-                      <input
-                        id="confirm_password"
-                        type="password"
-                        required
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        onFocus={() => handleIconFocus("confirm")}
-                        onBlur={() => handleIconBlur("confirm")}
-                        placeholder="••••••••"
-                        className="auth-input w-full pl-10 pr-4 py-3 rounded-lg outline-none transition-all text-[16px]"
-                        style={{
-                          background: isDark ? "rgba(255,255,255,0.05)" : "#ffffff",
-                          border: isDark
-                            ? (confirmPassword && confirmPassword !== password ? "1px solid #F8AFD4" : "1px solid rgba(255,255,255,0.12)")
-                            : (confirmPassword && confirmPassword !== password ? "1px solid #ba1a1a" : "1px solid #c7c4d7"),
-                          color: isDark ? "#F5F1FF" : "#111c2d",
-                        }}
-                      />
-                      {/* Match indicator */}
-                      {confirmPassword.length > 0 && (
-                        <span
-                          className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-[18px]"
-                          style={{
-                            color: confirmPassword === password ? (isDark ? "#4ade80" : "#1a7a4a") : (isDark ? "#F8AFD4" : "#ba1a1a"),
-                            fontVariationSettings: "'FILL' 1",
-                          }}
-                        >
-                          {confirmPassword === password ? "check_circle" : "cancel"}
-                        </span>
-                      )}
-                    </div>
+                    <label htmlFor="confirm_password" className="text-[14px] font-medium">{t("auth.register.confirmLabel")}</label>
+                    <input
+                      id="confirm_password"
+                      type="password"
+                      required
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full pl-4 pr-4 py-3 rounded-lg border border-[#c7c4d7] bg-white focus:ring-2 focus:ring-[#4648d4]/20 focus:border-[#4648d4] outline-none transition-all text-[16px]"
+                    />
                   </div>
                 </div>
 
-                {/* Submit */}
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full disabled:opacity-60 disabled:cursor-not-allowed text-white text-[14px] font-medium py-3 rounded-lg shadow-md hover:shadow-lg active:scale-[0.98] transition-all mt-2 flex items-center justify-center gap-2"
-                  style={{ background: isDark ? "linear-gradient(135deg, #7C3AED, #6D28D9)" : "#4648d4" }}
-                  onMouseEnter={(e) => { if (!loading) e.currentTarget.style.background = isDark ? "linear-gradient(135deg, #8B5CF6, #7C3AED)" : "#6063ee"; }}
-                  onMouseLeave={(e) => { if (!loading) e.currentTarget.style.background = isDark ? "linear-gradient(135deg, #7C3AED, #6D28D9)" : "#4648d4"; }}
+                  className="w-full bg-[#4648d4] hover:bg-[#6063ee] text-white text-[14px] font-medium py-3 rounded-lg transition-all"
                 >
-                  {loading ? (
-                    <>
-                      <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                      </svg>
-                      <span>{t("auth.register.registering")}</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>{t("auth.register.registerBtn")}</span>
-                      <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
-                    </>
-                  )}
+                  {loading ? t("auth.register.registering") : t("auth.register.registerBtn")}
                 </button>
-
-                {/* Divider */}
-                <div className="flex items-center gap-4 my-1">
-                  <div className="flex-grow h-[1px]" style={{ background: isDark ? "rgba(255,255,255,0.10)" : "rgba(199,196,215,0.5)" }} />
-                  <span className="text-[12px] font-medium uppercase tracking-wider" style={{ color: isDark ? "rgba(245,241,255,0.35)" : "#767586" }}>{t("auth.register.orRegisterWith")}</span>
-                  <div className="flex-grow h-[1px]" style={{ background: isDark ? "rgba(255,255,255,0.10)" : "rgba(199,196,215,0.5)" }} />
-                </div>
-
-                {/* Social buttons */}
-                <div className="flex flex-col gap-4">
-                  <button
-                    type="button"
-                    onClick={handleGoogle}
-                    className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-[14px] font-medium transition-colors"
-                    style={{
-                      border: isDark ? "1px solid rgba(255,255,255,0.12)" : "1px solid #c7c4d7",
-                      background: isDark ? "rgba(255,255,255,0.05)" : "transparent",
-                      color: isDark ? "#F5F1FF" : "#111c2d",
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = isDark ? "rgba(255,255,255,0.10)" : "#e7eeff"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = isDark ? "rgba(255,255,255,0.05)" : "transparent"; }}
-                  >
-                    <svg className="w-5 h-5" viewBox="0 0 24 24">
-                      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-                      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05" />
-                      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-                    </svg>
-                    {t("auth.register.googleBtn")}
-                  </button>
-                </div>
               </form>
-
-              {/* Footer link */}
-              <div className="mt-8 text-center">
-                <p className="text-[14px]" style={{ color: isDark ? "rgba(245,241,255,0.55)" : "#464554" }}>
-                  {t("auth.register.hasAccount")}{" "}
-                  <Link href="/login" className="font-semibold hover:underline" style={{ color: isDark ? "var(--color-brand)" : "#4648d4" }}>{t("auth.register.loginNow")}</Link>
-                </p>
-              </div>
             </div>
           </div>
         </div>
       </main>
 
-
-      {/* Float animation keyframes */}
       <style>{`
         @keyframes float {
           0%   { transform: translateY(0px); }

@@ -6,19 +6,17 @@ import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useTranslation } from "react-i18next";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useTranslation } from "react-i18next";
 
 export default function TopNavBar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const { user, loading } = useAuth();
-  const { language, toggleLanguage } = useLanguage();
+  const { theme, toggleTheme } = useTheme();
   const { t } = useTranslation();
   const router = useRouter();
   const pathname = usePathname();
-  const { theme, toggleTheme } = useTheme();
   const isDark = theme === "dark";
 
   useEffect(() => {
@@ -53,30 +51,34 @@ export default function TopNavBar() {
       <nav
         className="fixed top-0 left-0 right-0 z-[100] transition-all duration-300 font-sans h-[72px]"
         style={{
-          background: scrolled
-            ? isDark ? "rgba(28,28,36,0.92)" : "rgba(255,255,255,0.92)"
-            : isDark ? "#1c1c24" : "#ffffff",
+          background: isDark
+            ? scrolled
+              ? "rgba(28,28,36,0.92)"
+              : "var(--color-bg-surface)"
+            : scrolled
+              ? "rgba(255,255,255,0.92)"
+              : "#ffffff",
           backdropFilter: scrolled ? "blur(12px)" : "none",
           WebkitBackdropFilter: scrolled ? "blur(12px)" : "none",
-          borderBottom: scrolled
-            ? `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "transparent"}`
-            : `1px solid ${isDark ? "rgba(255,255,255,0.06)" : "#F1F0FF"}`,
+          borderBottom: `1px solid ${isDark ? "var(--color-border)" : scrolled ? "transparent" : "#F1F0FF"}`,
           boxShadow: scrolled
-            ? isDark ? "0 2px 20px rgba(0,0,0,0.3)" : "0 2px 20px rgba(0,0,0,0.08)"
+            ? isDark
+              ? "0 2px 20px rgba(0,0,0,0.28)"
+              : "0 2px 20px rgba(0,0,0,0.08)"
             : "none",
         }}
       >
         <style dangerouslySetInnerHTML={{__html: `
           .nav-link {
             position: relative;
-            color: ${isDark ? "#a0a0b8" : "#374151"};
+            color: var(--color-text-secondary);
             font-weight: 500;
             font-size: 15px;
             transition: color 0.2s;
             padding: 4px 0;
           }
           .nav-link:hover {
-            color: ${isDark ? "#9B8FF8" : "#6D4CFF"};
+            color: var(--color-brand);
           }
           .nav-link::after {
             content: '';
@@ -86,18 +88,18 @@ export default function TopNavBar() {
             transform: translateX(-50%);
             width: 0;
             height: 2px;
-            background-color: ${isDark ? "#9B8FF8" : "#6D4CFF"};
+            background-color: var(--color-brand);
             transition: width 0.3s ease;
           }
           .nav-link:hover::after {
             width: 100%;
           }
           .nav-link.active {
-            color: ${isDark ? "#9B8FF8" : "#6D4CFF"};
+            color: var(--color-brand);
             font-weight: 600;
           }
           .cta-button {
-            background: #6D4CFF;
+            background: var(--color-brand);
             color: white;
             border-radius: 10px;
             padding: 10px 20px;
@@ -119,7 +121,7 @@ export default function TopNavBar() {
           {/* Logo */}
           <Link href="/" className="flex items-center hover:opacity-80 transition-opacity w-[180px] md:w-[260px] h-full relative overflow-hidden">
             <img 
-              src={isDark ? "/logo-dark.png" : "/logo.png"}
+              src={isDark ? "/logo.png" : "/logo-dark.png"}
               alt="InsightFlow Logo" 
               className={`absolute left-[-8px] md:left-[-12px] top-1/2 -translate-y-1/2 h-[120px] md:h-[160px] max-w-none pointer-events-none ${isDark ? "" : "mix-blend-multiply"}`}
             />
@@ -140,29 +142,6 @@ export default function TopNavBar() {
 
           {/* Right Actions */}
           <div className="flex items-center gap-3">
-
-            {/* ── Dark Mode Toggle ── */}
-            <button
-              onClick={toggleTheme}
-              className="theme-toggle"
-              role="switch"
-              aria-checked={isDark}
-              aria-label={isDark ? "Chuyển sang chế độ sáng" : "Chuyển sang chế độ tối"}
-              title={isDark ? "Chế độ sáng" : "Chế độ tối"}
-            >
-              <span className="theme-toggle-thumb">
-                {isDark ? (
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 0 1-4.4 2.26 5.403 5.403 0 0 1-3.14-9.8c-.44-.06-.9-.1-1.36-.1z"/>
-                  </svg>
-                ) : (
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 7a5 5 0 1 0 0 10A5 5 0 0 0 12 7zm0-5a1 1 0 0 1 1 1v2a1 1 0 0 1-2 0V3a1 1 0 0 1 1-1zm0 16a1 1 0 0 1 1 1v2a1 1 0 0 1-2 0v-2a1 1 0 0 1 1-1zM4.22 5.64a1 1 0 0 1 1.42-1.42l1.41 1.42a1 1 0 0 1-1.41 1.41L4.22 5.64zm12.72 12.72a1 1 0 0 1 1.41-1.41l1.42 1.41a1 1 0 0 1-1.42 1.42l-1.41-1.42zM3 11a1 1 0 0 1 0 2H1a1 1 0 0 1 0-2h2zm20 0a1 1 0 0 1 0 2h-2a1 1 0 0 1 0-2h2zM5.64 18.36a1 1 0 0 1-1.42 1.42L2.8 18.36a1 1 0 0 1 1.42-1.42l1.42 1.42zM18.36 5.64a1 1 0 0 1-1.41-1.41l1.41-1.42a1 1 0 0 1 1.42 1.42l-1.42 1.41z"/>
-                  </svg>
-                )}
-              </span>
-            </button>
-
             {/* Logged in: show avatar */}
             {!loading && user && (
               <div className="hidden md:flex items-center gap-3">
@@ -179,13 +158,10 @@ export default function TopNavBar() {
                       .toUpperCase()}
                   </div>
                   <div className="flex flex-col items-start leading-tight">
-                    <span
-                      className="text-[14px] font-semibold transition-colors"
-                      style={{ color: isDark ? "#e4e6eb" : "#1a1a2e" }}
-                    >
+                    <span className="text-[14px] font-semibold text-[var(--color-text-primary)] group-hover:text-[var(--color-brand)] transition-colors">
                       {user.displayName || user.email}
                     </span>
-                    <span className="text-[12px] text-[#9CA3AF]">{t("header.administrator")}</span>
+                    <span className="text-[12px] text-[var(--color-text-muted)]">{t("header.administrator")}</span>
                   </div>
                 </Link>
               </div>
@@ -196,43 +172,37 @@ export default function TopNavBar() {
               <div className="hidden md:flex items-center gap-3">
                 <Link
                   href="/login"
-                  className="text-[15px] font-medium transition-colors"
-                  style={{ color: isDark ? "#a0a0b8" : "#374151" }}
-                  onMouseOver={(e) => { e.currentTarget.style.color = isDark ? "#9B8FF8" : "#6D4CFF"; }}
-                  onMouseOut={(e) => { e.currentTarget.style.color = isDark ? "#a0a0b8" : "#374151"; }}
+                  className="text-[15px] font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-brand)] transition-colors"
                 >
                   {t("auth.login.loginBtn")}
                 </Link>
                 <Link
                   href="/dashboard"
-                  className="text-[14px] font-semibold text-white px-5 py-2 rounded-[10px] transition-all"
-                  style={{ background: "#6D4CFF" }}
-                  onMouseOver={(e) => { e.currentTarget.style.background = "#5B3FE8"; e.currentTarget.style.transform = "translateY(-1px)"; }}
-                  onMouseOut={(e) => { e.currentTarget.style.background = "#6D4CFF"; e.currentTarget.style.transform = "translateY(0)"; }}
+                  className="text-[14px] font-semibold text-white px-5 py-2 rounded-[10px] transition-all bg-[var(--color-brand)] hover:bg-[#5B3FE8] hover:shadow-lg hover:-translate-y-[1px]"
                 >
                   {t("home.hero.freeTrialBtn")}
                 </Link>
               </div>
             )}
 
-            {/* Language Toggle */}
+            {/* Theme Toggle */}
             <button
-              onClick={toggleLanguage}
-              title={language === "vi" ? "Switch to English" : "Chuyển sang Tiếng Việt"}
-              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-[13px] font-bold border transition-all duration-200 select-none"
-              style={{ borderColor: "#E5E3FA", color: "#6D4CFF", background: "#F8F7FF" }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "#6D4CFF"; e.currentTarget.style.color = "white"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "#F8F7FF"; e.currentTarget.style.color = "#6D4CFF"; }}
+              onClick={toggleTheme}
+              title={isDark ? "Chế độ sáng" : "Chế độ tối"}
+              className="hidden md:flex theme-toggle"
+              role="switch"
+              aria-checked={isDark}
+              aria-label={isDark ? "Chuyển sang chế độ sáng" : "Chuyển sang chế độ tối"}
             >
-              <span style={{ fontSize: "16px", lineHeight: 1 }}>
-                {language === "vi" ? "🇻🇳" : "🇬🇧"}
+              <span className="theme-toggle-thumb">
+                <span className="material-symbols-outlined text-[14px]">
+                  {isDark ? "dark_mode" : "light_mode"}
+                </span>
               </span>
-              <span>{language === "vi" ? "VI" : "EN"}</span>
             </button>
             {/* Mobile hamburger */}
             <button
-              className="md:hidden p-2"
-              style={{ color: isDark ? "#9B8FF8" : "#6D4CFF" }}
+              className="md:hidden p-2 text-[var(--color-brand)]"
               onClick={() => setMobileOpen(true)}
               aria-label="Toggle menu"
             >
@@ -241,7 +211,6 @@ export default function TopNavBar() {
           </div>
         </div>
       </nav>
-
 
       {/* Mobile Drawer Overlay */}
       {mobileOpen && (
@@ -254,11 +223,9 @@ export default function TopNavBar() {
 
       {/* Mobile Drawer */}
       <div 
-        className={`fixed top-0 right-0 bottom-0 w-[280px] z-[120] shadow-2xl transition-transform duration-300 md:hidden flex flex-col ${mobileOpen ? "translate-x-0" : "translate-x-full"}`}
-        style={{ background: isDark ? "#1c1c24" : "#ffffff" }}
+        className={`fixed top-0 right-0 bottom-0 w-[280px] bg-[var(--color-bg-surface)] z-[120] shadow-2xl transition-transform duration-300 md:hidden flex flex-col ${mobileOpen ? "translate-x-0" : "translate-x-full"}`}
       >
         <div className="p-5 flex justify-between items-center">
-          {/* Mobile theme toggle */}
           <button
             onClick={toggleTheme}
             className="theme-toggle"
@@ -267,20 +234,14 @@ export default function TopNavBar() {
             aria-label={isDark ? "Chuyển sang chế độ sáng" : "Chuyển sang chế độ tối"}
           >
             <span className="theme-toggle-thumb">
-              {isDark ? (
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 0 1-4.4 2.26 5.403 5.403 0 0 1-3.14-9.8c-.44-.06-.9-.1-1.36-.1z"/>
-                </svg>
-              ) : (
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 7a5 5 0 1 0 0 10A5 5 0 0 0 12 7zm0-5a1 1 0 0 1 1 1v2a1 1 0 0 1-2 0V3a1 1 0 0 1 1-1zm0 16a1 1 0 0 1 1 1v2a1 1 0 0 1-2 0v-2a1 1 0 0 1 1-1zM4.22 5.64a1 1 0 0 1 1.42-1.42l1.41 1.42a1 1 0 0 1-1.41 1.41L4.22 5.64zm12.72 12.72a1 1 0 0 1 1.41-1.41l1.42 1.41a1 1 0 0 1-1.42 1.42l-1.41-1.42zM3 11a1 1 0 0 1 0 2H1a1 1 0 0 1 0-2h2zm20 0a1 1 0 0 1 0 2h-2a1 1 0 0 1 0-2h2zM5.64 18.36a1 1 0 0 1-1.42 1.42L2.8 18.36a1 1 0 0 1 1.42-1.42l1.42 1.42zM18.36 5.64a1 1 0 0 1-1.41-1.41l1.41-1.42a1 1 0 0 1 1.42 1.42l-1.42 1.41z"/>
-                  </svg>
-              )}
+              <span className="material-symbols-outlined text-[14px]">
+                  {isDark ? "dark_mode" : "light_mode"}
+              </span>
             </span>
           </button>
           <button 
             onClick={() => setMobileOpen(false)}
-            style={{ color: isDark ? "#6e6e88" : "#64748B" }}
+            className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
           >
             <span className="material-symbols-outlined text-[28px]">close</span>
           </button>
@@ -290,12 +251,7 @@ export default function TopNavBar() {
           {navLinks.map((link) => (
             <Link
               key={link.href}
-              className="block py-[16px] px-[24px] text-[18px] transition-colors"
-              style={
-                isActive(link.href)
-                  ? { color: isDark ? "#9B8FF8" : "#6D4CFF", fontWeight: 600, background: isDark ? "rgba(123,116,255,0.08)" : "#F8F7FF" }
-                  : { color: isDark ? "#a0a0b8" : "#374151", fontWeight: 500 }
-              }
+              className={`block py-[16px] px-[24px] text-[18px] transition-colors ${isActive(link.href) ? "text-[var(--color-brand)] font-semibold bg-[var(--color-brand-subtle)]" : "text-[var(--color-text-secondary)] font-medium"}`}
               href={link.href}
               onClick={() => setMobileOpen(false)}
             >
@@ -303,20 +259,23 @@ export default function TopNavBar() {
             </Link>
           ))}
 
-          {/* Language toggle in mobile drawer */}
-          <div className="px-[24px] py-[16px] border-t border-[#F1F0FF]">
+          <div className="px-[24px] py-[16px] border-t border-[var(--color-border)]">
             <button
-              onClick={() => { toggleLanguage(); setMobileOpen(false); }}
-              className="flex items-center gap-3 w-full text-[18px] font-medium text-[#374151]"
+              onClick={() => { toggleTheme(); setMobileOpen(false); }}
+              className="flex items-center justify-between gap-3 w-full text-[18px] font-medium text-[var(--color-text-secondary)]"
             >
-              <span style={{ fontSize: "22px" }}>{language === "vi" ? "🇬🇧" : "🇻🇳"}</span>
-              <span>{language === "vi" ? "Switch to English" : "Chuyển sang Tiếng Việt"}</span>
+              <span className="flex items-center gap-3">
+                <span className="material-symbols-outlined text-[22px]">
+                  {isDark ? "dark_mode" : "light_mode"}
+                </span>
+                <span>{isDark ? "Chế độ tối" : "Chế độ sáng"}</span>
+              </span>
             </button>
           </div>
 
           {!loading && user && (
-            <div className="mt-4 border-t border-[#F1F0FF] px-[24px] py-[16px]">
-              <p className="text-[14px] font-medium text-[#9CA3AF] mb-3">{t("nav.account")}</p>
+            <div className="mt-4 border-t border-[var(--color-border)] px-[24px] py-[16px]">
+              <p className="text-[14px] font-medium text-[var(--color-text-muted)] mb-3">{t("nav.account")}</p>
               <Link
                 href="/profile"
                 onClick={() => setMobileOpen(false)}
@@ -330,7 +289,7 @@ export default function TopNavBar() {
                     .slice(0, 2)
                     .toUpperCase()}
                 </div>
-                <span className="text-[16px] font-semibold" style={{ color: isDark ? "#e4e6eb" : "#1a1a2e" }}>
+                <span className="text-[16px] font-semibold text-[var(--color-text-primary)]">
                   {user.displayName || user.email}
                 </span>
               </Link>
@@ -344,7 +303,6 @@ export default function TopNavBar() {
             </div>
           )}
         </div>
-
       </div>
     </>
   );

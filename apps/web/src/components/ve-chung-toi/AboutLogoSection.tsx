@@ -6,9 +6,9 @@ import { useTheme } from "@/contexts/ThemeContext";
 
 export default function AboutLogoSection() {
   const { t } = useTranslation();
-  const { ref, hasIntersected } = useIntersectionObserver();
   const { theme } = useTheme();
   const isDark = theme === "dark";
+  const { ref, hasIntersected } = useIntersectionObserver();
 
   const logoCards = [
     {
@@ -98,9 +98,9 @@ export default function AboutLogoSection() {
                 }}
               >
                 <img 
-                  src={isDark ? "/logo-dark.png" : "/logo.png"} 
+                  src={isDark ? "/logo.png" : "/logo-dark.png"}
                   alt="InsightFlow Logo" 
-                  className={`w-full h-full object-cover pointer-events-none ${isDark ? "" : "mix-blend-multiply"}`} 
+                  className={`w-full h-full object-cover pointer-events-none ${isDark ? "" : "mix-blend-multiply"}`}
                 />
               </div>
             </div>
