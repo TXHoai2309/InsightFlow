@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import { useRouter } from "next/navigation";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { PLATFORM_META } from "@/lib/services/dashboard";
-import type { Lead } from "@/types/dashboard";
+import type { Lead, Mention } from "@/types/dashboard";
 
 interface LeadCardProps {
   lead: Lead;
@@ -49,7 +50,12 @@ const STATUS_META: Record<
 
 export function LeadCard({ lead, currentTime }: LeadCardProps) {
   const { t, i18n } = useTranslation();
-  const { updateLeadDetails } = useDashboardStore();
+  const router = useRouter();
+  const { mentions, updateLeadDetails } = useDashboardStore();
+  const mentionById = useMemo(
+    () => new Map<string, Mention>(mentions.map((item) => [item.id, item])),
+    [mentions],
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -180,9 +186,10 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
     if (lead.intent === "warm") {
       const h = Math.floor(remainingSeconds / 3600);
       const m = Math.floor((remainingSeconds % 3600) / 60);
-      const formatted = h > 0 
-        ? t("leads.card.remainingHours", { hours: h, mins: m }) 
-        : t("leads.card.remainingMins", { mins: m });
+      const formatted =
+        h > 0
+          ? t("leads.card.remainingHours", { hours: h, mins: m })
+          : t("leads.card.remainingMins", { mins: m });
       const isUrgent = remainingSeconds < 2 * 60 * 60; // < 2h
 
       return (
@@ -223,7 +230,9 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
     return null;
   };
 
-  const authorName = lead.author || t("leads.card.defaultCustomer", { defaultValue: "Customer" });
+  const authorName =
+    lead.author ||
+    t("leads.card.defaultCustomer", { defaultValue: "Customer" });
 
   const getInitials = (name: string) => {
     if (!name) return "KH";
@@ -246,6 +255,73 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
   const originalPostUrl = lead.url?.trim();
   const postLinkUrl = originalPostUrl;
   const shouldShowProfileContact = Boolean(contactUrl);
+
+  const normalizeUrlForMatch = (value?: string) => {
+    if (!value) return null;
+    const trimmed = value.trim();
+    try {
+      const url = new URL(trimmed);
+      const path = url.pathname.replace(/\/+$/, "");
+      return `${url.origin}${path}`.toLowerCase();
+    } catch {
+      return trimmed
+        .replace(/[#?].*$/, "")
+        .replace(/\/+$/, "")
+        .toLowerCase();
+    }
+  };
+
+  const leadUrlNormalized = normalizeUrlForMatch(lead.url);
+
+  const resolveParentMentionId = (mentionId: string): string | null => {
+    let current = mentionById.get(mentionId);
+    const visited = new Set<string>();
+    while (current?.parent_id && mentionById.has(current.parent_id)) {
+      if (visited.has(current.parent_id)) break;
+      visited.add(current.parent_id);
+      current = mentionById.get(current.parent_id);
+    }
+    return current?.id || null;
+  };
+
+  const mentionTarget = useMemo(() => {
+    if (!leadUrlNormalized || !mentions?.length) return null;
+
+    const found = mentions.find((mention) => {
+      const mentionUrlNormalized = normalizeUrlForMatch(mention.url);
+      if (!mentionUrlNormalized) return false;
+      if (mentionUrlNormalized === leadUrlNormalized) return true;
+      if (
+        mentionUrlNormalized.startsWith(leadUrlNormalized) ||
+        leadUrlNormalized.startsWith(mentionUrlNormalized)
+      )
+        return true;
+
+      const mentionAnchor = mention.url?.match(/#comment[_-]([a-zA-Z0-9\-_]+)/);
+      const leadAnchor = lead.url?.match(/#comment[_-]([a-zA-Z0-9\-_]+)/);
+      if (
+        mentionAnchor &&
+        leadUrlNormalized &&
+        leadUrlNormalized === normalizeUrlForMatch(mention.url)
+      ) {
+        return true;
+      }
+      if (mentionAnchor && leadAnchor && mentionAnchor[1] === leadAnchor[1]) {
+        return true;
+      }
+      return false;
+    });
+
+    if (!found) return null;
+
+    const parentId = resolveParentMentionId(found.id);
+    return parentId || found.id;
+  }, [leadUrlNormalized, mentions, mentionById]);
+
+  const handleNavigateToMention = () => {
+    if (!mentionTarget) return;
+    router.push(`/mentions/${encodeURIComponent(mentionTarget)}`);
+  };
 
   const getProfileContactMeta = (url?: string) => {
     const normalizedUrl = (url || "").toLowerCase();
@@ -465,10 +541,42 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
                 className={`appearance-none pl-3 pr-8 py-1.5 border rounded-full text-xs font-bold focus:ring-1 outline-none transition-all cursor-pointer shadow-sm ${statusInfo.bg} ${statusInfo.text} ${isSaving ? "opacity-50 cursor-not-allowed" : ""}`}
                 style={{ backgroundColor: "var(--color-bg-surface)" }}
               >
-                <option value="new" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>🟢 {t("leads.card.status.new")}</option>
-                <option value="processing" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>🟡 {t("leads.card.status.processing")}</option>
-                <option value="completed" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>🔵 {t("leads.card.status.completed")}</option>
-                <option value="skipped" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>⚫ {t("leads.card.status.skipped")}</option>
+                <option
+                  value="new"
+                  style={{
+                    backgroundColor: "var(--color-bg-surface)",
+                    color: "var(--color-text-primary)",
+                  }}
+                >
+                  🟢 {t("leads.card.status.new")}
+                </option>
+                <option
+                  value="processing"
+                  style={{
+                    backgroundColor: "var(--color-bg-surface)",
+                    color: "var(--color-text-primary)",
+                  }}
+                >
+                  🟡 {t("leads.card.status.processing")}
+                </option>
+                <option
+                  value="completed"
+                  style={{
+                    backgroundColor: "var(--color-bg-surface)",
+                    color: "var(--color-text-primary)",
+                  }}
+                >
+                  🔵 {t("leads.card.status.completed")}
+                </option>
+                <option
+                  value="skipped"
+                  style={{
+                    backgroundColor: "var(--color-bg-surface)",
+                    color: "var(--color-text-primary)",
+                  }}
+                >
+                  ⚫ {t("leads.card.status.skipped")}
+                </option>
               </select>
               <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center">
                 {isSaving ? (
@@ -562,26 +670,23 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
             )}
 
             {/* Original Post */}
-            {postLinkUrl && (
+            {postLinkUrl && mentionTarget ? (
+              <button
+                type="button"
+                onClick={handleNavigateToMention}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--color-bg-surface-raised)] hover:bg-[var(--color-bg-surface-high)] text-[var(--color-text-secondary)] border border-[var(--color-border)] rounded-lg text-xs font-bold transition-all"
+                title="Xem chi tiết đề cập"
+              >
+                <span className="material-symbols-outlined text-base">
+                  open_in_new
+                </span>
+                Xem chi tiết đề cập
+              </button>
+            ) : postLinkUrl ? (
               <a
                 href={postLinkUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                onClick={() => {
-                  // Increments attempt but does not block URL open
-                  if (lead.status === "new") {
-                    updateLeadDetails(lead.id, {
-                      status: "processing",
-                      contact_attempts: (lead.contact_attempts || 0) + 1,
-                      last_contact_at: new Date().toISOString(),
-                    });
-                  } else {
-                    updateLeadDetails(lead.id, {
-                      contact_attempts: (lead.contact_attempts || 0) + 1,
-                      last_contact_at: new Date().toISOString(),
-                    });
-                  }
-                }}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--color-bg-surface-raised)] hover:bg-[var(--color-bg-surface-high)] text-[var(--color-text-secondary)] border border-[var(--color-border)] rounded-lg text-xs font-bold transition-all"
                 title={t("leads.card.viewPostTooltip")}
               >
@@ -590,7 +695,7 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
                 </span>
                 Xem bài viết gốc
               </a>
-            )}
+            ) : null}
           </div>
 
           {/* CRM Note Field */}
@@ -620,7 +725,9 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
                   onClick={handleSaveNote}
                   disabled={isSavingNote}
                   className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-primary hover:bg-primary/10 rounded flex items-center justify-center transition-all"
-                  title={t("leads.card.saveNoteTooltip", { defaultValue: "Lưu ghi chú" })}
+                  title={t("leads.card.saveNoteTooltip", {
+                    defaultValue: "Lưu ghi chú",
+                  })}
                 >
                   {isSavingNote ? (
                     <span className="w-3.5 h-3.5 border border-primary/20 border-t-primary rounded-full animate-spin"></span>
