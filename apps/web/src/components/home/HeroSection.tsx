@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useTheme } from "@/contexts/ThemeContext";
 
 /* ─── KPI Counter Hook ─── */
 function useCountUp(target: number, duration = 1800, started = false) {
@@ -26,17 +27,19 @@ function useCountUp(target: number, duration = 1800, started = false) {
 /* ─── Mini Dashboard SVG Component ─── */
 function DashboardDemo() {
   const { t } = useTranslation();
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
   return (
     <div
       className="relative w-full rounded-2xl overflow-hidden"
       style={{
-        background: "#fff",
-        boxShadow: "0 0 120px rgba(109,76,255,0.18), 0 24px 64px rgba(0,0,0,0.10)",
-        border: "1.5px solid #ede9ff",
+        background: isDark ? "var(--color-bg-surface)" : "#fff",
+        boxShadow: isDark ? "0 0 120px rgba(123,116,255,0.12), 0 24px 64px rgba(0,0,0,0.3)" : "0 0 120px rgba(109,76,255,0.18), 0 24px 64px rgba(0,0,0,0.10)",
+        border: isDark ? "1.5px solid var(--color-border)" : "1.5px solid #ede9ff",
       }}
     >
       {/* Dashboard header bar */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-[#F3F0FF]" style={{ background: "#faf9ff" }}>
+      <div className="flex items-center gap-2 px-4 py-3 border-b" style={{ background: isDark ? "var(--color-bg-surface-raised)" : "#faf9ff", borderColor: isDark ? "var(--color-border)" : "#F3F0FF" }}>
         <div className="w-3 h-3 rounded-full bg-[#FF5F57]" />
         <div className="w-3 h-3 rounded-full bg-[#FEBC2E]" />
         <div className="w-3 h-3 rounded-full bg-[#28C840]" />
@@ -52,14 +55,14 @@ function DashboardDemo() {
         {/* Row 1: 3 stat cards */}
         <div className="grid grid-cols-3 gap-3">
           {/* Sentiment Score */}
-          <div className="bg-[#faf9ff] border border-[#ede9ff] rounded-[14px] p-3 col-span-1">
-            <p className="text-[9px] text-[#9898B0] font-semibold uppercase tracking-wide mb-1">{t("home.hero.demo.sentiment")}</p>
+          <div className="rounded-[14px] p-3 col-span-1" style={{ background: isDark ? "var(--color-bg-surface-raised)" : "#faf9ff", border: isDark ? "1px solid var(--color-border)" : "1px solid #ede9ff" }}>
+            <p className="text-[9px] font-semibold uppercase tracking-wide mb-1" style={{ color: isDark ? "var(--color-text-muted)" : "#9898B0" }}>{t("home.hero.demo.sentiment")}</p>
             <div className="flex items-baseline gap-1">
               <span className="text-[22px] font-bold text-[#6D4CFF] leading-none">71%</span>
               <span className="text-[12px]">😊</span>
             </div>
             {/* Progress bar */}
-            <div className="mt-2 h-1.5 rounded-full bg-[#ede9ff] overflow-hidden">
+            <div className="mt-2 h-1.5 rounded-full overflow-hidden" style={{ background: isDark ? "var(--color-brand-subtle)" : "#ede9ff" }}>
               <div
                 className="h-full rounded-full"
                 style={{
@@ -69,12 +72,12 @@ function DashboardDemo() {
                 }}
               />
             </div>
-            <p className="text-[8px] text-[#9898B0] mt-1">{t("home.hero.demo.positive")}</p>
+            <p className="text-[8px] mt-1" style={{ color: isDark ? "var(--color-text-muted)" : "#9898B0" }}>{t("home.hero.demo.positive")}</p>
           </div>
 
           {/* Trend */}
-          <div className="bg-[#f0fdf4] border border-[#bbf7d0] rounded-[14px] p-3 col-span-1">
-            <p className="text-[9px] text-[#9898B0] font-semibold uppercase tracking-wide mb-1">{t("home.hero.demo.trend")}</p>
+          <div className="rounded-[14px] p-3 col-span-1" style={{ background: isDark ? "var(--color-success-subtle)" : "#f0fdf4", border: isDark ? "1px solid rgba(74,222,128,0.2)" : "1px solid #bbf7d0" }}>
+            <p className="text-[9px] font-semibold uppercase tracking-wide mb-1" style={{ color: isDark ? "var(--color-text-muted)" : "#9898B0" }}>{t("home.hero.demo.trend")}</p>
             <div className="flex items-baseline gap-1">
               <span className="text-[22px] font-bold text-[#16a34a] leading-none">+43%</span>
               <span className="text-[11px]">📈</span>
@@ -94,8 +97,8 @@ function DashboardDemo() {
           </div>
 
           {/* Crisis Alert */}
-          <div className="bg-[#fff8f8] border border-[#fed7d7] rounded-[14px] p-3 col-span-1 relative overflow-hidden">
-            <p className="text-[9px] text-[#9898B0] font-semibold uppercase tracking-wide mb-1">{t("home.hero.demo.crisis")}</p>
+          <div className="rounded-[14px] p-3 col-span-1 relative overflow-hidden" style={{ background: isDark ? "var(--color-error-subtle)" : "#fff8f8", border: isDark ? "1px solid rgba(248,113,113,0.2)" : "1px solid #fed7d7" }}>
+            <p className="text-[9px] font-semibold uppercase tracking-wide mb-1" style={{ color: isDark ? "var(--color-text-muted)" : "#9898B0" }}>{t("home.hero.demo.crisis")}</p>
             <div className="flex items-center gap-1 mt-1">
               <span
                 className="w-2 h-2 rounded-full bg-[#ef4444]"
@@ -109,8 +112,8 @@ function DashboardDemo() {
         </div>
 
         {/* Row 2: Top Keywords bar chart */}
-        <div className="bg-[#faf9ff] border border-[#ede9ff] rounded-[14px] p-3">
-          <p className="text-[9px] text-[#9898B0] font-semibold uppercase tracking-wide mb-2">{t("home.hero.demo.topKeywords")}</p>
+        <div className="rounded-[14px] p-3" style={{ background: isDark ? "var(--color-bg-surface-raised)" : "#faf9ff", border: isDark ? "1px solid var(--color-border)" : "1px solid #ede9ff" }}>
+          <p className="text-[9px] font-semibold uppercase tracking-wide mb-2" style={{ color: isDark ? "var(--color-text-muted)" : "#9898B0" }}>{t("home.hero.demo.topKeywords")}</p>
           <div className="space-y-1.5">
             {[
               { label: t("home.hero.demo.kw.quality"), pct: 88 },
@@ -120,8 +123,8 @@ function DashboardDemo() {
               { label: t("home.hero.demo.kw.promo"), pct: 38 },
             ].map((kw, i) => (
               <div key={kw.label} className="flex items-center gap-2">
-                <span className="text-[8px] text-[#4A4A6A] w-14 shrink-0 font-medium">{kw.label}</span>
-                <div className="flex-1 h-2 rounded-full bg-[#ede9ff] overflow-hidden">
+                <span className="text-[8px] w-14 shrink-0 font-medium" style={{ color: isDark ? "var(--color-text-secondary)" : "#4A4A6A" }}>{kw.label}</span>
+                <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: isDark ? "var(--color-brand-subtle)" : "#ede9ff" }}>
                   <div
                     className="h-full rounded-full"
                     style={{
@@ -131,15 +134,15 @@ function DashboardDemo() {
                     }}
                   />
                 </div>
-                <span className="text-[8px] text-[#9898B0] font-semibold w-6 text-right">{kw.pct}%</span>
+                <span className="text-[8px] font-semibold w-6 text-right" style={{ color: isDark ? "var(--color-text-muted)" : "#9898B0" }}>{kw.pct}%</span>
               </div>
             ))}
           </div>
         </div>
 
         {/* Row 3: Word cloud */}
-        <div className="bg-[#faf9ff] border border-[#ede9ff] rounded-[14px] px-3 py-2.5">
-          <p className="text-[9px] text-[#9898B0] font-semibold uppercase tracking-wide mb-2">{t("home.hero.demo.wordCloud")}</p>
+        <div className="rounded-[14px] px-3 py-2.5" style={{ background: isDark ? "var(--color-bg-surface-raised)" : "#faf9ff", border: isDark ? "1px solid var(--color-border)" : "1px solid #ede9ff" }}>
+          <p className="text-[9px] font-semibold uppercase tracking-wide mb-2" style={{ color: isDark ? "var(--color-text-muted)" : "#9898B0" }}>{t("home.hero.demo.wordCloud")}</p>
           <div className="flex flex-wrap gap-1.5 items-center">
             {[
               { word: t("home.hero.demo.wc.delicious"), size: 14, color: "#6D4CFF" },
@@ -170,6 +173,8 @@ function DashboardDemo() {
 /* ─── KPI Stats Bar ─── */
 function KpiBar() {
   const { t } = useTranslation();
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
   const ref = useRef<HTMLDivElement>(null);
   const [started, setStarted] = useState(false);
 
@@ -196,16 +201,17 @@ function KpiBar() {
   return (
     <div
       ref={ref}
-      className="flex flex-wrap gap-x-0 gap-y-3 pt-6 mt-2 border-t border-[#e5e1f5]"
+      className="flex flex-wrap gap-x-0 gap-y-3 pt-6 mt-2 border-t"
+      style={{ borderColor: isDark ? "var(--color-border)" : "#e5e1f5" }}
     >
       {stats.map((s, i) => (
         <div key={s.label} className="flex items-center">
           <div className="text-center px-5">
-            <div className="text-[22px] font-black text-[#6D4CFF] leading-none">{s.value}</div>
-            <div className="text-[11px] text-[#9898B0] font-medium mt-0.5">{s.label}</div>
+            <div className="text-[22px] font-black leading-none" style={{ color: isDark ? "var(--color-brand)" : "#6D4CFF" }}>{s.value}</div>
+            <div className="text-[11px] font-medium mt-0.5" style={{ color: isDark ? "var(--color-text-muted)" : "#9898B0" }}>{s.label}</div>
           </div>
           {i < stats.length - 1 && (
-            <div className="w-px h-8 bg-[#e5e1f5]" />
+            <div className="w-px h-8" style={{ background: isDark ? "var(--color-border)" : "#e5e1f5" }} />
           )}
         </div>
       ))}
@@ -217,11 +223,13 @@ function KpiBar() {
 export default function HeroSection() {
   const { user, loading } = useAuth();
   const { t } = useTranslation();
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
 
   return (
     <section
       className="relative overflow-hidden px-6 py-16 md:py-20"
-      style={{ background: "linear-gradient(135deg, #f8f7ff 0%, #eef4ff 100%)" }}
+      style={{ background: isDark ? "linear-gradient(135deg, #111318 0%, #1a1a2e 100%)" : "linear-gradient(135deg, #f8f7ff 0%, #eef4ff 100%)" }}
     >
       {/* Decorative blobs */}
       <div
@@ -248,14 +256,14 @@ export default function HeroSection() {
             {/* Badge */}
             <span
               className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full font-semibold text-[12px] tracking-wider uppercase"
-              style={{ background: "#e4dfff", color: "#4234b6" }}
+              style={{ background: isDark ? "rgba(123,116,255,0.15)" : "#e4dfff", color: isDark ? "#9B8FF8" : "#4234b6" }}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-[#6D4CFF] animate-pulse inline-block" />
               {t("home.hero.badge")}
             </span>
 
             {/* Headline */}
-            <h1 className="text-[40px] md:text-[52px] leading-[1.1] tracking-[-0.02em] font-black text-[#1c1b23]">
+            <h1 className="text-[40px] md:text-[52px] leading-[1.1] tracking-[-0.02em] font-black" style={{ color: isDark ? "var(--color-text-primary)" : "#1c1b23" }}>
               {t("home.hero.title1")}{" "}
               <span
                 className="relative inline-block"
@@ -271,7 +279,7 @@ export default function HeroSection() {
             </h1>
 
             {/* Subtext */}
-            <p className="text-[17px] leading-[28px] text-[#474554] max-w-lg">
+            <p className="text-[17px] leading-[28px] max-w-lg" style={{ color: isDark ? "var(--color-text-secondary)" : "#474554" }}>
               {t("home.hero.subtitle")}
             </p>
 
@@ -304,7 +312,8 @@ export default function HeroSection() {
               )}
               <Link
                 href="/dashboard"
-                className="flex items-center justify-center gap-2 border-2 border-[#6D4CFF] text-[#6D4CFF] px-7 py-3.5 rounded-[12px] font-bold text-[15px] hover:bg-[#f3f0ff] transition-all active:scale-95"
+                className="flex items-center justify-center gap-2 border-2 px-7 py-3.5 rounded-[12px] font-bold text-[15px] transition-all active:scale-95"
+                style={{ borderColor: "#6D4CFF", color: isDark ? "#9B8FF8" : "#6D4CFF" }}
               >
                 <i className="ti ti-player-play text-[16px]" />
                 {t("home.hero.demoBtn")}

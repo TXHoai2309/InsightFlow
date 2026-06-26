@@ -36,7 +36,7 @@ export default function RootLayout({
 }) {
   const pathname = usePathname();
   const { t, i18n } = useTranslation();
-  const hideShell = ["/", "/login", "/register", "/nganh", "/ve-chung-toi", "/profile"].includes(pathname || "");
+  const hideShell = ["/", "/login", "/register", "/forgot-password", "/nganh", "/ve-chung-toi", "/profile"].includes(pathname || "");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const getPageTitleKey = (path: string) => {
@@ -47,6 +47,8 @@ export default function RootLayout({
         return "metadata.login.title";
       case "/register":
         return "metadata.register.title";
+      case "/forgot-password":
+        return "metadata.forgotPassword.title"; // Custom title for forgot password
       case "/nganh":
         return "metadata.industries.title";
       case "/ve-chung-toi":
@@ -77,6 +79,8 @@ export default function RootLayout({
         return "metadata.login.desc";
       case "/register":
         return "metadata.register.desc";
+      case "/forgot-password":
+        return "metadata.forgotPassword.subtitle";
       case "/nganh":
         return "metadata.industries.desc";
       case "/ve-chung-toi":

@@ -9,34 +9,38 @@
  ✓ Compiled successfully
    Linting and checking validity of types ...
    Collecting page data ...
-   Generating static pages (0/16) ...
-   Generating static pages (4/16) 
-   Generating static pages (8/16) 
-   Generating static pages (12/16) 
- ✓ Generating static pages (16/16)
+   Generating static pages (0/19) ...
+   Generating static pages (4/19) 
+   Generating static pages (9/19) 
+   Generating static pages (14/19) 
+ ✓ Generating static pages (19/19)
    Finalizing page optimization ...
    Collecting build traces ...
 
 Route (app)                              Size     First Load JS
-┌ ○ /                                    7.86 kB         301 kB
+┌ ○ /                                    8.1 kB          331 kB
 ├ ○ /_not-found                          876 B          88.5 kB
-├ ○ /alerts                              11.7 kB         348 kB
+├ ○ /alerts                              9.71 kB         364 kB
+├ ƒ /api/auth/reset-password             0 B                0 B
+├ ○ /api/debug-firestore                 0 B                0 B
 ├ ○ /api/reports/latest                  0 B                0 B
-├ ○ /dashboard                           5.39 kB         359 kB
-├ ○ /leads                               6.93 kB         275 kB
-├ ○ /login                               3.65 kB         292 kB
-├ ○ /mentions                            7.92 kB         302 kB
-├ ○ /nganh                               6.1 kB          282 kB
-├ ○ /profile                             9.03 kB         297 kB
+├ ○ /dashboard                           5.21 kB         359 kB
+├ ○ /forgot-password                     6.14 kB        93.7 kB
+├ ○ /leads                               6.57 kB         292 kB
+├ ○ /login                               3.64 kB         292 kB
+├ ○ /mentions                            4.84 kB         299 kB
+├ ○ /nganh                               4.6 kB          327 kB
+├ ○ /profile                             9.56 kB         328 kB
 ├ ○ /register                            4.86 kB         293 kB
-├ ○ /reports                             156 kB          418 kB
-├ ○ /settings/brand                      3.5 kB         91.1 kB
-└ ○ /ve-chung-toi                        13 kB           289 kB
+├ ○ /reports                             157 kB          437 kB
+├ ○ /settings/brand                      3.01 kB         108 kB
+└ ○ /ve-chung-toi                        11.6 kB         334 kB
 + First Load JS shared by all            87.6 kB
-  ├ chunks/1dd3208c-8c353eb062229c72.js  53.6 kB
-  ├ chunks/528-f0ed8414fd4a5683.js       31.9 kB
-  └ other shared chunks (total)          2.09 kB
+  ├ chunks/1dd3208c-4d948558e163dd97.js  53.6 kB
+  ├ chunks/528-7e11c70fd131a541.js       31.9 kB
+  └ other shared chunks (total)          2.1 kB
 
 
-○  (Static)  prerendered as static content
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
 

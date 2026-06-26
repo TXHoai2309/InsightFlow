@@ -176,7 +176,7 @@ export class AlertService {
       alerts = [
         {
           id: "simulated-alert-1",
-          brand: "Highland Coffee",
+          brand: "Highlands Coffee",
           source: "facebook",
           text: "Phát hiện gia tăng đột ngột của bài đăng phàn nàn về vệ sinh tại chi nhánh Quận 1. Tiếp cận 45k+ người.",
           sentiment: "negative",
@@ -187,7 +187,7 @@ export class AlertService {
         },
         {
           id: "simulated-alert-2",
-          brand: "Starbucks",
+          brand: "Phúc Long Tea",
           source: "tiktok",
           text: "Video KOL @HoangMedia chia sẻ nội dung so sánh tiêu cực: Tiếp cận 150k+ người.",
           sentiment: "negative",
@@ -198,9 +198,20 @@ export class AlertService {
         },
         {
           id: "simulated-alert-3",
-          brand: "Mixue",
+          brand: "The Coffee House",
+          source: "news",
+          text: "Đánh giá 1 sao hàng loạt phản ánh thái độ nhân viên chi nhánh Nguyễn Trãi thiếu tôn trọng khách hàng.",
+          sentiment: "negative",
+          topic: "staff",
+          severity: "medium",
+          created_at: new Date(Date.now() - 3 * 3600 * 1000).toISOString(),
+          status: "new",
+        },
+        {
+          id: "simulated-alert-4",
+          brand: "Highlands Coffee",
           source: "youtube",
-          text: "Vlog đánh giá đồ uống mới của Mixue nhận xét tiêu cực về độ ngọt vượt mức cho phép.",
+          text: "Vlog đánh giá đồ uống mới của Highlands nhận xét tiêu cực về độ ngọt vượt mức cho phép.",
           sentiment: "negative",
           topic: "quality",
           severity: "low",
