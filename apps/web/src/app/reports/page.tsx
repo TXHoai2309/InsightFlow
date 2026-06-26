@@ -219,7 +219,7 @@ function ArchivedReportDetailModal({
         {/* Header */}
         <div className="flex justify-between items-start border-b border-[var(--color-border)] pb-3">
           <div>
-            <span className="bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">
+            <span className="bg-[var(--color-brand)]/10 text-[var(--color-brand)] border border-[var(--color-brand)]/20 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">
               {report.id}
             </span>
             <h2 className="text-lg font-bold text-on-surface mt-1">
@@ -419,7 +419,7 @@ function ArchivedReportDetailModal({
                 onDelete();
               }
             }}
-            className="flex items-center gap-1.5 px-3 py-2 text-red-600 hover:bg-red-50 rounded-xl font-bold text-xs transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 text-[var(--color-error)] hover:bg-[var(--color-error-subtle)] rounded-xl font-bold text-xs transition-colors"
           >
             <span className="material-symbols-outlined text-[16px]">
               delete
@@ -1865,7 +1865,7 @@ export default function ReportsPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   {/* Brand & Date range */}
-                  <div className="space-y-4 bg-surface-container-lowest p-4 rounded-xl border border-outline-variant/60">
+                  <div className="space-y-4 bg-[var(--color-bg-surface-raised)] p-4 rounded-xl border border-[var(--color-border)]">
                     <div className="flex flex-col gap-1.5">
                       <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">
                         Chọn thương hiệu:
@@ -1873,7 +1873,7 @@ export default function ReportsPage() {
                       <select
                         value={customBrand}
                         onChange={(e) => setCustomBrand(e.target.value)}
-                        className="bg-white border border-outline-variant rounded-lg text-sm py-2 px-3 outline-none font-bold focus:ring-2 focus:ring-primary/25"
+                        className="bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] border border-[var(--color-border)] rounded-lg text-sm py-2 px-3 outline-none font-bold focus:ring-2 focus:ring-[var(--color-brand)]/20"
                       >
                         <option value="all">Tất cả nhãn hàng</option>
                         {brands.map((b) => (
@@ -1893,7 +1893,7 @@ export default function ReportsPage() {
                           type="date"
                           value={customStartDate}
                           onChange={(e) => setCustomStartDate(e.target.value)}
-                          className="bg-white border border-outline-variant rounded-lg text-sm py-2 px-3 outline-none focus:ring-2 focus:ring-primary/25"
+                          className="bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] border border-[var(--color-border)] rounded-lg text-sm py-2 px-3 outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 w-full"
                         />
                       </div>
                       <div className="flex flex-col gap-1.5">
@@ -1904,14 +1904,14 @@ export default function ReportsPage() {
                           type="date"
                           value={customEndDate}
                           onChange={(e) => setCustomEndDate(e.target.value)}
-                          className="bg-white border border-outline-variant rounded-lg text-sm py-2 px-3 outline-none focus:ring-2 focus:ring-primary/25"
+                          className="bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] border border-[var(--color-border)] rounded-lg text-sm py-2 px-3 outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 w-full"
                         />
                       </div>
                     </div>
                   </div>
 
                   {/* Sentiment Filter */}
-                  <div className="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant/60 space-y-3">
+                  <div className="bg-[var(--color-bg-surface-raised)] p-4 rounded-xl border border-[var(--color-border)] space-y-3">
                     <div className="flex justify-between items-center">
                       <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">
                         Chọn sắc thái:
@@ -1983,7 +1983,7 @@ export default function ReportsPage() {
                 {/* Platforms & Topics selection */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   {/* Platforms */}
-                  <div className="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant/60 space-y-3">
+                  <div className="bg-[var(--color-bg-surface-raised)] p-4 rounded-xl border border-[var(--color-border)] space-y-3">
                     <div className="flex justify-between items-center">
                       <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">
                         Nguồn dữ liệu (Nền tảng):
@@ -2052,7 +2052,7 @@ export default function ReportsPage() {
                   </div>
 
                   {/* Topics */}
-                  <div className="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant/60 space-y-3">
+                  <div className="bg-[var(--color-bg-surface-raised)] p-4 rounded-xl border border-[var(--color-border)] space-y-3">
                     <div className="flex justify-between items-center">
                       <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">
                         Chủ đề quan tâm:
@@ -2162,7 +2162,7 @@ export default function ReportsPage() {
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-outline-variant pb-4 gap-3">
                   <button
                     onClick={() => setCustomReportGenerated(false)}
-                    className="flex items-center gap-1.5 text-xs font-bold text-on-surface-variant hover:text-primary transition-colors"
+                    className="flex items-center gap-1.5 text-xs font-bold text-[var(--color-text-secondary)] hover:text-[var(--color-brand)] transition-colors"
                   >
                     <span className="material-symbols-outlined text-base">
                       arrow_back
@@ -2173,7 +2173,7 @@ export default function ReportsPage() {
                   <div className="flex gap-2 w-full sm:w-auto">
                     <button
                       onClick={handleArchiveReport}
-                      className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 bg-surface-container text-on-surface border border-outline-variant rounded-xl font-bold text-xs hover:bg-surface-container-high transition-colors"
+                      className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] border border-[var(--color-border)] rounded-xl font-bold text-xs hover:bg-[var(--color-bg-surface-high)] transition-colors"
                     >
                       <span className="material-symbols-outlined text-[16px]">
                         archive

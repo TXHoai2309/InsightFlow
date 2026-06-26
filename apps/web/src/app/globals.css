@@ -74,59 +74,86 @@
    ═══════════════════════════════════════════════════════════════ */
 .dark {
   /* ── Backgrounds ─────────────────────────────────────────── */
-  --color-bg-primary:        #111318;   /* Nền chính — xanh đen sâu */
-  --color-bg-surface:        #1c1c24;   /* Nền card — tối hơn 1 tông */
-  --color-bg-surface-raised: #252530;   /* Nền raised */
-  --color-bg-surface-high:   #2e2e3a;   /* Nền elevated */
-  --color-bg-overlay:        #363645;   /* Overlay / highlight */
+  --color-bg-primary:        #0A0612;   /* Nền chính toàn hệ thống */
+  --color-bg-surface:        rgba(255, 255, 255, 0.05);   /* Nền card / glassmorphism */
+  --color-bg-surface-raised: rgba(255, 255, 255, 0.08);   /* Nền raised (hover) */
+  --color-bg-surface-high:   rgba(255, 255, 255, 0.12);   /* Nền elevated cao hơn */
+  --color-bg-overlay:        rgba(255, 255, 255, 0.16);   /* Overlay / highlight */
 
   /* ── Borders ─────────────────────────────────────────────── */
-  --color-border:            #2e2e3a;   /* Border tối */
-  --color-border-strong:     #44445a;   /* Border đậm */
+  --color-border:            rgba(255, 255, 255, 0.10);   /* Border mặc định */
+  --color-border-strong:     rgba(255, 255, 255, 0.18);   /* Border đậm */
 
   /* ── Text ────────────────────────────────────────────────── */
-  --color-text-primary:      #e4e6eb;   /* Chữ chính — trắng mờ WCAG AA */
-  --color-text-secondary:    #a0a0b8;   /* Chữ phụ — xám trung tính */
-  --color-text-muted:        #6e6e88;   /* Chữ mờ */
-  --color-text-disabled:     #44445a;   /* Disabled */
+  --color-text-primary:      #F5F1FF;   /* Chữ chính */
+  --color-text-secondary:    rgba(245, 241, 255, 0.55);   /* Chữ phụ */
+  --color-text-muted:        rgba(245, 241, 255, 0.35);   /* Chữ mờ */
+  --color-text-disabled:     rgba(245, 241, 255, 0.35);   /* Disabled */
 
-  /* ── Brand / Primary ─────────────────────────────────────── */
-  --color-brand:             #7b74ff;   /* Brand sáng hơn cho nền tối */
-  --color-brand-hover:       #9b8ff8;
-  --color-brand-subtle:      #252538;   /* Brand bg nhẹ (dark) */
-  --color-brand-border:      #3a3860;
+  /* ── Brand / Primary / Accents ───────────────────────────── */
+  --color-brand:             #C4ACFF;   /* Tím sáng */
+  --color-brand-hover:       #b092fb;
+  --color-brand-subtle:      rgba(139, 92, 246, 0.25);   /* CTA nền đặc mờ */
+  --color-brand-border:      rgba(255, 255, 255, 0.18);
 
   /* ── Semantic Status (Dark) ──────────────────────────────── */
   --color-success:           #4ade80;
-  --color-success-subtle:    #14301f;
+  --color-success-subtle:    rgba(74, 222, 128, 0.15);
   --color-warning:           #fbbf24;
-  --color-warning-subtle:    #2d2008;
-  --color-error:             #f87171;
-  --color-error-subtle:      #2d0a0a;
+  --color-warning-subtle:    rgba(251, 191, 36, 0.15);
+  --color-error:             #F8AFD4;   /* Hồng pastel cho cảnh báo */
+  --color-error-subtle:      rgba(248, 175, 212, 0.15);
   --color-info:              #60a5fa;
-  --color-info-subtle:       #0d1f3c;
+  --color-info-subtle:       rgba(96, 165, 250, 0.15);
 
-  /* ── Chart Colors (Dark — Pastel Neon, dịu mắt trên nền tối) */
-  --chart-positive:          #818cf8;   /* Indigo pastel */
-  --chart-positive-bg:       rgba(129, 140, 248, 0.15);
-  --chart-negative:          #f87171;   /* Red pastel */
-  --chart-negative-bg:       rgba(248, 113, 113, 0.10);
-  --chart-neutral:           #94a3b8;   /* Slate */
-  --chart-neutral-bg:        rgba(148, 163, 184, 0.12);
+  /* ── Chart Colors (Dark) ─────────────────────────────────── */
+  --chart-positive:          #C4ACFF;   /* Tím sáng */
+  --chart-positive-bg:       rgba(196, 172, 255, 0.15);
+  --chart-negative:          #F8AFD4;   /* Hồng pastel */
+  --chart-negative-bg:       rgba(248, 175, 212, 0.15);
+  --chart-neutral:           rgba(245, 241, 255, 0.35);   /* Trung lập */
+  --chart-neutral-bg:        rgba(245, 241, 255, 0.12);
 
   /* ── Misc ────────────────────────────────────────────────── */
-  --shadow-card:             0 4px 20px -2px rgba(0, 0, 0, 0.3);
-  --shadow-card-hover:       0 12px 30px -4px rgba(0, 0, 0, 0.4);
-  --shadow-dropdown:         0 2px 16px rgba(0, 0, 0, 0.4);
+  --shadow-card:             none; /* Không dùng bóng đậm cho glassmorphism */
+  --shadow-card-hover:       none;
+  --shadow-dropdown:         0 8px 32px 0 rgba(0, 0, 0, 0.3);
 
   /* ── Platform Colors (Dark Mode) ─────────────────────────── */
   --color-platform-facebook:    #3b82f6;
   --color-platform-tiktok:      #ffffff;
-  --color-platform-youtube:     #ef4444;
-  --color-platform-thread:      #e4e6eb;
+  --color-platform-youtube:     #F8AFD4;
+  --color-platform-thread:      #F5F1FF;
   --color-platform-be:          #fbbf24;
   --color-platform-google-maps: #4ade80;
-  --color-platform-news:        #818cf8;
+  --color-platform-news:        #C4ACFF;
+}
+
+/* Glow Layers for Dark Mode */
+.dark body::before,
+.dark body::after {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.dark body::before {
+  top: -20vh;
+  left: -20vw;
+  width: 70vw;
+  height: 70vw;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.35), transparent 70%);
+  filter: blur(100px);
+}
+
+.dark body::after {
+  bottom: -20vh;
+  right: -20vw;
+  width: 70vw;
+  height: 70vw;
+  background: radial-gradient(circle, rgba(244, 114, 182, 0.18), transparent 70%);
+  filter: blur(100px);
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -182,10 +209,7 @@ body {
   box-shadow: var(--shadow-card-hover);
 }
 
-/* Dark mode glass card override for backdrop-blur */
-.dark .glass-card {
-  background-color: var(--color-bg-surface);
-}
+/* Dark mode glass card override handled globally below */
 
 /* Hover lift for industry cards */
 .hover-lift {
@@ -299,16 +323,43 @@ body {
 }
 
 /* Premium Glassmorphic Cards trong Dark Mode */
-.dark .glass-card {
-  background: linear-gradient(135deg, rgba(28, 28, 36, 0.9) 0%, rgba(20, 20, 26, 0.9) 100%) !important;
-  border-color: rgba(255, 255, 255, 0.05) !important;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3) !important;
-  backdrop-filter: blur(8px);
+.dark .glass-card,
+.dark .bg-surface-card,
+.dark .bento-card-bottom,
+.dark .industry-card,
+.dark .core-value-card,
+.dark .logo-card {
+  background: rgba(255, 255, 255, 0.05) !important;
+  backdrop-filter: blur(14px) !important;
+  -webkit-backdrop-filter: blur(14px) !important;
+  border: 0.5px solid rgba(255, 255, 255, 0.10) !important;
+  border-radius: 14px !important;
+  box-shadow: none !important;
 }
 
-.dark .glass-card:hover {
-  border-color: rgba(255, 255, 255, 0.08) !important;
-  box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.4) !important;
+.dark .glass-card:hover,
+.dark .bento-card-bottom:hover,
+.dark .industry-card:hover,
+.dark .core-value-card:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.16) !important;
+}
+
+/* Icon Pill Container */
+.dark-icon-pill {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Button overrides for dark mode */
+.dark .btn-primary {
+  background: rgba(139, 92, 246, 0.25) !important;
+  border: 0.5px solid rgba(255, 255, 255, 0.18) !important;
+  color: #E9DDFF !important;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -340,6 +391,47 @@ body {
 .dark textarea {
   color-scheme: dark;
 }
+
+/* Fix native <select> dropdown in dark mode — force browser to use dark colors */
+.dark select option {
+  background-color: #1a1a2e !important;
+  color: #F5F1FF !important;
+}
+
+.dark select {
+  background-color: var(--color-bg-surface) !important;
+  color: var(--color-text-primary) !important;
+  border-color: var(--color-border) !important;
+}
+
+/* ── Auth pages dark mode ────────────────────────────────────── */
+.dark .auth-container {
+  background-color: var(--color-bg-primary);
+  min-height: 100vh;
+}
+
+/* Auth card backgrounds */
+.dark .auth-card {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border-color: rgba(255, 255, 255, 0.10) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* Auth input dark mode */
+.dark .auth-input {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  color: #F5F1FF !important;
+}
+.dark .auth-input::placeholder {
+  color: rgba(245, 241, 255, 0.3) !important;
+}
+.dark .auth-input:focus {
+  border-color: var(--color-brand) !important;
+  box-shadow: 0 0 0 3px rgba(196, 172, 255, 0.15) !important;
+}
+
 
 /* ═══════════════════════════════════════════════════════════════
    THEME TOGGLE BUTTON

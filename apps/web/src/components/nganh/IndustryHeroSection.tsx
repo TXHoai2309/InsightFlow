@@ -2,17 +2,20 @@
 
 import { useCountUp } from "@/hooks/useIntersectionObserver";
 import { useTranslation } from "react-i18next";
+import { useTheme } from "@/contexts/ThemeContext";
 
 export default function IndustryHeroSection() {
   const { t } = useTranslation();
   const kpiDoanhNghiep = useCountUp(500, 2000, true);
   const kpiReview = useCountUp(2, 2000, true);
   const kpiAccuracy = useCountUp(98, 2000, true);
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
 
   return (
     <section 
       className="relative py-[60px] md:py-[80px] px-6 text-center overflow-hidden"
-      style={{ background: "linear-gradient(135deg, #f8f7ff 0%, #eef4ff 100%)" }}
+      style={{ background: isDark ? "linear-gradient(135deg, #111318 0%, #1a1a2e 100%)" : "linear-gradient(135deg, #f8f7ff 0%, #eef4ff 100%)" }}
     >
       {/* Decorative Blobs */}
       <div 

@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useTranslation } from "react-i18next";
+import { useTheme } from "@/contexts/ThemeContext";
 
 const team = [
   {
@@ -32,9 +33,11 @@ const team = [
 
 export default function TeamSection() {
   const { t } = useTranslation();
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
 
   return (
-    <section id="team" className="px-6 md:px-10 py-24 bg-white scroll-mt-16">
+    <section id="team" className="px-6 md:px-10 py-24 scroll-mt-16" style={{ background: isDark ? "var(--color-bg-primary)" : "#ffffff" }}>
       <div className="max-w-7xl mx-auto text-center">
         <h2 className="text-[32px] md:text-[36px] leading-[1.2] font-bold text-[#1a1a2e] mb-4">
           {t("about.team.title")}<span style={{ background: "linear-gradient(90deg, #6D4CFF, #3B82F6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>{t("about.team.titleHighlight")}</span>
@@ -47,8 +50,12 @@ export default function TeamSection() {
           {team.map((member) => (
             <div 
               key={member.name} 
-              className="group bg-white rounded-[20px] p-4 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-[6px]"
-              style={{ border: "1px solid #F1F5F9" }}
+              className="group rounded-[20px] p-4 transition-all duration-300 hover:-translate-y-[6px]"
+              style={{ 
+                background: isDark ? "var(--color-bg-surface)" : "#ffffff", 
+                border: `1px solid ${isDark ? "var(--color-border)" : "#F1F5F9"}`,
+                boxShadow: isDark ? "0 4px 20px rgba(0,0,0,0.3)" : "0 4px 20px rgba(109,76,255,0.06)"
+              }}
             >
               {/* Avatar Wrapper */}
               <div className="aspect-square rounded-[20px] overflow-hidden relative mb-4">
@@ -75,10 +82,10 @@ export default function TeamSection() {
 
               {/* Info */}
               <div className="text-left px-2">
-                <div className="text-[18px] font-bold text-[#1a1a2e] mb-1">
+                <div className="text-[18px] font-bold mb-1" style={{ color: isDark ? "var(--color-text-primary)" : "#1a1a2e" }}>
                   {member.name}
                 </div>
-                <div className="text-[14px] font-medium text-[#6D4CFF]">
+                <div className="text-[14px] font-medium" style={{ color: isDark ? "var(--color-brand)" : "#6D4CFF" }}>
                   {member.role}
                 </div>
               </div>
@@ -89,3 +96,4 @@ export default function TeamSection() {
     </section>
   );
 }
+
