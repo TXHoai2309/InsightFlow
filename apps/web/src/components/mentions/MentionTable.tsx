@@ -163,8 +163,7 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                   </div>
 
                   <Link
-                    href={mention.url || "#"}
-                    target="_blank"
+                    href={`/mentions/${encodeURIComponent(mention.id)}`}
                     className="text-sm leading-relaxed text-[var(--color-text-primary)] hover:text-[var(--color-brand)] line-clamp-3"
                   >
                     "{mention.content}"
@@ -271,8 +270,7 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                       {/* Content */}
                       <td className="px-4 py-4 align-top">
                         <Link
-                          href={mention.url || "#"}
-                          target="_blank"
+                          href={`/mentions/${encodeURIComponent(mention.id)}`}
                           className="text-sm leading-relaxed line-clamp-2 text-[var(--color-text-primary)] hover:text-[var(--color-brand)]"
                         >
                           "{mention.content}"

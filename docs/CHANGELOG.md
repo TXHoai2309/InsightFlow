@@ -8,8 +8,8 @@
 > - Các commit có message rõ ràng sẽ được diễn giải theo đúng nội dung commit.
 > - Các commit message ngắn như `fix`, `done`, `oke`, `a`, `update` được ghi nhận là cập nhật/hoàn thiện chung, không suy diễn quá sâu.
 > - Các commit merge vẫn được giữ lại để phản ánh đúng dòng phát triển giữa các nhánh.
-Tất cả các thay đổi đáng chú ý đối với dự án này sẽ được ghi lại trong file này.
-Định dạng dựa trên [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) và dự án này tuân thủ [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+>   Tất cả các thay đổi đáng chú ý đối với dự án này sẽ được ghi lại trong file này.
+>   Định dạng dựa trên [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) và dự án này tuân thủ [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
@@ -54,6 +54,13 @@ Bảo mật: Form đổi mật khẩu hoàn chỉnh sử dụng reauthenticateWi
 Thông báo: Quản lý tùy chọn nhận thông báo (Email, Push, Khủng hoảng, Báo cáo ngày). Lưu trạng thái người dùng lên Firestore (users/{uid}/notifications).
 Toàn bộ 3 tab đều hỗ trợ tính năng Hủy (trả về trạng thái cũ) và Lưu (có hiệu ứng loading và thông báo thành công).
 
+### 2026-06-26
+
+- Xây dựng và thiết kế trang chi tiết đề cập (`/mentions/[id]`): tạo layout chi tiết cho bài viết và section bình luận, bổ sung thông tin sentiment, độ tin cậy và metadata đề cập.
+- Cập nhật trang chi tiết đề cập (`/mentions/[id]`): xóa hai nhãn `Đúng bài viết gốc` và `Theo luồng reply` trên phần comment, đồng thời loại bỏ hành vi nhấp chuyển trang khi bấm vào comment.
+- Chỉnh sửa logic hiển thị thread comment để giữ comment tĩnh trên trang đề cập chi tiết, tránh chuyển hướng không mong muốn khi xem hội thoại.
+- Các thay đổi khác: điều chỉnh hiển thị comment, sửa lỗi render comment thread và tăng tính ổn định cho trang đề cập.
+
 ## Added / Updated
 
 Trang Quản lý khách hàng tiềm năng (/leads):
@@ -84,8 +91,6 @@ Tính toán Overview Stats: tổng số mentions, số lượng theo từng thư
 Tính toán Sentiment & Topic Distribution: phân phối sentiment tổng thể, danh sách top topics phổ biến nhất, và thống kê chi tiết theo từng brand (by_brand_breakdown) khi dữ liệu đủ lớn.
 Lưu kết quả report summary vào Firestore (collection reports_demo), kèm field generated_at để theo dõi thời điểm tạo báo cáo, đảm bảo dữ liệu có cấu trúc rõ ràng, dễ đọc cho API SP1-02.
 Thêm bộ lọc theo Nhãn hàng/Thương hiệu (Brand Filter) trên trang Reports: cho phép người dùng xem nhanh chỉ số tổng hợp và phân phối sentiment/topic riêng theo từng brand, sử dụng dữ liệu by_brand_breakdown đã tính sẵn (không gọi lại API khi đổi bộ lọc).
-
-## [Unreleased] - 2026-06-19
 
 ## [Unreleased] - 2026-06-22
 
@@ -167,8 +172,8 @@ Các giai đoạn chính:
 4. **Hoàn thiện responsive và xử lý merge**: hợp nhất code từ các nhánh thành viên, sửa xung đột, chỉnh layout.
 5. **Đưa dữ liệu lên giao diện**: hiển thị dữ liệu ở Mentions và Dashboard.
 6. **Hiệu chỉnh phân tích AI và sửa lỗi deploy**: cập nhật logic/hiển thị AI, sửa lỗi TypeScript, union type, field dữ liệu và lỗi Vercel.
-> Dự án đang ở giai đoạn khởi tạo. Chưa có thay đổi nào được ghi nhận.
-> Các tính năng dưới đây là kế hoạch phát triển dự kiến cho các phiên bản tiếp theo.
+   > Dự án đang ở giai đoạn khởi tạo. Chưa có thay đổi nào được ghi nhận.
+   > Các tính năng dưới đây là kế hoạch phát triển dự kiến cho các phiên bản tiếp theo.
 
 ## [1.2.0] - 2026-06-17
 
@@ -193,13 +198,13 @@ Các giai đoạn chính:
 
 ### Nhóm 1 — Khởi tạo repo và cấu trúc tài liệu
 
-| Thứ tự | Commit | Nội dung commit | Diễn giải chi tiết | Phạm vi ảnh hưởng |
-|---:|---|---|---|---|
-| 01 | `da6fe71` | `first commit` | Tạo commit đầu tiên cho repo InsightFlow. Đây là mốc bắt đầu lịch sử phát triển của dự án trên GitHub. | Repository |
-| 02 | `9b59a81` | `feat: initialize project directory structure and placeholder files` | Khởi tạo cấu trúc thư mục ban đầu và các file placeholder. Commit này giúp repo có bộ khung để tách tài liệu, source code app web và các phần cấu hình sau này. | Project structure |
-| 03 | `9d846cd` | `Xóa các file thừa` | Dọn bớt file không cần thiết sau giai đoạn khởi tạo, giúp repo gọn hơn và tránh giữ lại các file mẫu không phục vụ sản phẩm. | Cleanup |
-| 04 | `ca021e0` | `add CHANGELOG.md` | Thêm file changelog để bắt đầu ghi nhận lịch sử thay đổi của dự án. | Documentation |
-| 05 | `8d7ecec` | `add CHANGELOG.md` | Tiếp tục cập nhật/bổ sung changelog. Có thể là chỉnh sửa nội dung hoặc đưa file changelog vào đúng vị trí tài liệu. | Documentation |
+| Thứ tự | Commit    | Nội dung commit                                                      | Diễn giải chi tiết                                                                                                                                              | Phạm vi ảnh hưởng |
+| -----: | --------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+|     01 | `da6fe71` | `first commit`                                                       | Tạo commit đầu tiên cho repo InsightFlow. Đây là mốc bắt đầu lịch sử phát triển của dự án trên GitHub.                                                          | Repository        |
+|     02 | `9b59a81` | `feat: initialize project directory structure and placeholder files` | Khởi tạo cấu trúc thư mục ban đầu và các file placeholder. Commit này giúp repo có bộ khung để tách tài liệu, source code app web và các phần cấu hình sau này. | Project structure |
+|     03 | `9d846cd` | `Xóa các file thừa`                                                  | Dọn bớt file không cần thiết sau giai đoạn khởi tạo, giúp repo gọn hơn và tránh giữ lại các file mẫu không phục vụ sản phẩm.                                    | Cleanup           |
+|     04 | `ca021e0` | `add CHANGELOG.md`                                                   | Thêm file changelog để bắt đầu ghi nhận lịch sử thay đổi của dự án.                                                                                             | Documentation     |
+|     05 | `8d7ecec` | `add CHANGELOG.md`                                                   | Tiếp tục cập nhật/bổ sung changelog. Có thể là chỉnh sửa nội dung hoặc đưa file changelog vào đúng vị trí tài liệu.                                             | Documentation     |
 
 #### Kết quả đạt được
 
@@ -207,6 +212,7 @@ Các giai đoạn chính:
 - Cấu trúc thư mục cơ bản được tạo để phục vụ phát triển tiếp theo.
 - Bắt đầu có tài liệu changelog trong thư mục docs.
 - Dự án chuyển từ trạng thái rỗng sang có bộ khung phát triển.
+
 ### Thêm (Added)
 
 - Triển khai duy trì phiên đăng nhập (`setPersistence`) với `browserLocalPersistence` trong Firebase, giúp giữ trạng thái đăng nhập lên đến 1 tháng.
@@ -253,10 +259,10 @@ Các giai đoạn chính:
 
 ### Nhóm 2 — Xây dựng trang Home
 
-| Thứ tự | Commit | Nội dung commit | Diễn giải chi tiết | Phạm vi ảnh hưởng |
-|---:|---|---|---|---|
-| 06 | `28c7339` | `build layout "home"` | Xây dựng layout trang chủ. Đây là màn hình đầu tiên giúp người dùng hiểu sản phẩm InsightFlow, đóng vai trò landing page hoặc entry page của web app. | Home UI |
-| 07 | `8d1cf63` | `fix bug layout "home"` | Sửa lỗi layout Home sau khi dựng bản đầu tiên. Commit này giúp giao diện Home ổn định hơn về bố cục, khoảng cách hoặc hiển thị. | Home UI / Fix |
+| Thứ tự | Commit    | Nội dung commit         | Diễn giải chi tiết                                                                                                                                    | Phạm vi ảnh hưởng |
+| -----: | --------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+|     06 | `28c7339` | `build layout "home"`   | Xây dựng layout trang chủ. Đây là màn hình đầu tiên giúp người dùng hiểu sản phẩm InsightFlow, đóng vai trò landing page hoặc entry page của web app. | Home UI           |
+|     07 | `8d1cf63` | `fix bug layout "home"` | Sửa lỗi layout Home sau khi dựng bản đầu tiên. Commit này giúp giao diện Home ổn định hơn về bố cục, khoảng cách hoặc hiển thị.                       | Home UI / Fix     |
 
 #### Kết quả đạt được
 
@@ -268,15 +274,15 @@ Các giai đoạn chính:
 
 ### Nhóm 3 — Login, Logout và session
 
-| Thứ tự | Commit | Nội dung commit | Diễn giải chi tiết | Phạm vi ảnh hưởng |
-|---:|---|---|---|---|
-| 08 | `ce7cd89` | `login, log out` | Bổ sung luồng đăng nhập và đăng xuất. Đây là nền tảng để phân biệt người dùng đã xác thực và người dùng chưa xác thực. | Auth |
-| 09 | `30196a8` | `gitignore` | Cập nhật `.gitignore` để loại trừ file không nên đưa lên repo, ví dụ file môi trường, build output hoặc dependency local. | Repo config |
-| 10 | `c677e96` | `đẩy code lên` | Đẩy thêm phần code đang phát triển lên repo. Message không mô tả chi tiết nên chỉ ghi nhận là cập nhật chung trong giai đoạn Auth/Home. | General update |
-| 11 | `6872c0f` | `Merge branch 'Tan-home' into minh-login` | Gộp nhánh Home vào nhánh Login. Điều này cho thấy phần giao diện trang chủ và phần đăng nhập được tích hợp để chuẩn bị merge vào main. | Merge / Home + Auth |
-| 12 | `0a1d56c` | `Merge pull request #1 from TXHoai2309/minh-login` | Merge pull request từ nhánh `minh-login` vào main. Đây là mốc đưa phần login/logout vào nhánh chính. | Merge / Auth |
-| 13 | `80f347f` | `fix xung dot` | Sửa xung đột sau quá trình merge. Commit này giúp code từ các nhánh không ghi đè hoặc phá vỡ nhau. | Merge conflict fix |
-| 14 | `7929856` | `đăng suất session` | Hoàn thiện/sửa phần session khi đăng xuất. Nội dung commit cho thấy có xử lý trạng thái phiên đăng nhập sau khi user logout. | Auth session |
+| Thứ tự | Commit    | Nội dung commit                                    | Diễn giải chi tiết                                                                                                                      | Phạm vi ảnh hưởng   |
+| -----: | --------- | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+|     08 | `ce7cd89` | `login, log out`                                   | Bổ sung luồng đăng nhập và đăng xuất. Đây là nền tảng để phân biệt người dùng đã xác thực và người dùng chưa xác thực.                  | Auth                |
+|     09 | `30196a8` | `gitignore`                                        | Cập nhật `.gitignore` để loại trừ file không nên đưa lên repo, ví dụ file môi trường, build output hoặc dependency local.               | Repo config         |
+|     10 | `c677e96` | `đẩy code lên`                                     | Đẩy thêm phần code đang phát triển lên repo. Message không mô tả chi tiết nên chỉ ghi nhận là cập nhật chung trong giai đoạn Auth/Home. | General update      |
+|     11 | `6872c0f` | `Merge branch 'Tan-home' into minh-login`          | Gộp nhánh Home vào nhánh Login. Điều này cho thấy phần giao diện trang chủ và phần đăng nhập được tích hợp để chuẩn bị merge vào main.  | Merge / Home + Auth |
+|     12 | `0a1d56c` | `Merge pull request #1 from TXHoai2309/minh-login` | Merge pull request từ nhánh `minh-login` vào main. Đây là mốc đưa phần login/logout vào nhánh chính.                                    | Merge / Auth        |
+|     13 | `80f347f` | `fix xung dot`                                     | Sửa xung đột sau quá trình merge. Commit này giúp code từ các nhánh không ghi đè hoặc phá vỡ nhau.                                      | Merge conflict fix  |
+|     14 | `7929856` | `đăng suất session`                                | Hoàn thiện/sửa phần session khi đăng xuất. Nội dung commit cho thấy có xử lý trạng thái phiên đăng nhập sau khi user logout.            | Auth session        |
 
 #### Kết quả đạt được
 
@@ -289,9 +295,9 @@ Các giai đoạn chính:
 
 ### Nhóm 4 — Dashboard bản đầu
 
-| Thứ tự | Commit | Nội dung commit | Diễn giải chi tiết | Phạm vi ảnh hưởng |
-|---:|---|---|---|---|
-| 15 | `7f2050e` | `build giao dien Dashboard` | Xây dựng giao diện Dashboard. Đây là màn hình trung tâm để hiển thị số liệu tổng quan của InsightFlow như mentions, sentiment, alert hoặc chỉ số phân tích thương hiệu. | Dashboard UI |
+| Thứ tự | Commit    | Nội dung commit             | Diễn giải chi tiết                                                                                                                                                      | Phạm vi ảnh hưởng |
+| -----: | --------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+|     15 | `7f2050e` | `build giao dien Dashboard` | Xây dựng giao diện Dashboard. Đây là màn hình trung tâm để hiển thị số liệu tổng quan của InsightFlow như mentions, sentiment, alert hoặc chỉ số phân tích thương hiệu. | Dashboard UI      |
 
 #### Kết quả đạt được
 
@@ -305,14 +311,14 @@ Các giai đoạn chính:
 
 ### Nhóm 5 — Merge Dashboard và cập nhật tài liệu
 
-| Thứ tự | Commit | Nội dung commit | Diễn giải chi tiết | Phạm vi ảnh hưởng |
-|---:|---|---|---|---|
-| 16 | `f30c3ee` | `Merge pull request #2 from TXHoai2309/Tan-dashboard` | Merge pull request đưa phần Dashboard từ nhánh `Tan-dashboard` vào main. Đây là mốc xác nhận Dashboard trở thành một phần chính thức của nhánh chính. | Merge / Dashboard |
-| 17 | `052225c` | `update Changelog` | Cập nhật changelog sau khi có thêm các thay đổi về Dashboard hoặc tài liệu. | Documentation |
-| 18 | `a0e9122` | `update` | Commit cập nhật chung. Message không mô tả chi tiết nên chỉ ghi nhận là thay đổi nhỏ/bổ sung trong giai đoạn Dashboard. | General update |
-| 19 | `64ae830` | `Merge branch 'Tan-dashboard'` | Tiếp tục merge nhánh Dashboard. Commit này phản ánh việc đồng bộ code Dashboard giữa các nhánh. | Merge / Dashboard |
-| 20 | `0cc17f9` | `Initial commit` | Commit có message “Initial commit” trong nhánh đang merge. Vì không phải commit đầu tiên của toàn repo, ghi nhận đây là mốc khởi tạo/phần nền của một nhánh chức năng. | Branch update |
-| 21 | `f3bfc83` | `oke` | Commit cập nhật chung, message không đủ chi tiết để xác định thay đổi cụ thể. | General update |
+| Thứ tự | Commit    | Nội dung commit                                       | Diễn giải chi tiết                                                                                                                                                     | Phạm vi ảnh hưởng |
+| -----: | --------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+|     16 | `f30c3ee` | `Merge pull request #2 from TXHoai2309/Tan-dashboard` | Merge pull request đưa phần Dashboard từ nhánh `Tan-dashboard` vào main. Đây là mốc xác nhận Dashboard trở thành một phần chính thức của nhánh chính.                  | Merge / Dashboard |
+|     17 | `052225c` | `update Changelog`                                    | Cập nhật changelog sau khi có thêm các thay đổi về Dashboard hoặc tài liệu.                                                                                            | Documentation     |
+|     18 | `a0e9122` | `update`                                              | Commit cập nhật chung. Message không mô tả chi tiết nên chỉ ghi nhận là thay đổi nhỏ/bổ sung trong giai đoạn Dashboard.                                                | General update    |
+|     19 | `64ae830` | `Merge branch 'Tan-dashboard'`                        | Tiếp tục merge nhánh Dashboard. Commit này phản ánh việc đồng bộ code Dashboard giữa các nhánh.                                                                        | Merge / Dashboard |
+|     20 | `0cc17f9` | `Initial commit`                                      | Commit có message “Initial commit” trong nhánh đang merge. Vì không phải commit đầu tiên của toàn repo, ghi nhận đây là mốc khởi tạo/phần nền của một nhánh chức năng. | Branch update     |
+|     21 | `f3bfc83` | `oke`                                                 | Commit cập nhật chung, message không đủ chi tiết để xác định thay đổi cụ thể.                                                                                          | General update    |
 
 #### Kết quả đạt được
 
@@ -324,17 +330,17 @@ Các giai đoạn chính:
 
 ### Nhóm 6 — Mentions: tạo layout và hoàn thiện giao diện
 
-| Thứ tự | Commit | Nội dung commit | Diễn giải chi tiết | Phạm vi ảnh hưởng |
-|---:|---|---|---|---|
-| 22 | `0df2eff` | `build layout Mentions` | Xây dựng layout trang Mentions. Đây là màn hình dùng để xem danh sách bài viết/đề cập liên quan đến thương hiệu. | Mentions UI |
-| 23 | `7c57634` | `hoàn thiện` | Hoàn thiện thêm phần đang phát triển sau layout Mentions. Message không nêu rõ chi tiết nên ghi nhận là hoàn thiện giao diện/chức năng liên quan. | Mentions / General |
-| 24 | `6471528` | `a` | Commit cập nhật rất ngắn, không đủ dữ liệu để diễn giải cụ thể. Ghi nhận là cập nhật nhỏ trong luồng phát triển Mentions/Auth. | General update |
-| 25 | `b1b3f06` | `Merge branch 'TXH' into minh-login` | Merge nhánh `TXH` vào `minh-login`, đồng bộ code giữa phần chức năng của TXH và luồng login. | Merge |
-| 26 | `87cef3e` | `Merge branch 'TXH' into ThuHaTest` | Merge nhánh `TXH` vào `ThuHaTest`, tiếp tục đồng bộ code giữa các nhánh phát triển. | Merge |
-| 27 | `820fade` | `fix` | Commit sửa lỗi. Message không nêu rõ lỗi nên chỉ ghi nhận là fix chung trong giai đoạn merge/phát triển Mentions. | Fix |
-| 28 | `7ad391a` | `update layout Mentions` | Cập nhật layout Mentions sau bản dựng đầu tiên. Có thể liên quan đến bố cục, spacing, card, bảng, filter hoặc cách hiển thị danh sách. | Mentions UI |
-| 29 | `7b37080` | `fix` | Sửa lỗi sau khi cập nhật Mentions. Message không đủ chi tiết để xác định lỗi cụ thể. | Fix |
-| 30 | `0d4a0dd` | `add layout function button` | Thêm layout cho các nút chức năng. Nhiều khả năng liên quan đến các action trên giao diện như lọc, xem chi tiết, thao tác với dữ liệu hoặc điều hướng. | UI actions |
+| Thứ tự | Commit    | Nội dung commit                      | Diễn giải chi tiết                                                                                                                                     | Phạm vi ảnh hưởng  |
+| -----: | --------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------ |
+|     22 | `0df2eff` | `build layout Mentions`              | Xây dựng layout trang Mentions. Đây là màn hình dùng để xem danh sách bài viết/đề cập liên quan đến thương hiệu.                                       | Mentions UI        |
+|     23 | `7c57634` | `hoàn thiện`                         | Hoàn thiện thêm phần đang phát triển sau layout Mentions. Message không nêu rõ chi tiết nên ghi nhận là hoàn thiện giao diện/chức năng liên quan.      | Mentions / General |
+|     24 | `6471528` | `a`                                  | Commit cập nhật rất ngắn, không đủ dữ liệu để diễn giải cụ thể. Ghi nhận là cập nhật nhỏ trong luồng phát triển Mentions/Auth.                         | General update     |
+|     25 | `b1b3f06` | `Merge branch 'TXH' into minh-login` | Merge nhánh `TXH` vào `minh-login`, đồng bộ code giữa phần chức năng của TXH và luồng login.                                                           | Merge              |
+|     26 | `87cef3e` | `Merge branch 'TXH' into ThuHaTest`  | Merge nhánh `TXH` vào `ThuHaTest`, tiếp tục đồng bộ code giữa các nhánh phát triển.                                                                    | Merge              |
+|     27 | `820fade` | `fix`                                | Commit sửa lỗi. Message không nêu rõ lỗi nên chỉ ghi nhận là fix chung trong giai đoạn merge/phát triển Mentions.                                      | Fix                |
+|     28 | `7ad391a` | `update layout Mentions`             | Cập nhật layout Mentions sau bản dựng đầu tiên. Có thể liên quan đến bố cục, spacing, card, bảng, filter hoặc cách hiển thị danh sách.                 | Mentions UI        |
+|     29 | `7b37080` | `fix`                                | Sửa lỗi sau khi cập nhật Mentions. Message không đủ chi tiết để xác định lỗi cụ thể.                                                                   | Fix                |
+|     30 | `0d4a0dd` | `add layout function button`         | Thêm layout cho các nút chức năng. Nhiều khả năng liên quan đến các action trên giao diện như lọc, xem chi tiết, thao tác với dữ liệu hoặc điều hướng. | UI actions         |
 
 #### Kết quả đạt được
 
@@ -347,11 +353,11 @@ Các giai đoạn chính:
 
 ### Nhóm 7 — Alerts và Reports
 
-| Thứ tự | Commit | Nội dung commit | Diễn giải chi tiết | Phạm vi ảnh hưởng |
-|---:|---|---|---|---|
-| 31 | `26f4bc8` | `build layout Alerts` | Xây dựng layout trang Alerts. Đây là màn hình phục vụ việc hiển thị cảnh báo/rủi ro truyền thông hoặc các tín hiệu cần chú ý. | Alerts UI |
-| 32 | `a6eda63` | `report` | Bổ sung hoặc cập nhật phần Reports. Đây là bước mở rộng sản phẩm từ theo dõi dữ liệu sang tổng hợp báo cáo. | Reports UI |
-| 33 | `93fdd0c` | `done` | Commit hoàn thiện chung sau khi làm Alerts/Reports. Message không đủ chi tiết nên ghi nhận là hoàn thiện phần đang phát triển. | General completion |
+| Thứ tự | Commit    | Nội dung commit       | Diễn giải chi tiết                                                                                                             | Phạm vi ảnh hưởng  |
+| -----: | --------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------ |
+|     31 | `26f4bc8` | `build layout Alerts` | Xây dựng layout trang Alerts. Đây là màn hình phục vụ việc hiển thị cảnh báo/rủi ro truyền thông hoặc các tín hiệu cần chú ý.  | Alerts UI          |
+|     32 | `a6eda63` | `report`              | Bổ sung hoặc cập nhật phần Reports. Đây là bước mở rộng sản phẩm từ theo dõi dữ liệu sang tổng hợp báo cáo.                    | Reports UI         |
+|     33 | `93fdd0c` | `done`                | Commit hoàn thiện chung sau khi làm Alerts/Reports. Message không đủ chi tiết nên ghi nhận là hoàn thiện phần đang phát triển. | General completion |
 
 #### Kết quả đạt được
 
@@ -363,14 +369,14 @@ Các giai đoạn chính:
 
 ### Nhóm 8 — Merge, fix và responsive
 
-| Thứ tự | Commit | Nội dung commit | Diễn giải chi tiết | Phạm vi ảnh hưởng |
-|---:|---|---|---|---|
-| 34 | `12786e9` | `merge code cuar Tan` | Merge code của thành viên Tân vào nhánh đang phát triển. Message cho thấy đây là bước hợp nhất phần Dashboard/UI do Tân phụ trách. | Merge |
-| 35 | `863ddb2` | `fix` | Sửa lỗi chung sau quá trình merge/cập nhật giao diện. Không đủ dữ liệu để kết luận lỗi cụ thể. | Fix |
-| 36 | `679d2be` | `responsive` | Cập nhật responsive để giao diện hiển thị tốt hơn trên nhiều kích thước màn hình. Đây là bước quan trọng để app dùng được trên desktop và mobile/tablet. | Responsive UI |
-| 37 | `8617b75` | `Merge branch 'minh-login' into ThuHaTest` | Merge nhánh login vào `ThuHaTest`, đồng bộ phần auth/session với các màn hình giao diện khác. | Merge / Auth |
-| 38 | `6f514ac` | `Merge pull request #3 from TXHoai2309/minh-login` | Merge PR từ nhánh `minh-login` vào main. Đây là mốc đưa các cập nhật login/session mới nhất vào nhánh chính. | Merge / Auth |
-| 39 | `59a5dfb` | `Hoài sửa lỗi vercel` | Sửa lỗi build/deploy trên Vercel. Commit này giúp dự án có khả năng build/deploy ổn định hơn sau khi tích hợp nhiều màn hình và TypeScript. | Deploy / Build fix |
+| Thứ tự | Commit    | Nội dung commit                                    | Diễn giải chi tiết                                                                                                                                       | Phạm vi ảnh hưởng  |
+| -----: | --------- | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+|     34 | `12786e9` | `merge code cuar Tan`                              | Merge code của thành viên Tân vào nhánh đang phát triển. Message cho thấy đây là bước hợp nhất phần Dashboard/UI do Tân phụ trách.                       | Merge              |
+|     35 | `863ddb2` | `fix`                                              | Sửa lỗi chung sau quá trình merge/cập nhật giao diện. Không đủ dữ liệu để kết luận lỗi cụ thể.                                                           | Fix                |
+|     36 | `679d2be` | `responsive`                                       | Cập nhật responsive để giao diện hiển thị tốt hơn trên nhiều kích thước màn hình. Đây là bước quan trọng để app dùng được trên desktop và mobile/tablet. | Responsive UI      |
+|     37 | `8617b75` | `Merge branch 'minh-login' into ThuHaTest`         | Merge nhánh login vào `ThuHaTest`, đồng bộ phần auth/session với các màn hình giao diện khác.                                                            | Merge / Auth       |
+|     38 | `6f514ac` | `Merge pull request #3 from TXHoai2309/minh-login` | Merge PR từ nhánh `minh-login` vào main. Đây là mốc đưa các cập nhật login/session mới nhất vào nhánh chính.                                             | Merge / Auth       |
+|     39 | `59a5dfb` | `Hoài sửa lỗi vercel`                              | Sửa lỗi build/deploy trên Vercel. Commit này giúp dự án có khả năng build/deploy ổn định hơn sau khi tích hợp nhiều màn hình và TypeScript.              | Deploy / Build fix |
 
 #### Kết quả đạt được
 
@@ -385,11 +391,11 @@ Các giai đoạn chính:
 
 ### Nhóm 9 — Dọn file mẫu và đưa dữ liệu lên Mentions
 
-| Thứ tự | Commit | Nội dung commit | Diễn giải chi tiết | Phạm vi ảnh hưởng |
-|---:|---|---|---|---|
-| 40 | `91ebd85` | `Delete file html giao diện mẫu` | Xóa file HTML giao diện mẫu không còn dùng. Điều này giúp repo tránh lẫn giữa prototype tĩnh và code app chính thức. | Cleanup |
-| 41 | `f0ca5f3` | `đẩy dữ liệu lên mention` | Đưa dữ liệu lên trang Mentions. Đây là bước chuyển Mentions từ layout tĩnh sang màn hình có dữ liệu hiển thị. | Mentions data |
-| 42 | `99095b2` | `update information` | Cập nhật phần thông tin/information. Có thể liên quan đến nội dung giới thiệu, trang thông tin hoặc metadata hiển thị trong app. | Information content |
+| Thứ tự | Commit    | Nội dung commit                  | Diễn giải chi tiết                                                                                                               | Phạm vi ảnh hưởng   |
+| -----: | --------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+|     40 | `91ebd85` | `Delete file html giao diện mẫu` | Xóa file HTML giao diện mẫu không còn dùng. Điều này giúp repo tránh lẫn giữa prototype tĩnh và code app chính thức.             | Cleanup             |
+|     41 | `f0ca5f3` | `đẩy dữ liệu lên mention`        | Đưa dữ liệu lên trang Mentions. Đây là bước chuyển Mentions từ layout tĩnh sang màn hình có dữ liệu hiển thị.                    | Mentions data       |
+|     42 | `99095b2` | `update information`             | Cập nhật phần thông tin/information. Có thể liên quan đến nội dung giới thiệu, trang thông tin hoặc metadata hiển thị trong app. | Information content |
 
 #### Kết quả đạt được
 
@@ -401,12 +407,12 @@ Các giai đoạn chính:
 
 ### Nhóm 10 — Hiệu chỉnh phân tích AI và dữ liệu Dashboard
 
-| Thứ tự | Commit | Nội dung commit | Diễn giải chi tiết | Phạm vi ảnh hưởng |
-|---:|---|---|---|---|
-| 43 | `d829027` | `Hiệu chỉnh phân tích AI` | Cập nhật phần phân tích AI. Trong phạm vi repo hiện tại, ghi nhận đây là hiệu chỉnh logic/hiển thị AI ở frontend hoặc dữ liệu phân tích, chưa kết luận là đã có backend/model production hoàn chỉnh. | AI analysis |
-| 44 | `a3c1cfa` | `add data tren trang dashboard` | Đưa dữ liệu lên Dashboard. Đây là bước giúp Dashboard hiển thị chỉ số cụ thể thay vì chỉ là giao diện tĩnh. | Dashboard data |
-| 45 | `73b9030` | `Merge branch 'minh-mention' into dashboard` | Merge nhánh Mentions vào Dashboard, đồng bộ phần dữ liệu/logic Mentions với màn hình Dashboard. | Merge / Dashboard + Mentions |
-| 46 | `ed6c744` | `Merge branch 'dashboard'` | Merge nhánh Dashboard, đưa các cập nhật dữ liệu/giao diện Dashboard vào nhánh chính hoặc nhánh tích hợp. | Merge / Dashboard |
+| Thứ tự | Commit    | Nội dung commit                              | Diễn giải chi tiết                                                                                                                                                                                   | Phạm vi ảnh hưởng            |
+| -----: | --------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+|     43 | `d829027` | `Hiệu chỉnh phân tích AI`                    | Cập nhật phần phân tích AI. Trong phạm vi repo hiện tại, ghi nhận đây là hiệu chỉnh logic/hiển thị AI ở frontend hoặc dữ liệu phân tích, chưa kết luận là đã có backend/model production hoàn chỉnh. | AI analysis                  |
+|     44 | `a3c1cfa` | `add data tren trang dashboard`              | Đưa dữ liệu lên Dashboard. Đây là bước giúp Dashboard hiển thị chỉ số cụ thể thay vì chỉ là giao diện tĩnh.                                                                                          | Dashboard data               |
+|     45 | `73b9030` | `Merge branch 'minh-mention' into dashboard` | Merge nhánh Mentions vào Dashboard, đồng bộ phần dữ liệu/logic Mentions với màn hình Dashboard.                                                                                                      | Merge / Dashboard + Mentions |
+|     46 | `ed6c744` | `Merge branch 'dashboard'`                   | Merge nhánh Dashboard, đưa các cập nhật dữ liệu/giao diện Dashboard vào nhánh chính hoặc nhánh tích hợp.                                                                                             | Merge / Dashboard            |
 
 #### Kết quả đạt được
 
@@ -419,12 +425,12 @@ Các giai đoạn chính:
 
 ### Nhóm 11 — Sửa lỗi type, field dữ liệu và merge các nhánh cuối
 
-| Thứ tự | Commit | Nội dung commit | Diễn giải chi tiết | Phạm vi ảnh hưởng |
-|---:|---|---|---|---|
-| 47 | `1259ca0` | `Sửa lỗi marketting không có trong union type topic, poster_at bị thiếu trong 8 mack object` | Sửa lỗi TypeScript liên quan đến topic `marketting` không có trong union type `topic`. Đồng thời bổ sung field thời gian `poster_at`/`posted_at` bị thiếu trong 8 mock object. Đây là lỗi quan trọng vì có thể làm build thất bại hoặc dữ liệu hiển thị thiếu thông tin. | TypeScript / Data model / Build |
-| 48 | `624edd0` | `Merge branch 'main' into ha-information` | Merge main vào nhánh `ha-information` để cập nhật nhánh information theo trạng thái mới nhất của main. | Merge |
-| 49 | `94f27fa` | `Merge branch 'ThuHaTest'` | Merge nhánh `ThuHaTest`, đưa các cập nhật đã test hoặc giao diện liên quan vào nhánh tích hợp. | Merge |
-| 50 | `b577dbc` | `Merge branch 'ha-information'` | Merge nhánh `ha-information`, hoàn tất việc đưa phần information vào main. Đây là commit mới nhất trong chuỗi changelog hiện tại. | Merge / Information |
+| Thứ tự | Commit    | Nội dung commit                                                                              | Diễn giải chi tiết                                                                                                                                                                                                                                                       | Phạm vi ảnh hưởng               |
+| -----: | --------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------- |
+|     47 | `1259ca0` | `Sửa lỗi marketting không có trong union type topic, poster_at bị thiếu trong 8 mack object` | Sửa lỗi TypeScript liên quan đến topic `marketting` không có trong union type `topic`. Đồng thời bổ sung field thời gian `poster_at`/`posted_at` bị thiếu trong 8 mock object. Đây là lỗi quan trọng vì có thể làm build thất bại hoặc dữ liệu hiển thị thiếu thông tin. | TypeScript / Data model / Build |
+|     48 | `624edd0` | `Merge branch 'main' into ha-information`                                                    | Merge main vào nhánh `ha-information` để cập nhật nhánh information theo trạng thái mới nhất của main.                                                                                                                                                                   | Merge                           |
+|     49 | `94f27fa` | `Merge branch 'ThuHaTest'`                                                                   | Merge nhánh `ThuHaTest`, đưa các cập nhật đã test hoặc giao diện liên quan vào nhánh tích hợp.                                                                                                                                                                           | Merge                           |
+|     50 | `b577dbc` | `Merge branch 'ha-information'`                                                              | Merge nhánh `ha-information`, hoàn tất việc đưa phần information vào main. Đây là commit mới nhất trong chuỗi changelog hiện tại.                                                                                                                                        | Merge / Information             |
 
 #### Kết quả đạt được
 
