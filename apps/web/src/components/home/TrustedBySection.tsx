@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslation } from "react-i18next";
+import { useTheme } from "@/contexts/ThemeContext";
 
 /* ─── TrustedBySection — Social Proof ─── */
 
@@ -16,6 +17,8 @@ const brands = [
 
 export default function TrustedBySection() {
   const { t } = useTranslation();
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
 
   return (
     <section 

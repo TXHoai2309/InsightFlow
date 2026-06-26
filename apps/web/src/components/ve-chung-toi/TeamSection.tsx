@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useTranslation } from "react-i18next";
+import { useTheme } from "@/contexts/ThemeContext";
 
 const team = [
   {
@@ -32,6 +33,8 @@ const team = [
 
 export default function TeamSection() {
   const { t } = useTranslation();
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
 
   return (
     <section id="team" className="px-6 md:px-10 py-24 scroll-mt-16" style={{ background: isDark ? "var(--color-bg-primary)" : "#ffffff" }}>

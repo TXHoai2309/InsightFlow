@@ -8,6 +8,7 @@ import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useTranslation } from "react-i18next";
+import { useTheme } from "@/contexts/ThemeContext";
 
 export default function TopNavBar() {
   const [mobileOpen, setMobileOpen] = useState(false);

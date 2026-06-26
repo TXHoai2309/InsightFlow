@@ -2,9 +2,12 @@
 
 import Link from "next/link";
 import { useTranslation } from "react-i18next";
+import { useTheme } from "@/contexts/ThemeContext";
 
 export default function MissionVisionSection() {
   const { t } = useTranslation();
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
 
   return (
     <section id="mission-vision" className="px-6 md:px-10 py-20 scroll-mt-16" style={{ background: isDark ? "var(--color-bg-primary)" : "#ffffff" }}>

@@ -392,6 +392,47 @@ body {
   color-scheme: dark;
 }
 
+/* Fix native <select> dropdown in dark mode — force browser to use dark colors */
+.dark select option {
+  background-color: #1a1a2e !important;
+  color: #F5F1FF !important;
+}
+
+.dark select {
+  background-color: var(--color-bg-surface) !important;
+  color: var(--color-text-primary) !important;
+  border-color: var(--color-border) !important;
+}
+
+/* ── Auth pages dark mode ────────────────────────────────────── */
+.dark .auth-container {
+  background-color: var(--color-bg-primary);
+  min-height: 100vh;
+}
+
+/* Auth card backgrounds */
+.dark .auth-card {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border-color: rgba(255, 255, 255, 0.10) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* Auth input dark mode */
+.dark .auth-input {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  color: #F5F1FF !important;
+}
+.dark .auth-input::placeholder {
+  color: rgba(245, 241, 255, 0.3) !important;
+}
+.dark .auth-input:focus {
+  border-color: var(--color-brand) !important;
+  box-shadow: 0 0 0 3px rgba(196, 172, 255, 0.15) !important;
+}
+
+
 /* ═══════════════════════════════════════════════════════════════
    THEME TOGGLE BUTTON
    ═══════════════════════════════════════════════════════════════ */

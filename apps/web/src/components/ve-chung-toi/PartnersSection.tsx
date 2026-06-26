@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslation } from "react-i18next";
+import { useTheme } from "@/contexts/ThemeContext";
 
 const partners = [
   "VINAGROUP",
@@ -14,6 +15,8 @@ const partners = [
 
 export default function PartnersSection() {
   const { t } = useTranslation();
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
 
   return (
     <section 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import Link from "next/link";
@@ -13,6 +13,7 @@ import {
 } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { doc, setDoc } from "firebase/firestore";
+import { useTheme } from "@/contexts/ThemeContext";
 
 // ─── Atmospheric floating dots (replaces the JS createAtmosphere()) ───────────
 function AtmosphereDots() {
@@ -72,6 +73,8 @@ const FIREBASE_ERROR_I18N_KEYS: Record<string, string> = {
 export default function RegisterForm() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
 
   // Translate Firebase error codes lazily (t is available here inside the component)
   const getFirebaseError = (code: string) => {
@@ -170,8 +173,12 @@ export default function RegisterForm() {
 
   return (
     <div
-      className="min-h-screen flex flex-col"
-      style={{ backgroundColor: "#f9f9ff", color: "#111c2d", fontFamily: "'Inter', sans-serif" }}
+      className="min-h-screen flex flex-col transition-colors duration-300"
+      style={{
+        backgroundColor: isDark ? "#0A0612" : "#f9f9ff",
+        color: isDark ? "#F5F1FF" : "#111c2d",
+        fontFamily: "'Inter', sans-serif"
+      }}
     >
       <AtmosphereDots />
 
@@ -182,7 +189,7 @@ export default function RegisterForm() {
         <div
           className="absolute top-[-10%] left-[-5%] w-[400px] h-[400px] rounded-full -z-10"
           style={{
-            background: "rgba(70,72,212,0.05)",
+            background: isDark ? "rgba(139,92,246,0.18)" : "rgba(70,72,212,0.05)",
             filter: "blur(48px)",
             animation: "float 6s ease-in-out infinite",
           }}
@@ -190,7 +197,7 @@ export default function RegisterForm() {
         <div
           className="absolute bottom-[-5%] right-[-5%] w-[350px] h-[350px] rounded-full -z-10"
           style={{
-            background: "rgba(75,65,225,0.05)",
+            background: isDark ? "rgba(244,114,182,0.10)" : "rgba(75,65,225,0.05)",
             filter: "blur(48px)",
             animation: "float 8s ease-in-out infinite reverse",
           }}
@@ -211,11 +218,11 @@ export default function RegisterForm() {
             </div>
 
             <h2
-              className="text-[40px] leading-[48px] font-bold tracking-[-0.02em] text-[#111c2d]"
-              style={{ fontFamily: "'Hanken Grotesk', sans-serif" }}
-            >{t("auth.register.heroTitle1")} <span className="text-[#4648d4]">{t("auth.register.heroTitle2")}</span>.</h2>
+              className="text-[40px] leading-[48px] font-bold tracking-[-0.02em]"
+              style={{ fontFamily: "'Hanken Grotesk', sans-serif", color: isDark ? "#F5F1FF" : "#111c2d" }}
+            >{t("auth.register.heroTitle1")} <span style={{ color: isDark ? "var(--color-brand)" : "#4648d4" }}>{t("auth.register.heroTitle2")}</span>.</h2>
 
-            <p className="text-[18px] leading-[28px] text-[#464554] max-w-md">{t("auth.register.heroDesc")}</p>
+            <p className="text-[18px] leading-[28px] max-w-md" style={{ color: isDark ? "rgba(245,241,255,0.55)" : "#464554" }}>{t("auth.register.heroDesc")}</p>
 
             {/* Dashboard preview image */}
             <div className="mt-8 relative rounded-xl overflow-hidden shadow-xl border border-[#c7c4d7]/30 group">
@@ -246,27 +253,33 @@ export default function RegisterForm() {
           {/* ── RIGHT PANEL: FORM ── */}
           <div className="lg:col-span-6 flex justify-center lg:justify-end">
             <div
-              className="w-full max-w-md bg-white p-8 md:p-12 rounded-xl border border-[#c7c4d7]/20 relative z-10"
-              style={{ boxShadow: "0 4px 20px rgba(0,0,0,0.04)" }}
+              className="auth-card w-full max-w-md p-8 md:p-12 rounded-xl relative z-10 transition-all duration-300"
+              style={{
+                background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.95)",
+                backdropFilter: "blur(20px)",
+                WebkitBackdropFilter: "blur(20px)",
+                border: isDark ? "1px solid rgba(255,255,255,0.10)" : "1px solid rgba(199,196,215,0.2)",
+                boxShadow: isDark ? "0 8px 32px rgba(0,0,0,0.4)" : "0 4px 20px rgba(0,0,0,0.04)"
+              }}
             >
 
               {/* Mobile logo */}
               <div className="lg:hidden flex items-center justify-center mb-2">
                 <Link href="/" className="flex items-center justify-center hover:opacity-80 transition-opacity w-[340px] h-[120px] relative">
-                  <img 
-                    src="/logo.png" 
-                    alt="InsightFlow Logo" 
-                    className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[220px] max-w-none mix-blend-multiply pointer-events-none" 
+                  <img
+                    src={isDark ? "/logo-dark.png" : "/logo.png"}
+                    alt="InsightFlow Logo"
+                    className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[220px] max-w-none pointer-events-none ${isDark ? "" : "mix-blend-multiply"}`}
                   />
                 </Link>
               </div>
 
               <div className="text-center lg:text-left mb-8">
                 <h2
-                  className="text-[24px] leading-[32px] font-semibold text-[#111c2d] mb-1"
-                  style={{ fontFamily: "'Hanken Grotesk', sans-serif" }}
+                  className="text-[24px] leading-[32px] font-semibold mb-1"
+                  style={{ fontFamily: "'Hanken Grotesk', sans-serif", color: isDark ? "#F5F1FF" : "#111c2d" }}
                 >{t("auth.register.title")}</h2>
-                <p className="text-[14px] text-[#464554]">{t("auth.register.subtitle")}</p>
+                <p className="text-[14px]" style={{ color: isDark ? "rgba(245,241,255,0.55)" : "#464554" }}>{t("auth.register.subtitle")}</p>
               </div>
 
               {/* Error banner */}
@@ -281,10 +294,11 @@ export default function RegisterForm() {
 
                 {/* Full name */}
                 <div className="flex flex-col gap-1">
-                  <label htmlFor="full_name" className="text-[14px] font-medium text-[#111c2d]">{t("auth.register.nameLabel")}</label>
+                  <label htmlFor="full_name" className="text-[14px] font-medium" style={{ color: isDark ? "rgba(245,241,255,0.7)" : "#111c2d" }}>{t("auth.register.nameLabel")}</label>
                   <div className="relative group">
                     <span
-                      className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#767586] text-[20px] group-focus-within:text-[#4648d4] transition-colors"
+                      className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[20px] transition-colors"
+                      style={{ color: isDark ? "rgba(245,241,255,0.35)" : "#767586" }}
                     >
                       person
                     </span>
@@ -295,16 +309,21 @@ export default function RegisterForm() {
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       placeholder={t("auth.register.namePlaceholder")}
-                      className="w-full pl-10 pr-4 py-3 rounded-lg border border-[#c7c4d7] bg-white focus:ring-2 focus:ring-[#4648d4]/20 focus:border-[#4648d4] outline-none transition-all text-[16px] text-[#111c2d] placeholder:text-[#767586]/50"
+                      className="auth-input w-full pl-10 pr-4 py-3 rounded-lg outline-none transition-all text-[16px]"
+                      style={{
+                        background: isDark ? "rgba(255,255,255,0.05)" : "#ffffff",
+                        border: isDark ? "1px solid rgba(255,255,255,0.12)" : "1px solid #c7c4d7",
+                        color: isDark ? "#F5F1FF" : "#111c2d",
+                      }}
                     />
                   </div>
                 </div>
 
                 {/* Email */}
                 <div className="flex flex-col gap-1">
-                  <label htmlFor="email" className="text-[14px] font-medium text-[#111c2d]">{t("auth.register.emailLabel")}</label>
+                  <label htmlFor="email" className="text-[14px] font-medium" style={{ color: isDark ? "rgba(245,241,255,0.7)" : "#111c2d" }}>{t("auth.register.emailLabel")}</label>
                   <div className="relative group">
-                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#767586] text-[20px] group-focus-within:text-[#4648d4] transition-colors">
+                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[20px] transition-colors" style={{ color: isDark ? "rgba(245,241,255,0.35)" : "#767586" }}>
                       mail
                     </span>
                     <input
@@ -314,7 +333,12 @@ export default function RegisterForm() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="example@insightflow.com"
-                      className="w-full pl-10 pr-4 py-3 rounded-lg border border-[#c7c4d7] bg-white focus:ring-2 focus:ring-[#4648d4]/20 focus:border-[#4648d4] outline-none transition-all text-[16px] text-[#111c2d] placeholder:text-[#767586]/50"
+                      className="auth-input w-full pl-10 pr-4 py-3 rounded-lg outline-none transition-all text-[16px]"
+                      style={{
+                        background: isDark ? "rgba(255,255,255,0.05)" : "#ffffff",
+                        border: isDark ? "1px solid rgba(255,255,255,0.12)" : "1px solid #c7c4d7",
+                        color: isDark ? "#F5F1FF" : "#111c2d",
+                      }}
                     />
                   </div>
                 </div>
@@ -324,11 +348,11 @@ export default function RegisterForm() {
 
                   {/* Password */}
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="password" className="text-[14px] font-medium text-[#111c2d]">{t("auth.register.passwordLabel")}</label>
+                    <label htmlFor="password" className="text-[14px] font-medium" style={{ color: isDark ? "rgba(245,241,255,0.7)" : "#111c2d" }}>{t("auth.register.passwordLabel")}</label>
                     <div className="relative group">
                       <span
-                        className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#767586] text-[20px] group-focus-within:text-[#4648d4] transition-colors"
-                        style={{ fontVariationSettings: iconFill["password"] ?? "'FILL' 0" }}
+                        className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[20px] transition-colors"
+                        style={{ color: isDark ? "rgba(245,241,255,0.35)" : "#767586", fontVariationSettings: iconFill["password"] ?? "'FILL' 0" }}
                       >
                         lock
                       </span>
@@ -341,13 +365,18 @@ export default function RegisterForm() {
                         onFocus={() => handleIconFocus("password")}
                         onBlur={() => handleIconBlur("password")}
                         placeholder="••••••••"
-                        className="w-full pl-10 pr-4 py-3 rounded-lg border border-[#c7c4d7] bg-white focus:ring-2 focus:ring-[#4648d4]/20 focus:border-[#4648d4] outline-none transition-all text-[16px] placeholder:text-[#767586]/50"
+                        className="auth-input w-full pl-10 pr-4 py-3 rounded-lg outline-none transition-all text-[16px]"
+                        style={{
+                          background: isDark ? "rgba(255,255,255,0.05)" : "#ffffff",
+                          border: isDark ? "1px solid rgba(255,255,255,0.12)" : "1px solid #c7c4d7",
+                          color: isDark ? "#F5F1FF" : "#111c2d",
+                        }}
                       />
                     </div>
                     {/* Strength bar */}
                     {password.length > 0 && (
                       <div className="mt-1 space-y-1">
-                        <div className="h-1 w-full bg-[#e7eeff] rounded-full overflow-hidden">
+                        <div className="h-1 w-full rounded-full overflow-hidden" style={{ background: isDark ? "rgba(255,255,255,0.10)" : "#e7eeff" }}>
                           <div
                             className="h-full rounded-full transition-all duration-300"
                             style={{ width: pwStrength.width, backgroundColor: pwStrength.color }}
@@ -362,11 +391,11 @@ export default function RegisterForm() {
 
                   {/* Confirm password */}
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="confirm_password" className="text-[14px] font-medium text-[#111c2d]">{t("auth.register.confirmLabel")}</label>
+                    <label htmlFor="confirm_password" className="text-[14px] font-medium" style={{ color: isDark ? "rgba(245,241,255,0.7)" : "#111c2d" }}>{t("auth.register.confirmLabel")}</label>
                     <div className="relative group">
                       <span
-                        className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#767586] text-[20px] group-focus-within:text-[#4648d4] transition-colors"
-                        style={{ fontVariationSettings: iconFill["confirm"] ?? "'FILL' 0" }}
+                        className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[20px] transition-colors"
+                        style={{ color: isDark ? "rgba(245,241,255,0.35)" : "#767586", fontVariationSettings: iconFill["confirm"] ?? "'FILL' 0" }}
                       >
                         lock_reset
                       </span>
@@ -379,17 +408,21 @@ export default function RegisterForm() {
                         onFocus={() => handleIconFocus("confirm")}
                         onBlur={() => handleIconBlur("confirm")}
                         placeholder="••••••••"
-                        className={`w-full pl-10 pr-4 py-3 rounded-lg border bg-white focus:ring-2 outline-none transition-all text-[16px] placeholder:text-[#767586]/50 ${confirmPassword && confirmPassword !== password
-                          ? "border-[#ba1a1a] focus:ring-[#ba1a1a]/20 focus:border-[#ba1a1a]"
-                          : "border-[#c7c4d7] focus:ring-[#4648d4]/20 focus:border-[#4648d4]"
-                          }`}
+                        className="auth-input w-full pl-10 pr-4 py-3 rounded-lg outline-none transition-all text-[16px]"
+                        style={{
+                          background: isDark ? "rgba(255,255,255,0.05)" : "#ffffff",
+                          border: isDark
+                            ? (confirmPassword && confirmPassword !== password ? "1px solid #F8AFD4" : "1px solid rgba(255,255,255,0.12)")
+                            : (confirmPassword && confirmPassword !== password ? "1px solid #ba1a1a" : "1px solid #c7c4d7"),
+                          color: isDark ? "#F5F1FF" : "#111c2d",
+                        }}
                       />
                       {/* Match indicator */}
                       {confirmPassword.length > 0 && (
                         <span
                           className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-[18px]"
                           style={{
-                            color: confirmPassword === password ? "#1a7a4a" : "#ba1a1a",
+                            color: confirmPassword === password ? (isDark ? "#4ade80" : "#1a7a4a") : (isDark ? "#F8AFD4" : "#ba1a1a"),
                             fontVariationSettings: "'FILL' 1",
                           }}
                         >
@@ -404,7 +437,10 @@ export default function RegisterForm() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-[#4648d4] hover:bg-[#6063ee] disabled:opacity-60 disabled:cursor-not-allowed text-white text-[14px] font-medium py-3 rounded-lg shadow-md hover:shadow-lg active:scale-[0.98] transition-all mt-2 flex items-center justify-center gap-2"
+                  className="w-full disabled:opacity-60 disabled:cursor-not-allowed text-white text-[14px] font-medium py-3 rounded-lg shadow-md hover:shadow-lg active:scale-[0.98] transition-all mt-2 flex items-center justify-center gap-2"
+                  style={{ background: isDark ? "linear-gradient(135deg, #7C3AED, #6D28D9)" : "#4648d4" }}
+                  onMouseEnter={(e) => { if (!loading) e.currentTarget.style.background = isDark ? "linear-gradient(135deg, #8B5CF6, #7C3AED)" : "#6063ee"; }}
+                  onMouseLeave={(e) => { if (!loading) e.currentTarget.style.background = isDark ? "linear-gradient(135deg, #7C3AED, #6D28D9)" : "#4648d4"; }}
                 >
                   {loading ? (
                     <>
@@ -424,9 +460,9 @@ export default function RegisterForm() {
 
                 {/* Divider */}
                 <div className="flex items-center gap-4 my-1">
-                  <div className="flex-grow h-[1px] bg-[#c7c4d7]/50" />
-                  <span className="text-[12px] font-medium text-[#767586] uppercase tracking-wider">{t("auth.register.orRegisterWith")}</span>
-                  <div className="flex-grow h-[1px] bg-[#c7c4d7]/50" />
+                  <div className="flex-grow h-[1px]" style={{ background: isDark ? "rgba(255,255,255,0.10)" : "rgba(199,196,215,0.5)" }} />
+                  <span className="text-[12px] font-medium uppercase tracking-wider" style={{ color: isDark ? "rgba(245,241,255,0.35)" : "#767586" }}>{t("auth.register.orRegisterWith")}</span>
+                  <div className="flex-grow h-[1px]" style={{ background: isDark ? "rgba(255,255,255,0.10)" : "rgba(199,196,215,0.5)" }} />
                 </div>
 
                 {/* Social buttons */}
@@ -434,7 +470,14 @@ export default function RegisterForm() {
                   <button
                     type="button"
                     onClick={handleGoogle}
-                    className="w-full flex items-center justify-center gap-2 py-3 border border-[#c7c4d7] rounded-lg text-[14px] font-medium text-[#111c2d] hover:bg-[#e7eeff] transition-colors"
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-[14px] font-medium transition-colors"
+                    style={{
+                      border: isDark ? "1px solid rgba(255,255,255,0.12)" : "1px solid #c7c4d7",
+                      background: isDark ? "rgba(255,255,255,0.05)" : "transparent",
+                      color: isDark ? "#F5F1FF" : "#111c2d",
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = isDark ? "rgba(255,255,255,0.10)" : "#e7eeff"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = isDark ? "rgba(255,255,255,0.05)" : "transparent"; }}
                   >
                     <svg className="w-5 h-5" viewBox="0 0 24 24">
                       <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
@@ -442,15 +485,16 @@ export default function RegisterForm() {
                       <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05" />
                       <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
                     </svg>
-                    {t("auth.register.googleBtn")}</button>
+                    {t("auth.register.googleBtn")}
+                  </button>
                 </div>
               </form>
 
               {/* Footer link */}
               <div className="mt-8 text-center">
-                <p className="text-[14px] text-[#464554]">
-                  {t("auth.register.hasAccount")} {" "}
-                  <Link href="/login" className="text-[#4648d4] font-semibold hover:underline">{t("auth.register.loginNow")}</Link>
+                <p className="text-[14px]" style={{ color: isDark ? "rgba(245,241,255,0.55)" : "#464554" }}>
+                  {t("auth.register.hasAccount")}{" "}
+                  <Link href="/login" className="font-semibold hover:underline" style={{ color: isDark ? "var(--color-brand)" : "#4648d4" }}>{t("auth.register.loginNow")}</Link>
                 </p>
               </div>
             </div>
@@ -458,23 +502,6 @@ export default function RegisterForm() {
         </div>
       </main>
 
-      {/* ── FOOTER ── */}
-      <footer className="py-8 px-4 md:px-10 border-t border-[#c7c4d7]/30 bg-[#f9f9ff]">
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
-          <p className="text-[12px] font-medium text-[#767586]">{t("auth.register.footerCopyright")}</p>
-          <nav className="flex gap-8">
-            {[t("auth.register.footerTerms"), t("auth.register.footerPrivacy"), t("auth.register.footerSupport")].map((label) => (
-              <Link
-                key={label}
-                href="#"
-                className="text-[12px] font-medium text-[#464554] hover:text-[#4648d4] transition-colors"
-              >
-                {label}
-              </Link>
-            ))}
-          </nav>
-        </div>
-      </footer>
 
       {/* Float animation keyframes */}
       <style>{`

@@ -2,6 +2,7 @@
 
 import { useIntersectionObserver, useCountUp } from "@/hooks/useIntersectionObserver";
 import { useTranslation } from "react-i18next";
+import { useTheme } from "@/contexts/ThemeContext";
 
 export default function IndustryBentoSection() {
   const { t } = useTranslation();

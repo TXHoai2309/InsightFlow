@@ -2,6 +2,7 @@
 
 import { useIntersectionObserver } from "@/hooks/useIntersectionObserver";
 import { useTranslation } from "react-i18next";
+import { useTheme } from "@/contexts/ThemeContext";
 
 export default function IndustryGridSection() {
   const { t } = useTranslation();

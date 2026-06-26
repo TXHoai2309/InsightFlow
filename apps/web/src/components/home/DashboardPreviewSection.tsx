@@ -3,9 +3,12 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useTheme } from "@/contexts/ThemeContext";
 
 /* ─── Brand Dashboard SVG ─── */
 function BrandDashboardSVG({ animate }: { animate: boolean }) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
   const { t } = useTranslation();
   const sources = [
     { label: "Facebook", color: "#1877F2", pct: 68 },

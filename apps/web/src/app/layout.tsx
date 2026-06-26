@@ -36,7 +36,13 @@ export default function RootLayout({
 }) {
   const pathname = usePathname();
   const { t, i18n } = useTranslation();
-  const hideShell = ["/", "/login", "/register", "/forgot-password", "/nganh", "/ve-chung-toi", "/profile"].includes(pathname || "");
+
+  // Trang auth: không có sidebar, không có footer
+  const isAuthPage = ["/login", "/register", "/forgot-password"].includes(pathname || "");
+  // Trang public: không có sidebar, nhưng có footer
+  const isPublicPage = ["/", "/nganh", "/ve-chung-toi", "/profile"].includes(pathname || "");
+  const hideShell = isAuthPage || isPublicPage;
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const getPageTitleKey = (path: string) => {
@@ -125,12 +131,17 @@ export default function RootLayout({
         <I18nextProvider i18n={i18nInstance}>
         <ThemeProvider>
           <LanguageProvider>
-          {hideShell ? (
+          {isAuthPage ? (
+            /* Trang đăng nhập/đăng ký/quên mật khẩu — không có footer */
+            <main className="flex-1">{children}</main>
+          ) : hideShell ? (
+            /* Trang public (Home, Ngành, Về chúng tôi...) — có footer */
             <div className="flex flex-col min-h-screen">
               <main className="flex-1">{children}</main>
               <Footer />
             </div>
           ) : (
+            /* Trang app (Dashboard, Mentions...) — có sidebar */
             <div className="flex h-screen w-screen overflow-hidden" style={{ backgroundColor: "var(--color-bg-primary)" }}>
               <Sidebar
                 isOpen={sidebarOpen}
@@ -155,3 +166,4 @@ export default function RootLayout({
     </html>
   );
 }
+
