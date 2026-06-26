@@ -224,7 +224,7 @@ export default function ForgotPasswordPage() {
           <img
             src={isDark ? "/logo.png" : "/logo-dark.png"}
             alt="InsightFlow Logo"
-            style={{ height: 80, width: "auto", objectFit: "contain" }}
+            style={{ height: 300, width: "auto", objectFit: "contain" }}
           />
         </div>
 

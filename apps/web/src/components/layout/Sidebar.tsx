@@ -69,9 +69,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     <>
       {/* Backdrop overlay — mobile only */}
       <div
-        className={`fixed inset-0 bg-black/50 z-30 md:hidden transition-opacity duration-300 ${
-          isOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
-        }`}
+        className={`fixed inset-0 bg-black/50 z-30 md:hidden transition-opacity duration-300 ${isOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+          }`}
         onClick={onClose}
         aria-hidden="true"
       />
@@ -96,7 +95,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             {/* Container crop giống nhau cho cả 2 chế độ */}
             <div className="relative w-[300px] h-[80px] overflow-hidden flex items-center justify-center">
               <img
-                src={isDark ? "/logo-dark.png" : "/logo.png"}
+                src={isDark ? "/logo.png" : "/logo-dark.png"}
                 alt="InsightFlow Logo"
                 className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[220px] max-w-none pointer-events-none"
                 style={isDark ? undefined : { mixBlendMode: "multiply" }}
@@ -130,16 +129,16 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                 style={
                   isActive
                     ? {
-                        backgroundColor: "var(--color-brand-subtle)",
-                        borderLeft: "3px solid var(--color-brand)",
-                        color: "var(--color-brand)",
-                        fontWeight: "600",
-                      }
+                      backgroundColor: "var(--color-brand-subtle)",
+                      borderLeft: "3px solid var(--color-brand)",
+                      color: "var(--color-brand)",
+                      fontWeight: "600",
+                    }
                     : {
-                        color: "var(--color-text-secondary)",
-                        fontWeight: "500",
-                        borderLeft: "3px solid transparent",
-                      }
+                      color: "var(--color-text-secondary)",
+                      fontWeight: "500",
+                      borderLeft: "3px solid transparent",
+                    }
                 }
                 onMouseEnter={(e) => {
                   if (!isActive) {

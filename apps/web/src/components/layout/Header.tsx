@@ -101,7 +101,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
       {/* Right Section */}
       <div className="flex items-center gap-2 md:gap-4">
         {/* Simulation Controls — desktop only */}
-        <div
+        {/* <div
           className="hidden md:flex items-center gap-2 rounded-[10px] px-3 h-[44px]"
           style={{
             backgroundColor: "var(--color-bg-surface-raised)",
@@ -130,7 +130,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
           >
             + Alert
           </button>
-        </div>
+        </div> */}
 
         {/* Notifications */}
         <div className="relative">
@@ -212,12 +212,12 @@ export function Header({ onMenuToggle }: HeaderProps) {
             {isDark ? (
               /* Moon icon — dark mode active */
               <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 0 1-4.4 2.26 5.403 5.403 0 0 1-3.14-9.8c-.44-.06-.9-.1-1.36-.1z"/>
+                <path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 0 1-4.4 2.26 5.403 5.403 0 0 1-3.14-9.8c-.44-.06-.9-.1-1.36-.1z" />
               </svg>
             ) : (
               /* Sun icon — light mode active */
               <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 7a5 5 0 1 0 0 10A5 5 0 0 0 12 7zm0-5a1 1 0 0 1 1 1v2a1 1 0 0 1-2 0V3a1 1 0 0 1 1-1zm0 16a1 1 0 0 1 1 1v2a1 1 0 0 1-2 0v-2a1 1 0 0 1 1-1zM4.22 5.64a1 1 0 0 1 1.42-1.42l1.41 1.42a1 1 0 0 1-1.41 1.41L4.22 5.64zm12.72 12.72a1 1 0 0 1 1.41-1.41l1.42 1.41a1 1 0 0 1-1.42 1.42l-1.41-1.42zM3 11a1 1 0 0 1 0 2H1a1 1 0 0 1 0-2h2zm20 0a1 1 0 0 1 0 2h-2a1 1 0 0 1 0-2h2zM5.64 18.36a1 1 0 0 1-1.42 1.42L2.8 18.36a1 1 0 0 1 1.42-1.42l1.42 1.42zM18.36 5.64a1 1 0 0 1-1.41-1.41l1.41-1.42a1 1 0 0 1 1.42 1.42l-1.42 1.41z"/>
+                <path d="M12 7a5 5 0 1 0 0 10A5 5 0 0 0 12 7zm0-5a1 1 0 0 1 1 1v2a1 1 0 0 1-2 0V3a1 1 0 0 1 1-1zm0 16a1 1 0 0 1 1 1v2a1 1 0 0 1-2 0v-2a1 1 0 0 1 1-1zM4.22 5.64a1 1 0 0 1 1.42-1.42l1.41 1.42a1 1 0 0 1-1.41 1.41L4.22 5.64zm12.72 12.72a1 1 0 0 1 1.41-1.41l1.42 1.41a1 1 0 0 1-1.42 1.42l-1.41-1.42zM3 11a1 1 0 0 1 0 2H1a1 1 0 0 1 0-2h2zm20 0a1 1 0 0 1 0 2h-2a1 1 0 0 1 0-2h2zM5.64 18.36a1 1 0 0 1-1.42 1.42L2.8 18.36a1 1 0 0 1 1.42-1.42l1.42 1.42zM18.36 5.64a1 1 0 0 1-1.41-1.41l1.41-1.42a1 1 0 0 1 1.42 1.42l-1.42 1.41z" />
               </svg>
             )}
           </span>
@@ -255,34 +255,34 @@ export function Header({ onMenuToggle }: HeaderProps) {
           </button>
         </div>
         {false && (
-        <button
-          onClick={() => setLanguage(language === "vi" ? "en" : "vi")}
-          title={language === "vi" ? "Switch to English" : "Chuyển sang Tiếng Việt"}
-          aria-label={language === "vi" ? "Switch to English" : "Chuyển sang Tiếng Việt"}
-          className="flex items-center gap-1.5 px-2.5 h-[34px] rounded-[8px] border font-bold text-[12px] transition-all duration-200 select-none"
-          style={{
-            backgroundColor: "var(--color-bg-surface-raised)",
-            border: "1.5px solid var(--color-border)",
-            color: "var(--color-text-primary)",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.borderColor = "var(--color-brand)";
-            e.currentTarget.style.backgroundColor = "var(--color-brand-subtle)";
-            e.currentTarget.style.color = "var(--color-brand)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = "var(--color-border)";
-            e.currentTarget.style.backgroundColor = "var(--color-bg-surface-raised)";
-            e.currentTarget.style.color = "var(--color-text-primary)";
-          }}
-        >
-          <span style={{ fontSize: "16px", lineHeight: 1 }}>
-            {language === "vi" ? "🇻🇳" : "🇬🇧"}
-          </span>
-          <span className="hidden sm:inline">
-            {language === "vi" ? "VI" : "EN"}
-          </span>
-        </button>
+          <button
+            onClick={() => setLanguage(language === "vi" ? "en" : "vi")}
+            title={language === "vi" ? "Switch to English" : "Chuyển sang Tiếng Việt"}
+            aria-label={language === "vi" ? "Switch to English" : "Chuyển sang Tiếng Việt"}
+            className="flex items-center gap-1.5 px-2.5 h-[34px] rounded-[8px] border font-bold text-[12px] transition-all duration-200 select-none"
+            style={{
+              backgroundColor: "var(--color-bg-surface-raised)",
+              border: "1.5px solid var(--color-border)",
+              color: "var(--color-text-primary)",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = "var(--color-brand)";
+              e.currentTarget.style.backgroundColor = "var(--color-brand-subtle)";
+              e.currentTarget.style.color = "var(--color-brand)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = "var(--color-border)";
+              e.currentTarget.style.backgroundColor = "var(--color-bg-surface-raised)";
+              e.currentTarget.style.color = "var(--color-text-primary)";
+            }}
+          >
+            <span style={{ fontSize: "16px", lineHeight: 1 }}>
+              {language === "vi" ? "🇻🇳" : "🇬🇧"}
+            </span>
+            <span className="hidden sm:inline">
+              {language === "vi" ? "VI" : "EN"}
+            </span>
+          </button>
         )}
 
         {/* User Profile */}
