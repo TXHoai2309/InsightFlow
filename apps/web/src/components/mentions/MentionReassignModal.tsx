@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import type { Mention } from "@/types/dashboard";
 
 interface MentionReassignModalProps {
@@ -16,21 +17,21 @@ interface MentionReassignModalProps {
 }
 
 const TOPIC_OPTIONS = [
-  "Chất lượng",
-  "Giá cả",
-  "Dịch vụ",
-  "Nhân viên",
-  "Giao hàng",
-  "Trải nghiệm",
-  "Pháp lý",
-  "Vận hành",
-  "Đối thủ",
+  "quality",
+  "price",
+  "service",
+  "staff",
+  "delivery",
+  "experience",
+  "legal",
+  "operation",
+  "competitor",
 ];
 
 const SENTIMENT_OPTIONS = [
   {
     value: "positive" as const,
-    label: "Tích cực",
+    labelKey: "dashboard.filters.positive",
     emoji: "😊",
     activeClass: "border-[var(--color-success)] bg-[var(--color-success-subtle)] ring-2 ring-[var(--color-success)]/20 ring-offset-0",
     textClass: "text-[var(--color-success)] font-bold",
@@ -38,7 +39,7 @@ const SENTIMENT_OPTIONS = [
   },
   {
     value: "neutral" as const,
-    label: "Trung lập",
+    labelKey: "dashboard.filters.neutral",
     emoji: "😐",
     activeClass: "border-[var(--color-info)] bg-[var(--color-info-subtle)] ring-2 ring-[var(--color-info)]/20 ring-offset-0",
     textClass: "text-[var(--color-info)] font-bold",
@@ -46,7 +47,7 @@ const SENTIMENT_OPTIONS = [
   },
   {
     value: "negative" as const,
-    label: "Tiêu cực",
+    labelKey: "dashboard.filters.negative",
     emoji: "☹️",
     activeClass: "border-[var(--color-error)] bg-[var(--color-error-subtle)] ring-2 ring-[var(--color-error)]/20 ring-offset-0",
     textClass: "text-[var(--color-error)] font-bold",
@@ -61,6 +62,7 @@ export function MentionReassignModal({
   onSubmit,
   isLoading = false,
 }: MentionReassignModalProps) {
+  const { t, i18n } = useTranslation();
   const [selectedSentiment, setSelectedSentiment] = useState<
     "positive" | "negative" | "neutral"
   >("neutral");
@@ -74,7 +76,7 @@ export function MentionReassignModal({
       // Attempt to match the mention's topic with TOPIC_OPTIONS, 
       // or default to empty if "other" or not found.
       const matchedTopic = TOPIC_OPTIONS.find((t) => 
-        t.toLowerCase().includes(mention.topic.toLowerCase()) || 
+        t.toLowerCase() === mention.topic.toLowerCase() || 
         mention.topic.toLowerCase().includes(t.toLowerCase())
       );
       setSelectedTopics(matchedTopic ? [matchedTopic] : []);
@@ -100,8 +102,8 @@ export function MentionReassignModal({
 
   // Format date
   const dateObj = new Date(mention.created_at);
-  const timeString = dateObj.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
-  const dateString = dateObj.toLocaleDateString("vi-VN", { day: "numeric", month: "numeric", year: "2-digit" });
+  const timeString = dateObj.toLocaleTimeString(i18n.language === "vi" ? "vi-VN" : "en-US", { hour: "2-digit", minute: "2-digit" });
+  const dateString = dateObj.toLocaleDateString(i18n.language === "vi" ? "vi-VN" : "en-US", { day: "numeric", month: "numeric", year: "2-digit" });
   const formattedDate = `${timeString} ${dateString}`;
 
   return (
@@ -115,9 +117,13 @@ export function MentionReassignModal({
               <svg className="h-5 w-5 text-[var(--color-brand)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
               </svg>
-              <h1 className="text-xl font-bold text-[var(--color-text-primary)] font-sans tracking-tight">Hiệu chỉnh phân tích AI</h1>
+              <h1 className="text-xl font-bold text-[var(--color-text-primary)] font-sans tracking-tight">
+                {t("mentions.reassign.title", { defaultValue: "Hiệu chỉnh phân tích AI" })}
+              </h1>
             </div>
-            <p className="text-sm text-[var(--color-text-secondary)] mt-0.5">Cải thiện độ chính xác cho mô hình huấn luyện</p>
+            <p className="text-sm text-[var(--color-text-secondary)] mt-0.5">
+              {t("mentions.reassign.subtitle", { defaultValue: "Cải thiện độ chính xác cho mô hình huấn luyện" })}
+            </p>
           </div>
           <button 
             onClick={onClose}
@@ -135,9 +141,11 @@ export function MentionReassignModal({
           {/* Original Content */}
           <section>
             <div className="flex justify-between items-center mb-2">
-              <h3 className="text-xs font-bold text-[var(--color-text-muted)] uppercase tracking-wider">Nội dung gốc</h3>
+              <h3 className="text-xs font-bold text-[var(--color-text-muted)] uppercase tracking-wider">
+                {t("mentions.reassign.originalContent", { defaultValue: "Nội dung gốc" })}
+              </h3>
               <span className="text-xs text-[var(--color-text-muted)] flex items-center gap-1 font-medium">
-                {mention.platform} • {formattedDate}
+                {t(`dashboard.filters.${mention.platform.toLowerCase()}`, { defaultValue: mention.platform })} • {formattedDate}
               </span>
             </div>
             <div className="bg-[var(--color-brand-subtle)]/40 border border-[var(--color-brand-border)]/30 p-4 rounded-xl">
@@ -153,7 +161,7 @@ export function MentionReassignModal({
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              Xác định lại sắc thái
+              {t("mentions.reassign.sentimentSelect", { defaultValue: "Xác định lại sắc thái" })}
             </h3>
             <div className="grid grid-cols-3 gap-3">
               {SENTIMENT_OPTIONS.map((option) => {
@@ -173,7 +181,7 @@ export function MentionReassignModal({
                       {option.emoji}
                     </span>
                     <span className={`text-sm ${isActive ? option.textClass : 'font-medium text-[var(--color-text-secondary)]'}`}>
-                      {option.label}
+                      {t(option.labelKey)}
                     </span>
                   </button>
                 );
@@ -187,7 +195,7 @@ export function MentionReassignModal({
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
               </svg>
-              Gán nhãn Chủ đề
+              {t("mentions.reassign.topicTagging", { defaultValue: "Gán nhãn Chủ đề" })}
             </h3>
             <div className="flex flex-wrap gap-2">
               {TOPIC_OPTIONS.map((topic) => {
@@ -203,7 +211,7 @@ export function MentionReassignModal({
                         : "bg-[var(--color-bg-surface-raised)] border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-high)] hover:border-[var(--color-border-strong)]"
                     } ${isLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                   >
-                    {topic}
+                    {t(`dashboard.topics.${topic}`, { defaultValue: topic })}
                   </button>
                 );
               })}
@@ -216,14 +224,14 @@ export function MentionReassignModal({
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
-              Ghi chú thêm (không bắt buộc)
+              {t("mentions.reassign.notesLabel", { defaultValue: "Ghi chú thêm (không bắt buộc)" })}
             </h3>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               disabled={isLoading}
               className="w-full h-24 p-4 border border-[var(--color-border)] rounded-xl bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] focus:bg-[var(--color-bg-surface)] focus:ring-2 focus:ring-[var(--color-brand)] focus:border-transparent transition-all outline-none text-sm placeholder:text-[var(--color-text-muted)] disabled:opacity-50 resize-none"
-              placeholder="Nhập phản hồi hoặc lý do bạn gán lại kết quả này..."
+              placeholder={t("mentions.reassign.notesPlaceholder", { defaultValue: "Nhập phản hồi hoặc lý do bạn gán lại kết quả này..." })}
             />
           </section>
         </div>
@@ -234,7 +242,7 @@ export function MentionReassignModal({
             <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            Dữ liệu sẽ được gửi về máy chủ huấn luyện
+            {t("mentions.reassign.trainingNote", { defaultValue: "Dữ liệu sẽ được gửi về máy chủ huấn luyện" })}
           </div>
           <div className="flex gap-3">
             <button
@@ -242,7 +250,7 @@ export function MentionReassignModal({
               disabled={isLoading}
               className="px-5 py-2 text-sm font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors disabled:opacity-50"
             >
-              Hủy
+              {t("mentions.reassign.cancelBtn", { defaultValue: "Hủy" })}
             </button>
             <button
               onClick={handleSubmit}
@@ -252,7 +260,9 @@ export function MentionReassignModal({
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
               </svg>
-              {isLoading ? "Đang xử lý..." : "Cập nhật & Huấn luyện AI"}
+              {isLoading 
+                ? t("mentions.reassign.processing", { defaultValue: "Đang xử lý..." }) 
+                : t("mentions.reassign.updateBtn", { defaultValue: "Cập nhật & Huấn luyện AI" })}
             </button>
           </div>
         </footer>

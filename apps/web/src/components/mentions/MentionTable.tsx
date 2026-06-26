@@ -23,6 +23,11 @@ const getPlatformIcon = (platformStr: string) => {
   return platformIconMap[platformStr.toLowerCase()] || { icon: "public", color: "text-gray-600" };
 };
 
+const formatCredibilityScore = (score: number) => {
+  const percentage = score <= 1 ? score * 100 : score;
+  return Math.max(0, Math.min(100, Math.round(percentage)));
+};
+
 const sentimentMap: Record<
   Mention["sentiment"],
   { labelKey: string; icon: string; className: string }
@@ -60,7 +65,7 @@ const topicTags: Record<Mention["topic"], string[]> = {
 };
 
 export function MentionTable({ mentions, isLoading }: MentionTableProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -85,7 +90,10 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
     if (Number.isNaN(date.getTime())) {
-      return { timeStr: "Không rõ", relativeTime: "Không rõ thời gian" };
+      return { 
+        timeStr: t("mentions.table.unknownTime"), 
+        relativeTime: t("mentions.table.unknownTimeDesc") 
+      };
     }
 
     const now = new Date();
@@ -94,7 +102,7 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-    const timeStr = date.toLocaleString("vi-VN", {
+    const timeStr = date.toLocaleString(i18n.language === "vi" ? "vi-VN" : "en-US", {
       hour: "2-digit",
       minute: "2-digit",
       day: "2-digit",
@@ -102,14 +110,14 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
       year: "numeric",
     });
 
-    let relativeTime = "Vừa xong";
-    if (diffMs < -60000) relativeTime = "Trong tương lai";
-    else if (diffMs < 0) relativeTime = "Vừa xong"; // Handle minor clock skews
-    else if (diffDays >= 365) relativeTime = `${Math.floor(diffDays / 365.25)} năm trước`;
-    else if (diffDays >= 30) relativeTime = `${Math.floor(diffDays / 30.44)} tháng trước`;
-    else if (diffDays >= 1) relativeTime = `${diffDays} ngày trước`;
-    else if (diffHours >= 1) relativeTime = `${diffHours} giờ trước`;
-    else if (diffMinutes >= 1) relativeTime = `${diffMinutes} phút trước`;
+    let relativeTime = t("mentions.table.justNow");
+    if (diffMs < -60000) relativeTime = t("mentions.table.future");
+    else if (diffMs < 0) relativeTime = t("mentions.table.justNow"); // Handle minor clock skews
+    else if (diffDays >= 365) relativeTime = t("mentions.table.yearsAgo", { count: Math.floor(diffDays / 365.25) });
+    else if (diffDays >= 30) relativeTime = t("mentions.table.monthsAgo", { count: Math.floor(diffDays / 30.44) });
+    else if (diffDays >= 1) relativeTime = t("mentions.table.daysAgo", { count: diffDays });
+    else if (diffHours >= 1) relativeTime = t("mentions.table.hoursAgo", { count: diffHours });
+    else if (diffMinutes >= 1) relativeTime = t("mentions.table.minutesAgo", { count: diffMinutes });
 
     return { timeStr, relativeTime };
   };
@@ -126,9 +134,9 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
         {/* Mobile View: Card List */}
         <div className="md:hidden divide-y" style={{ borderColor: "var(--color-border)" }}>
           {isLoading ? (
-            <div className="py-20 text-center text-[var(--color-text-muted)]">Đang tải dữ liệu mentions...</div>
+            <div className="py-20 text-center text-[var(--color-text-muted)]">{t("mentions.table.loading")}</div>
           ) : currentMentions.length === 0 ? (
-            <div className="py-20 text-center text-[var(--color-text-muted)]">Không tìm thấy mention phù hợp với bộ lọc.</div>
+            <div className="py-20 text-center text-[var(--color-text-muted)]">{t("mentions.table.noData")}</div>
           ) : (
             currentMentions.map((mention) => {
               const { timeStr, relativeTime } = formatTime(mention.posted_at);
@@ -144,7 +152,7 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                         {getPlatformIcon(mention.platform).icon}
                       </span>
                     <span className="text-xs font-bold text-[var(--color-text-muted)] uppercase tracking-wider">
-                        {mention.platform}
+                        {t(`dashboard.filters.${mention.platform.toLowerCase()}`, { defaultValue: mention.platform })}
                       </span>
                     </div>
                     <span
@@ -164,7 +172,7 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
 
                   <div className="flex flex-wrap gap-2">
                     <span className="px-2 py-0.5 bg-[var(--color-brand-subtle)] text-[var(--color-brand)] rounded text-[10px] font-bold uppercase border border-[var(--color-brand-border)]">
-                      {mention.topic}
+                      {t(`dashboard.topics.${mention.topic.toLowerCase()}`, { defaultValue: mention.topic })}
                     </span>
                     {tags.map((tag) => (
                       <span
@@ -197,11 +205,11 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
           <table className="w-full text-sm border-collapse">
             <thead>
               <tr className="" style={{ backgroundColor: "var(--color-bg-surface-raised)", borderBottom: "1px solid var(--color-border)" }}>
-                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-24">{t("mentions.table.platform")}</th>
-                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-24">Độ tin cậy</th>
+                 <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-24">{t("mentions.table.platform")}</th>
+                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-24">{t("mentions.table.credibility")}</th>
                 <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center">{t("mentions.table.content")}</th>
                 <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-32">{t("mentions.table.sentiment")}</th>
-                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-32">Chủ đề</th>
+                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-32">{t("mentions.table.topic")}</th>
                 <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-40">{t("mentions.table.time")}</th>
               </tr>
             </thead>
@@ -211,14 +219,14 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                   <td
                     colSpan={6}
                     className="py-20 text-center text-[var(--color-text-muted)]"
-                  >Đang tải dữ liệu mentions...</td>
+                  >{t("mentions.table.loading")}</td>
                 </tr>
               ) : currentMentions.length === 0 ? (
                 <tr>
                   <td
                     colSpan={6}
                     className="py-20 text-center text-[var(--color-text-muted)]"
-                  >Không tìm thấy mention phù hợp với bộ lọc.</td>
+                  >{t("mentions.table.noData")}</td>
                 </tr>
               ) : (
                 currentMentions.map((mention) => {
@@ -247,13 +255,13 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                       <td className="px-4 py-4 align-top">
                         <div className="flex flex-col gap-2">
                           <span className="font-bold text-[var(--color-text-primary)] text-center">
-                            {Math.round(mention.credibility_score * 100)}%
+                            {formatCredibilityScore(mention.credibility_score)}%
                           </span>
                           <div className="w-24 h-2 bg-[var(--color-bg-surface-raised)] rounded-full overflow-hidden">
                             <div
                               className="bg-[var(--color-brand)] h-full rounded-full"
                               style={{
-                                width: `${mention.credibility_score * 100}%`,
+                                width: `${formatCredibilityScore(mention.credibility_score)}%`,
                               }}
                             />
                           </div>
@@ -299,7 +307,7 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                       {/* Topic */}
                       <td className="px-4 py-4 align-top text-center">
                         <span className="px-2 py-1 bg-[var(--color-brand-subtle)] text-[var(--color-brand)] rounded text-xs font-bold uppercase border border-[var(--color-brand-border)]">
-                          {mention.topic}
+                          {t(`dashboard.topics.${mention.topic.toLowerCase()}`, { defaultValue: mention.topic })}
                         </span>
                       </td>
 
@@ -332,8 +340,7 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
             }}
           >
             <span className="text-xs text-[var(--color-text-muted)] font-medium">
-              Hiển thị {startIndex + 1}-{endIndex} trên tổng số{" "}
-              {mentions.length} đề cập
+              {t("mentions.table.paginationInfo", { start: startIndex + 1, end: endIndex, total: mentions.length })}
             </span>
             <div className="flex gap-2">
               <button

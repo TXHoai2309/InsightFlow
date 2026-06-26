@@ -1,8 +1,10 @@
 "use client";
 
 import { useIntersectionObserver, useCountUp } from "@/hooks/useIntersectionObserver";
+import { useTranslation } from "react-i18next";
 
 export default function IndustryBentoSection() {
+  const { t } = useTranslation();
   const { ref: chartRef, hasIntersected: chartVisible } = useIntersectionObserver();
   const { ref: statsRef, hasIntersected: statsVisible } = useIntersectionObserver();
   const { ref: bottomCardsRef, hasIntersected: bottomCardsVisible } = useIntersectionObserver();
@@ -43,12 +45,10 @@ export default function IndustryBentoSection() {
               className="text-[28px] leading-[36px] tracking-[-0.02em] font-bold mb-3"
               style={{ background: "linear-gradient(90deg, #6D4CFF, #3B82F6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}
             >
-              Dữ liệu thông minh, Hành động kịp thời
+              {t("industries.bento.chartTitle")}
             </h3>
             <p className="text-[14px] leading-[22px] text-[#64748B]">
-              Hệ thống của chúng tôi thu thập hàng triệu mẩu tin mỗi ngày từ
-              Facebook, TikTok, YouTube và Báo chí để đưa ra cái nhìn toàn cảnh
-              nhất.
+              {t("industries.bento.chartDesc")}
             </p>
           </div>
           {/* Decorative visualization mock */}
@@ -56,10 +56,10 @@ export default function IndustryBentoSection() {
             <div className="w-full h-full rounded-2xl bg-white/60 backdrop-blur-md border border-[#E5E7EB] shadow-xl flex flex-col justify-end p-4 gap-3">
               {/* Mock bar chart */}
               {[
-                { label: "Facebook", width: 90, color: "#6D4CFF" },
-                { label: "TikTok", width: 70, color: "#3B82F6" },
-                { label: "YouTube", width: 55, color: "#A78BFA" },
-                { label: "Báo chí", width: 40, color: "#60A5FA" },
+                { label: t("dashboard.filters.facebook"), width: 90, color: "#6D4CFF" },
+                { label: t("dashboard.filters.tiktok"), width: 70, color: "#3B82F6" },
+                { label: t("dashboard.filters.youtube"), width: 55, color: "#A78BFA" },
+                { label: t("dashboard.filters.news"), width: 40, color: "#60A5FA" },
               ].map((bar) => (
                 <div key={bar.label} className="flex items-center gap-2">
                   <span className="text-[12px] font-medium text-[#64748B] w-16 text-right shrink-0">
@@ -101,11 +101,10 @@ export default function IndustryBentoSection() {
           <div className="relative z-10">
             <div className="text-[52px] leading-none font-bold mb-3">{accuracyCount}%</div>
             <h4 className="text-[18px] font-semibold mb-2">
-              Độ chính xác AI Tiếng Việt
+              {t("industries.bento.accuracyTitle")}
             </h4>
             <p className="text-[13px] leading-[20px] text-white/90">
-              Mô hình ngôn ngữ lớn (LLM) được huấn luyện riêng cho ngữ cảnh và
-              tiếng lóng của người Việt trên mạng xã hội.
+              {t("industries.bento.accuracyDesc")}
             </p>
           </div>
         </div>
@@ -123,11 +122,10 @@ export default function IndustryBentoSection() {
               </span>
             </div>
             <h4 className="text-[18px] font-semibold text-[#1a1a2e] mb-2">
-              Thời gian thực
+              {t("industries.bento.realtimeTitle")}
             </h4>
             <p className="text-[14px] leading-[22px] text-[#64748B]">
-              Cập nhật dữ liệu mỗi 5 phút, đảm bảo bạn không bỏ lỡ bất kỳ biến
-              động nào của thị trường.
+              {t("industries.bento.realtimeDesc")}
             </p>
           </div>
 
@@ -151,14 +149,13 @@ export default function IndustryBentoSection() {
             </div>
             <div>
               <h4 className="text-[18px] font-semibold text-[#1a1a2e] mb-2">
-                Phù hợp cho mọi quy mô
+                {t("industries.bento.scaleTitle")}
               </h4>
               <p className="text-[14px] leading-[22px] text-[#64748B] mb-3">
-                Từ doanh nghiệp Startup đến các tập đoàn đa quốc gia, InsightFlow
-                cung cấp các gói dịch vụ linh hoạt theo nhu cầu thực tế.
+                {t("industries.bento.scaleDesc")}
               </p>
               <button className="font-bold text-[14px] flex items-center gap-1 hover:underline transition-all" style={{ color: "#6D4CFF" }}>
-                Tìm hiểu thêm
+                {t("industries.bento.learnMore")}
                 <span className="material-symbols-outlined text-[18px]">
                   arrow_forward
                 </span>

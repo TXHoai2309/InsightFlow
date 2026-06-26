@@ -1,84 +1,78 @@
 "use client";
 
 import { useIntersectionObserver } from "@/hooks/useIntersectionObserver";
-
-const industries = [
-  {
-    icon: "storefront",
-    title: "Chuỗi Nhà hàng & Cafe",
-    badge: { label: "PHỔ BIẾN NHẤT", style: { background: "#6D4CFF", color: "#FFFFFF" } },
-    description:
-      "Giám sát chất lượng dịch vụ trên quy mô lớn, đánh giá hiệu quả từng cơ sở và theo dõi phản hồi thực khách về các món mới.",
-    features: [
-      "Quản lý review đa cơ sở",
-      "Phát hiện phàn nàn",
-      "Theo dõi trend đồ uống",
-      "Đánh giá chất lượng phục vụ",
-    ],
-    testimonial: {
-      quote:
-        '"InsightFlow giúp chúng tôi phát hiện và xử lý ngay lập tức những phàn nàn về thái độ phục vụ tại chi nhánh mới, tránh được khủng hoảng truyền thông."',
-      author: "COO, Chuỗi 50+ Coffee Shop",
-    },
-  },
-  {
-    icon: "fastfood",
-    title: "Đồ ăn nhanh & Nhượng quyền",
-    badge: { label: "TỐC ĐỘ", style: { background: "#3B82F6", color: "#FFFFFF" } },
-    description:
-      "Theo dõi mức độ lan truyền của các chiến dịch khuyến mãi (Flash Sale, Combo), và giám sát chất lượng đồng đều giữa các đại lý nhượng quyền.",
-    features: [
-      "Đo lường chiến dịch Flash Sale",
-      "Kiểm soát vệ sinh ATTP",
-      "Phân tích phản hồi về giá",
-      "Báo cáo hiệu suất đại lý",
-    ],
-    testimonial: {
-      quote:
-        '"Hệ thống đã giúp chúng tôi đo lường chính xác hiệu ứng viral của chiến dịch ra mắt món Gà rán vị mới chỉ sau 24 giờ."',
-      author: "Marketing Manager, Chuỗi Fastfood",
-    },
-  },
-  {
-    icon: "restaurant",
-    title: "Nhà hàng Fine Dining",
-    badge: null,
-    description:
-      "Nắm bắt chi tiết trải nghiệm khách hàng cao cấp, từ không gian ẩm thực, thái độ nhân viên đến hương vị đặc trưng của từng món ăn.",
-    features: [
-      "Lắng nghe Food Blogger/Reviewer",
-      "Phân tích cảm xúc trải nghiệm",
-      "Theo dõi check-in VIP",
-      "Quản lý danh tiếng thương hiệu",
-    ],
-    testimonial: {
-      quote:
-        '"Khách hàng của chúng tôi yêu cầu sự hoàn hảo. AI giúp chúng tôi thấu hiểu từng chi tiết nhỏ nhất trong trải nghiệm của họ qua các bài review dài."',
-      author: "Chủ đầu tư, Tổ hợp Fine Dining",
-    },
-  },
-  {
-    icon: "delivery_dining",
-    title: "Nền tảng Giao đồ ăn & Booking",
-    badge: null,
-    description:
-      "Quản lý đối tác nhà hàng, theo dõi phản hồi về tốc độ giao hàng, thái độ shipper và chất lượng ứng dụng trên mọi mặt trận mạng xã hội.",
-    features: [
-      "Review tốc độ giao hàng",
-      "Phàn nàn về Shipper/App",
-      "Chất lượng đồ ăn khi giao",
-      "Cạnh tranh khuyến mãi",
-    ],
-    testimonial: {
-      quote:
-        '"Chúng tôi có thể theo sát nhất cử nhất động các chương trình khuyến mãi của đối thủ nhờ vào khả năng cập nhật theo thời gian thực."',
-      author: "Giám đốc Phát triển kinh doanh, Food Delivery App",
-    },
-  },
-];
+import { useTranslation } from "react-i18next";
 
 export default function IndustryGridSection() {
+  const { t } = useTranslation();
   const { ref, hasIntersected } = useIntersectionObserver();
+
+  const industries = [
+    {
+      icon: "storefront",
+      title: t("industries.grid.card1Title"),
+      badge: { label: t("industries.grid.popularBadge"), style: { background: "#6D4CFF", color: "#FFFFFF" } },
+      description: t("industries.grid.card1Desc"),
+      features: [
+        t("industries.grid.card1Feat1"),
+        t("industries.grid.card1Feat2"),
+        t("industries.grid.card1Feat3"),
+        t("industries.grid.card1Feat4"),
+      ],
+      testimonial: {
+        quote: t("industries.grid.card1Quote"),
+        author: t("industries.grid.card1Author"),
+      },
+    },
+    {
+      icon: "fastfood",
+      title: t("industries.grid.card2Title"),
+      badge: { label: t("industries.grid.speedBadge"), style: { background: "#3B82F6", color: "#FFFFFF" } },
+      description: t("industries.grid.card2Desc"),
+      features: [
+        t("industries.grid.card2Feat1"),
+        t("industries.grid.card2Feat2"),
+        t("industries.grid.card2Feat3"),
+        t("industries.grid.card2Feat4"),
+      ],
+      testimonial: {
+        quote: t("industries.grid.card2Quote"),
+        author: t("industries.grid.card2Author"),
+      },
+    },
+    {
+      icon: "restaurant",
+      title: t("industries.grid.card3Title"),
+      badge: null,
+      description: t("industries.grid.card3Desc"),
+      features: [
+        t("industries.grid.card3Feat1"),
+        t("industries.grid.card3Feat2"),
+        t("industries.grid.card3Feat3"),
+        t("industries.grid.card3Feat4"),
+      ],
+      testimonial: {
+        quote: t("industries.grid.card3Quote"),
+        author: t("industries.grid.card3Author"),
+      },
+    },
+    {
+      icon: "delivery_dining",
+      title: t("industries.grid.card4Title"),
+      badge: null,
+      description: t("industries.grid.card4Desc"),
+      features: [
+        t("industries.grid.card4Feat1"),
+        t("industries.grid.card4Feat2"),
+        t("industries.grid.card4Feat3"),
+        t("industries.grid.card4Feat4"),
+      ],
+      testimonial: {
+        quote: t("industries.grid.card4Quote"),
+        author: t("industries.grid.card4Author"),
+      },
+    },
+  ];
 
   return (
     <section className="pb-[60px] px-6 max-w-[1200px] mx-auto overflow-hidden">
@@ -176,7 +170,7 @@ export default function IndustryGridSection() {
               }}
             >
               <h4 className="text-[14px] font-semibold mb-2" style={{ color: "#6D4CFF" }}>
-                Câu chuyện thành công
+                {t("industries.grid.successStory")}
               </h4>
               <p className="text-[14px] leading-[20px] italic text-[#374151]">
                 {industry.testimonial.quote}{" "}

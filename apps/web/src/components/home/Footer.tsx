@@ -2,28 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-
-const productLinks = [
-  { label: "Social Listening", href: "/#features" },
-  { label: "AI Insight Report", href: "/#features" },
-  { label: "Dashboard", href: "/dashboard" },
-  { label: "Bảng giá", href: "/#pricing" },
-  { label: "API & Tích hợp", href: "/#features" },
-];
-
-const companyLinks = [
-  { label: "Về chúng tôi", href: "/ve-chung-toi" },
-  { label: "Blog AI", href: "#" },
-  { label: "Tuyển dụng", href: "#" },
-  { label: "Liên hệ", href: "#" },
-  { label: "Báo chí", href: "#" },
-];
-
-const contactItems = [
-  { icon: "✉", text: "hello@insightflow.vn" },
-  { icon: "☎", text: "1900 xxxx" },
-  { icon: "📍", text: "Hà Nội, Việt Nam" },
-];
+import { useTranslation } from "react-i18next";
 
 function LinkedInIcon() {
   return (
@@ -50,6 +29,30 @@ function YouTubeIcon() {
 }
 
 export default function Footer() {
+  const { t } = useTranslation();
+
+  const productLinks = [
+    { label: "Social Listening", href: "/#features" },
+    { label: "AI Insight Report", href: "/#features" },
+    { label: "Dashboard", href: "/dashboard" },
+    { label: t("footer.pricing"), href: "/#pricing" },
+    { label: t("footer.api"), href: "/#features" },
+  ];
+
+  const companyLinks = [
+    { label: t("nav.about"), href: "/ve-chung-toi" },
+    { label: t("footer.blog"), href: "#" },
+    { label: t("footer.careers"), href: "#" },
+    { label: t("footer.contactLink"), href: "#" },
+    { label: t("footer.press"), href: "#" },
+  ];
+
+  const contactItems = [
+    { icon: "✉", text: "hello@insightflow.vn" },
+    { icon: "☎", text: "1900 xxxx" },
+    { icon: "📍", text: t("footer.address") },
+  ];
+
   return (
     <footer
       className="font-sans mt-auto"
@@ -112,7 +115,7 @@ export default function Footer() {
                 maxWidth: "240px",
               }}
             >
-              Biến dữ liệu mạng xã hội thành insight chiến lược bằng AI.
+              {t("footer.tagline")}
             </p>
             <div className="flex gap-2">
               <a href="#" aria-label="LinkedIn" className="social-icon-btn">
@@ -139,7 +142,7 @@ export default function Footer() {
                 textTransform: "uppercase",
               }}
             >
-              SẢN PHẨM
+              {t("footer.products")}
             </h6>
             <ul className="flex flex-col gap-3">
               {productLinks.map((l) => (
@@ -162,7 +165,7 @@ export default function Footer() {
                 textTransform: "uppercase",
               }}
             >
-              CÔNG TY
+              {t("footer.company")}
             </h6>
             <ul className="flex flex-col gap-3">
               {companyLinks.map((l) => (
@@ -185,7 +188,7 @@ export default function Footer() {
                 textTransform: "uppercase",
               }}
             >
-              LIÊN HỆ
+              {t("footer.contact")}
             </h6>
             <ul className="flex flex-col gap-3">
               {contactItems.map((item) => (
@@ -208,14 +211,14 @@ export default function Footer() {
           style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}
         >
           <p style={{ color: "rgba(255,255,255,0.35)", fontSize: "13px" }}>
-            © {new Date().getFullYear()} InsightFlow. Tất cả quyền được bảo lưu.
+            {t("footer.copyright", { year: new Date().getFullYear() })}
           </p>
           <div className="flex gap-4" style={{ color: "rgba(255,255,255,0.35)", fontSize: "13px" }}>
-            <a href="#" className="hover:text-white transition-colors">Điều khoản</a>
+            <a href="#" className="hover:text-white transition-colors">{t("footer.terms")}</a>
             <span>·</span>
-            <a href="#" className="hover:text-white transition-colors">Bảo mật</a>
+            <a href="#" className="hover:text-white transition-colors">{t("footer.privacy")}</a>
             <span>·</span>
-            <a href="#" className="hover:text-white transition-colors">Cookie</a>
+            <a href="#" className="hover:text-white transition-colors">{t("footer.cookie")}</a>
           </div>
         </div>
       </div>

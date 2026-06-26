@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslation } from "react-i18next";
+
 const partners = [
   "VINAGROUP",
   "TECH-SOL",
@@ -11,6 +13,8 @@ const partners = [
 ];
 
 export default function PartnersSection() {
+  const { t } = useTranslation();
+
   return (
     <section 
       className="py-[40px] overflow-hidden"
@@ -36,7 +40,7 @@ export default function PartnersSection() {
 
       <div className="max-w-7xl mx-auto px-6 md:px-10 flex flex-col items-center">
         <p className="text-[16px] md:text-[18px] font-medium text-[#64748B] mb-8 text-center">
-          Được tin tưởng bởi 500+ doanh nghiệp hàng đầu
+          {t("about.partners.text")}
         </p>
       </div>
       

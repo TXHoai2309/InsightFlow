@@ -1,19 +1,21 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslation } from "react-i18next";
 
 export default function MissionVisionSection() {
+  const { t } = useTranslation();
+
   return (
     <section id="mission-vision" className="px-6 md:px-10 py-20 bg-white scroll-mt-16">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="text-center mb-16 space-y-4">
           <h2 className="text-[32px] leading-[40px] tracking-[-0.02em] font-bold text-[#1a1a2e]">
-            Tầm nhìn & Sứ mệnh
+            {t("about.mission.title")}
           </h2>
           <p className="text-[16px] leading-[24px] text-[#64748B] max-w-2xl mx-auto">
-            Chúng tôi không chỉ cung cấp công cụ, chúng tôi xây dựng nền tảng
-            để doanh nghiệp Việt dẫn đầu bằng dữ liệu.
+            {t("about.mission.subtitle")}
           </p>
         </div>
 
@@ -46,14 +48,14 @@ export default function MissionVisionSection() {
             
             <div className="relative z-10 space-y-4">
               <h3 className="text-[28px] leading-[36px] font-bold text-[#1a1a2e]">
-                Sứ mệnh
+                {t("about.mission.cardTitle")}
               </h3>
               <div className="text-[16px] md:text-[18px] leading-[1.6] text-[#64748B] max-w-lg space-y-4">
                 <p>
-                  InsightFlow được xây dựng với một niềm tin: mọi doanh nghiệp Việt Nam — dù lớn hay nhỏ — đều xứng đáng có được sức mạnh của AI để hiểu khách hàng thật sự.
+                  {t("about.mission.desc1")}
                 </p>
                 <p>
-                  Chúng tôi không chỉ cung cấp dữ liệu. Chúng tôi trao cho bạn góc nhìn — để mỗi quyết định truyền thông đều dựa trên sự thật, không phải cảm tính.
+                  {t("about.mission.desc2")}
                 </p>
               </div>
             </div>
@@ -87,14 +89,14 @@ export default function MissionVisionSection() {
 
             <div className="relative z-10 space-y-4">
               <h3 className="text-[28px] leading-[36px] font-bold text-white">
-                Tầm nhìn 2030
+                {t("about.vision.cardTitle")}
               </h3>
               <p className="text-[16px] md:text-[18px] leading-[1.6] text-white/90">
-                Trở thành nền tảng Social Intelligence hàng đầu Đông Nam Á — nơi AI thuần Việt hiểu ngôn ngữ, văn hóa và con người Việt sâu sắc hơn bất kỳ công nghệ ngoại nhập nào.
+                {t("about.vision.desc")}
               </p>
               
               <Link href="#" className="inline-flex items-center gap-2 font-bold text-[18px] text-white mt-4 hover:underline">
-                Hơn cả một công cụ
+                {t("about.vision.more")}
                 <span className="material-symbols-outlined">arrow_forward</span>
               </Link>
             </div>

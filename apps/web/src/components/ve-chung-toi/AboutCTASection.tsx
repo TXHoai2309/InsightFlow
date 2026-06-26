@@ -1,8 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslation } from "react-i18next";
 
 export default function AboutCTASection() {
+  const { t } = useTranslation();
+
   return (
     <section className="px-6 md:px-10 py-24">
       <div 
@@ -27,10 +30,10 @@ export default function AboutCTASection() {
 
         <div className="relative z-10 space-y-6">
           <h2 className="text-[32px] md:text-[40px] leading-[1.2] tracking-tight font-bold text-white max-w-2xl mx-auto">
-            Sẵn sàng khám phá insight ẩn trong hàng triệu cuộc trò chuyện?
+            {t("about.cta.title")}
           </h2>
           <p className="text-[18px] md:text-[20px] leading-[28px] opacity-90 max-w-2xl mx-auto pb-4">
-            🚀 Dùng thử miễn phí 14 ngày — Không cần thẻ tín dụng
+            {t("about.cta.desc")}
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
             <Link
@@ -46,7 +49,7 @@ export default function AboutCTASection() {
                 e.currentTarget.style.boxShadow = "0 4px 6px -1px rgba(0, 0, 0, 0.1)";
               }}
             >
-              Bắt đầu ngay
+              {t("about.cta.start")}
             </Link>
             <button 
               className="bg-transparent border-2 px-8 py-4 rounded-xl text-[16px] md:text-[18px] font-bold text-white transition-all w-full sm:w-auto"
@@ -58,7 +61,7 @@ export default function AboutCTASection() {
                 e.currentTarget.style.backgroundColor = "transparent";
               }}
             >
-              Xem Demo
+              {t("about.cta.demo")}
             </button>
           </div>
         </div>

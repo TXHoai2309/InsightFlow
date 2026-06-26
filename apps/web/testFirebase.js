@@ -26,15 +26,15 @@ async function test() {
     const commentsSnap = await getDocs(collection(db, "comments"));
     console.log("Comments:", commentsSnap.size);
     if (!commentsSnap.empty) console.log(commentsSnap.docs[0].data());
-  } catch(e) { console.error("comments error:", e.message); }
+  } catch (e) { console.error("comments error:", e.message); }
 
   try {
     console.log("Fetching 'mentions'...");
     const mentionsSnap = await getDocs(collection(db, "mentions"));
     console.log("Mentions:", mentionsSnap.size);
     if (!mentionsSnap.empty) console.log(mentionsSnap.docs[0].data());
-  } catch(e) { console.error("mentions error:", e.message); }
-  
+  } catch (e) { console.error("mentions error:", e.message); }
+
   process.exit(0);
 }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useTranslation } from "react-i18next";
 
 const team = [
   {
@@ -30,14 +31,16 @@ const team = [
 ];
 
 export default function TeamSection() {
+  const { t } = useTranslation();
+
   return (
     <section id="team" className="px-6 md:px-10 py-24 bg-white scroll-mt-16">
       <div className="max-w-7xl mx-auto text-center">
         <h2 className="text-[32px] md:text-[36px] leading-[1.2] font-bold text-[#1a1a2e] mb-4">
-          Đội ngũ chuyên gia <span style={{ background: "linear-gradient(90deg, #6D4CFF, #3B82F6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>AI hàng đầu</span>
+          {t("about.team.title")}<span style={{ background: "linear-gradient(90deg, #6D4CFF, #3B82F6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>{t("about.team.titleHighlight")}</span>
         </h2>
         <p className="text-[16px] md:text-[18px] text-[#64748B] mb-12">
-          Đội ngũ kết hợp giữa nghiên cứu học thuật và thực chiến doanh nghiệp
+          {t("about.team.subtitle")}
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8">
@@ -63,7 +66,7 @@ export default function TeamSection() {
                     <span className="text-[14px] font-medium">{member.desc}</span>
                     <a href="#" className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/40 transition-colors">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
-                        <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/>
+                        <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764.784-1.764 1.75-1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/>
                       </svg>
                     </a>
                   </div>

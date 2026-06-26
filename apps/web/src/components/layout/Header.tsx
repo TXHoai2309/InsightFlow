@@ -12,6 +12,7 @@ import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface HeaderProps {
   onMenuToggle: () => void;
@@ -23,6 +24,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
   const { user } = useAuth();
   const { t } = useTranslation();
   const { theme, toggleTheme } = useTheme();
+  const { language, toggleLanguage } = useLanguage();
   const getInitials = (name: string | null | undefined) => {
     if (!name) return "U";
     const parts = name.trim().split(" ");
@@ -218,6 +220,36 @@ export function Header({ onMenuToggle }: HeaderProps) {
                 <path d="M12 7a5 5 0 1 0 0 10A5 5 0 0 0 12 7zm0-5a1 1 0 0 1 1 1v2a1 1 0 0 1-2 0V3a1 1 0 0 1 1-1zm0 16a1 1 0 0 1 1 1v2a1 1 0 0 1-2 0v-2a1 1 0 0 1 1-1zM4.22 5.64a1 1 0 0 1 1.42-1.42l1.41 1.42a1 1 0 0 1-1.41 1.41L4.22 5.64zm12.72 12.72a1 1 0 0 1 1.41-1.41l1.42 1.41a1 1 0 0 1-1.42 1.42l-1.41-1.42zM3 11a1 1 0 0 1 0 2H1a1 1 0 0 1 0-2h2zm20 0a1 1 0 0 1 0 2h-2a1 1 0 0 1 0-2h2zM5.64 18.36a1 1 0 0 1-1.42 1.42L2.8 18.36a1 1 0 0 1 1.42-1.42l1.42 1.42zM18.36 5.64a1 1 0 0 1-1.41-1.41l1.41-1.42a1 1 0 0 1 1.42 1.42l-1.42 1.41z"/>
               </svg>
             )}
+          </span>
+        </button>
+
+        {/* ── Language Toggle ────────────────────────────────── */}
+        <button
+          onClick={toggleLanguage}
+          title={language === "vi" ? "Switch to English" : "Chuyển sang Tiếng Việt"}
+          aria-label={language === "vi" ? "Switch to English" : "Chuyển sang Tiếng Việt"}
+          className="flex items-center gap-1.5 px-2.5 h-[34px] rounded-[8px] border font-bold text-[12px] transition-all duration-200 select-none"
+          style={{
+            backgroundColor: "var(--color-bg-surface-raised)",
+            border: "1.5px solid var(--color-border)",
+            color: "var(--color-text-primary)",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = "var(--color-brand)";
+            e.currentTarget.style.backgroundColor = "var(--color-brand-subtle)";
+            e.currentTarget.style.color = "var(--color-brand)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = "var(--color-border)";
+            e.currentTarget.style.backgroundColor = "var(--color-bg-surface-raised)";
+            e.currentTarget.style.color = "var(--color-text-primary)";
+          }}
+        >
+          <span style={{ fontSize: "16px", lineHeight: 1 }}>
+            {language === "vi" ? "🇻🇳" : "🇬🇧"}
+          </span>
+          <span className="hidden sm:inline">
+            {language === "vi" ? "VI" : "EN"}
           </span>
         </button>
 

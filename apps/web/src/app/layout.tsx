@@ -2,15 +2,22 @@
 
 import { useState } from "react";
 import { usePathname } from "next/navigation";
-import "../../i18n";
+import { useTranslation, I18nextProvider } from "react-i18next";
+import i18nInstance from "../i18n";
 import "./globals.css";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { MobileNav } from "@/components/layout/MobileNav";
 import Footer from "@/components/home/Footer";
 import { ThemeProvider } from "@/contexts/ThemeContext";
-import { I18nProvider } from "@/contexts/I18nProvider";
+import { LanguageProvider } from "@/contexts/LanguageContext";
 
+/**
+ * Anti-FOUC (Flash of Unstyled Content) Script.
+ * Được inject trực tiếp vào <head> TRƯỚC khi React hydrate.
+ * Đọc localStorage và set class "dark" lên <html> ngay lập tức
+ * để tránh màn hình trắng nháy khi reload trang ở dark mode.
+ */
 const antiFoucScript = `
 (function() {
   try {
@@ -28,17 +35,75 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const { t, i18n } = useTranslation();
   const hideShell = ["/", "/login", "/register", "/forgot-password", "/nganh", "/ve-chung-toi", "/profile"].includes(pathname || "");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  const getPageTitleKey = (path: string) => {
+    switch (path) {
+      case "/":
+        return "metadata.home.title";
+      case "/login":
+        return "metadata.login.title";
+      case "/register":
+        return "metadata.register.title";
+      case "/forgot-password":
+        return "metadata.forgotPassword.title"; // Custom title for forgot password
+      case "/nganh":
+        return "metadata.industries.title";
+      case "/ve-chung-toi":
+        return "metadata.about.title";
+      case "/profile":
+        return "metadata.profile.title";
+      case "/dashboard":
+        return "metadata.dashboard.title";
+      case "/mentions":
+        return "metadata.mentions.title";
+      case "/alerts":
+        return "metadata.alerts.title";
+      case "/leads":
+        return "metadata.leads.title";
+      case "/reports":
+        return "metadata.reports.title";
+      default:
+        if (path.startsWith("/settings")) return "metadata.settings.title";
+        return "metadata.default.title";
+    }
+  };
+
+  const getPageDescriptionKey = (path: string) => {
+    switch (path) {
+      case "/":
+        return "metadata.home.desc";
+      case "/login":
+        return "metadata.login.desc";
+      case "/register":
+        return "metadata.register.desc";
+      case "/forgot-password":
+        return "metadata.forgotPassword.subtitle";
+      case "/nganh":
+        return "metadata.industries.desc";
+      case "/ve-chung-toi":
+        return "metadata.about.desc";
+      case "/profile":
+        return "metadata.profile.desc";
+      default:
+        return "metadata.default.desc";
+    }
+  };
+
+  const titleKey = getPageTitleKey(pathname || "/");
+  const descKey = getPageDescriptionKey(pathname || "/");
+
   return (
-    <html lang="vi" suppressHydrationWarning>
+    <html lang={i18n.language} suppressHydrationWarning>
       <head>
+        {/* Anti-FOUC: set dark class trước React render để tránh flash */}
         <script dangerouslySetInnerHTML={{ __html: antiFoucScript }} />
-        <title>InsightFlow · Biến dữ liệu thành insight</title>
+        <title>{t(titleKey)}</title>
         <meta
           name="description"
-          content="Nền tảng AI theo dõi và phân tích thương hiệu trong thời gian thực"
+          content={t(descKey)}
         />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link
@@ -57,34 +122,35 @@ export default function RootLayout({
         <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
       </head>
       <body style={{ margin: 0, padding: 0, backgroundColor: "var(--color-bg-primary)" }}>
+        <I18nextProvider i18n={i18nInstance}>
         <ThemeProvider>
-          {/* I18nProvider: đọc localStorage và apply ngôn ngữ SAU khi client mount */}
-          <I18nProvider>
-            {hideShell ? (
-              <div className="flex flex-col min-h-screen">
-                <main className="flex-1">{children}</main>
-                <Footer />
+          <LanguageProvider>
+          {hideShell ? (
+            <div className="flex flex-col min-h-screen">
+              <main className="flex-1">{children}</main>
+              <Footer />
+            </div>
+          ) : (
+            <div className="flex h-screen w-screen overflow-hidden" style={{ backgroundColor: "var(--color-bg-primary)" }}>
+              <Sidebar
+                isOpen={sidebarOpen}
+                onClose={() => setSidebarOpen(false)}
+              />
+              <div className="flex flex-col flex-1 md:ml-64">
+                <Header onMenuToggle={() => setSidebarOpen((prev) => !prev)} />
+                <main
+                  className="flex-1 overflow-y-auto mt-16 pb-16 md:pb-0"
+                  style={{ backgroundColor: "var(--color-bg-primary)" }}
+                >
+                  {children}
+                </main>
+                <MobileNav />
               </div>
-            ) : (
-              <div className="flex h-screen w-screen overflow-hidden" style={{ backgroundColor: "var(--color-bg-primary)" }}>
-                <Sidebar
-                  isOpen={sidebarOpen}
-                  onClose={() => setSidebarOpen(false)}
-                />
-                <div className="flex flex-col flex-1 md:ml-64">
-                  <Header onMenuToggle={() => setSidebarOpen((prev) => !prev)} />
-                  <main
-                    className="flex-1 overflow-y-auto mt-16 pb-16 md:pb-0"
-                    style={{ backgroundColor: "var(--color-bg-primary)" }}
-                  >
-                    {children}
-                  </main>
-                  <MobileNav />
-                </div>
-              </div>
-            )}
-          </I18nProvider>
+            </div>
+          )}
+          </LanguageProvider>
         </ThemeProvider>
+        </I18nextProvider>
       </body>
     </html>
   );

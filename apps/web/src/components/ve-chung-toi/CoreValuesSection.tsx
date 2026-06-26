@@ -1,27 +1,28 @@
 "use client";
 
-const values = [
-  {
-    icon: "lightbulb",
-    title: "Đổi mới (Innovation)",
-    description:
-      "Chúng tôi liên tục cập nhật các mô hình AI mới nhất như GPT-4, Llama 3 và các mô hình NLP tiếng Việt độc quyền để mang lại độ chính xác tối ưu.",
-  },
-  {
-    icon: "visibility",
-    title: "Minh bạch (Transparency)",
-    description:
-      "Dữ liệu được thu thập và xử lý tuân thủ nghiêm ngặt các quy định về bảo mật. Mọi chỉ số phân tích đều có nguồn gốc rõ ràng, khách quan.",
-  },
-  {
-    icon: "handshake",
-    title: "Đồng hành (Partnership)",
-    description:
-      "Sự thành công của doanh nghiệp là thước đo cho giá trị của chúng tôi. InsightFlow luôn sát cánh hỗ trợ 24/7 trong mọi tình huống.",
-  },
-];
+import { useTranslation } from "react-i18next";
 
 export default function CoreValuesSection() {
+  const { t } = useTranslation();
+
+  const values = [
+    {
+      icon: "lightbulb",
+      title: t("about.values.val1Title"),
+      description: t("about.values.val1Desc"),
+    },
+    {
+      icon: "visibility",
+      title: t("about.values.val2Title"),
+      description: t("about.values.val2Desc"),
+    },
+    {
+      icon: "handshake",
+      title: t("about.values.val3Title"),
+      description: t("about.values.val3Desc"),
+    },
+  ];
+
   return (
     <section 
       className="px-6 md:px-10 py-24"
@@ -79,11 +80,10 @@ export default function CoreValuesSection() {
         <div className="flex flex-col md:flex-row justify-between items-end mb-16 gap-8">
           <div className="max-w-xl space-y-4">
             <h2 className="text-[32px] md:text-[36px] leading-[1.2] tracking-tight font-bold text-[#1a1a2e]">
-              Giá trị cốt lõi
+              {t("about.values.title")}
             </h2>
             <p className="text-[16px] md:text-[18px] leading-[1.6] text-[#64748B]">
-              Văn hóa tại InsightFlow được xây dựng dựa trên sự cam kết mang lại
-              giá trị thực chất cho khách hàng.
+              {t("about.values.subtitle")}
             </p>
           </div>
         </div>

@@ -2,6 +2,7 @@
 
 import { useState, FormEvent } from "react";
 import { useTranslation } from "react-i18next";
+import { useTheme } from "@/contexts/ThemeContext";
 
 interface Props {
   displayName: string;
@@ -9,8 +10,8 @@ interface Props {
 
 type StrengthLevel = 0 | 1 | 2 | 3 | 4;
 
-function getStrengthColor(level: StrengthLevel, barIndex: number): string {
-  if (barIndex >= level) return "bg-[#E2E4F0]";
+function getStrengthColor(level: StrengthLevel, barIndex: number, isDark: boolean): string {
+  if (barIndex >= level) return isDark ? "bg-[#252530]" : "bg-[#E2E4F0]";
   if (level === 1) return "bg-[#EF4444]";
   if (level === 2) return "bg-[#F97316]";
   if (level === 3) return "bg-[#EAB308]";
@@ -19,6 +20,9 @@ function getStrengthColor(level: StrengthLevel, barIndex: number): string {
 
 export default function SecurityTab({ displayName }: Props) {
   const { t } = useTranslation();
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+
   const strengthLabels = [
     t("profile.security.strengthLabels.empty"),
     t("profile.security.strengthLabels.weak"),
@@ -85,11 +89,14 @@ export default function SecurityTab({ displayName }: Props) {
   };
 
   const Req = ({ ok, label }: { ok: boolean; label: string }) => (
-    <li className={"flex items-center gap-[8px] text-[13px] transition-colors " + (ok ? "text-[#22C55E]" : "text-[#4A4A6A]")}>
+    <li 
+      className="flex items-center gap-[8px] text-[13px] transition-colors"
+      style={{ color: isDark ? (ok ? "var(--color-success)" : "var(--color-text-secondary)") : (ok ? "#22C55E" : "#4A4A6A") }}
+    >
       {ok ? (
-        <i className="ti ti-circle-check-filled text-[18px] text-[#22C55E]"></i>
+        <i className="ti ti-circle-check-filled text-[18px]" style={{ color: "var(--color-success)" }}></i>
       ) : (
-        <i className="ti ti-circle text-[18px] text-[#E2E4F0]"></i>
+        <i className="ti ti-circle text-[18px]" style={{ color: isDark ? "var(--color-text-disabled)" : "#E2E4F0" }}></i>
       )}
       {label}
     </li>
@@ -100,14 +107,14 @@ export default function SecurityTab({ displayName }: Props) {
       {/* ── Left: Form ── */}
       <div className="md:col-span-2 space-y-8">
         <section>
-          <h2 className="text-[20px] leading-[28px] font-semibold text-[#111c2d] mb-6">
+          <h2 className="text-[20px] leading-[28px] font-semibold mb-6" style={{ color: isDark ? "var(--color-text-primary)" : "#111c2d" }}>
             {t("profile.security.title")}
           </h2>
 
           <form className="space-y-[24px]" onSubmit={handleSubmit}>
             {/* Current Password */}
             <div className="space-y-2">
-              <label className="block text-[14px] font-medium text-[#464554]">
+              <label className="block text-[14px] font-medium" style={{ color: isDark ? "var(--color-text-secondary)" : "#464554" }}>
                 {t("profile.security.current")}
               </label>
               <div className="relative">
@@ -116,7 +123,12 @@ export default function SecurityTab({ displayName }: Props) {
                   value={currentPw}
                   onChange={(e) => setCurrentPw(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full h-[44px] px-[16px] pr-12 rounded-[10px] border-[1.5px] border-[#E2E4F0] bg-white focus:ring-[3px] focus:ring-[#6C63FF]/12 focus:border-[#6C63FF] outline-none transition-all text-[14px] font-normal text-[#4A4A6A] placeholder:text-[#9898B0]"
+                  className="w-full h-[44px] px-[16px] pr-12 rounded-[10px] border-[1.5px] focus:ring-[3px] focus:ring-[#6C63FF]/12 focus:border-[#6C63FF] outline-none transition-all text-[14px] font-normal placeholder:text-[#9898B0]"
+                  style={{
+                    backgroundColor: isDark ? "var(--color-bg-surface-raised)" : "#ffffff",
+                    borderColor: isDark ? "var(--color-border)" : "#E2E4F0",
+                    color: isDark ? "var(--color-text-primary)" : "#4A4A6A",
+                  }}
                 />
                 <button
                   type="button"
@@ -130,7 +142,7 @@ export default function SecurityTab({ displayName }: Props) {
 
             {/* New Password */}
             <div className="space-y-2">
-              <label className="block text-[14px] font-medium text-[#464554]">
+              <label className="block text-[14px] font-medium" style={{ color: isDark ? "var(--color-text-secondary)" : "#464554" }}>
                 {t("profile.security.new")}
               </label>
               <div className="relative">
@@ -139,7 +151,12 @@ export default function SecurityTab({ displayName }: Props) {
                   value={newPw}
                   onChange={(e) => setNewPw(e.target.value)}
                   placeholder={t("profile.security.newPlaceholder")}
-                  className="w-full h-[44px] px-[16px] pr-12 rounded-[10px] border-[1.5px] border-[#E2E4F0] bg-white focus:ring-[3px] focus:ring-[#6C63FF]/12 focus:border-[#6C63FF] outline-none transition-all text-[14px] font-normal text-[#4A4A6A] placeholder:text-[#9898B0]"
+                  className="w-full h-[44px] px-[16px] pr-12 rounded-[10px] border-[1.5px] focus:ring-[3px] focus:ring-[#6C63FF]/12 focus:border-[#6C63FF] outline-none transition-all text-[14px] font-normal placeholder:text-[#9898B0]"
+                  style={{
+                    backgroundColor: isDark ? "var(--color-bg-surface-raised)" : "#ffffff",
+                    borderColor: isDark ? "var(--color-border)" : "#E2E4F0",
+                    color: isDark ? "var(--color-text-primary)" : "#4A4A6A",
+                  }}
                 />
                 <button
                   type="button"
@@ -155,21 +172,21 @@ export default function SecurityTab({ displayName }: Props) {
                 {[1, 2, 3, 4].map((i) => (
                   <div
                     key={i}
-                    className={"h-[4px] flex-1 rounded-full transition-all duration-300 " + getStrengthColor(strength, i)}
+                    className={"h-[4px] flex-1 rounded-full transition-all duration-300 " + getStrengthColor(strength, i, isDark)}
                   />
                 ))}
               </div>
-              <p className="text-[12px] text-[#464554] mt-1">
+              <p className="text-[12px] mt-1" style={{ color: isDark ? "var(--color-text-muted)" : "#464554" }}>
                 {t("profile.security.strength")}
                 <span className={strength >= 4 ? "text-green-600 font-semibold" : strength >= 2 ? "text-amber-500 font-semibold" : strength >= 1 ? "text-red-500 font-semibold" : ""}>
-                  {strengthLabels[strength]}
+                  {" "}{strengthLabels[strength]}
                 </span>
               </p>
             </div>
 
             {/* Confirm Password */}
             <div className="space-y-2">
-              <label className="block text-[14px] font-medium text-[#464554]">
+              <label className="block text-[14px] font-medium" style={{ color: isDark ? "var(--color-text-secondary)" : "#464554" }}>
                 {t("profile.security.confirm")}
               </label>
               <div className="relative">
@@ -178,12 +195,14 @@ export default function SecurityTab({ displayName }: Props) {
                   value={confirmPw}
                   onChange={(e) => setConfirmPw(e.target.value)}
                   placeholder={t("profile.security.confirmPlaceholder")}
-                  className={
-                    "w-full h-[44px] px-[16px] pr-12 rounded-[10px] border-[1.5px] outline-none transition-all text-[14px] font-normal focus:ring-[3px] text-[#4A4A6A] placeholder:text-[#9898B0] " +
-                    (passwordsMatch && confirmPw.length > 0
-                      ? "border-[#22C55E] focus:border-[#22C55E] focus:ring-[#22C55E]/12"
-                      : "border-[#E2E4F0] focus:border-[#6C63FF] focus:ring-[#6C63FF]/12")
-                  }
+                  className="w-full h-[44px] px-[16px] pr-12 rounded-[10px] border-[1.5px] outline-none transition-all text-[14px] font-normal focus:ring-[3px]"
+                  style={{
+                    backgroundColor: isDark ? "var(--color-bg-surface-raised)" : "#ffffff",
+                    borderColor: passwordsMatch && confirmPw.length > 0
+                      ? "#22C55E"
+                      : (isDark ? "var(--color-border)" : "#E2E4F0"),
+                    color: isDark ? "var(--color-text-primary)" : "#4A4A6A",
+                  }}
                 />
                 {passwordsMatch && confirmPw.length > 0 ? (
                   <i className="ti ti-circle-check-filled absolute right-3 top-1/2 -translate-y-1/2 text-[#22C55E] text-[18px]"></i>
@@ -225,7 +244,19 @@ export default function SecurityTab({ displayName }: Props) {
               <button
                 type="button"
                 onClick={() => { setCurrentPw(""); setNewPw(""); setConfirmPw(""); }}
-                className="bg-transparent text-[#4A4A6A] border-[1.5px] border-[#E2E4F0] rounded-[10px] px-[28px] py-[11px] font-semibold hover:border-[#6C63FF] hover:text-[#6C63FF] transition-colors text-[14px]"
+                className="bg-transparent border-[1.5px] rounded-[10px] px-[28px] py-[11px] font-semibold transition-colors text-[14px]"
+                style={{
+                  borderColor: isDark ? "var(--color-border)" : "#E2E4F0",
+                  color: isDark ? "var(--color-text-secondary)" : "#4A4A6A",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = isDark ? "var(--color-brand)" : "#6C63FF";
+                  e.currentTarget.style.color = isDark ? "var(--color-brand)" : "#6C63FF";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = isDark ? "var(--color-border)" : "#E2E4F0";
+                  e.currentTarget.style.color = isDark ? "var(--color-text-secondary)" : "#4A4A6A";
+                }}
               >
                 {t("profile.security.cancel")}
               </button>
@@ -234,13 +265,13 @@ export default function SecurityTab({ displayName }: Props) {
         </section>
 
         {/* Remote logout */}
-        <div className="mt-10 pt-8 border-t border-[#e7eaf3]">
-          <div className="flex items-center justify-between gap-6">
+        <div className="mt-10 pt-8 border-t" style={{ borderColor: isDark ? "var(--color-border)" : "#e7eaf3" }}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
             <div>
-              <h4 className="text-[14px] font-semibold text-[#111c2d]">
+              <h4 className="text-[14px] font-semibold" style={{ color: isDark ? "var(--color-text-primary)" : "#111c2d" }}>
                 {t("profile.security.remoteLogoutTitle")}
               </h4>
-              <p className="text-[14px] text-[#464554] mt-1">
+              <p className="text-[14px] mt-1" style={{ color: isDark ? "var(--color-text-secondary)" : "#464554" }}>
                 {t("profile.security.remoteLogoutDesc")}
               </p>
             </div>
@@ -254,8 +285,14 @@ export default function SecurityTab({ displayName }: Props) {
 
       {/* ── Right: Requirements checklist ── */}
       <div className="md:col-span-1">
-        <div className="bg-[#f0f3ff] p-6 rounded-2xl border border-[#e7eaf3]">
-          <h3 className="text-[14px] font-semibold text-[#111c2d] mb-4">
+        <div 
+          className="p-6 rounded-2xl border"
+          style={{
+            backgroundColor: isDark ? "var(--color-bg-surface-raised)" : "#f0f3ff",
+            borderColor: isDark ? "var(--color-border)" : "#e7eaf3",
+          }}
+        >
+          <h3 className="text-[14px] font-semibold mb-4" style={{ color: isDark ? "var(--color-text-primary)" : "#111c2d" }}>
             {t("profile.security.req.title")}
           </h3>
           <ul className="space-y-3">
@@ -264,8 +301,8 @@ export default function SecurityTab({ displayName }: Props) {
             <Req ok={hasNum} label={t("profile.security.req.num")} />
             <Req ok={hasSpec} label={t("profile.security.req.spec")} />
           </ul>
-          <div className="mt-8 pt-6 border-t border-[#c7c4d7]">
-            <p className="text-[12px] text-[#464554] leading-relaxed">
+          <div className="mt-8 pt-6 border-t" style={{ borderColor: isDark ? "var(--color-border)" : "#c7c4d7" }}>
+            <p className="text-[12px] leading-relaxed" style={{ color: isDark ? "var(--color-text-secondary)" : "#464554" }}>
               {t("profile.security.note.part1")} <span className="font-semibold">{displayName}</span>{t("profile.security.note.part2")}
             </p>
           </div>
@@ -274,3 +311,4 @@ export default function SecurityTab({ displayName }: Props) {
     </div>
   );
 }
+

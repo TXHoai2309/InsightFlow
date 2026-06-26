@@ -12,53 +12,38 @@ interface MentionFiltersProps {
 }
 
 const sentimentOptions = [
-  { value: "all", label: "Tất cả sắc thái" },
+  { value: "all", label: "Tất cả Sắc thái" },
   { value: "positive", label: "Tích cực" },
-  { value: "negative", label: "Tiêu cực" },
   { value: "neutral", label: "Trung lập" },
+  { value: "negative", label: "Tiêu cực" },
 ];
-
-const platformLabelMap: Record<string, string> = {
-  facebook: "Facebook",
-  tiktok: "TikTok",
-  news: "Báo chí",
-  youtube: "YouTube",
-  google_maps: "Google Maps",
-  thread: "Threads",
-  be: "BeFood",
-};
-
-const topicLabelMap: Record<string, string> = {
-  quality: "Sản phẩm",
-  price: "Giá cả",
-  service: "Dịch vụ khách hàng",
-  staff: "Nhân viên",
-  delivery: "Giao hàng",
-  experience: "Trải nghiệm",
-  legal: "Pháp lý",
-  operation: "Vận hành",
-  marketing: "Marketing",
-  competitor: "Đối thủ",
-  other: "Khác",
-};
 
 const timeRangeOptions = [
   { value: "all", label: "Tất cả thời gian" },
-  { value: "24h", label: "24 giờ" },
-  { value: "7d", label: "7 ngày" },
-  { value: "30d", label: "30 ngày" },
+  { value: "today", label: "Hôm nay (24h)" },
+  { value: "7days", label: "7 ngày qua" },
+  { value: "30days", label: "30 ngày qua" },
 ];
 
 export function MentionFilters({ workspaces, filters, allMentions }: MentionFiltersProps) {
   const { t } = useTranslation();
   const { setFilters } = useDashboardStore();
 
-  // Derive available brands from actual data
+  // Keep the product scope fixed to the three tracked brands.
   const availableBrands = useMemo(() => {
-    const brandSet = new Set<string>();
-    allMentions.forEach(m => brandSet.add(m.workspace_id));
-    return Array.from(brandSet).sort();
-  }, [allMentions]);
+    const order = ["highlandcoffee", "starbucks", "mixue"];
+    return [...workspaces].sort((a, b) => {
+      const aIndex = order.findIndex((key) =>
+        a.id.toLowerCase().includes(key) ||
+        a.brand_name.toLowerCase().replace(/[\s\-_.]/g, "").includes(key),
+      );
+      const bIndex = order.findIndex((key) =>
+        b.id.toLowerCase().includes(key) ||
+        b.brand_name.toLowerCase().replace(/[\s\-_.]/g, "").includes(key),
+      );
+      return (aIndex === -1 ? 99 : aIndex) - (bIndex === -1 ? 99 : bIndex);
+    });
+  }, [workspaces]);
 
   // Derive available platforms from actual data
   const availablePlatforms = useMemo(() => {
@@ -79,7 +64,10 @@ export function MentionFilters({ workspaces, filters, allMentions }: MentionFilt
   // Get brand display name: check workspaces list, then fall back to raw value
   const getBrandName = (brandId: string) => {
     const ws = workspaces.find(w => w.id === brandId);
-    return ws ? ws.brand_name : brandId;
+    if (!ws) return brandId;
+    return ws.brand_name.toLowerCase().includes("highland")
+      ? "Highland Coffee"
+      : ws.brand_name;
   };
 
   return (
@@ -93,20 +81,22 @@ export function MentionFilters({ workspaces, filters, allMentions }: MentionFilt
         }}
       >
         <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--color-text-muted)" }}>
-          Nhãn hàng (Brand)
+          {t("mentions.filters.brandLabel")}
         </label>
         <select
           value={filters.workspace_id}
           onChange={(event) =>
             setFilters({ workspace_id: event.target.value })
           }
-          className="bg-transparent border-none focus:ring-0 font-medium w-full p-0 text-sm outline-none"
+          className="bg-transparent border-none focus:ring-0 font-medium w-full p-0 text-sm outline-none cursor-pointer"
           style={{ color: "var(--color-text-primary)" }}
         >
-          <option value="all">Tất cả nhãn hàng</option>
+          <option value="all" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
+            {t("mentions.filters.allBrands")}
+          </option>
           {availableBrands.map((brand) => (
-            <option key={brand} value={brand}>
-              {getBrandName(brand)}
+            <option key={brand.id} value={brand.id}>
+              {getBrandName(brand.id)}
             </option>
           ))}
         </select>
@@ -121,7 +111,7 @@ export function MentionFilters({ workspaces, filters, allMentions }: MentionFilt
         }}
       >
         <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--color-text-muted)" }}>
-          Sắc thái (Sentiment)
+          {t("mentions.filters.sentimentLabel")}
         </label>
         <select
           value={filters.sentiment}
@@ -130,11 +120,11 @@ export function MentionFilters({ workspaces, filters, allMentions }: MentionFilt
               sentiment: event.target.value as DashboardFilters["sentiment"],
             })
           }
-          className="bg-transparent border-none focus:ring-0 font-medium w-full p-0 text-sm outline-none"
+          className="bg-transparent border-none focus:ring-0 font-medium w-full p-0 text-sm outline-none cursor-pointer"
           style={{ color: "var(--color-text-primary)" }}
         >
           {sentimentOptions.map((option) => (
-            <option key={option.value} value={option.value}>
+            <option key={option.value} value={option.value} style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
               {option.label}
             </option>
           ))}
@@ -150,7 +140,7 @@ export function MentionFilters({ workspaces, filters, allMentions }: MentionFilt
         }}
       >
         <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--color-text-muted)" }}>
-          Nền tảng (Platform)
+          {t("mentions.filters.platformLabel")}
         </label>
         <select
           value={filters.platform}
@@ -159,13 +149,15 @@ export function MentionFilters({ workspaces, filters, allMentions }: MentionFilt
               platform: event.target.value as DashboardFilters["platform"],
             })
           }
-          className="bg-transparent border-none focus:ring-0 font-medium w-full p-0 text-sm outline-none"
+          className="bg-transparent border-none focus:ring-0 font-medium w-full p-0 text-sm outline-none cursor-pointer"
           style={{ color: "var(--color-text-primary)" }}
         >
-          <option value="all">Tất cả nền tảng</option>
+          <option value="all" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
+            {t("mentions.filters.allPlatforms")}
+          </option>
           {availablePlatforms.map((platform) => (
-            <option key={platform} value={platform}>
-              {platformLabelMap[platform] || platform}
+            <option key={platform} value={platform} style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
+              {t(`dashboard.filters.${platform.toLowerCase()}`, { defaultValue: platform })}
             </option>
           ))}
         </select>
@@ -180,7 +172,7 @@ export function MentionFilters({ workspaces, filters, allMentions }: MentionFilt
         }}
       >
         <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--color-text-muted)" }}>
-          Chủ đề (Topic)
+          {t("mentions.filters.topicLabel")}
         </label>
         <select
           value={filters.topic || "all"}
@@ -189,13 +181,15 @@ export function MentionFilters({ workspaces, filters, allMentions }: MentionFilt
               topic: event.target.value as DashboardFilters["topic"],
             })
           }
-          className="bg-transparent border-none focus:ring-0 font-medium w-full p-0 text-sm outline-none"
+          className="bg-transparent border-none focus:ring-0 font-medium w-full p-0 text-sm outline-none cursor-pointer"
           style={{ color: "var(--color-text-primary)" }}
         >
-          <option value="all">Tất cả chủ đề</option>
+          <option value="all" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
+            {t("mentions.filters.allTopics")}
+          </option>
           {availableTopics.map((topic) => (
-            <option key={topic} value={topic}>
-              {topicLabelMap[topic] || topic}
+            <option key={topic} value={topic} style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
+              {t(`dashboard.topics.${topic.toLowerCase()}`, { defaultValue: topic })}
             </option>
           ))}
         </select>
@@ -210,7 +204,7 @@ export function MentionFilters({ workspaces, filters, allMentions }: MentionFilt
         }}
       >
         <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--color-text-muted)" }}>
-          Khoảng thời gian
+          {t("mentions.filters.timeRangeLabel")}
         </label>
         <select
           value={filters.time_range}
@@ -219,11 +213,11 @@ export function MentionFilters({ workspaces, filters, allMentions }: MentionFilt
               time_range: event.target.value as DashboardFilters["time_range"],
             })
           }
-          className="bg-transparent border-none focus:ring-0 font-medium w-full p-0 text-sm outline-none"
+          className="bg-transparent border-none focus:ring-0 font-medium w-full p-0 text-sm outline-none cursor-pointer"
           style={{ color: "var(--color-text-primary)" }}
         >
           {timeRangeOptions.map((option) => (
-            <option key={option.value} value={option.value}>
+            <option key={option.value} value={option.value} style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
               {option.label}
             </option>
           ))}

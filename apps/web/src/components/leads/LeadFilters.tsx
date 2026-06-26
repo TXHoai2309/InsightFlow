@@ -11,12 +11,18 @@ interface LeadFiltersProps {
 }
 
 const PLATFORM_ORDER: Platform[] = [
-  "facebook", "tiktok", "youtube", "thread", "be", "google_maps", "news",
+  "facebook",
+  "tiktok",
+  "youtube",
+  "thread",
+  "be",
+  "google_maps",
+  "news",
 ];
 
 export function LeadFilters({ workspaces }: LeadFiltersProps) {
-  const { filters, setFilters } = useDashboardStore();
   const { t } = useTranslation();
+  const { filters, setFilters } = useDashboardStore();
 
   const handleFilterChange = useCallback(
     <K extends keyof Filters>(key: K, value: Filters[K]) => {
@@ -31,7 +37,7 @@ export function LeadFilters({ workspaces }: LeadFiltersProps) {
         <div>
           <h3 className="font-bold text-lg text-[var(--color-text-primary)]">{t("leads.filters.title")}</h3>
           <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">
-            {t("leads.filters.subtitle")}
+            {t("leads.filters.desc")}
           </p>
         </div>
 
@@ -47,9 +53,13 @@ export function LeadFilters({ workspaces }: LeadFiltersProps) {
                 onChange={(e) => handleFilterChange("workspace_id", e.target.value)}
                 className="appearance-none pl-3 pr-9 py-2 rounded-lg text-sm focus:ring-1 focus:ring-[var(--color-brand)] outline-none transition-all cursor-pointer select-app w-full border border-[var(--color-border)]"
               >
-                <option value="all">{t("leads.filters.allBrands")}</option>
+                <option value="all" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
+                  {t("leads.filters.brandAll")}
+                </option>
                 {workspaces.map((ws) => (
-                  <option key={ws.id} value={ws.id}>{ws.brand_name}</option>
+                  <option key={ws.id} value={ws.id} style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
+                    {ws.brand_name}
+                  </option>
                 ))}
               </select>
               <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center text-[var(--color-text-muted)]">
@@ -66,12 +76,18 @@ export function LeadFilters({ workspaces }: LeadFiltersProps) {
             <div className="relative">
               <select
                 value={filters.platform}
-                onChange={(e) => handleFilterChange("platform", e.target.value as Filters["platform"])}
+                onChange={(e) =>
+                  handleFilterChange("platform", e.target.value as Filters["platform"])
+                }
                 className="appearance-none pl-3 pr-9 py-2 rounded-lg text-sm focus:ring-1 focus:ring-[var(--color-brand)] outline-none transition-all cursor-pointer select-app w-full border border-[var(--color-border)]"
               >
-                <option value="all">{t("leads.filters.allPlatforms")}</option>
+                <option value="all" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
+                  {t("leads.filters.platformAll")}
+                </option>
                 {PLATFORM_ORDER.map((p) => (
-                  <option key={p} value={p}>{PLATFORM_META[p].label}</option>
+                  <option key={p} value={p} style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
+                    {t(`dashboard.filters.${p}`, { defaultValue: PLATFORM_META[p].label })}
+                  </option>
                 ))}
               </select>
               <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center text-[var(--color-text-muted)]">
@@ -88,14 +104,26 @@ export function LeadFilters({ workspaces }: LeadFiltersProps) {
             <div className="relative">
               <select
                 value={filters.urgency || "pending"}
-                onChange={(e) => handleFilterChange("urgency", e.target.value as Filters["urgency"])}
+                onChange={(e) =>
+                  handleFilterChange("urgency", e.target.value as Filters["urgency"])
+                }
                 className="appearance-none pl-3 pr-9 py-2 rounded-lg text-sm focus:ring-1 focus:ring-[var(--color-brand)] outline-none transition-all cursor-pointer select-app font-bold w-full border border-[var(--color-border)]"
               >
-                <option value="pending">{t("leads.filters.pending")}</option>
-                <option value="urgent">{t("leads.filters.urgent")}</option>
-                <option value="overdue">{t("leads.filters.overdue")}</option>
-                <option value="handled">{t("leads.filters.handled")}</option>
-                <option value="all">{t("leads.filters.all")}</option>
+                <option value="pending" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
+                  {t("leads.filters.pending")}
+                </option>
+                <option value="urgent" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
+                  {t("leads.filters.urgent")}
+                </option>
+                <option value="overdue" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
+                  {t("leads.filters.overdue")}
+                </option>
+                <option value="handled" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
+                  {t("leads.filters.handled")}
+                </option>
+                <option value="all" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
+                  {t("leads.filters.urgencyAll")}
+                </option>
               </select>
               <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center text-[var(--color-text-muted)]">
                 <span className="material-symbols-outlined text-sm">keyboard_arrow_down</span>

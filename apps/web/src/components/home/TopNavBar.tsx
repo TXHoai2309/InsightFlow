@@ -1,17 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { signOut } from "firebase/auth";
-import { useTranslation } from "react-i18next";
+import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
+import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { useTranslation } from "react-i18next";
 
 export default function TopNavBar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const { user, loading } = useAuth();
+  const { language, toggleLanguage } = useLanguage();
   const { t } = useTranslation();
   const router = useRouter();
   const pathname = usePathname();
@@ -43,13 +45,6 @@ export default function TopNavBar() {
     return pathname.startsWith(href);
   };
 
-  const initials = (user?.displayName || user?.email || "U")
-    .split(" ")
-    .map((word: string) => word[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-
   return (
     <>
       <nav
@@ -62,9 +57,7 @@ export default function TopNavBar() {
           boxShadow: scrolled ? "0 2px 20px rgba(0,0,0,0.08)" : "none",
         }}
       >
-        <style
-          dangerouslySetInnerHTML={{
-            __html: `
+        <style dangerouslySetInnerHTML={{__html: `
           .nav-link {
             position: relative;
             color: #374151;
@@ -94,22 +87,36 @@ export default function TopNavBar() {
             color: #6D4CFF;
             font-weight: 600;
           }
-          @media (prefers-reduced-motion: reduce) {
-            * { transition: none !important; animation: none !important; }
+          .cta-button {
+            background: #6D4CFF;
+            color: white;
+            border-radius: 10px;
+            padding: 10px 20px;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.2s ease;
           }
-        `,
-          }}
-        />
+          .cta-button:hover {
+            background: #5B3FE8;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 16px rgba(109,76,255,0.35);
+          }
+          @media (prefers-reduced-motion: reduce) { 
+            * { transition: none !important; animation: none !important; } 
+          }
+        `}} />
 
         <div className="flex justify-between items-center w-full px-5 md:px-12 max-w-[1440px] mx-auto h-full">
+          {/* Logo */}
           <Link href="/" className="flex items-center hover:opacity-80 transition-opacity w-[180px] md:w-[260px] h-full relative overflow-hidden">
-            <img
-              src="/logo.png"
-              alt="InsightFlow Logo"
-              className="absolute left-[-8px] md:left-[-12px] top-1/2 -translate-y-1/2 h-[120px] md:h-[160px] max-w-none mix-blend-multiply pointer-events-none"
+            <img 
+              src="/logo.png" 
+              alt="InsightFlow Logo" 
+              className="absolute left-[-8px] md:left-[-12px] top-1/2 -translate-y-1/2 h-[120px] md:h-[160px] max-w-none mix-blend-multiply pointer-events-none" 
             />
           </Link>
 
+          {/* Desktop Nav */}
           <div className="hidden md:flex items-center space-x-8">
             {navLinks.map((link) => (
               <Link
@@ -122,26 +129,35 @@ export default function TopNavBar() {
             ))}
           </div>
 
+          {/* Right Actions */}
           <div className="flex items-center gap-4">
+
+            {/* Logged in: show avatar */}
             {!loading && user && (
               <div className="hidden md:flex items-center gap-3">
-                <Link href="/profile" className="flex items-center gap-[12px] group">
-                  <div
-                    className="w-[38px] h-[38px] rounded-full flex items-center justify-center text-white text-[14px] font-bold group-hover:scale-105 transition-transform shadow-sm shrink-0"
-                    style={{ background: "linear-gradient(135deg, #6D4CFF, #9B8FF8)" }}
-                  >
-                    {initials}
+                <Link
+                  href="/profile"
+                  className="flex items-center gap-[12px] group"
+                >
+                  <div className="w-[38px] h-[38px] rounded-full flex items-center justify-center text-white text-[14px] font-bold group-hover:scale-105 transition-transform shadow-sm shrink-0" style={{ background: "linear-gradient(135deg, #6D4CFF, #9B8FF8)" }}>
+                    {(user.displayName || user.email || "U")
+                      .split(" ")
+                      .map((w: string) => w[0])
+                      .join("")
+                      .slice(0, 2)
+                      .toUpperCase()}
                   </div>
                   <div className="flex flex-col items-start leading-tight">
                     <span className="text-[14px] font-semibold text-[#1a1a2e] group-hover:text-[#6D4CFF] transition-colors">
                       {user.displayName || user.email}
                     </span>
-                    <span className="text-[12px] text-[#9CA3AF]">{t("profile.adminRole")}</span>
+                    <span className="text-[12px] text-[#9CA3AF]">{t("header.administrator")}</span>
                   </div>
                 </Link>
               </div>
             )}
 
+            {/* Logged out: show login + signup */}
             {!loading && !user && (
               <div className="hidden md:flex items-center gap-3">
                 <Link
@@ -154,20 +170,29 @@ export default function TopNavBar() {
                   href="/dashboard"
                   className="text-[14px] font-semibold text-white px-5 py-2 rounded-[10px] transition-all"
                   style={{ background: "#6D4CFF" }}
-                  onMouseOver={(event) => {
-                    event.currentTarget.style.background = "#5B3FE8";
-                    event.currentTarget.style.transform = "translateY(-1px)";
-                  }}
-                  onMouseOut={(event) => {
-                    event.currentTarget.style.background = "#6D4CFF";
-                    event.currentTarget.style.transform = "translateY(0)";
-                  }}
+                  onMouseOver={(e) => { e.currentTarget.style.background = "#5B3FE8"; e.currentTarget.style.transform = "translateY(-1px)"; }}
+                  onMouseOut={(e) => { e.currentTarget.style.background = "#6D4CFF"; e.currentTarget.style.transform = "translateY(0)"; }}
                 >
                   {t("home.hero.freeTrialBtn")}
                 </Link>
               </div>
             )}
 
+            {/* Language Toggle */}
+            <button
+              onClick={toggleLanguage}
+              title={language === "vi" ? "Switch to English" : "Chuyển sang Tiếng Việt"}
+              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-[13px] font-bold border transition-all duration-200 select-none"
+              style={{ borderColor: "#E5E3FA", color: "#6D4CFF", background: "#F8F7FF" }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "#6D4CFF"; e.currentTarget.style.color = "white"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "#F8F7FF"; e.currentTarget.style.color = "#6D4CFF"; }}
+            >
+              <span style={{ fontSize: "16px", lineHeight: 1 }}>
+                {language === "vi" ? "🇻🇳" : "🇬🇧"}
+              </span>
+              <span>{language === "vi" ? "VI" : "EN"}</span>
+            </button>
+            {/* Mobile hamburger */}
             <button
               className="md:hidden p-2 text-[#6D4CFF]"
               onClick={() => setMobileOpen(true)}
@@ -179,21 +204,23 @@ export default function TopNavBar() {
         </div>
       </nav>
 
+
+      {/* Mobile Drawer Overlay */}
       {mobileOpen && (
-        <div
+        <div 
           className="fixed inset-0 bg-[#1a1a2e]/40 backdrop-blur-sm z-[110] transition-opacity md:hidden"
           onClick={() => setMobileOpen(false)}
-        />
+        ></div>
       )}
 
-      <div
+      {/* Mobile Drawer */}
+      <div 
         className={`fixed top-0 right-0 bottom-0 w-[280px] bg-white z-[120] shadow-2xl transition-transform duration-300 md:hidden flex flex-col ${mobileOpen ? "translate-x-0" : "translate-x-full"}`}
       >
         <div className="p-5 flex justify-end">
-          <button
+          <button 
             onClick={() => setMobileOpen(false)}
             className="text-[#64748B] hover:text-[#1a1a2e]"
-            aria-label="Close menu"
           >
             <span className="material-symbols-outlined text-[28px]">close</span>
           </button>
@@ -211,25 +238,38 @@ export default function TopNavBar() {
             </Link>
           ))}
 
+          {/* Language toggle in mobile drawer */}
+          <div className="px-[24px] py-[16px] border-t border-[#F1F0FF]">
+            <button
+              onClick={() => { toggleLanguage(); setMobileOpen(false); }}
+              className="flex items-center gap-3 w-full text-[18px] font-medium text-[#374151]"
+            >
+              <span style={{ fontSize: "22px" }}>{language === "vi" ? "🇬🇧" : "🇻🇳"}</span>
+              <span>{language === "vi" ? "Switch to English" : "Chuyển sang Tiếng Việt"}</span>
+            </button>
+          </div>
+
           {!loading && user && (
             <div className="mt-4 border-t border-[#F1F0FF] px-[24px] py-[16px]">
-              <p className="text-[14px] font-medium text-[#9CA3AF] mb-3">{t("profile.title")}</p>
+              <p className="text-[14px] font-medium text-[#9CA3AF] mb-3">{t("nav.account")}</p>
               <Link
                 href="/profile"
                 onClick={() => setMobileOpen(false)}
                 className="flex items-center gap-3 mb-4"
               >
-                <div
-                  className="w-[38px] h-[38px] rounded-full flex items-center justify-center text-white text-[14px] font-bold"
-                  style={{ background: "linear-gradient(135deg, #6D4CFF, #9B8FF8)" }}
-                >
-                  {initials}
+                <div className="w-[38px] h-[38px] rounded-full flex items-center justify-center text-white text-[14px] font-bold" style={{ background: "linear-gradient(135deg, #6D4CFF, #9B8FF8)" }}>
+                  {(user.displayName || user.email || "U")
+                    .split(" ")
+                    .map((w: string) => w[0])
+                    .join("")
+                    .slice(0, 2)
+                    .toUpperCase()}
                 </div>
                 <span className="text-[16px] font-semibold text-[#1a1a2e]">
                   {user.displayName || user.email}
                 </span>
               </Link>
-              <button
+              <button 
                 onClick={handleLogout}
                 className="text-[#EF4444] text-[16px] font-medium flex items-center gap-2"
               >
@@ -239,7 +279,9 @@ export default function TopNavBar() {
             </div>
           )}
         </div>
+
       </div>
     </>
   );
 }
+

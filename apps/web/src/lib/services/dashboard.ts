@@ -13,7 +13,6 @@ import {
   collection,
   getDocs,
   query,
-  orderBy,
   limit,
   startAfter,
   QueryDocumentSnapshot,
@@ -36,7 +35,7 @@ import type {
 
 // ─── Collection names ────────────────────────────────────────────────────────
 export const COLLECTION_NAMES = {
-  mentions: "mentions_nlp_demo",
+  mentions: "insightflow_labels",
   alerts: "alerts",
   leads: "leads",
 } as const;
@@ -59,18 +58,43 @@ const SOURCE_TO_PLATFORM: Record<string, Platform> = {
 };
 
 export function mapSourceToPlatform(source: string): Platform {
-  return SOURCE_TO_PLATFORM[source?.toLowerCase().replace(/[-\s]/g, "_")] ?? "news";
+  const normalized = source
+    ?.toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[-\s]/g, "_");
+  return SOURCE_TO_PLATFORM[normalized] ?? "news";
 }
 
 /**
- * Chuẩn hoá tên thương hiệu để so sánh không phân biệt hoa thường / ký tự đặc biệt.
- * Ví dụ: "Laha Cafe" → "lahacafe", "laha-cafe" → "lahacafe"
+ * Chuẩn hoá tên thương hiệu → tên hiển thị đẹp cho 3 target brand.
+ * Fallback: capitalize from raw string.
  */
 export function normalizeBrandName(name: string): string {
-  return name
+  const normalized = name
     .toLowerCase()
     .replace(/[\s\-_.]/g, "") // bỏ dấu cách, gạch ngang, gạch dưới, dấu chấm
     .trim();
+
+  if (normalized.includes("highland")) return "highlandcoffee";
+  if (normalized.includes("starbuck")) return "starbucks";
+  if (normalized.includes("mixue")) return "mixue";
+
+  return normalized;
+}
+
+/** Map raw brand string → display name */
+export function formatBrandDisplayName(raw: string): string {
+  if (!raw) return "";
+  const b = raw.toLowerCase().trim();
+  if (b.includes("highland")) return "Highland Coffee";
+  if (b.includes("starbuck")) return "Starbucks";
+  if (b.includes("mixue")) return "Mixue";
+  // fallback: capitalize words
+  return raw
+    .split(/[-_\s]+/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
 }
 
 // ─── Platform display info (dùng cho TopSources và DashboardFilters) ─────────
@@ -90,8 +114,44 @@ const VALID_TOPICS = new Set<string>([
   "quality", "price", "service", "staff", "delivery",
   "experience", "legal", "operation", "competitor", "other",
 ]);
-function mapTopic(raw: string): TopicType {
-  return VALID_TOPICS.has(raw) ? (raw as TopicType) : "other";
+function mapTopic(raw: unknown): TopicType {
+  const firstTopic = Array.isArray(raw) ? raw[0] : raw;
+  const topic = String(firstTopic || "").toLowerCase().trim();
+  return VALID_TOPICS.has(topic) ? (topic as TopicType) : "other";
+}
+
+function mapSentiment(raw: unknown): Mention["sentiment"] {
+  const sentiment = String(raw || "").toLowerCase().trim();
+  return (["positive", "negative", "neutral"].includes(sentiment)
+    ? sentiment
+    : "neutral") as Mention["sentiment"];
+}
+
+function mapIntent(raw: unknown): Lead["intent"] {
+  const intent = String(raw || "").toLowerCase().trim();
+  return (["hot", "warm", "cold", "none"].includes(intent)
+    ? intent
+    : "none") as Lead["intent"];
+}
+
+function mapLeadStatus(raw: unknown): Lead["status"] {
+  const status = String(raw || "").toLowerCase().trim();
+  return (["new", "processing", "completed", "skipped"].includes(status)
+    ? status
+    : "new") as Lead["status"];
+}
+
+function normalizeOptionalUrl(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    const url = String(value || "").trim();
+    if (url) return url;
+  }
+  return undefined;
+}
+
+function normalizeOptionalText(value: unknown): string | undefined {
+  const text = String(value || "").trim();
+  return text || undefined;
 }
 
 // ─── Date parser ─────────────────────────────────────────────────────────────
@@ -103,6 +163,7 @@ function parseDate(field: unknown): string {
   if (field instanceof Date) return field.toISOString();
   const s = String(field).trim();
   if (!s) return new Date().toISOString();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return `${s}T00:00:00Z`;
 
   // Thử parse định dạng Việt Nam thông dụng như "HH:mm DD/MM/YYYY" hoặc "DD/MM/YYYY"
   // ví dụ: "22:21 18/05/2025"
@@ -149,9 +210,9 @@ export class DashboardService {
   }> {
     try {
       // ── Mentions ──────────────────────────────────────────────────────────
-      const constraints: Parameters<typeof query>[1][] = [
-        orderBy("crawled_at", "desc"),
-      ];
+      // NOTE: No orderBy — avoids Firestore index requirement.
+      // We sort in-memory after fetching.
+      const constraints: Parameters<typeof query>[1][] = [];
       if (opts.maxMentions) constraints.push(limit(opts.maxMentions));
       if (opts.after) constraints.push(startAfter(opts.after));
 
@@ -161,41 +222,63 @@ export class DashboardService {
 
       const mentions: Mention[] = mentionsSnap.docs.map((doc) => {
         const d = doc.data();
+        const labels = d.labels || {};
         // posted_at = ngày đăng bài thật (post_date → created_at nguồn → fallback crawled_at)
-        const postedAtRaw = d.post_date ?? d.posted_at ?? d.created_at ?? d.crawled_at;
+        const postedAtRaw = d.post_date ?? d.posted_at ?? d.created_at ?? d.crawled_at ?? d.uploaded_at;
+        const rawBrand = String(d.brand || d.workspace_id || "");
         return {
-          id: doc.id,
-          workspace_id: String(d.brand || ""),
+          id: String(d.id || doc.id),
+          workspace_id: rawBrand,
           platform: mapSourceToPlatform(d.source || ""),
-          content: String(d.processed_text || d.text || ""),
-          author: String(d.author_name || "N/A"),
-          sentiment: (["positive", "negative", "neutral"].includes(d.baseline_sentiment)
-            ? d.baseline_sentiment
-            : "neutral") as Mention["sentiment"],
-          topic: mapTopic(String(d.baseline_topic || "")),
+          content: String(d.clean_text || d.processed_text || d.text || d.content || d.original_text || ""),
+          author: String(d.author || d.author_name || "N/A"),
+          sentiment: mapSentiment(labels.sentiment ?? d.baseline_sentiment ?? d.sentiment),
+          topic: mapTopic(labels.topic ?? d.baseline_topic ?? d.topic),
           credibility_score: typeof d.baseline_confidence === "number"
             ? Math.round(d.baseline_confidence * 100)
-            : 50,
-          created_at: parseDate(d.crawled_at),
+            : 100,
+          created_at: parseDate(d.uploaded_at || d.labeled_at || d.crawled_at || d.analyzed_at || d.created_at),
           posted_at: parseDate(postedAtRaw),
-          url: String(d.url || ""),
+          url: String(d.url || d.post_url || d.source_url || ""),
         };
       });
+
+      // Sort in-memory: newest posted_at first
+      mentions.sort((a, b) => new Date(b.posted_at).getTime() - new Date(a.posted_at).getTime());
 
       const lastMentionDoc = mentionsSnap.docs.at(-1);
 
       // ── Workspaces (derived từ brands trong mentions) ─────────────────────
-      // Nhóm brands có cùng normalized name (không phân biệt hoa thường/ký tự đặc biệt)
-      // Ví dụ: "Laha Cafe" và "laha-cafe" → cùng một workspace
+      // Seed với 3 target brands để đảm bảo luôn hiển thị
+      const TARGET_BRAND_MAP: Record<string, string> = {
+        "highland-coffee": "Highland Coffee",
+        starbucks: "Starbucks",
+        mixue: "Mixue",
+      };
       const brandMap = new Map<string, Workspace>();
+
+      // Pre-seed 3 target brands
+      Object.entries(TARGET_BRAND_MAP).forEach(([id, name]) => {
+        brandMap.set(normalizeBrandName(name), {
+          id,
+          brand_name: name,
+          scale: "medium",
+          keywords: [id],
+          synonyms: [],
+          priority: true,
+          created_at: new Date().toISOString(),
+        });
+      });
+
+      // Add brands found in data
       mentions.forEach((m) => {
         if (!m.workspace_id) return;
-        const key = normalizeBrandName(m.workspace_id);
+        const displayName = formatBrandDisplayName(m.workspace_id);
+        const key = normalizeBrandName(displayName);
         if (!brandMap.has(key)) {
-          // Lấy tên đẹp nhất: ưu tiên tên có chữ hoa (nhiều ký tự hơn là original)
           brandMap.set(key, {
-            id: m.workspace_id,          // giữ nguyên id gốc đầu tiên gặp
-            brand_name: m.workspace_id,
+            id: m.workspace_id,
+            brand_name: displayName,
             scale: "medium",
             keywords: [],
             synonyms: [],
@@ -212,7 +295,7 @@ export class DashboardService {
       let alerts: Alert[] = [];
       try {
         const alertsSnap = await getDocs(
-          query(collection(dbData, COLLECTION_NAMES.alerts), orderBy("created_at", "desc"), limit(200))
+          query(collection(dbData, COLLECTION_NAMES.alerts), limit(200))
         );
         alerts = alertsSnap.docs.map((doc) => {
           const d = doc.data();
@@ -228,6 +311,7 @@ export class DashboardService {
             status: d.status || "new",
           };
         });
+        alerts.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       } catch {
         // Collection chưa tồn tại — bỏ qua
       }
@@ -236,7 +320,7 @@ export class DashboardService {
       let leads: Lead[] = [];
       try {
         const leadsSnap = await getDocs(
-          query(collection(dbData, COLLECTION_NAMES.leads), orderBy("created_at", "desc"), limit(200))
+          query(collection(dbData, COLLECTION_NAMES.leads), limit(200))
         );
         leads = leadsSnap.docs.map((doc) => {
           const d = doc.data();
@@ -251,22 +335,55 @@ export class DashboardService {
             status: d.status || "new",
             created_at: parseDate(d.created_at),
             expiry_at: d.expiry_at ? parseDate(d.expiry_at) : undefined,
-            url: String(d.url || ""),
-            // Extended Contact Info
-            phone: d.phone ? String(d.phone) : undefined,
-            email: d.email ? String(d.email) : undefined,
-            zalo_id: d.zalo_id ? String(d.zalo_id) : undefined,
-            messenger_id: d.messenger_id ? String(d.messenger_id) : undefined,
-            social_profile_url: d.social_profile_url ? String(d.social_profile_url) : undefined,
-            // Extended CRM Tracking
+            url: normalizeOptionalUrl(d.url, d.post_url, d.source_url),
+            phone: normalizeOptionalText(d.phone),
+            email: normalizeOptionalText(d.email),
+            zalo_id: normalizeOptionalText(d.zalo_id),
+            messenger_id: normalizeOptionalText(d.messenger_id),
+            social_profile_url: normalizeOptionalUrl(d.social_profile_url, d.contact, d.profile_url),
             contact_attempts: typeof d.contact_attempts === "number" ? d.contact_attempts : 0,
             last_contact_at: d.last_contact_at ? parseDate(d.last_contact_at) : undefined,
             notes: d.notes ? String(d.notes) : undefined,
             posted_at: d.posted_at ? parseDate(d.posted_at) : undefined,
           };
         });
+        leads.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       } catch {
         // Collection chưa tồn tại — bỏ qua
+      }
+
+      if (leads.length === 0) {
+        const derivedLeads: Lead[] = [];
+        mentionsSnap.docs.forEach((doc) => {
+          const d = doc.data();
+          const labels = d.labels || {};
+          const intent = mapIntent(labels.intent);
+          if (intent === "none") return;
+
+          derivedLeads.push({
+            id: String(d.id || doc.id),
+            workspace_id: String(d.brand || d.workspace_id || ""),
+            platform: mapSourceToPlatform(d.source || d.platform || ""),
+            author: String(d.author || "Khách hàng"),
+            content: String(d.clean_text || d.content || d.original_text || ""),
+            intent,
+            intent_signals: Array.isArray(labels.topic) ? labels.topic : [],
+            status: mapLeadStatus(d.status),
+            created_at: parseDate(d.labeled_at || d.uploaded_at || d.created_at || d.posted_at),
+            url: normalizeOptionalUrl(d.url, d.post_url, d.source_url),
+            phone: normalizeOptionalText(d.phone),
+            email: normalizeOptionalText(d.email),
+            zalo_id: normalizeOptionalText(d.zalo_id),
+            messenger_id: normalizeOptionalText(d.messenger_id),
+            social_profile_url: normalizeOptionalUrl(d.social_profile_url, d.contact, d.profile_url),
+            contact_attempts: typeof d.contact_attempts === "number" ? d.contact_attempts : 0,
+            last_contact_at: d.last_contact_at ? parseDate(d.last_contact_at) : undefined,
+            notes: d.notes ? String(d.notes) : undefined,
+            posted_at: d.posted_at ? parseDate(d.posted_at) : undefined,
+          });
+        });
+        leads = derivedLeads;
+        leads.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       }
 
       return { workspaces, mentions, alerts, leads, lastMentionDoc };
@@ -284,8 +401,13 @@ export class DashboardService {
       const leadRef = doc(dbData, COLLECTION_NAMES.leads, id);
       await updateDoc(leadRef, { status });
     } catch (error) {
-      console.error("[DashboardService] updateLeadStatus error:", error);
-      throw error;
+      try {
+        const labelRef = doc(dbData, COLLECTION_NAMES.mentions, id);
+        await updateDoc(labelRef, { status });
+      } catch (fallbackError) {
+        console.error("[DashboardService] updateLeadStatus error:", error);
+        throw fallbackError;
+      }
     }
   }
 
@@ -299,8 +421,15 @@ export class DashboardService {
       delete cleanData.id;
       await updateDoc(leadRef, cleanData);
     } catch (error) {
-      console.error("[DashboardService] updateLeadDetails error:", error);
-      throw error;
+      try {
+        const labelRef = doc(dbData, COLLECTION_NAMES.mentions, id);
+        const cleanData = { ...data };
+        delete cleanData.id;
+        await updateDoc(labelRef, cleanData);
+      } catch (fallbackError) {
+        console.error("[DashboardService] updateLeadDetails error:", error);
+        throw fallbackError;
+      }
     }
   }
 
