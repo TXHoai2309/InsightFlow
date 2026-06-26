@@ -25,7 +25,7 @@ export function TopSources({ sources }: TopSourcesProps) {
       }}
     >
       <h4 className="font-bold text-lg mb-4" style={{ color: "var(--color-text-primary)" }}>
-        Top nguồn dữ liệu
+        {t("dashboard.topSources.title")}
       </h4>
 
       <div className="space-y-4">
@@ -35,7 +35,7 @@ export function TopSources({ sources }: TopSourcesProps) {
             <div key={source.platform}>
               <div className="flex justify-between items-center mb-1">
                 <span className="text-sm font-bold text-[var(--color-text-primary)]">
-                  {meta.label}
+                  {t(`dashboard.filters.${source.platform}`)}
                 </span>
                 <span className="text-xs text-[var(--color-text-secondary)]">
                   {source.count} ({source.percentage}%)

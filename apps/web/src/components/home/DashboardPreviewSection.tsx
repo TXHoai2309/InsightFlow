@@ -2,13 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { useTheme } from "@/contexts/ThemeContext";
+import { useTranslation } from "react-i18next";
 
 /* ─── Brand Dashboard SVG ─── */
 function BrandDashboardSVG({ animate }: { animate: boolean }) {
-  const { theme } = useTheme();
-  const isDark = theme === "dark";
-
+  const { t } = useTranslation();
   const sources = [
     { label: "Facebook", color: "#1877F2", pct: 68 },
     { label: "TikTok", color: isDark ? "#ffffff" : "#010101", pct: 42 },
@@ -64,7 +62,7 @@ function BrandDashboardSVG({ animate }: { animate: boolean }) {
             gap: 4,
           }}
         >
-          Thương hiệu A <span style={{ color: "var(--color-text-muted)" }}>▾</span>
+          {t("home.dashboardPreview.brandA")} <span style={{ color: "#9898B0" }}>▾</span>
         </div>
       </div>
 
@@ -105,7 +103,7 @@ function BrandDashboardSVG({ animate }: { animate: boolean }) {
                 />
               </div>
             </div>
-            <p style={{ fontSize: 9, color: "var(--color-success)", fontWeight: 700, marginTop: 4 }}>▲ +12% so tháng trước</p>
+            <p style={{ fontSize: 9, color: "#22c55e", fontWeight: 700, marginTop: 4 }}>{t("home.dashboardPreview.vsPrevMonth")}</p>
           </div>
 
           {/* Trend Line Chart */}
@@ -117,8 +115,8 @@ function BrandDashboardSVG({ animate }: { animate: boolean }) {
               padding: "10px 12px",
             }}
           >
-            <p style={{ fontSize: 9, color: isDark ? "var(--color-text-muted)" : "#9898B0", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
-              Xu hướng 3 tháng
+            <p style={{ fontSize: 9, color: "#9898B0", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
+              {t("home.dashboardPreview.trendTitle")}
             </p>
             <svg viewBox="0 0 96 60" style={{ width: "100%", height: 52 }}>
               <defs>
@@ -157,8 +155,8 @@ function BrandDashboardSVG({ animate }: { animate: boolean }) {
             padding: "12px 14px",
           }}
         >
-          <p style={{ fontSize: 9, color: isDark ? "var(--color-text-muted)" : "#9898B0", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
-            Nguồn thảo luận hàng đầu
+          <p style={{ fontSize: 9, color: "#9898B0", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+            {t("home.dashboardPreview.topSources")}
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
             {sources.map((s) => (
@@ -197,8 +195,12 @@ function BrandDashboardSVG({ animate }: { animate: boolean }) {
           <span style={{ fontSize: 9, color: isDark ? "var(--color-text-muted)" : "#9898B0", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", flexShrink: 0 }}>
             Top KOLs
           </span>
-          <div style={{ width: 1, height: 16, background: isDark ? "var(--color-border)" : "#E5E7EB" }} />
-          {["Nguyễn A", "Trần B", "Lê C"].map((kol, i) => (
+          <div style={{ width: 1, height: 16, background: "#E5E7EB" }} />
+          {[
+            t("home.dashboardPreview.kol1", { defaultValue: "Nguyễn A" }),
+            t("home.dashboardPreview.kol2", { defaultValue: "Trần B" }),
+            t("home.dashboardPreview.kol3", { defaultValue: "Lê C" })
+          ].map((kol, i) => (
             <div
               key={kol}
               style={{
@@ -308,6 +310,7 @@ export default function DashboardPreviewSection() {
   const isDark = theme === "dark";
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
+  const { t } = useTranslation();
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -321,18 +324,18 @@ export default function DashboardPreviewSection() {
   const cards = [
     {
       num: "01",
-      title: "Share of Voice",
-      desc: "Theo dõi SOV của thương hiệu so với toàn thị trường và từng đối thủ cạnh tranh.",
+      title: t("home.dashboardPreview.card1Title"),
+      desc: t("home.dashboardPreview.card1Desc"),
     },
     {
       num: "02",
-      title: "Nguồn thảo luận chính",
-      desc: "Xác định KOLs, Groups, Fanpages tạo ra lượng thảo luận lớn nhất về thương hiệu.",
+      title: t("home.dashboardPreview.card2Title"),
+      desc: t("home.dashboardPreview.card2Desc"),
     },
     {
       num: "03",
-      title: "Hành vi & Nhân khẩu học",
-      desc: "Phân tích hành vi mua sắm và chân dung khách hàng mục tiêu theo từng kênh.",
+      title: t("home.dashboardPreview.card3Title"),
+      desc: t("home.dashboardPreview.card3Desc"),
     },
   ];
 
@@ -380,8 +383,8 @@ export default function DashboardPreviewSection() {
             </span>
 
             {/* Heading */}
-            <h2 className="text-[32px] md:text-[38px] leading-tight tracking-[-0.02em] font-black" style={{ color: isDark ? "var(--color-text-primary)" : "#1c1b23" }}>
-              Trải nghiệm quản trị{" "}
+            <h2 className="text-[32px] md:text-[38px] leading-tight tracking-[-0.02em] font-black text-[#1c1b23]">
+              {t("home.dashboardPreview.title")}{" "}
               <span
                 style={{
                   color: isDark ? "var(--color-brand)" : "#6D4CFF",
@@ -391,15 +394,14 @@ export default function DashboardPreviewSection() {
                   textUnderlineOffset: 4,
                 }}
               >
-                thương hiệu
+                {t("home.dashboardPreview.titleHighlight")}
               </span>{" "}
-              toàn diện
+              {t("home.dashboardPreview.titleEnd")}
             </h2>
 
             {/* Subtext */}
-            <p className="text-[16px] leading-[26px]" style={{ color: isDark ? "var(--color-text-secondary)" : "#474554" }}>
-              InsightFlow cung cấp cái nhìn 360° về mọi khía cạnh của thương hiệu
-              trên không gian số — từ Share of Voice đến cảm xúc từng phân khúc khách hàng.
+            <p className="text-[16px] leading-[26px] text-[#474554]">
+              {t("home.dashboardPreview.subtitle")}
             </p>
 
             {/* Numbered cards */}
@@ -422,7 +424,7 @@ export default function DashboardPreviewSection() {
               className="inline-flex items-center gap-2 font-semibold text-[14px] group"
               style={{ color: isDark ? "var(--color-brand)" : "#6D4CFF" }}
             >
-              Xem demo thực tế
+              {t("home.dashboardPreview.demo")}
               <i
                 className="ti ti-arrow-right text-[15px] transition-transform duration-200 group-hover:translate-x-1"
               />

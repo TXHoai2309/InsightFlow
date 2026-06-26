@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useTheme } from "@/contexts/ThemeContext";
+import { useTranslation } from "react-i18next";
 
 export default function AboutHeroSection() {
+  const { t } = useTranslation();
   const [isLoaded, setIsLoaded] = useState(false);
   const { theme } = useTheme();
   const isDark = theme === "dark";
@@ -42,20 +43,19 @@ export default function AboutHeroSection() {
             }}
           >
             <span className="material-symbols-outlined text-[18px]">rocket_launch</span>
-            HÀNH TRÌNH CỦA CHÚNG TÔI
+            {t("about.hero.badge")}
           </div>
           
-          <h1 className="text-[36px] md:text-[44px] font-[800]" style={{ lineHeight: 1.2, color: isDark ? "var(--color-text-primary)" : "#1a1a2e" }}>
-            Biến dữ liệu mạng xã hội thành{" "}
+          <h1 className="text-[36px] md:text-[44px] font-[800] text-[#1a1a2e]" style={{ lineHeight: 1.2 }}>
+            {t("about.hero.title1")}
             <span style={{ background: "linear-gradient(90deg, #6D4CFF, #3B82F6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-              lợi thế cạnh tranh
-            </span> cho doanh nghiệp Việt.
+              {t("about.hero.titleHighlight")}
+            </span>
+            {t("about.hero.title2")}
           </h1>
           
-          <p className="text-[16px] md:text-[18px] leading-[1.6] max-w-xl" style={{ color: isDark ? "var(--color-text-muted)" : "#64748B" }}>
-            InsightFlow ra đời với sứ mệnh mang sức mạnh của AI hiện đại nhất để
-            giúp các thương hiệu Việt Nam hiểu thấu khách hàng và làm chủ mọi xu
-            hướng thảo luận.
+          <p className="text-[16px] md:text-[18px] leading-[1.6] text-[#64748B] max-w-xl">
+            {t("about.hero.subtitle")}
           </p>
           
           <div className="flex gap-4 flex-wrap pt-2">
@@ -64,14 +64,14 @@ export default function AboutHeroSection() {
               className="px-8 py-4 rounded-xl text-[16px] font-bold text-white transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 inline-block"
               style={{ background: "#6D4CFF" }}
             >
-              Tìm hiểu thêm
+              {t("about.hero.ctaLearnMore")}
             </Link>
             <Link
               href="#team"
               className="border-2 px-8 py-4 rounded-xl text-[16px] font-bold transition-all hover:bg-gray-50 inline-block"
               style={{ borderColor: isDark ? "var(--color-border)" : "#E5E7EB", color: isDark ? "var(--color-text-primary)" : "#1a1a2e" }}
             >
-              Xem đội ngũ
+              {t("about.hero.ctaViewTeam")}
             </Link>
           </div>
         </div>
@@ -97,15 +97,15 @@ export default function AboutHeroSection() {
           >
             <div className="flex items-center gap-3 mb-6 pb-4 border-b" style={{ borderColor: isDark ? "var(--color-border)" : "#f3f4f6" }}>
               <span className="text-[24px]">🏆</span>
-              <h3 className="text-[20px] font-bold" style={{ color: isDark ? "var(--color-text-primary)" : "#1a1a2e" }}>Thành tựu nổi bật</h3>
+              <h3 className="text-[20px] font-bold text-[#1a1a2e]">{t("about.hero.statsTitle")}</h3>
             </div>
 
             <div className="space-y-4 mb-6">
               {[
-                { icon: "calendar_today", num: "2021", label: "Thành lập" },
-                { icon: "group", num: "15+", label: "Chuyên gia AI" },
-                { icon: "corporate_fare", num: "500+", label: "Doanh nghiệp" },
-                { icon: "public", num: "3", label: "Quốc gia" },
+                { icon: "calendar_today", num: t("about.hero.stat1Num"), label: t("about.hero.stat1Label") },
+                { icon: "group", num: t("about.hero.stat2Num"), label: t("about.hero.stat2Label") },
+                { icon: "corporate_fare", num: t("about.hero.stat3Num"), label: t("about.hero.stat3Label") },
+                { icon: "public", num: t("about.hero.stat4Num"), label: t("about.hero.stat4Label") },
               ].map((stat, i) => (
                 <div 
                   key={i} 
@@ -128,7 +128,7 @@ export default function AboutHeroSection() {
               <div className="flex gap-1 text-[#FBBF24] text-[20px]">
                 ★★★★★
               </div>
-              <span className="text-[14px] font-semibold" style={{ color: isDark ? "var(--color-text-primary)" : "#1a1a2e" }}>4.9/5 đánh giá</span>
+              <span className="text-[14px] font-semibold text-[#1a1a2e]">{t("about.hero.rating")}</span>
             </div>
           </div>
         </div>

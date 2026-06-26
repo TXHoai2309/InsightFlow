@@ -1,6 +1,8 @@
 "use client";
 
-import { useTheme } from "@/contexts/ThemeContext";
+import { useTranslation } from "react-i18next";
+
+/* ─── TrustedBySection — Social Proof ─── */
 
 const brands = [
   { name: "FPT", label: "FPT" },
@@ -13,8 +15,7 @@ const brands = [
 ];
 
 export default function TrustedBySection() {
-  const { theme } = useTheme();
-  const isDark = theme === "dark";
+  const { t } = useTranslation();
 
   return (
     <section 
@@ -25,9 +26,9 @@ export default function TrustedBySection() {
       }}
     >
       <div className="max-w-[1200px] mx-auto">
-        <p className="text-center text-[13px] font-semibold uppercase tracking-widest mb-7" style={{ color: isDark ? "var(--color-text-muted)" : "#9898B0" }}>
-          Được tin dùng bởi hơn{" "}
-          <span style={{ color: isDark ? "var(--color-brand)" : "#6D4CFF" }}>500 doanh nghiệp</span>
+        <p className="text-center text-[13px] text-[#9898B0] font-semibold uppercase tracking-widest mb-7">
+          {t("home.trustedBy.text")}{" "}
+          <span className="text-[#6D4CFF]">{t("home.trustedBy.highlight")}</span>
         </p>
 
         {/* Marquee wrapper */}

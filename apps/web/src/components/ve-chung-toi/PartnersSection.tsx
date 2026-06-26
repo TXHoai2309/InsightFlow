@@ -1,6 +1,6 @@
 "use client";
 
-import { useTheme } from "@/contexts/ThemeContext";
+import { useTranslation } from "react-i18next";
 
 const partners = [
   "VINAGROUP",
@@ -13,8 +13,7 @@ const partners = [
 ];
 
 export default function PartnersSection() {
-  const { theme } = useTheme();
-  const isDark = theme === "dark";
+  const { t } = useTranslation();
 
   return (
     <section 
@@ -44,8 +43,8 @@ export default function PartnersSection() {
       `}} />
 
       <div className="max-w-7xl mx-auto px-6 md:px-10 flex flex-col items-center">
-        <p className="text-[16px] md:text-[18px] font-medium mb-8 text-center" style={{ color: isDark ? "var(--color-text-secondary)" : "#64748B" }}>
-          Được tin tưởng bởi 500+ doanh nghiệp hàng đầu
+        <p className="text-[16px] md:text-[18px] font-medium text-[#64748B] mb-8 text-center">
+          {t("about.partners.text")}
         </p>
       </div>
       

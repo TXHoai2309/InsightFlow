@@ -92,7 +92,7 @@ export function SentimentTrend({ filteredMentions }: SentimentTrendProps) {
         labels: trendData.map((d) => d.date),
         datasets: [
           {
-            label: "Tích cực",
+            label: t("dashboard.filters.positive"),
             data: trendData.map((d) => d.positive),
             borderColor: p.positive.line,
             backgroundColor: p.positive.fill,
@@ -103,7 +103,7 @@ export function SentimentTrend({ filteredMentions }: SentimentTrendProps) {
             pointBackgroundColor: p.positive.line,
           },
           {
-            label: "Tiêu cực",
+            label: t("dashboard.filters.negative"),
             data: trendData.map((d) => d.negative),
             borderColor: p.negative.line,
             backgroundColor: p.negative.fill,
@@ -114,7 +114,7 @@ export function SentimentTrend({ filteredMentions }: SentimentTrendProps) {
             pointBackgroundColor: p.negative.line,
           },
           {
-            label: "Trung lập",
+            label: t("dashboard.filters.neutral"),
             data: trendData.map((d) => d.neutral),
             borderColor: p.neutral.line,
             backgroundColor: p.neutral.fill,
@@ -138,7 +138,7 @@ export function SentimentTrend({ filteredMentions }: SentimentTrendProps) {
             borderWidth: 1,
             cornerRadius: 8,
             callbacks: {
-              title: (items) => `Ngày đăng: ${items[0]?.label}`,
+              title: (items) => `${t("dashboard.sentimentTrend.postedDate")}: ${items[0]?.label}`,
             },
           },
         },
@@ -202,17 +202,17 @@ export function SentimentTrend({ filteredMentions }: SentimentTrendProps) {
     >
       <div className="flex items-center justify-between mb-4">
         <h4 className="font-bold text-lg" style={{ color: "var(--color-text-primary)" }}>
-          Xu hướng cảm xúc
+          {t("dashboard.sentimentTrend.title")}
         </h4>
         <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>
           {timeRange === "all"
-            ? "Toàn bộ thời gian"
+            ? t("dashboard.sentimentTrend.allTime")
             : timeRange === "24h"
-            ? "24 giờ qua"
+            ? t("dashboard.sentimentTrend.24h")
             : timeRange === "7d"
-            ? "7 ngày qua"
-            : "30 ngày qua"}
-          {" · theo ngày đăng bài"}
+            ? t("dashboard.sentimentTrend.7d")
+            : t("dashboard.sentimentTrend.30d")}
+          {` · ${t("dashboard.sentimentTrend.byPostDate")}`}
         </span>
       </div>
 
@@ -222,9 +222,9 @@ export function SentimentTrend({ filteredMentions }: SentimentTrendProps) {
 
       <div className="mt-4 flex justify-center gap-6 text-xs">
         {[
-          { color: pal.positive.line, label: "Tích cực", count: totalInPeriod.positive },
-          { color: pal.negative.line, label: "Tiêu cực", count: totalInPeriod.negative },
-          { color: pal.neutral.line, label: "Trung lập", count: totalInPeriod.neutral },
+          { color: pal.positive.line, label: t("dashboard.filters.positive"), count: totalInPeriod.positive },
+          { color: pal.negative.line, label: t("dashboard.filters.negative"), count: totalInPeriod.negative },
+          { color: pal.neutral.line, label: t("dashboard.filters.neutral"), count: totalInPeriod.neutral },
         ].map(({ color, label, count }) => (
           <div key={label} className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />

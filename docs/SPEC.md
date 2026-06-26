@@ -1,170 +1,467 @@
-# InsightFlow — Functional Specification (SPEC)
+# InsightFlow — Functional Specification
 
-> Phiên bản: 1.0 | Trạng thái: Draft | Cập nhật: 2025
-
----
-
-## Mục lục
-
-1. [Mục tiêu tài liệu](#1-mục-tiêu-tài-liệu)
-2. [Người dùng & vai trò](#2-người-dùng--vai-trò)
-3. [Luồng nghiệp vụ chính](#3-luồng-nghiệp-vụ-chính)
-4. [Đặc tả chức năng chi tiết](#4-đặc-tả-chức-năng-chi-tiết)
-5. [Quy tắc nghiệp vụ (Business Rules)](#5-quy-tắc-nghiệp-vụ-business-rules)
-6. [API Endpoints tổng quan](#6-api-endpoints-tổng-quan)
-7. [Database Schema (tóm tắt)](#7-database-schema-tóm-tắt)
-8. [Yêu cầu phi chức năng (NFR)](#8-yêu-cầu-phi-chức-năng-nfr)
-9. [KPI & SLA](#9-kpi--sla)
-10. [Rủi ro & Giải pháp](#10-rủi-ro--giải-pháp)
-11.
+> Phiên bản: 1.1  
+> Trạng thái: Cập nhật theo lịch sử commit `main`  
+> Mốc tham chiếu: 50 commits trên nhánh `main`, giai đoạn 16/06/2026 → 19/06/2026  
+> Phạm vi tài liệu: phản ánh phần **đã có trong repo hiện tại**, không mô tả quá xa như Kafka/Kubernetes/PostgreSQL nếu chưa được triển khai trong commit.
 
 ---
 
 ## 1. Mục tiêu tài liệu
 
-Tài liệu này định nghĩa các **yêu cầu chức năng** của hệ thống InsightFlow, bao gồm:
+Tài liệu này mô tả phạm vi chức năng hiện tại của InsightFlow theo đúng trình tự phát triển trong commit history:
 
-- Mô tả hành vi mong muốn của từng tính năng.
-- Quy tắc nghiệp vụ và điều kiện biên.
-- Giao diện API ở mức tổng quan.
-- SLA và KPI kỹ thuật cần đạt.
-
-Đối tượng đọc: **Product Owner, Developer, QA, Tech Lead**.
-
----
-
-## 2. Người dùng & vai trò
-
-| Vai trò | Mô tả | Quyền truy cập |
-|---------|-------|----------------|
-| **Super Admin** | Quản trị hệ thống (Anthropic-level) | Toàn quyền + quản lý tenant |
-| **Brand Admin** | Quản lý của doanh nghiệp client | Quản lý workspace, user, keyword |
-| **Analyst** | Nhân viên phân tích của client | Đọc dashboard, export báo cáo |
-| **Sales** | Đội kinh doanh của client | Xem Lead List, đánh dấu đã xử lý |
-| **Marketing/PR** | Đội truyền thông của client | Xem mention, dashboard, cảnh báo |
-| **Agency** | Đối tác Agency quản lý nhiều brand | Quản lý nhiều workspace brand |
-
-### Multi-tenant Architecture
-
-Mỗi **Tenant** (doanh nghiệp) có thể có nhiều **Workspace** (thương hiệu). Dữ liệu được cô lập hoàn toàn giữa các tenant. Một tenant không có > 60% dữ liệu đến từ 1 nền tảng duy nhất.
+1. Khởi tạo cấu trúc dự án.
+2. Xây dựng giao diện trang chủ.
+3. Xây dựng đăng nhập, đăng xuất và session.
+4. Xây dựng dashboard.
+5. Xây dựng các trang nghiệp vụ: Mentions, Alerts, Reports, Leads, Profile, Settings Brand, Ngành, Về chúng tôi.
+6. Kết nối và hiển thị dữ liệu từ Firebase/Firestore.
+7. Hiệu chỉnh phân tích AI và sửa lỗi build/deploy.
+8. Cập nhật tài liệu theo trạng thái thực tế của repo.
 
 ---
 
-## 3. Luồng nghiệp vụ chính
+## 2. Tổng quan sản phẩm
 
-### 3.1 Luồng Phòng vệ — Brand Monitoring & Crisis Alert
+InsightFlow là nền tảng theo dõi và phân tích thương hiệu, tập trung vào việc hiển thị dữ liệu truyền thông/mention theo cách dễ quan sát cho người dùng.
 
+Ở trạng thái hiện tại, sản phẩm đang ở mức **MVP Web Dashboard**:
+
+- Có giao diện trang chủ giới thiệu sản phẩm.
+- Có luồng đăng nhập/đăng xuất cơ bản.
+- Có dashboard tổng quan dữ liệu thương hiệu.
+- Có các màn hình nghiệp vụ chính phục vụ demo: Mentions, Alerts, Reports, Leads.
+- Có kết nối Firebase/Firestore để lấy dữ liệu thật hiển thị lên giao diện.
+- Có xử lý hiển thị chỉ số, biểu đồ, bộ lọc và phân tích AI ở mức giao diện/dữ liệu đã chuẩn hóa.
+
+---
+
+## 3. Người dùng & vai trò hiện tại
+
+| Vai trò | Mục đích sử dụng | Trạng thái trong MVP |
+|---|---|---|
+| Người dùng/Brand User | Truy cập hệ thống, xem dashboard, mentions, alerts, reports | Đang hỗ trợ qua giao diện web |
+| Analyst/Marketing | Theo dõi dữ liệu mention, sentiment, nguồn, chủ đề, cảnh báo | Đang hỗ trợ qua các trang dashboard/mentions/alerts |
+| Admin hệ thống | Quản lý tenant/user nâng cao | Chưa triển khai đầy đủ trong commit hiện tại |
+| Sales/Lead Handler | Xem và xử lý lead | Có route/trang Leads, chưa xác nhận đủ workflow xử lý lead end-to-end |
+
+---
+
+## 4. Phạm vi chức năng theo thứ tự commit
+
+### SP-00 — Khởi tạo dự án và cấu trúc thư mục
+
+**Nguồn commit liên quan:**
+
+- `da6fe71` — first commit
+- `9b59a81` — feat: initialize project directory structure and placeholder files
+- `9d846cd` — Xóa các file thừa
+- `30196a8` — gitignore
+
+**Mô tả:**  
+Khởi tạo repo InsightFlow theo mô hình monorepo, có thư mục `apps/web`, `docs`, `services`, `shared`, `scripts`, `infrastructure`, `database`.
+
+**Yêu cầu chức năng:**
+
+- FE chính nằm trong `apps/web`.
+- Tài liệu dự án nằm trong `docs`.
+- Các service backend/AI/crawler/alert/lead/report được đặt placeholder trong `services` để mở rộng sau.
+- Cấu hình workspace/package được chuẩn hóa để chạy bằng npm/turbo.
+
+**Acceptance Criteria:**
+
+- AC-1: Repo có cấu trúc thư mục rõ ràng.
+- AC-2: Có file cấu hình npm/turbo cho monorepo.
+- AC-3: Có `.gitignore` để tránh commit file thừa.
+- AC-4: Có thư mục `docs` chứa tài liệu dự án.
+
+---
+
+### SP-01 — Trang chủ giới thiệu sản phẩm
+
+**Nguồn commit liên quan:**
+
+- `28c7339` — build layout "home"
+- `8d1cf63` — fix bug layout "home"
+- `6872c0f` — Merge branch 'Tan-home' into minh-login
+
+**Mô tả:**  
+Xây dựng trang chủ/landing page của InsightFlow để giới thiệu sản phẩm, định vị nền tảng và dẫn người dùng vào luồng chính.
+
+**Yêu cầu chức năng:**
+
+- Hiển thị thông điệp thương hiệu InsightFlow.
+- Có bố cục landing page gồm header, nội dung chính và các section giới thiệu.
+- Có responsive layout ở mức cơ bản.
+- Header/điều hướng thống nhất với các trang khác.
+
+**Acceptance Criteria:**
+
+- AC-1: Người dùng truy cập `/` thấy trang chủ.
+- AC-2: Trang chủ hiển thị đúng nhận diện sản phẩm InsightFlow.
+- AC-3: Layout không vỡ trên desktop.
+- AC-4: Các lỗi layout đã được sửa theo commit fix.
+
+---
+
+### SP-02 — Đăng nhập, đăng xuất và session
+
+**Nguồn commit liên quan:**
+
+- `ce7cd89` — login, log out
+- `c677e96` — đẩy code lên
+- `0a1d56c` — Merge pull request #1 from TXHoai2309/minh-login
+- `7929856` — đăng suất session
+- `b1b3f06` — Merge branch 'TXH' into minh-login
+- `8617b75` — Merge branch 'minh-login' into ThuHaTest
+- `6f514ac` — Merge pull request #3 from TXHoai2309/minh-login
+
+**Mô tả:**  
+Bổ sung nhóm màn hình và logic đăng nhập/đăng xuất để người dùng có thể truy cập hệ thống theo phiên làm việc.
+
+**Yêu cầu chức năng:**
+
+- Có nhóm route `(auth)` cho các màn hình xác thực.
+- Người dùng có thể đăng nhập vào hệ thống.
+- Người dùng có thể đăng xuất để kết thúc phiên.
+- Session được xử lý để tránh trạng thái đăng nhập sai sau khi logout.
+
+**Acceptance Criteria:**
+
+- AC-1: Có màn hình đăng nhập trong nhóm route auth.
+- AC-2: Sau khi đăng nhập, người dùng có thể truy cập các trang dashboard/nghiệp vụ.
+- AC-3: Sau khi đăng xuất, session không còn được giữ như người dùng đang đăng nhập.
+- AC-4: Luồng login/logout không làm vỡ layout trang chủ và dashboard.
+
+---
+
+### SP-03 — Dashboard tổng quan
+
+**Nguồn commit liên quan:**
+
+- `7f2050e` — build giao dien Dashboard
+- `f30c3ee` — Merge pull request #2 from TXHoai2309/Tan-dashboard
+- `64ae830` — Merge branch 'Tan-dashboard'
+- `a3c1cfa` — add data tren trang dashboard
+- `ed6c744` — Merge branch 'dashboard'
+
+**Mô tả:**  
+Xây dựng dashboard trung tâm để người dùng theo dõi tổng quan dữ liệu brand monitoring.
+
+**Yêu cầu chức năng:**
+
+- Hiển thị tổng số mentions.
+- Hiển thị sentiment tích cực/trung lập/tiêu cực.
+- Hiển thị xu hướng sentiment theo thời gian.
+- Hiển thị top sources.
+- Hiển thị top topics.
+- Hiển thị hot leads/cảnh báo ở mức tổng quan nếu có dữ liệu.
+- Hỗ trợ bộ lọc dashboard theo workspace, thời gian và platform.
+- Tính toán lại dữ liệu hiển thị khi filter thay đổi.
+
+**Acceptance Criteria:**
+
+- AC-1: Người dùng truy cập `/dashboard` thấy dashboard tổng quan.
+- AC-2: Các card chỉ số không còn dùng dữ liệu tĩnh nếu Firestore đã có dữ liệu.
+- AC-3: Biểu đồ sentiment nhận dữ liệu đã lọc.
+- AC-4: Top sources và top topics được tính từ dữ liệu mention.
+- AC-5: Khi filter thay đổi, số liệu dashboard được cập nhật lại.
+- AC-6: Dashboard build không lỗi type liên quan đến filter/topic.
+
+---
+
+### SP-04 — Mentions
+
+**Nguồn commit liên quan:**
+
+- `0df2eff` — build layout Mentions
+- `7ad391a` — update layout Mentions
+- `f0ca5f3` — đẩy dữ liệu lên mention
+- `73b9030` — Merge branch 'minh-mention' into dashboard
+
+**Mô tả:**  
+Xây dựng trang danh sách mention để người dùng xem các nội dung được hệ thống thu thập/phân tích.
+
+**Yêu cầu chức năng:**
+
+- Có route `/mentions`.
+- Hiển thị danh sách mention.
+- Mỗi mention cần có các thông tin chính: nội dung, nguồn/platform, thời gian, sentiment, topic/AI analysis nếu có.
+- Có trạng thái dữ liệu lấy từ Firestore thay vì chỉ layout tĩnh.
+- Layout được cập nhật để phù hợp với dashboard.
+
+**Acceptance Criteria:**
+
+- AC-1: Người dùng mở `/mentions` thấy danh sách mention.
+- AC-2: Mention hiển thị dữ liệu thật khi Firestore có dữ liệu.
+- AC-3: Mention có thông tin sentiment/topic phục vụ phân tích.
+- AC-4: Giao diện Mentions đồng bộ với layout chung.
+
+---
+
+### SP-05 — Alerts
+
+**Nguồn commit liên quan:**
+
+- `0d4a0dd` — add layout function button
+- `26f4bc8` — build layout Alerts
+
+**Mô tả:**  
+Xây dựng trang Alerts để hiển thị các cảnh báo truyền thông/rủi ro cần người dùng chú ý.
+
+**Yêu cầu chức năng:**
+
+- Có route `/alerts`.
+- Hiển thị danh sách cảnh báo.
+- Có layout thẻ/bảng giúp phân biệt mức độ cảnh báo.
+- Có các nút chức năng phục vụ thao tác trên giao diện.
+
+**Acceptance Criteria:**
+
+- AC-1: Người dùng truy cập `/alerts` thấy trang cảnh báo.
+- AC-2: Alert có thông tin mô tả, mức độ và thời gian nếu dữ liệu có sẵn.
+- AC-3: Giao diện Alerts không bị lệch so với layout dashboard.
+
+---
+
+### SP-06 — Reports
+
+**Nguồn commit liên quan:**
+
+- `a6eda63` — report
+- `93fdd0c` — done
+
+**Mô tả:**  
+Xây dựng trang Reports để người dùng xem/tổng hợp báo cáo từ dữ liệu theo dõi thương hiệu.
+
+**Yêu cầu chức năng:**
+
+- Có route `/reports`.
+- Có giao diện danh sách hoặc khối báo cáo.
+- Báo cáo thể hiện các chỉ số tổng hợp phục vụ demo.
+
+**Acceptance Criteria:**
+
+- AC-1: Người dùng mở `/reports` thấy giao diện báo cáo.
+- AC-2: Báo cáo có bố cục rõ ràng, dễ đọc.
+- AC-3: Reports dùng cùng hệ thống layout với các trang nghiệp vụ khác.
+
+---
+
+### SP-07 — Leads, Profile, Settings Brand, Ngành, Về chúng tôi
+
+**Nguồn commit liên quan:**
+
+- `7c57634` — hoàn thiện
+- `6471528` — a
+- `12786e9` — merge code cuar Tan
+- `679d2be` — responsive
+- `99095b2` — update information
+
+**Mô tả:**  
+Bổ sung và hoàn thiện các route/phần giao diện phụ để sản phẩm có đủ khung demo.
+
+**Yêu cầu chức năng:**
+
+- Có route `/leads` để hiển thị lead.
+- Có route `/profile` để hiển thị thông tin người dùng.
+- Có route `/settings/brand` để quản lý/cấu hình thương hiệu ở mức giao diện.
+- Có route `/nganh` để giới thiệu/nhóm ngành.
+- Có route `/ve-chung-toi` để giới thiệu đội ngũ/sản phẩm.
+- Giao diện responsive tốt hơn sau commit `responsive`.
+
+**Acceptance Criteria:**
+
+- AC-1: Các route chính không trả lỗi 404.
+- AC-2: Layout các trang đồng bộ header/sidebar/footer nếu có.
+- AC-3: Trang hiển thị tốt hơn trên nhiều kích thước màn hình sau commit responsive.
+
+---
+
+### SP-08 — Firebase/Firestore Data Foundation
+
+**Nguồn commit liên quan:**
+
+- `a3c1cfa` — add data tren trang dashboard
+- `f0ca5f3` — đẩy dữ liệu lên mention
+- `1259ca0` — Sửa lỗi marketting không có trong union type topic, poster_at bị thiếu trong 8 mack object
+- `59a5dfb` — Hoài sửa lỗi vercel
+
+**Mô tả:**  
+Chuẩn hóa việc lấy và hiển thị dữ liệu từ Firebase/Firestore cho dashboard và mentions.
+
+**Yêu cầu chức năng:**
+
+- Cấu hình Firebase client trong app web.
+- Lấy dữ liệu mention/dashboard từ Firestore.
+- Có service/hook/store để đưa dữ liệu vào UI.
+- Dữ liệu mention cần có field thời gian `posted_at` hoặc trường tương đương để chart và list hoạt động ổn định.
+- Topic phải nằm trong union type đã định nghĩa để tránh lỗi build TypeScript.
+
+**Acceptance Criteria:**
+
+- AC-1: Dữ liệu Firestore hiển thị được trên dashboard.
+- AC-2: Dữ liệu Firestore hiển thị được trên mentions.
+- AC-3: Không lỗi build do thiếu `posted_at`.
+- AC-4: Không lỗi build do topic ngoài union type.
+- AC-5: Vercel build được sau khi sửa lỗi type/config.
+
+---
+
+### SP-09 — Hiệu chỉnh phân tích AI
+
+**Nguồn commit liên quan:**
+
+- `d829027` — Hiệu chỉnh phân tích AI
+
+**Mô tả:**  
+Cập nhật phần hiển thị/logic liên quan đến phân tích AI để dashboard và mention phản ánh dữ liệu phân tích rõ hơn.
+
+**Yêu cầu chức năng:**
+
+- Hiển thị kết quả phân tích AI gắn với dữ liệu mention.
+- Phân tích có thể bao gồm sentiment, topic, insight hoặc nhãn hỗ trợ dashboard.
+- Dữ liệu phân tích cần phù hợp với type đang dùng ở frontend.
+
+**Acceptance Criteria:**
+
+- AC-1: UI không hiển thị sai field phân tích AI.
+- AC-2: Các chỉ số/chủ đề dùng cho dashboard tính toán được từ dữ liệu hiện có.
+- AC-3: Không phát sinh lỗi type khi build.
+
+---
+
+### SP-10 — Sửa lỗi, merge nhánh và ổn định bản demo
+
+**Nguồn commit liên quan:**
+
+- `80f347f` — fix xung dot
+- `820fade` — fix
+- `7b37080` — fix
+- `863ddb2` — fix
+- `91ebd85` — Delete file html giao diện mẫu
+- `94f27fa` — Merge branch 'ThuHaTest'
+- `624edd0` — Merge branch 'main' into ha-information
+- `b577dbc` — Merge branch 'ha-information'
+
+**Mô tả:**  
+Giai đoạn ổn định repo, xử lý xung đột, xóa file demo không cần thiết, merge các nhánh chức năng vào `main`.
+
+**Acceptance Criteria:**
+
+- AC-1: Repo không còn file HTML mẫu không dùng.
+- AC-2: Các nhánh dashboard/login/mention/information được merge vào `main`.
+- AC-3: Không còn lỗi build rõ ràng do xung đột code hoặc type thiếu.
+- AC-4: Tài liệu phản ánh đúng hiện trạng code.
+
+---
+
+## 5. Luồng nghiệp vụ hiện tại
+
+### 5.1 Luồng xem dữ liệu dashboard
+
+```text
+Người dùng đăng nhập
+→ Mở Dashboard
+→ App đọc dữ liệu Firestore qua Firebase client/service
+→ Store/hook nhận dữ liệu mentions, alerts, leads, workspaces
+→ Dashboard tính toán stats, top sources, top topics, sentiment trend
+→ Người dùng đổi filter
+→ UI tính toán lại dữ liệu đã lọc
 ```
-[Crawler] 
-  → thu thập post/comment từ nguồn công khai
-  → đẩy raw data vào Kafka topic: raw-content
 
-[NLP Fast-path] 
-  → lọc keyword match (rule-based, < 1s)
-  → nếu khớp từ khóa của tenant: đẩy vào Kafka topic: matched-content
+### 5.2 Luồng xem mentions
 
-[NLP Deep-path] 
-  → phân tích sentiment (Pos/Neg/Neu)
-  → gắn nhãn chủ đề
-  → lưu vào PostgreSQL + Elasticsearch
-
-[Crisis Alert Engine]
-  → kiểm tra ngưỡng spike mention tiêu cực
-  → nếu vượt ngưỡng → gửi alert qua Telegram/Zalo/Email (< 3 phút)
-  → cập nhật Dashboard real-time qua WebSocket
+```text
+Người dùng mở Mentions
+→ App lấy danh sách mention từ Firestore/dữ liệu đã chuẩn hóa
+→ Hiển thị nội dung, platform, thời gian, sentiment/topic
+→ Người dùng quan sát dữ liệu phục vụ phân tích thương hiệu
 ```
 
-### 3.2 Luồng Tấn công — Lead Generation
+### 5.3 Luồng cảnh báo/báo cáo ở MVP
 
-```
-[NLP Intent Analyzer]
-  → phân tích purchase intent từ matched-content
-  → phân loại: Hot Lead / Warm Lead / Cold Lead
-
-[Lead Service]
-  → Hot Lead: push ngay Zalo/Telegram Sales (< 60 giây)
-  → Hiển thị Lead Expiry Countdown trên dashboard
-  → Lưu lịch sử xử lý lead
-
-[Sales Action]
-  → Nhận alert với context đầy đủ (link, platform, tóm tắt)
-  → Đánh dấu đã xử lý / bỏ qua / chuyển tiếp
-```
-
-### 3.3 Luồng Báo cáo tự động
-
-```
-[Report Scheduler]
-  → Chạy hàng ngày lúc 7:00 sáng
-  → Tổng hợp mention, sentiment, top nguồn, top chủ đề
-  → Xuất PDF/Excel
-  → Gửi qua Email / lưu S3 / hiển thị trong dashboard
+```text
+Dữ liệu cảnh báo/báo cáo có sẵn hoặc được mock/chuẩn hóa
+→ UI Alerts/Reports hiển thị theo layout
+→ Dashboard có thể tổng hợp một phần chỉ số nếu dữ liệu liên quan tồn tại
 ```
 
 ---
 
-## 4. Đặc tả chức năng chi tiết
+## 6. API/Data Contract ở trạng thái hiện tại
 
-### 4.1 Quản lý Workspace / Brand
+Hiện repo web ưu tiên dùng Firebase/Firestore ở frontend. Các endpoint REST backend chưa phải phần được xác nhận hoàn chỉnh trong commit hiện tại.
 
-**US-01: Tạo Workspace mới**
+### 6.1 Entity: Mention
 
+<<<<<<< HEAD
+Các field nên có để FE hoạt động ổn định:
+=======
 - Actor: Brand Admin
 - Mô tả: Tạo workspace theo từng thương hiệu để theo dõi
 - Inputs:
-  - Tên thương hiệu (bắt buộc, thuộc 9 thương hiệu F&B mục tiêu: Highlands Coffee, Phúc Long, Cộng Cà Phê, KATINAT, Phê La, Pizza 4P's, XLIII Coffee, Maison Marou, Laha Cafe)
+  - Tên thương hiệu (bắt buộc, thuộc 3 thương hiệu F&B mục tiêu: Highland Coffee, Starbucks, Mixue)
   - Phân nhóm quy mô thương hiệu (Nhóm Nhỏ / Nhóm Vừa / Nhóm Lớn)
   - Danh sách từ khóa chính (tên thương hiệu, tên sản phẩm, tên founder, tên chi nhánh)
   - Danh sách từ đồng nghĩa / biến thể cách viết (slang, teencode)
   - Mức độ ưu tiên monitoring (Standard / Crisis-watch)
 - Outputs: Workspace được tạo, crawler bắt đầu thu thập theo keyword config
 - Business rule: Tối thiểu 1 từ khóa. Mỗi tenant tối đa 10 workspace (mặc định, tùy gói dịch vụ)
+>>>>>>> 7986446e122a39441df380fb6a2defcf5d997678
 
-**US-02: Cập nhật từ khóa**
+| Field | Kiểu dữ liệu | Ghi chú |
+|---|---|---|
+| `id` | string | ID document/mention |
+| `content` hoặc `text` | string | Nội dung mention |
+| `platform` | string | Nguồn: facebook/tiktok/news/youtube/threads hoặc nguồn tương đương |
+| `source` | string | Tên nguồn/trang/tài khoản |
+| `sentiment` | `positive` / `neutral` / `negative` | Dùng cho chart và filter |
+| `topic` | union type hợp lệ | Không dùng topic ngoài type để tránh lỗi build |
+| `posted_at` | string/date/timestamp | Bắt buộc để trend theo thời gian ổn định |
+| `created_at` | string/date/timestamp | Thời điểm dữ liệu vào hệ thống |
+| `ai_summary` | string | Tùy chọn, phục vụ phân tích AI |
 
-- Actor: Brand Admin
-- Thay đổi có hiệu lực ngay từ chu kỳ crawl tiếp theo
-- Lịch sử thay đổi được lưu lại (audit log)
+### 6.2 Entity: DashboardStats
 
-**US-03: Xem sức khỏe nguồn dữ liệu**
-
-- Actor: Brand Admin, Analyst
-- Dashboard hiển thị "health" của từng data source (Facebook, TikTok, báo điện tử...)
-- Cảnh báo nội bộ khi nguồn mất > 30 phút không có dữ liệu mới
-
----
-
-### 4.2 Thu thập dữ liệu (Crawling)
-
-**US-04: Crawling theo lịch tiered**
-
-- Tần suất cao: khung giờ cao điểm 7–9h, 11–13h, 19–22h
-- Tần suất thấp: các giờ còn lại, đặc biệt sau 23h
-- Crisis-watch keyword: luôn crawl tần suất cao bất kể giờ
-- Proxy rotation & randomize delay để tránh bị chặn
-
-**US-05: Tiêu chuẩn hóa dữ liệu**
-
-- Tất cả dữ liệu crawl phải qua bước:
-  1. **Deduplication** (MinHash LSH): loại bỏ bài duplicate, giữ bản gốc
-  2. **Spam filter**: loại bỏ nội dung bot, quảng cáo tự động
-  3. **PII Anonymization**: mask số điện thoại, CMND, địa chỉ cụ thể
-  4. **Content type filter**: chỉ lưu headline + tóm tắt + URL với nội dung báo điện tử
-
-**US-06: Source Credibility Scoring**
-
-- Mỗi nguồn được gán điểm uy tín:
-  - Tờ báo lớn (VnExpress, Tuổi Trẻ...): điểm cao
-  - Tài khoản được tạo < 30 ngày: điểm thấp
-  - Nguồn có lịch sử spam: điểm âm
-- Điểm uy tín ảnh hưởng đến thứ tự hiển thị mention
+| Field | Ý nghĩa |
+|---|---|
+| `total_mentions` | Tổng lượt nhắc đến |
+| `positive_count` | Số mention tích cực |
+| `neutral_count` | Số mention trung lập |
+| `negative_count` | Số mention tiêu cực |
+| `net_sentiment` | Điểm sentiment tổng hợp |
+| `hot_leads_today` | Số hot leads trong ngày nếu có dữ liệu |
+| `alerts_count` | Số cảnh báo nếu có dữ liệu |
 
 ---
 
-### 4.3 Phân tích AI / NLP
+## 7. Quy tắc nghiệp vụ hiện tại
 
-**US-07: Nhận diện mention**
+| BR | Quy tắc |
+|---|---|
+| BR-01 | Dữ liệu hiển thị trên dashboard phải ưu tiên lấy từ Firestore thay vì hard-code. |
+| BR-02 | Mọi mention dùng cho biểu đồ thời gian phải có `posted_at` hoặc field ngày tương đương. |
+| BR-03 | Topic phải nằm trong danh sách type hợp lệ ở frontend. |
+| BR-04 | Filter dashboard không được làm sai tổng số liệu đã hiển thị. |
+| BR-05 | Các trang nghiệp vụ dùng layout thống nhất để demo liền mạch. |
+| BR-06 | File tài liệu không mô tả các service chưa triển khai như chức năng đã hoàn thành. |
 
+---
+
+## 8. Ngoài phạm vi MVP hiện tại
+
+Các phần dưới đây là định hướng phát triển sau, chưa nên ghi như chức năng đã hoàn thành trong SPEC hiện tại:
+
+- Kafka event streaming.
+- PostgreSQL/Elasticsearch production data layer.
+- Kubernetes deployment.
+- NLP service train/fine-tune độc lập.
+- Crawler đa nền tảng chạy real-time hoàn chỉnh.
+- Alert push qua Telegram/Zalo/Email end-to-end.
+- Export PDF/Excel production.
+- Multi-tenant RBAC hoàn chỉnh.
 - Input: nội dung post/comment đã chuẩn hóa + keyword config của workspace
 - Output: `is_relevant: boolean`, `match_reason: string`
 - Xử lý: lọc keyword nhanh (fast-path) → nếu pass → NLP phân tích ngữ cảnh sâu (deep-path)
@@ -220,336 +517,10 @@ Mỗi **Tenant** (doanh nghiệp) có thể có nhiều **Workspace** (thương 
 
 ---
 
-### 4.4 Cảnh báo sớm (Crisis Alert)
-
-**US-11: Phát hiện Crisis Signal**
-
-- Hệ thống theo dõi các tín hiệu bất thường:
-
-  | Tín hiệu | Mô tả | Ngưỡng mặc định |
-  |----------|-------|----------------|
-  | Mention spike | Số mention tiêu cực tăng đột biến | > 3x baseline trong 15 phút |
-  | High-reach source | Nguồn có nhiều follower/reader đề cập | Nguồn có reach > 100k |
-  | Sensitive topic repeat | Chủ đề nhạy cảm lặp lại nhiều lần | > 10 lần trong 1 giờ |
-
-- Brand Admin có thể tùy chỉnh ngưỡng theo từng workspace
-
-**US-12: Gửi cảnh báo**
-
-- Latency mục tiêu: < 3 phút từ khi phát hiện đến khi user nhận được thông báo
-- Channel: Telegram Bot, Zalo OA, Email
-- Nội dung alert bao gồm:
-  - Loại cảnh báo (spike / high-reach / sensitive topic)
-  - Tổng số mention tiêu cực
-  - Top 3 nội dung tiêu biểu (link + tóm tắt)
-  - Đề xuất mức độ ưu tiên xử lý
-
----
-
-### 4.5 Dashboard tổng quan
-
-**US-13: Tổng quan Dashboard**
-
-- Các widget hiển thị:
-  - **Mention Counter**: tổng số mention trong khoảng thời gian được chọn
-  - **Sentiment Donut Chart**: tỷ lệ Positive / Negative / Neutral
-  - **Sentiment Trend Line**: xu hướng sentiment theo ngày/tuần
-  - **Top Sources**: top 5 nguồn có nhiều mention nhất
-  - **Top Topics**: top 5 chủ đề được đề cập nhiều nhất
-  - **Recent Alerts**: 5 cảnh báo gần nhất với badge mức độ
-  - **Lead Summary**: số Hot/Warm/Cold lead hôm nay
-
-- Bộ lọc: theo workspace, theo khoảng thời gian, theo platform, theo sentiment
-
-**US-14: Danh sách Mention**
-
-- Bảng danh sách với pagination (20 items/page)
-- Các cột: Nền tảng, Nội dung (tóm tắt), Sentiment, Topic, Nguồn, Thời gian, Credibility Score
-- Filter: sentiment, topic, platform, keyword, khoảng thời gian
-- Cho phép người dùng relabel sentiment (Human-in-the-loop feedback)
-
----
-
-### 4.6 Lead Management
-
-**US-15: Xem Lead List**
-
-- Hiển thị danh sách Lead với 3 tab: Hot / Warm / Cold
-- Mỗi Lead hiển thị:
-  - Platform + link bài đăng
-  - Nội dung tóm tắt
-  - Intent signals (các từ/cụm từ cho thấy purchase intent)
-  - Thời gian phát hiện
-  - **Lead Expiry Countdown** (đồng hồ đếm ngược với Hot Lead)
-  - Trạng thái: Mới / Đang xử lý / Đã xử lý / Bỏ qua
-
-**US-16: Hot Lead Push Notification**
-
-- Khi hệ thống phát hiện Hot Lead mới:
-  - Trong < 60 giây: gửi push notification đến Zalo/Telegram của user Sales
-  - Nội dung message: platform, link, tóm tắt content, intent signals
-  - User có thể click để mở Lead detail ngay trong app
-
----
-
-### 4.7 Báo cáo tự động
-
-**US-17: Báo cáo ngày**
-
-- Tự động tạo hàng ngày lúc 7:00 sáng
-- Nội dung:
-  - Tổng số mention trong ngày hôm qua
-  - So sánh với ngày trước (delta %)
-  - Phân tích sentiment (số lượng + %)
-  - Top 5 nguồn + Top 5 chủ đề
-  - Danh sách cảnh báo đã kích hoạt
-  - Nội dung cần ưu tiên xử lý (top negative mentions)
-- Format: PDF + Excel
-- Phân phối: Email + lưu trên S3 + xem trong app
-
----
-
-## 5. Quy tắc nghiệp vụ (Business Rules)
-
-| BR# | Quy tắc |
-|-----|---------|
-| BR-01 | Chỉ thu thập dữ liệu **công khai**. Tuyệt đối không crawl nội dung yêu cầu đăng nhập. |
-| BR-02 | Với báo điện tử: chỉ lưu headline, tóm tắt (< 300 ký tự) và URL. Không lưu full-text. |
-| BR-03 | Tất cả dữ liệu phải qua PII Anonymization trước khi lưu vào DB. |
-| BR-04 | Mỗi tenant không được phép truy cập dữ liệu của tenant khác. |
-| BR-05 | Nguồn dữ liệu của mỗi tenant: không quá 60% từ 1 nền tảng duy nhất. |
-| BR-06 | Hot Lead phải được push trong vòng 60 giây từ khi phát hiện. |
-| BR-07 | Crisis Alert phải gửi đến user trong vòng 3 phút từ khi phát hiện spike. |
-| BR-08 | Nếu sentiment accuracy < 85% trên test-set → trigger nội bộ để AI team xử lý. |
-| BR-09 | Dữ liệu crawl raw được giữ tối đa 90 ngày trên S3. Mention đã phân tích giữ 365 ngày. |
-| BR-10 | User relabel sentiment → dữ liệu đưa vào pipeline fine-tuning (không áp dụng ngay). |
-
----
-
-## 6. API Endpoints tổng quan
-
-### Authentication
-
-```
-POST   /api/v1/auth/login
-POST   /api/v1/auth/refresh
-POST   /api/v1/auth/logout
-```
-
-### Workspace
-
-```
-GET    /api/v1/workspaces                    # Danh sách workspace của tenant
-POST   /api/v1/workspaces                    # Tạo workspace mới
-GET    /api/v1/workspaces/:id                # Chi tiết workspace
-PUT    /api/v1/workspaces/:id                # Cập nhật keyword config
-DELETE /api/v1/workspaces/:id                # Xóa workspace
-GET    /api/v1/workspaces/:id/health         # Sức khỏe nguồn dữ liệu
-```
-
-### Mentions
-
-```
-GET    /api/v1/workspaces/:id/mentions       # Danh sách mention (filter, paginate)
-GET    /api/v1/workspaces/:id/mentions/:mid  # Chi tiết mention
-PATCH  /api/v1/workspaces/:id/mentions/:mid/relabel  # Relabel sentiment
-```
-
-### Dashboard
-
-```
-GET    /api/v1/workspaces/:id/dashboard      # Tổng quan (summary stats)
-GET    /api/v1/workspaces/:id/sentiment-trend?period=7d  # Sentiment trend
-GET    /api/v1/workspaces/:id/top-sources    # Top nguồn
-GET    /api/v1/workspaces/:id/top-topics     # Top chủ đề
-```
-
-### Alerts
-
-```
-GET    /api/v1/workspaces/:id/alerts         # Danh sách cảnh báo
-GET    /api/v1/workspaces/:id/alerts/:aid    # Chi tiết cảnh báo
-PUT    /api/v1/workspaces/:id/alert-config   # Cấu hình ngưỡng cảnh báo
-```
-
-### Leads
-
-```
-GET    /api/v1/workspaces/:id/leads          # Danh sách lead (filter: hot/warm/cold)
-GET    /api/v1/workspaces/:id/leads/:lid     # Chi tiết lead
-PATCH  /api/v1/workspaces/:id/leads/:lid     # Cập nhật trạng thái lead
-```
-
-### Reports
-
-```
-GET    /api/v1/workspaces/:id/reports        # Danh sách báo cáo
-GET    /api/v1/workspaces/:id/reports/:rid   # Download báo cáo (PDF/Excel)
-POST   /api/v1/workspaces/:id/reports/generate  # Tạo báo cáo thủ công
-```
-
----
-
-## 7. Database Schema (tóm tắt)
-
-### Core Entities
-
-```sql
--- Tenant (Multi-tenant isolation)
-tenants (id, name, plan, created_at)
-
--- Workspace per brand
-workspaces (
-  id, tenant_id, name, industry,
-  keywords: jsonb,         -- [{term, synonyms, priority}]
-  crisis_watch: boolean,
-  created_at, updated_at
-)
-
--- Raw mention (sau khi dedup + PII mask)
-mentions (
-  id, workspace_id,
-  source_platform,         -- facebook | tiktok | news | youtube
-  source_url,
-  content_summary,         -- max 500 chars
-  author_display_name,     -- public display only
-  credibility_score,
-  published_at,
-  crawled_at
-)
-
--- NLP Analysis result
-nlp_results (
-  id, mention_id,
-  sentiment,               -- positive | negative | neutral
-  sentiment_confidence,
-  topics: text[],
-  intent,                  -- hot | warm | cold | none
-  model_version,
-  is_relabeled: boolean,
-  relabeled_by,
-  analyzed_at
-)
-
--- Crisis Alerts
-alerts (
-  id, workspace_id,
-  type,                    -- spike | high_reach | sensitive_topic
-  severity,                -- low | medium | high | critical
-  triggered_at,
-  sent_at,
-  channels_sent: text[],
-  acknowledged_at,
-  acknowledged_by
-)
-
--- Leads
-leads (
-  id, workspace_id, mention_id,
-  intent_type,             -- hot | warm | cold
-  intent_signals: text[],
-  status,                  -- new | in_progress | handled | ignored
-  pushed_at,
-  handled_at,
-  handled_by,
-  expires_at               -- Hot lead: 30 phút từ pushed_at
-)
-
--- Daily Reports
-reports (
-  id, workspace_id,
-  period_start, period_end,
-  file_url,                -- S3 URL
-  generated_at
-)
-```
-
----
-
-## 8. Yêu cầu phi chức năng (NFR)
-
-### Performance
-
-| Metric | Target |
-|--------|--------|
-| API response time (P95) | < 500ms |
-| Dashboard load time | < 2s |
-| WebSocket latency (alert) | < 3 phút end-to-end |
-| Hot Lead push notification | < 60 giây |
-| NLP Fast-path processing | < 1 giây / mention |
-| NLP Deep-path processing | 5–10 giây / mention |
-| System throughput | >= 10,000 posts/phút lúc peak |
-
-### Availability
-
-| Component | SLA |
-|-----------|-----|
-| Web App | 99.5% uptime |
-| Alert Service | 99.9% uptime (critical path) |
-| Crawler | 95% uptime (có thể degrade theo platform) |
-
-### Security
-
-- JWT Authentication với refresh token rotation
-- HTTPS/TLS cho tất cả endpoints
-- Rate limiting: 100 req/phút / user
-- Multi-tenant data isolation (row-level security)
-- PII anonymization trước khi lưu
-- Không lưu thông tin cá nhân ngoài tên hiển thị công khai
-
-### Scalability
-
-- Kubernetes HPA cho crawler và NLP worker pods
-- Kafka buffer giúp hệ thống chịu traffic spike 100x
-- Tiered crawling giảm 30–40% chi phí compute
-
----
-
-## 9. KPI & SLA
-
-### KPI Kỹ thuật
-
-| KPI | Target |
-|-----|--------|
-| Sentiment accuracy | > 90% trên bộ test chuẩn |
-| Sarcasm detection F1-score | > 75% |
-| Crisis Alert latency | < 3 phút |
-| Hot Lead push latency | < 60 giây |
-| System throughput | >= 10,000 posts/phút |
-
-### KPI Vận hành
-
-| KPI | Target |
-|-----|--------|
-| Data source uptime | > 95% / nguồn |
-| Report generation thành công | > 99% |
-| Dedup effectiveness | < 2% duplicate trong DB |
-
----
-
-## 10. Rủi ro & Giải pháp
-
-### Rủi ro kỹ thuật
-
-| Rủi ro | Giải pháp |
-|--------|----------|
-| **AI accuracy thấp với tiếng Việt MXH** | Fine-tune PhoBERT + context window rộng + human-in-the-loop feedback |
-| **Traffic spike làm nghẽn hệ thống** | Kafka buffer + K8s HPA + tiered processing (fast-path / deep-path) |
-| **Dữ liệu nhiễu, spam, duplicate** | MinHash LSH dedup + spam classifier + source credibility scoring |
-| **Bot bị chặn khi crawl** | Ưu tiên Official API + residential proxy pool + randomize delay |
-
-### Rủi ro pháp lý
-
-| Rủi ro | Giải pháp |
-|--------|----------|
-| **Vi phạm quyền riêng tư** | PII Anonymization Pipeline + không crawl private content |
-| **Vi phạm bản quyền báo chí** | Chỉ lưu headline + tóm tắt + URL |
-| **API bị đóng đột ngột (như Twitter 2023)** | Data Source Abstraction Layer + đa nguồn (không > 60% từ 1 nền tảng) |
-
-### Rủi ro vận hành
-
-| Rủi ro | Giải pháp |
-|--------|----------|
-| **Lead hết hạn trước khi Sales xử lý** | Lead Expiry Countdown + phân loại Hot/Warm/Cold + hướng dẫn onboarding |
-| **Chi phí cloud vượt doanh thu** | Tiered crawling + batch NLP cho non-critical + pricing model theo khối lượng |
-| **Cạnh tranh từ Buzzmetrics, Meltwater** | USP: Lead Generation (offense) — hầu hết đối thủ chỉ làm defense |
+## 9. Tiêu chí nghiệm thu tổng cho bản hiện tại
+
+- Trang chủ, login/logout, dashboard, mentions, alerts, reports, leads và các trang phụ truy cập được.
+- Dashboard đọc được dữ liệu Firestore và tính toán chỉ số cơ bản.
+- Mentions hiển thị dữ liệu từ Firestore.
+- Không lỗi build do thiếu field `poster_at/posted_at` hoặc topic ngoài union type.
+- Changelog, spec và architecture phản ánh đúng thứ tự commit từ khởi tạo → UI → auth → dashboard → mentions → AI/data → fix/merge.

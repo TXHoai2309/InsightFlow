@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useDashboard } from "@/hooks/useDashboardData";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { LeadFilters, LeadStats, LeadCard } from "@/components/leads";
@@ -13,8 +14,13 @@ import { normalizeBrandName } from "@/lib/services/dashboard";
  * Hỗ trợ mobile responsive và đếm ngược thời gian thực
  */
 export default function LeadsPage() {
-  const [activeTab, setActiveTab] = useState<"hot" | "warm" | "cold">("hot");
+  const { t } = useTranslation();
+  const [activeTab, useStateTab] = useState<"hot" | "warm" | "cold" | any>("hot");
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
+
+  const setActiveTab = (tab: "hot" | "warm" | "cold") => {
+    useStateTab(tab);
+  };
 
   // 1. Tự động tải dữ liệu và cập nhật định kỳ từ Firebase (Project 2: datainsight)
   useDashboard({ autoFetch: true, refetchInterval: 60000 });
@@ -56,10 +62,10 @@ export default function LeadsPage() {
       <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4">
         <div>
           <h2 className="text-2xl md:text-3xl text-[var(--color-text-primary)] font-bold">
-            Quản lý Khách hàng Tiềm năng
+            {t("leads.title")}
           </h2>
           <p className="text-body-md text-[var(--color-text-secondary)] mt-1">
-            Theo dõi và chuyển đổi Lead trực tiếp từ dữ liệu cào mạng xã hội thời gian thực.
+            {t("leads.subtitle")}
           </p>
         </div>
         
@@ -76,7 +82,7 @@ export default function LeadsPage() {
               }`}
             >
               <span>
-                {tab === "hot" ? "🔥 Hot" : tab === "warm" ? "⚡ Warm" : "❄️ Cold"}
+                {t(`leads.tabs.${tab}`)}
               </span>
               <span>
                 ({allFilteredLeads.filter((l) => l.intent === tab).length})
@@ -97,7 +103,7 @@ export default function LeadsPage() {
         {error && (
           <div className="p-4 bg-[var(--color-error-subtle)] text-[var(--color-error)] rounded-xl border border-[var(--color-error)]/20 text-sm font-medium flex items-center gap-2">
             <span className="material-symbols-outlined">error</span>
-            <span>Không thể tải dữ liệu: {error}. Vui lòng thử lại.</span>
+            <span>{t("leads.list.error", { error })}</span>
           </div>
         )}
 
@@ -129,9 +135,9 @@ export default function LeadsPage() {
               <span className="material-symbols-outlined text-3xl">inbox</span>
             </div>
             <div>
-              <h4 className="font-bold text-[var(--color-text-primary)] text-lg">Chưa có lead nào</h4>
+              <h4 className="font-bold text-[var(--color-text-primary)] text-lg">{t("leads.list.emptyTitle")}</h4>
               <p className="text-sm text-[var(--color-text-secondary)] mt-1">
-                Không tìm thấy khách hàng tiềm năng nào phù hợp với bộ lọc hiện tại trong tab này.
+                {t("leads.list.emptyDesc")}
               </p>
             </div>
           </div>

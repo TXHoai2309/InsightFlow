@@ -1,6 +1,7 @@
 // apps/api/src/index.ts
 import Fastify from "fastify";
 import alertsRoutes from "./routes/alerts";
+import authRoutes from "./routes/auth";
 
 const fastify = Fastify({
   logger: true,
@@ -16,9 +17,11 @@ fastify.addHook("onRequest", async (request, reply) => {
     return reply.status(200).send();
   }
 });
-
 // Register Alerts routes
 fastify.register(alertsRoutes, { prefix: "/api/alerts" });
+
+// Register Auth routes
+fastify.register(authRoutes, { prefix: "/api/auth" });
 
 // Health check endpoint
 fastify.get("/health", async () => {

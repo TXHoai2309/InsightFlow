@@ -48,10 +48,10 @@ export function DashboardFilters({ workspaces }: DashboardFiltersProps) {
       <div className="flex flex-col sm:flex-row sm:flex-wrap sm:justify-between sm:items-center gap-4">
         <div>
           <h2 className="font-bold text-xl md:text-2xl mb-1" style={{ color: "var(--color-text-primary)" }}>
-            Tổng quan Dashboard
+            {t("dashboard.overview.title")}
           </h2>
           <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
-            Giám sát thông tin F&B thời gian thực được tổng hợp tự động
+            {t("dashboard.overview.subtitle")}
           </p>
         </div>
 
@@ -59,7 +59,7 @@ export function DashboardFilters({ workspaces }: DashboardFiltersProps) {
           {/* Workspace Filter */}
           <div className="flex flex-col">
             <label className="text-xs font-bold uppercase mb-1" style={{ color: "var(--color-text-muted)" }}>
-              Thương hiệu
+              {t("dashboard.filters.brandLabel")}
             </label>
             <div className="relative">
               <select
@@ -72,9 +72,9 @@ export function DashboardFilters({ workspaces }: DashboardFiltersProps) {
                   color: "var(--color-text-primary)",
                 }}
               >
-                <option value="all">Tất cả thương hiệu</option>
+                <option value="all" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("dashboard.filters.allBrands")}</option>
                 {workspaces.map((ws) => (
-                  <option key={ws.id} value={ws.id}>
+                  <option key={ws.id} value={ws.id} style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
                     {ws.brand_name}
                   </option>
                 ))}
@@ -88,7 +88,7 @@ export function DashboardFilters({ workspaces }: DashboardFiltersProps) {
           {/* Time Range Filter */}
           <div className="flex flex-col">
             <label className="text-xs font-bold uppercase mb-1" style={{ color: "var(--color-text-muted)" }}>
-              Thời gian
+              {t("dashboard.filters.timeRange")}
             </label>
             <div className="relative">
               <select
@@ -103,10 +103,10 @@ export function DashboardFilters({ workspaces }: DashboardFiltersProps) {
                   color: "var(--color-text-primary)",
                 }}
               >
-                <option value="all">Toàn bộ</option>
-                <option value="24h">Hôm nay (24h)</option>
-                <option value="7d">{t("dashboard.filters.7days")}</option>
-                <option value="30d">{t("dashboard.filters.30days")}</option>
+                <option value="all" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("dashboard.filters.allTime")}</option>
+                <option value="24h" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("dashboard.filters.today24h")}</option>
+                <option value="7d" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("dashboard.filters.7days")}</option>
+                <option value="30d" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("dashboard.filters.30days")}</option>
               </select>
               <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center" style={{ color: "var(--color-text-muted)" }}>
                 <span className="material-symbols-outlined text-sm">keyboard_arrow_down</span>
@@ -117,7 +117,7 @@ export function DashboardFilters({ workspaces }: DashboardFiltersProps) {
           {/* Platform Filter */}
           <div className="flex flex-col">
             <label className="text-xs font-bold uppercase mb-1" style={{ color: "var(--color-text-muted)" }}>
-              Nền tảng
+              {t("dashboard.filters.platform")}
             </label>
             <div className="relative">
               <select
@@ -132,10 +132,10 @@ export function DashboardFilters({ workspaces }: DashboardFiltersProps) {
                   color: "var(--color-text-primary)",
                 }}
               >
-                <option value="all">Tất cả nền tảng</option>
+                <option value="all" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("dashboard.filters.allPlatforms")}</option>
                 {PLATFORM_ORDER.map((p) => (
-                  <option key={p} value={p}>
-                    {PLATFORM_META[p].label}
+                  <option key={p} value={p} style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
+                    {t(`dashboard.filters.${p}`)}
                   </option>
                 ))}
               </select>

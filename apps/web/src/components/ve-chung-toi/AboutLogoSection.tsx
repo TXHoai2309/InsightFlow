@@ -1,30 +1,31 @@
 "use client";
 
 import { useIntersectionObserver } from "@/hooks/useIntersectionObserver";
-import { useTheme } from "@/contexts/ThemeContext";
-
-const logoCards = [
-  {
-    icon: "waves",
-    title: "Đường sóng dữ liệu",
-    description: "Hai chữ I và F được cách điệu thành đường sóng liên tục — tượng trưng cho dòng chảy dữ liệu không ngừng từ mạng xã hội vào hệ thống phân tích.",
-  },
-  {
-    icon: "psychology",
-    title: "Trí tuệ & Công nghệ",
-    description: "Tím là màu của trí tuệ, sáng tạo và công nghệ tiên tiến. Đây cũng là màu của sự tin tưởng — giá trị cốt lõi mà InsightFlow mang đến.",
-  },
-  {
-    icon: "lightbulb",
-    title: "Insight + Flow",
-    description: '"Insight" — những hiểu biết sâu sắc ẩn trong dữ liệu. "Flow" — dòng chảy tự nhiên, liên tục và không gián đoạn. Cùng nhau: biến data thành hành động thông minh.',
-  },
-];
+import { useTranslation } from "react-i18next";
 
 export default function AboutLogoSection() {
+  const { t } = useTranslation();
   const { ref, hasIntersected } = useIntersectionObserver();
   const { theme } = useTheme();
   const isDark = theme === "dark";
+
+  const logoCards = [
+    {
+      icon: "waves",
+      title: t("about.logo.card1Title"),
+      description: t("about.logo.card1Desc"),
+    },
+    {
+      icon: "psychology",
+      title: t("about.logo.card2Title"),
+      description: t("about.logo.card2Desc"),
+    },
+    {
+      icon: "lightbulb",
+      title: t("about.logo.card3Title"),
+      description: t("about.logo.card3Desc"),
+    },
+  ];
 
   return (
     <section 
@@ -61,11 +62,11 @@ export default function AboutLogoSection() {
 
       <div className="max-w-7xl mx-auto px-6 md:px-10">
         <div className="text-center mb-16">
-          <h2 className="text-[32px] md:text-[36px] font-bold mb-4" style={{ color: isDark ? "var(--color-text-primary)" : "#1a1a2e" }}>
-            Câu chuyện đằng sau logo
+          <h2 className="text-[32px] md:text-[36px] font-bold text-[#1a1a2e] mb-4">
+            {t("about.logo.title")}
           </h2>
-          <p className="text-[16px] md:text-[18px]" style={{ color: isDark ? "var(--color-text-secondary)" : "#64748B" }}>
-            Mỗi đường nét đều mang một ý nghĩa
+          <p className="text-[16px] md:text-[18px] text-[#64748B]">
+            {t("about.logo.subtitle")}
           </p>
         </div>
 
