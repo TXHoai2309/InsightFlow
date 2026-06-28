@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import {
   DashboardService,
@@ -13,22 +14,22 @@ import type { Mention } from "@/types/dashboard";
 
 const sentimentMeta: Record<
   Mention["sentiment"],
-  { label: string; color: string; bg: string; icon: string }
+  { labelKey: string; color: string; bg: string; icon: string }
 > = {
   positive: {
-    label: "Tích cực",
+    labelKey: "mentionDetail.sentiment.positive",
     color: "text-[var(--color-success)]",
     bg: "bg-[var(--color-success-subtle)]",
     icon: "sentiment_satisfied",
   },
   neutral: {
-    label: "Trung lập",
+    labelKey: "mentionDetail.sentiment.neutral",
     color: "text-[var(--color-info)]",
     bg: "bg-[var(--color-info-subtle)]",
     icon: "sentiment_neutral",
   },
   negative: {
-    label: "Tiêu cực",
+    labelKey: "mentionDetail.sentiment.negative",
     color: "text-[var(--color-error)]",
     bg: "bg-[var(--color-error-subtle)]",
     icon: "sentiment_very_dissatisfied",
@@ -49,11 +50,11 @@ type CommentNode = Mention & {
   children: CommentNode[];
 };
 
-function formatDateTime(value?: string) {
-  if (!value) return "Không rõ";
+function formatDateTime(value: string | undefined, locale = "vi-VN") {
+  if (!value) return "--";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Không rõ";
-  return date.toLocaleString("vi-VN", {
+  if (Number.isNaN(date.getTime())) return "--";
+  return date.toLocaleString(locale, {
     hour: "2-digit",
     minute: "2-digit",
     day: "2-digit",
@@ -62,7 +63,7 @@ function formatDateTime(value?: string) {
   });
 }
 
-function formatRelativeTime(value?: string) {
+function formatRelativeTime(value: string | undefined, t: (key: string, options?: Record<string, unknown>) => string) {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
@@ -70,10 +71,10 @@ function formatRelativeTime(value?: string) {
   const diffMinutes = Math.max(0, Math.floor(diffMs / 60000));
   const diffHours = Math.floor(diffMinutes / 60);
   const diffDays = Math.floor(diffHours / 24);
-  if (diffDays >= 1) return `${diffDays} ngày trước`;
-  if (diffHours >= 1) return `${diffHours} giờ trước`;
-  if (diffMinutes >= 1) return `${diffMinutes} phút trước`;
-  return "Vừa xong";
+  if (diffDays >= 1) return t("mentionDetail.time.daysAgo", { count: diffDays });
+  if (diffHours >= 1) return t("mentionDetail.time.hoursAgo", { count: diffHours });
+  if (diffMinutes >= 1) return t("mentionDetail.time.minutesAgo", { count: diffMinutes });
+  return t("mentionDetail.time.justNow");
 }
 
 function percent(part: number, total: number) {
@@ -97,6 +98,7 @@ function makeInitials(name: string) {
 }
 
 export default function MentionDetailPage() {
+  const { t, i18n } = useTranslation();
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const mentionId = decodeURIComponent(String(params.id || ""));
@@ -122,7 +124,7 @@ export default function MentionDetailPage() {
         if (mounted) setMentions(data.mentions);
       } catch (err) {
         console.error("[MentionDetailPage] load error:", err);
-        if (mounted) setError("Không thể tải dữ liệu đề cập từ Firebase.");
+        if (mounted) setError("mentionDetail.loadError");
       } finally {
         if (mounted) setIsLoading(false);
       }
@@ -238,11 +240,49 @@ export default function MentionDetailPage() {
     };
   }, [postContext, mentions]);
 
+  const dominantSentiment = useMemo(() => {
+    return (Object.entries(sentimentStats) as Array<[Mention["sentiment"], number]>).reduce(
+      (largest, current) => current[1] > largest[1] ? current : largest,
+    );
+  }, [sentimentStats]);
+
+  useEffect(() => {
+    if (!mention) return;
+
+    const hashPrefix = "#comment-";
+    const hashTarget = window.location.hash.startsWith(hashPrefix)
+      ? decodeURIComponent(window.location.hash.slice(hashPrefix.length))
+      : "";
+    const targetId = hashTarget || (mention.content_type === "post" ? "" : mention.id);
+    if (!targetId) return;
+
+    const scrollToTarget = (behavior: ScrollBehavior) => {
+      const target = document.getElementById(`comment-${targetId}`);
+      if (!target) return false;
+      const stickyOffset = 96;
+      const top = target.getBoundingClientRect().top + window.scrollY - stickyOffset;
+      window.scrollTo({ top: Math.max(0, top), behavior });
+      target.focus({ preventScroll: true });
+      return true;
+    };
+
+    const frame = window.requestAnimationFrame(() => scrollToTarget("auto"));
+    const retries = [
+      window.setTimeout(() => scrollToTarget("smooth"), 250),
+      window.setTimeout(() => scrollToTarget("smooth"), 800),
+    ];
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      retries.forEach(window.clearTimeout);
+    };
+  }, [mention, postContext.tree]);
+
   if (isLoading) {
     return (
       <div className="p-6 md:p-10">
         <div className="glass-card rounded-3xl p-10 text-center text-[var(--color-text-muted)]">
-          Đang tải chi tiết đề cập từ Firebase...
+          {t("mentionDetail.loading")}
         </div>
       </div>
     );
@@ -256,16 +296,16 @@ export default function MentionDetailPage() {
             error
           </span>
           <h1 className="mt-4 text-2xl font-bold text-[var(--color-text-primary)]">
-            Không tìm thấy đề cập
+            {t("mentionDetail.notFound")}
           </h1>
           <p className="mt-2 text-[var(--color-text-secondary)]">
-            {error || "Bài viết này không còn trong dữ liệu Firebase hiện tại."}
+            {error ? t(error) : t("mentionDetail.notFoundDescription")}
           </p>
           <button
             onClick={() => router.push("/mentions")}
             className="mt-6 rounded-xl bg-[var(--color-brand)] px-5 py-3 text-sm font-bold text-white"
           >
-            Quay lại Mentions
+            {t("mentionDetail.backToMentions")}
           </button>
         </div>
       </div>
@@ -292,13 +332,13 @@ export default function MentionDetailPage() {
             <button
               onClick={() => router.push("/mentions")}
               className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)]"
-              aria-label="Quay lại"
+              aria-label={t("mentionDetail.back")}
             >
               <span className="material-symbols-outlined">arrow_back</span>
             </button>
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-[var(--color-brand)]">
-                Chi tiết đề cập
+                {t("mentionDetail.title")}
               </p>
             </div>
           </div>
@@ -320,16 +360,16 @@ export default function MentionDetailPage() {
                 </div>
                 <div>
                   <h2 className="text-xl font-extrabold text-[var(--color-text-primary)]">
-                    Bài viết gốc
+                    {t("mentionDetail.originalPost")}
                   </h2>
                   <p className="text-sm text-[var(--color-text-secondary)]">
-                    {platform.label} · {formatDateTime(postMention.posted_at)}
+                    {platform.label} · {formatDateTime(postMention.posted_at, i18n.language === "en" ? "en-US" : "vi-VN")}
                   </p>
                 </div>
               </div>
 
               <div className="rounded-full bg-[var(--color-success-subtle)] px-4 py-2 text-sm font-extrabold text-[var(--color-success)]">
-                {credibility}% Độ tin cậy
+                {credibility}% {t("mentionDetail.credibility")}
               </div>
             </div>
 
@@ -344,23 +384,11 @@ export default function MentionDetailPage() {
               <span
                 className={`rounded-full px-4 py-2 text-xs font-extrabold ${sentiment.bg} ${sentiment.color}`}
               >
-                {sentiment.label}
+                {t(sentiment.labelKey)}
               </span>
               <span className="rounded-full bg-[var(--color-bg-surface-raised)] px-4 py-2 text-xs font-extrabold uppercase text-[var(--color-text-muted)]">
                 {platform.label}
               </span>
-            </div>
-
-            <div className="mt-6 border-t border-[var(--color-border)] pt-6">
-              <div className="grid grid-cols-2 gap-4 text-center md:grid-cols-4">
-                <Metric label="Tác giả" value={postMention.author || "N/A"} />
-                <Metric
-                  label="Chủ đề"
-                  value={postMention.topic.toUpperCase()}
-                />
-                <Metric label="Sắc thái" value={sentiment.label} />
-                <Metric label="Độ tin cậy" value={`${credibility}%`} />
-              </div>
             </div>
 
             {postMention.url && (
@@ -374,7 +402,7 @@ export default function MentionDetailPage() {
                   <span className="material-symbols-outlined text-lg">
                     open_in_new
                   </span>
-                  Mở bài viết gốc
+                  {t("mentionDetail.openOriginalPost")}
                 </Link>
               </div>
             )}
@@ -382,65 +410,61 @@ export default function MentionDetailPage() {
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-lg font-bold text-[var(--color-text-primary)]">
-              Bình luận ({postContext.total})
+              {t("mentionDetail.comments")} ({postContext.total})
             </h2>
           </div>
 
           <div className="space-y-4">
             {postContext.tree.length === 0 ? (
               <div className="glass-card rounded-3xl p-8 text-center text-[var(--color-text-muted)]">
-                Chưa có comment nào cho bài viết này trong Firebase.
+                {t("mentionDetail.noComments")}
               </div>
             ) : (
               postContext.tree.map((item) => (
-                <CommentThread key={item.id} comment={item} level={0} />
+                <CommentThread
+                  key={item.id}
+                  comment={item}
+                  level={0}
+                  targetId={mention.content_type === "post" ? undefined : mention.id}
+                />
               ))
             )}
           </div>
         </section>
 
-        <aside className="space-y-6">
+        <aside className="self-start space-y-6 md:sticky md:top-24">
           <section className="glass-card rounded-3xl p-6">
             <h2 className="flex items-center gap-2 text-xl font-extrabold text-[var(--color-text-primary)]">
               <span className="material-symbols-outlined text-[var(--color-brand)]">
                 donut_large
               </span>
-              Phân tích sắc thái
+              {t("mentionDetail.sentimentAnalysis")}
             </h2>
 
             <div className="mt-7 flex flex-col items-center gap-7 sm:flex-row">
-              <div
-                className="relative h-40 w-40 rounded-full p-5"
-                style={donutStyle}
-              >
-                <div className="flex h-full w-full flex-col items-center justify-center rounded-full bg-[var(--color-bg-surface)]">
-                  <span className="text-xs text-[var(--color-text-muted)]">
-                    Chỉ số
-                  </span>
-                  <span className="text-3xl font-extrabold text-[var(--color-text-primary)]">
-                    {sentimentStats.positive}%
-                  </span>
-                </div>
-              </div>
+              <div className="h-40 w-40 shrink-0 rounded-full shadow-inner" style={donutStyle} />
 
               <div className="w-full space-y-4">
                 <Legend
-                  label="Tích cực"
+                  label={t("mentionDetail.sentiment.positive")}
                   value={sentimentStats.positive}
                   color="bg-[var(--color-success)]"
                 />
                 <Legend
-                  label="Trung lập"
+                  label={t("mentionDetail.sentiment.neutral")}
                   value={sentimentStats.neutral}
                   color="bg-[var(--color-info)]"
                 />
                 <Legend
-                  label="Tiêu cực"
+                  label={t("mentionDetail.sentiment.negative")}
                   value={sentimentStats.negative}
                   color="bg-[var(--color-error)]"
                 />
               </div>
             </div>
+            <p className="mt-5 text-center text-sm font-bold text-[var(--color-text-secondary)]">
+              {t("mentionDetail.dominantSentiment")}: {t(sentimentMeta[dominantSentiment[0]].labelKey)} ({dominantSentiment[1]}%)
+            </p>
           </section>
 
           <section className="glass-card rounded-3xl p-6">
@@ -448,21 +472,21 @@ export default function MentionDetailPage() {
               <span className="material-symbols-outlined text-[var(--color-brand)]">
                 info
               </span>
-              Thông tin đề cập
+              {t("mentionDetail.mentionInfo")}
             </h2>
 
             <div className="mt-6 divide-y divide-[var(--color-border)]">
-              <InfoRow label="Thương hiệu" value={brandName} highlight />
-              <InfoRow label="Nền tảng" value={platform.label} />
-              <InfoRow label="Tác giả" value={postMention.author || "N/A"} />
+              <InfoRow label={t("mentionDetail.brand")} value={brandName} highlight />
+              <InfoRow label={t("mentionDetail.platform")} value={platform.label} />
+              <InfoRow label={t("mentionDetail.author")} value={postMention.author || "N/A"} />
               <InfoRow
-                label="Thời gian"
-                value={formatDateTime(postMention.posted_at)}
+                label={t("mentionDetail.timeLabel")}
+                value={formatDateTime(postMention.posted_at, i18n.language === "en" ? "en-US" : "vi-VN")}
               />
-              <InfoRow label="Chủ đề" value={postMention.topic.toUpperCase()} />
+              <InfoRow label={t("mentionDetail.topic")} value={postMention.topic.toUpperCase()} />
               <div className="flex items-center justify-between gap-4 py-4">
                 <span className="text-[var(--color-text-secondary)]">
-                  Độ tin cậy AI
+                  {t("mentionDetail.aiCredibility")}
                 </span>
                 <div className="flex min-w-[160px] items-center gap-3">
                   <div className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--color-bg-surface-raised)]">
@@ -484,26 +508,16 @@ export default function MentionDetailPage() {
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div className="truncate text-2xl font-extrabold text-[var(--color-text-primary)]">
-        {value}
-      </div>
-      <div className="mt-1 text-[11px] font-bold uppercase tracking-wide text-[var(--color-text-muted)]">
-        {label}
-      </div>
-    </div>
-  );
-}
-
 function CommentThread({
   comment,
   level,
+  targetId,
 }: {
   comment: CommentNode;
   level: number;
+  targetId?: string;
 }) {
+  const { t } = useTranslation();
   const itemSentiment = sentimentMeta[comment.sentiment];
   const borderClass =
     comment.sentiment === "positive"
@@ -515,17 +529,25 @@ function CommentThread({
 
   return (
     <div
-      className="space-y-3"
+      id={`comment-${comment.id}`}
+      tabIndex={-1}
+      className="scroll-mt-24 space-y-3"
       style={{ marginLeft: safeLevel ? `${safeLevel * 28}px` : undefined }}
     >
       <div
-        className={`block rounded-3xl border border-l-4 bg-[var(--color-bg-surface)] p-5 shadow-sm transition ${borderClass}`}
+        className={`block rounded-3xl border border-l-4 bg-[var(--color-bg-surface)] p-5 shadow-sm transition ${borderClass} ${comment.id === targetId ? "ring-2 ring-[var(--color-brand)] ring-offset-2 ring-offset-[var(--color-bg-canvas)]" : ""}`}
         style={{
           borderTopColor: "var(--color-border)",
           borderRightColor: "var(--color-border)",
           borderBottomColor: "var(--color-border)",
         }}
       >
+        {comment.id === targetId && (
+          <div className="mb-3 inline-flex items-center gap-1 rounded-full bg-[var(--color-brand-subtle)] px-3 py-1 text-xs font-bold text-[var(--color-brand)]">
+            <span className="material-symbols-outlined text-sm">my_location</span>
+            {t("mentionDetail.selectedComment")}
+          </div>
+        )}
         <div className="flex gap-4">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--color-bg-surface-raised)] text-sm font-extrabold text-[var(--color-text-secondary)]">
             {makeInitials(comment.author || "KH")}
@@ -534,16 +556,16 @@ function CommentThread({
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="font-extrabold text-[var(--color-text-primary)]">
-                  {comment.author || "Khách hàng"}
+                  {comment.author || t("mentionDetail.customer")}
                 </h3>
                 {level > 0 && (
                   <span className="mt-1 inline-flex rounded-full bg-[var(--color-bg-surface-raised)] px-2 py-0.5 text-[10px] font-bold uppercase text-[var(--color-text-muted)]">
-                    Reply cấp {level}
+                    {t("mentionDetail.replyLevel", { level })}
                   </span>
                 )}
               </div>
               <span className="shrink-0 text-xs text-[var(--color-text-muted)]">
-                {formatRelativeTime(comment.posted_at)}
+                {formatRelativeTime(comment.posted_at, t)}
               </span>
             </div>
             <p className="mt-2 whitespace-pre-wrap break-words text-[var(--color-text-primary)]">
@@ -552,7 +574,7 @@ function CommentThread({
             <span
               className={`mt-3 inline-flex rounded-full px-3 py-1 text-[11px] font-extrabold uppercase ${itemSentiment.bg} ${itemSentiment.color}`}
             >
-              {itemSentiment.label}
+              {t(itemSentiment.labelKey)}
             </span>
           </div>
         </div>
@@ -561,7 +583,12 @@ function CommentThread({
       {comment.children.length > 0 && (
         <div className="space-y-3 border-l border-dashed border-[var(--color-border)] pl-3">
           {comment.children.map((child) => (
-            <CommentThread key={child.id} comment={child} level={level + 1} />
+            <CommentThread
+              key={child.id}
+              comment={child}
+              level={level + 1}
+              targetId={targetId}
+            />
           ))}
         </div>
       )}

@@ -177,8 +177,8 @@ export const useDashboardStore = create<DashboardState>()(
         // 5. Filter by Time Range
         if (cutoff !== null) {
           const time = new Date(m.posted_at).getTime();
-          // Filter out mentions older than cutoff AND mentions in the future
-          if (time < cutoff || time > Date.now()) return false;
+          // Invalid, old, and future timestamps do not belong in a bounded range.
+          if (!Number.isFinite(time) || time < cutoff || time > Date.now()) return false;
         }
 
         return true;

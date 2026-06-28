@@ -18,23 +18,24 @@
    Collecting build traces ...
 
 Route (app)                              Size     First Load JS
-┌ ○ /                                    8.1 kB          331 kB
+┌ ○ /                                    9.44 kB         301 kB
 ├ ○ /_not-found                          876 B          88.5 kB
-├ ○ /alerts                              9.71 kB         364 kB
+├ ○ /alerts                              9.73 kB         364 kB
 ├ ƒ /api/auth/reset-password             0 B                0 B
 ├ ○ /api/debug-firestore                 0 B                0 B
 ├ ○ /api/reports/latest                  0 B                0 B
 ├ ○ /dashboard                           5.21 kB         359 kB
-├ ○ /forgot-password                     6.14 kB        93.7 kB
-├ ○ /leads                               6.57 kB         292 kB
-├ ○ /login                               3.64 kB         292 kB
-├ ○ /mentions                            4.84 kB         299 kB
-├ ○ /nganh                               4.6 kB          327 kB
-├ ○ /profile                             9.56 kB         328 kB
-├ ○ /register                            4.86 kB         293 kB
+├ ○ /forgot-password                     4.94 kB        92.5 kB
+├ ○ /leads                               7.09 kB         293 kB
+├ ○ /login                               4.11 kB         292 kB
+├ ○ /mentions                            5.12 kB         300 kB
+├ ƒ /mentions/[id]                       4.2 kB          282 kB
+├ ○ /nganh                               6.41 kB         298 kB
+├ ○ /profile                             7.24 kB         299 kB
+├ ○ /register                            3.16 kB         291 kB
 ├ ○ /reports                             157 kB          437 kB
-├ ○ /settings/brand                      3.01 kB         108 kB
-└ ○ /ve-chung-toi                        11.6 kB         334 kB
+├ ○ /settings/brand                      3.36 kB         108 kB
+└ ○ /ve-chung-toi                        13.4 kB         305 kB
 + First Load JS shared by all            87.6 kB
   ├ chunks/1dd3208c-4d948558e163dd97.js  53.6 kB
   ├ chunks/528-7e11c70fd131a541.js       31.9 kB

@@ -257,6 +257,29 @@ export class DashboardService {
       const mentions: Mention[] = mentionsSnap.docs.map((doc) => {
         const d = doc.data();
         const labels = d.labels || {};
+        const postContent = normalizeOptionalText(
+          normalizeText(
+            d.post_content ||
+              d.post_text ||
+              d.post_caption ||
+              d.caption ||
+              d.title ||
+              d.original_post ||
+              "",
+          ),
+        );
+        const commentContent = normalizeOptionalText(
+          normalizeText(
+            d.comment_content ||
+              d.comment_text ||
+              d.comment ||
+              d.clean_text ||
+              d.processed_text ||
+              d.text ||
+              d.content ||
+              "",
+          ),
+        );
         // posted_at = ngày đăng bài thật (post_date → created_at nguồn → fallback crawled_at)
         const postedAtRaw =
           d.post_date ??
@@ -270,14 +293,14 @@ export class DashboardService {
           parent_id: d.parent_id ? String(d.parent_id) : null,
           workspace_id: rawBrand,
           platform: mapSourceToPlatform(d.source || ""),
-          content: normalizeText(
-            d.clean_text ||
-              d.processed_text ||
-              d.text ||
-              d.content ||
-              d.original_text ||
-              "",
-          ),
+          content: commentContent || postContent || "",
+          post_content: postContent,
+          comment_content: commentContent,
+          content_type: ["post", "comment", "reply"].includes(
+            String(d.content_type || "").toLowerCase(),
+          )
+            ? (String(d.content_type).toLowerCase() as Mention["content_type"])
+            : undefined,
           original_content: normalizeText(
             d.original_text ||
               d.clean_text ||
