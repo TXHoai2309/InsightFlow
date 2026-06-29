@@ -38,3 +38,6 @@ env/
 apps/api/service-account.json
 *.json.key
 *service-account*.json
+
+# Turborepo cache and logs
+.turbo/
