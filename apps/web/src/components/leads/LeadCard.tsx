@@ -5,22 +5,13 @@ import { useTranslation } from "react-i18next";
 import { useRouter } from "next/navigation";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { PLATFORM_META } from "@/lib/services/dashboard";
+import { PlatformLogo } from "@/components/platform/PlatformLogo";
 import type { Lead, Mention } from "@/types/dashboard";
 
 interface LeadCardProps {
   lead: Lead;
   currentTime: number;
 }
-
-const PLATFORM_ICONS: Record<string, string> = {
-  facebook: "chat",
-  tiktok: "music_note",
-  youtube: "play_circle",
-  thread: "alternate_email",
-  be: "restaurant",
-  google_maps: "pin_drop",
-  news: "newspaper",
-};
 
 const STATUS_META: Record<
   Lead["status"],
@@ -249,7 +240,6 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
     label: "Khác",
     color: "#666",
   };
-  const platformIcon = PLATFORM_ICONS[lead.platform] || "public";
   const statusInfo = STATUS_META[lead.status];
   const contactUrl = lead.social_profile_url?.trim();
   const originalPostUrl = lead.url?.trim();
@@ -331,19 +321,17 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
     ) {
       return {
         label: "Liên hệ",
-        icon: "chat",
         title: "Liên hệ qua Facebook",
         className:
-          "bg-[#0084FF]/10 hover:bg-[#0084FF]/20 text-[#0084FF] border-[#0084FF]/20",
+          "bg-[var(--color-brand-subtle)] hover:bg-[var(--color-brand)]/14 text-[var(--color-brand)] border-[var(--color-brand-border)]",
       };
     }
     if (normalizedUrl.includes("tiktok.com")) {
       return {
         label: "Liên hệ",
-        icon: "music_note",
         title: "Liên hệ qua TikTok",
         className:
-          "bg-[#111827]/10 hover:bg-[#111827]/20 text-[#111827] border-[#111827]/20",
+          "bg-[var(--color-brand-subtle)] hover:bg-[var(--color-brand)]/14 text-[var(--color-brand)] border-[var(--color-brand-border)]",
       };
     }
     if (
@@ -352,18 +340,16 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
     ) {
       return {
         label: "Liên hệ",
-        icon: "play_circle",
         title: "Liên hệ qua YouTube",
         className:
-          "bg-[#FF0000]/10 hover:bg-[#FF0000]/20 text-[#FF0000] border-[#FF0000]/20",
+          "bg-[var(--color-brand-subtle)] hover:bg-[var(--color-brand)]/14 text-[var(--color-brand)] border-[var(--color-brand-border)]",
       };
     }
     return {
       label: "Liên hệ",
-      icon: "contact_page",
       title: "Liên hệ với khách hàng",
       className:
-        "bg-[var(--color-info-subtle)] hover:bg-[var(--color-info)]/20 text-[var(--color-info)] border-[var(--color-info)]/30",
+        "bg-[var(--color-brand-subtle)] hover:bg-[var(--color-brand)]/14 text-[var(--color-brand)] border-[var(--color-brand-border)]",
     };
   };
 
@@ -417,20 +403,15 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
                 {getInitials(authorName)}
               </div>
               <div
-                className="absolute -bottom-1 -right-1 p-0.5 rounded-full border shadow-sm flex items-center justify-center"
-                style={{
-                  color: platformMeta.color,
-                  backgroundColor: "var(--color-bg-surface)",
-                  borderColor: "var(--color-border)",
-                }}
+                className="absolute -bottom-1 -right-1 rounded-full border bg-[var(--color-bg-surface)] shadow-sm"
+                style={{ borderColor: "var(--color-border)" }}
                 title={platformMeta.label}
               >
-                <span
-                  className="material-symbols-outlined text-[13px]"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >
-                  {platformIcon}
-                </span>
+                <PlatformLogo
+                  platform={lead.platform}
+                  size="sm"
+                  className="h-4 w-4 rounded-full p-0.5"
+                />
               </div>
             </div>
 
@@ -659,12 +640,9 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
                   handleContactAction(profileContactMeta.label, contactUrl)
                 }
                 disabled={isSaving}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${profileContactMeta.className}`}
+                className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${profileContactMeta.className}`}
                 title={profileContactMeta.title}
               >
-                <span className="material-symbols-outlined text-base">
-                  {profileContactMeta.icon}
-                </span>
                 Liên hệ
               </button>
             )}
