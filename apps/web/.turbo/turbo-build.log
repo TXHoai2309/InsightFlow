@@ -9,16 +9,41 @@
  ✓ Compiled successfully
    Linting and checking validity of types ...
    Collecting page data ...
-PageNotFoundError: Cannot find module for page: /page
-    at getPagePath (E:\Netspace\InsightFlow\node_modules\next\dist\server\require.js:94:15)
-    at requirePage (E:\Netspace\InsightFlow\node_modules\next\dist\server\require.js:99:22)
-    at E:\Netspace\InsightFlow\node_modules\next\dist\server\load-components.js:103:84
-    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
-    at async loadComponentsImpl (E:\Netspace\InsightFlow\node_modules\next\dist\server\load-components.js:103:26)
-    at async E:\Netspace\InsightFlow\node_modules\next\dist\build\utils.js:1116:32
-    at async Span.traceAsyncFn (E:\Netspace\InsightFlow\node_modules\next\dist\trace\trace.js:154:20) {
-  code: 'ENOENT'
-}
+   Generating static pages (0/19) ...
+   Generating static pages (4/19) 
+   Generating static pages (9/19) 
+   Generating static pages (14/19) 
+ ✓ Generating static pages (19/19)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                              Size     First Load JS
+┌ ○ /                                    9.44 kB         301 kB
+├ ○ /_not-found                          876 B          88.5 kB
+├ ○ /alerts                              9.73 kB         364 kB
+├ ƒ /api/auth/reset-password             0 B                0 B
+├ ○ /api/debug-firestore                 0 B                0 B
+├ ○ /api/reports/latest                  0 B                0 B
+├ ○ /dashboard                           5.21 kB         359 kB
+├ ○ /forgot-password                     4.94 kB        92.5 kB
+├ ○ /leads                               7.09 kB         293 kB
+├ ○ /login                               4.11 kB         292 kB
+├ ○ /mentions                            6.87 kB         301 kB
+├ ƒ /mentions/[id]                       4.52 kB         299 kB
+├ ○ /nganh                               6.41 kB         298 kB
+├ ○ /profile                             7.24 kB         299 kB
+├ ○ /register                            3.16 kB         291 kB
+├ ○ /reports                             157 kB          437 kB
+├ ○ /settings/brand                      3.01 kB         108 kB
+└ ○ /ve-chung-toi                        13.4 kB         305 kB
++ First Load JS shared by all            87.6 kB
+  ├ chunks/1dd3208c-1abe0379f54bbae7.js  53.6 kB
+  ├ chunks/528-94bbb73287828cdd.js       31.9 kB
+  └ other shared chunks (total)          2.1 kB
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
 
 > Build error occurred
 Error: Failed to collect page data for /
