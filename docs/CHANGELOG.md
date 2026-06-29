@@ -35,6 +35,11 @@
   - Sửa hiển thị logo `TikTok` và `Threads` để dùng màu đen ở giao diện sáng và tự đổi sang màu trắng ở giao diện tối theo đúng CSS theme token của ứng dụng.
   - Căn giữa logo nền tảng trong ô hiển thị trên trang Mentions và đầu trang chi tiết đề cập.
 
+ - **Lead card navigation & badge alignment (`/leads`)**
+   - Thu nhỏ badge logo nền tảng trong `LeadCard` bằng size `xs` riêng để cân đối với avatar khách hàng và không ảnh hưởng các màn hình Mentions/Detail.
+   - Cập nhật điều hướng từ Lead sang trang chi tiết đề cập để mở đúng post/comment/reply qua deep-link `/mentions/{postId}#comment-{commentId}`.
+   - Khôi phục tương tác mở chi tiết trên card lead: nội dung lead và nút xem chi tiết vẫn hoạt động khi tìm được mention nội bộ, kể cả khi bản ghi lead không có `url`.
+
 ## [Unreleased] - 2026-06-26
   ### Fixed
   - **Giao diện sáng/tối (Theme-aware UI)**:

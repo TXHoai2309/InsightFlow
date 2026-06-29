@@ -730,7 +730,7 @@ export default function MentionDetailPage() {
                   key={item.id}
                   comment={item}
                   level={0}
-                  targetId={mention.content_type === "post" ? undefined : mention.id}
+                  targetId={requestedTargetId || undefined}
                 />
               ))
             )}

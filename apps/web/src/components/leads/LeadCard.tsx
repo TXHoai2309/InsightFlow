@@ -13,6 +13,20 @@ interface LeadCardProps {
   currentTime: number;
 }
 
+type MentionNavigationTarget = {
+  rootId: string;
+  targetId?: string;
+};
+
+function normalizeMatchText(value?: string) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 const STATUS_META: Record<
   Lead["status"],
   { bg: string; text: string; dot: string }
@@ -262,6 +276,13 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
   };
 
   const leadUrlNormalized = normalizeUrlForMatch(lead.url);
+  const leadAnchorMatch = lead.url?.match(/#comment[_-]([a-zA-Z0-9\-_]+)/);
+  const leadAnchorId = leadAnchorMatch?.[1] || "";
+  const leadAuthorNormalized = normalizeMatchText(lead.author);
+  const leadContentNormalized = normalizeMatchText(lead.content);
+  const leadPostedAtMs = lead.posted_at
+    ? new Date(lead.posted_at).getTime()
+    : Number.NaN;
 
   const resolveParentMentionId = (mentionId: string): string | null => {
     let current = mentionById.get(mentionId);
@@ -274,43 +295,145 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
     return current?.id || null;
   };
 
-  const mentionTarget = useMemo(() => {
-    if (!leadUrlNormalized || !mentions?.length) return null;
+  const mentionTarget = useMemo<MentionNavigationTarget | null>(() => {
+    if (!mentions?.length) return null;
 
-    const found = mentions.find((mention) => {
-      const mentionUrlNormalized = normalizeUrlForMatch(mention.url);
-      if (!mentionUrlNormalized) return false;
-      if (mentionUrlNormalized === leadUrlNormalized) return true;
-      if (
-        mentionUrlNormalized.startsWith(leadUrlNormalized) ||
-        leadUrlNormalized.startsWith(mentionUrlNormalized)
-      )
-        return true;
+    const scoreMentionCandidate = (mention: Mention) => {
+      let score = 0;
 
-      const mentionAnchor = mention.url?.match(/#comment[_-]([a-zA-Z0-9\-_]+)/);
-      const leadAnchor = lead.url?.match(/#comment[_-]([a-zA-Z0-9\-_]+)/);
+      if (mention.id === lead.id) score += 6;
+      if (leadAnchorId && mention.id === leadAnchorId) score += 5;
+      if (mention.platform === lead.platform) score += 2;
+
+      const mentionAuthorNormalized = normalizeMatchText(mention.author);
       if (
-        mentionAnchor &&
-        leadUrlNormalized &&
-        leadUrlNormalized === normalizeUrlForMatch(mention.url)
+        leadAuthorNormalized &&
+        mentionAuthorNormalized &&
+        leadAuthorNormalized === mentionAuthorNormalized
       ) {
-        return true;
+        score += 2;
       }
-      if (mentionAnchor && leadAnchor && mentionAnchor[1] === leadAnchor[1]) {
-        return true;
+
+      const mentionTexts = [
+        mention.content,
+        mention.original_content,
+        mention.comment_content,
+        mention.post_content,
+      ]
+        .map((value) => normalizeMatchText(value))
+        .filter(Boolean);
+
+      if (
+        leadContentNormalized &&
+        mentionTexts.some(
+          (value) =>
+            value === leadContentNormalized ||
+            value.includes(leadContentNormalized) ||
+            leadContentNormalized.includes(value),
+        )
+      ) {
+        score += 4;
       }
-      return false;
-    });
+
+      const mentionPostedAtMs = new Date(mention.posted_at).getTime();
+      if (
+        Number.isFinite(leadPostedAtMs) &&
+        Number.isFinite(mentionPostedAtMs) &&
+        Math.abs(mentionPostedAtMs - leadPostedAtMs) <= 5 * 60 * 1000
+      ) {
+        score += 2;
+      }
+
+      return score;
+    };
+
+    let found =
+      mentionById.get(lead.id) ||
+      (leadAnchorId ? mentionById.get(leadAnchorId) || null : null);
+
+    if (!found && leadUrlNormalized) {
+      found =
+        mentions.find((mention) => {
+          const mentionUrlNormalized = normalizeUrlForMatch(mention.url);
+          if (!mentionUrlNormalized) return false;
+          if (mentionUrlNormalized === leadUrlNormalized) return true;
+          if (
+            mentionUrlNormalized.startsWith(leadUrlNormalized) ||
+            leadUrlNormalized.startsWith(mentionUrlNormalized)
+          )
+            return true;
+
+          const mentionAnchor = mention.url?.match(
+            /#comment[_-]([a-zA-Z0-9\-_]+)/,
+          );
+          if (
+            mentionAnchor &&
+            leadUrlNormalized === normalizeUrlForMatch(mention.url)
+          ) {
+            return true;
+          }
+          if (mentionAnchor && leadAnchorId && mentionAnchor[1] === leadAnchorId) {
+            return true;
+          }
+          return false;
+        }) || null;
+    }
+
+    if (!found) {
+      const rankedCandidates = mentions
+        .map((mention) => ({
+          mention,
+          score: scoreMentionCandidate(mention),
+        }))
+        .filter((item) => item.score >= 6)
+        .sort((a, b) => b.score - a.score);
+
+      found = rankedCandidates[0]?.mention || null;
+    }
 
     if (!found) return null;
 
-    const parentId = resolveParentMentionId(found.id);
-    return parentId || found.id;
-  }, [leadUrlNormalized, mentions, mentionById]);
+    const rootId = resolveParentMentionId(found.id) || found.id;
+    const isCommentTarget =
+      found.id !== rootId ||
+      found.content_type === "comment" ||
+      found.content_type === "reply";
+
+    return isCommentTarget
+      ? {
+          rootId,
+          targetId: found.id,
+        }
+      : { rootId };
+  }, [
+    lead.id,
+    lead.platform,
+    leadAnchorId,
+    leadAuthorNormalized,
+    leadContentNormalized,
+    leadPostedAtMs,
+    leadUrlNormalized,
+    mentions,
+    mentionById,
+  ]);
 
   const handleNavigateToMention = () => {
     if (!mentionTarget) return;
-    router.push(`/mentions/${encodeURIComponent(mentionTarget)}`);
+    const detailHref = mentionTarget.targetId
+      ? `/mentions/${encodeURIComponent(mentionTarget.rootId)}#comment-${encodeURIComponent(mentionTarget.targetId)}`
+      : `/mentions/${encodeURIComponent(mentionTarget.rootId)}`;
+    router.push(detailHref);
+  };
+
+  const handleOpenLeadSource = () => {
+    if (mentionTarget) {
+      handleNavigateToMention();
+      return;
+    }
+
+    if (postLinkUrl) {
+      window.open(postLinkUrl, "_blank", "noopener,noreferrer");
+    }
   };
 
   const getProfileContactMeta = (url?: string) => {
@@ -354,6 +477,7 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
   };
 
   const profileContactMeta = getProfileContactMeta(contactUrl);
+  const isLeadSourceInteractive = Boolean(mentionTarget || postLinkUrl);
 
   const getBorderClass = () => {
     if (lead.status === "completed" || lead.status === "skipped") {
@@ -407,11 +531,7 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
                 style={{ borderColor: "var(--color-border)" }}
                 title={platformMeta.label}
               >
-                <PlatformLogo
-                  platform={lead.platform}
-                  size="sm"
-                  className="h-4 w-4 rounded-full p-0.5"
-                />
+                <PlatformLogo platform={lead.platform} size="xs" />
               </div>
             </div>
 
@@ -427,9 +547,26 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
 
           {/* Core Content & Intent Tags */}
           <div className="flex-1 space-y-2.5">
-            <p className="text-body-md text-[var(--color-text-primary)] leading-relaxed font-medium">
-              {lead.content}
-            </p>
+            {isLeadSourceInteractive ? (
+              <button
+                type="button"
+                onClick={handleOpenLeadSource}
+                className="group w-full text-left"
+                title={
+                  mentionTarget
+                    ? "Mở đúng đề cập trong trang chi tiết"
+                    : t("leads.card.viewPostTooltip")
+                }
+              >
+                <p className="text-body-md text-[var(--color-text-primary)] leading-relaxed font-medium transition-colors group-hover:text-[var(--color-brand)]">
+                  {lead.content}
+                </p>
+              </button>
+            ) : (
+              <p className="text-body-md text-[var(--color-text-primary)] leading-relaxed font-medium">
+                {lead.content}
+              </p>
+            )}
 
             {/* Meta tags & Details line */}
             <div className="flex flex-wrap gap-1.5 items-center">
@@ -648,7 +785,7 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
             )}
 
             {/* Original Post */}
-            {postLinkUrl && mentionTarget ? (
+            {mentionTarget ? (
               <button
                 type="button"
                 onClick={handleNavigateToMention}

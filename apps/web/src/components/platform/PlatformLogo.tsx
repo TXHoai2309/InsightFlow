@@ -2,7 +2,7 @@ import type { Platform } from "@/types/dashboard";
 
 type PlatformLogoProps = {
   platform: Platform | string;
-  size?: "sm" | "md" | "lg";
+  size?: "xs" | "sm" | "md" | "lg";
   className?: string;
 };
 
@@ -11,12 +11,14 @@ type SvgStyle = {
 };
 
 const TILE_SIZE_CLASSES: Record<NonNullable<PlatformLogoProps["size"]>, string> = {
+  xs: "h-[18px] w-[18px] rounded-full p-[2px]",
   sm: "h-9 w-9 rounded-xl p-2",
   md: "h-11 w-11 rounded-2xl p-2.5",
   lg: "h-14 w-14 rounded-2xl p-3.5",
 };
 
 const SVG_SIZE_CLASSES: Record<NonNullable<PlatformLogoProps["size"]>, string> = {
+  xs: "h-3 w-3",
   sm: "h-5 w-5",
   md: "h-6 w-6",
   lg: "h-8 w-8",
