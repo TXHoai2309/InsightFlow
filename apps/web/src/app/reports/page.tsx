@@ -960,6 +960,72 @@ function generateAIInsights(
   return summary;
 }
 
+function LanguageSelectModal({
+  isOpen,
+  onClose,
+  onSelect,
+  isExporting,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onSelect: (lang: "vi" | "en") => void;
+  isExporting: boolean;
+}) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] p-6 rounded-2xl shadow-xl w-full max-w-sm flex flex-col gap-5">
+        <div className="flex justify-between items-center border-b border-[var(--color-border)] pb-3">
+          <h3 className="text-lg font-bold text-[var(--color-text-primary)]">
+            Chọn ngôn ngữ báo cáo
+          </h3>
+          <button
+            onClick={onClose}
+            className="p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-raised)] rounded-full transition-colors"
+          >
+            <span className="material-symbols-outlined text-xl">close</span>
+          </button>
+        </div>
+
+        <p className="text-xs text-[var(--color-text-secondary)] -mt-2">
+          Vui lòng lựa chọn ngôn ngữ phù hợp cho bản báo cáo PDF tải xuống.
+        </p>
+
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={() => onSelect("vi")}
+            disabled={isExporting}
+            className="flex flex-col items-center justify-center gap-3 p-5 rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] hover:border-[var(--color-brand)] hover:bg-[var(--color-brand)]/5 transition-all group disabled:opacity-50 text-center"
+          >
+            <span className="text-3xl">🇻🇳</span>
+            <span className="text-sm font-bold text-[var(--color-text-primary)] group-hover:text-[var(--color-brand)]">
+              Tiếng Việt
+            </span>
+          </button>
+          <button
+            onClick={() => onSelect("en")}
+            disabled={isExporting}
+            className="flex flex-col items-center justify-center gap-3 p-5 rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] hover:border-[var(--color-brand)] hover:bg-[var(--color-brand)]/5 transition-all group disabled:opacity-50 text-center"
+          >
+            <span className="text-3xl">🇬🇧</span>
+            <span className="text-sm font-bold text-[var(--color-text-primary)] group-hover:text-[var(--color-brand)]">
+              English
+            </span>
+          </button>
+        </div>
+
+        {isExporting && (
+          <div className="flex items-center justify-center gap-2 text-xs text-[var(--color-brand)] font-bold mt-1">
+            <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
+            Đang xuất báo cáo PDF...
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function ReportsPage() {
   const { t, i18n } = useTranslation();
   const [activeTab, setActiveTab] = useState<"periodic" | "custom" | "archive">(
@@ -974,6 +1040,10 @@ export default function ReportsPage() {
 
   const [generatingPdfId, setGeneratingPdfId] = useState<string | null>(null);
   const [previewReport, setPreviewReport] = useState<DailyReport | null>(null);
+  const [exportConfig, setExportConfig] = useState<{
+    type: "periodic" | "custom" | "archive";
+    data: any;
+  } | null>(null);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [customMentionsPage, setCustomMentionsPage] = useState(1);
@@ -1331,17 +1401,8 @@ export default function ReportsPage() {
     };
   }, [mentions, reportsList]);
 
-  const handleExportPDF = async (report: DailyReport) => {
-    try {
-      setGeneratingPdfId(report.id);
-      await generateDailyReportPDF(
-        report.brand,
-        report.dateStr,
-        report.mentions,
-      );
-    } finally {
-      setGeneratingPdfId(null);
-    }
+  const handleExportPDF = (report: DailyReport) => {
+    setExportConfig({ type: "periodic", data: report });
   };
 
   // ── Custom report actions ──
@@ -1448,29 +1509,9 @@ export default function ReportsPage() {
     }, 2400);
   };
 
-  const handleExportCustomPDF = async () => {
+  const handleExportCustomPDF = () => {
     if (!customReportData) return;
-    try {
-      setGeneratingPdfId("custom-export");
-      const filtersSummary = `${customPlatforms.length} nguồn, ${customTopics.length} chủ đề, ${customSentiments.length} sắc thái.`;
-      const dateStartFormatted = new Date(customStartDate).toLocaleDateString(
-        "vi-VN",
-      );
-      const dateEndFormatted = new Date(customEndDate).toLocaleDateString(
-        "vi-VN",
-      );
-
-      await generateCustomReportPDF(
-        customBrand,
-        dateStartFormatted,
-        dateEndFormatted,
-        customReportData.mentions,
-        customReportData.aiInsights,
-        filtersSummary,
-      );
-    } finally {
-      setGeneratingPdfId(null);
-    }
+    setExportConfig({ type: "custom", data: customReportData });
   };
 
   const handleArchiveReport = () => {
@@ -1510,26 +1551,72 @@ export default function ReportsPage() {
     );
   };
 
-  const handleExportArchivedPDF = async (report: any) => {
-    try {
-      setGeneratingPdfId(report.id);
-      const startFormatted = new Date(
-        report.startDate || new Date(),
-      ).toLocaleDateString("vi-VN");
-      const endFormatted = new Date(
-        report.endDate || new Date(),
-      ).toLocaleDateString("vi-VN");
+  const handleExportArchivedPDF = (report: any) => {
+    setExportConfig({ type: "archive", data: report });
+  };
 
-      await generateCustomReportPDF(
-        report.brand,
-        startFormatted,
-        endFormatted,
-        report.mentions || [],
-        report.insights || "",
-        report.filtersSummary || "Báo cáo lưu trữ",
-      );
+  const executeExportPDF = async (lang: "vi" | "en") => {
+    if (!exportConfig) return;
+    const { type, data } = exportConfig;
+    const fixedT = i18n.getFixedT(lang);
+    try {
+      setGeneratingPdfId(data.id || "export-pdf");
+      if (type === "periodic") {
+        await generateDailyReportPDF(
+          data.brand,
+          data.dateStr,
+          data.mentions,
+          fixedT,
+          lang
+        );
+      } else if (type === "custom") {
+        const filtersSummary = `${customPlatforms.length} nguồn, ${customTopics.length} chủ đề, ${customSentiments.length} sắc thái.`;
+        const dateStartFormatted = new Date(customStartDate).toLocaleDateString(
+          lang === "vi" ? "vi-VN" : "en-US",
+        );
+        const dateEndFormatted = new Date(customEndDate).toLocaleDateString(
+          lang === "vi" ? "vi-VN" : "en-US",
+        );
+        const insights = generateAIInsights(customBrand, data.mentions, customPrompt, lang);
+
+        await generateCustomReportPDF(
+          customBrand,
+          dateStartFormatted,
+          dateEndFormatted,
+          data.mentions,
+          insights,
+          filtersSummary,
+          fixedT,
+          lang
+        );
+      } else if (type === "archive") {
+        const startFormatted = new Date(
+          data.startDate || new Date(),
+        ).toLocaleDateString(lang === "vi" ? "vi-VN" : "en-US");
+        const endFormatted = new Date(
+          data.endDate || new Date(),
+        ).toLocaleDateString(lang === "vi" ? "vi-VN" : "en-US");
+        
+        const insights = data.mentions && data.mentions.length > 0
+          ? generateAIInsights(data.brand, data.mentions, "", lang)
+          : data.insights || "";
+
+        await generateCustomReportPDF(
+          data.brand,
+          startFormatted,
+          endFormatted,
+          data.mentions || [],
+          insights,
+          data.filtersSummary || "Báo cáo lưu trữ",
+          fixedT,
+          lang
+        );
+      }
+    } catch (error) {
+      console.error("Lỗi xuất PDF:", error);
     } finally {
       setGeneratingPdfId(null);
+      setExportConfig(null);
     }
   };
 
@@ -1587,11 +1674,18 @@ export default function ReportsPage() {
         <ArchivedReportDetailModal
           report={previewArchiveReport}
           onClose={() => setPreviewArchiveReport(null)}
-          onExport={() => handleExportArchivedPDF(previewArchiveReport)}
+          onExport={() => setExportConfig({ type: "archive", data: previewArchiveReport })}
           isExporting={generatingPdfId === previewArchiveReport.id}
           onDelete={() => handleDeleteArchive(previewArchiveReport.id)}
         />
       )}
+
+      <LanguageSelectModal
+        isOpen={!!exportConfig}
+        onClose={() => setExportConfig(null)}
+        onSelect={executeExportPDF}
+        isExporting={!!generatingPdfId}
+      />
 
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
