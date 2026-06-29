@@ -395,3 +395,20 @@ Mỗi sprint tạo ra increment demo được. Sau mỗi sprint: review + feedba
 ## 10. Giấy phép
 
 © 2025 InsightFlow Team. Tất cả quyền được bảo lưu.
+
+---
+
+## 11. Update 2026-06-29
+
+Các ghi chú dưới đây cập nhật trạng thái repo hiện tại và được ưu tiên hơn các mô tả cũ nếu có chênh lệch:
+
+- Trang `Brands / Settings Brand` vẫn tồn tại trong app shell tại route `/settings/brand`.
+- Nhóm route `mentions` hiện bao gồm:
+  - trang danh sách đề cập `/mentions`
+  - trang chi tiết đề cập `/mentions/[id]`
+- Trang chi tiết đề cập đã có thêm:
+  - bộ lọc bình luận theo sắc thái, cấp bình luận và từ khóa
+  - cảnh báo khi comment mục tiêu bị ẩn bởi filter
+  - nút quay về đầu trang
+  - summary panel bên phải đã được nén gọn để dễ xem đủ chỉ số hơn trên desktop
+- Hệ thống frontend hiện có thêm shared component `PlatformLogo` để đồng bộ logo nền tảng giữa bảng Mentions và trang chi tiết đề cập.
