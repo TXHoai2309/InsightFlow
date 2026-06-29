@@ -28,17 +28,17 @@ Route (app)                              Size     First Load JS
 ├ ○ /forgot-password                     4.94 kB        92.5 kB
 ├ ○ /leads                               7.09 kB         293 kB
 ├ ○ /login                               4.11 kB         292 kB
-├ ○ /mentions                            5.12 kB         300 kB
-├ ƒ /mentions/[id]                       4.2 kB          282 kB
+├ ○ /mentions                            6.87 kB         301 kB
+├ ƒ /mentions/[id]                       4.52 kB         299 kB
 ├ ○ /nganh                               6.41 kB         298 kB
 ├ ○ /profile                             7.24 kB         299 kB
 ├ ○ /register                            3.16 kB         291 kB
 ├ ○ /reports                             157 kB          437 kB
-├ ○ /settings/brand                      3.36 kB         108 kB
+├ ○ /settings/brand                      3.01 kB         108 kB
 └ ○ /ve-chung-toi                        13.4 kB         305 kB
 + First Load JS shared by all            87.6 kB
-  ├ chunks/1dd3208c-4d948558e163dd97.js  53.6 kB
-  ├ chunks/528-7e11c70fd131a541.js       31.9 kB
+  ├ chunks/1dd3208c-1abe0379f54bbae7.js  53.6 kB
+  ├ chunks/528-94bbb73287828cdd.js       31.9 kB
   └ other shared chunks (total)          2.1 kB
 
 

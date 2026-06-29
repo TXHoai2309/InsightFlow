@@ -89,12 +89,24 @@ function scoreToPercent(score: number) {
 
 function makeInitials(name: string) {
   return (name || "KH")
+    .replace(/^@+/, "")
     .split(/\s+/)
     .filter(Boolean)
     .map((word) => word[0])
     .join("")
     .slice(0, 2)
     .toUpperCase();
+}
+
+function formatAuthorName(author: string | undefined, platform?: Mention["platform"]) {
+  const cleanAuthor = (author || "").trim();
+  if (!cleanAuthor) return "N/A";
+
+  if (platform === "facebook") {
+    return cleanAuthor.replace(/^@+/, "").trim() || cleanAuthor;
+  }
+
+  return cleanAuthor;
 }
 
 export default function MentionDetailPage() {
@@ -320,6 +332,8 @@ export default function MentionDetailPage() {
   const sentiment = sentimentMeta[postMention.sentiment];
   const credibility = scoreToPercent(postMention.credibility_score);
   const brandName = formatBrandDisplayName(postMention.workspace_id);
+  const postAuthorName = formatAuthorName(postMention.author, postMention.platform);
+  const postTopicLabel = t(`dashboard.topics.${postMention.topic}`);
   const donutStyle = {
     background: `conic-gradient(var(--color-success) 0 ${sentimentStats.positive}%, var(--color-info) ${sentimentStats.positive}% ${sentimentStats.positive + sentimentStats.neutral}%, var(--color-error) ${sentimentStats.positive + sentimentStats.neutral}% 100%)`,
   };
@@ -360,7 +374,7 @@ export default function MentionDetailPage() {
                 </div>
                 <div>
                   <h2 className="text-xl font-extrabold text-[var(--color-text-primary)]">
-                    {t("mentionDetail.originalPost")}
+                    {postAuthorName}
                   </h2>
                   <p className="text-sm text-[var(--color-text-secondary)]">
                     {platform.label} · {formatDateTime(postMention.posted_at, i18n.language === "en" ? "en-US" : "vi-VN")}
@@ -379,7 +393,7 @@ export default function MentionDetailPage() {
 
             <div className="mt-6 flex flex-wrap gap-2">
               <span className="rounded-full bg-[var(--color-brand-subtle)] px-4 py-2 text-xs font-extrabold uppercase text-[var(--color-brand)]">
-                #{postMention.topic}
+                #{postTopicLabel}
               </span>
               <span
                 className={`rounded-full px-4 py-2 text-xs font-extrabold ${sentiment.bg} ${sentiment.color}`}
@@ -478,12 +492,15 @@ export default function MentionDetailPage() {
             <div className="mt-6 divide-y divide-[var(--color-border)]">
               <InfoRow label={t("mentionDetail.brand")} value={brandName} highlight />
               <InfoRow label={t("mentionDetail.platform")} value={platform.label} />
-              <InfoRow label={t("mentionDetail.author")} value={postMention.author || "N/A"} />
+              <InfoRow label={t("mentionDetail.author")} value={postAuthorName} />
               <InfoRow
                 label={t("mentionDetail.timeLabel")}
                 value={formatDateTime(postMention.posted_at, i18n.language === "en" ? "en-US" : "vi-VN")}
               />
-              <InfoRow label={t("mentionDetail.topic")} value={postMention.topic.toUpperCase()} />
+              <InfoRow
+                label={t("mentionDetail.topic")}
+                value={postTopicLabel}
+              />
               <div className="flex items-center justify-between gap-4 py-4">
                 <span className="text-[var(--color-text-secondary)]">
                   {t("mentionDetail.aiCredibility")}
@@ -519,12 +536,7 @@ function CommentThread({
 }) {
   const { t } = useTranslation();
   const itemSentiment = sentimentMeta[comment.sentiment];
-  const borderClass =
-    comment.sentiment === "positive"
-      ? "border-l-[var(--color-success)]"
-      : comment.sentiment === "negative"
-        ? "border-l-[var(--color-error)]"
-        : "border-l-[var(--color-info)]";
+  const isTarget = comment.id === targetId;
   const safeLevel = Math.min(level, 6);
 
   return (
@@ -535,14 +547,9 @@ function CommentThread({
       style={{ marginLeft: safeLevel ? `${safeLevel * 28}px` : undefined }}
     >
       <div
-        className={`block rounded-3xl border border-l-4 bg-[var(--color-bg-surface)] p-5 shadow-sm transition ${borderClass} ${comment.id === targetId ? "ring-2 ring-[var(--color-brand)] ring-offset-2 ring-offset-[var(--color-bg-canvas)]" : ""}`}
-        style={{
-          borderTopColor: "var(--color-border)",
-          borderRightColor: "var(--color-border)",
-          borderBottomColor: "var(--color-border)",
-        }}
+        className={`block rounded-2xl border p-4 shadow-sm transition-colors duration-200 md:p-5 ${isTarget ? "border-[var(--color-brand)] bg-[var(--color-brand-subtle)]" : "border-[var(--color-border)] bg-[var(--color-bg-surface)] hover:border-[var(--color-border-strong)]"}`}
       >
-        {comment.id === targetId && (
+        {isTarget && (
           <div className="mb-3 inline-flex items-center gap-1 rounded-full bg-[var(--color-brand-subtle)] px-3 py-1 text-xs font-bold text-[var(--color-brand)]">
             <span className="material-symbols-outlined text-sm">my_location</span>
             {t("mentionDetail.selectedComment")}

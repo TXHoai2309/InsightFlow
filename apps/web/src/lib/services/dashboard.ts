@@ -123,6 +123,7 @@ const VALID_TOPICS = new Set<string>([
   "experience",
   "legal",
   "operation",
+  "marketing",
   "competitor",
   "other",
 ]);
@@ -309,7 +310,7 @@ export class DashboardService {
               d.content ||
               "",
           ),
-          author: String(d.author || d.author_name || "N/A"),
+          author: normalizeText(d.author || d.author_name || "N/A").trim(),
           sentiment: mapSentiment(
             labels.sentiment ?? d.baseline_sentiment ?? d.sentiment,
           ),
@@ -421,7 +422,7 @@ export class DashboardService {
             id: doc.id,
             workspace_id: String(d.workspace_id || d.brand || ""),
             platform: mapSourceToPlatform(d.source || d.platform || ""),
-            author: String(d.author || "Khách hàng"),
+            author: normalizeText(d.author || "Khách hàng").trim(),
             content: String(d.content || d.text || ""),
             intent: d.intent || "none",
             intent_signals: d.intent_signals || [],
@@ -467,7 +468,7 @@ export class DashboardService {
             id: String(d.id || doc.id),
             workspace_id: String(d.brand || d.workspace_id || ""),
             platform: mapSourceToPlatform(d.source || d.platform || ""),
-            author: String(d.author || "Khách hàng"),
+            author: normalizeText(d.author || "Khách hàng").trim(),
             content: String(d.clean_text || d.content || d.original_text || ""),
             intent,
             intent_signals: Array.isArray(labels.topic) ? labels.topic : [],
