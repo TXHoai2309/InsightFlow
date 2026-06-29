@@ -17,19 +17,20 @@ export default function ForgotPasswordPage() {
   const [error, setError] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [countdown, setCountdown] = useState(59);
+  const [countdown, setCountdown] = useState(30);
   const [canResend, setCanResend] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [otpResendKey, setOtpResendKey] = useState(0);
 
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
   const router = useRouter();
   const { theme } = useTheme();
   const isDark = theme === "dark";
 
-  // Countdown timer for OTP resend
+  // Countdown timer for OTP resend (30 seconds)
   useEffect(() => {
     if (step !== 2) return;
-    setCountdown(59);
+    setCountdown(30);
     setCanResend(false);
     const interval = setInterval(() => {
       setCountdown((prev) => {
@@ -42,7 +43,7 @@ export default function ForgotPasswordPage() {
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [step]);
+  }, [step, otpResendKey]);
 
   // Password strength
   const getPasswordStrength = (pwd: string) => {
@@ -86,15 +87,22 @@ export default function ForgotPasswordPage() {
     e.preventDefault();
     setError("");
     const enteredOtp = otpDigits.join("");
+    if (enteredOtp.length !== 6) {
+      setError("Vui lòng nhập đủ 6 chữ số mã OTP.");
+      return;
+    }
     if (enteredOtp === generatedOtp) {
       setStep(3);
     } else {
       setError("Mã OTP không chính xác. Vui lòng nhập lại.");
+      setOtpDigits(["", "", "", "", "", ""]);
+      otpRefs.current[0]?.focus();
     }
   };
 
   const handleOtpChange = (index: number, value: string) => {
     if (!/^[0-9]?$/.test(value)) return;
+    if (error) setError("");
     const newDigits = [...otpDigits];
     newDigits[index] = value;
     setOtpDigits(newDigits);
@@ -121,8 +129,7 @@ export default function ForgotPasswordPage() {
         process.env.NEXT_PUBLIC_EMAILJS_PUBLIC_KEY!
       );
       setOtpDigits(["", "", "", "", "", ""]);
-      setCountdown(59);
-      setCanResend(false);
+      setOtpResendKey((k) => k + 1);
     } catch {
       setError("Không thể gửi lại email. Vui lòng thử lại.");
     } finally {
@@ -130,20 +137,33 @@ export default function ForgotPasswordPage() {
     }
   };
 
+  // Password validation rules
+  const passwordRequirements = [
+    { label: "Ít nhất 8 ký tự", test: (p: string) => p.length >= 8 },
+    { label: "Chứa chữ viết hoa", test: (p: string) => /[A-Z]/.test(p) },
+    { label: "Chứa chữ số", test: (p: string) => /[0-9]/.test(p) },
+    { label: "Chứa ký tự đặc biệt", test: (p: string) => /[^A-Za-z0-9]/.test(p) },
+  ];
+
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
+    
+    // Check requirements
+    const isInvalid = passwordRequirements.some(req => !req.test(newPassword));
+    if (isInvalid) {
+      setError("Mật khẩu không đáp ứng đủ các yêu cầu.");
+      setLoading(false);
+      return;
+    }
+    
     if (newPassword !== confirmPassword) {
       setError("Mật khẩu nhập lại không khớp.");
       setLoading(false);
       return;
     }
-    if (newPassword.length < 8) {
-      setError("Mật khẩu phải có ít nhất 8 ký tự.");
-      setLoading(false);
-      return;
-    }
+    
     try {
       const response = await fetch("/api/auth/reset-password", {
         method: "POST",
@@ -275,7 +295,11 @@ export default function ForgotPasswordPage() {
                   <span className="material-symbols-outlined" style={{ color: brandColor, fontSize: 28 }}>mark_email_read</span>
                 </div>
                 <h1 style={{ fontSize: "1.6rem", fontWeight: 700, color: textPrimary, marginBottom: 10 }}>Xác thực tài khoản</h1>
+                <p style={{ color: textSecondary, fontSize: "0.875rem", lineHeight: 1.6 }}>
+                  Mã OTP đã được gửi tới <strong style={{ color: textPrimary }}>{email}</strong>
+                </p>
               </div>
+              {error && <ErrorBanner message={error} isDark={isDark} />}
               <form onSubmit={handleVerifyOtp} style={{ display: "flex", flexDirection: "column", gap: 24 }}>
                 <div style={{ display: "flex", justifyContent: "center", gap: 8 }}>
                   {otpDigits.map((digit, i) => (
@@ -287,17 +311,47 @@ export default function ForgotPasswordPage() {
                   ))}
                 </div>
                 <button type="submit" disabled={loading} className="w-full text-white text-[1rem] font-bold py-[14px] rounded-xl border-none cursor-pointer flex items-center justify-center gap-2 transition-all" style={{ background: brandColor }}>Xác nhận mã</button>
+                <div style={{ textAlign: "center" }}>
+                  {canResend ? (
+                    <button
+                      type="button"
+                      onClick={handleResendOtp}
+                      disabled={loading}
+                      style={{ fontSize: "0.875rem", fontWeight: 600, color: brandColor, background: "none", border: "none", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.6 : 1 }}
+                    >
+                      {loading ? "Đang gửi lại..." : "Gửi lại mã OTP"}
+                    </button>
+                  ) : (
+                    <p style={{ fontSize: "0.875rem", color: textMuted, margin: 0 }}>
+                      Gửi lại mã sau <strong style={{ color: brandColor }}>{countdown}s</strong>
+                    </p>
+                  )}
+                </div>
               </form>
             </div>
           )}
           {step === 3 && (
             <div className="fp-fade-in-up">
               <h1 style={{ fontSize: "1.6rem", fontWeight: 700, color: textPrimary, marginBottom: 28, textAlign: "center" }}>Thiết lập mật khẩu mới</h1>
+              {error && <ErrorBanner message={error} isDark={isDark} />}
               <form onSubmit={handleUpdatePassword} style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                {/* Inputs for New Password/Confirm Password */}
                 <input type="password" placeholder="Mật khẩu mới" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} style={{ width: "100%", padding: "12px 16px", background: inputBg, border: `1px solid ${inputBorder}`, borderRadius: 10, color: textPrimary }} />
+                <div style={{ background: reqBoxBg, border: `1px solid ${reqBoxBorder}`, borderRadius: 12, padding: 16 }}>
+                  <p style={{ fontSize: "0.8rem", fontWeight: 700, color: textPrimary, marginBottom: 10 }}>Yêu cầu mật khẩu:</p>
+                  <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+                    {passwordRequirements.map((req, idx) => {
+                      const isValid = req.test(newPassword);
+                      return (
+                        <li key={idx} style={{ fontSize: "0.8rem", color: isValid ? "#16a34a" : textMuted, display: "flex", alignItems: "center", gap: 8 }}>
+                          <span className="material-symbols-outlined" style={{ fontSize: 16 }}>{isValid ? "check_circle" : "radio_button_unchecked"}</span>
+                          {req.label}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
                 <input type="password" placeholder="Xác nhận mật khẩu" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} style={{ width: "100%", padding: "12px 16px", background: inputBg, border: `1px solid ${inputBorder}`, borderRadius: 10, color: textPrimary }} />
-                <button type="submit" className="w-full text-white text-[1rem] font-bold py-[14px] rounded-xl border-none cursor-pointer" style={{ background: brandColor }}>Cập nhật mật khẩu</button>
+                <button type="submit" disabled={loading} className="w-full text-white text-[1rem] font-bold py-[14px] rounded-xl border-none cursor-pointer" style={{ background: brandColor }}>{loading ? "Đang cập nhật..." : "Cập nhật mật khẩu"}</button>
               </form>
             </div>
           )}

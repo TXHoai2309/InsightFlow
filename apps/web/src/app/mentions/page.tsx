@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { useMentionsData } from "@/hooks/useMentionsData";
@@ -11,13 +11,25 @@ import { MentionStats } from "@/components/mentions/MentionStats";
 export default function MentionsPage() {
   useMentionsData({ autoFetch: true, refetchInterval: 120000 });
   const { t } = useTranslation();
+  const [contentMode, setContentMode] = useState<"all" | "post" | "comment">("all");
 
   const { getFilteredMentions, filters, workspaces, mentions: allMentions, isLoading } =
     useDashboardStore();
-  const mentions = useMemo(
+  const filteredMentions = useMemo(
     () => getFilteredMentions(),
     [getFilteredMentions, filters, allMentions],
   );
+  const mentions = useMemo(() => {
+    if (contentMode === "post") {
+      return filteredMentions.filter((mention) => mention.content_type === "post");
+    }
+    if (contentMode === "comment") {
+      return filteredMentions.filter(
+        (mention) => mention.content_type === "comment" || mention.content_type === "reply",
+      );
+    }
+    return filteredMentions;
+  }, [contentMode, filteredMentions]);
 
   return (
     <div className="p-4 md:p-8">
@@ -47,12 +59,22 @@ export default function MentionsPage() {
 
       {/* Filters Bar */}
       <div className="mb-6">
-        <MentionFilters workspaces={workspaces} filters={filters} allMentions={allMentions} />
+        <MentionFilters
+          workspaces={workspaces}
+          filters={filters}
+          allMentions={allMentions}
+          contentMode={contentMode}
+          onContentModeChange={setContentMode}
+        />
       </div>
 
       {/* Mentions Table */}
       <div className="mb-8">
-        <MentionTable mentions={mentions} isLoading={isLoading} />
+        <MentionTable
+          mentions={mentions}
+          isLoading={isLoading}
+          contentMode={contentMode}
+        />
       </div>
 
       {/* Stats Dashboard Widget */}

@@ -1,27 +1,15 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import Link from "next/link";
 import type { Mention } from "@/types/dashboard";
+import { PlatformLogo } from "@/components/platform/PlatformLogo";
+import { resolveMentionDetailTarget } from "@/lib/mention-navigation";
 
 interface MentionTableProps {
   mentions: Mention[];
   isLoading: boolean;
+  contentMode: "all" | "post" | "comment";
 }
-
-const platformIconMap: Record<
-  string,
-  { icon: string; color: string }
-> = {
-  facebook: { icon: "face", color: "text-blue-600" },
-  tiktok: { icon: "music_video", color: "text-pink-600" },
-  news: { icon: "newspaper", color: "text-slate-600" },
-  youtube: { icon: "play_circle", color: "text-red-600" },
-  google_maps: { icon: "location_on", color: "text-green-600" },
-};
-
-const getPlatformIcon = (platformStr: string) => {
-  return platformIconMap[platformStr.toLowerCase()] || { icon: "public", color: "text-gray-600" };
-};
 
 const formatCredibilityScore = (score: number) => {
   const percentage = score <= 1 ? score * 100 : score;
@@ -64,10 +52,33 @@ const topicTags: Record<Mention["topic"], string[]> = {
   other: ["#Other"],
 };
 
-export function MentionTable({ mentions, isLoading }: MentionTableProps) {
+export function MentionTable({ mentions, isLoading, contentMode }: MentionTableProps) {
   const { t, i18n } = useTranslation();
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  const mentionById = useMemo(
+    () => new Map<string, Mention>(mentions.map((item) => [item.id, item])),
+    [mentions],
+  );
+
+  const getDisplayContent = (mention: Mention) => {
+    if (contentMode === "comment") {
+      return mention.comment_content || mention.content;
+    }
+    if (contentMode === "post") {
+      return mention.post_content || mention.original_content || mention.content;
+    }
+    return mention.content_type === "post"
+      ? mention.post_content || mention.original_content || mention.content
+      : mention.comment_content || mention.content || mention.original_content;
+  };
+
+  const getContentTypeLabel = (mention: Mention) => {
+    if (!mention.content_type) return "—";
+    return t(`mentions.table.contentTypes.${mention.content_type}`, {
+      defaultValue: mention.content_type,
+    });
+  };
 
   // Reset page when mentions change (e.g. filters applied)
   useEffect(() => {
@@ -141,17 +152,14 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
             currentMentions.map((mention) => {
               const { timeStr, relativeTime } = formatTime(mention.posted_at);
               const tags = topicTags[mention.topic] || [];
+              const displayContent = getDisplayContent(mention);
 
               return (
                 <div key={mention.id} className="p-4 flex flex-col gap-4">
                   <div className="flex justify-between items-start">
                     <div className="flex items-center gap-2">
-                      <span
-                        className={`material-symbols-outlined ${getPlatformIcon(mention.platform).color}`}
-                      >
-                        {getPlatformIcon(mention.platform).icon}
-                      </span>
-                    <span className="text-xs font-bold text-[var(--color-text-muted)] uppercase tracking-wider">
+                      <PlatformLogo platform={mention.platform} size="sm" />
+                      <span className="text-xs font-bold text-[var(--color-text-muted)] uppercase tracking-wider">
                         {t(`dashboard.filters.${mention.platform.toLowerCase()}`, { defaultValue: mention.platform })}
                       </span>
                     </div>
@@ -163,15 +171,15 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                   </div>
 
                   <Link
-                    href={`/mentions/${encodeURIComponent(mention.id)}`}
+                    href={resolveMentionDetailTarget(mention, mentionById).href}
                     className="text-sm leading-relaxed text-[var(--color-text-primary)] hover:text-[var(--color-brand)] line-clamp-3"
                   >
-                    "{mention.content}"
+                    "{displayContent}"
                   </Link>
 
                   <div className="flex flex-wrap gap-2">
                     <span className="px-2 py-0.5 bg-[var(--color-brand-subtle)] text-[var(--color-brand)] rounded text-[10px] font-bold uppercase border border-[var(--color-brand-border)]">
-                      {t(`dashboard.topics.${mention.topic.toLowerCase()}`, { defaultValue: mention.topic })}
+                      {getContentTypeLabel(mention)}
                     </span>
                     {tags.map((tag) => (
                       <span
@@ -201,12 +209,21 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
 
         {/* Desktop View: Table */}
         <div className="hidden md:block overflow-x-auto">
-          <table className="w-full text-sm border-collapse">
+          <table className="w-full text-sm border-collapse [&_th:not(:last-child)]:border-r [&_td:not(:last-child)]:border-r [&_th]:border-[var(--color-border)] [&_td]:border-[var(--color-border)]">
             <thead>
               <tr className="" style={{ backgroundColor: "var(--color-bg-surface-raised)", borderBottom: "1px solid var(--color-border)" }}>
                  <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-24">{t("mentions.table.platform")}</th>
                 <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-24">{t("mentions.table.credibility")}</th>
-                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center">{t("mentions.table.content")}</th>
+                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-[34rem] max-w-[34rem]">
+                  {contentMode === "all"
+                    ? t("mentions.table.relatedContent", { defaultValue: "Nội dung liên quan" })
+                    : contentMode === "comment"
+                      ? t("mentions.table.commentContent", { defaultValue: "Nội dung bình luận" })
+                      : t("mentions.table.postContent", { defaultValue: "Nội dung bài viết" })}
+                </th>
+                <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-32">
+                  {t("mentions.table.category", { defaultValue: "Phân loại" })}
+                </th>
                 <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-32">{t("mentions.table.sentiment")}</th>
                 <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-32">{t("mentions.table.topic")}</th>
                 <th className="px-4 py-4 font-semibold text-outline uppercase tracking-wider text-center w-40">{t("mentions.table.time")}</th>
@@ -216,14 +233,14 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
               {isLoading ? (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="py-20 text-center text-[var(--color-text-muted)]"
                   >{t("mentions.table.loading")}</td>
                 </tr>
               ) : currentMentions.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="py-20 text-center text-[var(--color-text-muted)]"
                   >{t("mentions.table.noData")}</td>
                 </tr>
@@ -233,6 +250,7 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                     mention.posted_at,
                   );
                   const tags = topicTags[mention.topic] || [];
+                  const displayContent = getDisplayContent(mention);
 
                   return (
                     <tr
@@ -242,11 +260,7 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                       {/* Platform */}
                       <td className="px-4 py-4 align-top text-center">
                         <div className="flex items-center justify-center">
-                          <span
-                            className={`material-symbols-outlined ${getPlatformIcon(mention.platform).color}`}
-                          >
-                            {getPlatformIcon(mention.platform).icon}
-                          </span>
+                          <PlatformLogo platform={mention.platform} size="md" />
                         </div>
                       </td>
 
@@ -268,12 +282,12 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                       </td>
 
                       {/* Content */}
-                      <td className="px-4 py-4 align-top">
+                      <td className="px-4 py-4 align-top w-[34rem] max-w-[34rem]">
                         <Link
-                          href={`/mentions/${encodeURIComponent(mention.id)}`}
+                          href={resolveMentionDetailTarget(mention, mentionById).href}
                           className="text-sm leading-relaxed line-clamp-2 text-[var(--color-text-primary)] hover:text-[var(--color-brand)]"
                         >
-                          "{mention.content}"
+                          "{displayContent}"
                         </Link>
                         <div className="mt-2 flex gap-2 flex-wrap">
                           {tags.map((tag) => (
@@ -285,6 +299,13 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
                             </span>
                           ))}
                         </div>
+                      </td>
+
+                      {/* Category */}
+                      <td className="px-4 py-4 align-top text-center">
+                        <span className="inline-flex px-3 py-1 bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)] rounded-full text-xs font-bold uppercase border border-[var(--color-border)]">
+                          {getContentTypeLabel(mention)}
+                        </span>
                       </td>
 
                       {/* Sentiment */}
@@ -304,7 +325,7 @@ export function MentionTable({ mentions, isLoading }: MentionTableProps) {
 
                       {/* Topic */}
                       <td className="px-4 py-4 align-top text-center">
-                        <span className="px-2 py-1 bg-[var(--color-brand-subtle)] text-[var(--color-brand)] rounded text-xs font-bold uppercase border border-[var(--color-brand-border)]">
+                        <span className="inline-flex px-3 py-1 bg-[var(--color-brand-subtle)] text-[var(--color-brand)] rounded-full text-xs font-bold uppercase border border-[var(--color-brand-border)]">
                           {t(`dashboard.topics.${mention.topic.toLowerCase()}`, { defaultValue: mention.topic })}
                         </span>
                       </td>

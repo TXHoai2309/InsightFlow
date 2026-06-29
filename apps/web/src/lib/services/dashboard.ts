@@ -123,6 +123,7 @@ const VALID_TOPICS = new Set<string>([
   "experience",
   "legal",
   "operation",
+  "marketing",
   "competitor",
   "other",
 ]);
@@ -257,6 +258,29 @@ export class DashboardService {
       const mentions: Mention[] = mentionsSnap.docs.map((doc) => {
         const d = doc.data();
         const labels = d.labels || {};
+        const postContent = normalizeOptionalText(
+          normalizeText(
+            d.post_content ||
+              d.post_text ||
+              d.post_caption ||
+              d.caption ||
+              d.title ||
+              d.original_post ||
+              "",
+          ),
+        );
+        const commentContent = normalizeOptionalText(
+          normalizeText(
+            d.comment_content ||
+              d.comment_text ||
+              d.comment ||
+              d.clean_text ||
+              d.processed_text ||
+              d.text ||
+              d.content ||
+              "",
+          ),
+        );
         // posted_at = ngày đăng bài thật (post_date → created_at nguồn → fallback crawled_at)
         const postedAtRaw =
           d.post_date ??
@@ -270,14 +294,14 @@ export class DashboardService {
           parent_id: d.parent_id ? String(d.parent_id) : null,
           workspace_id: rawBrand,
           platform: mapSourceToPlatform(d.source || ""),
-          content: normalizeText(
-            d.clean_text ||
-              d.processed_text ||
-              d.text ||
-              d.content ||
-              d.original_text ||
-              "",
-          ),
+          content: commentContent || postContent || "",
+          post_content: postContent,
+          comment_content: commentContent,
+          content_type: ["post", "comment", "reply"].includes(
+            String(d.content_type || "").toLowerCase(),
+          )
+            ? (String(d.content_type).toLowerCase() as Mention["content_type"])
+            : undefined,
           original_content: normalizeText(
             d.original_text ||
               d.clean_text ||
@@ -286,7 +310,7 @@ export class DashboardService {
               d.content ||
               "",
           ),
-          author: String(d.author || d.author_name || "N/A"),
+          author: normalizeText(d.author || d.author_name || "N/A").trim(),
           sentiment: mapSentiment(
             labels.sentiment ?? d.baseline_sentiment ?? d.sentiment,
           ),
@@ -398,7 +422,7 @@ export class DashboardService {
             id: doc.id,
             workspace_id: String(d.workspace_id || d.brand || ""),
             platform: mapSourceToPlatform(d.source || d.platform || ""),
-            author: String(d.author || "Khách hàng"),
+            author: normalizeText(d.author || "Khách hàng").trim(),
             content: String(d.content || d.text || ""),
             intent: d.intent || "none",
             intent_signals: d.intent_signals || [],
@@ -444,7 +468,7 @@ export class DashboardService {
             id: String(d.id || doc.id),
             workspace_id: String(d.brand || d.workspace_id || ""),
             platform: mapSourceToPlatform(d.source || d.platform || ""),
-            author: String(d.author || "Khách hàng"),
+            author: normalizeText(d.author || "Khách hàng").trim(),
             content: String(d.clean_text || d.content || d.original_text || ""),
             intent,
             intent_signals: Array.isArray(labels.topic) ? labels.topic : [],

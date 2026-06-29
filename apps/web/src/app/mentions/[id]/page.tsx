@@ -2,58 +2,73 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import {
   DashboardService,
   PLATFORM_META,
   formatBrandDisplayName,
 } from "@/lib/services/dashboard";
+import {
+  resolveMentionDetailTarget,
+  resolveMentionDisplayPost,
+} from "@/lib/mention-navigation";
+import { PlatformLogo } from "@/components/platform/PlatformLogo";
 import type { Mention } from "@/types/dashboard";
+
+const STICKY_HEADER_OFFSET = 96;
+const DETAIL_TOP_ID = "mention-detail-top";
+const APP_SCROLL_ROOT_SELECTOR = '[data-app-scroll-root="true"]';
 
 const sentimentMeta: Record<
   Mention["sentiment"],
-  { label: string; color: string; bg: string; icon: string }
+  { labelKey: string; color: string; bg: string; icon: string }
 > = {
   positive: {
-    label: "Tích cực",
+    labelKey: "mentionDetail.sentiment.positive",
     color: "text-[var(--color-success)]",
     bg: "bg-[var(--color-success-subtle)]",
     icon: "sentiment_satisfied",
   },
   neutral: {
-    label: "Trung lập",
+    labelKey: "mentionDetail.sentiment.neutral",
     color: "text-[var(--color-info)]",
     bg: "bg-[var(--color-info-subtle)]",
     icon: "sentiment_neutral",
   },
   negative: {
-    label: "Tiêu cực",
+    labelKey: "mentionDetail.sentiment.negative",
     color: "text-[var(--color-error)]",
     bg: "bg-[var(--color-error-subtle)]",
     icon: "sentiment_very_dissatisfied",
   },
 };
 
-const platformIcons: Record<string, string> = {
-  facebook: "chat",
-  tiktok: "music_note",
-  youtube: "play_circle",
-  thread: "alternate_email",
-  google_maps: "location_on",
-  be: "restaurant",
-  news: "newspaper",
-};
-
 type CommentNode = Mention & {
   children: CommentNode[];
 };
 
-function formatDateTime(value?: string) {
-  if (!value) return "Không rõ";
+type CommentSentimentFilter = "all" | Mention["sentiment"];
+type CommentLevelFilter = "all" | "comment" | "reply";
+
+type CommentFilters = {
+  sentiment: CommentSentimentFilter;
+  level: CommentLevelFilter;
+  keyword: string;
+};
+
+const DEFAULT_COMMENT_FILTERS: CommentFilters = {
+  sentiment: "all",
+  level: "all",
+  keyword: "",
+};
+
+function formatDateTime(value: string | undefined, locale = "vi-VN") {
+  if (!value) return "--";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Không rõ";
-  return date.toLocaleString("vi-VN", {
+  if (Number.isNaN(date.getTime())) return "--";
+  return date.toLocaleString(locale, {
     hour: "2-digit",
     minute: "2-digit",
     day: "2-digit",
@@ -62,7 +77,7 @@ function formatDateTime(value?: string) {
   });
 }
 
-function formatRelativeTime(value?: string) {
+function formatRelativeTime(value: string | undefined, t: (key: string, options?: Record<string, unknown>) => string) {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
@@ -70,10 +85,10 @@ function formatRelativeTime(value?: string) {
   const diffMinutes = Math.max(0, Math.floor(diffMs / 60000));
   const diffHours = Math.floor(diffMinutes / 60);
   const diffDays = Math.floor(diffHours / 24);
-  if (diffDays >= 1) return `${diffDays} ngày trước`;
-  if (diffHours >= 1) return `${diffHours} giờ trước`;
-  if (diffMinutes >= 1) return `${diffMinutes} phút trước`;
-  return "Vừa xong";
+  if (diffDays >= 1) return t("mentionDetail.time.daysAgo", { count: diffDays });
+  if (diffHours >= 1) return t("mentionDetail.time.hoursAgo", { count: diffHours });
+  if (diffMinutes >= 1) return t("mentionDetail.time.minutesAgo", { count: diffMinutes });
+  return t("mentionDetail.time.justNow");
 }
 
 function percent(part: number, total: number) {
@@ -88,6 +103,7 @@ function scoreToPercent(score: number) {
 
 function makeInitials(name: string) {
   return (name || "KH")
+    .replace(/^@+/, "")
     .split(/\s+/)
     .filter(Boolean)
     .map((word) => word[0])
@@ -96,7 +112,136 @@ function makeInitials(name: string) {
     .toUpperCase();
 }
 
+function formatAuthorName(author: string | undefined, platform?: Mention["platform"]) {
+  const cleanAuthor = (author || "").trim();
+  if (!cleanAuthor) return "N/A";
+
+  if (platform === "facebook") {
+    return cleanAuthor.replace(/^@+/, "").trim() || cleanAuthor;
+  }
+
+  return cleanAuthor;
+}
+
+function normalizeSearchText(value: string | undefined) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
+function hasActiveCommentFilters(filters: CommentFilters) {
+  return (
+    filters.sentiment !== "all" ||
+    filters.level !== "all" ||
+    filters.keyword.trim().length > 0
+  );
+}
+
+function getCommentLevel(level: number): Exclude<CommentLevelFilter, "all"> {
+  return level === 0 ? "comment" : "reply";
+}
+
+function matchesCommentFilters(
+  comment: CommentNode,
+  filters: CommentFilters,
+  level: number,
+) {
+  if (filters.sentiment !== "all" && comment.sentiment !== filters.sentiment) {
+    return false;
+  }
+
+  const commentLevel = getCommentLevel(level);
+  if (filters.level !== "all" && filters.level !== commentLevel) {
+    return false;
+  }
+
+  const keyword = normalizeSearchText(filters.keyword);
+  if (!keyword) return true;
+
+  const haystacks = [
+    comment.author,
+    comment.content,
+    comment.original_content,
+    comment.post_content,
+    comment.comment_content,
+  ];
+
+  return haystacks.some((value) => normalizeSearchText(value).includes(keyword));
+}
+
+function filterCommentTree(
+  nodes: CommentNode[],
+  filters: CommentFilters,
+  level = 0,
+): { tree: CommentNode[]; matchedCount: number } {
+  let matchedCount = 0;
+  const tree: CommentNode[] = [];
+
+  nodes.forEach((node) => {
+    const childResult = filterCommentTree(node.children, filters, level + 1);
+    const selfMatches = matchesCommentFilters(node, filters, level);
+
+    if (selfMatches || childResult.tree.length > 0) {
+      tree.push({
+        ...node,
+        children: childResult.tree,
+      });
+    }
+
+    if (selfMatches) matchedCount += 1;
+    matchedCount += childResult.matchedCount;
+  });
+
+  return { tree, matchedCount };
+}
+
+function treeContainsComment(
+  nodes: CommentNode[],
+  targetId: string,
+): boolean {
+  return nodes.some(
+    (node) =>
+      node.id === targetId || treeContainsComment(node.children, targetId),
+  );
+}
+
+function getAppScrollRoot() {
+  return document.querySelector<HTMLElement>(APP_SCROLL_ROOT_SELECTOR);
+}
+
+function scrollToElementWithOffset(
+  elementId: string,
+  behavior: ScrollBehavior,
+  focusTarget = false,
+) {
+  const target = document.getElementById(elementId);
+  if (!target) return false;
+  const scrollRoot = getAppScrollRoot();
+
+  if (scrollRoot) {
+    const top =
+      target.getBoundingClientRect().top -
+      scrollRoot.getBoundingClientRect().top +
+      scrollRoot.scrollTop -
+      STICKY_HEADER_OFFSET;
+    scrollRoot.scrollTo({ top: Math.max(0, top), behavior });
+  } else {
+    const top =
+      target.getBoundingClientRect().top + window.scrollY - STICKY_HEADER_OFFSET;
+    window.scrollTo({ top: Math.max(0, top), behavior });
+  }
+
+  if (focusTarget && typeof target.focus === "function") {
+    target.focus({ preventScroll: true });
+  }
+
+  return true;
+}
+
 export default function MentionDetailPage() {
+  const { t, i18n } = useTranslation();
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const mentionId = decodeURIComponent(String(params.id || ""));
@@ -104,6 +249,11 @@ export default function MentionDetailPage() {
   const [mentions, setMentions] = useState<Mention[]>(cachedMentions);
   const [isLoading, setIsLoading] = useState(cachedMentions.length === 0);
   const [error, setError] = useState<string | null>(null);
+  const [commentFilters, setCommentFilters] =
+    useState<CommentFilters>(DEFAULT_COMMENT_FILTERS);
+  const [requestedTargetId, setRequestedTargetId] = useState("");
+  const [showBackToTop, setShowBackToTop] = useState(false);
+  const autoFocusedTargetKeyRef = useRef("");
 
   useEffect(() => {
     let mounted = true;
@@ -122,7 +272,7 @@ export default function MentionDetailPage() {
         if (mounted) setMentions(data.mentions);
       } catch (err) {
         console.error("[MentionDetailPage] load error:", err);
-        if (mounted) setError("Không thể tải dữ liệu đề cập từ Firebase.");
+        if (mounted) setError("mentionDetail.loadError");
       } finally {
         if (mounted) setIsLoading(false);
       }
@@ -143,8 +293,13 @@ export default function MentionDetailPage() {
     return new Map(mentions.map((item) => [item.id, item]));
   }, [mentions]);
 
+  const threadSeedMention = useMemo(() => {
+    if (!mention) return null;
+    return (requestedTargetId && mentionById.get(requestedTargetId)) || mention;
+  }, [mention, mentionById, requestedTargetId]);
+
   const postContext = useMemo(() => {
-    if (!mention) {
+    if (!threadSeedMention) {
       return {
         post: null as Mention | null,
         rootParentId: "",
@@ -154,21 +309,9 @@ export default function MentionDetailPage() {
       };
     }
 
-    let rootMention = mention;
-    const visited = new Set<string>();
-    while (
-      rootMention.parent_id &&
-      mentionById.has(rootMention.parent_id) &&
-      !visited.has(rootMention.id)
-    ) {
-      visited.add(rootMention.id);
-      rootMention = mentionById.get(rootMention.parent_id)!;
-    }
-
-    const threadRootId =
-      rootMention.parent_id && !mentionById.has(rootMention.parent_id)
-        ? rootMention.parent_id
-        : rootMention.id;
+    const postMention = resolveMentionDisplayPost(threadSeedMention, mentionById);
+    const threadTarget = resolveMentionDetailTarget(threadSeedMention, mentionById);
+    const threadRootId = threadTarget.detailId;
 
     const isDescendantOf = (item: Mention, rootId: string) => {
       if (item.id === rootId) return false;
@@ -211,13 +354,13 @@ export default function MentionDetailPage() {
     const tree = buildTree(threadRootId);
 
     return {
-      post: rootMention,
+      post: postMention,
       rootParentId: threadRootId,
       comments,
       tree,
       total: comments.length,
     };
-  }, [mention, mentionById, mentions]);
+  }, [mentionById, mentions, threadSeedMention]);
 
   const sentimentStats = useMemo(() => {
     const pool = postContext.post
@@ -238,11 +381,98 @@ export default function MentionDetailPage() {
     };
   }, [postContext, mentions]);
 
+  const dominantSentiment = useMemo(() => {
+    return (Object.entries(sentimentStats) as Array<[Mention["sentiment"], number]>).reduce(
+      (largest, current) => current[1] > largest[1] ? current : largest,
+    );
+  }, [sentimentStats]);
+
+  const filteredComments = useMemo(() => {
+    if (!hasActiveCommentFilters(commentFilters)) {
+      return {
+        tree: postContext.tree,
+        matchedCount: postContext.total,
+      };
+    }
+
+    return filterCommentTree(postContext.tree, commentFilters);
+  }, [commentFilters, postContext]);
+
+  const isTargetCommentHidden = useMemo(() => {
+    if (!requestedTargetId || !hasActiveCommentFilters(commentFilters)) {
+      return false;
+    }
+
+    return !treeContainsComment(filteredComments.tree, requestedTargetId);
+  }, [commentFilters, filteredComments.tree, requestedTargetId]);
+
+  useEffect(() => {
+    if (!mention) return;
+
+    const hashPrefix = "#comment-";
+    const hashTarget = window.location.hash.startsWith(hashPrefix)
+      ? decodeURIComponent(window.location.hash.slice(hashPrefix.length))
+      : "";
+    const targetId =
+      hashTarget || (mention.content_type === "post" ? "" : mention.id);
+    setRequestedTargetId(targetId);
+  }, [mention]);
+
+  useEffect(() => {
+    if (!requestedTargetId) return;
+    const autoFocusKey = `${mentionId}:${requestedTargetId}`;
+
+    if (autoFocusedTargetKeyRef.current === autoFocusKey) return;
+    autoFocusedTargetKeyRef.current = autoFocusKey;
+
+    const frame = window.requestAnimationFrame(() =>
+      scrollToElementWithOffset(`comment-${requestedTargetId}`, "auto", true),
+    );
+    const retries = [
+      window.setTimeout(
+        () =>
+          scrollToElementWithOffset(
+            `comment-${requestedTargetId}`,
+            "smooth",
+            true,
+          ),
+        250,
+      ),
+      window.setTimeout(
+        () =>
+          scrollToElementWithOffset(
+            `comment-${requestedTargetId}`,
+            "smooth",
+            true,
+          ),
+        800,
+      ),
+    ];
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      retries.forEach(window.clearTimeout);
+    };
+  }, [mentionId, requestedTargetId]);
+
+  useEffect(() => {
+    const scrollRoot = getAppScrollRoot();
+    const handleScroll = () => {
+      const currentScrollTop = scrollRoot ? scrollRoot.scrollTop : window.scrollY;
+      setShowBackToTop(currentScrollTop > 320);
+    };
+
+    handleScroll();
+    const scrollTarget: HTMLElement | Window = scrollRoot || window;
+    scrollTarget.addEventListener("scroll", handleScroll, { passive: true });
+    return () => scrollTarget.removeEventListener("scroll", handleScroll);
+  }, []);
+
   if (isLoading) {
     return (
       <div className="p-6 md:p-10">
         <div className="glass-card rounded-3xl p-10 text-center text-[var(--color-text-muted)]">
-          Đang tải chi tiết đề cập từ Firebase...
+          {t("mentionDetail.loading")}
         </div>
       </div>
     );
@@ -256,16 +486,16 @@ export default function MentionDetailPage() {
             error
           </span>
           <h1 className="mt-4 text-2xl font-bold text-[var(--color-text-primary)]">
-            Không tìm thấy đề cập
+            {t("mentionDetail.notFound")}
           </h1>
           <p className="mt-2 text-[var(--color-text-secondary)]">
-            {error || "Bài viết này không còn trong dữ liệu Firebase hiện tại."}
+            {error ? t(error) : t("mentionDetail.notFoundDescription")}
           </p>
           <button
             onClick={() => router.push("/mentions")}
             className="mt-6 rounded-xl bg-[var(--color-brand)] px-5 py-3 text-sm font-bold text-white"
           >
-            Quay lại Mentions
+            {t("mentionDetail.backToMentions")}
           </button>
         </div>
       </div>
@@ -280,25 +510,35 @@ export default function MentionDetailPage() {
   const sentiment = sentimentMeta[postMention.sentiment];
   const credibility = scoreToPercent(postMention.credibility_score);
   const brandName = formatBrandDisplayName(postMention.workspace_id);
+  const postAuthorName = formatAuthorName(postMention.author, postMention.platform);
+  const postTopicLabel = t(`dashboard.topics.${postMention.topic}`);
   const donutStyle = {
     background: `conic-gradient(var(--color-success) 0 ${sentimentStats.positive}%, var(--color-info) ${sentimentStats.positive}% ${sentimentStats.positive + sentimentStats.neutral}%, var(--color-error) ${sentimentStats.positive + sentimentStats.neutral}% 100%)`,
   };
+  const hasCommentFilters = hasActiveCommentFilters(commentFilters);
+  const commentsHeadingCount = hasCommentFilters
+    ? `${filteredComments.matchedCount}/${postContext.total}`
+    : `${postContext.total}`;
 
   return (
-    <div className="min-h-screen bg-[var(--color-bg-canvas)]">
+    <div
+      id={DETAIL_TOP_ID}
+      tabIndex={-1}
+      className="min-h-screen bg-[var(--color-bg-canvas)]"
+    >
       <div className="sticky top-0 z-20 border-b border-[var(--color-border)] bg-[var(--color-bg-surface)]/90 backdrop-blur-xl">
         <div className="flex items-center justify-between gap-4 px-4 py-4 md:px-8">
           <div className="flex items-center gap-4">
             <button
               onClick={() => router.push("/mentions")}
               className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)]"
-              aria-label="Quay lại"
+              aria-label={t("mentionDetail.back")}
             >
               <span className="material-symbols-outlined">arrow_back</span>
             </button>
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-[var(--color-brand)]">
-                Chi tiết đề cập
+                {t("mentionDetail.title")}
               </p>
             </div>
           </div>
@@ -310,26 +550,19 @@ export default function MentionDetailPage() {
           <article className="glass-card rounded-3xl p-5 md:p-7">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex items-center gap-4">
-                <div
-                  className="flex h-14 w-14 items-center justify-center rounded-2xl text-white shadow-lg"
-                  style={{ backgroundColor: platform.color }}
-                >
-                  <span className="material-symbols-outlined text-3xl">
-                    {platformIcons[postMention.platform] || "public"}
-                  </span>
-                </div>
+                <PlatformLogo platform={postMention.platform} size="lg" className="shadow-lg" />
                 <div>
                   <h2 className="text-xl font-extrabold text-[var(--color-text-primary)]">
-                    Bài viết gốc
+                    {postAuthorName}
                   </h2>
                   <p className="text-sm text-[var(--color-text-secondary)]">
-                    {platform.label} · {formatDateTime(postMention.posted_at)}
+                    {platform.label} · {formatDateTime(postMention.posted_at, i18n.language === "en" ? "en-US" : "vi-VN")}
                   </p>
                 </div>
               </div>
 
               <div className="rounded-full bg-[var(--color-success-subtle)] px-4 py-2 text-sm font-extrabold text-[var(--color-success)]">
-                {credibility}% Độ tin cậy
+                {credibility}% {t("mentionDetail.credibility")}
               </div>
             </div>
 
@@ -339,28 +572,16 @@ export default function MentionDetailPage() {
 
             <div className="mt-6 flex flex-wrap gap-2">
               <span className="rounded-full bg-[var(--color-brand-subtle)] px-4 py-2 text-xs font-extrabold uppercase text-[var(--color-brand)]">
-                #{postMention.topic}
+                #{postTopicLabel}
               </span>
               <span
                 className={`rounded-full px-4 py-2 text-xs font-extrabold ${sentiment.bg} ${sentiment.color}`}
               >
-                {sentiment.label}
+                {t(sentiment.labelKey)}
               </span>
               <span className="rounded-full bg-[var(--color-bg-surface-raised)] px-4 py-2 text-xs font-extrabold uppercase text-[var(--color-text-muted)]">
                 {platform.label}
               </span>
-            </div>
-
-            <div className="mt-6 border-t border-[var(--color-border)] pt-6">
-              <div className="grid grid-cols-2 gap-4 text-center md:grid-cols-4">
-                <Metric label="Tác giả" value={postMention.author || "N/A"} />
-                <Metric
-                  label="Chủ đề"
-                  value={postMention.topic.toUpperCase()}
-                />
-                <Metric label="Sắc thái" value={sentiment.label} />
-                <Metric label="Độ tin cậy" value={`${credibility}%`} />
-              </div>
             </div>
 
             {postMention.url && (
@@ -374,7 +595,7 @@ export default function MentionDetailPage() {
                   <span className="material-symbols-outlined text-lg">
                     open_in_new
                   </span>
-                  Mở bài viết gốc
+                  {t("mentionDetail.openOriginalPost")}
                 </Link>
               </div>
             )}
@@ -382,117 +603,246 @@ export default function MentionDetailPage() {
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-lg font-bold text-[var(--color-text-primary)]">
-              Bình luận ({postContext.total})
+              {t("mentionDetail.comments")} ({commentsHeadingCount})
             </h2>
+            {hasCommentFilters && (
+              <span className="text-sm font-medium text-[var(--color-text-secondary)]">
+                {t("mentionDetail.filters.matchingCount", {
+                  shown: filteredComments.matchedCount,
+                  total: postContext.total,
+                })}
+              </span>
+            )}
           </div>
 
+          {postContext.total > 0 && (
+            <div className="glass-card rounded-3xl p-4 md:p-5">
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-1">
+                  <h3 className="text-sm font-extrabold uppercase tracking-[0.16em] text-[var(--color-brand)]">
+                    {t("mentionDetail.filters.title")}
+                  </h3>
+                  <p className="text-sm text-[var(--color-text-secondary)]">
+                    {t("mentionDetail.filters.subtitle")}
+                  </p>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-[minmax(0,180px)_minmax(0,180px)_minmax(0,1fr)_auto]">
+                  <select
+                    value={commentFilters.sentiment}
+                    onChange={(event) =>
+                      setCommentFilters((current) => ({
+                        ...current,
+                        sentiment: event.target
+                          .value as CommentFilters["sentiment"],
+                      }))
+                    }
+                    className="h-11 rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-4 text-sm font-medium text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-brand)]"
+                  >
+                    <option value="all">
+                      {t("mentionDetail.filters.allSentiments")}
+                    </option>
+                    <option value="positive">
+                      {t("mentionDetail.sentiment.positive")}
+                    </option>
+                    <option value="neutral">
+                      {t("mentionDetail.sentiment.neutral")}
+                    </option>
+                    <option value="negative">
+                      {t("mentionDetail.sentiment.negative")}
+                    </option>
+                  </select>
+
+                  <select
+                    value={commentFilters.level}
+                    onChange={(event) =>
+                      setCommentFilters((current) => ({
+                        ...current,
+                        level: event.target.value as CommentFilters["level"],
+                      }))
+                    }
+                    className="h-11 rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-4 text-sm font-medium text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-brand)]"
+                  >
+                    <option value="all">
+                      {t("mentionDetail.filters.allLevels")}
+                    </option>
+                    <option value="comment">
+                      {t("mentionDetail.filters.commentsOnly")}
+                    </option>
+                    <option value="reply">
+                      {t("mentionDetail.filters.repliesOnly")}
+                    </option>
+                  </select>
+
+                  <input
+                    type="text"
+                    value={commentFilters.keyword}
+                    onChange={(event) =>
+                      setCommentFilters((current) => ({
+                        ...current,
+                        keyword: event.target.value,
+                      }))
+                    }
+                    placeholder={t("mentionDetail.filters.keywordPlaceholder")}
+                    className="h-11 rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-4 text-sm font-medium text-[var(--color-text-primary)] outline-none transition placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-brand)]"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => setCommentFilters(DEFAULT_COMMENT_FILTERS)}
+                    disabled={!hasCommentFilters}
+                    className="h-11 rounded-2xl border border-[var(--color-border)] px-4 text-sm font-bold text-[var(--color-text-primary)] transition hover:bg-[var(--color-bg-surface-raised)] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {t("mentionDetail.filters.reset")}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {isTargetCommentHidden && (
+            <div className="rounded-3xl border border-[var(--color-warning)]/25 bg-[var(--color-warning-subtle)] px-4 py-3 text-sm text-[var(--color-text-primary)]">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="font-medium">
+                  {t("mentionDetail.filters.targetHidden")}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setCommentFilters(DEFAULT_COMMENT_FILTERS)}
+                  className="rounded-xl bg-[var(--color-warning)] px-4 py-2 text-sm font-bold text-white"
+                >
+                  {t("mentionDetail.filters.showTarget")}
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="space-y-4">
-            {postContext.tree.length === 0 ? (
+            {postContext.total === 0 ? (
               <div className="glass-card rounded-3xl p-8 text-center text-[var(--color-text-muted)]">
-                Chưa có comment nào cho bài viết này trong Firebase.
+                {t("mentionDetail.noComments")}
+              </div>
+            ) : filteredComments.tree.length === 0 ? (
+              <div className="glass-card rounded-3xl p-8 text-center text-[var(--color-text-muted)]">
+                {t("mentionDetail.filters.empty")}
               </div>
             ) : (
-              postContext.tree.map((item) => (
-                <CommentThread key={item.id} comment={item} level={0} />
+              filteredComments.tree.map((item) => (
+                <CommentThread
+                  key={item.id}
+                  comment={item}
+                  level={0}
+                  targetId={requestedTargetId || undefined}
+                />
               ))
             )}
           </div>
         </section>
 
-        <aside className="space-y-6">
-          <section className="glass-card rounded-3xl p-6">
-            <h2 className="flex items-center gap-2 text-xl font-extrabold text-[var(--color-text-primary)]">
-              <span className="material-symbols-outlined text-[var(--color-brand)]">
-                donut_large
-              </span>
-              Phân tích sắc thái
-            </h2>
-
-            <div className="mt-7 flex flex-col items-center gap-7 sm:flex-row">
-              <div
-                className="relative h-40 w-40 rounded-full p-5"
-                style={donutStyle}
-              >
-                <div className="flex h-full w-full flex-col items-center justify-center rounded-full bg-[var(--color-bg-surface)]">
-                  <span className="text-xs text-[var(--color-text-muted)]">
-                    Chỉ số
+        <aside className="self-start md:sticky md:top-24">
+          <section className="glass-card rounded-3xl p-5 lg:p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="flex items-center gap-2 text-lg font-extrabold text-[var(--color-text-primary)] lg:text-xl">
+                  <span className="material-symbols-outlined text-[var(--color-brand)]">
+                    donut_large
                   </span>
-                  <span className="text-3xl font-extrabold text-[var(--color-text-primary)]">
-                    {sentimentStats.positive}%
+                  {t("mentionDetail.sentimentAnalysis")}
+                </h2>
+                <p className="mt-2 text-sm font-medium text-[var(--color-text-secondary)]">
+                  {t("mentionDetail.dominantSentiment")}:{" "}
+                  <span className="font-extrabold text-[var(--color-text-primary)]">
+                    {t(sentimentMeta[dominantSentiment[0]].labelKey)} ({dominantSentiment[1]}%)
                   </span>
-                </div>
+                </p>
               </div>
+              <span
+                className={`inline-flex shrink-0 rounded-full px-3 py-1 text-[11px] font-extrabold uppercase ${sentimentMeta[dominantSentiment[0]].bg} ${sentimentMeta[dominantSentiment[0]].color}`}
+              >
+                {t(sentimentMeta[dominantSentiment[0]].labelKey)}
+              </span>
+            </div>
 
-              <div className="w-full space-y-4">
+            <div className="mt-5 grid gap-4 md:grid-cols-[112px_minmax(0,1fr)] md:items-center lg:grid-cols-[124px_minmax(0,1fr)]">
+              <div
+                className="mx-auto h-28 w-28 shrink-0 rounded-full shadow-inner lg:h-32 lg:w-32"
+                style={donutStyle}
+              />
+
+              <div className="grid gap-2.5">
                 <Legend
-                  label="Tích cực"
+                  label={t("mentionDetail.sentiment.positive")}
                   value={sentimentStats.positive}
                   color="bg-[var(--color-success)]"
                 />
                 <Legend
-                  label="Trung lập"
+                  label={t("mentionDetail.sentiment.neutral")}
                   value={sentimentStats.neutral}
                   color="bg-[var(--color-info)]"
                 />
                 <Legend
-                  label="Tiêu cực"
+                  label={t("mentionDetail.sentiment.negative")}
                   value={sentimentStats.negative}
                   color="bg-[var(--color-error)]"
                 />
               </div>
             </div>
-          </section>
 
-          <section className="glass-card rounded-3xl p-6">
-            <h2 className="flex items-center gap-2 text-xl font-extrabold text-[var(--color-text-primary)]">
-              <span className="material-symbols-outlined text-[var(--color-brand)]">
-                info
-              </span>
-              Thông tin đề cập
-            </h2>
-
-            <div className="mt-6 divide-y divide-[var(--color-border)]">
-              <InfoRow label="Thương hiệu" value={brandName} highlight />
-              <InfoRow label="Nền tảng" value={platform.label} />
-              <InfoRow label="Tác giả" value={postMention.author || "N/A"} />
-              <InfoRow
-                label="Thời gian"
-                value={formatDateTime(postMention.posted_at)}
-              />
-              <InfoRow label="Chủ đề" value={postMention.topic.toUpperCase()} />
-              <div className="flex items-center justify-between gap-4 py-4">
-                <span className="text-[var(--color-text-secondary)]">
-                  Độ tin cậy AI
+            <div className="mt-5 border-t border-[var(--color-border)] pt-5">
+              <h2 className="flex items-center gap-2 text-lg font-extrabold text-[var(--color-text-primary)] lg:text-xl">
+                <span className="material-symbols-outlined text-[var(--color-brand)]">
+                  info
                 </span>
-                <div className="flex min-w-[160px] items-center gap-3">
-                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--color-bg-surface-raised)]">
+                {t("mentionDetail.mentionInfo")}
+              </h2>
+
+              <div className="mt-4 divide-y divide-[var(--color-border)]">
+                <InfoRow label={t("mentionDetail.brand")} value={brandName} highlight />
+                <InfoRow label={t("mentionDetail.platform")} value={platform.label} />
+                <InfoRow label={t("mentionDetail.author")} value={postAuthorName} />
+                <InfoRow
+                  label={t("mentionDetail.timeLabel")}
+                  value={formatDateTime(postMention.posted_at, i18n.language === "en" ? "en-US" : "vi-VN")}
+                />
+                <InfoRow
+                  label={t("mentionDetail.topic")}
+                  value={postTopicLabel}
+                />
+                <div className="grid gap-2 py-3">
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-sm text-[var(--color-text-secondary)]">
+                      {t("mentionDetail.aiCredibility")}
+                    </span>
+                    <span className="text-sm font-extrabold text-[var(--color-success)]">
+                      {credibility}%
+                    </span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-[var(--color-bg-surface-raised)]">
                     <div
                       className="h-full rounded-full bg-[var(--color-success)]"
                       style={{ width: `${credibility}%` }}
                     />
                   </div>
-                  <span className="text-sm font-extrabold text-[var(--color-success)]">
-                    {credibility}%
-                  </span>
                 </div>
               </div>
             </div>
           </section>
         </aside>
       </main>
-    </div>
-  );
-}
 
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div className="truncate text-2xl font-extrabold text-[var(--color-text-primary)]">
-        {value}
-      </div>
-      <div className="mt-1 text-[11px] font-bold uppercase tracking-wide text-[var(--color-text-muted)]">
-        {label}
-      </div>
+      {showBackToTop && (
+        <button
+          type="button"
+          onClick={() =>
+            scrollToElementWithOffset(DETAIL_TOP_ID, "smooth", true)
+          }
+          aria-label={t("mentionDetail.backToTop")}
+          title={t("mentionDetail.backToTop")}
+          className="fixed bottom-24 right-4 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--color-brand)] text-white shadow-[0_16px_40px_rgba(0,0,0,0.18)] transition hover:bg-[var(--color-brand-hover)] focus:outline-none focus:ring-4 focus:ring-[var(--color-brand-border)] md:bottom-6 md:right-6"
+        >
+          <span className="material-symbols-outlined">arrow_upward</span>
+        </button>
+      )}
     </div>
   );
 }
@@ -500,32 +850,33 @@ function Metric({ label, value }: { label: string; value: string }) {
 function CommentThread({
   comment,
   level,
+  targetId,
 }: {
   comment: CommentNode;
   level: number;
+  targetId?: string;
 }) {
+  const { t } = useTranslation();
   const itemSentiment = sentimentMeta[comment.sentiment];
-  const borderClass =
-    comment.sentiment === "positive"
-      ? "border-l-[var(--color-success)]"
-      : comment.sentiment === "negative"
-        ? "border-l-[var(--color-error)]"
-        : "border-l-[var(--color-info)]";
+  const isTarget = comment.id === targetId;
   const safeLevel = Math.min(level, 6);
 
   return (
     <div
-      className="space-y-3"
+      id={`comment-${comment.id}`}
+      tabIndex={-1}
+      className="scroll-mt-24 space-y-3"
       style={{ marginLeft: safeLevel ? `${safeLevel * 28}px` : undefined }}
     >
       <div
-        className={`block rounded-3xl border border-l-4 bg-[var(--color-bg-surface)] p-5 shadow-sm transition ${borderClass}`}
-        style={{
-          borderTopColor: "var(--color-border)",
-          borderRightColor: "var(--color-border)",
-          borderBottomColor: "var(--color-border)",
-        }}
+        className={`block rounded-2xl border p-4 shadow-sm transition-colors duration-200 md:p-5 ${isTarget ? "border-[var(--color-brand)] bg-[var(--color-brand-subtle)]" : "border-[var(--color-border)] bg-[var(--color-bg-surface)] hover:border-[var(--color-border-strong)]"}`}
       >
+        {isTarget && (
+          <div className="mb-3 inline-flex items-center gap-1 rounded-full bg-[var(--color-brand-subtle)] px-3 py-1 text-xs font-bold text-[var(--color-brand)]">
+            <span className="material-symbols-outlined text-sm">my_location</span>
+            {t("mentionDetail.selectedComment")}
+          </div>
+        )}
         <div className="flex gap-4">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--color-bg-surface-raised)] text-sm font-extrabold text-[var(--color-text-secondary)]">
             {makeInitials(comment.author || "KH")}
@@ -534,16 +885,16 @@ function CommentThread({
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="font-extrabold text-[var(--color-text-primary)]">
-                  {comment.author || "Khách hàng"}
+                  {comment.author || t("mentionDetail.customer")}
                 </h3>
                 {level > 0 && (
                   <span className="mt-1 inline-flex rounded-full bg-[var(--color-bg-surface-raised)] px-2 py-0.5 text-[10px] font-bold uppercase text-[var(--color-text-muted)]">
-                    Reply cấp {level}
+                    {t("mentionDetail.replyLevel", { level })}
                   </span>
                 )}
               </div>
               <span className="shrink-0 text-xs text-[var(--color-text-muted)]">
-                {formatRelativeTime(comment.posted_at)}
+                {formatRelativeTime(comment.posted_at, t)}
               </span>
             </div>
             <p className="mt-2 whitespace-pre-wrap break-words text-[var(--color-text-primary)]">
@@ -552,7 +903,7 @@ function CommentThread({
             <span
               className={`mt-3 inline-flex rounded-full px-3 py-1 text-[11px] font-extrabold uppercase ${itemSentiment.bg} ${itemSentiment.color}`}
             >
-              {itemSentiment.label}
+              {t(itemSentiment.labelKey)}
             </span>
           </div>
         </div>
@@ -561,7 +912,12 @@ function CommentThread({
       {comment.children.length > 0 && (
         <div className="space-y-3 border-l border-dashed border-[var(--color-border)] pl-3">
           {comment.children.map((child) => (
-            <CommentThread key={child.id} comment={child} level={level + 1} />
+            <CommentThread
+              key={child.id}
+              comment={child}
+              level={level + 1}
+              targetId={targetId}
+            />
           ))}
         </div>
       )}
@@ -579,12 +935,12 @@ function Legend({
   color: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4">
-      <span className="flex items-center gap-2 text-[var(--color-text-secondary)]">
-        <span className={`h-3 w-3 rounded-full ${color}`} />
+    <div className="flex items-center justify-between gap-3 rounded-2xl bg-[var(--color-bg-surface)] px-3 py-2">
+      <span className="flex min-w-0 items-center gap-2 text-sm text-[var(--color-text-secondary)]">
+        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${color}`} />
         {label}
       </span>
-      <span className="font-extrabold text-[var(--color-text-primary)]">
+      <span className="shrink-0 text-sm font-extrabold text-[var(--color-text-primary)]">
         {value}%
       </span>
     </div>
@@ -601,10 +957,10 @@ function InfoRow({
   highlight?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-4">
-      <span className="text-[var(--color-text-secondary)]">{label}</span>
+    <div className="flex items-start justify-between gap-4 py-3">
+      <span className="min-w-0 text-sm text-[var(--color-text-secondary)]">{label}</span>
       <span
-        className={`text-right font-extrabold ${highlight ? "text-[var(--color-brand)]" : "text-[var(--color-text-primary)]"}`}
+        className={`max-w-[58%] text-right text-sm font-extrabold leading-6 ${highlight ? "text-[var(--color-brand)]" : "text-[var(--color-text-primary)]"}`}
       >
         {value}
       </span>

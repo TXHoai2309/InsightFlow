@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { useDashboardStore } from "@/stores/dashboard.store";
@@ -136,6 +136,9 @@ export default function AlertsPage() {
   const [selectedEvidence, setSelectedEvidence] = useState<any>(null);
   const [copied, setCopied] = useState(false);
   const [trendAlert, setTrendAlert] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<"new" | "resolving" | "resolved">("new");
+  const [resolvingAlert, setResolvingAlert] = useState<any>(null);
+  const [viewingHistoryAlert, setViewingHistoryAlert] = useState<any>(null);
 
   // Active configs for thesis presentation
   const [keywords, setKeywords] = useState(['Ngộ độc', 'Biểu tình', 'Tẩy chay', 'Chất lượng']);
@@ -185,11 +188,89 @@ export default function AlertsPage() {
 
   // Load alerts on mount
   useEffect(() => {
+    setFilters({ status: "all" });
     fetchAlerts();
   }, []);
 
-  // Filter alerts locally based on the "Tín hiệu" (signal) dropdown
+  // Calculate counts for tabs based on current filters (brand, severity, signal)
+  const newCountForTab = alerts.filter((alert) => {
+    let matchSignal = true;
+    if (signalFilter === "spike") {
+      matchSignal = (
+        alert.text.toLowerCase().includes("đột biến") ||
+        alert.text.toLowerCase().includes("tăng") ||
+        alert.text.toLowerCase().includes("spike")
+      );
+    } else if (signalFilter === "reach") {
+      matchSignal = (
+        alert.text.toLowerCase().includes("tiếp cận") ||
+        alert.text.toLowerCase().includes("reach") ||
+        alert.text.toLowerCase().includes("người")
+      );
+    } else if (signalFilter === "sensitive") {
+      matchSignal = alert.sentiment === "negative" || alert.severity === "critical" || alert.severity === "high";
+    }
+    const status = alert.status.toLowerCase();
+    return status !== "resolving" && status !== "resolved" && matchSignal;
+  }).length;
+
+  const resolvingCountForTab = alerts.filter((alert) => {
+    let matchSignal = true;
+    if (signalFilter === "spike") {
+      matchSignal = (
+        alert.text.toLowerCase().includes("đột biến") ||
+        alert.text.toLowerCase().includes("tăng") ||
+        alert.text.toLowerCase().includes("spike")
+      );
+    } else if (signalFilter === "reach") {
+      matchSignal = (
+        alert.text.toLowerCase().includes("tiếp cận") ||
+        alert.text.toLowerCase().includes("reach") ||
+        alert.text.toLowerCase().includes("người")
+      );
+    } else if (signalFilter === "sensitive") {
+      matchSignal = alert.sentiment === "negative" || alert.severity === "critical" || alert.severity === "high";
+    }
+    return alert.status.toLowerCase() === "resolving" && matchSignal;
+  }).length;
+
+  const resolvedCountForTab = alerts.filter((alert) => {
+    let matchSignal = true;
+    if (signalFilter === "spike") {
+      matchSignal = (
+        alert.text.toLowerCase().includes("đột biến") ||
+        alert.text.toLowerCase().includes("tăng") ||
+        alert.text.toLowerCase().includes("spike")
+      );
+    } else if (signalFilter === "reach") {
+      matchSignal = (
+        alert.text.toLowerCase().includes("tiếp cận") ||
+        alert.text.toLowerCase().includes("reach") ||
+        alert.text.toLowerCase().includes("người")
+      );
+    } else if (signalFilter === "sensitive") {
+      matchSignal = alert.sentiment === "negative" || alert.severity === "critical" || alert.severity === "high";
+    }
+    return alert.status.toLowerCase() === "resolved" && matchSignal;
+  }).length;
+
+  // Filter alerts locally based on both Tab status and "Tín hiệu" (signal) dropdown
   const filteredAlerts = alerts.filter((alert) => {
+    // 1. Tab filtering
+    if (activeTab === "new") {
+      const status = alert.status.toLowerCase();
+      if (status === "resolving" || status === "resolved") {
+        return false;
+      }
+    }
+    if (activeTab === "resolving" && alert.status.toLowerCase() !== "resolving") {
+      return false;
+    }
+    if (activeTab === "resolved" && alert.status.toLowerCase() !== "resolved") {
+      return false;
+    }
+
+    // 2. Signal filtering
     if (signalFilter === "spike") {
       return (
         alert.text.toLowerCase().includes("đột biến") ||
@@ -209,6 +290,34 @@ export default function AlertsPage() {
     }
     return true;
   });
+
+  // Sort alerts:
+  // - resolved tab: resolved_at descending (most recently resolved first)
+  // - resolving tab: timestamp of last resolution attempt descending (most recently updated first)
+  // - new tab: created_at descending (newest first)
+  const sortedAlerts = useMemo(() => {
+    return [...filteredAlerts].sort((a, b) => {
+      if (activeTab === "resolved") {
+        const timeA = a.resolved_at ? new Date(a.resolved_at).getTime() : 0;
+        const timeB = b.resolved_at ? new Date(b.resolved_at).getTime() : 0;
+        if (timeA !== timeB) {
+          return timeB - timeA;
+        }
+      }
+      if (activeTab === "resolving") {
+        const lastAttemptA = a.resolution_history && a.resolution_history.length > 0
+          ? new Date(a.resolution_history[a.resolution_history.length - 1].timestamp).getTime()
+          : new Date(a.created_at).getTime();
+        const lastAttemptB = b.resolution_history && b.resolution_history.length > 0
+          ? new Date(b.resolution_history[b.resolution_history.length - 1].timestamp).getTime()
+          : new Date(b.created_at).getTime();
+        if (lastAttemptA !== lastAttemptB) {
+          return lastAttemptB - lastAttemptA;
+        }
+      }
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+  }, [filteredAlerts, activeTab]);
 
   // Calculate stats based on all loaded raw alerts to maintain overall dashboard health visibility
   const totalCount = rawAlerts.length;
@@ -309,13 +418,71 @@ export default function AlertsPage() {
         </div>
       </div>
 
+      {/* ── Tabs ── */}
+      <div className="flex border-b border-[var(--color-border)] gap-2 pb-px overflow-x-auto scrollbar-none">
+        <button
+          onClick={() => setActiveTab("new")}
+          className={`flex items-center gap-2 px-6 py-3 font-bold text-sm border-b-2 transition-all duration-300 ${
+            activeTab === "new"
+              ? "border-[var(--color-brand)] text-[var(--color-brand)] bg-[var(--color-brand-subtle)]/30 rounded-t-xl"
+              : "border-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)]/50 rounded-t-xl"
+          }`}
+        >
+          <span className="material-symbols-outlined text-base">notifications_active</span>
+          <span>{t("alerts.tabs.new", { defaultValue: "Chưa giải quyết" })}</span>
+          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+            activeTab === "new"
+              ? "bg-[var(--color-brand)] text-white"
+              : "bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]"
+          }`}>
+            {newCountForTab}
+          </span>
+        </button>
+        <button
+          onClick={() => setActiveTab("resolving")}
+          className={`flex items-center gap-2 px-6 py-3 font-bold text-sm border-b-2 transition-all duration-300 ${
+            activeTab === "resolving"
+              ? "border-[var(--color-brand)] text-[var(--color-brand)] bg-[var(--color-brand-subtle)]/30 rounded-t-xl"
+              : "border-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)]/50 rounded-t-xl"
+          }`}
+        >
+          <span className="material-symbols-outlined text-base">hourglass_top</span>
+          <span>{t("alerts.tabs.resolving", { defaultValue: "Đang giải quyết" })}</span>
+          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+            activeTab === "resolving"
+              ? "bg-[var(--color-brand)] text-white"
+              : "bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]"
+          }`}>
+            {resolvingCountForTab}
+          </span>
+        </button>
+        <button
+          onClick={() => setActiveTab("resolved")}
+          className={`flex items-center gap-2 px-6 py-3 font-bold text-sm border-b-2 transition-all duration-300 ${
+            activeTab === "resolved"
+              ? "border-[var(--color-brand)] text-[var(--color-brand)] bg-[var(--color-brand-subtle)]/30 rounded-t-xl"
+              : "border-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)]/50 rounded-t-xl"
+          }`}
+        >
+          <span className="material-symbols-outlined text-base">check_circle</span>
+          <span>{t("alerts.tabs.resolved", { defaultValue: "Đã giải quyết" })}</span>
+          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+            activeTab === "resolved"
+              ? "bg-[var(--color-brand)] text-white"
+              : "bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]"
+          }`}>
+            {resolvedCountForTab}
+          </span>
+        </button>
+      </div>
+
       {/* ── Filters Bar ── */}
       <div className="glass-card rounded-xl p-3 md:p-4">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-3">
           <select
             value={filters.brand}
             onChange={(e) => setFilters({ brand: e.target.value })}
-            className="col-span-2 lg:col-span-1 w-full select-app border border-[var(--color-border)] rounded-xl text-xs md:text-sm py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 font-medium"
+            className="w-full select-app border border-[var(--color-border)] rounded-xl text-xs md:text-sm py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 font-medium"
           >
             <option value="all" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("alerts.filters.brandAll")}</option>
             {brands.map((b) => (
@@ -323,16 +490,6 @@ export default function AlertsPage() {
                 {formatBrandName(b)}
               </option>
             ))}
-          </select>
-          <select
-            value={filters.status}
-            onChange={(e) => setFilters({ status: e.target.value })}
-            className="w-full select-app border border-[var(--color-border)] rounded-xl text-xs md:text-sm py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 font-medium"
-          >
-            <option value="all" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("alerts.filters.statusAll")}</option>
-            <option value="new" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("alerts.filters.new")}</option>
-            <option value="acknowledged" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("alerts.filters.acknowledged")}</option>
-            <option value="resolved" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("alerts.filters.resolved")}</option>
           </select>
           <select
             value={filters.severity}
@@ -382,7 +539,7 @@ export default function AlertsPage() {
               {t("alerts.list.retry")}
             </button>
           </div>
-        ) : filteredAlerts.length === 0 ? (
+        ) : sortedAlerts.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-12 space-y-3 glass-card rounded-2xl">
             <span className="material-symbols-outlined text-on-surface-variant text-4xl">notifications_off</span>
             <p className="text-sm font-bold text-on-surface">{t("alerts.list.noAlerts")}</p>
@@ -391,7 +548,7 @@ export default function AlertsPage() {
             </p>
           </div>
         ) : (
-          filteredAlerts.map((alert) => {
+          sortedAlerts.map((alert) => {
             const sev = alert.severity.toLowerCase();
             const isCritical = sev === "critical";
             const isHigh = sev === "high";
@@ -492,6 +649,12 @@ export default function AlertsPage() {
                         <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${sourceBadge}`}>
                           {sourceLabel}
                         </span>
+                        {alert.status === "resolving" && (
+                          <span className="text-[9px] font-black px-2 py-1 rounded-lg bg-[var(--color-warning)]/10 text-[var(--color-warning)] border border-[var(--color-warning)]/30 uppercase tracking-widest flex items-center gap-0.5">
+                            <span className="material-symbols-outlined text-[10px] animate-pulse">hourglass_top</span>
+                            Đang giải quyết
+                          </span>
+                        )}
                       </div>
                       <h2 className="text-base md:text-xl font-bold text-[var(--color-text-primary)] leading-snug">
                         {t("alerts.card.titleFormat", {
@@ -555,35 +718,68 @@ export default function AlertsPage() {
                     </div>
 
                     {/* Action buttons */}
-                    <div className="grid grid-cols-3 sm:flex gap-2 items-center">
-                      {alert.status === "new" && (
-                        <button
-                          onClick={() => updateAlertStatus(alert.id, "acknowledged")}
-                          className="px-3 py-2.5 rounded-xl border border-[var(--color-border)] text-[11px] font-bold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)] transition-all"
-                        >
-                          {t("alerts.card.acknowledge")}
-                        </button>
-                      )}
+                    <div className="grid grid-cols-2 sm:flex gap-2 items-center">
                       {alert.status !== "resolved" ? (
+                        alert.status === "resolving" ? (
+                          <>
+                            <button 
+                              onClick={() => setResolvingAlert(alert)}
+                              className="px-3 py-2.5 rounded-xl border border-[var(--color-brand)]/30 text-[var(--color-brand)] text-[11px] font-bold hover:bg-[var(--color-brand-subtle)] transition-all cursor-pointer flex items-center gap-1"
+                            >
+                              <span className="material-symbols-outlined text-[13px]">edit_note</span>
+                              {t("alerts.card.resolveFurther", { defaultValue: "Giải quyết tiếp" })}
+                            </button>
+                            <button
+                              onClick={() => updateAlertStatus(alert.id, "resolved")}
+                              className="px-3 py-2.5 rounded-xl bg-[var(--color-brand)] text-white text-[11px] font-bold hover:bg-[var(--color-brand-hover)] active:scale-95 transition-all shadow-sm cursor-pointer flex items-center gap-1"
+                            >
+                              <span className="material-symbols-outlined text-[13px]">check_circle</span>
+                              {t("alerts.card.resolved", { defaultValue: "Đã giải quyết" })}
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button 
+                              onClick={() => setTrendAlert(alert)}
+                              className="px-3 py-2.5 rounded-xl border border-[var(--color-brand)]/30 text-[var(--color-brand)] text-[11px] font-bold hover:bg-[var(--color-brand-subtle)] transition-all cursor-pointer flex items-center gap-1"
+                            >
+                              <span className="material-symbols-outlined text-[13px]">trending_up</span>
+                              {t("alerts.card.trend")}
+                            </button>
+                            <button
+                              onClick={() => setResolvingAlert(alert)}
+                              className="px-3 py-2.5 rounded-xl bg-[var(--color-brand)] text-white text-[11px] font-bold hover:bg-[var(--color-brand-hover)] active:scale-95 transition-all shadow-sm cursor-pointer flex items-center gap-1"
+                            >
+                              <span className="material-symbols-outlined text-[13px]">pending_actions</span>
+                              {t("alerts.card.resolve", { defaultValue: "Giải quyết" })}
+                            </button>
+                          </>
+                        )
+                      ) : (
                         <>
                           <button 
-                            onClick={() => setTrendAlert(alert)}
-                            className="px-3 py-2.5 rounded-xl border border-[var(--color-brand)]/30 text-[var(--color-brand)] text-[11px] font-bold hover:bg-[var(--color-brand-subtle)] transition-all"
+                            onClick={() => setViewingHistoryAlert(alert)}
+                            className="px-3 py-2.5 rounded-xl border border-[var(--color-brand)]/30 text-[var(--color-brand)] text-[11px] font-bold hover:bg-[var(--color-brand-subtle)] transition-all cursor-pointer flex items-center gap-1"
                           >
-                            {t("alerts.card.trend")}
+                            <span className="material-symbols-outlined text-[13px]">history</span>
+                            {t("alerts.card.viewHistory", { defaultValue: "Xem lịch sử" })}
                           </button>
-                          <button
-                            onClick={() => updateAlertStatus(alert.id, "resolved")}
-                            className="px-3 py-2.5 rounded-xl bg-[var(--color-brand)] text-white text-[11px] font-bold hover:bg-[var(--color-brand-hover)] active:scale-95 transition-all shadow-sm"
+                          <button 
+                            onClick={() => {
+                              const nextStatus = alert.resolution_history && alert.resolution_history.length > 0 ? "resolving" : "new";
+                              updateAlertStatus(alert.id, nextStatus);
+                            }}
+                            title="Khôi phục trạng thái xử lý"
+                            className="px-3 py-2.5 rounded-xl border border-[var(--color-border)] text-[var(--color-text-secondary)] text-[11px] font-bold hover:bg-[var(--color-bg-surface-raised)] transition-all cursor-pointer flex items-center gap-1 active:scale-95"
                           >
-                            {t("alerts.card.resolve")}
+                            <span className="material-symbols-outlined text-[13px]">undo</span>
+                            {t("alerts.card.restore", { defaultValue: "Khôi phục" })}
                           </button>
+                          <span className="text-[var(--color-success)] font-bold text-xs flex items-center gap-1 bg-[var(--color-success-subtle)] border border-[var(--color-success)]/30 px-3 py-1.5 rounded-xl">
+                            <span className="material-symbols-outlined text-sm">check_circle</span>
+                            {t("alerts.card.resolved")}
+                          </span>
                         </>
-                      ) : (
-                        <span className="text-[var(--color-success)] font-bold text-xs flex items-center gap-1 bg-[var(--color-success-subtle)] border border-[var(--color-success)]/30 px-3 py-1.5 rounded-xl">
-                          <span className="material-symbols-outlined text-sm">check_circle</span>
-                          {t("alerts.card.resolved")}
-                        </span>
                       )}
                     </div>
                   </div>
@@ -873,6 +1069,25 @@ export default function AlertsPage() {
         </div>
       )}
 
+      {/* ── Resolution Modal ── */}
+      {resolvingAlert && (
+        <ResolutionModal 
+          alert={resolvingAlert} 
+          onClose={() => setResolvingAlert(null)} 
+          onSave={async (id, note, imageUrl, targetStatus = "resolving") => {
+            await updateAlertStatus(id, targetStatus, { note, image_url: imageUrl });
+          }}
+        />
+      )}
+
+      {/* ── History Modal ── */}
+      {viewingHistoryAlert && (
+        <HistoryModal 
+          alert={viewingHistoryAlert} 
+          onClose={() => setViewingHistoryAlert(null)} 
+        />
+      )}
+
       {/* Toast Alert */}
       {showToast && (
         <div className="fixed bottom-5 right-5 z-50 bg-green-600 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 border border-green-500 animate-bounce">
@@ -1123,7 +1338,7 @@ function TrendModal({ alert, onClose }: TrendModalProps) {
   const handleNavigateToMentions = () => {
     const brandId = normalizeBrandId(alert.brand);
     setDashboardFilters({
-      workspace_id: `ws-${brandId}`,
+      workspace_id: brandId,
       topic: alert.topic as any,
       sentiment: "negative"
     });
@@ -1202,6 +1417,420 @@ function TrendModal({ alert, onClose }: TrendModalProps) {
           >
             <span className="material-symbols-outlined text-[14px]">search</span>
             {t("alerts.modal.discover")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Resolution Modal Component ──
+interface ResolutionModalProps {
+  alert: any;
+  onClose: () => void;
+  onSave: (id: string, note: string, imageUrl?: string, targetStatus?: string) => Promise<void>;
+}
+
+function ResolutionModal({ alert, onClose, onSave }: ResolutionModalProps) {
+  const { t } = useTranslation();
+  const [note, setNote] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Profile link search fallbacks if alert.social_profile_url is empty
+  const profileUrl = alert.social_profile_url?.trim() || (() => {
+    const authorName = alert.author || "";
+    const source = alert.source?.toLowerCase() || "";
+    if (source === "facebook" || source === "fb") {
+      return `https://www.facebook.com/search/top/?q=${encodeURIComponent(authorName)}`;
+    }
+    if (source === "tiktok" || source === "tt") {
+      return `https://www.tiktok.com/search?q=${encodeURIComponent(authorName)}`;
+    }
+    if (source === "youtube" || source === "yt") {
+      return `https://www.youtube.com/results?search_query=${encodeURIComponent(authorName)}`;
+    }
+    return `https://www.google.com/search?q=${encodeURIComponent(authorName)}`;
+  })();
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setError(t("alerts.resolution.errorInvalidImage", { defaultValue: "Vui lòng chọn tệp hình ảnh hợp lệ." }));
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      setError(t("alerts.resolution.errorImageSize", { defaultValue: "Hình ảnh quá lớn. Vui lòng chọn tệp nhỏ hơn 2MB." }));
+      return;
+    }
+
+    setError(null);
+    setImageFile(file);
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        
+        const MAX_DIM = 600;
+        let width = img.width;
+        let height = img.height;
+        
+        if (width > height) {
+          if (width > MAX_DIM) {
+            height *= MAX_DIM / width;
+            width = MAX_DIM;
+          }
+        } else {
+          if (height > MAX_DIM) {
+            width *= MAX_DIM / height;
+            height = MAX_DIM;
+          }
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        ctx?.drawImage(img, 0, 0, width, height);
+        
+        const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7);
+        setImagePreview(compressedBase64);
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleAction = async (targetStatus: "resolving" | "resolved") => {
+    if (!note.trim()) {
+      setError(t("alerts.resolution.errorEmptyNote", { defaultValue: "Vui lòng nhập ghi chú hoặc bằng chứng giải quyết." }));
+      return;
+    }
+
+    setIsSaving(true);
+    setError(null);
+
+    try {
+      await onSave(alert.id, note.trim(), imagePreview || undefined, targetStatus);
+      onClose();
+    } catch (err: any) {
+      setError(t("alerts.resolution.errorSaveFailed", { defaultValue: "Không thể lưu bằng chứng giải quyết. Vui lòng thử lại." }));
+      console.error("[ResolutionModal] Save error:", err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const attemptNumber = (alert.resolution_history?.length || 0) + 1;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div 
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+        onClick={onClose}
+      />
+      
+      <div className="glass-card w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl relative z-10 border border-app/30 flex flex-col max-h-[90vh] bg-app-surface">
+        {/* Header */}
+        <div className="p-4 md:p-6 border-b border-app/30 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-app-brand text-xl">pending_actions</span>
+            <h3 className="font-bold text-app text-base md:text-lg">
+              {t("alerts.resolution.title", { attempt: attemptNumber, defaultValue: `Giải quyết Cảnh báo (Lần ${attemptNumber})` })}
+            </h3>
+          </div>
+          <button 
+            type="button"
+            onClick={onClose}
+            className="w-8 h-8 rounded-full flex items-center justify-center text-app-text-secondary hover:bg-app-surface-raised transition-colors"
+          >
+            <span className="material-symbols-outlined text-base">close</span>
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-4 md:p-6 space-y-4 overflow-y-auto">
+          {/* Author contact section */}
+          <div className="bg-[var(--color-bg-surface-raised)]/50 p-4 rounded-xl border border-[var(--color-border)] space-y-2">
+            <p className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-wider">
+              {t("alerts.resolution.authorContact", { defaultValue: "Thông tin liên hệ tác giả" })}
+            </p>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[var(--color-brand)] text-base">person</span>
+                <span className="text-sm font-bold text-[var(--color-text-primary)]">{alert.author || t("alerts.card.anonymous", { defaultValue: "Ẩn danh" })}</span>
+                <span className="text-xs text-[var(--color-text-secondary)]">({alert.source})</span>
+              </div>
+              <a 
+                href={profileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[var(--color-brand)] font-bold text-xs bg-[var(--color-brand-subtle)] px-3 py-1.5 rounded-lg flex items-center gap-1 hover:bg-[var(--color-brand-border)] transition-colors cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-sm">open_in_new</span>
+                {t("alerts.resolution.contactProfile", { defaultValue: "Liên hệ Profile" })}
+              </a>
+            </div>
+          </div>
+
+          {/* Previous attempts history (if any) */}
+          {alert.resolution_history && alert.resolution_history.length > 0 && (
+            <div className="space-y-3 bg-[var(--color-bg-surface-raised)]/30 p-4 rounded-xl border border-[var(--color-border)]/50">
+              <p className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-wider flex items-center gap-1">
+                <span className="material-symbols-outlined text-xs">history</span>
+                {t("alerts.resolution.previousHistory", { count: alert.resolution_history.length, defaultValue: `Lịch sử giải quyết cũ (${alert.resolution_history.length} lần)` })}
+              </p>
+              <div className="space-y-4 max-h-48 overflow-y-auto pr-1">
+                {alert.resolution_history.map((item: any, idx: number) => {
+                  const dateText = new Date(item.timestamp).toLocaleString("vi-VN", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    day: "2-digit",
+                    month: "2-digit",
+                  });
+                  return (
+                    <div key={idx} className="text-xs border-l-2 border-[var(--color-brand)]/40 pl-3 py-0.5 space-y-1">
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="font-bold text-[var(--color-brand)]">
+                          {t("alerts.resolution.attemptTitle", { attempt: item.attempt_number || (idx + 1), defaultValue: `Lần ${item.attempt_number || (idx + 1)}` })}
+                        </span>
+                        <span className="text-[var(--color-text-muted)]">{dateText}</span>
+                      </div>
+                      <p className="text-[var(--color-text-secondary)] whitespace-pre-wrap">{item.note}</p>
+                      {item.image_url && (
+                        <div className="mt-1 w-24 h-16 rounded overflow-hidden border border-[var(--color-border)] bg-black/5 flex items-center justify-center">
+                          <img 
+                            src={item.image_url} 
+                            alt={`Attempt ${idx + 1}`} 
+                            className="max-h-full max-w-full object-contain cursor-zoom-in"
+                            onClick={() => window.open(item.image_url, '_blank')}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* New resolution attempt input */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-[var(--color-text-primary)]">
+              {t("alerts.resolution.noteLabel", { defaultValue: "Mô tả / Ghi chú bằng chứng" })} <span className="text-[var(--color-error)]">*</span>
+            </label>
+            <textarea
+              rows={3}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder={t("alerts.resolution.notePlaceholder", { defaultValue: "Nhập ghi chú chi tiết hoặc bằng chứng xử lý tại đây..." })}
+              className="w-full bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] rounded-xl text-xs py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 text-[var(--color-text-primary)]"
+            />
+          </div>
+
+          {/* Image Upload */}
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-[var(--color-text-primary)]">
+              {t("alerts.resolution.imageLabel", { defaultValue: "Hình ảnh bằng chứng (Tùy chọn)" })}
+            </label>
+            
+            <div className="flex items-center gap-3">
+              <label className="flex items-center justify-center gap-1.5 px-4 py-2 border border-dashed border-[var(--color-brand)]/40 rounded-xl bg-[var(--color-brand-subtle)]/10 text-[var(--color-brand)] text-xs font-bold hover:bg-[var(--color-brand-subtle)]/20 transition-all cursor-pointer">
+                <span className="material-symbols-outlined text-sm">upload_file</span>
+                {t("alerts.resolution.chooseImage", { defaultValue: "Chọn ảnh chụp màn hình" })}
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  className="hidden" 
+                  onChange={handleImageChange}
+                />
+              </label>
+              
+              {imageFile && (
+                <span className="text-xs text-[var(--color-text-secondary)] truncate max-w-[200px]">
+                  {imageFile.name}
+                </span>
+              )}
+            </div>
+
+            {imagePreview && (
+              <div className="relative w-full max-h-48 overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] flex items-center justify-center p-2">
+                <img 
+                  src={imagePreview} 
+                  alt="Evidence preview" 
+                  className="max-h-40 max-w-full object-contain rounded-lg"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setImageFile(null);
+                    setImagePreview(null);
+                  }}
+                  className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full w-6 h-6 flex items-center justify-center transition-colors cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-sm">close</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {error && (
+            <div className="text-xs text-[var(--color-error)] bg-[var(--color-error)]/5 border border-[var(--color-error)]/20 p-3 rounded-xl flex items-start gap-1.5">
+              <span className="material-symbols-outlined text-sm mt-0.5">error</span>
+              <span>{error}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 border-t border-app/30 flex justify-end gap-2 bg-app-surface-raised/20">
+          <button 
+            type="button"
+            disabled={isSaving}
+            onClick={onClose}
+            className="px-4 py-2.5 rounded-xl text-xs font-bold text-app-text-secondary bg-app-surface-raised hover:bg-app-surface-high transition-all cursor-pointer"
+          >
+            {t("alerts.resolution.close", { defaultValue: "Đóng" })}
+          </button>
+          
+          <button 
+            type="button"
+            disabled={isSaving}
+            onClick={() => handleAction("resolving")}
+            className="px-4 py-2.5 rounded-xl text-xs font-bold bg-[var(--color-bg-surface-raised)] border border-[var(--color-brand)]/30 text-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)] active:scale-95 transition-all flex items-center gap-1 shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSaving 
+              ? t("alerts.resolution.saving", { defaultValue: "Đang lưu..." }) 
+              : t("alerts.resolution.saveProgress", { defaultValue: "Lưu tiến độ" })}
+          </button>
+
+          <button 
+            type="button"
+            disabled={isSaving}
+            onClick={() => handleAction("resolved")}
+            className="px-5 py-2.5 rounded-xl text-xs font-bold bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand-hover)] active:scale-95 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSaving 
+              ? t("alerts.resolution.saving", { defaultValue: "Đang lưu..." }) 
+              : t("alerts.resolution.complete", { defaultValue: "Giải quyết xong" })}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── History Modal Component ──
+interface HistoryModalProps {
+  alert: any;
+  onClose: () => void;
+}
+
+function HistoryModal({ alert, onClose }: HistoryModalProps) {
+  const { t } = useTranslation();
+  
+  const historyList = alert.resolution_history || [];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div 
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+        onClick={onClose}
+      />
+      
+      <div className="glass-card w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl relative z-10 border border-app/30 flex flex-col max-h-[90vh] bg-app-surface">
+        <div className="p-4 md:p-6 border-b border-app/30 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-app-brand text-xl">history</span>
+            <h3 className="font-bold text-app text-base md:text-lg">
+              {t("alerts.history.title", { defaultValue: "Lịch sử giải quyết" })}
+            </h3>
+          </div>
+          <button 
+            onClick={onClose}
+            className="w-8 h-8 rounded-full flex items-center justify-center text-app-text-secondary hover:bg-app-surface-raised transition-colors"
+          >
+            <span className="material-symbols-outlined text-base">close</span>
+          </button>
+        </div>
+
+        <div className="p-4 md:p-6 space-y-4 overflow-y-auto">
+          <div className="space-y-1 bg-[var(--color-bg-surface-raised)]/30 p-3 rounded-xl border border-[var(--color-border)]/50">
+            <p className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider font-bold">
+              {t("alerts.history.incidentInfo", { defaultValue: "Thông tin sự cố" })}
+            </p>
+            <p className="text-sm font-bold text-[var(--color-text-primary)]">
+              {formatBrandName(alert.brand)} - {alert.topic}
+            </p>
+            <p className="text-xs text-[var(--color-text-secondary)] italic">
+              "{alert.text}"
+            </p>
+          </div>
+
+          {historyList.length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-8 space-y-2 text-center">
+              <span className="material-symbols-outlined text-[var(--color-text-muted)] text-3xl">info</span>
+              <p className="text-xs text-[var(--color-text-secondary)]">
+                {t("alerts.history.noHistory", { defaultValue: "Không tìm thấy nhật ký ghi nhận giải quyết." })}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-6 relative before:absolute before:top-2 before:bottom-2 before:left-[17px] before:w-[2px] before:bg-[var(--color-border)]">
+              {historyList.map((item: any, idx: number) => {
+                const dateText = new Date(item.timestamp).toLocaleString("vi-VN", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                });
+                return (
+                  <div key={idx} className="relative pl-10 flex flex-col gap-1">
+                    <div className="absolute left-2.5 top-1.5 w-4 h-4 rounded-full bg-[var(--color-brand)] border-2 border-white dark:border-[var(--color-bg-surface)] flex items-center justify-center">
+                      <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-[var(--color-brand)] uppercase tracking-wider">
+                        {t("alerts.history.attemptTitle", { attempt: item.attempt_number || (idx + 1), defaultValue: `Giải quyết lần ${item.attempt_number || (idx + 1)}` })}
+                      </span>
+                      <span className="text-[10px] text-[var(--color-text-secondary)] font-bold bg-[var(--color-bg-surface-raised)] px-2 py-0.5 rounded">
+                        {dateText}
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-[var(--color-text-primary)] leading-relaxed mt-1 whitespace-pre-wrap bg-[var(--color-bg-surface-raised)] p-3 rounded-xl border border-[var(--color-border)]">
+                      {item.note}
+                    </p>
+
+                    {item.image_url && (
+                      <div className="mt-2 w-full max-h-48 overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] flex items-center justify-center p-2">
+                        <img 
+                          src={item.image_url} 
+                          alt={`Evidence attempt ${idx + 1}`} 
+                          className="max-h-40 max-w-full object-contain rounded-lg"
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="p-4 border-t border-app/30 flex justify-end bg-app-surface-raised/20">
+          <button 
+            onClick={onClose}
+            className="px-5 py-2 rounded-xl text-xs font-bold text-app-text-secondary bg-app-surface-raised hover:bg-app-surface-high transition-all active:scale-95 cursor-pointer"
+          >
+            {t("alerts.history.close", { defaultValue: "Đóng" })}
           </button>
         </div>
       </div>
