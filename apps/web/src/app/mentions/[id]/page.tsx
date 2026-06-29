@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import {
@@ -10,6 +10,10 @@ import {
   PLATFORM_META,
   formatBrandDisplayName,
 } from "@/lib/services/dashboard";
+import {
+  resolveMentionDetailTarget,
+  resolveMentionDisplayPost,
+} from "@/lib/mention-navigation";
 import { PlatformLogo } from "@/components/platform/PlatformLogo";
 import type { Mention } from "@/types/dashboard";
 
@@ -249,6 +253,7 @@ export default function MentionDetailPage() {
     useState<CommentFilters>(DEFAULT_COMMENT_FILTERS);
   const [requestedTargetId, setRequestedTargetId] = useState("");
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const autoFocusedTargetKeyRef = useRef("");
 
   useEffect(() => {
     let mounted = true;
@@ -288,8 +293,13 @@ export default function MentionDetailPage() {
     return new Map(mentions.map((item) => [item.id, item]));
   }, [mentions]);
 
+  const threadSeedMention = useMemo(() => {
+    if (!mention) return null;
+    return (requestedTargetId && mentionById.get(requestedTargetId)) || mention;
+  }, [mention, mentionById, requestedTargetId]);
+
   const postContext = useMemo(() => {
-    if (!mention) {
+    if (!threadSeedMention) {
       return {
         post: null as Mention | null,
         rootParentId: "",
@@ -299,21 +309,9 @@ export default function MentionDetailPage() {
       };
     }
 
-    let rootMention = mention;
-    const visited = new Set<string>();
-    while (
-      rootMention.parent_id &&
-      mentionById.has(rootMention.parent_id) &&
-      !visited.has(rootMention.id)
-    ) {
-      visited.add(rootMention.id);
-      rootMention = mentionById.get(rootMention.parent_id)!;
-    }
-
-    const threadRootId =
-      rootMention.parent_id && !mentionById.has(rootMention.parent_id)
-        ? rootMention.parent_id
-        : rootMention.id;
+    const postMention = resolveMentionDisplayPost(threadSeedMention, mentionById);
+    const threadTarget = resolveMentionDetailTarget(threadSeedMention, mentionById);
+    const threadRootId = threadTarget.detailId;
 
     const isDescendantOf = (item: Mention, rootId: string) => {
       if (item.id === rootId) return false;
@@ -356,13 +354,13 @@ export default function MentionDetailPage() {
     const tree = buildTree(threadRootId);
 
     return {
-      post: rootMention,
+      post: postMention,
       rootParentId: threadRootId,
       comments,
       tree,
       total: comments.length,
     };
-  }, [mention, mentionById, mentions]);
+  }, [mentionById, mentions, threadSeedMention]);
 
   const sentimentStats = useMemo(() => {
     const pool = postContext.post
@@ -422,6 +420,10 @@ export default function MentionDetailPage() {
 
   useEffect(() => {
     if (!requestedTargetId) return;
+    const autoFocusKey = `${mentionId}:${requestedTargetId}`;
+
+    if (autoFocusedTargetKeyRef.current === autoFocusKey) return;
+    autoFocusedTargetKeyRef.current = autoFocusKey;
 
     const frame = window.requestAnimationFrame(() =>
       scrollToElementWithOffset(`comment-${requestedTargetId}`, "auto", true),
@@ -451,7 +453,7 @@ export default function MentionDetailPage() {
       window.cancelAnimationFrame(frame);
       retries.forEach(window.clearTimeout);
     };
-  }, [filteredComments.tree, requestedTargetId]);
+  }, [mentionId, requestedTargetId]);
 
   useEffect(() => {
     const scrollRoot = getAppScrollRoot();
