@@ -26,10 +26,10 @@ Route (app)                              Size     First Load JS
 ├ ○ /api/reports/latest                  0 B                0 B
 ├ ○ /dashboard                           5.21 kB         359 kB
 ├ ○ /forgot-password                     4.94 kB        92.5 kB
-├ ○ /leads                               7.09 kB         293 kB
+├ ○ /leads                               7.08 kB         293 kB
 ├ ○ /login                               4.11 kB         292 kB
 ├ ○ /mentions                            6.87 kB         301 kB
-├ ƒ /mentions/[id]                       4.52 kB         299 kB
+├ ƒ /mentions/[id]                       4.45 kB         299 kB
 ├ ○ /nganh                               6.41 kB         298 kB
 ├ ○ /profile                             7.24 kB         299 kB
 ├ ○ /register                            3.16 kB         291 kB

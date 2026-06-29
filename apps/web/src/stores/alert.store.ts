@@ -3,6 +3,13 @@ import { subscribeWithSelector } from "zustand/middleware";
 import { dbSecond } from "@/lib/firebase";
 import { collection, doc, getDocs, limit, query, updateDoc } from "firebase/firestore";
 
+export interface ResolutionAttempt {
+  attempt_number: number;
+  timestamp: string;
+  note: string;
+  image_url?: string;
+}
+
 export interface AlertData {
   id: string;
   brand: string;
@@ -22,6 +29,8 @@ export interface AlertData {
   shares?: number;
   author?: string;
   title?: string;
+  social_profile_url?: string;
+  resolution_history?: ResolutionAttempt[];
 }
 
 export interface AlertFilters {
@@ -39,7 +48,11 @@ interface AlertState {
   filters: AlertFilters;
   setFilters: (filters: Partial<AlertFilters>) => void;
   fetchAlerts: () => Promise<void>;
-  updateAlertStatus: (id: string, newStatus: string) => Promise<void>;
+  updateAlertStatus: (
+    id: string,
+    newStatus: string,
+    attempt?: { note: string; image_url?: string }
+  ) => Promise<void>;
 }
 
 function parseDate(field: unknown): string {
@@ -200,7 +213,7 @@ export const useAlertStore = create<AlertState>()(
           const data = document.data();
           const labels = data.labels || {};
           const sentiment = String(
-            labels.sentiment || data.sentiment || "neutral",
+            labels.sentiment || data.baseline_sentiment || data.sentiment || "neutral",
           ).toLowerCase();
 
           if (sentiment !== "negative") return;
@@ -237,6 +250,8 @@ export const useAlertStore = create<AlertState>()(
             shares: Number(data.shares || data.share_count || 0),
             author: String(data.author || data.author_name || "Ẩn danh"),
             title: text.slice(0, 120),
+            social_profile_url: String(data.social_profile_url || data.contact || data.profile_url || ""),
+            resolution_history: Array.isArray(data.resolution_history) ? data.resolution_history : [],
           });
         });
 
@@ -256,20 +271,34 @@ export const useAlertStore = create<AlertState>()(
       }
     },
 
-    updateAlertStatus: async (id, newStatus) => {
+    updateAlertStatus: async (id, newStatus, attempt) => {
       const resolvedAt =
-        newStatus === "resolved" ? new Date().toISOString() : undefined;
+        newStatus === "resolved" ? new Date().toISOString() : null;
+
+      let newAttemptItem: ResolutionAttempt | undefined = undefined;
 
       set((state) => {
-        const nextRawAlerts = state.rawAlerts.map((alert) =>
-          alert.id === id
-            ? {
-                ...alert,
-                status: newStatus,
-                ...(resolvedAt ? { resolved_at: resolvedAt } : {}),
-              }
-            : alert,
-        );
+        const nextRawAlerts = state.rawAlerts.map((alert) => {
+          if (alert.id === id) {
+            let nextHistory = alert.resolution_history ? [...alert.resolution_history] : [];
+            if (attempt) {
+              newAttemptItem = {
+                attempt_number: nextHistory.length + 1,
+                timestamp: new Date().toISOString(),
+                note: attempt.note,
+                image_url: attempt.image_url,
+              };
+              nextHistory.push(newAttemptItem);
+            }
+            return {
+              ...alert,
+              status: newStatus,
+              resolution_history: nextHistory,
+              resolved_at: resolvedAt || undefined,
+            };
+          }
+          return alert;
+        });
 
         return {
           rawAlerts: nextRawAlerts,
@@ -281,10 +310,18 @@ export const useAlertStore = create<AlertState>()(
 
       try {
         const documentRef = doc(dbSecond, "insightflow_labels", id);
-        await updateDoc(documentRef, {
+        
+        const updateData: Record<string, any> = {
           status: newStatus,
-          ...(resolvedAt ? { resolved_at: resolvedAt } : {}),
-        });
+          resolved_at: resolvedAt,
+        };
+
+        const targetAlert = get().rawAlerts.find(a => a.id === id);
+        if (targetAlert && targetAlert.resolution_history && targetAlert.resolution_history.length > 0) {
+          updateData.resolution_history = targetAlert.resolution_history;
+        }
+
+        await updateDoc(documentRef, updateData);
       } catch (error) {
         console.error("[AlertStore] Failed to persist alert status:", error);
       }
