@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import Link from "next/link";
 import type { Mention } from "@/types/dashboard";
 import { PlatformLogo } from "@/components/platform/PlatformLogo";
+import { resolveMentionDetailTarget } from "@/lib/mention-navigation";
 
 interface MentionTableProps {
   mentions: Mention[];
@@ -55,6 +56,10 @@ export function MentionTable({ mentions, isLoading, contentMode }: MentionTableP
   const { t, i18n } = useTranslation();
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  const mentionById = useMemo(
+    () => new Map<string, Mention>(mentions.map((item) => [item.id, item])),
+    [mentions],
+  );
 
   const getDisplayContent = (mention: Mention) => {
     if (contentMode === "comment") {
@@ -166,7 +171,7 @@ export function MentionTable({ mentions, isLoading, contentMode }: MentionTableP
                   </div>
 
                   <Link
-                    href={`/mentions/${encodeURIComponent(mention.id)}${mention.content_type === "post" ? "" : `#comment-${encodeURIComponent(mention.id)}`}`}
+                    href={resolveMentionDetailTarget(mention, mentionById).href}
                     className="text-sm leading-relaxed text-[var(--color-text-primary)] hover:text-[var(--color-brand)] line-clamp-3"
                   >
                     "{displayContent}"
@@ -279,7 +284,7 @@ export function MentionTable({ mentions, isLoading, contentMode }: MentionTableP
                       {/* Content */}
                       <td className="px-4 py-4 align-top w-[34rem] max-w-[34rem]">
                         <Link
-                          href={`/mentions/${encodeURIComponent(mention.id)}${mention.content_type === "post" ? "" : `#comment-${encodeURIComponent(mention.id)}`}`}
+                          href={resolveMentionDetailTarget(mention, mentionById).href}
                           className="text-sm leading-relaxed line-clamp-2 text-[var(--color-text-primary)] hover:text-[var(--color-brand)]"
                         >
                           "{displayContent}"

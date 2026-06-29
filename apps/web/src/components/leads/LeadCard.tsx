@@ -5,6 +5,10 @@ import { useTranslation } from "react-i18next";
 import { useRouter } from "next/navigation";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { PLATFORM_META } from "@/lib/services/dashboard";
+import {
+  resolveMentionDetailTarget,
+  type MentionDetailTarget,
+} from "@/lib/mention-navigation";
 import { PlatformLogo } from "@/components/platform/PlatformLogo";
 import type { Lead, Mention } from "@/types/dashboard";
 
@@ -12,11 +16,6 @@ interface LeadCardProps {
   lead: Lead;
   currentTime: number;
 }
-
-type MentionNavigationTarget = {
-  rootId: string;
-  targetId?: string;
-};
 
 function normalizeMatchText(value?: string) {
   return String(value || "")
@@ -284,18 +283,7 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
     ? new Date(lead.posted_at).getTime()
     : Number.NaN;
 
-  const resolveParentMentionId = (mentionId: string): string | null => {
-    let current = mentionById.get(mentionId);
-    const visited = new Set<string>();
-    while (current?.parent_id && mentionById.has(current.parent_id)) {
-      if (visited.has(current.parent_id)) break;
-      visited.add(current.parent_id);
-      current = mentionById.get(current.parent_id);
-    }
-    return current?.id || null;
-  };
-
-  const mentionTarget = useMemo<MentionNavigationTarget | null>(() => {
+  const mentionTarget = useMemo<MentionDetailTarget | null>(() => {
     if (!mentions?.length) return null;
 
     const scoreMentionCandidate = (mention: Mention) => {
@@ -393,18 +381,7 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
 
     if (!found) return null;
 
-    const rootId = resolveParentMentionId(found.id) || found.id;
-    const isCommentTarget =
-      found.id !== rootId ||
-      found.content_type === "comment" ||
-      found.content_type === "reply";
-
-    return isCommentTarget
-      ? {
-          rootId,
-          targetId: found.id,
-        }
-      : { rootId };
+    return resolveMentionDetailTarget(found, mentionById);
   }, [
     lead.id,
     lead.platform,
@@ -419,10 +396,7 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
 
   const handleNavigateToMention = () => {
     if (!mentionTarget) return;
-    const detailHref = mentionTarget.targetId
-      ? `/mentions/${encodeURIComponent(mentionTarget.rootId)}#comment-${encodeURIComponent(mentionTarget.targetId)}`
-      : `/mentions/${encodeURIComponent(mentionTarget.rootId)}`;
-    router.push(detailHref);
+    router.push(mentionTarget.href);
   };
 
   const handleOpenLeadSource = () => {
