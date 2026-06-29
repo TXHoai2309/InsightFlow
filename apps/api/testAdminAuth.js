@@ -25,13 +25,11 @@ if (fs.existsSync(p)) {
   process.exit(1);
 }
 
-const projectId = "insightflow-6ce1f";
+const projectId = process.env.NEXT_PUBLIC_FIREBASE_SECOND_PROJECT_ID || "insightflow-6ce1f";
 const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
 
 console.log("Project ID:", projectId);
 console.log("Has Service Account JSON:", !!serviceAccountJson);
-
-const SERVICE_ACCOUNT_PATH = path.join(__dirname, "service-account.json");
 
 if (serviceAccountJson) {
   try {
@@ -39,7 +37,7 @@ if (serviceAccountJson) {
     console.log("Successfully parsed service account JSON.");
     console.log("Service Account Project ID:", serviceAccount.project_id);
     console.log("Client Email:", serviceAccount.client_email);
-    
+
     initializeApp({
       credential: cert(serviceAccount),
       projectId,
@@ -49,24 +47,8 @@ if (serviceAccountJson) {
     console.error("Failed to parse or initialize service account:", e.message);
     process.exit(1);
   }
-} else if (fs.existsSync(SERVICE_ACCOUNT_PATH)) {
-  try {
-    const serviceAccount = require(SERVICE_ACCOUNT_PATH);
-    console.log("Successfully loaded service-account.json file.");
-    console.log("Service Account Project ID:", serviceAccount.project_id);
-    console.log("Client Email:", serviceAccount.client_email);
-    
-    initializeApp({
-      credential: cert(serviceAccount),
-      projectId,
-    });
-    console.log("Firebase Admin initialized successfully.");
-  } catch (e) {
-    console.error("Failed to load or initialize service-account.json:", e.message);
-    process.exit(1);
-  }
 } else {
-  console.error("FIREBASE_SERVICE_ACCOUNT_JSON and service-account.json are both missing.");
+  console.error("FIREBASE_SERVICE_ACCOUNT_JSON is missing from environment variables.");
   process.exit(1);
 }
 
