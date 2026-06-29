@@ -21,3 +21,18 @@
 2026-06-29T02:19:20.670830Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("apps\\web\\.next")}
 2026-06-29T02:19:20.670863Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@insightflow/web"), path: AnchoredSystemPathBuf("apps\\web") }}))
 2026-06-29T02:19:21.106479Z  WARN turborepo_lib::package_changes_watcher: hashes are the same, no need to rerun
+2026-06-29T07:44:41.726217Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies"), AnchoredSystemPathBuf(".turbo\\cookies\\1.cookie"), AnchoredSystemPathBuf(".turbo")}
+2026-06-29T07:44:41.726583Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2026-06-29T07:44:41.929599Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies")}
+2026-06-29T07:44:41.929616Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2026-06-29T07:44:46.532846Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("apps\\web\\.next")}
+2026-06-29T07:44:46.532869Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@insightflow/web"), path: AnchoredSystemPathBuf("apps\\web") }}))
+2026-06-29T07:44:46.735353Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("apps\\web\\.next")}
+2026-06-29T07:44:46.735377Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@insightflow/web"), path: AnchoredSystemPathBuf("apps\\web") }}))
+2026-06-29T07:44:46.765389Z  WARN turborepo_lib::package_changes_watcher: hashes are the same, no need to rerun
+2026-06-29T07:44:48.027865Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("apps\\web\\.next")}
+2026-06-29T07:44:48.027881Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@insightflow/web"), path: AnchoredSystemPathBuf("apps\\web") }}))
+2026-06-29T07:44:48.087739Z  WARN turborepo_lib::package_changes_watcher: hashes are the same, no need to rerun
+2026-06-29T07:44:48.231312Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("apps\\web\\.next")}
+2026-06-29T07:44:48.231334Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@insightflow/web"), path: AnchoredSystemPathBuf("apps\\web") }}))
+2026-06-29T07:44:48.231408Z  WARN turborepo_lib::package_changes_watcher: hashes are the same, no need to rerun
