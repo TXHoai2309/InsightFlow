@@ -15,9 +15,14 @@ export type Platform =
 
 export interface Mention {
   id: string;
+  parent_id?: string | null;
   workspace_id: string;       // = brand field từ Firestore
   platform: Platform;
   content: string;
+  post_content?: string;
+  comment_content?: string;
+  content_type?: "post" | "comment" | "reply";
+  original_content?: string;
   author: string;
   sentiment: "positive" | "negative" | "neutral";
   topic:

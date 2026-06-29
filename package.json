@@ -9,7 +9,9 @@
   ],
   "scripts": {
     "build": "turbo run build",
-    "dev": "turbo run dev",
+    "dev": "turbo run dev --parallel",
+    "dev:web": "npm run dev -w @insightflow/web",
+    "dev:api": "npm run dev -w @insightflow/api",
     "lint": "turbo run lint"
   },
   "devDependencies": {

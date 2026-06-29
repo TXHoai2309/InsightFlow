@@ -396,20 +396,7 @@ Hiện repo web ưu tiên dùng Firebase/Firestore ở frontend. Các endpoint R
 
 ### 6.1 Entity: Mention
 
-<<<<<<< HEAD
 Các field nên có để FE hoạt động ổn định:
-=======
-- Actor: Brand Admin
-- Mô tả: Tạo workspace theo từng thương hiệu để theo dõi
-- Inputs:
-  - Tên thương hiệu (bắt buộc, thuộc 3 thương hiệu F&B mục tiêu: Highland Coffee, Starbucks, Mixue)
-  - Phân nhóm quy mô thương hiệu (Nhóm Nhỏ / Nhóm Vừa / Nhóm Lớn)
-  - Danh sách từ khóa chính (tên thương hiệu, tên sản phẩm, tên founder, tên chi nhánh)
-  - Danh sách từ đồng nghĩa / biến thể cách viết (slang, teencode)
-  - Mức độ ưu tiên monitoring (Standard / Crisis-watch)
-- Outputs: Workspace được tạo, crawler bắt đầu thu thập theo keyword config
-- Business rule: Tối thiểu 1 từ khóa. Mỗi tenant tối đa 10 workspace (mặc định, tùy gói dịch vụ)
->>>>>>> 7986446e122a39441df380fb6a2defcf5d997678
 
 | Field | Kiểu dữ liệu | Ghi chú |
 |---|---|---|

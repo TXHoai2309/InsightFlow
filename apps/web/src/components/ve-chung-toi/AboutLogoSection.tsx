@@ -2,9 +2,12 @@
 
 import { useIntersectionObserver } from "@/hooks/useIntersectionObserver";
 import { useTranslation } from "react-i18next";
+import { useTheme } from "@/contexts/ThemeContext";
 
 export default function AboutLogoSection() {
   const { t } = useTranslation();
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
   const { ref, hasIntersected } = useIntersectionObserver();
 
   const logoCards = [
@@ -27,8 +30,11 @@ export default function AboutLogoSection() {
 
   return (
     <section 
-      className="py-20 md:py-24 bg-white border-y"
-      style={{ borderColor: "#F1F0FF" }}
+      className="py-20 md:py-24 border-y"
+      style={{ 
+        background: isDark ? "var(--color-bg-surface)" : "#ffffff",
+        borderColor: isDark ? "var(--color-border)" : "#F1F0FF" 
+      }}
     >
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes fadeInUp {
@@ -39,16 +45,16 @@ export default function AboutLogoSection() {
           animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
         .logo-card {
-          background: #ffffff;
-          border: 1px solid rgba(109,76,255,0.12);
+          background: ${isDark ? "var(--color-bg-surface-raised)" : "#ffffff"};
+          border: 1px solid ${isDark ? "var(--color-border)" : "rgba(109,76,255,0.12)"};
           border-radius: 16px;
           padding: 24px;
           transition: all 0.3s ease;
         }
         .logo-card:hover {
           transform: translateY(-4px);
-          box-shadow: 0 12px 32px rgba(109,76,255,0.12);
-          border-color: #6D4CFF;
+          box-shadow: ${isDark ? "0 12px 32px rgba(0,0,0,0.3)" : "0 12px 32px rgba(109,76,255,0.12)"};
+          border-color: var(--color-brand);
         }
         @media (prefers-reduced-motion: reduce) { 
           * { animation: none !important; transition: none !important; } 
@@ -70,7 +76,7 @@ export default function AboutLogoSection() {
           <div className="w-full lg:w-[40%]">
             <div 
               className="relative rounded-[24px] p-[60px] flex items-center justify-center overflow-hidden h-[400px]"
-              style={{ background: "linear-gradient(135deg, #6D4CFF, #3B82F6)" }}
+              style={{ background: isDark ? "linear-gradient(135deg, var(--color-brand), var(--color-bg-surface-high))" : "linear-gradient(135deg, #6D4CFF, #3B82F6)" }}
             >
               {/* Decorative SVG Connections */}
               <div className="absolute inset-0 opacity-20 pointer-events-none">
@@ -88,13 +94,13 @@ export default function AboutLogoSection() {
               <div 
                 className="relative z-10 bg-white rounded-[24px] shadow-2xl flex items-center justify-center overflow-hidden w-full h-full max-w-[340px] max-h-[200px]"
                 style={{ 
-                  filter: "drop-shadow(0 20px 40px rgba(109,76,255,0.3))" 
+                  filter: isDark ? "drop-shadow(0 20px 40px rgba(0,0,0,0.5))" : "drop-shadow(0 20px 40px rgba(109,76,255,0.3))" 
                 }}
               >
                 <img 
-                  src="/logo.png" 
+                  src={isDark ? "/logo.png" : "/logo-dark.png"}
                   alt="InsightFlow Logo" 
-                  className="w-full h-full object-cover mix-blend-multiply pointer-events-none" 
+                  className={`w-full h-full object-cover pointer-events-none ${isDark ? "" : "mix-blend-multiply"}`}
                 />
               </div>
             </div>
@@ -110,20 +116,20 @@ export default function AboutLogoSection() {
               >
                 <div 
                   className="shrink-0 w-[56px] h-[56px] rounded-[16px] flex items-center justify-center"
-                  style={{ background: "rgba(109,76,255,0.08)" }}
+                  style={{ background: isDark ? "var(--color-bg-surface)" : "rgba(109,76,255,0.08)", border: isDark ? "1px solid var(--color-border)" : "none" }}
                 >
                   <span 
                     className="material-symbols-outlined text-[32px]"
-                    style={{ color: "#6D4CFF" }}
+                    style={{ color: isDark ? "var(--color-brand)" : "#6D4CFF" }}
                   >
                     {card.icon}
                   </span>
                 </div>
                 <div>
-                  <h4 className="text-[20px] font-bold text-[#1a1a2e] mb-2">
+                  <h4 className="text-[20px] font-bold mb-2" style={{ color: isDark ? "var(--color-text-primary)" : "#1a1a2e" }}>
                     {card.title}
                   </h4>
-                  <p className="text-[15px] text-[#64748B] leading-[1.7]">
+                  <p className="text-[15px] leading-[1.7]" style={{ color: isDark ? "var(--color-text-secondary)" : "#64748B" }}>
                     {card.description}
                   </p>
                 </div>

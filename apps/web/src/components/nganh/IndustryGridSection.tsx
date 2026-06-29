@@ -2,10 +2,13 @@
 
 import { useIntersectionObserver } from "@/hooks/useIntersectionObserver";
 import { useTranslation } from "react-i18next";
+import { useTheme } from "@/contexts/ThemeContext";
 
 export default function IndustryGridSection() {
   const { t } = useTranslation();
   const { ref, hasIntersected } = useIntersectionObserver();
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
 
   const industries = [
     {
@@ -85,16 +88,16 @@ export default function IndustryGridSection() {
           animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
         .industry-card {
-          background: #FFFFFF;
-          border: 1px solid #E5E7EB;
+          background: ${isDark ? "var(--color-bg-surface)" : "#FFFFFF"};
+          border: 1px solid ${isDark ? "var(--color-border)" : "#E5E7EB"};
           border-radius: 20px;
-          box-shadow: 0 4px 24px rgba(109,76,255,0.06);
+          box-shadow: ${isDark ? "0 4px 24px rgba(0,0,0,0.3)" : "0 4px 24px rgba(109,76,255,0.06)"};
           transition: all 0.3s ease;
         }
         .industry-card:hover {
           transform: translateY(-6px);
-          box-shadow: 0 16px 48px rgba(109,76,255,0.14);
-          border-color: rgba(109,76,255,0.3);
+          box-shadow: ${isDark ? "0 16px 48px rgba(0,0,0,0.4)" : "0 16px 48px rgba(109,76,255,0.14)"};
+          border-color: var(--color-brand);
         }
         @media (prefers-reduced-motion: reduce) { 
           * { animation: none !important; transition: none !important; } 
@@ -112,16 +115,16 @@ export default function IndustryGridSection() {
               <div>
                 <div 
                   className="inline-flex items-center justify-center rounded-[10px] p-2 mb-3"
-                  style={{ background: "rgba(109,76,255,0.08)" }}
+                  style={{ background: isDark ? "var(--color-bg-surface-raised)" : "rgba(109,76,255,0.08)" }}
                 >
                   <span
                     className="material-symbols-outlined text-[24px]"
-                    style={{ fontVariationSettings: "'FILL' 1", color: "#6D4CFF" }}
+                    style={{ fontVariationSettings: "'FILL' 1", color: isDark ? "var(--color-brand)" : "#6D4CFF" }}
                   >
                     {industry.icon}
                   </span>
                 </div>
-                <h2 className="text-[20px] leading-[28px] font-semibold text-[#1a1a2e]">
+                <h2 className="text-[20px] leading-[28px] font-semibold" style={{ color: isDark ? "var(--color-text-primary)" : "#1a1a2e" }}>
                   {industry.title}
                 </h2>
               </div>
@@ -142,7 +145,7 @@ export default function IndustryGridSection() {
             </div>
 
             {/* Description */}
-            <p className="text-[14px] leading-[22px] text-[#64748B] mb-6">
+            <p className="text-[14px] leading-[22px] mb-6" style={{ color: isDark ? "var(--color-text-secondary)" : "#64748B" }}>
               {industry.description}
             </p>
 
@@ -150,10 +153,10 @@ export default function IndustryGridSection() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-6">
               {industry.features.map((feature) => (
                 <div key={feature} className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-[16px]" style={{ color: "#6D4CFF" }}>
+                  <span className="material-symbols-outlined text-[16px]" style={{ color: isDark ? "var(--color-brand)" : "#6D4CFF" }}>
                     check
                   </span>
-                  <span className="text-[13px] font-medium text-[#374151]">
+                  <span className="text-[13px] font-medium" style={{ color: isDark ? "var(--color-text-primary)" : "#374151" }}>
                     {feature}
                   </span>
                 </div>
@@ -164,17 +167,17 @@ export default function IndustryGridSection() {
             <div
               className="mt-auto p-4"
               style={{
-                background: "linear-gradient(135deg, rgba(109,76,255,0.04), rgba(59,130,246,0.04))",
-                borderLeft: "3px solid #6D4CFF",
+                background: isDark ? "var(--color-bg-surface-raised)" : "linear-gradient(135deg, rgba(109,76,255,0.04), rgba(59,130,246,0.04))",
+                borderLeft: `3px solid ${isDark ? "var(--color-brand)" : "#6D4CFF"}`,
                 borderRadius: "12px",
               }}
             >
               <h4 className="text-[14px] font-semibold mb-2" style={{ color: "#6D4CFF" }}>
                 {t("industries.grid.successStory")}
               </h4>
-              <p className="text-[14px] leading-[20px] italic text-[#374151]">
+              <p className="text-[14px] leading-[20px] italic" style={{ color: isDark ? "var(--color-text-primary)" : "#374151" }}>
                 {industry.testimonial.quote}{" "}
-                <strong style={{ color: "#6D4CFF", fontWeight: 600 }}>- {industry.testimonial.author}</strong>
+                <strong style={{ color: isDark ? "var(--color-brand)" : "#6D4CFF", fontWeight: 600 }}>- {industry.testimonial.author}</strong>
               </p>
             </div>
           </div>

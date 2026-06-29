@@ -9,6 +9,8 @@ interface MentionFiltersProps {
   workspaces: Workspace[];
   filters: DashboardFilters;
   allMentions: Mention[];
+  contentMode: "all" | "post" | "comment";
+  onContentModeChange: (mode: "all" | "post" | "comment") => void;
 }
 
 const sentimentOptions = [
@@ -20,12 +22,12 @@ const sentimentOptions = [
 
 const timeRangeOptions = [
   { value: "all", label: "Tất cả thời gian" },
-  { value: "today", label: "Hôm nay (24h)" },
-  { value: "7days", label: "7 ngày qua" },
-  { value: "30days", label: "30 ngày qua" },
+  { value: "24h", label: "24 giờ qua" },
+  { value: "7d", label: "7 ngày qua" },
+  { value: "30d", label: "30 ngày qua" },
 ];
 
-export function MentionFilters({ workspaces, filters, allMentions }: MentionFiltersProps) {
+export function MentionFilters({ workspaces, filters, allMentions, contentMode, onContentModeChange }: MentionFiltersProps) {
   const { t } = useTranslation();
   const { setFilters } = useDashboardStore();
 
@@ -71,7 +73,7 @@ export function MentionFilters({ workspaces, filters, allMentions }: MentionFilt
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-4">
       {/* Brand Filter */}
       <div
         className="p-4 rounded-2xl flex flex-col gap-3"
@@ -192,6 +194,35 @@ export function MentionFilters({ workspaces, filters, allMentions }: MentionFilt
               {t(`dashboard.topics.${topic.toLowerCase()}`, { defaultValue: topic })}
             </option>
           ))}
+        </select>
+      </div>
+
+      {/* Content Display Filter */}
+      <div
+        className="p-4 rounded-2xl flex flex-col gap-3"
+        style={{
+          backgroundColor: "var(--color-bg-surface)",
+          border: "1px solid var(--color-border)",
+        }}
+      >
+        <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--color-text-muted)" }}>
+          {t("mentions.filters.contentModeLabel", { defaultValue: "Hiển thị" })}
+        </label>
+        <select
+          value={contentMode}
+          onChange={(event) => onContentModeChange(event.target.value as "all" | "post" | "comment")}
+          className="bg-transparent border-none focus:ring-0 font-medium w-full p-0 text-sm outline-none cursor-pointer"
+          style={{ color: "var(--color-text-primary)" }}
+        >
+          <option value="all" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
+            {t("mentions.filters.allContent", { defaultValue: "Tất cả nội dung" })}
+          </option>
+          <option value="post" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
+            {t("mentions.filters.postContent", { defaultValue: "Nội dung bài viết" })}
+          </option>
+          <option value="comment" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
+            {t("mentions.filters.commentContent", { defaultValue: "Nội dung cmt" })}
+          </option>
         </select>
       </div>
 

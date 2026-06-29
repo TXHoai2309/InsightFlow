@@ -1,9 +1,12 @@
 "use client";
 
 import { useTranslation } from "react-i18next";
+import { useTheme } from "@/contexts/ThemeContext";
 
 export default function CoreValuesSection() {
   const { t } = useTranslation();
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
 
   const values = [
     {
@@ -26,15 +29,15 @@ export default function CoreValuesSection() {
   return (
     <section 
       className="px-6 md:px-10 py-24"
-      style={{ background: "linear-gradient(180deg, #ffffff 0%, #f8f7ff 100%)" }}
+      style={{ background: isDark ? "linear-gradient(180deg, var(--color-bg-surface) 0%, var(--color-bg-primary) 100%)" : "linear-gradient(180deg, #ffffff 0%, #f8f7ff 100%)" }}
     >
       <style dangerouslySetInnerHTML={{__html: `
         .core-value-card {
-          background: #ffffff;
+          background: ${isDark ? "var(--color-bg-surface-raised)" : "#ffffff"};
           border-top: 3px solid transparent;
           border-radius: 20px;
           padding: 32px;
-          box-shadow: 0 4px 24px rgba(109,76,255,0.06);
+          box-shadow: ${isDark ? "0 4px 24px rgba(0,0,0,0.3)" : "0 4px 24px rgba(109,76,255,0.06)"};
           transition: all 0.4s ease;
           position: relative;
           overflow: hidden;
@@ -46,17 +49,17 @@ export default function CoreValuesSection() {
           left: 0;
           right: 0;
           height: 3px;
-          background: #6D4CFF;
+          background: var(--color-brand);
           opacity: 0;
           transition: all 0.4s ease;
         }
         .core-value-card:hover {
           transform: translateY(-8px);
-          box-shadow: 0 20px 48px rgba(109,76,255,0.14);
+          box-shadow: ${isDark ? "0 20px 48px rgba(0,0,0,0.4)" : "0 20px 48px rgba(109,76,255,0.14)"};
         }
         .core-value-card:hover::before {
           opacity: 1;
-          box-shadow: 0 -2px 12px rgba(109,76,255,0.4);
+          box-shadow: 0 -2px 12px var(--color-brand-border);
         }
         .core-value-card:hover .core-value-icon {
           transform: rotate(10deg);
@@ -69,7 +72,7 @@ export default function CoreValuesSection() {
           opacity: 0;
           transform: translateX(-10px);
           transition: all 0.3s ease;
-          color: #6D4CFF;
+          color: var(--color-brand);
         }
         .core-value-icon {
           transition: transform 0.4s ease;
@@ -94,22 +97,23 @@ export default function CoreValuesSection() {
             <div
               key={v.title}
               className="core-value-card group cursor-default flex flex-col"
+              style={{ border: isDark ? "1px solid var(--color-border)" : "none" }}
             >
               <div 
                 className="w-[72px] h-[72px] rounded-[16px] flex items-center justify-center mb-8"
-                style={{ background: "rgba(109,76,255,0.08)" }}
+                style={{ background: isDark ? "var(--color-bg-surface)" : "rgba(109,76,255,0.08)", border: isDark ? "1px solid var(--color-border)" : "none" }}
               >
                 <span 
                   className="core-value-icon material-symbols-outlined text-[48px]"
-                  style={{ color: "#6D4CFF", fontVariationSettings: "'FILL' 1" }}
+                  style={{ color: isDark ? "var(--color-brand)" : "#6D4CFF", fontVariationSettings: "'FILL' 1" }}
                 >
                   {v.icon}
                 </span>
               </div>
-              <h4 className="text-[20px] md:text-[22px] font-bold text-[#1a1a2e] mb-4">
+              <h4 className="text-[20px] md:text-[22px] font-bold mb-4" style={{ color: isDark ? "var(--color-text-primary)" : "#1a1a2e" }}>
                 {v.title}
               </h4>
-              <p className="text-[15px] md:text-[16px] leading-[1.6] text-[#64748B] mb-8 flex-1">
+              <p className="text-[15px] md:text-[16px] leading-[1.6] mb-8 flex-1" style={{ color: isDark ? "var(--color-text-secondary)" : "#64748B" }}>
                 {v.description}
               </p>
               
@@ -125,3 +129,4 @@ export default function CoreValuesSection() {
     </section>
   );
 }
+

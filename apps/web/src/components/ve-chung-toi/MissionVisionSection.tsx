@@ -2,12 +2,15 @@
 
 import Link from "next/link";
 import { useTranslation } from "react-i18next";
+import { useTheme } from "@/contexts/ThemeContext";
 
 export default function MissionVisionSection() {
   const { t } = useTranslation();
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
 
   return (
-    <section id="mission-vision" className="px-6 md:px-10 py-20 bg-white scroll-mt-16">
+    <section id="mission-vision" className="px-6 md:px-10 py-20 scroll-mt-16" style={{ background: isDark ? "var(--color-bg-primary)" : "#ffffff" }}>
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="text-center mb-16 space-y-4">
@@ -25,14 +28,14 @@ export default function MissionVisionSection() {
           <div 
             className="md:col-span-7 rounded-[24px] p-10 flex flex-col justify-between relative overflow-hidden group"
             style={{
-              background: "linear-gradient(135deg, #f8f7ff, #eef4ff)",
-              border: "1px solid rgba(109,76,255,0.15)"
+              background: isDark ? "linear-gradient(135deg, var(--color-bg-surface-raised), var(--color-bg-surface))" : "linear-gradient(135deg, #f8f7ff, #eef4ff)",
+              border: isDark ? "1px solid var(--color-border)" : "1px solid rgba(109,76,255,0.15)"
             }}
           >
             {/* Decorative Quote Mark */}
             <span 
               className="absolute top-4 right-6 text-[160px] font-serif leading-none pointer-events-none"
-              style={{ color: "rgba(109,76,255,0.08)" }}
+              style={{ color: isDark ? "rgba(255,255,255,0.03)" : "rgba(109,76,255,0.08)" }}
             >
               "
             </span>
@@ -50,7 +53,7 @@ export default function MissionVisionSection() {
               <h3 className="text-[28px] leading-[36px] font-bold text-[#1a1a2e]">
                 {t("about.mission.cardTitle")}
               </h3>
-              <div className="text-[16px] md:text-[18px] leading-[1.6] text-[#64748B] max-w-lg space-y-4">
+              <div className="text-[16px] md:text-[18px] leading-[1.6] max-w-lg space-y-4" style={{ color: isDark ? "var(--color-text-muted)" : "#64748B" }}>
                 <p>
                   {t("about.mission.desc1")}
                 </p>
