@@ -350,3 +350,27 @@ Các phần sau có thể nằm trong tầm nhìn sản phẩm hoặc placeholde
 - Không dùng mock data lẫn với data thật mà không có tên rõ ràng.
 - Không ghi docs vượt quá trạng thái code hiện tại.
 - Mỗi module mới cần có route, component, type và service rõ ràng nếu có dữ liệu động.
+---
+
+## 11. Corrections 2026-06-29
+
+Các ghi chú dưới đây phản ánh trạng thái code hiện tại và ưu tiên hơn các mô tả cũ nếu có chênh lệch:
+
+### 11.1 Route inventory hiện tại
+
+- Route `/settings/brand` vẫn tồn tại trong app shell hiện tại.
+- Module `mentions` hiện gồm:
+  - `/mentions`
+  - `/mentions/[id]`
+
+### 11.2 Frontend modules mới/đã cập nhật
+
+- `apps/web/src/components/platform/PlatformLogo.tsx`
+  - Shared component dùng chung cho logo nền tảng ở bảng Mentions và trang chi tiết đề cập.
+- `apps/web/src/app/mentions/[id]/page.tsx`
+  - Bổ sung comment filtering, back-to-top, summary panel bên phải gọn hơn và logic scroll theo app container.
+
+### 11.3 Dữ liệu và UI shell
+
+- `workspace` vẫn là đơn vị tổ chức dữ liệu thương hiệu trong frontend store/service.
+- Route cấu hình thương hiệu riêng (`/settings/brand`) vẫn là một phần của app shell hiện tại.

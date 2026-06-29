@@ -511,3 +511,28 @@ Các phần dưới đây là định hướng phát triển sau, chưa nên ghi
 - Mentions hiển thị dữ liệu từ Firestore.
 - Không lỗi build do thiếu field `poster_at/posted_at` hoặc topic ngoài union type.
 - Changelog, spec và architecture phản ánh đúng thứ tự commit từ khởi tạo → UI → auth → dashboard → mentions → AI/data → fix/merge.
+## 10. Corrections 2026-06-29
+
+Các ghi chú dưới đây cập nhật phạm vi chức năng theo trạng thái repo hiện tại và được ưu tiên hơn các mô tả cũ nếu có chênh lệch:
+
+### 10.1 Mentions
+
+- Module `mentions` hiện gồm hai màn hình chính:
+  - `/mentions`: danh sách đề cập
+  - `/mentions/[id]`: trang chi tiết đề cập
+- Trang chi tiết đề cập hiện hỗ trợ:
+  - hiển thị bài viết gốc, metadata, sentiment summary và độ tin cậy AI
+  - bộ lọc bình luận theo sắc thái, cấp bình luận và từ khóa
+  - cảnh báo khi comment mục tiêu bị ẩn bởi filter
+  - nút quay về đầu trang
+  - panel thông tin bên phải đã được nén gọn để dễ xem đủ chỉ số hơn
+
+### 10.2 Platform logo behavior
+
+- Logo nền tảng đã được chuẩn hóa qua shared component `PlatformLogo`.
+- `TikTok` và `Threads` dùng màu đen ở giao diện sáng và tự đổi sang màu trắng ở giao diện tối theo theme token của ứng dụng.
+
+### 10.3 Settings Brand route note
+
+- Route `/settings/brand` vẫn tồn tại trong app shell hiện tại.
+- Các mô tả cũ về `Settings Brand` trong tài liệu này tiếp tục có hiệu lực cho phạm vi frontend hiện có.
