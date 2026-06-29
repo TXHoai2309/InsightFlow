@@ -825,3 +825,77 @@
 2026-06-29T04:37:25.007130Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
 2026-06-29T05:11:39.010985Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("apps\\web\\src\\lib\\pdfExport.ts")}
 2026-06-29T05:11:39.011054Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@insightflow/web"), path: AnchoredSystemPathBuf("apps\\web") }}))
+2026-06-29T08:18:03.356904Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies"), AnchoredSystemPathBuf(".turbo\\cookies\\1.cookie")}
+2026-06-29T08:18:03.357181Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2026-06-29T08:18:03.518520Z  WARN daemon_server: turborepo_lib::commands::daemon: daemon already running
+2026-06-29T08:18:03.697933Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies\\1.cookie"), AnchoredSystemPathBuf(".turbo"), AnchoredSystemPathBuf(".turbo\\cookies"), AnchoredSystemPathBuf(".turbo\\cookies\\.turbo-cookie")}
+2026-06-29T08:18:03.698168Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2026-06-29T08:18:04.526900Z  WARN daemon_server: turborepo_lib::commands::daemon: daemon already running
+2026-06-29T08:18:05.481412Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\cookies"), AnchoredSystemPathBuf(".turbo\\daemon\\6edc36386e096921-turbo.log.2026-06-29")}
+2026-06-29T08:18:05.484198Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2026-06-29T08:18:06.054757Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\daemon\\6edc36386e096921-turbo.log.2026-06-29")}
+2026-06-29T08:18:06.054833Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2026-06-29T08:18:32.666450Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("apps\\web\\.next")}
+2026-06-29T08:18:32.667019Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@insightflow/web"), path: AnchoredSystemPathBuf("apps\\web") }}))
+2026-06-29T08:18:33.258069Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("apps\\web\\.next")}
+2026-06-29T08:18:33.258290Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@insightflow/web"), path: AnchoredSystemPathBuf("apps\\web") }}))
+2026-06-29T08:18:33.259212Z  WARN turborepo_lib::package_changes_watcher: hashes are the same, no need to rerun
+2026-06-29T08:18:38.958774Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("apps\\web\\.next")}
+2026-06-29T08:18:38.958921Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@insightflow/web"), path: AnchoredSystemPathBuf("apps\\web") }}))
+2026-06-29T08:18:40.213174Z  WARN turborepo_lib::package_changes_watcher: hashes are the same, no need to rerun
+2026-06-29T08:18:40.216214Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("apps\\web\\.next")}
+2026-06-29T08:18:40.216265Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@insightflow/web"), path: AnchoredSystemPathBuf("apps\\web") }}))
+2026-06-29T08:18:40.216867Z  WARN turborepo_lib::package_changes_watcher: hashes are the same, no need to rerun
+2026-06-29T08:18:47.564806Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\daemon\\6edc36386e096921-turbo.log.2026-06-29")}
+2026-06-29T08:18:47.564904Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2026-06-29T08:18:47.655957Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\daemon\\6edc36386e096921-turbo.log.2026-06-29")}
+2026-06-29T08:18:47.656036Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2026-06-29T08:18:49.157614Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\daemon\\6edc36386e096921-turbo.log.2026-06-29")}
+2026-06-29T08:18:49.157700Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2026-06-29T08:19:26.166081Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\daemon\\6edc36386e096921-turbo.log.2026-06-29")}
+2026-06-29T08:19:26.166151Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2026-06-29T08:19:26.256781Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\daemon\\6edc36386e096921-turbo.log.2026-06-29")}
+2026-06-29T08:19:26.256804Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2026-06-29T08:19:26.354234Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\daemon\\6edc36386e096921-turbo.log.2026-06-29")}
+2026-06-29T08:19:26.354265Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2026-06-29T08:21:15.150824Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("apps\\web\\src\\components\\auth\\RegisterForm.tsx")}
+2026-06-29T08:21:15.150859Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@insightflow/web"), path: AnchoredSystemPathBuf("apps\\web") }}))
+2026-06-29T08:21:21.754611Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\daemon\\6edc36386e096921-turbo.log.2026-06-29")}
+2026-06-29T08:21:21.754650Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2026-06-29T08:21:21.851749Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\daemon\\6edc36386e096921-turbo.log.2026-06-29")}
+2026-06-29T08:21:21.851768Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2026-06-29T08:24:26.851737Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\daemon\\6edc36386e096921-turbo.log.2026-06-29")}
+2026-06-29T08:24:26.851804Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2026-06-29T08:24:26.965548Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\daemon\\6edc36386e096921-turbo.log.2026-06-29")}
+2026-06-29T08:24:26.965574Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2026-06-29T08:26:51.858529Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("apps\\web\\src\\components\\auth\\RegisterForm.tsx")}
+2026-06-29T08:26:51.858580Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@insightflow/web"), path: AnchoredSystemPathBuf("apps\\web") }}))
+2026-06-29T08:29:02.757202Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("apps\\web\\src\\components\\auth\\RegisterForm.tsx")}
+2026-06-29T08:29:02.757227Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@insightflow/web"), path: AnchoredSystemPathBuf("apps\\web") }}))
+2026-06-29T08:33:15.354076Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("apps\\web\\src\\components\\auth\\RegisterForm.tsx")}
+2026-06-29T08:33:15.354133Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@insightflow/web"), path: AnchoredSystemPathBuf("apps\\web") }}))
+2026-06-29T08:33:21.460909Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\daemon\\6edc36386e096921-turbo.log.2026-06-29")}
+2026-06-29T08:33:21.460929Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2026-06-29T08:33:21.566813Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\daemon\\6edc36386e096921-turbo.log.2026-06-29")}
+2026-06-29T08:33:21.566829Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2026-06-29T08:34:56.558368Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\daemon\\6edc36386e096921-turbo.log.2026-06-29")}
+2026-06-29T08:34:56.558413Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2026-06-29T08:34:56.753432Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\daemon\\6edc36386e096921-turbo.log.2026-06-29")}
+2026-06-29T08:34:56.753514Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2026-06-29T08:34:56.865953Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\daemon\\6edc36386e096921-turbo.log.2026-06-29")}
+2026-06-29T08:34:56.866003Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2026-06-29T08:36:22.952830Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\daemon\\6edc36386e096921-turbo.log.2026-06-29")}
+2026-06-29T08:36:22.952885Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2026-06-29T08:36:23.064872Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\daemon\\6edc36386e096921-turbo.log.2026-06-29")}
+2026-06-29T08:36:23.064899Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))
+2026-06-29T08:43:25.451357Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("apps\\api\\src\\routes\\auth.ts")}
+2026-06-29T08:43:25.451397Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@insightflow/api"), path: AnchoredSystemPathBuf("apps\\api") }}))
+2026-06-29T08:43:25.666853Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("apps\\api\\src\\routes\\auth.ts")}
+2026-06-29T08:43:25.666875Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@insightflow/api"), path: AnchoredSystemPathBuf("apps\\api") }}))
+2026-06-29T08:43:25.666916Z  WARN turborepo_lib::package_changes_watcher: hashes are the same, no need to rerun
+2026-06-29T08:50:18.964428Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("apps\\web\\src\\app\\forgot-password\\page.tsx")}
+2026-06-29T08:50:18.964529Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@insightflow/web"), path: AnchoredSystemPathBuf("apps\\web") }}))
+2026-06-29T08:51:25.350849Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf("apps\\web\\src\\app\\forgot-password\\page.tsx")}
+2026-06-29T08:51:25.350875Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Other("@insightflow/web"), path: AnchoredSystemPathBuf("apps\\web") }}))
+2026-06-29T08:51:31.465968Z  WARN turborepo_lib::package_changes_watcher: changed_files: {AnchoredSystemPathBuf(".turbo\\daemon\\6edc36386e096921-turbo.log.2026-06-29")}
+2026-06-29T08:51:31.465994Z  WARN turborepo_lib::package_changes_watcher: changed_packages: Ok(Some({WorkspacePackage { name: Root, path: AnchoredSystemPathBuf("") }}))

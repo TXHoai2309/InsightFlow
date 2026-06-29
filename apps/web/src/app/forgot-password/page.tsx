@@ -137,20 +137,33 @@ export default function ForgotPasswordPage() {
     }
   };
 
+  // Password validation rules
+  const passwordRequirements = [
+    { label: "Ít nhất 8 ký tự", test: (p: string) => p.length >= 8 },
+    { label: "Chứa chữ viết hoa", test: (p: string) => /[A-Z]/.test(p) },
+    { label: "Chứa chữ số", test: (p: string) => /[0-9]/.test(p) },
+    { label: "Chứa ký tự đặc biệt", test: (p: string) => /[^A-Za-z0-9]/.test(p) },
+  ];
+
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
+    
+    // Check requirements
+    const isInvalid = passwordRequirements.some(req => !req.test(newPassword));
+    if (isInvalid) {
+      setError("Mật khẩu không đáp ứng đủ các yêu cầu.");
+      setLoading(false);
+      return;
+    }
+    
     if (newPassword !== confirmPassword) {
       setError("Mật khẩu nhập lại không khớp.");
       setLoading(false);
       return;
     }
-    if (newPassword.length < 8) {
-      setError("Mật khẩu phải có ít nhất 8 ký tự.");
-      setLoading(false);
-      return;
-    }
+    
     try {
       const response = await fetch("/api/auth/reset-password", {
         method: "POST",
@@ -320,11 +333,25 @@ export default function ForgotPasswordPage() {
           {step === 3 && (
             <div className="fp-fade-in-up">
               <h1 style={{ fontSize: "1.6rem", fontWeight: 700, color: textPrimary, marginBottom: 28, textAlign: "center" }}>Thiết lập mật khẩu mới</h1>
+              {error && <ErrorBanner message={error} isDark={isDark} />}
               <form onSubmit={handleUpdatePassword} style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                {/* Inputs for New Password/Confirm Password */}
                 <input type="password" placeholder="Mật khẩu mới" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} style={{ width: "100%", padding: "12px 16px", background: inputBg, border: `1px solid ${inputBorder}`, borderRadius: 10, color: textPrimary }} />
+                <div style={{ background: reqBoxBg, border: `1px solid ${reqBoxBorder}`, borderRadius: 12, padding: 16 }}>
+                  <p style={{ fontSize: "0.8rem", fontWeight: 700, color: textPrimary, marginBottom: 10 }}>Yêu cầu mật khẩu:</p>
+                  <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+                    {passwordRequirements.map((req, idx) => {
+                      const isValid = req.test(newPassword);
+                      return (
+                        <li key={idx} style={{ fontSize: "0.8rem", color: isValid ? "#16a34a" : textMuted, display: "flex", alignItems: "center", gap: 8 }}>
+                          <span className="material-symbols-outlined" style={{ fontSize: 16 }}>{isValid ? "check_circle" : "radio_button_unchecked"}</span>
+                          {req.label}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
                 <input type="password" placeholder="Xác nhận mật khẩu" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} style={{ width: "100%", padding: "12px 16px", background: inputBg, border: `1px solid ${inputBorder}`, borderRadius: 10, color: textPrimary }} />
-                <button type="submit" className="w-full text-white text-[1rem] font-bold py-[14px] rounded-xl border-none cursor-pointer" style={{ background: brandColor }}>Cập nhật mật khẩu</button>
+                <button type="submit" disabled={loading} className="w-full text-white text-[1rem] font-bold py-[14px] rounded-xl border-none cursor-pointer" style={{ background: brandColor }}>{loading ? "Đang cập nhật..." : "Cập nhật mật khẩu"}</button>
               </form>
             </div>
           )}

@@ -12,9 +12,10 @@ import {
   signInWithPopup,
   GoogleAuthProvider,
   getAdditionalUserInfo,
+  fetchSignInMethodsForEmail,
 } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
-import { doc, setDoc } from "firebase/firestore";
+import { doc, setDoc, collection, query, where, getDocs } from "firebase/firestore";
 
 // ─── Atmospheric floating dots ───────────
 function AtmosphereDots() {
@@ -119,6 +120,30 @@ export default function RegisterForm() {
     setLoading(true);
     setError("");
     try {
+      // Kiểm tra email đã tồn tại trong Firestore chưa
+      const q = query(collection(db, "users"), where("email", "==", email.trim().toLowerCase()));
+      const querySnapshot = await getDocs(q);
+      
+      let emailExists = !querySnapshot.empty;
+
+      if (!emailExists) {
+        // Fallback kiểm tra qua Firebase Auth (nếu có)
+        try {
+          const signInMethods = await fetchSignInMethodsForEmail(auth, email);
+          if (signInMethods && signInMethods.length > 0) {
+            emailExists = true;
+          }
+        } catch (authErr) {
+          console.warn("Auth check error, relying on firestore:", authErr);
+        }
+      }
+      
+      if (emailExists) {
+        setError("Email đã được đăng ký. Vui lòng đăng nhập.");
+        setTimeout(() => router.push("/login"), 2000);
+        return;
+      }
+
       const code = Math.floor(100000 + Math.random() * 900000).toString();
       setGeneratedOtp(code);
 
@@ -131,8 +156,8 @@ export default function RegisterForm() {
 
       setOtpSent(true);
     } catch (err: any) {
-      console.error("EmailJS Error:", err);
-      setError("Không thể gửi email. Vui lòng kiểm tra cấu hình EmailJS.");
+      console.error("Error in handleSendOtp:", err);
+      setError("Có lỗi xảy ra khi kiểm tra email. Vui lòng thử lại.");
     } finally {
       setLoading(false);
     }
@@ -297,7 +322,7 @@ export default function RegisterForm() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="example@insightflow.com"
-                      className="flex-grow pl-4 pr-4 py-3 rounded-lg border border-[#c7c4d7] bg-white focus:ring-2 focus:ring-[#4648d4]/20 focus:border-[#4648d4] outline-none transition-all text-[16px] text-[#111c2d]"
+                      className={`flex-grow pl-4 pr-4 py-3 rounded-lg border border-[#c7c4d7] ${isDark ? "bg-[#111c2d] text-white" : "bg-white text-[#111c2d]"} focus:ring-2 focus:ring-[#4648d4]/20 focus:border-[#4648d4] outline-none transition-all text-[16px]`}
                       disabled={otpVerified}
                     />
                     <button
@@ -324,7 +349,7 @@ export default function RegisterForm() {
                           maxLength={1}
                           value={digit}
                           onChange={(e) => handleOtpChange(i, e.target.value)}
-                          className="w-12 h-12 text-center text-[18px] border border-[#c7c4d7] rounded-lg focus:ring-2 focus:ring-[#4648d4]/20 focus:border-[#4648d4] outline-none"
+                          className={`w-12 h-12 text-center text-[18px] border border-[#c7c4d7] rounded-lg ${isDark ? "bg-[#111c2d] text-white" : "bg-white text-[#111c2d]"} focus:ring-2 focus:ring-[#4648d4]/20 focus:border-[#4648d4] outline-none`}
                         />
                       ))}
                     </div>

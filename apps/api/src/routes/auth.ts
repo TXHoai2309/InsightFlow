@@ -41,23 +41,26 @@ export default async function authRoutes(fastify: FastifyInstance, options: Fast
     }
 
     try {
+      console.log(`[AuthRoute] Resetting password for: ${email}`);
       // 1. Find user by email
       const userRecord = await authAdmin.getUserByEmail(email.trim());
+      console.log(`[AuthRoute] User found: ${userRecord.uid}`);
       
       // 2. Update password
       await authAdmin.updateUser(userRecord.uid, {
         password: newPassword,
       });
+      console.log(`[AuthRoute] Password updated for: ${userRecord.uid}`);
 
       return reply.status(200).send({ success: true, message: "Password updated successfully." });
     } catch (error: any) {
-      console.error("[AuthRoute] Reset Password Error:", error);
+      console.error("[AuthRoute] Reset Password Detailed Error:", error);
       if (error.code === "auth/user-not-found" || error.message?.includes("user-not-found")) {
         return reply.status(404).send({ success: false, error: "User not found." });
       }
       return reply.status(500).send({ 
         success: false, 
-        error: "Failed to update password." 
+        error: "Failed to update password: " + error.message
       });
     }
   });
