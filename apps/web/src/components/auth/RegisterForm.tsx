@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "@/contexts/ThemeContext";
 import Link from "next/link";
+import emailjs from "@emailjs/browser";
 import {
   createUserWithEmailAndPassword,
   updateProfile,
@@ -17,23 +18,25 @@ import { doc, setDoc } from "firebase/firestore";
 
 // ─── Atmospheric floating dots ───────────
 function AtmosphereDots() {
-  const dots = useRef<{ size: number; left: number; top: number; color: string }[]>([]);
+  const [dots, setDots] = useState<{ size: number; left: number; top: number; color: string }[]>([]);
 
-  if (dots.current.length === 0) {
+  useEffect(() => {
+    const newDots = [];
     for (let i = 0; i < 15; i++) {
       const size = Math.random() * 4 + 2;
-      dots.current.push({
+      newDots.push({
         size,
         left: Math.random() * 100,
         top: Math.random() * 100,
         color: i % 2 === 0 ? "#4648d4" : "#645efb",
       });
     }
-  }
+    setDots(newDots);
+  }, []);
 
   return (
     <>
-      {dots.current.map((dot, i) => (
+      {dots.map((dot, i) => (
         <div
           key={i}
           className="fixed rounded-full pointer-events-none opacity-20"
@@ -74,12 +77,85 @@ export default function RegisterForm() {
   const [loading, setLoading] = useState(false);
   const [iconFill, setIconFill] = useState<Record<string, string>>({});
 
+  // OTP States
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [otpDigits, setOtpDigits] = useState(["", "", "", "", "", ""]);
+  const [generatedOtp, setGeneratedOtp] = useState("");
+  const [countdown, setCountdown] = useState(30);
+  const [canResend, setCanResend] = useState(false);
+  const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  useEffect(() => {
+    if (!otpSent || otpVerified) return;
+    setCountdown(30);
+    setCanResend(false);
+    const interval = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          setCanResend(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [otpSent, otpVerified]);
+
   const handleIconFocus = (id: string) =>
     setIconFill((prev) => ({ ...prev, [id]: "'FILL' 1" }));
   const handleIconBlur = (id: string) =>
     setIconFill((prev) => ({ ...prev, [id]: "'FILL' 0" }));
 
   const pwStrength = getPasswordStrength(password, t);
+
+  // OTP handlers
+  const handleSendOtp = async () => {
+    if (!email) {
+      setError(t("auth.register.invalidEmail"));
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      setGeneratedOtp(code);
+
+      await emailjs.send(
+        process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID!,
+        process.env.NEXT_PUBLIC_EMAILJS_TEMPLATE_ID!,
+        { to_email: email, otp_code: code },
+        process.env.NEXT_PUBLIC_EMAILJS_PUBLIC_KEY!
+      );
+
+      setOtpSent(true);
+    } catch (err: any) {
+      console.error("EmailJS Error:", err);
+      setError("Không thể gửi email. Vui lòng kiểm tra cấu hình EmailJS.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = () => {
+    const enteredOtp = otpDigits.join("");
+    if (enteredOtp === generatedOtp) {
+      setOtpVerified(true);
+      setError("");
+    } else {
+      setError("Mã OTP không chính xác. Vui lòng nhập lại.");
+      setOtpDigits(["", "", "", "", "", ""]);
+    }
+  };
+
+  const handleOtpChange = (index: number, value: string) => {
+    if (!/^[0-9]?$/.test(value)) return;
+    const newDigits = [...otpDigits];
+    newDigits[index] = value;
+    setOtpDigits(newDigits);
+    if (value && index < 5) otpRefs.current[index + 1]?.focus();
+  };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -159,9 +235,9 @@ export default function RegisterForm() {
           <div className="hidden lg:flex lg:col-span-6 flex-col gap-8">
             <div className="flex items-center mb-0">
               <Link href="/" className="flex hover:opacity-80 transition-opacity w-[340px] h-[120px] relative">
-                <img 
+                <img
                   src={isDark ? "/logo.png" : "/logo-dark.png"}
-                  alt="InsightFlow Logo" 
+                  alt="InsightFlow Logo"
                   className="absolute left-0 top-1/2 -translate-y-1/2 h-[220px] max-w-none pointer-events-none"
                 />
               </Link>
@@ -177,9 +253,9 @@ export default function RegisterForm() {
             >
               <div className="lg:hidden flex items-center justify-center mb-2">
                 <Link href="/" className="flex items-center justify-center hover:opacity-80 transition-opacity w-[340px] h-[120px] relative">
-                  <img 
+                  <img
                     src={isDark ? "/logo.png" : "/logo-dark.png"}
-                    alt="InsightFlow Logo" 
+                    alt="InsightFlow Logo"
                     className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[220px] max-w-none pointer-events-none"
                   />
                 </Link>
@@ -213,16 +289,63 @@ export default function RegisterForm() {
 
                 <div className="flex flex-col gap-1">
                   <label htmlFor="email" className="text-[14px] font-medium">{t("auth.register.emailLabel")}</label>
-                  <input
-                    id="email"
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="example@insightflow.com"
-                    className="w-full pl-4 pr-4 py-3 rounded-lg border border-[#c7c4d7] bg-white focus:ring-2 focus:ring-[#4648d4]/20 focus:border-[#4648d4] outline-none transition-all text-[16px] text-[#111c2d]"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      id="email"
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="example@insightflow.com"
+                      className="flex-grow pl-4 pr-4 py-3 rounded-lg border border-[#c7c4d7] bg-white focus:ring-2 focus:ring-[#4648d4]/20 focus:border-[#4648d4] outline-none transition-all text-[16px] text-[#111c2d]"
+                      disabled={otpVerified}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSendOtp}
+                      disabled={loading || otpSent || otpVerified}
+                      className="px-4 py-3 bg-[#4648d4] hover:bg-[#6063ee] text-white text-[14px] font-medium rounded-lg transition-all"
+                    >
+                      {otpSent ? "Đã gửi" : "Gửi OTP"}
+                    </button>
+                  </div>
                 </div>
+
+                {otpSent && !otpVerified && (
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[14px] font-medium">Nhập mã OTP</label>
+                    <div className="flex gap-2 justify-between">
+                      {otpDigits.map((digit, i) => (
+                        <input
+                          key={i}
+                          ref={(el) => { otpRefs.current[i] = el; }}
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={1}
+                          value={digit}
+                          onChange={(e) => handleOtpChange(i, e.target.value)}
+                          className="w-12 h-12 text-center text-[18px] border border-[#c7c4d7] rounded-lg focus:ring-2 focus:ring-[#4648d4]/20 focus:border-[#4648d4] outline-none"
+                        />
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleVerifyOtp}
+                      className="w-full bg-[#1a7a4a] text-white text-[14px] font-medium py-2 rounded-lg"
+                    >
+                      Xác thực OTP
+                    </button>
+                    
+                    <button
+                      type="button"
+                      onClick={handleSendOtp}
+                      disabled={!canResend || loading}
+                      className="text-[12px] text-[#4648d4] hover:underline disabled:text-gray-400"
+                    >
+                      {canResend ? "Gửi lại mã OTP" : `Gửi lại sau ${countdown}s`}
+                    </button>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="flex flex-col gap-1">
@@ -235,6 +358,7 @@ export default function RegisterForm() {
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••••"
                       className="w-full pl-4 pr-4 py-3 rounded-lg border border-[#c7c4d7] bg-white focus:ring-2 focus:ring-[#4648d4]/20 focus:border-[#4648d4] outline-none transition-all text-[16px]"
+                      disabled={!otpVerified}
                     />
                   </div>
                   <div className="flex flex-col gap-1">
@@ -247,14 +371,15 @@ export default function RegisterForm() {
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       placeholder="••••••••"
                       className="w-full pl-4 pr-4 py-3 rounded-lg border border-[#c7c4d7] bg-white focus:ring-2 focus:ring-[#4648d4]/20 focus:border-[#4648d4] outline-none transition-all text-[16px]"
+                      disabled={!otpVerified}
                     />
                   </div>
                 </div>
 
                 <button
                   type="submit"
-                  disabled={loading}
-                  className="w-full bg-[#4648d4] hover:bg-[#6063ee] text-white text-[14px] font-medium py-3 rounded-lg transition-all"
+                  disabled={loading || !otpVerified}
+                  className="w-full bg-[#4648d4] hover:bg-[#6063ee] text-white text-[14px] font-medium py-3 rounded-lg transition-all disabled:opacity-50"
                 >
                   {loading ? t("auth.register.registering") : t("auth.register.registerBtn")}
                 </button>

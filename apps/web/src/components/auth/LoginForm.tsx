@@ -105,10 +105,10 @@ export default function LoginForm() {
         {/* Logo */}
         <div className="flex flex-col items-center mb-2">
           <Link href="/" className="flex items-center justify-center hover:opacity-80 transition-opacity">
-            <img 
-              src={isDark ? "/logo.png" : "/logo-dark.png"} 
-              alt="InsightFlow Logo" 
-              className="w-[280px] h-auto pointer-events-none" 
+            <img
+              src={isDark ? "/logo.png" : "/logo-dark.png"}
+              alt="InsightFlow Logo"
+              className="w-[280px] h-auto pointer-events-none"
             />
           </Link>
         </div>

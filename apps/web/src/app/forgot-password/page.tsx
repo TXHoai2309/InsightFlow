@@ -17,19 +17,20 @@ export default function ForgotPasswordPage() {
   const [error, setError] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [countdown, setCountdown] = useState(59);
+  const [countdown, setCountdown] = useState(30);
   const [canResend, setCanResend] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [otpResendKey, setOtpResendKey] = useState(0);
 
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
   const router = useRouter();
   const { theme } = useTheme();
   const isDark = theme === "dark";
 
-  // Countdown timer for OTP resend
+  // Countdown timer for OTP resend (30 seconds)
   useEffect(() => {
     if (step !== 2) return;
-    setCountdown(59);
+    setCountdown(30);
     setCanResend(false);
     const interval = setInterval(() => {
       setCountdown((prev) => {
@@ -42,7 +43,7 @@ export default function ForgotPasswordPage() {
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [step]);
+  }, [step, otpResendKey]);
 
   // Password strength
   const getPasswordStrength = (pwd: string) => {
@@ -86,15 +87,22 @@ export default function ForgotPasswordPage() {
     e.preventDefault();
     setError("");
     const enteredOtp = otpDigits.join("");
+    if (enteredOtp.length !== 6) {
+      setError("Vui lòng nhập đủ 6 chữ số mã OTP.");
+      return;
+    }
     if (enteredOtp === generatedOtp) {
       setStep(3);
     } else {
       setError("Mã OTP không chính xác. Vui lòng nhập lại.");
+      setOtpDigits(["", "", "", "", "", ""]);
+      otpRefs.current[0]?.focus();
     }
   };
 
   const handleOtpChange = (index: number, value: string) => {
     if (!/^[0-9]?$/.test(value)) return;
+    if (error) setError("");
     const newDigits = [...otpDigits];
     newDigits[index] = value;
     setOtpDigits(newDigits);
@@ -121,8 +129,7 @@ export default function ForgotPasswordPage() {
         process.env.NEXT_PUBLIC_EMAILJS_PUBLIC_KEY!
       );
       setOtpDigits(["", "", "", "", "", ""]);
-      setCountdown(59);
-      setCanResend(false);
+      setOtpResendKey((k) => k + 1);
     } catch {
       setError("Không thể gửi lại email. Vui lòng thử lại.");
     } finally {
@@ -275,7 +282,11 @@ export default function ForgotPasswordPage() {
                   <span className="material-symbols-outlined" style={{ color: brandColor, fontSize: 28 }}>mark_email_read</span>
                 </div>
                 <h1 style={{ fontSize: "1.6rem", fontWeight: 700, color: textPrimary, marginBottom: 10 }}>Xác thực tài khoản</h1>
+                <p style={{ color: textSecondary, fontSize: "0.875rem", lineHeight: 1.6 }}>
+                  Mã OTP đã được gửi tới <strong style={{ color: textPrimary }}>{email}</strong>
+                </p>
               </div>
+              {error && <ErrorBanner message={error} isDark={isDark} />}
               <form onSubmit={handleVerifyOtp} style={{ display: "flex", flexDirection: "column", gap: 24 }}>
                 <div style={{ display: "flex", justifyContent: "center", gap: 8 }}>
                   {otpDigits.map((digit, i) => (
@@ -287,6 +298,22 @@ export default function ForgotPasswordPage() {
                   ))}
                 </div>
                 <button type="submit" disabled={loading} className="w-full text-white text-[1rem] font-bold py-[14px] rounded-xl border-none cursor-pointer flex items-center justify-center gap-2 transition-all" style={{ background: brandColor }}>Xác nhận mã</button>
+                <div style={{ textAlign: "center" }}>
+                  {canResend ? (
+                    <button
+                      type="button"
+                      onClick={handleResendOtp}
+                      disabled={loading}
+                      style={{ fontSize: "0.875rem", fontWeight: 600, color: brandColor, background: "none", border: "none", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.6 : 1 }}
+                    >
+                      {loading ? "Đang gửi lại..." : "Gửi lại mã OTP"}
+                    </button>
+                  ) : (
+                    <p style={{ fontSize: "0.875rem", color: textMuted, margin: 0 }}>
+                      Gửi lại mã sau <strong style={{ color: brandColor }}>{countdown}s</strong>
+                    </p>
+                  )}
+                </div>
               </form>
             </div>
           )}

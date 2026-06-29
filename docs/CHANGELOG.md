@@ -12,7 +12,24 @@
 >   Định dạng dựa trên [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) và dự án này tuân thủ [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
-## [Unreleased] - 2026-06-26
+## [Unreleased] - 2026-06-29
+
+### Added
+- **Trang đăng ký (/register)**: 
+  - Thêm tính năng xác thực tài khoản bằng mã OTP (gửi qua EmailJS).
+  - Thêm chức năng gửi lại mã OTP sau 30 giây (có bộ đếm ngược).
+  - Vô hiệu hóa các trường mật khẩu cho đến khi OTP được xác thực thành công.
+- **Trang báo cáo (/reports)**: 
+  - Mở rộng chức năng xuất báo cáo, hỗ trợ xuất báo cáo ra nhiều nền tảng thay vì chỉ TikTok.
+
+### Fixed
+- **Trang quên mật khẩu (/forgot-password)**:
+  - Thêm thông báo lỗi khi nhập sai mã OTP.
+  - Thêm tính năng gửi lại mã OTP sau 30 giây.
+- **Trang đăng ký (/register)**:
+  - Khắc phục lỗi hydration ở thành phần `AtmosphereDots`.
+  - Khắc phục lỗi thiếu import `useEffect` và `emailjs`.
+
   ### Fixed
   - **Giao diện sáng/tối (Theme-aware UI)**:
     - Khôi phục cơ chế tự động chuyển đổi logo cho các trang Auth (Đăng nhập, Đăng ký, Quên mật khẩu).
