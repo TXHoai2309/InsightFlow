@@ -9,38 +9,27 @@
  ✓ Compiled successfully
    Linting and checking validity of types ...
    Collecting page data ...
-   Generating static pages (0/19) ...
-   Generating static pages (4/19) 
-   Generating static pages (9/19) 
-   Generating static pages (14/19) 
- ✓ Generating static pages (19/19)
-   Finalizing page optimization ...
-   Collecting build traces ...
+PageNotFoundError: Cannot find module for page: /page
+    at getPagePath (E:\Netspace\InsightFlow\node_modules\next\dist\server\require.js:94:15)
+    at requirePage (E:\Netspace\InsightFlow\node_modules\next\dist\server\require.js:99:22)
+    at E:\Netspace\InsightFlow\node_modules\next\dist\server\load-components.js:103:84
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async loadComponentsImpl (E:\Netspace\InsightFlow\node_modules\next\dist\server\load-components.js:103:26)
+    at async E:\Netspace\InsightFlow\node_modules\next\dist\build\utils.js:1116:32
+    at async Span.traceAsyncFn (E:\Netspace\InsightFlow\node_modules\next\dist\trace\trace.js:154:20) {
+  code: 'ENOENT'
+}
 
-Route (app)                              Size     First Load JS
-┌ ○ /                                    8.1 kB          331 kB
-├ ○ /_not-found                          876 B          88.5 kB
-├ ○ /alerts                              9.71 kB         364 kB
-├ ƒ /api/auth/reset-password             0 B                0 B
-├ ○ /api/debug-firestore                 0 B                0 B
-├ ○ /api/reports/latest                  0 B                0 B
-├ ○ /dashboard                           5.21 kB         359 kB
-├ ○ /forgot-password                     6.14 kB        93.7 kB
-├ ○ /leads                               6.57 kB         292 kB
-├ ○ /login                               3.64 kB         292 kB
-├ ○ /mentions                            4.84 kB         299 kB
-├ ○ /nganh                               4.6 kB          327 kB
-├ ○ /profile                             9.56 kB         328 kB
-├ ○ /register                            4.86 kB         293 kB
-├ ○ /reports                             157 kB          437 kB
-├ ○ /settings/brand                      3.01 kB         108 kB
-└ ○ /ve-chung-toi                        11.6 kB         334 kB
-+ First Load JS shared by all            87.6 kB
-  ├ chunks/1dd3208c-4d948558e163dd97.js  53.6 kB
-  ├ chunks/528-7e11c70fd131a541.js       31.9 kB
-  └ other shared chunks (total)          2.1 kB
-
-
-○  (Static)   prerendered as static content
-ƒ  (Dynamic)  server-rendered on demand
-
+> Build error occurred
+Error: Failed to collect page data for /
+    at E:\Netspace\InsightFlow\node_modules\next\dist\build\utils.js:1269:15
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5) {
+  type: 'Error'
+}
+npm error Lifecycle script `build` failed with error:
+npm error code 1
+npm error path E:\Netspace\InsightFlow\apps\web
+npm error workspace @insightflow/web@1.0.0
+npm error location E:\Netspace\InsightFlow\apps\web
+npm error command failed
+npm error command C:\WINDOWS\system32\cmd.exe /d /s /c next build
