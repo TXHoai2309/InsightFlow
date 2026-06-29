@@ -37,7 +37,8 @@ for (const p of possiblePaths) {
 }
 
 // Re-evaluate PROJECT_ID after loading env
-const projectId = process.env.NEXT_PUBLIC_FIREBASE_SECOND_PROJECT_ID || PROJECT_ID;
+const primaryProjectId = "insightflow-6ce1f";
+const secondaryProjectId = process.env.NEXT_PUBLIC_FIREBASE_SECOND_PROJECT_ID || PROJECT_ID;
 
 if (getApps().length === 0) {
   const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
@@ -45,41 +46,69 @@ if (getApps().length === 0) {
   if (serviceAccountJson) {
     try {
       const serviceAccount = JSON.parse(serviceAccountJson);
+      const projId1 = serviceAccount.project_id || primaryProjectId;
+      
+      // Default app (Project 1) for Auth
       initializeApp({
         credential: cert(serviceAccount),
-        projectId,
+        projectId: projId1,
       });
-      console.log(`[Firebase Admin] Initialized with FIREBASE_SERVICE_ACCOUNT_JSON env for project: ${projectId}`);
+
+      // Named app (Project 2) for Firestore
+      initializeApp({
+        credential: cert(serviceAccount),
+        projectId: secondaryProjectId,
+      }, "datainsight");
+
+      console.log(`[Firebase Admin] Initialized default (Auth) for: ${projId1} and named (Firestore) for: ${secondaryProjectId}`);
     } catch (e: any) {
       console.error("[Firebase Admin] Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON:", e.message);
-      initializeApp({ projectId });
+      initializeApp({ projectId: primaryProjectId });
+      initializeApp({ projectId: secondaryProjectId }, "datainsight");
     }
   } else if (fs.existsSync(SERVICE_ACCOUNT_PATH)) {
     try {
       const serviceAccount = require(SERVICE_ACCOUNT_PATH);
+      const projId1 = serviceAccount.project_id || primaryProjectId;
+
+      // Default app (Project 1) for Auth
       initializeApp({
         credential: cert(serviceAccount),
-        projectId,
+        projectId: projId1,
       });
-      console.log(`[Firebase Admin] Initialized with service-account.json file for project: ${projectId}`);
+
+      // Named app (Project 2) for Firestore
+      initializeApp({
+        credential: cert(serviceAccount),
+        projectId: secondaryProjectId,
+      }, "datainsight");
+
+      console.log(`[Firebase Admin] Initialized default (Auth) for: ${projId1} and named (Firestore) for: ${secondaryProjectId}`);
     } catch (e: any) {
       console.error("[Firebase Admin] Failed to load service-account.json:", e.message);
-      initializeApp({ projectId });
+      initializeApp({ projectId: primaryProjectId });
+      initializeApp({ projectId: secondaryProjectId }, "datainsight");
     }
   } else {
     console.warn("[Firebase Admin] No service account credentials found. Attempting basic/emulator initialization...");
     try {
       initializeApp({
-        projectId,
+        projectId: primaryProjectId,
       });
-      console.log(`[Firebase Admin] Initialized with project ID: ${projectId}`);
+      initializeApp({
+        projectId: secondaryProjectId,
+      }, "datainsight");
     } catch (e: any) {
       console.warn("[Firebase Admin] Failed basic initialization, attempting applicationDefault:", e.message);
       try {
         initializeApp({
           credential: applicationDefault(),
-          projectId,
+          projectId: primaryProjectId,
         });
+        initializeApp({
+          credential: applicationDefault(),
+          projectId: secondaryProjectId,
+        }, "datainsight");
       } catch (err: any) {
         console.error("[Firebase Admin] Critical: All initialization attempts failed.", err.message);
       }
@@ -87,6 +116,10 @@ if (getApps().length === 0) {
   }
 }
 
-export const db = getFirestore();
-export const authAdmin = getAuth();
-export default getApps()[0];
+// Get the apps
+const defaultApp = getApps().find(app => app.name === "[DEFAULT]");
+const secondApp = getApps().find(app => app.name === "datainsight") || defaultApp;
+
+export const db = secondApp ? getFirestore(secondApp) : getFirestore();
+export const authAdmin = defaultApp ? getAuth(defaultApp) : getAuth();
+export default defaultApp;
