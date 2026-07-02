@@ -32,6 +32,7 @@ InsightFlow hỗ trợ thương hiệu và đội truyền thông:
 - Tiền xử lý dữ liệu, loại bỏ dữ liệu lỗi/trùng/spam.
 - Dùng AI để gán nhãn sentiment, topic, crisis level và lead intent.
 - Cho Admin kiểm duyệt nhãn đầu vào trước khi dữ liệu được publish.
+- Tổng hợp nhiều post/comment của cùng một contact đối với một brand để đánh giá trạng thái, độ ảnh hưởng, spam score và priority.
 - Cho đội thương hiệu xử lý khủng hoảng, lead và báo cáo theo vai trò.
 - Cho nhân viên gửi request sửa nhãn nếu phát hiện AI hoặc dữ liệu đã publish bị sai.
 - Cho Quản lý thương hiệu duyệt request, cấu hình template phản hồi và bật/tắt auto-response.
@@ -42,6 +43,7 @@ Luồng giá trị chính:
 Cào dữ liệu công khai
 -> tiền xử lý
 -> AI gán nhãn
+-> gom nhóm contact và đánh giá influence/spam
 -> Admin kiểm duyệt nhãn
 -> publish dữ liệu cho thương hiệu
 -> xử lý nghiệp vụ theo vai trò
@@ -88,6 +90,7 @@ Onboarding/user guide phải theo vai trò, không dùng một hướng dẫn ch
 | Brand isolation | Dữ liệu nghiệp vụ luôn được scope theo brand/workspace |
 | Label lifecycle | Dữ liệu đi từ raw -> preprocessed -> ai_labeled -> admin_reviewing -> approved_for_publish -> published |
 | Admin review | Admin kiểm duyệt nhãn AI trước khi publish dữ liệu cho brand |
+| Contact Intelligence | Tổng hợp lịch sử contact-brand, influence score, spam score và priority boost |
 | Label correction request | Nhân viên khủng hoảng gửi request sửa nhãn, Quản lý thương hiệu duyệt/từ chối/chỉnh lại |
 | Role-based dashboard/report | Số liệu tích cực/tiêu cực/lead/khủng hoảng hiển thị theo mục tiêu từng vai trò |
 | Auto-response safety | Brand Manager quản lý template, bật/tắt auto-response, high/critical phải manual review |
@@ -273,10 +276,13 @@ Không commit secret thật vào repo.
 Crawler chạy mỗi 1-2 tiếng
 -> raw_collected
 -> preprocessed
+-> contact_resolved
 -> ai_labeled
+-> spam_assessed
 -> admin_reviewing
 -> approved_for_publish
 -> published
+-> contact_aggregated / priority_scored
 -> brand users xử lý theo role
 -> correction/audit/report
 ```
@@ -285,11 +291,44 @@ Quy tắc:
 
 - Dữ liệu chưa `published` không xuất hiện trong dashboard/report của brand.
 - Admin review là bước quản trị chất lượng dữ liệu, không phải nghiệp vụ xử lý khủng hoảng/lead.
+- Contact có nhiều nội dung tiêu cực, ảnh hưởng cao và spam score thấp được tăng mức ưu tiên xử lý.
+- Contact hoặc content có spam score cao không được boost priority như contact thật.
 - Nhãn đã được Quản lý thương hiệu duyệt sửa phải trở thành active label cho dashboard/report.
 
 ---
 
-## 12. Auto-response
+## 12. Contact Intelligence
+
+Contact Intelligence giúp InsightFlow hiểu bối cảnh của một đối tượng/contact với thương hiệu, thay vì chỉ nhìn từng mention rời rạc.
+
+Hệ thống cần tổng hợp:
+
+- Các post/comment của cùng contact trong cùng platform và brand.
+- Sentiment history: phần lớn nội dung là tích cực, trung tính hay tiêu cực.
+- Topic history: contact thường nói về vấn đề nào.
+- Influence score: dựa trên like, comment, share, reply, view hoặc follower nếu có.
+- Spam score: phát hiện content/contact có dấu hiệu spam, bot hoặc noise.
+- Priority score: mức ưu tiên xử lý sau khi xét sentiment, influence, recency và spam.
+
+Ví dụ:
+
+```text
+Một contact có 8 post/comment về Brand X trong 7 ngày
+-> 6 nội dung negative
+-> tổng tương tác cao
+-> spam score thấp
+-> hệ thống tăng priority trong crisis queue
+```
+
+Khuyến nghị Sprint 2:
+
+- Chỉ gom contact trong cùng platform trước.
+- Không gom cross-platform nếu chỉ dựa vào tên hiển thị.
+- Spam detection cần áp dụng ở cả content-level và contact-level.
+
+---
+
+## 13. Auto-response
 
 Auto-response phải an toàn theo brand.
 
@@ -308,18 +347,19 @@ Quy tắc:
 
 ---
 
-## 13. Quy trình phát triển đề xuất
+## 14. Quy trình phát triển đề xuất
 
 Khi phát triển Sprint 2, ưu tiên theo thứ tự:
 
 1. Role profile, membership, route guard, sidebar theo quyền.
 2. Brand/data scope ở service/API layer.
 3. Data lifecycle và Admin review queue.
-4. Label correction request workflow.
-5. Dashboard/report theo vai trò.
-6. Onboarding/user guide theo vai trò.
-7. Response template, auto-response setting và safety gate.
-8. Audit log cho các thao tác quan trọng.
+4. Contact Intelligence: contact resolution, influence score, spam score, priority score.
+5. Label correction request workflow.
+6. Dashboard/report theo vai trò.
+7. Onboarding/user guide theo vai trò.
+8. Response template, auto-response setting và safety gate.
+9. Audit log cho các thao tác quan trọng.
 
 Nguyên tắc:
 
@@ -330,13 +370,14 @@ Nguyên tắc:
 
 ---
 
-## 14. Phạm vi sản phẩm
+## 15. Phạm vi sản phẩm
 
 ### In scope
 
 - Dữ liệu truyền thông công khai.
 - Brand monitoring theo workspace/brand.
 - AI labeling và human-in-the-loop review.
+- Contact Intelligence trong cùng platform và brand.
 - Crisis workflow.
 - Lead workflow.
 - Role-based dashboard/report.
@@ -349,10 +390,11 @@ Nguyên tắc:
 - Tự động phản hồi mọi tình huống không qua safety gate.
 - Cào dữ liệu private message, group kín hoặc dữ liệu không công khai.
 - Refactor bắt buộc toàn bộ cấu trúc thư mục/route.
+- Gom contact xuyên nền tảng bằng tín hiệu yếu như tên hiển thị.
 
 ---
 
-## 15. Definition of Done cấp sản phẩm
+## 16. Definition of Done cấp sản phẩm
 
 Sprint 2 được coi là đúng hướng khi:
 
@@ -360,6 +402,9 @@ Sprint 2 được coi là đúng hướng khi:
 - Mỗi vai trò chỉ thấy đúng dữ liệu và chức năng.
 - Admin được tách khỏi nghiệp vụ brand.
 - Dữ liệu đi qua lifecycle rõ ràng trước khi publish.
+- Có thể tổng hợp nhiều post/comment của cùng contact trong cùng platform và brand.
+- Priority tăng khi contact có nhiều nội dung tiêu cực, influence cao và không phải spam.
+- Spam contact/content không được ưu tiên như contact thật.
 - Nhân viên khủng hoảng gửi được request sửa nhãn.
 - Quản lý thương hiệu duyệt/từ chối/chỉnh request sửa nhãn.
 - Lead và crisis được tách quyền rõ.
@@ -369,8 +414,9 @@ Sprint 2 được coi là đúng hướng khi:
 
 ---
 
-## 16. Change Log
+## 17. Change Log
 
 | Phiên bản | Ngày | Thay đổi |
 |---|---|---|
+| 2.1 | 2026-07-02 | Bổ sung Contact Intelligence: contact-level aggregation, influence score, spam score và priority boost. |
 | 2.0 | 2026-07-02 | Cập nhật README theo SPEC/ARCHITECTURE Sprint 2: role-based workflow, không đổi cấu trúc thư mục, label lifecycle, onboarding, report và auto-response safety. |

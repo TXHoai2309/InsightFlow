@@ -1,6 +1,6 @@
 # InsightFlow - Đặc tả chức năng sản phẩm
 
-> Phiên bản: 2.0  
+> Phiên bản: 2.1  
 > Trạng thái: Bản nháp đặc tả Sprint 2  
 > Ngày cập nhật: 2026-07-02  
 > Phạm vi: Phân quyền theo nghiệp vụ, luồng gán nhãn, onboarding, báo cáo và auto-response  
@@ -39,6 +39,7 @@ InsightFlow không chỉ là dashboard hiển thị số liệu. Sản phẩm ph
 - Dữ liệu đã đủ tin cậy để dùng cho báo cáo hay chưa.
 - Khi AI gán nhãn sai thì sửa và ghi nhận lịch sử như thế nào.
 - Khi nào có thể phản hồi tự động, khi nào bắt buộc con người duyệt.
+- Một contact có lịch sử tương tác với thương hiệu như thế nào, có ảnh hưởng lớn không, có phải spam/bot/noise không.
 
 Luồng giá trị tổng quát:
 
@@ -46,6 +47,7 @@ Luồng giá trị tổng quát:
 Cào dữ liệu công khai
 -> tiền xử lý dữ liệu
 -> AI gán nhãn
+-> gom nhóm contact và đánh giá influence/spam
 -> Admin kiểm duyệt nhãn đầu vào
 -> publish dữ liệu cho thương hiệu
 -> người dùng theo vai trò xử lý nghiệp vụ
@@ -60,6 +62,8 @@ Các thương hiệu thường gặp các vấn đề sau:
 - Không phân biệt rõ ai xử lý khủng hoảng, ai xử lý khách hàng tiềm năng, ai duyệt dữ liệu.
 - Số liệu tích cực, tiêu cực chỉ là biểu đồ chung, chưa trả lời được vai trò đó cần quyết định điều gì.
 - Dữ liệu mention phân tán ở nhiều nguồn và khó ưu tiên.
+- Một contact có thể tạo nhiều post/comment về cùng một thương hiệu nhưng hệ thống chỉ nhìn từng mention rời rạc, dẫn đến đánh giá thiếu bối cảnh.
+- Một contact có ảnh hưởng cao, nhiều nội dung tiêu cực và không phải spam cần được ưu tiên hơn contact ít ảnh hưởng hoặc có dấu hiệu bot/spam.
 - AI có thể gán sai nhãn sentiment, topic, mức độ khủng hoảng hoặc lead intent.
 - Thiếu workflow gửi request, duyệt request và ghi lịch sử chỉnh sửa nhãn.
 - Auto-response có rủi ro truyền thông nếu không có cấu hình bật/tắt và cơ chế an toàn.
@@ -72,6 +76,7 @@ Trong Sprint 2, InsightFlow cần chuyển từ MVP dashboard sang hệ thống 
 - Quản lý thương hiệu vận hành toàn bộ nghiệp vụ của một brand cụ thể.
 - Nhân viên xử lý khủng hoảng chỉ xử lý nghiệp vụ khủng hoảng của brand mình, không xử lý lead.
 - Nhân viên xử lý khách hàng tiềm năng chỉ xử lý lead của brand mình, không xử lý khủng hoảng.
+- Hệ thống tổng hợp lịch sử contact-brand để nhận diện contact tiêu cực lặp lại, contact có ảnh hưởng cao, và contact nghi spam.
 - Người dùng sau khi đăng nhập được điều hướng đến đúng màn hình và đúng công việc.
 - Báo cáo và dashboard phải trả lời câu hỏi nghiệp vụ của từng vai trò.
 
@@ -87,6 +92,7 @@ Trong Sprint 2, InsightFlow cần chuyển từ MVP dashboard sang hệ thống 
 - Luồng cào dữ liệu định kỳ 1-2 tiếng/lần ở mức đặc tả nghiệp vụ.
 - Luồng tiền xử lý dữ liệu.
 - Luồng AI gán nhãn sentiment, topic, crisis level và lead intent.
+- Luồng Contact Intelligence: gom nhóm các post/comment của cùng một contact trong phạm vi một brand, tính sentiment history, influence score, spam score và priority score.
 - Luồng Admin kiểm duyệt nhãn trước khi dữ liệu được publish.
 - Luồng nhân viên khủng hoảng gửi request sửa nhãn.
 - Luồng Quản lý thương hiệu duyệt, từ chối hoặc chỉnh lại request sửa nhãn.
@@ -99,12 +105,14 @@ Trong Sprint 2, InsightFlow cần chuyển từ MVP dashboard sang hệ thống 
 - Empty state có hướng dẫn hành động tiếp theo.
 - Thông báo ưu tiên theo vai trò.
 - Lịch sử duyệt request sửa nhãn.
+- Danh sách contact rủi ro cao hoặc có ảnh hưởng cao trong phạm vi từng brand.
 
 ### 3.3 Could Have
 
 - Hàng chờ review nâng cao theo AI confidence.
 - Gợi ý phản hồi theo ngữ cảnh.
 - Chỉ số SLA xử lý khủng hoảng và lead.
+- Gom contact cross-platform khi có định danh đủ tin cậy.
 
 ### 3.4 Ngoài phạm vi Sprint 2
 
@@ -113,6 +121,7 @@ Trong Sprint 2, InsightFlow cần chuyển từ MVP dashboard sang hệ thống 
 - Admin quyết định chiến lược phản hồi truyền thông của thương hiệu.
 - Auto-response tự động phản hồi mọi tình huống mà không có cấu hình an toàn.
 - Cào dữ liệu tin nhắn riêng tư, group kín hoặc dữ liệu không công khai.
+- Gom danh tính contact xuyên nền tảng nếu chỉ dựa trên tên hiển thị hoặc tín hiệu yếu.
 
 ---
 
@@ -311,6 +320,8 @@ Crawler chạy định kỳ 1-2 tiếng/lần
 -> tiền xử lý dữ liệu
 -> loại bỏ spam, trùng lặp, dữ liệu lỗi
 -> model AI gán nhãn
+-> contact resolution: gom post/comment về cùng một contact trong phạm vi brand
+-> tính influence score, spam score, contact-brand state và priority score
 -> Admin kiểm duyệt nhãn
 -> Admin approve dữ liệu đủ tin cậy
 -> hệ thống publish dữ liệu cho brand
@@ -345,6 +356,10 @@ Crawler chạy định kỳ 1-2 tiếng/lần
 | Lead intent | none, cold, warm, hot | Phân loại khách hàng tiềm năng |
 | Spam flag | true, false | Loại dữ liệu rác |
 | Relevance | relevant, irrelevant, uncertain | Xác định có liên quan brand hay không |
+| Contact spam score | 0-100 | Đánh giá contact/content có dấu hiệu spam, bot hoặc noise |
+| Contact influence score | 0-100 | Ước lượng ảnh hưởng của contact dựa trên tương tác và tín hiệu có sẵn |
+| Contact brand state | positive, neutral, negative, mixed, unknown | Trạng thái tổng hợp của contact đối với brand |
+| Contact priority score | 0-100 | Mức ưu tiên xử lý sau khi xét sentiment history, influence, spam và recency |
 
 ### 7.4 Admin kiểm duyệt nhãn
 
@@ -402,6 +417,45 @@ Khi request được duyệt:
 - Nhãn active được cập nhật.
 - Dashboard và report dùng nhãn mới nhất đã được duyệt.
 - Lịch sử thay đổi được ghi lại.
+
+### 7.6 Contact Intelligence
+
+Contact Intelligence là năng lực tổng hợp nhiều post/comment của cùng một contact đối với một brand để đánh giá bối cảnh và mức ưu tiên xử lý.
+
+Trong Sprint 2, hệ thống ưu tiên gom contact trong cùng một nền tảng trước. Không bắt buộc gom danh tính xuyên nền tảng nếu không có định danh đáng tin cậy.
+
+Luồng xử lý:
+
+```text
+Published hoặc pre-publish mention
+-> xác định contact trong phạm vi platform và brand
+-> gom các post/comment liên quan của contact đối với brand
+-> tính sentiment distribution và topic distribution
+-> tính influence score từ lượt like/comment/share/reply/view/follower nếu có
+-> tính spam score ở cả content-level và contact-level
+-> tính contact priority score
+-> cập nhật crisis queue, lead queue và report theo quyền
+```
+
+Quy tắc nghiệp vụ:
+
+- Nếu một contact có nhiều post/comment tiêu cực về brand trong thời gian ngắn, hệ thống tăng mức ưu tiên xử lý.
+- Nếu contact có influence cao, mức ưu tiên tăng mạnh hơn.
+- Nếu contact có spam score cao, hệ thống không được boost priority như contact thật.
+- Nếu contact vừa có lead intent vừa có sentiment tiêu cực, hệ thống phải giữ ngữ cảnh để tránh nhầm lead với khủng hoảng.
+- Brand users chỉ xem contact profile trong phạm vi brand của mình.
+
+Ví dụ:
+
+```text
+Contact A có 8 post/comment về Brand X trong 7 ngày
+-> 6 nội dung negative
+-> tổng tương tác cao
+-> spam score thấp
+-> contact_brand_state = negative
+-> contact_priority_score tăng
+-> các crisis item liên quan được ưu tiên cao hơn trong queue
+```
 
 ---
 
@@ -556,6 +610,7 @@ Admin cần thấy:
 - Phân bố AI confidence.
 - Trạng thái crawler.
 - Số record bị loại do spam, trùng lặp hoặc lỗi dữ liệu.
+- Số contact/content nghi spam cần kiểm tra trong pipeline.
 - Tài khoản Quản lý thương hiệu chờ phê duyệt.
 - Lịch sử chỉnh nhãn gần đây của Admin.
 
@@ -579,6 +634,8 @@ Quản lý thương hiệu cần thấy:
 - Tỷ lệ sentiment tích cực, trung tính, tiêu cực.
 - Xu hướng tiêu cực theo thời gian.
 - Chủ đề tiêu cực nổi bật.
+- Contact rủi ro cao: nhiều nội dung tiêu cực, ảnh hưởng cao, spam score thấp.
+- Contact có ảnh hưởng cao đang chuyển trạng thái tiêu cực.
 - Chủ đề tích cực nổi bật.
 - Request sửa nhãn đang chờ duyệt.
 - Trạng thái xử lý khủng hoảng.
@@ -605,6 +662,7 @@ Nhân viên khủng hoảng cần thấy:
 - Task khủng hoảng được giao.
 - Mention tiêu cực mới.
 - Alert high/critical.
+- Contact có nhiều nội dung tiêu cực lặp lại hoặc influence cao.
 - Nguồn, thời gian, sentiment, topic, crisis level.
 - Gợi ý phản hồi nếu brand cho phép.
 - Nút gửi request sửa nhãn.
@@ -628,6 +686,7 @@ Nhân viên lead cần thấy:
 - Thời hạn xử lý lead.
 - Trạng thái lead.
 - Tín hiệu intent.
+- Lịch sử contact-brand nếu contact từng có nhiều tương tác liên quan đến brand.
 - Ngữ cảnh mention tạo ra lead.
 - Lead được giao cho mình.
 
@@ -648,6 +707,8 @@ Báo cáo cho Quản lý thương hiệu:
 - Sentiment trend.
 - Chủ đề tích cực nổi bật.
 - Chủ đề tiêu cực nổi bật.
+- Top risky contacts và influential negative contacts.
+- Tóm tắt contact nghi spam/noise.
 - Tóm tắt khủng hoảng.
 - Tóm tắt lead.
 - Lịch sử request sửa nhãn.
@@ -793,15 +854,70 @@ Trường chính:
 
 - `id`
 - `brand_id`
+- `contact_id`
 - `source_platform`
 - `source_url`
 - `content`
 - `author_display_name`
+- `engagement_like_count`
+- `engagement_comment_count`
+- `engagement_share_count`
+- `engagement_view_count`
 - `published_at`
 - `crawled_at`
 - `data_state`
 
-### 11.6 Label
+### 11.6 Contact
+
+Đại diện một người, tài khoản hoặc tác giả được nhận diện trong phạm vi một nền tảng.
+
+Trường chính:
+
+- `id`
+- `platform`
+- `platform_contact_id`
+- `display_name`
+- `profile_url`
+- `identity_confidence`
+- `created_at`
+- `updated_at`
+
+### 11.7 Contact Brand Profile
+
+Trạng thái tổng hợp của một contact đối với một brand.
+
+Trường chính:
+
+- `id`
+- `contact_id`
+- `brand_id`
+- `mention_count`
+- `positive_count`
+- `neutral_count`
+- `negative_count`
+- `negative_ratio`
+- `top_topics`
+- `influence_score`
+- `spam_score`
+- `contact_brand_state`
+- `priority_score`
+- `last_seen_at`
+
+### 11.8 Spam Assessment
+
+Đánh giá spam/bot/noise ở cấp content hoặc contact.
+
+Trường chính:
+
+- `id`
+- `entity_type`
+- `entity_id`
+- `spam_score`
+- `spam_reasons`
+- `assessed_by`
+- `assessed_at`
+
+### 11.9 Label
 
 Trường chính:
 
@@ -817,7 +933,7 @@ Trường chính:
 - `reviewed_by`
 - `reviewed_at`
 
-### 11.7 Label Correction Request
+### 11.10 Label Correction Request
 
 Trường chính:
 
@@ -833,7 +949,7 @@ Trường chính:
 - `reviewed_at`
 - `created_at`
 
-### 11.8 Alert
+### 11.11 Alert
 
 Trường chính:
 
@@ -847,7 +963,7 @@ Trường chính:
 - `created_at`
 - `resolved_at`
 
-### 11.9 Lead
+### 11.12 Lead
 
 Trường chính:
 
@@ -862,7 +978,7 @@ Trường chính:
 - `handled_at`
 - `notes`
 
-### 11.10 Response Template
+### 11.13 Response Template
 
 Trường chính:
 
@@ -877,7 +993,7 @@ Trường chính:
 - `created_by`
 - `updated_at`
 
-### 11.11 Audit Log
+### 11.14 Audit Log
 
 Trường chính:
 
@@ -964,7 +1080,21 @@ Trường chính:
 | FR-RESP-04 | Nội dung khủng hoảng high/critical bắt buộc qua manual review trước khi phản hồi. | P0 |
 | FR-RESP-05 | Mọi quyết định auto-response phải được ghi log. | P1 |
 
-### 12.8 Báo cáo
+### 12.8 Contact Intelligence
+
+| ID | Yêu cầu | Ưu tiên |
+|---|---|---|
+| FR-CONTACT-01 | Hệ thống gom nhóm các post/comment thuộc cùng một contact trong phạm vi cùng platform và brand. | P0 |
+| FR-CONTACT-02 | Hệ thống tổng hợp sentiment, topic, crisis và lead history của contact đối với brand. | P0 |
+| FR-CONTACT-03 | Hệ thống tính influence score dựa trên tín hiệu như like, comment, share, reply, view hoặc follower nếu có. | P0 |
+| FR-CONTACT-04 | Hệ thống đánh giá spam/bot/noise ở cấp content và contact. | P0 |
+| FR-CONTACT-05 | Nếu contact có nhiều nội dung tiêu cực, influence cao và spam score thấp, hệ thống tăng priority xử lý. | P0 |
+| FR-CONTACT-06 | Nếu contact có spam score cao, hệ thống không boost priority như contact thật. | P0 |
+| FR-CONTACT-07 | Nhân viên khủng hoảng xem được lịch sử contact-brand để hiểu bối cảnh xử lý. | P1 |
+| FR-CONTACT-08 | Quản lý thương hiệu xem được contact rủi ro cao hoặc có ảnh hưởng cao trong brand mình. | P1 |
+| FR-CONTACT-09 | Admin xem được contact/content nghi spam trong pipeline kiểm duyệt dữ liệu. | P1 |
+
+### 12.9 Báo cáo
 
 | ID | Yêu cầu | Ưu tiên |
 |---|---|---|
@@ -1023,6 +1153,16 @@ Trường chính:
 - Nội dung high/critical crisis yêu cầu manual review.
 - Hành động auto-response có thể audit.
 
+### 13.6 Contact Intelligence
+
+- Hệ thống gom được nhiều post/comment của cùng một contact trong cùng platform và brand.
+- Hệ thống hiển thị được lịch sử sentiment/topic của contact đối với brand.
+- Contact có nhiều nội dung tiêu cực, influence cao và spam score thấp được tăng priority trong crisis queue.
+- Contact hoặc content có spam score cao không được boost priority như contact thật.
+- Brand Manager xem được danh sách contact rủi ro cao trong brand mình.
+- Crisis Employee xem được bối cảnh contact-brand khi xử lý item tiêu cực.
+- Admin xem được tín hiệu spam/noise liên quan đến contact trong pipeline kiểm duyệt.
+
 ---
 
 ## 14. Definition of Done
@@ -1037,6 +1177,7 @@ Sprint 2 được coi là đạt yêu cầu khi:
 - Quyền của nhân viên khủng hoảng và nhân viên lead được tách rõ.
 - Luồng gán nhãn và request sửa nhãn được implement hoặc stub rõ theo acceptance criteria.
 - Dashboard/report có nội dung theo vai trò.
+- Contact Intelligence có thể tổng hợp lịch sử contact-brand, tính influence/spam/priority ở mức tối thiểu.
 - Có onboarding hoặc checklist đăng nhập lần đầu theo vai trò.
 - Auto-response có template và cấu hình bật/tắt.
 - Các workflow quan trọng có audit log hoặc event sẵn sàng cho audit.
@@ -1053,6 +1194,10 @@ Sprint 2 được coi là đạt yêu cầu khi:
 | OQ-03 | Nhân viên lead có được request sửa lead intent không? | Nên cân nhắc ở sprint sau. |
 | OQ-04 | Quản lý thương hiệu có được override nhãn sau Admin review không? | Có, trong phạm vi brand-facing label và phải có audit. |
 | OQ-05 | Auto-response có được tự đăng công khai không qua duyệt không? | Chỉ với tình huống rủi ro thấp đã được bật rõ. |
+| OQ-06 | Contact được định danh bằng platform ID, username hay display name? | Sprint 2 ưu tiên platform ID/URL; display name chỉ là tín hiệu phụ. |
+| OQ-07 | Có gom contact xuyên nền tảng trong Sprint 2 không? | Không mặc định; chỉ gom trong cùng platform để tránh sai định danh. |
+| OQ-08 | Influence score dùng tín hiệu nào là bắt buộc? | Like/comment/share/reply nếu có; follower/view là optional theo nguồn. |
+| OQ-09 | Spam detection áp dụng ở content-level hay contact-level? | Cả hai, nhưng ưu tiên content-level trước rồi tổng hợp lên contact-level. |
 
 ---
 
@@ -1060,4 +1205,5 @@ Sprint 2 được coi là đạt yêu cầu khi:
 
 | Phiên bản | Ngày | Thay đổi |
 |---|---|---|
+| 2.1 | 2026-07-02 | Bổ sung Contact Intelligence: gom lịch sử post/comment theo contact-brand, influence score, spam assessment và priority boost. |
 | 2.0 | 2026-07-02 | Viết lại SPEC cho Sprint 2, tập trung vào phân quyền nghiệp vụ, luồng gán nhãn, onboarding, báo cáo theo vai trò và auto-response. |
