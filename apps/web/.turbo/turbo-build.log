@@ -9,52 +9,43 @@
  ✓ Compiled successfully
    Linting and checking validity of types ...
    Collecting page data ...
-   Generating static pages (0/19) ...
-   Generating static pages (4/19) 
-   Generating static pages (9/19) 
-   Generating static pages (14/19) 
- ✓ Generating static pages (19/19)
+   Generating static pages (0/18) ...
+   Generating static pages (4/18) 
+   Generating static pages (8/18) 
+   Generating static pages (13/18) 
+ ✓ Generating static pages (18/18)
    Finalizing page optimization ...
    Collecting build traces ...
 
 Route (app)                              Size     First Load JS
-┌ ○ /                                    9.44 kB         301 kB
+┌ ○ /                                    9.43 kB         301 kB
 ├ ○ /_not-found                          876 B          88.5 kB
-├ ○ /alerts                              9.73 kB         364 kB
+├ ○ /alerts                              9.73 kB         363 kB
 ├ ƒ /api/auth/reset-password             0 B                0 B
 ├ ○ /api/debug-firestore                 0 B                0 B
 ├ ○ /api/reports/latest                  0 B                0 B
 ├ ○ /dashboard                           5.21 kB         359 kB
 ├ ○ /forgot-password                     4.94 kB        92.5 kB
-├ ○ /leads                               7.09 kB         293 kB
+├ ○ /leads                               9.75 kB         295 kB
 ├ ○ /login                               4.11 kB         292 kB
-├ ○ /mentions                            6.87 kB         301 kB
-├ ƒ /mentions/[id]                       4.52 kB         299 kB
+├ ○ /mentions                            7.58 kB         302 kB
+├ ƒ /mentions/[id]                       8.13 kB         302 kB
 ├ ○ /nganh                               6.41 kB         298 kB
-├ ○ /profile                             7.24 kB         299 kB
+├ ○ /profile                             7.23 kB         299 kB
 ├ ○ /register                            3.16 kB         291 kB
-├ ○ /reports                             157 kB          437 kB
-├ ○ /settings/brand                      3.01 kB         108 kB
+├ ○ /reports                             157 kB          436 kB
 └ ○ /ve-chung-toi                        13.4 kB         305 kB
 + First Load JS shared by all            87.6 kB
-  ├ chunks/1dd3208c-1abe0379f54bbae7.js  53.6 kB
-  ├ chunks/528-94bbb73287828cdd.js       31.9 kB
+  ├ chunks/1dd3208c-4d948558e163dd97.js  53.6 kB
+  ├ chunks/528-7e11c70fd131a541.js       31.9 kB
   └ other shared chunks (total)          2.1 kB
 
 
 ○  (Static)   prerendered as static content
 ƒ  (Dynamic)  server-rendered on demand
 
-> Build error occurred
-Error: Failed to collect page data for /
-    at E:\Netspace\InsightFlow\node_modules\next\dist\build\utils.js:1269:15
-    at process.processTicksAndRejections (node:internal/process/task_queues:104:5) {
-  type: 'Error'
-}
-npm error Lifecycle script `build` failed with error:
-npm error code 1
-npm error path E:\Netspace\InsightFlow\apps\web
-npm error workspace @insightflow/web@1.0.0
-npm error location E:\Netspace\InsightFlow\apps\web
-npm error command failed
-npm error command C:\WINDOWS\system32\cmd.exe /d /s /c next build
+npm notice
+npm notice New minor version of npm available! 11.13.0 -> 11.18.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.18.0
+npm notice To update run: npm install -g npm@11.18.0
+npm notice
