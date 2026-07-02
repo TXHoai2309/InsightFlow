@@ -4,11 +4,11 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { getIdTokenResult, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { useTheme } from "@/contexts/ThemeContext";
-import { isValidRole } from "@/lib/rbac";
+import { buildUserRoleProfile, isValidRole } from "@/lib/rbac";
 
 export default function LoginForm() {
   const router = useRouter();
@@ -27,12 +27,38 @@ export default function LoginForm() {
     setError("");
     try {
       const credential = await signInWithEmailAndPassword(auth, email, password);
-      const userSnapshot = await getDoc(doc(db, "users", credential.user.uid));
-      const userData = userSnapshot.exists() ? userSnapshot.data() : null;
+      let userData: Record<string, any> | null = null;
+
+      try {
+        const userSnapshot = await getDoc(doc(db, "users", credential.user.uid));
+        userData = userSnapshot.exists() ? userSnapshot.data() : null;
+      } catch (profileError) {
+        console.warn("Could not read Firestore user profile during login. Falling back to token claims.", profileError);
+      }
 
       if (!userData || !isValidRole(userData.role)) {
-        await signOut(auth);
-        setError("Tai khoan nay chua duoc cap quyen truy cap InsightFlow. Vui long dung tai khoan do Admin/Quan ly thuong hieu cap.");
+        const tokenResult = await getIdTokenResult(credential.user, true);
+        const claims = tokenResult.claims;
+
+        if (!isValidRole(claims.role)) {
+          await signOut(auth);
+          setError("Tai khoan nay chua duoc cap quyen truy cap InsightFlow. Vui long dung tai khoan do Admin/Quan ly thuong hieu cap.");
+          return;
+        }
+
+        const profileFromClaims = buildUserRoleProfile({
+          uid: credential.user.uid,
+          email: credential.user.email,
+          displayName: credential.user.displayName,
+          photoURL: credential.user.photoURL,
+          storedRole: claims.role,
+          storedBrandId: claims.brandId,
+          storedBrandName: claims.brandName,
+          storedPermissions: claims.permissions,
+          storedDefaultRoute: claims.defaultRoute,
+        });
+
+        router.push(profileFromClaims.defaultRoute);
         return;
       }
 

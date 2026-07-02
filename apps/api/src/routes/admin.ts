@@ -99,6 +99,9 @@ export default async function adminRoutes(fastify: FastifyInstance, options: Fas
       await authAdmin.setCustomUserClaims(userRecord.uid, {
         role: "brand_manager",
         brandId,
+        brandName,
+        permissions: brandManagerPermissions,
+        defaultRoute: "/dashboard",
       });
 
       const accountPayload = {

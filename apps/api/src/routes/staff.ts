@@ -185,6 +185,9 @@ export default async function staffRoutes(fastify: FastifyInstance, options: Fas
       await authAdmin.setCustomUserClaims(userRecord.uid, {
         role: staffRole,
         brandId: manager.brandId,
+        brandName: manager.brandName,
+        permissions,
+        defaultRoute,
       });
 
       const accountPayload = {

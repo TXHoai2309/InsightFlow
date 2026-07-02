@@ -1,9 +1,9 @@
 "use client";
 import { useEffect } from "react";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import { getIdTokenResult, onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
-import { buildUserRoleProfile, isValidRole } from "@/lib/rbac";
+import { buildUserRoleProfile, isValidRole, type UserRoleProfile } from "@/lib/rbac";
 import { useAuthStore } from "@/stores/auth.store";
 
 let unsubscribeAuth: (() => void) | null = null;
@@ -13,6 +13,74 @@ function stripUndefinedFields<T extends Record<string, unknown>>(data: T) {
   return Object.fromEntries(
     Object.entries(data).filter(([, value]) => value !== undefined),
   ) as Partial<T>;
+}
+
+async function resolveProfileFromClaims(firebaseUser: NonNullable<typeof auth.currentUser>) {
+  const tokenResult = await getIdTokenResult(firebaseUser, true);
+  const claims = tokenResult.claims;
+
+  if (!isValidRole(claims.role)) {
+    throw new Error("User is not provisioned with a valid InsightFlow role.");
+  }
+
+  return buildUserRoleProfile({
+    uid: firebaseUser.uid,
+    email: firebaseUser.email,
+    displayName: firebaseUser.displayName,
+    photoURL: firebaseUser.photoURL,
+    storedRole: claims.role,
+    storedBrandId: claims.brandId,
+    storedBrandName: claims.brandName,
+    storedPermissions: claims.permissions,
+    storedDefaultRoute: claims.defaultRoute,
+  });
+}
+
+async function resolveUserProfile(firebaseUser: NonNullable<typeof auth.currentUser>) {
+  const userRef = doc(db, "users", firebaseUser.uid);
+  let storedData: Record<string, any> | null = null;
+
+  try {
+    const snapshot = await getDoc(userRef);
+    storedData = snapshot.exists() ? snapshot.data() : null;
+  } catch (error) {
+    console.warn("Could not read Firestore user profile. Falling back to token claims.", error);
+  }
+
+  let resolvedProfile: UserRoleProfile;
+
+  if (storedData && isValidRole(storedData.role)) {
+    resolvedProfile = buildUserRoleProfile({
+      uid: firebaseUser.uid,
+      email: firebaseUser.email,
+      displayName: firebaseUser.displayName,
+      photoURL: firebaseUser.photoURL,
+      storedRole: storedData.role,
+      storedBrandId: storedData.brandId,
+      storedBrandName: storedData.brandName,
+      storedPermissions: storedData.permissions,
+      storedDefaultRoute: storedData.defaultRoute,
+    });
+  } else {
+    resolvedProfile = await resolveProfileFromClaims(firebaseUser);
+  }
+
+  try {
+    await setDoc(
+      userRef,
+      stripUndefinedFields({
+        ...resolvedProfile,
+        lastLogin: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdAt: storedData?.createdAt || new Date().toISOString(),
+      }),
+      { merge: true },
+    );
+  } catch (error) {
+    console.warn("Could not update Firestore user profile after login.", error);
+  }
+
+  return resolvedProfile;
 }
 
 function startAuthListener() {
@@ -37,40 +105,7 @@ function startAuthListener() {
     }
 
     try {
-      const userRef = doc(db, "users", firebaseUser.uid);
-      const snapshot = await getDoc(userRef);
-      const storedData = snapshot.exists() ? snapshot.data() : null;
-
-      if (!storedData || !isValidRole(storedData.role)) {
-        await signOut(auth);
-        setUser(null);
-        setProfile(null);
-        return;
-      }
-
-      const resolvedProfile = buildUserRoleProfile({
-        uid: firebaseUser.uid,
-        email: firebaseUser.email,
-        displayName: firebaseUser.displayName,
-        photoURL: firebaseUser.photoURL,
-        storedRole: storedData.role,
-        storedBrandId: storedData.brandId,
-        storedBrandName: storedData.brandName,
-        storedPermissions: storedData.permissions,
-        storedDefaultRoute: storedData.defaultRoute,
-      });
-
-      await setDoc(
-        userRef,
-        stripUndefinedFields({
-          ...resolvedProfile,
-          lastLogin: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          createdAt: storedData.createdAt || new Date().toISOString(),
-        }),
-        { merge: true },
-      );
-
+      const resolvedProfile = await resolveUserProfile(firebaseUser);
       setProfile(resolvedProfile);
     } catch (error) {
       console.error("Failed to resolve user role:", error);

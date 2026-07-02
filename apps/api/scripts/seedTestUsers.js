@@ -101,6 +101,14 @@ async function upsertUser(userConfig) {
     { merge: true },
   );
 
+  await auth.setCustomUserClaims(firebaseUser.uid, {
+    role: userConfig.role,
+    brandId: userConfig.brandId || null,
+    brandName: userConfig.brandName || null,
+    permissions: userConfig.permissions,
+    defaultRoute: userConfig.defaultRoute,
+  });
+
   return { ...userConfig, uid: firebaseUser.uid };
 }
 
