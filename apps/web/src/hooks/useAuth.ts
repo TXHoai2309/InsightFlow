@@ -9,6 +9,12 @@ import { useAuthStore } from "@/stores/auth.store";
 let unsubscribeAuth: (() => void) | null = null;
 let authSubscriberCount = 0;
 
+function stripUndefinedFields<T extends Record<string, unknown>>(data: T) {
+  return Object.fromEntries(
+    Object.entries(data).filter(([, value]) => value !== undefined),
+  ) as Partial<T>;
+}
+
 function startAuthListener() {
   if (unsubscribeAuth) return;
 
@@ -56,12 +62,12 @@ function startAuthListener() {
 
       await setDoc(
         userRef,
-        {
+        stripUndefinedFields({
           ...resolvedProfile,
           lastLogin: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           createdAt: storedData.createdAt || new Date().toISOString(),
-        },
+        }),
         { merge: true },
       );
 
