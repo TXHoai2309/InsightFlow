@@ -8,16 +8,19 @@ import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useTranslation } from "react-i18next";
+import { getDefaultRouteForRole, ROLE_CONFIG } from "@/lib/rbac";
 
 export default function TopNavBar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const { user, loading } = useAuth();
+  const { user, profile, role, loading } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { t } = useTranslation();
   const router = useRouter();
   const pathname = usePathname();
   const isDark = theme === "dark";
+  const appRoute = profile?.defaultRoute || getDefaultRouteForRole(role);
+  const roleLabel = role ? ROLE_CONFIG[role].label : t("header.guest");
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -146,7 +149,7 @@ export default function TopNavBar() {
             {!loading && user && (
               <div className="hidden md:flex items-center gap-3">
                 <Link
-                  href="/profile"
+                  href={appRoute}
                   className="flex items-center gap-[12px] group"
                 >
                   <div className="w-[38px] h-[38px] rounded-full flex items-center justify-center text-white text-[14px] font-bold group-hover:scale-105 transition-transform shadow-sm shrink-0" style={{ background: "linear-gradient(135deg, #6D4CFF, #9B8FF8)" }}>
@@ -161,7 +164,7 @@ export default function TopNavBar() {
                     <span className="text-[14px] font-semibold text-[var(--color-text-primary)] group-hover:text-[var(--color-brand)] transition-colors">
                       {user.displayName || user.email}
                     </span>
-                    <span className="text-[12px] text-[var(--color-text-muted)]">{t("header.administrator")}</span>
+                    <span className="text-[12px] text-[var(--color-text-muted)]">{roleLabel}</span>
                   </div>
                 </Link>
               </div>
@@ -177,10 +180,10 @@ export default function TopNavBar() {
                   {t("auth.login.loginBtn")}
                 </Link>
                 <Link
-                  href="/dashboard"
+                  href="/login"
                   className="text-[14px] font-semibold text-white px-5 py-2 rounded-[10px] transition-all bg-[var(--color-brand)] hover:bg-[#5B3FE8] hover:shadow-lg hover:-translate-y-[1px]"
                 >
-                  {t("home.hero.freeTrialBtn")}
+                  {t("auth.login.loginBtn")}
                 </Link>
               </div>
             )}
@@ -277,7 +280,7 @@ export default function TopNavBar() {
             <div className="mt-4 border-t border-[var(--color-border)] px-[24px] py-[16px]">
               <p className="text-[14px] font-medium text-[var(--color-text-muted)] mb-3">{t("nav.account")}</p>
               <Link
-                href="/profile"
+                href={appRoute}
                 onClick={() => setMobileOpen(false)}
                 className="flex items-center gap-3 mb-4"
               >

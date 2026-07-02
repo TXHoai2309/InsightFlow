@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import { useTranslation } from "react-i18next";
+import { getDefaultRouteForRole } from "@/lib/rbac";
 
 const particles = [
   { top: "18%", left: "7%", size: 4, dur: "4s", delay: "0s", opacity: 0.12 },
@@ -15,8 +16,9 @@ const particles = [
 ];
 
 export default function FinalCTASection() {
-  const { user, loading } = useAuth();
+  const { user, profile, role, loading } = useAuth();
   const { t } = useTranslation();
+  const appRoute = profile?.defaultRoute || getDefaultRouteForRole(role);
 
   return (
     <section className="px-6 md:px-10 py-12">
@@ -121,9 +123,9 @@ export default function FinalCTASection() {
           {/* Buttons */}
           <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
             {!loading && user ? (
-              <Link href="/dashboard" className="cta-btn-primary justify-center">{t("home.cta.dashboardBtn")}</Link>
+              <Link href={appRoute} className="cta-btn-primary justify-center">{t("home.cta.dashboardBtn")}</Link>
             ) : (
-              <Link href="/dashboard" className="cta-btn-primary justify-center">{t("home.cta.tryDashboardBtn")}</Link>
+              <Link href="/login" className="cta-btn-primary justify-center">{t("home.cta.tryDashboardBtn")}</Link>
             )}
             <button className="cta-btn-ghost" onClick={() => alert("Watch Demo triggered")}>{t("home.cta.demoBtn")}</button>
           </div>

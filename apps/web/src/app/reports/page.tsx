@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { generateDailyReportPDF, generateCustomReportPDF } from "@/lib/pdfExport";
 import { collection, getDocs } from "firebase/firestore";
 import { secondDb } from "@/lib/firebase";
+import { mapSourceToPlatform, PLATFORM_META } from "@/lib/services/dashboard";
 
 
 /**
@@ -17,6 +18,7 @@ interface Mention {
   brand: string;
   source: string;
   content: string;
+  content_type: "post" | "comment" | "reply";
   sentiment: string;
   topic: string;
   posted_at: string;
@@ -203,6 +205,7 @@ function ArchivedReportDetailModal({
   onDelete: () => void;
 }) {
   const { t, i18n } = useTranslation();
+  const [archiveMentionsPage, setArchiveMentionsPage] = useState(1);
   const stats = report.stats || {
     total: report.mentionsCount,
     positive: 0,
@@ -344,65 +347,22 @@ function ArchivedReportDetailModal({
             </p>
           </div>
 
-          {/* Sample Mentions List (Up to 15 rows) */}
+          {/* Sample Mentions List */}
           {mentions.length > 0 && (
             <div className="space-y-2">
               <h4 className="text-xs font-bold text-on-surface">
-                Đề cập tiêu biểu ({Math.min(mentions.length, 15)} bài viết)
+                Đề cập tiêu biểu ({mentions.length} bài viết)
               </h4>
-              <div className="border border-outline-variant rounded-xl overflow-hidden text-xs">
-                <table className="w-full text-left">
-                  <thead>
-                    <tr className="bg-surface-container-low border-b border-outline-variant">
-                      <th className="px-3 py-2 font-bold text-on-surface-variant w-16">
-                        Nguồn
-                      </th>
-                      <th className="px-3 py-2 font-bold text-on-surface-variant">
-                        Nội dung
-                      </th>
-                      <th className="px-3 py-2 font-bold text-on-surface-variant w-20">
-                        Sắc thái
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[var(--color-border)]/40">
-                    {mentions.slice(0, 15).map((m, idx) => (
-                      <tr
-                        key={idx}
-                        className="hover:bg-surface-container-low/30 transition-colors"
-                      >
-                        <td className="px-3 py-2 font-bold capitalize text-primary">
-                          {m.source}
-                        </td>
-                        <td
-                          className="px-3 py-2 text-on-surface-variant truncate max-w-[200px]"
-                          title={m.content}
-                        >
-                          {m.content}
-                        </td>
-                        <td className="px-3 py-2">
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${
-                              m.sentiment.toLowerCase().includes("pos")
-                                ? "text-green-600 bg-green-50 border-green-200"
-                                : m.sentiment.toLowerCase().includes("neg")
-                                  ? "text-red-600 bg-red-50 border-red-200"
-                                  : "text-gray-600 bg-gray-50 border-gray-200"
-                            }`}
-                          >
-                            {m.sentiment === "positive" || m.sentiment === "pos"
-                              ? "Tích cực"
-                              : m.sentiment === "negative" ||
-                                  m.sentiment === "neg"
-                                ? "Tiêu cực"
-                                : "Trung lập"}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <ReportMentionsTable
+                mentions={mentions.map((m, idx) => ({
+                  ...m,
+                  id: m.id || `archived-${idx}`,
+                  content_type: m.content_type || "post",
+                }))}
+                currentPage={archiveMentionsPage}
+                itemsPerPage={10}
+                onPageChange={setArchiveMentionsPage}
+              />
             </div>
           )}
         </div>
@@ -469,20 +429,291 @@ function formatBrandName(brand: string): string {
 }
 
 function normalizeSourceName(source: string): string {
-  const normalized = String(source || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim();
+  return mapSourceToPlatform(source);
+}
 
-  if (normalized.includes("facebook")) return "facebook";
-  if (normalized.includes("tiktok")) return "tiktok";
-  if (normalized.includes("youtube")) return "youtube";
-  if (normalized.includes("thread")) return "thread";
-  if (normalized.includes("google")) return "google_maps";
-  if (normalized.includes("befood") || normalized === "be") return "be";
-  if (normalized.includes("bao") || normalized.includes("news")) return "news";
-  return normalized || "news";
+function mapContentType(raw: unknown): Mention["content_type"] {
+  const type = String(raw || "post").toLowerCase().trim();
+  if (type === "comment") return "comment";
+  if (type === "reply") return "reply";
+  return "post";
+}
+
+function parsePostedAtRaw(field: unknown): string {
+  if (!field) return "";
+  if (typeof (field as { toDate?: () => Date }).toDate === "function") {
+    return (field as { toDate: () => Date }).toDate().toISOString();
+  }
+  if (field instanceof Date) return field.toISOString();
+  const s = String(field).trim();
+  if (!s) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return `${s}T00:00:00Z`;
+  if (/^\d{4}-\d{2}-\d{2}T/.test(s) && (s.includes("+") || s.endsWith("Z"))) {
+    return s;
+  }
+  const dmyRegex = /(\d{1,2})[/-](\d{1,2})[/-](\d{4})/;
+  const match = s.match(dmyRegex);
+  if (match) {
+    const day = match[1].padStart(2, "0");
+    const month = match[2].padStart(2, "0");
+    const year = match[3];
+    const timeRegex = /(\d{1,2}):(\d{2})/;
+    const timeMatch = s.match(timeRegex);
+    const hour = timeMatch ? timeMatch[1].padStart(2, "0") : "00";
+    const minute = timeMatch ? timeMatch[2].padStart(2, "0") : "00";
+    return `${year}-${month}-${day}T${hour}:${minute}:00Z`;
+  }
+  if (/^\d{4}-\d{2}-\d{2}T/.test(s)) return s.endsWith("Z") ? s : `${s}Z`;
+  const parsed = new Date(s);
+  return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString();
+}
+
+function parsePostedAtDate(value: string): Date | null {
+  if (!value) return null;
+  const match = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (match) {
+    const d = new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1]));
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function formatPlatformLabel(source: string): string {
+  const key = source.toLowerCase() as keyof typeof PLATFORM_META;
+  return PLATFORM_META[key]?.label || source;
+}
+
+function formatContentTypeLabel(type: Mention["content_type"]): string {
+  const labels: Record<Mention["content_type"], string> = {
+    post: "Post",
+    comment: "Comment",
+    reply: "Reply",
+  };
+  return labels[type] || "Post";
+}
+
+function formatSentimentLabel(sentiment: string): string {
+  const s = sentiment.toLowerCase();
+  if (s.includes("pos")) return "Tích cực";
+  if (s.includes("neg")) return "Tiêu cực";
+  return "Trung lập";
+}
+
+function formatReportTime(value: string) {
+  const date = parsePostedAtDate(value);
+  if (!date) return { timeStr: "Không rõ", relativeTime: "" };
+  const diffMs = Date.now() - date.getTime();
+  const diffMinutes = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const timeStr = date.toLocaleString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+  let relativeTime = "Vừa xong";
+  if (diffDays >= 1) relativeTime = `${diffDays} ngày trước`;
+  else if (diffHours >= 1) relativeTime = `${diffHours} giờ trước`;
+  else if (diffMinutes >= 1) relativeTime = `${diffMinutes} phút trước`;
+  return { timeStr, relativeTime };
+}
+
+function ReportPagination({
+  currentPage,
+  totalPages,
+  totalItems,
+  itemsPerPage,
+  onPageChange,
+  itemLabel = "báo cáo",
+}: {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  itemsPerPage: number;
+  onPageChange: (page: number) => void;
+  itemLabel?: string;
+}) {
+  if (totalItems === 0) return null;
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
+
+  return (
+    <div
+      className="px-4 py-4 flex flex-col sm:flex-row items-center justify-between gap-3"
+      style={{
+        backgroundColor: "var(--color-bg-surface-raised)",
+        borderTop: "1px solid var(--color-border)",
+      }}
+    >
+      <span className="text-xs text-[var(--color-text-muted)] font-medium">
+        Hiển thị {startIndex + 1}–{endIndex} trên tổng số {totalItems} {itemLabel}
+      </span>
+      <div className="flex gap-2">
+        <button
+          onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+          disabled={currentPage === 1}
+          className={`w-8 h-8 flex items-center justify-center rounded border transition-colors ${
+            currentPage === 1
+              ? "text-[var(--color-text-disabled)] cursor-not-allowed border-[var(--color-border)]"
+              : "text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-high)] border-[var(--color-border)]"
+          }`}
+        >
+          <span className="material-symbols-outlined text-lg">chevron_left</span>
+        </button>
+        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+          let startPage = Math.max(1, currentPage - 2);
+          if (startPage + 4 > totalPages) startPage = Math.max(1, totalPages - 4);
+          const pageNum = startPage + i;
+          if (pageNum > totalPages) return null;
+          return (
+            <button
+              key={pageNum}
+              onClick={() => onPageChange(pageNum)}
+              className={`w-8 h-8 flex items-center justify-center rounded font-medium text-sm transition-colors ${
+                currentPage === pageNum
+                  ? "bg-[var(--color-brand)] text-white"
+                  : "border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-high)]"
+              }`}
+            >
+              {pageNum}
+            </button>
+          );
+        })}
+        <button
+          onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+          disabled={currentPage === totalPages}
+          className={`w-8 h-8 flex items-center justify-center rounded border transition-colors ${
+            currentPage === totalPages
+              ? "text-[var(--color-text-disabled)] cursor-not-allowed border-[var(--color-border)]"
+              : "text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-high)] border-[var(--color-border)]"
+          }`}
+        >
+          <span className="material-symbols-outlined text-lg">chevron_right</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ReportMentionsTable({
+  mentions,
+  currentPage,
+  itemsPerPage,
+  onPageChange,
+}: {
+  mentions: Mention[];
+  currentPage: number;
+  itemsPerPage: number;
+  onPageChange: (page: number) => void;
+}) {
+  const totalPages = Math.max(1, Math.ceil(mentions.length / itemsPerPage));
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const pageMentions = mentions.slice(startIndex, startIndex + itemsPerPage);
+
+  return (
+    <div
+      className="rounded-2xl shadow-sm overflow-hidden border border-[var(--color-border)]"
+      style={{ backgroundColor: "var(--color-bg-surface)" }}
+    >
+      <div className="md:hidden divide-y divide-[var(--color-border)]">
+        {pageMentions.map((m) => {
+          const { timeStr, relativeTime } = formatReportTime(m.posted_at);
+          return (
+            <div key={m.id} className="p-4 space-y-2 text-xs">
+              <div className="flex justify-between items-center gap-2">
+                <span className="font-bold text-[var(--color-brand)]">{formatPlatformLabel(m.source)}</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[var(--color-brand-subtle)] text-[var(--color-brand)]">
+                  {formatContentTypeLabel(m.content_type)}
+                </span>
+              </div>
+              <p className="text-[var(--color-text-primary)]">{m.content}</p>
+              <div className="flex flex-wrap gap-2">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[var(--color-info-subtle)] text-[var(--color-info)]">
+                  {formatSentimentLabel(m.sentiment)}
+                </span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-[var(--color-bg-surface-raised)] text-[var(--color-text-muted)]">
+                  {m.topic}
+                </span>
+              </div>
+              <div className="text-[10px] text-[var(--color-text-muted)]">
+                <div>{timeStr}</div>
+                {relativeTime && <div>{relativeTime}</div>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="hidden md:block overflow-x-auto">
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr style={{ backgroundColor: "var(--color-bg-surface-raised)", borderBottom: "1px solid var(--color-border)" }}>
+              <th className="px-4 py-4 font-semibold uppercase tracking-wider text-center w-28">Nền tảng</th>
+              <th className="px-4 py-4 font-semibold uppercase tracking-wider text-center">Nội dung liên quan</th>
+              <th className="px-4 py-4 font-semibold uppercase tracking-wider text-center w-28">Phân loại</th>
+              <th className="px-4 py-4 font-semibold uppercase tracking-wider text-center w-28">Sắc thái</th>
+              <th className="px-4 py-4 font-semibold uppercase tracking-wider text-center w-28">Chủ đề</th>
+              <th className="px-4 py-4 font-semibold uppercase tracking-wider text-center w-40">Thời gian</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--color-border)]">
+            {pageMentions.map((m) => {
+              const { timeStr, relativeTime } = formatReportTime(m.posted_at);
+              const sentimentClass =
+                m.sentiment.toLowerCase().includes("pos")
+                  ? "bg-[var(--color-success-subtle)] text-[var(--color-success)]"
+                  : m.sentiment.toLowerCase().includes("neg")
+                    ? "bg-[var(--color-error-subtle)] text-[var(--color-error)]"
+                    : "bg-[var(--color-info-subtle)] text-[var(--color-info)]";
+              return (
+                <tr key={m.id} className="hover:bg-[var(--color-bg-surface-raised)] transition-colors">
+                  <td className="px-4 py-4 text-center font-medium text-[var(--color-text-primary)]">
+                    {formatPlatformLabel(m.source)}
+                  </td>
+                  <td className="px-4 py-4 text-[var(--color-text-primary)] line-clamp-2">{m.content}</td>
+                  <td className="px-4 py-4 text-center">
+                    <span className="px-2 py-1 rounded-full text-xs font-bold bg-[var(--color-brand-subtle)] text-[var(--color-brand)]">
+                      {formatContentTypeLabel(m.content_type)}
+                    </span>
+                  </td>
+                  <td className="px-4 py-4 text-center">
+                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${sentimentClass}`}>
+                      {formatSentimentLabel(m.sentiment)}
+                    </span>
+                  </td>
+                  <td className="px-4 py-4 text-center">
+                    <span className="px-2 py-1 rounded text-xs font-bold uppercase bg-[var(--color-bg-surface-raised)] text-[var(--color-text-muted)]">
+                      {m.topic}
+                    </span>
+                  </td>
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    <div className="flex flex-col text-center">
+                      <span className="font-medium text-[var(--color-text-primary)] text-sm">{timeStr}</span>
+                      {relativeTime && (
+                        <span className="text-xs text-[var(--color-text-muted)]">{relativeTime}</span>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <ReportPagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        totalItems={mentions.length}
+        itemsPerPage={itemsPerPage}
+        onPageChange={onPageChange}
+        itemLabel="đề cập"
+      />
+    </div>
+  );
 }
 
 function normalizeTopicName(topic: unknown): string {
@@ -729,6 +960,72 @@ function generateAIInsights(
   return summary;
 }
 
+function LanguageSelectModal({
+  isOpen,
+  onClose,
+  onSelect,
+  isExporting,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onSelect: (lang: "vi" | "en") => void;
+  isExporting: boolean;
+}) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] p-6 rounded-2xl shadow-xl w-full max-w-sm flex flex-col gap-5">
+        <div className="flex justify-between items-center border-b border-[var(--color-border)] pb-3">
+          <h3 className="text-lg font-bold text-[var(--color-text-primary)]">
+            Chọn ngôn ngữ báo cáo
+          </h3>
+          <button
+            onClick={onClose}
+            className="p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-raised)] rounded-full transition-colors"
+          >
+            <span className="material-symbols-outlined text-xl">close</span>
+          </button>
+        </div>
+
+        <p className="text-xs text-[var(--color-text-secondary)] -mt-2">
+          Vui lòng lựa chọn ngôn ngữ phù hợp cho bản báo cáo PDF tải xuống.
+        </p>
+
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={() => onSelect("vi")}
+            disabled={isExporting}
+            className="flex flex-col items-center justify-center gap-3 p-5 rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] hover:border-[var(--color-brand)] hover:bg-[var(--color-brand)]/5 transition-all group disabled:opacity-50 text-center"
+          >
+            <span className="text-3xl">🇻🇳</span>
+            <span className="text-sm font-bold text-[var(--color-text-primary)] group-hover:text-[var(--color-brand)]">
+              Tiếng Việt
+            </span>
+          </button>
+          <button
+            onClick={() => onSelect("en")}
+            disabled={isExporting}
+            className="flex flex-col items-center justify-center gap-3 p-5 rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] hover:border-[var(--color-brand)] hover:bg-[var(--color-brand)]/5 transition-all group disabled:opacity-50 text-center"
+          >
+            <span className="text-3xl">🇬🇧</span>
+            <span className="text-sm font-bold text-[var(--color-text-primary)] group-hover:text-[var(--color-brand)]">
+              English
+            </span>
+          </button>
+        </div>
+
+        {isExporting && (
+          <div className="flex items-center justify-center gap-2 text-xs text-[var(--color-brand)] font-bold mt-1">
+            <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
+            Đang xuất báo cáo PDF...
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function ReportsPage() {
   const { t, i18n } = useTranslation();
   const [activeTab, setActiveTab] = useState<"periodic" | "custom" | "archive">(
@@ -743,8 +1040,13 @@ export default function ReportsPage() {
 
   const [generatingPdfId, setGeneratingPdfId] = useState<string | null>(null);
   const [previewReport, setPreviewReport] = useState<DailyReport | null>(null);
+  const [exportConfig, setExportConfig] = useState<{
+    type: "periodic" | "custom" | "archive";
+    data: any;
+  } | null>(null);
 
   const [currentPage, setCurrentPage] = useState(1);
+  const [customMentionsPage, setCustomMentionsPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
 
   // ── States for Custom Report ──
@@ -939,28 +1241,14 @@ export default function ReportsPage() {
             brandSet.add(b);
           }
 
-          let postedRaw =
-            d.posted_at ||
-            d.created_at ||
-            d.labeled_at ||
-            d.uploaded_at ||
-            d.analyzed_at ||
-            new Date().toISOString();
-          let posted = "";
-          if (
-            typeof postedRaw === "object" &&
-            typeof postedRaw.toDate === "function"
-          ) {
-            posted = postedRaw.toDate().toISOString();
-          } else {
-            posted = String(postedRaw);
-          }
+          let posted = parsePostedAtRaw(d.post_date ?? d.posted_at);
 
           data.push({
             id: doc.id,
             brand: b,
             source: normalizeSourceName(d.source || d.platform || "unknown"),
             content: d.clean_text || d.content || d.text || d.original_text || "",
+            content_type: mapContentType(d.content_type),
             sentiment: labels.sentiment || d.baseline_sentiment || d.sentiment || "neutral",
             topic: normalizeTopicName(labels.topic || d.baseline_topic || d.topic),
             posted_at: posted,
@@ -995,14 +1283,8 @@ export default function ReportsPage() {
     // Pre-group mentions by brand and date string for quick lookup
     const groupedMentions: Record<string, Record<string, Mention[]>> = {};
     mentions.forEach((m) => {
-      let d: Date;
-      const match = m.posted_at.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-      if (match) {
-        d = new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1]));
-      } else {
-        d = new Date(m.posted_at);
-      }
-      if (isNaN(d.getTime())) return;
+      const d = parsePostedAtDate(m.posted_at);
+      if (!d) return;
 
       const dateStr = d.toLocaleDateString("vi-VN", {
         day: "2-digit",
@@ -1065,10 +1347,8 @@ export default function ReportsPage() {
     // 1. Mentions tuần này (all brands, last 7 days)
     let weeklyMentions = 0;
     mentions.forEach((m) => {
-      let d = new Date(m.posted_at);
-      const match = m.posted_at.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-      if (match)
-        d = new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1]));
+      const d = parsePostedAtDate(m.posted_at);
+      if (!d) return;
 
       if (!isNaN(d.getTime())) {
         const diffDays = Math.ceil(
@@ -1121,17 +1401,8 @@ export default function ReportsPage() {
     };
   }, [mentions, reportsList]);
 
-  const handleExportPDF = async (report: DailyReport) => {
-    try {
-      setGeneratingPdfId(report.id);
-      await generateDailyReportPDF(
-        report.brand,
-        report.dateStr,
-        report.mentions,
-      );
-    } finally {
-      setGeneratingPdfId(null);
-    }
+  const handleExportPDF = (report: DailyReport) => {
+    setExportConfig({ type: "periodic", data: report });
   };
 
   // ── Custom report actions ──
@@ -1167,18 +1438,8 @@ export default function ReportsPage() {
         if (customBrand !== "all" && m.brand !== customBrand) return false;
 
         // Date filter
-        let mDate: Date;
-        const match = m.posted_at.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-        if (match) {
-          mDate = new Date(
-            Number(match[3]),
-            Number(match[2]) - 1,
-            Number(match[1]),
-          );
-        } else {
-          mDate = new Date(m.posted_at);
-        }
-        if (isNaN(mDate.getTime())) return false;
+        const mDate = parsePostedAtDate(m.posted_at);
+        if (!mDate) return false;
 
         const start = new Date(customStartDate);
         start.setHours(0, 0, 0, 0);
@@ -1187,7 +1448,7 @@ export default function ReportsPage() {
         if (mDate < start || mDate > end) return false;
 
         // Platform filter
-        if (!customPlatforms.includes(m.source.toLowerCase())) return false;
+        if (!customPlatforms.includes(m.source)) return false;
 
         // Topic filter
         if (!customTopics.includes(m.topic.toLowerCase())) return false;
@@ -1244,32 +1505,13 @@ export default function ReportsPage() {
       clearInterval(stepInterval);
       setCustomReportLoading(false);
       setCustomReportGenerated(true);
+      setCustomMentionsPage(1);
     }, 2400);
   };
 
-  const handleExportCustomPDF = async () => {
+  const handleExportCustomPDF = () => {
     if (!customReportData) return;
-    try {
-      setGeneratingPdfId("custom-export");
-      const filtersSummary = `${customPlatforms.length} nguồn, ${customTopics.length} chủ đề, ${customSentiments.length} sắc thái.`;
-      const dateStartFormatted = new Date(customStartDate).toLocaleDateString(
-        "vi-VN",
-      );
-      const dateEndFormatted = new Date(customEndDate).toLocaleDateString(
-        "vi-VN",
-      );
-
-      await generateCustomReportPDF(
-        customBrand,
-        dateStartFormatted,
-        dateEndFormatted,
-        customReportData.mentions,
-        customReportData.aiInsights,
-        filtersSummary,
-      );
-    } finally {
-      setGeneratingPdfId(null);
-    }
+    setExportConfig({ type: "custom", data: customReportData });
   };
 
   const handleArchiveReport = () => {
@@ -1309,26 +1551,72 @@ export default function ReportsPage() {
     );
   };
 
-  const handleExportArchivedPDF = async (report: any) => {
-    try {
-      setGeneratingPdfId(report.id);
-      const startFormatted = new Date(
-        report.startDate || new Date(),
-      ).toLocaleDateString("vi-VN");
-      const endFormatted = new Date(
-        report.endDate || new Date(),
-      ).toLocaleDateString("vi-VN");
+  const handleExportArchivedPDF = (report: any) => {
+    setExportConfig({ type: "archive", data: report });
+  };
 
-      await generateCustomReportPDF(
-        report.brand,
-        startFormatted,
-        endFormatted,
-        report.mentions || [],
-        report.insights || "",
-        report.filtersSummary || "Báo cáo lưu trữ",
-      );
+  const executeExportPDF = async (lang: "vi" | "en") => {
+    if (!exportConfig) return;
+    const { type, data } = exportConfig;
+    const fixedT = i18n.getFixedT(lang);
+    try {
+      setGeneratingPdfId(data.id || "export-pdf");
+      if (type === "periodic") {
+        await generateDailyReportPDF(
+          data.brand,
+          data.dateStr,
+          data.mentions,
+          fixedT,
+          lang
+        );
+      } else if (type === "custom") {
+        const filtersSummary = `${customPlatforms.length} nguồn, ${customTopics.length} chủ đề, ${customSentiments.length} sắc thái.`;
+        const dateStartFormatted = new Date(customStartDate).toLocaleDateString(
+          lang === "vi" ? "vi-VN" : "en-US",
+        );
+        const dateEndFormatted = new Date(customEndDate).toLocaleDateString(
+          lang === "vi" ? "vi-VN" : "en-US",
+        );
+        const insights = generateAIInsights(customBrand, data.mentions, customPrompt, lang);
+
+        await generateCustomReportPDF(
+          customBrand,
+          dateStartFormatted,
+          dateEndFormatted,
+          data.mentions,
+          insights,
+          filtersSummary,
+          fixedT,
+          lang
+        );
+      } else if (type === "archive") {
+        const startFormatted = new Date(
+          data.startDate || new Date(),
+        ).toLocaleDateString(lang === "vi" ? "vi-VN" : "en-US");
+        const endFormatted = new Date(
+          data.endDate || new Date(),
+        ).toLocaleDateString(lang === "vi" ? "vi-VN" : "en-US");
+        
+        const insights = data.mentions && data.mentions.length > 0
+          ? generateAIInsights(data.brand, data.mentions, "", lang)
+          : data.insights || "";
+
+        await generateCustomReportPDF(
+          data.brand,
+          startFormatted,
+          endFormatted,
+          data.mentions || [],
+          insights,
+          data.filtersSummary || "Báo cáo lưu trữ",
+          fixedT,
+          lang
+        );
+      }
+    } catch (error) {
+      console.error("Lỗi xuất PDF:", error);
     } finally {
       setGeneratingPdfId(null);
+      setExportConfig(null);
     }
   };
 
@@ -1386,11 +1674,18 @@ export default function ReportsPage() {
         <ArchivedReportDetailModal
           report={previewArchiveReport}
           onClose={() => setPreviewArchiveReport(null)}
-          onExport={() => handleExportArchivedPDF(previewArchiveReport)}
+          onExport={() => setExportConfig({ type: "archive", data: previewArchiveReport })}
           isExporting={generatingPdfId === previewArchiveReport.id}
           onDelete={() => handleDeleteArchive(previewArchiveReport.id)}
         />
       )}
+
+      <LanguageSelectModal
+        isOpen={!!exportConfig}
+        onClose={() => setExportConfig(null)}
+        onSelect={executeExportPDF}
+        isExporting={!!generatingPdfId}
+      />
 
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
@@ -1761,42 +2056,14 @@ export default function ReportsPage() {
                 </div>
 
                 {/* Pagination */}
-                <div className="px-4 md:px-6 py-4 bg-surface-bright border-t border-outline-variant flex flex-col sm:flex-row items-center justify-between gap-3">
-                  <p className="text-xs text-on-surface-variant font-bold uppercase tracking-wider">
-                    Hiển thị{" "}
-                    {reportsList.length === 0
-                      ? 0
-                      : (currentPage - 1) * ITEMS_PER_PAGE + 1}
-                    –
-                    {Math.min(currentPage * ITEMS_PER_PAGE, reportsList.length)}{" "}
-                    / {reportsList.length} báo cáo
-                  </p>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                      className="w-8 h-8 flex items-center justify-center rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-bg-surface-high)] transition-colors text-[var(--color-text-secondary)] disabled:opacity-30 disabled:hover:bg-transparent"
-                    >
-                      <span className="material-symbols-outlined text-lg">
-                        chevron_left
-                      </span>
-                    </button>
-                    <button className="w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition-colors bg-primary text-white">
-                      {currentPage}
-                    </button>
-                    <button
-                      onClick={() =>
-                        setCurrentPage((p) => Math.min(totalPages, p + 1))
-                      }
-                      disabled={currentPage === totalPages || totalPages === 0}
-                      className="w-8 h-8 flex items-center justify-center rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-bg-surface-high)] transition-colors text-[var(--color-text-secondary)] disabled:opacity-30 disabled:hover:bg-transparent"
-                    >
-                      <span className="material-symbols-outlined text-lg">
-                        chevron_right
-                      </span>
-                    </button>
-                  </div>
-                </div>
+                <ReportPagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  totalItems={reportsList.length}
+                  itemsPerPage={ITEMS_PER_PAGE}
+                  onPageChange={setCurrentPage}
+                  itemLabel="báo cáo"
+                />
               </>
             )}
           </>
@@ -2298,114 +2565,17 @@ export default function ReportsPage() {
                 {/* Matched mentions table */}
                 <div className="space-y-3">
                   <h3 className="text-sm font-bold text-[var(--color-text-primary)]">
-                    Các đề cập phù hợp tiêu chí (Tối đa 50 bài đăng mẫu)
+                    Các đề cập phù hợp tiêu chí ({customReportData?.mentions.length ?? 0} đề cập)
                   </h3>
 
-                  <div className="border border-[var(--color-border)] rounded-xl overflow-hidden shadow-sm">
-                    {/* Responsive list of matches */}
-                    <div className="block md:hidden divide-y divide-[var(--color-border)]">
-                      {customReportData?.mentions.slice(0, 50).map((m, idx) => (
-                        <div key={idx} className="p-3 text-xs space-y-2">
-                          <div className="flex justify-between items-center">
-                            <span className="font-bold text-[var(--color-brand)] capitalize">
-                              {m.source}
-                            </span>
-                            <span
-                              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                                m.sentiment.toLowerCase().includes("pos")
-                                  ? "bg-[var(--color-success-subtle)] text-[var(--color-success)]"
-                                  : m.sentiment.toLowerCase().includes("neg")
-                                    ? "bg-[var(--color-error-subtle)] text-[var(--color-error)]"
-                                    : "bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]"
-                              }`}
-                            >
-                              {m.sentiment}
-                            </span>
-                          </div>
-                          <p className="text-[var(--color-text-secondary)]">
-                            {m.content}
-                          </p>
-                          <div className="text-[10px] text-[var(--color-text-muted)] flex justify-between">
-                            <span>Chủ đề: {m.topic.toUpperCase()}</span>
-                            <span>
-                              {new Date(m.posted_at).toLocaleDateString(
-                                "vi-VN",
-                              )}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <table className="w-full text-left text-xs hidden md:table">
-                      <thead>
-                        <tr className="bg-[var(--color-bg-surface-raised)] border-b border-[var(--color-border)]">
-                          <th className="px-4 py-3 font-bold text-[var(--color-text-muted)] w-24">
-                            Nguồn
-                          </th>
-                          <th className="px-4 py-3 font-bold text-[var(--color-text-muted)]">
-                            Nội dung đề cập
-                          </th>
-                          <th className="px-4 py-3 font-bold text-[var(--color-text-muted)] w-24">
-                            Sắc thái
-                          </th>
-                          <th className="px-4 py-3 font-bold text-[var(--color-text-muted)] w-28">
-                            Chủ đề
-                          </th>
-                          <th className="px-4 py-3 font-bold text-[var(--color-text-muted)] w-28">
-                            Ngày đăng
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[var(--color-border)]">
-                        {customReportData?.mentions
-                          .slice(0, 50)
-                          .map((m, idx) => (
-                            <tr
-                              key={idx}
-                              className="hover:bg-[var(--color-bg-surface-raised)]/50 transition-colors"
-                            >
-                              <td className="px-4 py-3 font-bold capitalize text-[var(--color-brand)]">
-                                {m.source}
-                              </td>
-                              <td
-                                className="px-4 py-3 text-[var(--color-text-secondary)] font-medium max-w-xs truncate"
-                                title={m.content}
-                              >
-                                {m.content}
-                              </td>
-                              <td className="px-4 py-3">
-                                <span
-                                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                                    m.sentiment.toLowerCase().includes("pos")
-                                      ? "text-[var(--color-success)] bg-[var(--color-success-subtle)] border-[var(--color-success)]/30"
-                                      : m.sentiment
-                                            .toLowerCase()
-                                            .includes("neg")
-                                        ? "text-[var(--color-error)] bg-[var(--color-error-subtle)] border-[var(--color-error)]/30"
-                                        : "text-[var(--color-text-secondary)] bg-[var(--color-bg-surface-raised)] border-[var(--color-border)]"
-                                  }`}
-                                >
-                                  {m.sentiment === "positive"
-                                    ? "Tích cực"
-                                    : m.sentiment === "negative"
-                                      ? "Tiêu cực"
-                                      : "Trung lập"}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 font-bold text-[var(--color-text-secondary)] capitalize">
-                                {m.topic}
-                              </td>
-                              <td className="px-4 py-3 text-[var(--color-text-muted)] font-medium">
-                                {new Date(m.posted_at).toLocaleDateString(
-                                  "vi-VN",
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  {customReportData && (
+                    <ReportMentionsTable
+                      mentions={customReportData.mentions}
+                      currentPage={customMentionsPage}
+                      itemsPerPage={ITEMS_PER_PAGE}
+                      onPageChange={setCustomMentionsPage}
+                    />
+                  )}
                 </div>
               </div>
             )}

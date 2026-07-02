@@ -1,9 +1,10 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { PLATFORM_META } from "@/lib/services/dashboard";
+import { TFunction } from "i18next";
 
-// Helper to convert array buffer to base64
 function arrayBufferToBase64(buffer: ArrayBuffer) {
-  let binary = '';
+  let binary = "";
   const bytes = new Uint8Array(buffer);
   const len = bytes.byteLength;
   for (let i = 0; i < len; i++) {
@@ -12,21 +13,66 @@ function arrayBufferToBase64(buffer: ArrayBuffer) {
   return window.btoa(binary);
 }
 
-export async function generateDailyReportPDF(brandName: string, dateStr: string, mentions: any[]) {
+function formatPlatformLabel(source: string): string {
+  const key = source.toLowerCase() as keyof typeof PLATFORM_META;
+  return PLATFORM_META[key]?.label || source;
+}
+
+function formatContentTypeLabel(type: unknown, t: TFunction): string {
+  const normalized = String(type || "post").toLowerCase();
+  if (normalized === "comment") return t("reports.contentType.comment");
+  if (normalized === "reply") return t("reports.contentType.reply");
+  return t("reports.contentType.post");
+}
+
+function formatSentimentLabel(sentiment: unknown, t: TFunction): string {
+  const s = String(sentiment || "neutral").toLowerCase();
+  if (s.includes("pos")) return t("reports.sentiment.positive");
+  if (s.includes("neg")) return t("reports.sentiment.negative");
+  return t("reports.sentiment.neutral");
+}
+
+function formatPostedAt(value: unknown, lang: string): string {
+  if (!value) return "N/A";
+  const date = new Date(String(value));
+  if (Number.isNaN(date.getTime())) return "N/A";
+  return date.toLocaleString(lang, {
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function buildMentionRows(mentions: any[], t: TFunction, lang: string) {
+  return mentions.slice(0, 50).map((m) => [
+    formatPlatformLabel(m.source || m.platform || "unknown"),
+    String(m.content || m.text || "").substring(0, 100),
+    formatContentTypeLabel(m.content_type, t),
+    formatSentimentLabel(m.baseline_sentiment || m.sentiment, t),
+    t(`reports.topics.${(m.baseline_topic || m.topic || "other").toLowerCase()}`),
+    formatPostedAt(m.posted_at, lang),
+  ]);
+}
+
+const getMentionTableHead = (t: TFunction) => [
+  [t("reports.table.platform"), t("reports.table.content"), t("reports.table.type"), t("reports.table.sentiment"), t("reports.table.topic"), t("reports.table.time")],
+];
+
+export async function generateDailyReportPDF(brandName: string, dateStr: string, mentions: any[], t: TFunction, lang: string) {
   try {
     if (mentions.length === 0) {
-      alert("Không có dữ liệu mentions nào cho báo cáo này.");
+      alert(t("reports.errorNoData"));
       return;
     }
 
-    // 1. Aggregate metrics
     let positive = 0;
     let negative = 0;
     let neutral = 0;
-    
     const topics: Record<string, number> = {};
 
-    mentions.forEach(m => {
+    mentions.forEach((m) => {
       const sent = (m.baseline_sentiment || m.sentiment || "").toLowerCase();
       if (sent.includes("pos")) positive++;
       else if (sent.includes("neg")) negative++;
@@ -36,17 +82,14 @@ export async function generateDailyReportPDF(brandName: string, dateStr: string,
       topics[topic] = (topics[topic] || 0) + 1;
     });
 
-    // Top topics
     const topTopics = Object.entries(topics)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5);
 
-    // 2. Load Custom Font for Vietnamese Support
     let fontLoaded = false;
     let fontBase64 = "";
     try {
-      // Fetch the font from the public folder
-      const response = await fetch("/fonts/Roboto-Regular.ttf");
+      const response = await fetch("/fonts/NotoSans-Regular.ttf");
       if (response.ok) {
         const buffer = await response.arrayBuffer();
         fontBase64 = arrayBufferToBase64(buffer);
@@ -56,86 +99,79 @@ export async function generateDailyReportPDF(brandName: string, dateStr: string,
       console.warn("Could not load custom font, falling back to default.", e);
     }
 
-    // 3. Generate PDF
     const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-    
-    // Register font if loaded
+
     if (fontLoaded) {
-      doc.addFileToVFS("Roboto-Regular.ttf", fontBase64);
-      doc.addFont("Roboto-Regular.ttf", "Roboto", "normal");
-      doc.setFont("Roboto");
+      doc.addFileToVFS("NotoSans-Regular.ttf", fontBase64);
+      doc.addFont("NotoSans-Regular.ttf", "NotoSans", "normal");
+      doc.setFont("NotoSans");
     }
-    
+
     doc.setFontSize(22);
     doc.setTextColor(40);
-    const displayBrand = brandName === "all" ? "Tất Cả Nhãn Hàng" : brandName.charAt(0).toUpperCase() + brandName.slice(1);
-    doc.text(`Daily Insights Report: ${displayBrand}`, 14, 22);
+    const displayBrand = brandName === "all" ? t("reports.allBrands") : brandName.charAt(0).toUpperCase() + brandName.slice(1);
+    doc.text(`${t("reports.dailyTitle")}: ${displayBrand}`, 14, 22);
 
     doc.setFontSize(11);
     doc.setTextColor(100);
-    doc.text(`Date: ${dateStr}`, 14, 30);
-    doc.text(`Total Mentions: ${mentions.length}`, 14, 36);
-    
-    // Sentiment Summary
+    doc.text(`${t("reports.date")}: ${dateStr}`, 14, 30);
+    doc.text(`${t("reports.totalMentions")}: ${mentions.length}`, 14, 36);
+
     doc.setFontSize(14);
     doc.setTextColor(40);
-    doc.text("Sentiment Overview", 14, 50);
+    doc.text(t("reports.sentimentOverview"), 14, 50);
     doc.setFontSize(11);
     doc.setTextColor(100);
-    doc.text(`Positive: ${positive}`, 14, 58);
-    doc.text(`Neutral:  ${neutral}`, 14, 64);
-    doc.text(`Negative: ${negative}`, 14, 70);
+    doc.text(`${t("reports.sentiment.positive")}: ${positive}`, 14, 58);
+    doc.text(`${t("reports.sentiment.neutral")}:  ${neutral}`, 14, 64);
+    doc.text(`${t("reports.sentiment.negative")}: ${negative}`, 14, 70);
 
-    // Topics Summary
     doc.setFontSize(14);
     doc.setTextColor(40);
-    doc.text("Top Topics", 14, 85);
-    
+    doc.text(t("reports.topTopics"), 14, 85);
+
     let currentY = 93;
-    topTopics.forEach(([t, count], index) => {
+    topTopics.forEach(([topicName, count], index) => {
       doc.setFontSize(11);
       doc.setTextColor(100);
-      doc.text(`${index + 1}. ${t} (${count} mentions)`, 14, currentY);
+      doc.text(`${index + 1}. ${topicName} (${count} ${t("reports.mentionsCount")})`, 14, currentY);
       currentY += 6;
     });
 
     currentY += 10;
 
-    // Detailed Table
-    const tableData = mentions.slice(0, 50).map(m => [
-      m.source || m.platform || "unknown",
-      (m.content || m.text || "").substring(0, 80) + "...",
-      (m.baseline_sentiment || m.sentiment || "neutral"),
-      (m.baseline_topic || m.topic || "other")
-    ]);
-
     doc.setFontSize(14);
     doc.setTextColor(40);
-    doc.text("Sample Mentions (Top 50)", 14, currentY);
+    doc.text(t("reports.sampleMentions"), 14, currentY);
 
     autoTable(doc, {
       startY: currentY + 5,
-      head: [["Platform", "Content", "Sentiment", "Topic"]],
-      body: tableData,
-      theme: 'grid',
-      styles: { 
+      head: getMentionTableHead(t),
+      body: buildMentionRows(mentions, t, lang),
+      theme: "grid",
+      styles: {
         fontSize: 8,
-        font: fontLoaded ? "Roboto" : "helvetica" // Apply font to table cells
+        font: fontLoaded ? "NotoSans" : "helvetica",
+        fontStyle: "normal", // ← thêm dòng này
       },
-      headStyles: { 
+      headStyles: {
         fillColor: [41, 128, 185],
-        font: fontLoaded ? "Roboto" : "helvetica" 
-      }
+        font: fontLoaded ? "NotoSans" : "helvetica",
+        fontStyle: "normal", // ← thêm dòng này — quan trọng nhất
+        textColor: [255, 255, 255],
+      },
+      bodyStyles: {
+        font: fontLoaded ? "NotoSans" : "helvetica",
+        fontStyle: "normal", // ← thêm dòng này
+      },
     });
 
     const safeDate = dateStr.replace(/\//g, "-").replace(/,/g, "").replace(/ /g, "_");
     const fileNameSafeBrand = displayBrand.replace(/ /g, "_");
-    doc.save(`Report_${fileNameSafeBrand}_${safeDate}.pdf`);
-
+    doc.save(`${t("reports.filenameDaily")}_${fileNameSafeBrand}_${safeDate}.pdf`);
   } catch (error) {
     console.error("Lỗi tạo PDF:", error);
-    alert("Đã xảy ra lỗi khi tạo báo cáo PDF.");
+    alert(t("reports.errorGenerate"));
   }
 }
 
@@ -145,21 +181,22 @@ export async function generateCustomReportPDF(
   endDate: string,
   mentions: any[],
   aiInsights: string,
-  filtersSummary: string
+  filtersSummary: string,
+  t: TFunction,
+  lang: string
 ) {
   try {
     if (mentions.length === 0) {
-      alert("Không có dữ liệu mentions nào cho báo cáo tùy chỉnh này.");
+      alert(t("reports.errorNoData"));
       return;
     }
 
-    // 1. Aggregate metrics
     let positive = 0;
     let negative = 0;
     let neutral = 0;
     const topics: Record<string, number> = {};
 
-    mentions.forEach(m => {
+    mentions.forEach((m) => {
       const sent = (m.baseline_sentiment || m.sentiment || "").toLowerCase();
       if (sent.includes("pos")) positive++;
       else if (sent.includes("neg")) negative++;
@@ -173,7 +210,6 @@ export async function generateCustomReportPDF(
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5);
 
-    // 2. Load custom font for Vietnamese support
     let fontLoaded = false;
     let fontBase64 = "";
     try {
@@ -187,112 +223,106 @@ export async function generateCustomReportPDF(
       console.warn("Could not load custom font, falling back to default.", e);
     }
 
-    // 3. Generate PDF
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
-    
+
     if (fontLoaded) {
       doc.addFileToVFS("Roboto-Regular.ttf", fontBase64);
       doc.addFont("Roboto-Regular.ttf", "Roboto", "normal");
       doc.setFont("Roboto");
+    } else {
+      console.warn("Font Roboto chưa được load, tiêu đề có thể bị lỗi font.");
     }
 
-    // Header Title
     doc.setFontSize(20);
-    doc.setTextColor(41, 128, 185); // Primary color theme
-    const displayBrand = brandName === "all" ? "Tất Cả Nhãn Hàng" : brandName.charAt(0).toUpperCase() + brandName.slice(1);
-    doc.text(`BÁO CÁO PHÂN TÍCH TÙY CHỈNH`, 14, 22);
+    doc.setTextColor(41, 128, 185);
+    const displayBrand = brandName === "all" ? t("reports.allBrands") : brandName.charAt(0).toUpperCase() + brandName.slice(1);
+    doc.text(t("reports.title"), 14, 22);
 
     doc.setFontSize(14);
     doc.setTextColor(80);
-    doc.text(`Thương hiệu: ${displayBrand}`, 14, 30);
+    doc.text(`${t("reports.brand")}: ${displayBrand}`, 14, 30);
 
-    // Metadata
     doc.setFontSize(10);
     doc.setTextColor(120);
-    doc.text(`Thời gian: Từ ${startDate} đến ${endDate}`, 14, 38);
-    doc.text(`Bộ lọc đã áp dụng: ${filtersSummary}`, 14, 44);
-    doc.text(`Tổng lượt đề cập phân tích: ${mentions.length}`, 14, 50);
+    doc.text(`${t("reports.time")}: ${t("reports.from")} ${startDate} ${t("reports.to")} ${endDate}`, 14, 38);
+    doc.text(`${t("reports.filters")}: ${filtersSummary}`, 14, 44);
+    doc.text(`${t("reports.totalMentions")}: ${mentions.length}`, 14, 50);
 
-    // Divider
     doc.setDrawColor(220);
     doc.line(14, 55, pageWidth - 14, 55);
 
-    // Metrics Overview
     doc.setFontSize(14);
     doc.setTextColor(40);
-    doc.text("1. Tổng quan Sắc thái & Chủ đề", 14, 65);
+    doc.text(t("reports.sentimentOverview"), 14, 65);
 
     doc.setFontSize(10);
     doc.setTextColor(80);
-    doc.text(`Sắc thái tích cực: ${positive} (${Math.round(positive / mentions.length * 100)}%)`, 14, 73);
-    doc.text(`Sắc thái trung lập: ${neutral} (${Math.round(neutral / mentions.length * 100)}%)`, 14, 79);
-    doc.text(`Sắc thái tiêu cực: ${negative} (${Math.round(negative / mentions.length * 100)}%)`, 14, 85);
+    doc.text(`${t("reports.sentiment.positive")}: ${positive} (${Math.round((positive / mentions.length) * 100)}%)`, 14, 73);
+    doc.text(`${t("reports.sentiment.neutral")}: ${neutral} (${Math.round((neutral / mentions.length) * 100)}%)`, 14, 79);
+    doc.text(`${t("reports.sentiment.negative")}: ${negative} (${Math.round((negative / mentions.length) * 100)}%)`, 14, 85);
 
-    doc.text("Top chủ đề thảo luận nhiều nhất:", 100, 73);
+    doc.text(t("reports.topTopics"), 100, 73);
     let topicY = 79;
-    topTopics.forEach(([t, count], index) => {
-      doc.text(`- ${t.toUpperCase()}: ${count} lượt (${Math.round(count / mentions.length * 100)}%)`, 100, topicY);
+    topTopics.forEach(([topicName, count]) => {
+      doc.text(`- ${topicName.toUpperCase()}: ${count} ${t("reports.mentionsCount")} (${Math.round((count / mentions.length) * 100)}%)`, 100, topicY);
       topicY += 6;
     });
 
-    // Divider
     doc.line(14, 110, pageWidth - 14, 110);
 
-    // AI Insights Section
     doc.setFontSize(14);
     doc.setTextColor(40);
-    doc.text("2. Nhận định thông minh từ AI Insights", 14, 120);
+    doc.text(t("reports.aiInsights"), 14, 120);
 
     doc.setFontSize(9.5);
     doc.setTextColor(60);
     const splitInsights = doc.splitTextToSize(aiInsights, pageWidth - 28);
     doc.text(splitInsights, 14, 128);
 
-    // We calculate where the sample mentions table should start based on text height
-    const textHeight = splitInsights.length * 5; // roughly 5 units per line
+    const textHeight = splitInsights.length * 5;
     let currentY = 128 + textHeight + 12;
 
-    // Add page break if Y is too close to the bottom
     if (currentY > 230) {
       doc.addPage();
+      if (fontLoaded) {
+        doc.setFont("Roboto");
+      }
       currentY = 20;
     }
 
     doc.setFontSize(14);
     doc.setTextColor(40);
-    doc.text("3. Danh sách Đề cập Mẫu (Tối đa 50)", 14, currentY);
-
-    const tableData = mentions.slice(0, 50).map(m => [
-      m.source || m.platform || "unknown",
-      (m.content || m.text || "").substring(0, 80) + "...",
-      (m.baseline_sentiment || m.sentiment || "neutral"),
-      (m.baseline_topic || m.topic || "other")
-    ]);
+    doc.text(t("reports.sampleMentions"), 14, currentY);
 
     autoTable(doc, {
       startY: currentY + 5,
-      head: [["Platform", "Content", "Sentiment", "Topic"]],
-      body: tableData,
-      theme: 'grid',
-      styles: { 
+      head: getMentionTableHead(t),
+      body: buildMentionRows(mentions, t, lang),
+      theme: "grid",
+      styles: {
         fontSize: 8,
-        font: fontLoaded ? "Roboto" : "helvetica" 
+        font: fontLoaded ? "NotoSans" : "helvetica",
+        fontStyle: "normal", // ← thêm dòng này
       },
-      headStyles: { 
+      headStyles: {
         fillColor: [41, 128, 185],
-        font: fontLoaded ? "Roboto" : "helvetica" 
-      }
+        font: fontLoaded ? "NotoSans" : "helvetica",
+        fontStyle: "normal", // ← thêm dòng này — quan trọng nhất
+        textColor: [255, 255, 255],
+      },
+      bodyStyles: {
+        font: fontLoaded ? "NotoSans" : "helvetica",
+        fontStyle: "normal", // ← thêm dòng này
+      },
     });
 
     const safeStart = startDate.replace(/\//g, "-");
     const safeEnd = endDate.replace(/\//g, "-");
     const fileNameSafeBrand = displayBrand.replace(/ /g, "_");
-    doc.save(`BaoCaoTuyenChinh_${fileNameSafeBrand}_${safeStart}_to_${safeEnd}.pdf`);
-
+    doc.save(`${t("reports.filename")}_${fileNameSafeBrand}_${safeStart}_to_${safeEnd}.pdf`);
   } catch (error) {
     console.error("Lỗi tạo PDF tùy chỉnh:", error);
-    alert("Đã xảy ra lỗi khi tạo báo cáo PDF tùy chỉnh.");
+    alert(t("reports.errorGenerate"));
   }
 }
-
