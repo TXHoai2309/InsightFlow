@@ -7,13 +7,15 @@ import { auth } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
 import { validateStrongPassword } from "@/lib/passwordPolicy";
 
-type StaffRole = "crisis_staff" | "lead_staff";
+type StaffRole = "crisis_employee" | "lead_employee";
+type LegacyStaffRole = "crisis_staff" | "lead_staff";
+type StaffRoleValue = StaffRole | LegacyStaffRole;
 
 interface StaffAccount {
   uid: string;
   email: string;
   displayName: string;
-  role: StaffRole;
+  role: StaffRoleValue;
   brandName: string;
   permissions: string[];
   defaultRoute: string;
@@ -23,23 +25,23 @@ interface StaffAccount {
 
 const roleOptions: Array<{ value: StaffRole; labelKey: string; descriptionKey: string }> = [
   {
-    value: "crisis_staff",
+    value: "crisis_employee",
     labelKey: "team.roles.crisis.label",
     descriptionKey: "team.roles.crisis.description",
   },
   {
-    value: "lead_staff",
+    value: "lead_employee",
     labelKey: "team.roles.lead.label",
     descriptionKey: "team.roles.lead.description",
   },
 ];
 
 const operationOptions = [
-  { value: "dashboard", labelKey: "team.operations.dashboard", roles: ["crisis_staff", "lead_staff"] },
-  { value: "mentions", labelKey: "team.operations.mentions", roles: ["crisis_staff", "lead_staff"] },
-  { value: "alerts", labelKey: "team.operations.alerts", roles: ["crisis_staff"] },
-  { value: "reports", labelKey: "team.operations.reports", roles: ["crisis_staff", "lead_staff"] },
-  { value: "leads", labelKey: "team.operations.leads", roles: ["lead_staff"] },
+  { value: "dashboard", labelKey: "team.operations.dashboard", roles: ["crisis_employee", "lead_employee"] },
+  { value: "mentions", labelKey: "team.operations.mentions", roles: ["crisis_employee", "lead_employee"] },
+  { value: "alerts", labelKey: "team.operations.alerts", roles: ["crisis_employee"] },
+  { value: "reports", labelKey: "team.operations.reports", roles: ["crisis_employee", "lead_employee"] },
+  { value: "leads", labelKey: "team.operations.leads", roles: ["lead_employee"] },
 ];
 
 const permissionLabels: Record<string, string> = {
@@ -56,13 +58,17 @@ function generateTemporaryPassword() {
   return `IF@${randomPart}24`;
 }
 
+function isCrisisRole(role: StaffRoleValue) {
+  return role === "crisis_employee" || role === "crisis_staff";
+}
+
 export default function TeamPage() {
   const { t } = useTranslation();
   const { profile } = useAuth();
   const [staff, setStaff] = useState<StaffAccount[]>([]);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [staffRole, setStaffRole] = useState<StaffRole>("crisis_staff");
+  const [staffRole, setStaffRole] = useState<StaffRole>("crisis_employee");
   const [operations, setOperations] = useState<string[]>(["dashboard", "mentions", "alerts", "reports"]);
   const [temporaryPassword, setTemporaryPassword] = useState(generateTemporaryPassword());
   const [loading, setLoading] = useState(false);
@@ -83,7 +89,7 @@ export default function TeamPage() {
 
   useEffect(() => {
     const defaults =
-      staffRole === "crisis_staff"
+      staffRole === "crisis_employee"
         ? ["dashboard", "mentions", "alerts", "reports"]
         : ["dashboard", "mentions", "leads", "reports"];
     setOperations(defaults);
@@ -445,7 +451,7 @@ export default function TeamPage() {
                       <p className="text-[12px] text-[var(--color-text-secondary)]">{item.email}</p>
                     </td>
                     <td className="py-4 pr-4 text-[var(--color-text-secondary)]">
-                      {item.role === "crisis_staff" ? t("team.staffRole.crisis") : t("team.staffRole.lead")}
+                      {isCrisisRole(item.role) ? t("team.staffRole.crisis") : t("team.staffRole.lead")}
                     </td>
                     <td className="py-4 pr-4">
                       <div className="flex flex-wrap gap-2">

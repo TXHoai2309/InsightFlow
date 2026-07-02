@@ -8,7 +8,7 @@ import { getIdTokenResult, signInWithEmailAndPassword, signOut } from "firebase/
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { useTheme } from "@/contexts/ThemeContext";
-import { buildUserRoleProfile, isValidRole } from "@/lib/rbac";
+import { buildUserRoleProfile, normalizeRole } from "@/lib/rbac";
 
 export default function LoginForm() {
   const router = useRouter();
@@ -36,11 +36,11 @@ export default function LoginForm() {
         console.warn("Could not read Firestore user profile during login. Falling back to token claims.", profileError);
       }
 
-      if (!userData || !isValidRole(userData.role)) {
+      if (!userData || !normalizeRole(userData.role)) {
         const tokenResult = await getIdTokenResult(credential.user, true);
         const claims = tokenResult.claims;
 
-        if (!isValidRole(claims.role)) {
+        if (!normalizeRole(claims.role)) {
           await signOut(auth);
           setError(t("auth.errors.unprovisioned"));
           return;

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { DashboardService } from "@/lib/services/dashboard";
 import { useDashboardStore } from "@/stores/dashboard.store";
-import { filterByBrandScope } from "@/lib/brandScope";
+import { filterByBusinessPolicy } from "@/lib/brandScope";
 import { useAuth } from "@/hooks/useAuth";
 
 interface UseMentionsOptions {
@@ -31,13 +31,17 @@ export function useMentionsData(options: UseMentionsOptions = {}) {
     try {
       const rawData =
         await DashboardService.fetchRawData();
-      const mentions = filterByBrandScope(rawData.mentions, profile);
-      const workspaces = filterByBrandScope(rawData.workspaces.map((workspace) => ({
-        ...workspace,
-        brand: workspace.brand_name,
-      })), profile);
-      const alerts = filterByBrandScope(rawData.alerts, profile);
-      const leads = filterByBrandScope(rawData.leads, profile);
+      const mentions = filterByBusinessPolicy(rawData.mentions, profile, "view_mentions");
+      const workspaces = filterByBusinessPolicy(
+        rawData.workspaces.map((workspace) => ({
+          ...workspace,
+          brand: workspace.brand_name,
+        })),
+        profile,
+        "view_mentions",
+      );
+      const alerts = filterByBusinessPolicy(rawData.alerts, profile, "view_crisis_queue");
+      const leads = filterByBusinessPolicy(rawData.leads, profile, "view_leads");
 
       setMentions(mentions);
       setWorkspaces(workspaces);

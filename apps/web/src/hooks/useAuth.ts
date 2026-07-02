@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { getIdTokenResult, onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
-import { buildUserRoleProfile, isValidRole, type UserRoleProfile } from "@/lib/rbac";
+import { buildUserRoleProfile, normalizeRole, type UserRoleProfile } from "@/lib/rbac";
 import { useAuthStore } from "@/stores/auth.store";
 
 let unsubscribeAuth: (() => void) | null = null;
@@ -19,7 +19,7 @@ async function resolveProfileFromClaims(firebaseUser: NonNullable<typeof auth.cu
   const tokenResult = await getIdTokenResult(firebaseUser, true);
   const claims = tokenResult.claims;
 
-  if (!isValidRole(claims.role)) {
+  if (!normalizeRole(claims.role)) {
     throw new Error("User is not provisioned with a valid InsightFlow role.");
   }
 
@@ -50,7 +50,7 @@ async function resolveUserProfile(firebaseUser: NonNullable<typeof auth.currentU
 
   let resolvedProfile: UserRoleProfile;
 
-  if (storedData && isValidRole(storedData.role)) {
+  if (storedData && normalizeRole(storedData.role)) {
     resolvedProfile = buildUserRoleProfile({
       uid: firebaseUser.uid,
       email: firebaseUser.email,

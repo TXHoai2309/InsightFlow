@@ -4,7 +4,9 @@ import { authAdmin, db } from "../services/firebase";
 import { verifyToken } from "../middleware/auth";
 import { validateStrongPassword } from "../utils/passwordPolicy";
 
-type StaffRole = "crisis_staff" | "lead_staff";
+type StaffRole = "crisis_employee" | "lead_employee";
+type LegacyStaffRole = "crisis_staff" | "lead_staff";
+type StaffRoleInput = StaffRole | LegacyStaffRole;
 
 const operationPermissions = {
   dashboard: "dashboard",
@@ -15,18 +17,18 @@ const operationPermissions = {
 } as const;
 
 const roleAllowedPermissions: Record<StaffRole, string[]> = {
-  crisis_staff: ["dashboard", "mentions", "alerts", "reports"],
-  lead_staff: ["dashboard", "mentions", "leads", "reports"],
+  crisis_employee: ["dashboard", "mentions", "alerts", "reports"],
+  lead_employee: ["dashboard", "mentions", "leads", "reports"],
 };
 
 const defaultRoutePriority: Record<StaffRole, Array<{ permission: string; route: string }>> = {
-  crisis_staff: [
+  crisis_employee: [
     { permission: "alerts", route: "/alerts" },
     { permission: "mentions", route: "/mentions" },
     { permission: "reports", route: "/reports" },
     { permission: "dashboard", route: "/dashboard" },
   ],
-  lead_staff: [
+  lead_employee: [
     { permission: "leads", route: "/leads" },
     { permission: "mentions", route: "/mentions" },
     { permission: "reports", route: "/reports" },
@@ -38,8 +40,10 @@ function getDomainFromEmail(email: string) {
   return email.includes("@") ? email.split("@")[1].toLowerCase() : "";
 }
 
-function isStaffRole(role: unknown): role is StaffRole {
-  return role === "crisis_staff" || role === "lead_staff";
+function normalizeStaffRole(role: unknown): StaffRole | null {
+  if (role === "crisis_employee" || role === "crisis_staff") return "crisis_employee";
+  if (role === "lead_employee" || role === "lead_staff") return "lead_employee";
+  return null;
 }
 
 function resolvePermissions(staffRole: StaffRole, operations: unknown) {
@@ -84,15 +88,17 @@ function belongsToManagerBrand(staffProfile: any, manager: { brandId: string; co
 function isStaffAccount(data: any, manager: { uid: string; brandId: string; companyDomain?: string; email?: string }) {
   if (!data || data.uid === manager.uid) return false;
   if (data.role === "admin" || data.role === "brand_manager") return false;
-  if (data.role === "crisis_staff" || data.role === "lead_staff") return true;
+  if (normalizeStaffRole(data.role)) return true;
   return belongsToManagerBrand(data, manager);
 }
 
-function normalizeStaffRole(data: any): StaffRole {
-  if (data?.role === "lead_staff" || (Array.isArray(data?.permissions) && data.permissions.includes("leads"))) {
-    return "lead_staff";
+function inferStaffRoleFromProfile(data: any): StaffRole {
+  const normalizedRole = normalizeStaffRole(data?.role);
+  if (normalizedRole) return normalizedRole;
+  if (Array.isArray(data?.permissions) && data.permissions.includes("leads")) {
+    return "lead_employee";
   }
-  return "crisis_staff";
+  return "crisis_employee";
 }
 
 function normalizeStaffPermissions(role: StaffRole, permissions: unknown) {
@@ -141,7 +147,7 @@ export default async function staffRoutes(fastify: FastifyInstance, options: Fas
         .map((doc) => doc.data())
         .filter((data) => belongsToManagerBrand(data, manager) && isStaffAccount(data, manager))
         .map((data) => {
-          const role = normalizeStaffRole(data);
+          const role = inferStaffRoleFromProfile(data);
           const permissions = normalizeStaffPermissions(role, data.permissions);
           return {
             uid: data.uid,
@@ -173,16 +179,16 @@ export default async function staffRoutes(fastify: FastifyInstance, options: Fas
       fullName?: string;
       email?: string;
       temporaryPassword?: string;
-      staffRole?: StaffRole;
+      staffRole?: StaffRoleInput;
       operations?: string[];
     };
 
     const fullName = body.fullName?.trim();
     const email = body.email?.trim().toLowerCase();
     const temporaryPassword = body.temporaryPassword?.trim();
-    const staffRole = body.staffRole;
+    const staffRole = normalizeStaffRole(body.staffRole);
 
-    if (!fullName || !email || !temporaryPassword || !isStaffRole(staffRole)) {
+    if (!fullName || !email || !temporaryPassword || !staffRole) {
       return reply.status(400).send({
         success: false,
         error: "Full name, email, staffRole and temporaryPassword are required.",
