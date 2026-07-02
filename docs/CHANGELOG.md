@@ -10,7 +10,48 @@
 > - Các commit merge vẫn được giữ lại để phản ánh đúng dòng phát triển giữa các nhánh.
 >   Tất cả các thay đổi đáng chú ý đối với dự án này sẽ được ghi lại trong file này.
 >   Định dạng dựa trên [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) và dự án này tuân thủ [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [Unreleased] - 2026-07-02
 
+### Added
+
+- **Quản lý người dùng & Phân quyền (RBAC)**:
+  - Xây dựng cấu trúc dữ liệu lưu thông tin người dùng trên Firebase/Firestore, hỗ trợ các vai trò: `Admin`, `Brand Manager`, `Crisis Staff`, `Lead Staff` và `Viewer`.
+  - Mỗi tài khoản được gắn với vai trò và thương hiệu (Brand) tương ứng, hỗ trợ mở rộng thêm quyền trong các phiên bản sau.
+  - Triển khai cơ chế kiểm tra quyền truy cập (Role-Based Access Control) sau khi đăng nhập.
+  - Áp dụng Route Guard trên toàn bộ hệ thống, ngăn người dùng truy cập trái phép bằng URL trực tiếp.
+  - Điều hướng người dùng đến giao diện phù hợp theo vai trò được cấp.
+
+- **Quản lý tài khoản Brand Manager**:
+  - Thiết kế luồng cấp tài khoản do Admin thực hiện, loại bỏ quy trình Brand Manager tự đăng ký.
+  - Cho phép Admin tạo tài khoản Brand Manager với các thông tin cơ bản (họ tên, email, thương hiệu).
+  - Hỗ trợ tạo hoặc cấp mật khẩu tạm thời khi khởi tạo tài khoản.
+  - Tự động lưu tài khoản vào Firebase và gán đúng thương hiệu quản lý.
+
+- **Quản lý tài khoản nhân viên theo thương hiệu**:
+  - Cho phép Brand Manager tạo tài khoản nhân viên thuộc thương hiệu mình quản lý.
+  - Hỗ trợ nhập họ tên, email, số điện thoại và lựa chọn vai trò của nhân viên.
+  - Tự động gán Brand của Brand Manager cho tài khoản nhân viên khi tạo.
+  - Hỗ trợ cấp mật khẩu tạm thời cho tài khoản mới.
+
+- **Phân công nghiệp vụ nhân viên**:
+  - Cho phép Brand Manager phân công nghiệp vụ cho nhân viên theo từng chức năng.
+  - Hỗ trợ tối thiểu hai nhóm nghiệp vụ: `Crisis Staff` và `Lead Staff`.
+  - Thông tin phân công được lưu trên Firebase và có thể cập nhật khi cần.
+  - Nhân viên chỉ được truy cập các chức năng thuộc phạm vi nghiệp vụ đã được phân công.
+
+### Changed
+
+- Điều chỉnh quy trình quản lý tài khoản theo hướng tập trung:
+  - Admin chịu trách nhiệm tạo tài khoản Brand Manager.
+  - Brand Manager chịu trách nhiệm tạo và quản lý tài khoản nhân viên của thương hiệu mình.
+  - Loại bỏ luồng tự đăng ký và xác minh quyền đại diện thương hiệu của Brand Manager trong Sprint 2.
+
+### Security
+
+- Áp dụng cơ chế Role-Based Access Control (RBAC) trên toàn hệ thống.
+- Ngăn truy cập trái phép vào các chức năng thông qua kiểm tra quyền sau đăng nhập và Route Guard.
+- Chỉ người dùng có đủ quyền mới có thể truy cập hoặc thực hiện thao tác trên các chức năng tương ứng.
+- Giới hạn phạm vi dữ liệu theo thương hiệu, đảm bảo người dùng chỉ thao tác trên dữ liệu thuộc Brand được phân quyền.
 ---
 ## [Unreleased] - 2026-06-29
 
@@ -30,6 +71,33 @@
   - Khắc phục lỗi hydration ở thành phần `AtmosphereDots`.
   - Khắc phục lỗi thiếu import `useEffect` và `emailjs`.
 
+### Changed
+
+- **Mentions detail (`/mentions/[id]`)**
+  - Bổ sung bộ lọc bình luận theo sắc thái (`positive`, `neutral`, `negative`), cấp bình luận (`comment`, `reply`) và từ khóa.
+  - Thêm cảnh báo khi bình luận mục tiêu đang bị ẩn bởi filter, kèm hành động reset để hiện lại đúng comment đang xem.
+  - Thêm nút `Back to top` cho trang chi tiết đề cập và sửa lại logic lắng nghe scroll để hoạt động đúng với `app shell` cuộn bằng container nội bộ thay vì `window`.
+  - Tối ưu khối thông tin bên phải: gộp phần phân tích sắc thái và thông tin đề cập thành summary panel gọn hơn để người dùng không phải cuộn sâu mới xem đủ chỉ số.
+
+### Added
+
+- **Shared platform logo component**
+  - Tạo `PlatformLogo` dùng chung cho bảng Mentions và trang chi tiết đề cập.
+  - Chuẩn hóa hiển thị logo cho các nền tảng `facebook`, `tiktok`, `youtube`, `thread`, `google_maps`, `be`, `news`.
+
+### Fixed
+
+- **Theme-aware platform logos**
+  - Loại bỏ khung nền đậm bao ngoài logo nền tảng.
+  - Sửa hiển thị logo `TikTok` và `Threads` để dùng màu đen ở giao diện sáng và tự đổi sang màu trắng ở giao diện tối theo đúng CSS theme token của ứng dụng.
+  - Căn giữa logo nền tảng trong ô hiển thị trên trang Mentions và đầu trang chi tiết đề cập.
+
+ - **Lead card navigation & badge alignment (`/leads`)**
+   - Thu nhỏ badge logo nền tảng trong `LeadCard` bằng size `xs` riêng để cân đối với avatar khách hàng và không ảnh hưởng các màn hình Mentions/Detail.
+   - Cập nhật điều hướng từ Lead sang trang chi tiết đề cập để mở đúng post/comment/reply qua deep-link `/mentions/{postId}#comment-{commentId}`.
+   - Khôi phục tương tác mở chi tiết trên card lead: nội dung lead và nút xem chi tiết vẫn hoạt động khi tìm được mention nội bộ, kể cả khi bản ghi lead không có `url`.
+
+## [Unreleased] - 2026-06-26
   ### Fixed
   - **Giao diện sáng/tối (Theme-aware UI)**:
     - Khôi phục cơ chế tự động chuyển đổi logo cho các trang Auth (Đăng nhập, Đăng ký, Quên mật khẩu).

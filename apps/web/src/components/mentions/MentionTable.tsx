@@ -1,55 +1,15 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import Link from "next/link";
-import { Globe2, MapPin, Newspaper } from "lucide-react";
 import type { Mention } from "@/types/dashboard";
+import { PlatformLogo } from "@/components/platform/PlatformLogo";
+import { resolveMentionDetailTarget } from "@/lib/mention-navigation";
 
 interface MentionTableProps {
   mentions: Mention[];
   isLoading: boolean;
   contentMode: "all" | "post" | "comment";
 }
-
-const TikTokIcon = () => (
-  <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5 text-neutral-900">
-    <path
-      fill="currentColor"
-      d="M16.6 5.82a4.85 4.85 0 0 1-1.18-3.18h-3.1v12.43a2.62 2.62 0 1 1-2.26-2.6V9.33a5.75 5.75 0 1 0 5.36 5.74V8.76a7.9 7.9 0 0 0 4.62 1.48V7.15a4.87 4.87 0 0 1-3.44-1.33Z"
-    />
-  </svg>
-);
-
-const FacebookIcon = () => (
-  <svg viewBox="0 0 24 24" role="img" aria-label="Facebook" className="h-5 w-5 text-blue-600">
-    <circle cx="12" cy="12" r="10" fill="currentColor" />
-    <path fill="white" d="M13.5 20v-7h2.4l.36-2.75H13.5V8.5c0-.8.22-1.34 1.38-1.34h1.48V4.7a19.8 19.8 0 0 0-2.15-.11c-2.13 0-3.59 1.3-3.59 3.69v1.97H8.21V13h2.41v7h2.88Z" />
-  </svg>
-);
-
-const YouTubeIcon = () => (
-  <svg viewBox="0 0 24 24" role="img" aria-label="YouTube" className="h-5 w-5 text-red-600">
-    <path fill="currentColor" d="M22 12c0-2.1-.2-3.5-.45-4.25a2.75 2.75 0 0 0-1.94-1.94C18.1 5.4 12 5.4 12 5.4s-6.1 0-7.61.41a2.75 2.75 0 0 0-1.94 1.94C2.2 8.5 2 9.9 2 12s.2 3.5.45 4.25a2.75 2.75 0 0 0 1.94 1.94c1.51.41 7.61.41 7.61.41s6.1 0 7.61-.41a2.75 2.75 0 0 0 1.94-1.94C21.8 15.5 22 14.1 22 12Z" />
-    <path fill="white" d="m10 15.5 5.2-3.5L10 8.5v7Z" />
-  </svg>
-);
-
-const PlatformIcon = ({ platform }: { platform: string }) => {
-  const iconClass = "h-5 w-5";
-  switch (platform.toLowerCase()) {
-    case "facebook":
-      return <FacebookIcon />;
-    case "tiktok":
-      return <TikTokIcon />;
-    case "youtube":
-      return <YouTubeIcon />;
-    case "google_maps":
-      return <MapPin className={`${iconClass} text-green-600`} aria-label="Google Maps" />;
-    case "news":
-      return <Newspaper className={`${iconClass} text-slate-600`} aria-label="News" />;
-    default:
-      return <Globe2 className={`${iconClass} text-gray-500`} aria-label={platform} />;
-  }
-};
 
 const formatCredibilityScore = (score: number) => {
   const percentage = score <= 1 ? score * 100 : score;
@@ -96,6 +56,10 @@ export function MentionTable({ mentions, isLoading, contentMode }: MentionTableP
   const { t, i18n } = useTranslation();
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  const mentionById = useMemo(
+    () => new Map<string, Mention>(mentions.map((item) => [item.id, item])),
+    [mentions],
+  );
 
   const getDisplayContent = (mention: Mention) => {
     if (contentMode === "comment") {
@@ -194,8 +158,8 @@ export function MentionTable({ mentions, isLoading, contentMode }: MentionTableP
                 <div key={mention.id} className="p-4 flex flex-col gap-4">
                   <div className="flex justify-between items-start">
                     <div className="flex items-center gap-2">
-                      <PlatformIcon platform={mention.platform} />
-                    <span className="text-xs font-bold text-[var(--color-text-muted)] uppercase tracking-wider">
+                      <PlatformLogo platform={mention.platform} size="sm" />
+                      <span className="text-xs font-bold text-[var(--color-text-muted)] uppercase tracking-wider">
                         {t(`dashboard.filters.${mention.platform.toLowerCase()}`, { defaultValue: mention.platform })}
                       </span>
                     </div>
@@ -207,7 +171,7 @@ export function MentionTable({ mentions, isLoading, contentMode }: MentionTableP
                   </div>
 
                   <Link
-                    href={`/mentions/${encodeURIComponent(mention.id)}${mention.content_type === "post" ? "" : `#comment-${encodeURIComponent(mention.id)}`}`}
+                    href={resolveMentionDetailTarget(mention, mentionById).href}
                     className="text-sm leading-relaxed text-[var(--color-text-primary)] hover:text-[var(--color-brand)] line-clamp-3"
                   >
                     "{displayContent}"
@@ -296,7 +260,7 @@ export function MentionTable({ mentions, isLoading, contentMode }: MentionTableP
                       {/* Platform */}
                       <td className="px-4 py-4 align-top text-center">
                         <div className="flex items-center justify-center">
-                          <PlatformIcon platform={mention.platform} />
+                          <PlatformLogo platform={mention.platform} size="md" />
                         </div>
                       </td>
 
@@ -320,7 +284,7 @@ export function MentionTable({ mentions, isLoading, contentMode }: MentionTableP
                       {/* Content */}
                       <td className="px-4 py-4 align-top w-[34rem] max-w-[34rem]">
                         <Link
-                          href={`/mentions/${encodeURIComponent(mention.id)}${mention.content_type === "post" ? "" : `#comment-${encodeURIComponent(mention.id)}`}`}
+                          href={resolveMentionDetailTarget(mention, mentionById).href}
                           className="text-sm leading-relaxed line-clamp-2 text-[var(--color-text-primary)] hover:text-[var(--color-brand)]"
                         >
                           "{displayContent}"

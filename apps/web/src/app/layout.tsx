@@ -126,40 +126,41 @@ export default function RootLayout({
       </head>
       <body style={{ margin: 0, padding: 0, backgroundColor: "var(--color-bg-primary)" }}>
         <I18nextProvider i18n={i18nInstance}>
-        <ThemeProvider>
-          <LanguageProvider>
-          {isAuthPage ? (
-            /* Trang đăng nhập/đăng ký/quên mật khẩu — không có footer */
-            <main className="flex-1">{children}</main>
-          ) : hideShell ? (
-            /* Trang public (Home, Ngành, Về chúng tôi...) — có footer */
-            <div className="flex flex-col min-h-screen">
-              <main className="flex-1">{children}</main>
-              <Footer />
-            </div>
-          ) : (
-            /* Trang app (Dashboard, Mentions...) — có sidebar */
-            <ProtectedRoute>
-              <div className="flex h-screen w-screen overflow-hidden" style={{ backgroundColor: "var(--color-bg-primary)" }}>
-                <Sidebar
-                  isOpen={sidebarOpen}
-                  onClose={() => setSidebarOpen(false)}
-                />
-                <div className="flex flex-col flex-1 md:ml-64">
-                  <Header onMenuToggle={() => setSidebarOpen((prev) => !prev)} />
-                  <main
-                    className="flex-1 overflow-y-auto mt-16 pb-16 md:pb-0"
-                    style={{ backgroundColor: "var(--color-bg-primary)" }}
-                  >
-                    {children}
-                  </main>
-                  <MobileNav />
+          <ThemeProvider>
+            <LanguageProvider>
+              {isAuthPage ? (
+                /* Trang đăng nhập/đăng ký/quên mật khẩu — không có footer */
+                <main className="flex-1">{children}</main>
+              ) : hideShell ? (
+                /* Trang public (Home, Ngành, Về chúng tôi...) — có footer */
+                <div className="flex flex-col min-h-screen">
+                  <main className="flex-1">{children}</main>
+                  <Footer />
                 </div>
-              </div>
-            </ProtectedRoute>
-          )}
-          </LanguageProvider>
-        </ThemeProvider>
+              ) : (
+                /* Trang app (Dashboard, Mentions...) — có sidebar */
+                <ProtectedRoute>
+                  <div className="flex h-screen w-screen overflow-hidden" style={{ backgroundColor: "var(--color-bg-primary)" }}>
+                    <Sidebar
+                      isOpen={sidebarOpen}
+                      onClose={() => setSidebarOpen(false)}
+                    />
+                    <div className="flex flex-col flex-1 md:ml-64">
+                      <Header onMenuToggle={() => setSidebarOpen((prev) => !prev)} />
+                      <main
+                        data-app-scroll-root="true"
+                        className="flex-1 overflow-y-auto mt-16 pb-16 md:pb-0"
+                        style={{ backgroundColor: "var(--color-bg-primary)" }}
+                      >
+                        {children}
+                      </main>
+                      <MobileNav />
+                    </div>
+                  </div>
+                </ProtectedRoute>
+              )}
+            </LanguageProvider>
+          </ThemeProvider>
         </I18nextProvider>
       </body>
     </html>
