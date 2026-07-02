@@ -2,6 +2,8 @@
 import Fastify from "fastify";
 import alertsRoutes from "./routes/alerts";
 import authRoutes from "./routes/auth";
+import adminRoutes from "./routes/admin";
+import staffRoutes from "./routes/staff";
 
 const fastify = Fastify({
   logger: true,
@@ -22,6 +24,12 @@ fastify.register(alertsRoutes, { prefix: "/api/alerts" });
 
 // Register Auth routes
 fastify.register(authRoutes, { prefix: "/api/auth" });
+
+// Register Admin routes
+fastify.register(adminRoutes, { prefix: "/api/admin" });
+
+// Register Staff routes
+fastify.register(staffRoutes, { prefix: "/api/staff" });
 
 // Health check endpoint
 fastify.get("/health", async () => {

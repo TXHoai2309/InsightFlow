@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useAuth } from "@/hooks/useAuth";
+import { getDefaultRouteForRole } from "@/lib/rbac";
 
 /* ─── Brand Dashboard SVG ─── */
 function BrandDashboardSVG({ animate }: { animate: boolean }) {
@@ -314,6 +316,8 @@ export default function DashboardPreviewSection() {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
   const { t } = useTranslation();
+  const { user, profile, role } = useAuth();
+  const appRoute = profile?.defaultRoute || getDefaultRouteForRole(role);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -422,8 +426,8 @@ export default function DashboardPreviewSection() {
             </div>
 
             {/* CTA link */}
-            <a
-              href="/dashboard"
+            <Link
+              href={user ? appRoute : "/login"}
               className="inline-flex items-center gap-2 font-semibold text-[14px] group"
               style={{ color: isDark ? "var(--color-brand)" : "#6D4CFF" }}
             >
@@ -431,7 +435,7 @@ export default function DashboardPreviewSection() {
               <i
                 className="ti ti-arrow-right text-[15px] transition-transform duration-200 group-hover:translate-x-1"
               />
-            </a>
+            </Link>
           </div>
         </div>
       </div>
