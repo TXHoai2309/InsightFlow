@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { auth } from "@/lib/firebase";
 import { validateStrongPassword } from "@/lib/passwordPolicy";
 
@@ -21,6 +22,7 @@ function generateTemporaryPassword() {
 }
 
 export default function AdminPage() {
+  const { t } = useTranslation();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [brandName, setBrandName] = useState("");
@@ -48,12 +50,12 @@ export default function AdminPage() {
     try {
       const passwordPolicy = validateStrongPassword(temporaryPassword);
       if (!passwordPolicy.valid) {
-        throw new Error(passwordPolicy.errors.join(" "));
+        throw new Error(passwordPolicy.errors.map((key) => t(key)).join(" "));
       }
 
       const token = await auth.currentUser?.getIdToken();
       if (!token) {
-        throw new Error("Ban can dang nhap bang tai khoan Admin.");
+        throw new Error(t("admin.brandManager.errors.needAdmin"));
       }
 
       const response = await fetch("/api/admin/brand-managers", {
@@ -73,7 +75,7 @@ export default function AdminPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Khong the tao tai khoan Brand Manager.");
+        throw new Error(data.error || t("admin.brandManager.errors.createFailed"));
       }
 
       setCreatedAccount(data.data);
@@ -82,32 +84,31 @@ export default function AdminPage() {
       setBrandName("");
       setTemporaryPassword(generateTemporaryPassword());
     } catch (err: any) {
-      setError(err.message || "Khong the tao tai khoan Brand Manager.");
+      setError(err.message || t("admin.brandManager.errors.createFailed"));
     } finally {
       setLoading(false);
     }
   };
 
   const flowSteps = [
-    "Admin xac dinh Brand Manager trong Sprint 2",
-    "Admin nhap ho ten, email, thuong hieu va mat khau tam",
-    "He thong tao Firebase Auth user",
-    "He thong luu users/{uid} voi role brand_manager va brandId",
-    "Brand Manager dang nhap bang tai khoan duoc cap san",
+    t("admin.brandManager.flow.1"),
+    t("admin.brandManager.flow.2"),
+    t("admin.brandManager.flow.3"),
+    t("admin.brandManager.flow.4"),
+    t("admin.brandManager.flow.5"),
   ];
 
   return (
     <div className="p-4 md:p-8 space-y-6">
       <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6">
         <p className="text-[13px] font-semibold uppercase tracking-[0.08em] text-[var(--color-brand)]">
-          Sprint 2 Admin
+          {t("admin.brandManager.badge")}
         </p>
         <h1 className="mt-2 text-[28px] font-bold text-[var(--color-text-primary)]">
-          Cap tai khoan Brand Manager
+          {t("admin.brandManager.title")}
         </h1>
         <p className="mt-2 max-w-3xl text-[14px] leading-6 text-[var(--color-text-secondary)]">
-          Brand Manager khong tu dang ky. Admin tao tai khoan san, gan dung thuong hieu va cap mat khau tam thoi
-          de nguoi phu trach thuong hieu dang nhap vao InsightFlow.
+          {t("admin.brandManager.subtitle")}
         </p>
       </section>
 
@@ -132,10 +133,10 @@ export default function AdminPage() {
         >
           <div>
             <h2 className="text-[20px] font-bold text-[var(--color-text-primary)]">
-              Tao tai khoan moi
+              {t("admin.brandManager.form.title")}
             </h2>
             <p className="mt-1 text-[13px] text-[var(--color-text-secondary)]">
-              Tai khoan se duoc luu vao Firebase Auth va collection users voi role brand_manager.
+              {t("admin.brandManager.form.subtitle")}
             </p>
           </div>
 
@@ -147,18 +148,18 @@ export default function AdminPage() {
 
           <div className="grid gap-4 md:grid-cols-2">
             <label className="space-y-2">
-              <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">Ho ten</span>
+              <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">{t("admin.brandManager.form.fullName")}</span>
               <input
                 value={fullName}
                 onChange={(event) => setFullName(event.target.value)}
                 required
-                placeholder="Nguyen Van Quan Ly"
+                placeholder={t("admin.brandManager.form.fullNamePlaceholder")}
                 className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2.5 text-[14px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]"
               />
             </label>
 
             <label className="space-y-2">
-              <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">Email</span>
+              <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">{t("admin.brandManager.form.email")}</span>
               <input
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
@@ -171,7 +172,7 @@ export default function AdminPage() {
           </div>
 
           <label className="space-y-2 block">
-            <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">Thuong hieu</span>
+            <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">{t("admin.brandManager.form.brand")}</span>
             <input
               value={brandName}
               onChange={(event) => setBrandName(event.target.value)}
@@ -185,7 +186,7 @@ export default function AdminPage() {
           </label>
 
           <label className="space-y-2 block">
-            <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">Mat khau tam thoi</span>
+            <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">{t("admin.brandManager.form.tempPassword")}</span>
             <div className="flex gap-2">
               <input
                 value={temporaryPassword}
@@ -199,7 +200,7 @@ export default function AdminPage() {
                 onClick={() => setTemporaryPassword(generateTemporaryPassword())}
                 className="rounded-lg border border-[var(--color-border)] px-4 text-[13px] font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-brand-subtle)]"
               >
-                Sinh
+                {t("admin.brandManager.form.generate")}
               </button>
             </div>
           </label>
@@ -209,25 +210,24 @@ export default function AdminPage() {
             disabled={loading}
             className="rounded-lg bg-[var(--color-brand)] px-5 py-3 text-[14px] font-semibold text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {loading ? "Dang tao tai khoan..." : "Tao Brand Manager"}
+            {loading ? t("admin.brandManager.form.submitting") : t("admin.brandManager.form.submit")}
           </button>
         </form>
 
         <aside className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6">
-          <h2 className="text-[18px] font-bold text-[var(--color-text-primary)]">Ket qua cap tai khoan</h2>
+          <h2 className="text-[18px] font-bold text-[var(--color-text-primary)]">{t("admin.brandManager.result.title")}</h2>
           {createdAccount ? (
             <div className="mt-4 space-y-3 text-[13px] text-[var(--color-text-secondary)]">
-              <p><span className="font-semibold text-[var(--color-text-primary)]">Ho ten:</span> {createdAccount.displayName}</p>
+              <p><span className="font-semibold text-[var(--color-text-primary)]">{t("admin.brandManager.result.fullName")}</span> {createdAccount.displayName}</p>
               <p><span className="font-semibold text-[var(--color-text-primary)]">Email:</span> {createdAccount.email}</p>
-              <p><span className="font-semibold text-[var(--color-text-primary)]">Thuong hieu:</span> {createdAccount.brandName}</p>
+              <p><span className="font-semibold text-[var(--color-text-primary)]">{t("admin.brandManager.result.brand")}</span> {createdAccount.brandName}</p>
               <p><span className="font-semibold text-[var(--color-text-primary)]">Brand ID:</span> {createdAccount.brandId}</p>
-              <p><span className="font-semibold text-[var(--color-text-primary)]">Mat khau tam:</span> {createdAccount.temporaryPassword}</p>
-              <p><span className="font-semibold text-[var(--color-text-primary)]">Trang vao:</span> {createdAccount.defaultRoute}</p>
+              <p><span className="font-semibold text-[var(--color-text-primary)]">{t("admin.brandManager.result.tempPassword")}</span> {createdAccount.temporaryPassword}</p>
+              <p><span className="font-semibold text-[var(--color-text-primary)]">{t("admin.brandManager.result.defaultRoute")}</span> {createdAccount.defaultRoute}</p>
             </div>
           ) : (
             <p className="mt-4 text-[13px] leading-6 text-[var(--color-text-secondary)]">
-              Sau khi tao thanh cong, thong tin tai khoan va thuong hieu gan kem se hien o day de Admin ban giao cho
-              Brand Manager.
+              {t("admin.brandManager.result.empty")}
             </p>
           )}
         </aside>

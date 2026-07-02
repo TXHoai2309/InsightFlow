@@ -39,6 +39,13 @@
   - Thông tin phân công được lưu trên Firebase và có thể cập nhật khi cần.
   - Nhân viên chỉ được truy cập các chức năng thuộc phạm vi nghiệp vụ đã được phân công.
 
+- **Bắt buộc đổi mật khẩu tạm thời lần đầu đăng nhập (Brand Manager & Nhân viên)**:
+  - Thiết kế luồng kiểm soát và bắt buộc đổi mật khẩu khi đăng nhập lần đầu bằng tài khoản được hệ thống cấp sẵn (mật khẩu tạm thời).
+  - Ngăn chặn người dùng sử dụng các chức năng của hệ thống cho đến khi hoàn thành việc đổi mật khẩu.
+  - Xây dựng chức năng đổi mật khẩu cho phép nhập mật khẩu tạm thời, thiết lập mật khẩu mới và xác nhận mật khẩu mới.
+  - Vô hiệu hóa hoàn toàn mật khẩu tạm thời ngay sau khi đổi mật khẩu thành công.
+  - Áp dụng các quy tắc bảo mật mật khẩu nghiêm ngặt (độ dài tối thiểu, ký tự đặc biệt, chữ hoa, chữ thường, chữ số) và lưu trữ mật khẩu an toàn.
+
 ### Changed
 
 - Điều chỉnh quy trình quản lý tài khoản theo hướng tập trung:

@@ -42,7 +42,7 @@ export default function LoginForm() {
 
         if (!isValidRole(claims.role)) {
           await signOut(auth);
-          setError("Tai khoan nay chua duoc cap quyen truy cap InsightFlow. Vui long dung tai khoan do Admin/Quan ly thuong hieu cap.");
+          setError(t("auth.errors.unprovisioned"));
           return;
         }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
@@ -20,33 +21,33 @@ interface StaffAccount {
   hasTemporaryPassword?: boolean;
 }
 
-const roleOptions: Array<{ value: StaffRole; label: string; description: string }> = [
+const roleOptions: Array<{ value: StaffRole; labelKey: string; descriptionKey: string }> = [
   {
     value: "crisis_staff",
-    label: "Nhan vien xu ly khung hoang",
-    description: "Co the xu ly mentions, canh bao va bao cao. Khong truy cap Leads.",
+    labelKey: "team.roles.crisis.label",
+    descriptionKey: "team.roles.crisis.description",
   },
   {
     value: "lead_staff",
-    label: "Nhan vien xu ly khach hang tiem nang",
-    description: "Co the xu ly mentions, leads va bao cao. Khong truy cap Alerts.",
+    labelKey: "team.roles.lead.label",
+    descriptionKey: "team.roles.lead.description",
   },
 ];
 
 const operationOptions = [
-  { value: "dashboard", label: "Theo doi du lieu", roles: ["crisis_staff", "lead_staff"] },
-  { value: "mentions", label: "Kiem tra mention", roles: ["crisis_staff", "lead_staff"] },
-  { value: "alerts", label: "Xu ly canh bao", roles: ["crisis_staff"] },
-  { value: "reports", label: "Ho tro bao cao", roles: ["crisis_staff", "lead_staff"] },
-  { value: "leads", label: "Xu ly khach hang tiem nang", roles: ["lead_staff"] },
+  { value: "dashboard", labelKey: "team.operations.dashboard", roles: ["crisis_staff", "lead_staff"] },
+  { value: "mentions", labelKey: "team.operations.mentions", roles: ["crisis_staff", "lead_staff"] },
+  { value: "alerts", labelKey: "team.operations.alerts", roles: ["crisis_staff"] },
+  { value: "reports", labelKey: "team.operations.reports", roles: ["crisis_staff", "lead_staff"] },
+  { value: "leads", labelKey: "team.operations.leads", roles: ["lead_staff"] },
 ];
 
 const permissionLabels: Record<string, string> = {
-  dashboard: "Du lieu",
-  mentions: "Mentions",
-  alerts: "Alerts",
-  reports: "Reports",
-  leads: "Leads",
+  dashboard: "team.permissions.dashboard",
+  mentions: "team.permissions.mentions",
+  alerts: "team.permissions.alerts",
+  reports: "team.permissions.reports",
+  leads: "team.permissions.leads",
 };
 
 function generateTemporaryPassword() {
@@ -56,6 +57,7 @@ function generateTemporaryPassword() {
 }
 
 export default function TeamPage() {
+  const { t } = useTranslation();
   const { profile } = useAuth();
   const [staff, setStaff] = useState<StaffAccount[]>([]);
   const [fullName, setFullName] = useState("");
@@ -93,7 +95,7 @@ export default function TeamPage() {
 
     try {
       const token = await auth.currentUser?.getIdToken();
-      if (!token) throw new Error("Ban can dang nhap bang tai khoan Quan ly thuong hieu.");
+      if (!token) throw new Error(t("team.errors.needBrandManager"));
 
       const response = await fetch("/api/staff", {
         headers: { Authorization: `Bearer ${token}` },
@@ -101,12 +103,12 @@ export default function TeamPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Khong the tai danh sach nhan vien.");
+        throw new Error(data.error || t("team.errors.loadFailed"));
       }
 
       setStaff(data.data || []);
     } catch (err: any) {
-      setError(err.message || "Khong the tai danh sach nhan vien.");
+      setError(err.message || t("team.errors.loadFailed"));
     } finally {
       setLoadingList(false);
     }
@@ -134,11 +136,11 @@ export default function TeamPage() {
     try {
       const passwordPolicy = validateStrongPassword(temporaryPassword);
       if (!passwordPolicy.valid) {
-        throw new Error(passwordPolicy.errors.join(" "));
+        throw new Error(passwordPolicy.errors.map((key) => t(key)).join(" "));
       }
 
       const token = await auth.currentUser?.getIdToken();
-      if (!token) throw new Error("Ban can dang nhap bang tai khoan Quan ly thuong hieu.");
+      if (!token) throw new Error(t("team.errors.needBrandManager"));
 
       const response = await fetch("/api/staff", {
         method: "POST",
@@ -157,7 +159,7 @@ export default function TeamPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Khong the tao tai khoan nhan vien.");
+        throw new Error(data.error || t("team.errors.createFailed"));
       }
 
       setCreatedAccount(data.data);
@@ -169,7 +171,7 @@ export default function TeamPage() {
       setEmail("");
       setTemporaryPassword(generateTemporaryPassword());
     } catch (err: any) {
-      setError(err.message || "Khong the tao tai khoan nhan vien.");
+      setError(err.message || t("team.errors.createFailed"));
     } finally {
       setLoading(false);
     }
@@ -182,7 +184,7 @@ export default function TeamPage() {
     try {
       const user = auth.currentUser;
       if (!user?.email) {
-        throw new Error("Phien dang nhap khong hop le. Vui long dang nhap lai.");
+        throw new Error(t("team.errors.invalidSession"));
       }
 
       const credential = EmailAuthProvider.credential(user.email, managerPassword);
@@ -219,7 +221,7 @@ export default function TeamPage() {
             ),
           );
         }
-        throw new Error(data.error || "Khong the xem mat khau tam thoi.");
+        throw new Error(data.error || t("team.errors.revealFailed"));
       }
 
       setRevealedPasswords((current) => ({
@@ -237,15 +239,15 @@ export default function TeamPage() {
       setManagerPassword("");
     } catch (err: any) {
       const messageByCode: Record<string, string> = {
-        "auth/wrong-password": "Mat khau Quan ly thuong hieu khong dung.",
-        "auth/invalid-credential": "Mat khau Quan ly thuong hieu khong dung.",
-        "auth/too-many-requests": "Ban thu qua nhieu lan. Vui long doi mot lat roi thu lai.",
+        "auth/wrong-password": t("team.errors.managerPasswordWrong"),
+        "auth/invalid-credential": t("team.errors.managerPasswordWrong"),
+        "auth/too-many-requests": t("team.errors.tooManyRequests"),
       };
       const backendMessage =
         err.message === "Temporary password is no longer available for this account."
-          ? "Mat khau tam thoi khong con kha dung. Co the nhan vien da doi mat khau lan dau hoac tai khoan nay duoc tao truoc khi he thong luu mat khau tam."
+          ? t("team.errors.tempPasswordUnavailable")
           : err.message;
-      setRevealError(messageByCode[err.code] || backendMessage || "Khong the xem mat khau tam thoi.");
+      setRevealError(messageByCode[err.code] || backendMessage || t("team.errors.revealFailed"));
     } finally {
       setRevealLoading(false);
     }
@@ -255,15 +257,13 @@ export default function TeamPage() {
     <div className="p-4 md:p-8 space-y-6">
       <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6">
         <p className="text-[13px] font-semibold uppercase tracking-[0.08em] text-[var(--color-brand)]">
-          Quan ly nhan vien theo brand
+          {t("team.badge")}
         </p>
         <h1 className="mt-2 text-[28px] font-bold text-[var(--color-text-primary)]">
-          Tao tai khoan va phan cong nghiep vu
+          {t("team.title")}
         </h1>
         <p className="mt-2 max-w-3xl text-[14px] leading-6 text-[var(--color-text-secondary)]">
-          Nhan vien duoc tao tai day se tu dong gan voi thuong hieu{" "}
-          <strong>{profile?.brandName || "dang duoc gan cho ban"}</strong>. Moi tai khoan se chi truy cap cac chuc
-          nang dung voi nghiep vu duoc phan cong.
+          {t("team.subtitle", { brandName: profile?.brandName || t("team.currentBrandFallback") })}
         </p>
       </section>
 
@@ -273,9 +273,9 @@ export default function TeamPage() {
           className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 space-y-5"
         >
           <div>
-            <h2 className="text-[20px] font-bold text-[var(--color-text-primary)]">Tao nhan vien moi</h2>
+            <h2 className="text-[20px] font-bold text-[var(--color-text-primary)]">{t("team.form.title")}</h2>
             <p className="mt-1 text-[13px] text-[var(--color-text-secondary)]">
-              Brand se duoc lay tu ho so Brand Manager hien tai, khong nhap thu cong.
+              {t("team.form.subtitle")}
             </p>
           </div>
 
@@ -287,24 +287,24 @@ export default function TeamPage() {
 
           <div className="grid gap-4 md:grid-cols-2">
             <label className="space-y-2">
-              <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">Ho ten</span>
+              <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">{t("team.form.fullName")}</span>
               <input
                 value={fullName}
                 onChange={(event) => setFullName(event.target.value)}
                 required
-                placeholder="Nguyen Van A"
+                placeholder={t("team.form.fullNamePlaceholder")}
                 className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2.5 text-[14px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]"
               />
             </label>
 
             <label className="space-y-2">
-              <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">Email</span>
+              <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">{t("team.form.email")}</span>
               <input
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 required
                 type="email"
-                placeholder="nhan_vien@brand.com"
+                placeholder={t("team.form.emailPlaceholder")}
                 className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2.5 text-[14px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]"
               />
             </label>
@@ -326,16 +326,16 @@ export default function TeamPage() {
                   checked={staffRole === option.value}
                   onChange={() => setStaffRole(option.value)}
                 />
-                <span className="block text-[14px] font-bold text-[var(--color-text-primary)]">{option.label}</span>
+                <span className="block text-[14px] font-bold text-[var(--color-text-primary)]">{t(option.labelKey)}</span>
                 <span className="mt-1 block text-[12px] leading-5 text-[var(--color-text-secondary)]">
-                  {option.description}
+                  {t(option.descriptionKey)}
                 </span>
               </label>
             ))}
           </div>
 
           <fieldset className="space-y-3">
-            <legend className="text-[13px] font-semibold text-[var(--color-text-primary)]">Nghiep vu duoc phan cong</legend>
+            <legend className="text-[13px] font-semibold text-[var(--color-text-primary)]">{t("team.form.operations")}</legend>
             <div className="grid gap-2 md:grid-cols-2">
               {availableOperations.map((operation) => (
                 <label
@@ -348,14 +348,14 @@ export default function TeamPage() {
                     onChange={() => toggleOperation(operation.value)}
                     className="rounded text-[var(--color-brand)] focus:ring-[var(--color-brand)]"
                   />
-                  {operation.label}
+                  {t(operation.labelKey)}
                 </label>
               ))}
             </div>
           </fieldset>
 
           <label className="space-y-2 block">
-            <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">Mat khau tam thoi</span>
+            <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">{t("team.form.tempPassword")}</span>
             <div className="flex gap-2">
               <input
                 value={temporaryPassword}
@@ -369,7 +369,7 @@ export default function TeamPage() {
                 onClick={() => setTemporaryPassword(generateTemporaryPassword())}
                 className="rounded-lg border border-[var(--color-border)] px-4 text-[13px] font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-brand-subtle)]"
               >
-                Sinh
+                {t("team.form.generate")}
               </button>
             </div>
           </label>
@@ -379,23 +379,23 @@ export default function TeamPage() {
             disabled={loading}
             className="rounded-lg bg-[var(--color-brand)] px-5 py-3 text-[14px] font-semibold text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {loading ? "Dang tao tai khoan..." : "Tao tai khoan nhan vien"}
+            {loading ? t("team.form.submitting") : t("team.form.submit")}
           </button>
         </form>
 
         <aside className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6">
-          <h2 className="text-[18px] font-bold text-[var(--color-text-primary)]">Thong tin ban giao</h2>
+          <h2 className="text-[18px] font-bold text-[var(--color-text-primary)]">{t("team.handoff.title")}</h2>
           {createdAccount ? (
             <div className="mt-4 space-y-3 text-[13px] text-[var(--color-text-secondary)]">
-              <p><span className="font-semibold text-[var(--color-text-primary)]">Nhan vien:</span> {createdAccount.displayName}</p>
+              <p><span className="font-semibold text-[var(--color-text-primary)]">{t("team.handoff.employee")}</span> {createdAccount.displayName}</p>
               <p><span className="font-semibold text-[var(--color-text-primary)]">Email:</span> {createdAccount.email}</p>
-              <p><span className="font-semibold text-[var(--color-text-primary)]">Brand:</span> {createdAccount.brandName}</p>
-              <p><span className="font-semibold text-[var(--color-text-primary)]">Mat khau tam:</span> {createdAccount.temporaryPassword}</p>
-              <p><span className="font-semibold text-[var(--color-text-primary)]">Trang vao:</span> {createdAccount.defaultRoute}</p>
+              <p><span className="font-semibold text-[var(--color-text-primary)]">{t("team.handoff.brand")}</span> {createdAccount.brandName}</p>
+              <p><span className="font-semibold text-[var(--color-text-primary)]">{t("team.handoff.tempPassword")}</span> {createdAccount.temporaryPassword}</p>
+              <p><span className="font-semibold text-[var(--color-text-primary)]">{t("team.handoff.defaultRoute")}</span> {createdAccount.defaultRoute}</p>
             </div>
           ) : (
             <p className="mt-4 text-[13px] leading-6 text-[var(--color-text-secondary)]">
-              Sau khi tao thanh cong, thong tin dang nhap tam thoi cua nhan vien se hien tai day.
+              {t("team.handoff.empty")}
             </p>
           )}
         </aside>
@@ -404,16 +404,16 @@ export default function TeamPage() {
       <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h2 className="text-[20px] font-bold text-[var(--color-text-primary)]">Danh sach nhan vien</h2>
+            <h2 className="text-[20px] font-bold text-[var(--color-text-primary)]">{t("team.list.title")}</h2>
             <p className="text-[13px] text-[var(--color-text-secondary)]">
-              Chi hien nhan vien thuoc brand {profile?.brandName || "hien tai"}.
+              {t("team.list.subtitle", { brandName: profile?.brandName || t("team.list.brandFallback") })}
             </p>
           </div>
           <button
             onClick={loadStaff}
             className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-[13px] font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-brand-subtle)]"
           >
-            Tai lai
+            {t("team.list.reload")}
           </button>
         </div>
 
@@ -421,21 +421,21 @@ export default function TeamPage() {
           <table className="min-w-full text-left text-[14px]">
             <thead className="text-[12px] uppercase tracking-[0.06em] text-[var(--color-text-muted)]">
               <tr>
-                <th className="py-3 pr-4">Nhan vien</th>
-                <th className="py-3 pr-4">Vai tro</th>
-                <th className="py-3 pr-4">Nghiep vu</th>
-                <th className="py-3 pr-4">Trang vao</th>
-                <th className="py-3 pr-4">Mat khau tam</th>
+                <th className="py-3 pr-4">{t("team.table.employee")}</th>
+                <th className="py-3 pr-4">{t("team.table.role")}</th>
+                <th className="py-3 pr-4">{t("team.table.operations")}</th>
+                <th className="py-3 pr-4">{t("team.table.defaultRoute")}</th>
+                <th className="py-3 pr-4">{t("team.table.tempPassword")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--color-border)]">
               {loadingList ? (
                 <tr>
-                  <td className="py-5 text-[var(--color-text-secondary)]" colSpan={5}>Dang tai danh sach...</td>
+                  <td className="py-5 text-[var(--color-text-secondary)]" colSpan={5}>{t("team.table.loading")}</td>
                 </tr>
               ) : staff.length === 0 ? (
                 <tr>
-                  <td className="py-5 text-[var(--color-text-secondary)]" colSpan={5}>Chua co nhan vien nao.</td>
+                  <td className="py-5 text-[var(--color-text-secondary)]" colSpan={5}>{t("team.table.empty")}</td>
                 </tr>
               ) : (
                 staff.map((item) => (
@@ -445,7 +445,7 @@ export default function TeamPage() {
                       <p className="text-[12px] text-[var(--color-text-secondary)]">{item.email}</p>
                     </td>
                     <td className="py-4 pr-4 text-[var(--color-text-secondary)]">
-                      {item.role === "crisis_staff" ? "Xu ly khung hoang" : "Xu ly lead"}
+                      {item.role === "crisis_staff" ? t("team.staffRole.crisis") : t("team.staffRole.lead")}
                     </td>
                     <td className="py-4 pr-4">
                       <div className="flex flex-wrap gap-2">
@@ -454,7 +454,7 @@ export default function TeamPage() {
                             key={permission}
                             className="rounded-full bg-[var(--color-brand-subtle)] px-2.5 py-1 text-[12px] font-semibold text-[var(--color-brand)]"
                           >
-                            {permissionLabels[permission] || permission}
+                            {permissionLabels[permission] ? t(permissionLabels[permission]) : permission}
                           </span>
                         ))}
                       </div>
@@ -489,7 +489,7 @@ export default function TeamPage() {
                           }}
                           className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-[12px] font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-brand-subtle)]"
                         >
-                          Cap lai
+                          {t("team.password.reset")}
                         </button>
                       )}
                     </td>
@@ -505,12 +505,12 @@ export default function TeamPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-[420px] rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 shadow-xl">
             <h3 className="text-[18px] font-bold text-[var(--color-text-primary)]">
-              {passwordRequestMode === "reset" ? "Xac thuc de cap lai mat khau" : "Xac thuc de xem mat khau"}
+              {passwordRequestMode === "reset" ? t("team.password.modal.resetTitle") : t("team.password.modal.revealTitle")}
             </h3>
             <p className="mt-2 text-[13px] leading-5 text-[var(--color-text-secondary)]">
               {passwordRequestMode === "reset"
-                ? "Nhap mat khau tai khoan Quan ly thuong hieu cua ban. He thong se tao mat khau tam moi cho nhan vien."
-                : "Nhap mat khau tai khoan Quan ly thuong hieu cua ban de xem mat khau tam thoi cua nhan vien."}
+                ? t("team.password.modal.resetDesc")
+                : t("team.password.modal.revealDesc")}
             </p>
 
             {revealError && (
@@ -521,7 +521,7 @@ export default function TeamPage() {
 
             <label className="mt-5 block space-y-2">
               <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">
-                Mat khau Quan ly thuong hieu
+                {t("team.password.modal.managerPassword")}
               </span>
               <input
                 value={managerPassword}
@@ -543,7 +543,7 @@ export default function TeamPage() {
                 }}
                 className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-[13px] font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-brand-subtle)]"
               >
-                Huy
+                {t("team.password.modal.cancel")}
               </button>
               <button
                 type="button"
@@ -551,7 +551,11 @@ export default function TeamPage() {
                 onClick={() => handleRevealTemporaryPassword(passwordRequestUid)}
                 className="rounded-lg bg-[var(--color-brand)] px-4 py-2 text-[13px] font-semibold text-white hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {revealLoading ? "Dang xac thuc..." : passwordRequestMode === "reset" ? "Cap lai va xem" : "Xem mat khau"}
+                {revealLoading
+                  ? t("team.password.modal.authenticating")
+                  : passwordRequestMode === "reset"
+                    ? t("team.password.modal.resetAndReveal")
+                    : t("team.password.modal.reveal")}
               </button>
             </div>
           </div>

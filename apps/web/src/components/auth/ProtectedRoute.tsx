@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { usePathname, useRouter } from "next/navigation";
 import { canAccessPath, getDefaultRouteForRole } from "@/lib/rbac";
 import { useAuth } from "@/hooks/useAuth";
@@ -10,6 +11,7 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
+  const { t } = useTranslation();
   const pathname = usePathname();
   const router = useRouter();
   const { user, profile, role, loading } = useAuth();
@@ -40,7 +42,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[var(--color-bg-primary)] text-[var(--color-text-secondary)]">
-        Dang kiem tra quyen truy cap...
+        {t("auth.protected.loading")}
       </div>
     );
   }

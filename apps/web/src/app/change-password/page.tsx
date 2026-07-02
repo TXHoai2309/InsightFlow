@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useRouter } from "next/navigation";
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from "firebase/auth";
 import { auth } from "@/lib/firebase";
@@ -9,6 +10,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAuthStore } from "@/stores/auth.store";
 
 export default function ChangePasswordPage() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { profile } = useAuth();
   const { setProfile } = useAuthStore();
@@ -29,19 +31,19 @@ export default function ChangePasswordPage() {
     try {
       const user = auth.currentUser;
       if (!user?.email) {
-        throw new Error("Phien dang nhap khong hop le. Vui long dang nhap lai.");
+        throw new Error(t("changePassword.errors.invalidSession"));
       }
 
       if (!passwordPolicy.valid) {
-        throw new Error(passwordPolicy.errors.join(" "));
+        throw new Error(passwordPolicy.errors.map((key) => t(key)).join(" "));
       }
 
       if (newPassword !== confirmPassword) {
-        throw new Error("Mat khau moi va xac nhan mat khau khong khop.");
+        throw new Error(t("changePassword.errors.mismatch"));
       }
 
       if (temporaryPassword === newPassword) {
-        throw new Error("Mat khau moi phai khac mat khau tam thoi.");
+        throw new Error(t("changePassword.errors.sameAsTemporary"));
       }
 
       const credential = EmailAuthProvider.credential(user.email, temporaryPassword);
@@ -56,7 +58,7 @@ export default function ChangePasswordPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Khong the hoan tat doi mat khau.");
+        throw new Error(data.error || t("changePassword.errors.completeFailed"));
       }
 
       if (profile) {
@@ -67,13 +69,13 @@ export default function ChangePasswordPage() {
       router.replace(profile?.defaultRoute || "/dashboard");
     } catch (err: any) {
       const messageByCode: Record<string, string> = {
-        "auth/wrong-password": "Mat khau tam thoi khong dung.",
-        "auth/invalid-credential": "Mat khau tam thoi khong dung hoac da het hieu luc.",
-        "auth/weak-password": "Mat khau moi chua du manh.",
-        "auth/requires-recent-login": "Vui long dang nhap lai roi doi mat khau.",
-        "auth/too-many-requests": "Firebase dang tam khoa yeu cau do thu sai qua nhieu lan. Vui long doi vai phut roi thu lai, hoac lien he Admin/Quan ly thuong hieu de cap lai mat khau tam.",
+        "auth/wrong-password": t("changePassword.errors.wrongTemporary"),
+        "auth/invalid-credential": t("changePassword.errors.invalidTemporary"),
+        "auth/weak-password": t("changePassword.errors.weakPassword"),
+        "auth/requires-recent-login": t("changePassword.errors.recentLogin"),
+        "auth/too-many-requests": t("changePassword.errors.tooManyRequests"),
       };
-      setError(messageByCode[err.code] || err.message || "Khong the doi mat khau.");
+      setError(messageByCode[err.code] || err.message || t("changePassword.errors.failed"));
     } finally {
       setLoading(false);
     }
@@ -83,13 +85,13 @@ export default function ChangePasswordPage() {
     <main className="min-h-screen bg-[var(--color-bg-primary)] p-4 md:p-8">
       <div className="mx-auto max-w-[560px] rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 md:p-8">
         <p className="text-[13px] font-semibold uppercase tracking-[0.08em] text-[var(--color-brand)]">
-          Bao mat tai khoan
+          {t("changePassword.badge")}
         </p>
         <h1 className="mt-2 text-[28px] font-bold text-[var(--color-text-primary)]">
-          Doi mat khau lan dau
+          {t("changePassword.title")}
         </h1>
         <p className="mt-2 text-[14px] leading-6 text-[var(--color-text-secondary)]">
-          Tai khoan cua ban dang dung mat khau tam thoi. Hay dat mat khau moi truoc khi su dung InsightFlow.
+          {t("changePassword.subtitle")}
         </p>
 
         {error && (
@@ -100,7 +102,7 @@ export default function ChangePasswordPage() {
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-5">
           <label className="block space-y-2">
-            <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">Mat khau tam thoi</span>
+            <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">{t("changePassword.temporaryPassword")}</span>
             <input
               value={temporaryPassword}
               onChange={(event) => setTemporaryPassword(event.target.value)}
@@ -111,7 +113,7 @@ export default function ChangePasswordPage() {
           </label>
 
           <label className="block space-y-2">
-            <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">Mat khau moi</span>
+            <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">{t("changePassword.newPassword")}</span>
             <input
               value={newPassword}
               onChange={(event) => setNewPassword(event.target.value)}
@@ -122,7 +124,7 @@ export default function ChangePasswordPage() {
           </label>
 
           <label className="block space-y-2">
-            <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">Xac nhan mat khau moi</span>
+            <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">{t("changePassword.confirmPassword")}</span>
             <input
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
@@ -139,15 +141,15 @@ export default function ChangePasswordPage() {
               onChange={(event) => setShowPassword(event.target.checked)}
               className="rounded text-[var(--color-brand)] focus:ring-[var(--color-brand)]"
             />
-            Hien mat khau
+            {t("changePassword.showPassword")}
           </label>
 
           <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-4">
-            <p className="text-[13px] font-semibold text-[var(--color-text-primary)]">Chinh sach mat khau</p>
+            <p className="text-[13px] font-semibold text-[var(--color-text-primary)]">{t("changePassword.policy.title")}</p>
             <ul className="mt-2 space-y-1 text-[12px] text-[var(--color-text-secondary)]">
-              <li>Toi thieu 10 ky tu.</li>
-              <li>Co chu hoa, chu thuong, so va ky tu dac biet.</li>
-              <li>Khac voi mat khau tam thoi.</li>
+              <li>{t("changePassword.policy.length")}</li>
+              <li>{t("changePassword.policy.complexity")}</li>
+              <li>{t("changePassword.policy.different")}</li>
             </ul>
           </div>
 
@@ -156,7 +158,7 @@ export default function ChangePasswordPage() {
             disabled={loading}
             className="w-full rounded-lg bg-[var(--color-brand)] px-5 py-3 text-[14px] font-semibold text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {loading ? "Dang doi mat khau..." : "Doi mat khau va tiep tuc"}
+            {loading ? t("changePassword.submitting") : t("changePassword.submit")}
           </button>
         </form>
       </div>

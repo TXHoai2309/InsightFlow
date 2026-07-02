@@ -7,23 +7,23 @@ export function validateStrongPassword(password: string): PasswordPolicyResult {
   const errors: string[] = [];
 
   if (password.length < 10) {
-    errors.push("Mat khau phai co toi thieu 10 ky tu.");
+    errors.push("passwordPolicy.minLength");
   }
 
   if (!/[A-Z]/.test(password)) {
-    errors.push("Mat khau can co it nhat 1 chu hoa.");
+    errors.push("passwordPolicy.uppercase");
   }
 
   if (!/[a-z]/.test(password)) {
-    errors.push("Mat khau can co it nhat 1 chu thuong.");
+    errors.push("passwordPolicy.lowercase");
   }
 
   if (!/[0-9]/.test(password)) {
-    errors.push("Mat khau can co it nhat 1 chu so.");
+    errors.push("passwordPolicy.number");
   }
 
   if (!/[^A-Za-z0-9]/.test(password)) {
-    errors.push("Mat khau can co it nhat 1 ky tu dac biet.");
+    errors.push("passwordPolicy.special");
   }
 
   return {
