@@ -3,7 +3,9 @@ import { FieldValue } from "firebase-admin/firestore";
 import { authAdmin, db } from "../services/firebase";
 import { verifyToken } from "../middleware/auth";
 
-type StaffRole = "crisis_staff" | "lead_staff";
+type StaffRole = "crisis_employee" | "lead_employee";
+type LegacyStaffRole = "crisis_staff" | "lead_staff";
+type StaffRoleInput = StaffRole | LegacyStaffRole;
 
 const operationPermissions = {
   dashboard: "dashboard",
@@ -14,18 +16,18 @@ const operationPermissions = {
 } as const;
 
 const roleAllowedPermissions: Record<StaffRole, string[]> = {
-  crisis_staff: ["dashboard", "mentions", "alerts", "reports"],
-  lead_staff: ["dashboard", "mentions", "leads", "reports"],
+  crisis_employee: ["dashboard", "mentions", "alerts", "reports"],
+  lead_employee: ["dashboard", "mentions", "leads", "reports"],
 };
 
 const defaultRoutePriority: Record<StaffRole, Array<{ permission: string; route: string }>> = {
-  crisis_staff: [
+  crisis_employee: [
     { permission: "alerts", route: "/alerts" },
     { permission: "mentions", route: "/mentions" },
     { permission: "reports", route: "/reports" },
     { permission: "dashboard", route: "/dashboard" },
   ],
-  lead_staff: [
+  lead_employee: [
     { permission: "leads", route: "/leads" },
     { permission: "mentions", route: "/mentions" },
     { permission: "reports", route: "/reports" },
@@ -37,8 +39,10 @@ function getDomainFromEmail(email: string) {
   return email.includes("@") ? email.split("@")[1].toLowerCase() : "";
 }
 
-function isStaffRole(role: unknown): role is StaffRole {
-  return role === "crisis_staff" || role === "lead_staff";
+function normalizeStaffRole(role: unknown): StaffRole | null {
+  if (role === "crisis_employee" || role === "crisis_staff") return "crisis_employee";
+  if (role === "lead_employee" || role === "lead_staff") return "lead_employee";
+  return null;
 }
 
 function resolvePermissions(staffRole: StaffRole, operations: unknown) {
@@ -94,7 +98,7 @@ export default async function staffRoutes(fastify: FastifyInstance, options: Fas
       const snapshot = await db
         .collection("users")
         .where("brandId", "==", manager.brandId)
-        .where("role", "in", ["crisis_staff", "lead_staff"])
+        .where("role", "in", ["crisis_employee", "lead_employee", "crisis_staff", "lead_staff"])
         .get();
 
       const staff = snapshot.docs.map((doc) => {
@@ -103,7 +107,7 @@ export default async function staffRoutes(fastify: FastifyInstance, options: Fas
           uid: data.uid,
           email: data.email,
           displayName: data.displayName,
-          role: data.role,
+          role: normalizeStaffRole(data.role) || data.role,
           brandId: data.brandId,
           brandName: data.brandName,
           permissions: data.permissions || [],
@@ -128,16 +132,16 @@ export default async function staffRoutes(fastify: FastifyInstance, options: Fas
       fullName?: string;
       email?: string;
       temporaryPassword?: string;
-      staffRole?: StaffRole;
+      staffRole?: StaffRoleInput;
       operations?: string[];
     };
 
     const fullName = body.fullName?.trim();
     const email = body.email?.trim().toLowerCase();
     const temporaryPassword = body.temporaryPassword?.trim();
-    const staffRole = body.staffRole;
+    const staffRole = normalizeStaffRole(body.staffRole);
 
-    if (!fullName || !email || !temporaryPassword || !isStaffRole(staffRole)) {
+    if (!fullName || !email || !temporaryPassword || !staffRole) {
       return reply.status(400).send({
         success: false,
         error: "Full name, email, staffRole and temporaryPassword are required.",

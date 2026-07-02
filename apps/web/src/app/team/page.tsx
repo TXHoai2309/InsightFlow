@@ -4,13 +4,15 @@ import React, { useEffect, useMemo, useState } from "react";
 import { auth } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
 
-type StaffRole = "crisis_staff" | "lead_staff";
+type StaffRole = "crisis_employee" | "lead_employee";
+type LegacyStaffRole = "crisis_staff" | "lead_staff";
+type StaffRoleValue = StaffRole | LegacyStaffRole;
 
 interface StaffAccount {
   uid: string;
   email: string;
   displayName: string;
-  role: StaffRole;
+  role: StaffRoleValue;
   brandName: string;
   permissions: string[];
   defaultRoute: string;
@@ -19,23 +21,23 @@ interface StaffAccount {
 
 const roleOptions: Array<{ value: StaffRole; label: string; description: string }> = [
   {
-    value: "crisis_staff",
+    value: "crisis_employee",
     label: "Nhan vien xu ly khung hoang",
     description: "Co the xu ly mentions, canh bao va bao cao. Khong truy cap Leads.",
   },
   {
-    value: "lead_staff",
+    value: "lead_employee",
     label: "Nhan vien xu ly khach hang tiem nang",
     description: "Co the xu ly mentions, leads va bao cao. Khong truy cap Alerts.",
   },
 ];
 
 const operationOptions = [
-  { value: "dashboard", label: "Theo doi du lieu", roles: ["crisis_staff", "lead_staff"] },
-  { value: "mentions", label: "Kiem tra mention", roles: ["crisis_staff", "lead_staff"] },
-  { value: "alerts", label: "Xu ly canh bao", roles: ["crisis_staff"] },
-  { value: "reports", label: "Ho tro bao cao", roles: ["crisis_staff", "lead_staff"] },
-  { value: "leads", label: "Xu ly khach hang tiem nang", roles: ["lead_staff"] },
+  { value: "dashboard", label: "Theo doi du lieu", roles: ["crisis_employee", "lead_employee"] },
+  { value: "mentions", label: "Kiem tra mention", roles: ["crisis_employee", "lead_employee"] },
+  { value: "alerts", label: "Xu ly canh bao", roles: ["crisis_employee"] },
+  { value: "reports", label: "Ho tro bao cao", roles: ["crisis_employee", "lead_employee"] },
+  { value: "leads", label: "Xu ly khach hang tiem nang", roles: ["lead_employee"] },
 ];
 
 const permissionLabels: Record<string, string> = {
@@ -52,12 +54,16 @@ function generateTemporaryPassword() {
   return `IF@${randomPart}24`;
 }
 
+function isCrisisRole(role: StaffRoleValue) {
+  return role === "crisis_employee" || role === "crisis_staff";
+}
+
 export default function TeamPage() {
   const { profile } = useAuth();
   const [staff, setStaff] = useState<StaffAccount[]>([]);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [staffRole, setStaffRole] = useState<StaffRole>("crisis_staff");
+  const [staffRole, setStaffRole] = useState<StaffRole>("crisis_employee");
   const [operations, setOperations] = useState<string[]>(["dashboard", "mentions", "alerts", "reports"]);
   const [temporaryPassword, setTemporaryPassword] = useState(generateTemporaryPassword());
   const [loading, setLoading] = useState(false);
@@ -72,7 +78,7 @@ export default function TeamPage() {
 
   useEffect(() => {
     const defaults =
-      staffRole === "crisis_staff"
+      staffRole === "crisis_employee"
         ? ["dashboard", "mentions", "alerts", "reports"]
         : ["dashboard", "mentions", "leads", "reports"];
     setOperations(defaults);
@@ -354,7 +360,7 @@ export default function TeamPage() {
                       <p className="text-[12px] text-[var(--color-text-secondary)]">{item.email}</p>
                     </td>
                     <td className="py-4 pr-4 text-[var(--color-text-secondary)]">
-                      {item.role === "crisis_staff" ? "Xu ly khung hoang" : "Xu ly lead"}
+                      {isCrisisRole(item.role) ? "Xu ly khung hoang" : "Xu ly lead"}
                     </td>
                     <td className="py-4 pr-4">
                       <div className="flex flex-wrap gap-2">
