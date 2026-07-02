@@ -1,7 +1,6 @@
 // apps/web/src/app/api/auth/reset-password/route.ts
 import { NextRequest, NextResponse } from "next/server";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+import { adminAuth } from "@/lib/firebase-admin";
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,27 +14,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/auth/reset-password`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, newPassword }),
-    });
+    // Tìm user theo email bằng Firebase Admin SDK
+    const userRecord = await adminAuth.getUserByEmail(email.trim());
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      return NextResponse.json(
-        { error: data.error || "Không thể cập nhật mật khẩu." },
-        { status: response.status }
-      );
-    }
+    // Cập nhật mật khẩu trực tiếp
+    await adminAuth.updateUser(userRecord.uid, { password: newPassword });
 
     return NextResponse.json(
       { message: "Mật khẩu đã được cập nhật thành công." },
       { status: 200 }
     );
   } catch (error: any) {
-    console.error("[API Proxy] reset-password error:", error);
+    console.error("[reset-password] Error:", error);
+
+    if (
+      error.code === "auth/user-not-found" ||
+      error.message?.includes("user-not-found")
+    ) {
+      return NextResponse.json(
+        { error: "Không tìm thấy tài khoản với email này." },
+        { status: 404 }
+      );
+    }
+
     return NextResponse.json(
       { error: "Lỗi máy chủ. Vui lòng thử lại sau." },
       { status: 500 }
