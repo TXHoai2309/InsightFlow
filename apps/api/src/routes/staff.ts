@@ -67,6 +67,41 @@ function generateTemporaryPassword() {
   return `IF@${randomPart}24`;
 }
 
+function getManagerDomain(manager: { companyDomain?: string; email?: string }) {
+  return (manager.companyDomain || getDomainFromEmail(manager.email || "")).toLowerCase();
+}
+
+function belongsToManagerBrand(staffProfile: any, manager: { brandId: string; companyDomain?: string; email?: string }) {
+  const managerDomain = getManagerDomain(manager);
+  const staffDomain = (
+    staffProfile?.companyDomain ||
+    getDomainFromEmail(staffProfile?.email || "")
+  ).toLowerCase();
+
+  return staffProfile?.brandId === manager.brandId || Boolean(managerDomain && staffDomain === managerDomain);
+}
+
+function isStaffAccount(data: any, manager: { uid: string; brandId: string; companyDomain?: string; email?: string }) {
+  if (!data || data.uid === manager.uid) return false;
+  if (data.role === "admin" || data.role === "brand_manager") return false;
+  if (data.role === "crisis_staff" || data.role === "lead_staff") return true;
+  return belongsToManagerBrand(data, manager);
+}
+
+function normalizeStaffRole(data: any): StaffRole {
+  if (data?.role === "lead_staff" || (Array.isArray(data?.permissions) && data.permissions.includes("leads"))) {
+    return "lead_staff";
+  }
+  return "crisis_staff";
+}
+
+function normalizeStaffPermissions(role: StaffRole, permissions: unknown) {
+  const savedPermissions = Array.isArray(permissions)
+    ? permissions.filter((permission): permission is string => typeof permission === "string")
+    : [];
+  return savedPermissions.length > 0 ? savedPermissions : roleAllowedPermissions[role];
+}
+
 async function ensureBrandManager(request: FastifyRequest, reply: FastifyReply) {
   await verifyToken(request, reply);
   if (reply.sent) return null;
@@ -89,6 +124,8 @@ async function ensureBrandManager(request: FastifyRequest, reply: FastifyReply) 
     uid: requester.uid,
     brandId: requesterProfile.brandId as string,
     brandName: requesterProfile.brandName as string,
+    email: requesterProfile.email as string | undefined,
+    companyDomain: (requesterProfile.companyDomain || getDomainFromEmail(requesterProfile.email || "")) as string,
   };
 }
 
@@ -98,28 +135,28 @@ export default async function staffRoutes(fastify: FastifyInstance, options: Fas
     if (!manager) return;
 
     try {
-      const snapshot = await db
-        .collection("users")
-        .where("brandId", "==", manager.brandId)
-        .where("role", "in", ["crisis_staff", "lead_staff"])
-        .get();
+      const snapshot = await db.collection("users").get();
 
-      const staff = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        return {
-          uid: data.uid,
-          email: data.email,
-          displayName: data.displayName,
-          role: data.role,
-          brandId: data.brandId,
-          brandName: data.brandName,
-          permissions: data.permissions || [],
-          defaultRoute: data.defaultRoute,
-          createdAt: data.createdAt,
-          updatedAt: data.updatedAt,
-          hasTemporaryPassword: data.temporaryPasswordIssued === true && Boolean(data.temporaryPassword),
-        };
-      });
+      const staff = snapshot.docs
+        .map((doc) => doc.data())
+        .filter((data) => belongsToManagerBrand(data, manager) && isStaffAccount(data, manager))
+        .map((data) => {
+          const role = normalizeStaffRole(data);
+          const permissions = normalizeStaffPermissions(role, data.permissions);
+          return {
+            uid: data.uid,
+            email: data.email,
+            displayName: data.displayName,
+            role,
+            brandId: data.brandId || manager.brandId,
+            brandName: data.brandName || manager.brandName,
+            permissions,
+            defaultRoute: data.defaultRoute || resolveDefaultRoute(role, permissions),
+            createdAt: data.createdAt,
+            updatedAt: data.updatedAt,
+            hasTemporaryPassword: data.temporaryPasswordIssued === true && Boolean(data.temporaryPassword),
+          };
+        });
 
       return { success: true, data: staff };
     } catch (error: any) {
@@ -282,8 +319,8 @@ export default async function staffRoutes(fastify: FastifyInstance, options: Fas
 
       if (
         !staffProfile ||
-        staffProfile.brandId !== manager.brandId ||
-        !["crisis_staff", "lead_staff"].includes(staffProfile.role)
+        !belongsToManagerBrand(staffProfile, manager) ||
+        !isStaffAccount(staffProfile, manager)
       ) {
         return reply.status(404).send({ success: false, error: "Staff account not found in your brand." });
       }
@@ -332,8 +369,8 @@ export default async function staffRoutes(fastify: FastifyInstance, options: Fas
 
       if (
         !staffProfile ||
-        staffProfile.brandId !== manager.brandId ||
-        !["crisis_staff", "lead_staff"].includes(staffProfile.role)
+        !belongsToManagerBrand(staffProfile, manager) ||
+        !isStaffAccount(staffProfile, manager)
       ) {
         return reply.status(404).send({ success: false, error: "Staff account not found in your brand." });
       }
