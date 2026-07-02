@@ -5,6 +5,11 @@ import { useTranslation } from "react-i18next";
 import { useRouter } from "next/navigation";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { PLATFORM_META } from "@/lib/services/dashboard";
+import {
+  resolveMentionDetailTarget,
+  type MentionDetailTarget,
+} from "@/lib/mention-navigation";
+import { PlatformLogo } from "@/components/platform/PlatformLogo";
 import type { Lead, Mention } from "@/types/dashboard";
 
 interface LeadCardProps {
@@ -12,15 +17,14 @@ interface LeadCardProps {
   currentTime: number;
 }
 
-const PLATFORM_ICONS: Record<string, string> = {
-  facebook: "chat",
-  tiktok: "music_note",
-  youtube: "play_circle",
-  thread: "alternate_email",
-  be: "restaurant",
-  google_maps: "pin_drop",
-  news: "newspaper",
-};
+function normalizeMatchText(value?: string) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 const STATUS_META: Record<
   Lead["status"],
@@ -249,7 +253,6 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
     label: "Khác",
     color: "#666",
   };
-  const platformIcon = PLATFORM_ICONS[lead.platform] || "public";
   const statusInfo = STATUS_META[lead.status];
   const contactUrl = lead.social_profile_url?.trim();
   const originalPostUrl = lead.url?.trim();
@@ -272,55 +275,139 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
   };
 
   const leadUrlNormalized = normalizeUrlForMatch(lead.url);
+  const leadAnchorMatch = lead.url?.match(/#comment[_-]([a-zA-Z0-9\-_]+)/);
+  const leadAnchorId = leadAnchorMatch?.[1] || "";
+  const leadAuthorNormalized = normalizeMatchText(lead.author);
+  const leadContentNormalized = normalizeMatchText(lead.content);
+  const leadPostedAtMs = lead.posted_at
+    ? new Date(lead.posted_at).getTime()
+    : Number.NaN;
 
-  const resolveParentMentionId = (mentionId: string): string | null => {
-    let current = mentionById.get(mentionId);
-    const visited = new Set<string>();
-    while (current?.parent_id && mentionById.has(current.parent_id)) {
-      if (visited.has(current.parent_id)) break;
-      visited.add(current.parent_id);
-      current = mentionById.get(current.parent_id);
-    }
-    return current?.id || null;
-  };
+  const mentionTarget = useMemo<MentionDetailTarget | null>(() => {
+    if (!mentions?.length) return null;
 
-  const mentionTarget = useMemo(() => {
-    if (!leadUrlNormalized || !mentions?.length) return null;
+    const scoreMentionCandidate = (mention: Mention) => {
+      let score = 0;
 
-    const found = mentions.find((mention) => {
-      const mentionUrlNormalized = normalizeUrlForMatch(mention.url);
-      if (!mentionUrlNormalized) return false;
-      if (mentionUrlNormalized === leadUrlNormalized) return true;
+      if (mention.id === lead.id) score += 6;
+      if (leadAnchorId && mention.id === leadAnchorId) score += 5;
+      if (mention.platform === lead.platform) score += 2;
+
+      const mentionAuthorNormalized = normalizeMatchText(mention.author);
       if (
-        mentionUrlNormalized.startsWith(leadUrlNormalized) ||
-        leadUrlNormalized.startsWith(mentionUrlNormalized)
-      )
-        return true;
-
-      const mentionAnchor = mention.url?.match(/#comment[_-]([a-zA-Z0-9\-_]+)/);
-      const leadAnchor = lead.url?.match(/#comment[_-]([a-zA-Z0-9\-_]+)/);
-      if (
-        mentionAnchor &&
-        leadUrlNormalized &&
-        leadUrlNormalized === normalizeUrlForMatch(mention.url)
+        leadAuthorNormalized &&
+        mentionAuthorNormalized &&
+        leadAuthorNormalized === mentionAuthorNormalized
       ) {
-        return true;
+        score += 2;
       }
-      if (mentionAnchor && leadAnchor && mentionAnchor[1] === leadAnchor[1]) {
-        return true;
+
+      const mentionTexts = [
+        mention.content,
+        mention.original_content,
+        mention.comment_content,
+        mention.post_content,
+      ]
+        .map((value) => normalizeMatchText(value))
+        .filter(Boolean);
+
+      if (
+        leadContentNormalized &&
+        mentionTexts.some(
+          (value) =>
+            value === leadContentNormalized ||
+            value.includes(leadContentNormalized) ||
+            leadContentNormalized.includes(value),
+        )
+      ) {
+        score += 4;
       }
-      return false;
-    });
+
+      const mentionPostedAtMs = new Date(mention.posted_at).getTime();
+      if (
+        Number.isFinite(leadPostedAtMs) &&
+        Number.isFinite(mentionPostedAtMs) &&
+        Math.abs(mentionPostedAtMs - leadPostedAtMs) <= 5 * 60 * 1000
+      ) {
+        score += 2;
+      }
+
+      return score;
+    };
+
+    let found =
+      mentionById.get(lead.id) ||
+      (leadAnchorId ? mentionById.get(leadAnchorId) || null : null);
+
+    if (!found && leadUrlNormalized) {
+      found =
+        mentions.find((mention) => {
+          const mentionUrlNormalized = normalizeUrlForMatch(mention.url);
+          if (!mentionUrlNormalized) return false;
+          if (mentionUrlNormalized === leadUrlNormalized) return true;
+          if (
+            mentionUrlNormalized.startsWith(leadUrlNormalized) ||
+            leadUrlNormalized.startsWith(mentionUrlNormalized)
+          )
+            return true;
+
+          const mentionAnchor = mention.url?.match(
+            /#comment[_-]([a-zA-Z0-9\-_]+)/,
+          );
+          if (
+            mentionAnchor &&
+            leadUrlNormalized === normalizeUrlForMatch(mention.url)
+          ) {
+            return true;
+          }
+          if (mentionAnchor && leadAnchorId && mentionAnchor[1] === leadAnchorId) {
+            return true;
+          }
+          return false;
+        }) || null;
+    }
+
+    if (!found) {
+      const rankedCandidates = mentions
+        .map((mention) => ({
+          mention,
+          score: scoreMentionCandidate(mention),
+        }))
+        .filter((item) => item.score >= 6)
+        .sort((a, b) => b.score - a.score);
+
+      found = rankedCandidates[0]?.mention || null;
+    }
 
     if (!found) return null;
 
-    const parentId = resolveParentMentionId(found.id);
-    return parentId || found.id;
-  }, [leadUrlNormalized, mentions, mentionById]);
+    return resolveMentionDetailTarget(found, mentionById);
+  }, [
+    lead.id,
+    lead.platform,
+    leadAnchorId,
+    leadAuthorNormalized,
+    leadContentNormalized,
+    leadPostedAtMs,
+    leadUrlNormalized,
+    mentions,
+    mentionById,
+  ]);
 
   const handleNavigateToMention = () => {
     if (!mentionTarget) return;
-    router.push(`/mentions/${encodeURIComponent(mentionTarget)}`);
+    router.push(mentionTarget.href);
+  };
+
+  const handleOpenLeadSource = () => {
+    if (mentionTarget) {
+      handleNavigateToMention();
+      return;
+    }
+
+    if (postLinkUrl) {
+      window.open(postLinkUrl, "_blank", "noopener,noreferrer");
+    }
   };
 
   const getProfileContactMeta = (url?: string) => {
@@ -331,19 +418,17 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
     ) {
       return {
         label: "Liên hệ",
-        icon: "chat",
         title: "Liên hệ qua Facebook",
         className:
-          "bg-[#0084FF]/10 hover:bg-[#0084FF]/20 text-[#0084FF] border-[#0084FF]/20",
+          "bg-[var(--color-brand-subtle)] hover:bg-[var(--color-brand)]/14 text-[var(--color-brand)] border-[var(--color-brand-border)]",
       };
     }
     if (normalizedUrl.includes("tiktok.com")) {
       return {
         label: "Liên hệ",
-        icon: "music_note",
         title: "Liên hệ qua TikTok",
         className:
-          "bg-[#111827]/10 hover:bg-[#111827]/20 text-[#111827] border-[#111827]/20",
+          "bg-[var(--color-brand-subtle)] hover:bg-[var(--color-brand)]/14 text-[var(--color-brand)] border-[var(--color-brand-border)]",
       };
     }
     if (
@@ -352,22 +437,21 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
     ) {
       return {
         label: "Liên hệ",
-        icon: "play_circle",
         title: "Liên hệ qua YouTube",
         className:
-          "bg-[#FF0000]/10 hover:bg-[#FF0000]/20 text-[#FF0000] border-[#FF0000]/20",
+          "bg-[var(--color-brand-subtle)] hover:bg-[var(--color-brand)]/14 text-[var(--color-brand)] border-[var(--color-brand-border)]",
       };
     }
     return {
       label: "Liên hệ",
-      icon: "contact_page",
       title: "Liên hệ với khách hàng",
       className:
-        "bg-[var(--color-info-subtle)] hover:bg-[var(--color-info)]/20 text-[var(--color-info)] border-[var(--color-info)]/30",
+        "bg-[var(--color-brand-subtle)] hover:bg-[var(--color-brand)]/14 text-[var(--color-brand)] border-[var(--color-brand-border)]",
     };
   };
 
   const profileContactMeta = getProfileContactMeta(contactUrl);
+  const isLeadSourceInteractive = Boolean(mentionTarget || postLinkUrl);
 
   const getBorderClass = () => {
     if (lead.status === "completed" || lead.status === "skipped") {
@@ -417,20 +501,11 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
                 {getInitials(authorName)}
               </div>
               <div
-                className="absolute -bottom-1 -right-1 p-0.5 rounded-full border shadow-sm flex items-center justify-center"
-                style={{
-                  color: platformMeta.color,
-                  backgroundColor: "var(--color-bg-surface)",
-                  borderColor: "var(--color-border)",
-                }}
+                className="absolute -bottom-1 -right-1 rounded-full border bg-[var(--color-bg-surface)] shadow-sm"
+                style={{ borderColor: "var(--color-border)" }}
                 title={platformMeta.label}
               >
-                <span
-                  className="material-symbols-outlined text-[13px]"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >
-                  {platformIcon}
-                </span>
+                <PlatformLogo platform={lead.platform} size="xs" />
               </div>
             </div>
 
@@ -446,9 +521,26 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
 
           {/* Core Content & Intent Tags */}
           <div className="flex-1 space-y-2.5">
-            <p className="text-body-md text-[var(--color-text-primary)] leading-relaxed font-medium">
-              {lead.content}
-            </p>
+            {isLeadSourceInteractive ? (
+              <button
+                type="button"
+                onClick={handleOpenLeadSource}
+                className="group w-full text-left"
+                title={
+                  mentionTarget
+                    ? "Mở đúng đề cập trong trang chi tiết"
+                    : t("leads.card.viewPostTooltip")
+                }
+              >
+                <p className="text-body-md text-[var(--color-text-primary)] leading-relaxed font-medium transition-colors group-hover:text-[var(--color-brand)]">
+                  {lead.content}
+                </p>
+              </button>
+            ) : (
+              <p className="text-body-md text-[var(--color-text-primary)] leading-relaxed font-medium">
+                {lead.content}
+              </p>
+            )}
 
             {/* Meta tags & Details line */}
             <div className="flex flex-wrap gap-1.5 items-center">
@@ -659,18 +751,15 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
                   handleContactAction(profileContactMeta.label, contactUrl)
                 }
                 disabled={isSaving}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${profileContactMeta.className}`}
+                className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${profileContactMeta.className}`}
                 title={profileContactMeta.title}
               >
-                <span className="material-symbols-outlined text-base">
-                  {profileContactMeta.icon}
-                </span>
                 Liên hệ
               </button>
             )}
 
             {/* Original Post */}
-            {postLinkUrl && mentionTarget ? (
+            {mentionTarget ? (
               <button
                 type="button"
                 onClick={handleNavigateToMention}

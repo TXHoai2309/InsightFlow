@@ -30,6 +30,33 @@
   - Khắc phục lỗi hydration ở thành phần `AtmosphereDots`.
   - Khắc phục lỗi thiếu import `useEffect` và `emailjs`.
 
+### Changed
+
+- **Mentions detail (`/mentions/[id]`)**
+  - Bổ sung bộ lọc bình luận theo sắc thái (`positive`, `neutral`, `negative`), cấp bình luận (`comment`, `reply`) và từ khóa.
+  - Thêm cảnh báo khi bình luận mục tiêu đang bị ẩn bởi filter, kèm hành động reset để hiện lại đúng comment đang xem.
+  - Thêm nút `Back to top` cho trang chi tiết đề cập và sửa lại logic lắng nghe scroll để hoạt động đúng với `app shell` cuộn bằng container nội bộ thay vì `window`.
+  - Tối ưu khối thông tin bên phải: gộp phần phân tích sắc thái và thông tin đề cập thành summary panel gọn hơn để người dùng không phải cuộn sâu mới xem đủ chỉ số.
+
+### Added
+
+- **Shared platform logo component**
+  - Tạo `PlatformLogo` dùng chung cho bảng Mentions và trang chi tiết đề cập.
+  - Chuẩn hóa hiển thị logo cho các nền tảng `facebook`, `tiktok`, `youtube`, `thread`, `google_maps`, `be`, `news`.
+
+### Fixed
+
+- **Theme-aware platform logos**
+  - Loại bỏ khung nền đậm bao ngoài logo nền tảng.
+  - Sửa hiển thị logo `TikTok` và `Threads` để dùng màu đen ở giao diện sáng và tự đổi sang màu trắng ở giao diện tối theo đúng CSS theme token của ứng dụng.
+  - Căn giữa logo nền tảng trong ô hiển thị trên trang Mentions và đầu trang chi tiết đề cập.
+
+ - **Lead card navigation & badge alignment (`/leads`)**
+   - Thu nhỏ badge logo nền tảng trong `LeadCard` bằng size `xs` riêng để cân đối với avatar khách hàng và không ảnh hưởng các màn hình Mentions/Detail.
+   - Cập nhật điều hướng từ Lead sang trang chi tiết đề cập để mở đúng post/comment/reply qua deep-link `/mentions/{postId}#comment-{commentId}`.
+   - Khôi phục tương tác mở chi tiết trên card lead: nội dung lead và nút xem chi tiết vẫn hoạt động khi tìm được mention nội bộ, kể cả khi bản ghi lead không có `url`.
+
+## [Unreleased] - 2026-06-26
   ### Fixed
   - **Giao diện sáng/tối (Theme-aware UI)**:
     - Khôi phục cơ chế tự động chuyển đổi logo cho các trang Auth (Đăng nhập, Đăng ký, Quên mật khẩu).

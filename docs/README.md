@@ -1,397 +1,422 @@
-# InsightFlow — Brand Intelligence Platform
+# InsightFlow - Brand Intelligence Platform
 
-> *"Biến dữ liệu thành insight"* — Nền tảng theo dõi & phân tích thương hiệu bằng AI theo thời gian thực.
+> Nền tảng hỗ trợ thương hiệu theo dõi, phân tích và vận hành xử lý dữ liệu truyền thông công khai bằng AI.
 
----
-
-## Mục lục
-
-1. [Tổng quan dự án](#1-tổng-quan-dự-án)
-2. [Tính năng cốt lõi](#2-tính-năng-cốt-lõi)
-3. [Cấu trúc thư mục](#3-cấu-trúc-thư-mục)
-4. [Công nghệ sử dụng](#4-công-nghệ-sử-dụng)
-5. [Cài đặt và chạy local](#5-cài-đặt-và-chạy-local)
-6. [Biến môi trường](#6-biến-môi-trường)
-7. [Quy trình phát triển (Agile)](#7-quy-trình-phát-triển-agile)
-8. [Phạm vi sản phẩm](#8-phạm-vi-sản-phẩm)
-9. [Đóng góp](#9-đóng-góp)
-10. [Giấy phép](#10-giấy-phép)
+InsightFlow không chỉ là dashboard hiển thị số liệu. Mục tiêu sản phẩm là giúp từng vai trò trong hệ thống biết **mình cần làm gì tiếp theo**: dữ liệu nào cần kiểm duyệt, vấn đề nào cần xử lý, lead nào cần chăm sóc, báo cáo nào cần xem, và phản hồi nào có thể tự động hoặc cần con người duyệt.
 
 ---
 
-## 1. Tổng quan dự án
+## 1. Tài liệu liên quan
 
-**InsightFlow** là nền tảng AI Media Monitoring giúp doanh nghiệp, KOL/KOC và agency PR/Marketing:
+| Tài liệu | Mục đích |
+|---|---|
+| `docs/SPEC.md` | Đặc tả sản phẩm Sprint 2: vai trò, phân quyền, workflow, dashboard/report, onboarding, auto-response |
+| `docs/ARCHITECTURE.md` | Kiến trúc hệ thống Sprint 2: role guard, brand isolation, data lifecycle, audit, triển khai trong cấu trúc hiện tại |
+| `docs/API.md` | Tham khảo API hiện có/định hướng API |
+| `docs/DEPLOYMENT.md` | Hướng dẫn triển khai |
+| `docs/CHANGELOG.md` | Nhật ký thay đổi |
 
-- **Phòng vệ (Defense):** Phát hiện sớm rủi ro truyền thông, cảnh báo khủng hoảng real-time.
-- **Tấn công (Offense):** Khai thác khách hàng tiềm năng (Lead Generation) từ các tín hiệu mua hàng trên mạng xã hội.
+Nếu có xung đột, ưu tiên tài liệu theo thứ tự:
 
-### Bài toán giải quyết
-
-Phần lớn doanh nghiệp đang theo dõi thương hiệu thủ công — tự tìm từ khóa, đọc bài viết, tổng hợp báo cáo bằng tay. Hậu quả:
-
-- Bỏ sót cảnh báo khủng hoảng do xử lý chậm.
-- Dữ liệu mention bị phân tán ở nhiều kênh.
-- Tốn nhiều giờ tổng hợp báo cáo định kỳ.
-- Không ưu tiên được nội dung nào cần xử lý trước.
-
-### Điểm khác biệt (USP)
-
-Không giống Buzzmetrics, Younet Media, Meltwater chỉ làm brand monitoring đơn thuần, InsightFlow bổ sung **chiến lược tấn công**: phát hiện purchase intent & cung cấp Lead List thời gian thực cho đội Sales.
+1. `SPEC.md` cho nghiệp vụ sản phẩm.
+2. `ARCHITECTURE.md` cho kiến trúc triển khai.
+3. `README.md` cho định hướng nhanh và onboarding đội phát triển.
 
 ---
 
-## 2. Tính năng cốt lõi
+## 2. Tổng quan sản phẩm
 
-| # | Tính năng | Mô tả |
-|---|-----------|-------|
-| 1 | **Quản lý Brand/Project** | Tạo workspace theo thương hiệu, cấu hình từ khóa, tên sản phẩm, tên founder |
-| 2 | **Crawling thông minh** | Thu thập dữ liệu real-time từ các nguồn công khai (báo điện tử, Fanpage/Group, YouTube, TikTok) |
-| 3 | **AI NLP — Nhận diện Mention** | Xác định mention liên quan, loại bỏ nhiễu từ khóa |
-| 4 | **Phân tích Sentiment** | Phân loại Tích cực / Tiêu cực / Trung tính (accuracy mục tiêu > 90%) |
-| 5 | **Gắn nhãn Chủ đề (Topic)** | Phân nhóm: chất lượng SP, giá cả, dịch vụ, giao hàng, pháp lý... |
-| 6 | **Cảnh báo sớm (Crisis Alert)** | Kích hoạt khi mention tiêu cực tăng đột biến, latency < 3 phút |
-| 7 | **Lead Generation** | Phát hiện purchase intent → Hot/Warm/Cold Lead → Push Zalo/Telegram |
-| 8 | **Dashboard tổng quan** | Biểu đồ sentiment, top nguồn, top chủ đề, xu hướng theo thời gian |
-| 9 | **Báo cáo tự động** | Export PDF/Excel theo ngày/tuần, tóm tắt nội dung cần ưu tiên |
+InsightFlow hỗ trợ thương hiệu và đội truyền thông:
 
----
+- Thu thập dữ liệu công khai về thương hiệu.
+- Tiền xử lý dữ liệu, loại bỏ dữ liệu lỗi/trùng/spam.
+- Dùng AI để gán nhãn sentiment, topic, crisis level và lead intent.
+- Cho Admin kiểm duyệt nhãn đầu vào trước khi dữ liệu được publish.
+- Tổng hợp nhiều post/comment của cùng một contact đối với một brand để đánh giá trạng thái, độ ảnh hưởng, spam score và priority.
+- Cho đội thương hiệu xử lý khủng hoảng, lead và báo cáo theo vai trò.
+- Cho nhân viên gửi request sửa nhãn nếu phát hiện AI hoặc dữ liệu đã publish bị sai.
+- Cho Quản lý thương hiệu duyệt request, cấu hình template phản hồi và bật/tắt auto-response.
 
-## 3. Cấu trúc thư mục
+Luồng giá trị chính:
 
+```text
+Cào dữ liệu công khai
+-> tiền xử lý
+-> AI gán nhãn
+-> gom nhóm contact và đánh giá influence/spam
+-> Admin kiểm duyệt nhãn
+-> publish dữ liệu cho thương hiệu
+-> xử lý nghiệp vụ theo vai trò
+-> báo cáo và audit
 ```
-insightflow/
-│
+
+---
+
+## 3. Vai trò chính trong Sprint 2
+
+Quy tắc nền tảng:
+
+**Admin không tham gia nhiệm vụ nghiệp vụ thương hiệu.** Admin vận hành nền tảng, tài khoản cấp cao và chất lượng dữ liệu đầu vào. Nghiệp vụ thương hiệu thuộc Quản lý thương hiệu và nhân viên của thương hiệu đó.
+
+| Vai trò | Mục tiêu | Không làm |
+|---|---|---|
+| Admin | Phê duyệt tài khoản Quản lý thương hiệu, kiểm duyệt nhãn AI trước publish, theo dõi chất lượng dữ liệu/crawler | Không xử lý khủng hoảng, không chăm sóc lead, không quyết định phản hồi thay brand |
+| Quản lý thương hiệu | Quản lý toàn bộ nghiệp vụ của một brand, quản lý nhân viên, duyệt request sửa nhãn, xem báo cáo, cấu hình auto-response | Không truy cập brand khác, không phê duyệt tài khoản Quản lý thương hiệu khác |
+| Nhân viên xử lý khủng hoảng | Xem alerts/mentions tiêu cực của brand mình, xử lý khủng hoảng, gửi request sửa nhãn | Không xem/xử lý lead, không duyệt request, không cấu hình auto-response |
+| Nhân viên xử lý khách hàng tiềm năng | Xem và xử lý hot/warm/cold leads của brand mình, cập nhật trạng thái chăm sóc | Không xem/xử lý khủng hoảng, không duyệt request, không cấu hình auto-response |
+
+---
+
+## 4. Người dùng làm gì sau đăng nhập?
+
+InsightFlow không điều hướng tất cả người dùng vào cùng một dashboard chung. Mỗi vai trò có landing và hành động tiếp theo riêng.
+
+| Vai trò | Landing ưu tiên trong cấu trúc hiện tại | Việc cần làm đầu tiên |
+|---|---|---|
+| Admin | `/dashboard` với mode vận hành | Kiểm tra dữ liệu/nhãn/tài khoản đang chờ duyệt |
+| Quản lý thương hiệu | `/dashboard` với mode brand manager | Xem sức khỏe brand, request chờ duyệt và trạng thái đội xử lý |
+| Nhân viên khủng hoảng | `/alerts` hoặc dashboard focus crisis | Mở item tiêu cực/khủng hoảng ưu tiên cao nhất |
+| Nhân viên lead | `/leads` | Xử lý hot lead hoặc lead sắp quá hạn |
+
+Onboarding/user guide phải theo vai trò, không dùng một hướng dẫn chung cho mọi người.
+
+---
+
+## 5. Tính năng trọng tâm Sprint 2
+
+| Nhóm tính năng | Mục tiêu |
+|---|---|
+| Role-based access | Người dùng chỉ thấy đúng module, brand và action thuộc quyền |
+| Brand isolation | Dữ liệu nghiệp vụ luôn được scope theo brand/workspace |
+| Label lifecycle | Dữ liệu đi từ raw -> preprocessed -> ai_labeled -> admin_reviewing -> approved_for_publish -> published |
+| Admin review | Admin kiểm duyệt nhãn AI trước khi publish dữ liệu cho brand |
+| Contact Intelligence | Tổng hợp lịch sử contact-brand, influence score, spam score và priority boost |
+| Label correction request | Nhân viên khủng hoảng gửi request sửa nhãn, Quản lý thương hiệu duyệt/từ chối/chỉnh lại |
+| Role-based dashboard/report | Số liệu tích cực/tiêu cực/lead/khủng hoảng hiển thị theo mục tiêu từng vai trò |
+| Auto-response safety | Brand Manager quản lý template, bật/tắt auto-response, high/critical phải manual review |
+| Audit | Ghi lại thay đổi nhãn, quyền, request, lead/crisis status và auto-response |
+
+---
+
+## 6. Hiện trạng repo
+
+Repo hiện ở trạng thái web-first/Firebase-first:
+
+- `apps/web` là phần có giao diện và logic sản phẩm rõ nhất.
+- Dashboard, Mentions, Alerts, Leads, Reports, Profile và Settings Brand đã có route/module cơ bản.
+- Firebase/Firestore đang là nguồn dữ liệu chính ở frontend.
+- `apps/api` có nền tảng Fastify/Firebase Admin, nhưng nhiều route nghiệp vụ còn placeholder.
+- `database/schema.prisma` đã có các model nền như Tenant, Workspace, Mention, NlpResult, Alert, Lead, Report.
+- `services/crawler`, `services/nlp`, `services/alert`, `services/lead`, `services/report` đã có cấu trúc ban đầu, một số phần vẫn là placeholder.
+
+Điểm cần lưu ý:
+
+- Sprint 2 **không yêu cầu đổi cấu trúc thư mục hiện tại**.
+- Kiến trúc được cập nhật theo hướng `evolve in place`: bổ sung role guard, policy, service/data contract và role-aware components trong các module đang có.
+- Không tạo mới cây route `/admin/*`, `/brand/*`, `/crisis/*` như điều kiện bắt buộc.
+
+---
+
+## 7. Cấu trúc thư mục hiện tại
+
+```text
+InsightFlow/
 ├── apps/
-│   ├── web/                        # Frontend — Next.js Dashboard
-│   │   ├── src/
-│   │   │   ├── app/                # Next.js App Router (pages & layouts)
-│   │   │   │   ├── (auth)/         # Login, Register
-│   │   │   │   ├── dashboard/      # Dashboard tổng quan
-│   │   │   │   ├── brands/         # Quản lý thương hiệu / workspace
-│   │   │   │   ├── mentions/       # Danh sách mention & filter
-│   │   │   │   ├── leads/          # Lead List (Hot/Warm/Cold)
-│   │   │   │   ├── alerts/         # Lịch sử cảnh báo
-│   │   │   │   ├── reports/        # Báo cáo định kỳ
-│   │   │   │   └── settings/       # Cài đặt tài khoản, notification
-│   │   │   ├── components/         # UI components tái sử dụng
-│   │   │   │   ├── charts/         # Recharts / Chart.js wrappers
-│   │   │   │   ├── tables/         # Bảng mention, lead list
-│   │   │   │   ├── alerts/         # Alert cards & banners
-│   │   │   │   └── ui/             # shadcn/ui base components
-│   │   │   ├── hooks/              # Custom React hooks
-│   │   │   ├── stores/             # Zustand state management
-│   │   │   ├── lib/                # Utilities, API clients
-│   │   │   └── types/              # TypeScript types / interfaces
-│   │   ├── public/
-│   │   ├── tailwind.config.ts
-│   │   ├── next.config.ts
-│   │   └── package.json
-│   │
-│   └── api/                        # Backend — Node.js / FastAPI gateway
-│       ├── src/
-│       │   ├── routes/             # REST API routes
-│       │   ├── controllers/        # Business logic handlers
-│       │   ├── middleware/         # Auth, rate-limit, logging
-│       │   ├── services/           # External service clients
-│       │   └── types/
-│       └── package.json
-│
+│   ├── web/                    # Next.js app chính
+│   │   └── src/
+│   │       ├── app/            # App Router: dashboard, mentions, alerts, leads, reports...
+│   │       ├── components/     # UI components theo module hiện có
+│   │       ├── hooks/
+│   │       ├── lib/
+│   │       ├── stores/
+│   │       └── types/
+│   └── api/                    # Fastify API app
 ├── services/
-│   ├── crawler/                    # Crawling Service — Python
-│   │   ├── sources/                # Adapter cho từng nền tảng
-│   │   │   ├── facebook.py         # Meta Graph API + intelligent scraping
-│   │   │   ├── tiktok.py
-│   │   │   ├── news.py             # Báo điện tử
-│   │   │   └── youtube.py
-│   │   ├── pipeline/               # Data normalization pipeline
-│   │   ├── dedup/                  # MinHash LSH deduplication
-│   │   ├── scheduler.py            # Tiered crawling theo giờ cao điểm
-│   │   ├── health_monitor.py       # Data source health check
-│   │   └── requirements.txt
-│   │
-│   ├── nlp/                        # NLP Service — Python (AI/ML)
-│   │   ├── models/                 # Model weights & configs
-│   │   │   ├── phobert/            # PhoBERT fine-tuned
-│   │   │   └── multilingual_bert/
-│   │   ├── pipelines/
-│   │   │   ├── mention_detector.py # Nhận diện mention liên quan
-│   │   │   ├── sentiment.py        # Phân loại sentiment (3 class)
-│   │   │   ├── topic_labeler.py    # Gắn nhãn chủ đề
-│   │   │   ├── intent_analyzer.py  # Purchase intent detection (Lead)
-│   │   │   ├── spam_filter.py      # Spam classifier
-│   │   │   └── pii_anonymizer.py   # PII masking trước khi lưu
-│   │   ├── fast_path/              # Rule-based fast path (< 1s)
-│   │   │   └── keyword_filter.py
-│   │   ├── feedback/               # Human-in-the-loop relabeling
-│   │   └── requirements.txt
-│   │
-│   ├── alert/                      # Alert Service — Node.js
-│   │   ├── engine/                 # Crisis detection engine
-│   │   │   ├── spike_detector.ts   # Phát hiện mention tiêu cực đột biến
-│   │   │   └── threshold.ts        # Ngưỡng cảnh báo theo tenant
-│   │   ├── channels/               # Notification channels
-│   │   │   ├── telegram.ts
-│   │   │   ├── zalo.ts
-│   │   │   └── email.ts
-│   │   └── package.json
-│   │
-│   ├── lead/                       # Lead Generation Service — Node.js
-│   │   ├── scorer.ts               # Lead Scoring (Hot/Warm/Cold)
-│   │   ├── expiry.ts               # Lead Expiry countdown
-│   │   ├── pusher.ts               # Real-time push < 60 giây
-│   │   └── package.json
-│   │
-│   └── report/                     # Report Service — Python
-│       ├── generators/
-│       │   ├── daily_report.py     # Báo cáo ngày
-│       │   ├── weekly_report.py
-│       │   └── pdf_exporter.py     # Xuất PDF
-│       └── requirements.txt
-│
-├── infrastructure/
-│   ├── kafka/                      # Message queue config
-│   │   └── topics.yaml
-│   ├── k8s/                        # Kubernetes manifests
-│   │   ├── deployments/
-│   │   ├── services/
-│   │   └── hpa/                    # Horizontal Pod Autoscaler
-│   ├── nginx/                      # Reverse proxy config
-│   ├── redis/                      # Cache config
-│   └── docker-compose.yml          # Local development
-│
+│   ├── crawler/
+│   ├── nlp/
+│   ├── alert/
+│   ├── lead/
+│   └── report/
 ├── database/
-│   ├── migrations/                 # Prisma / Alembic migrations
-│   ├── seeds/                      # Dữ liệu mẫu
-│   └── schema.prisma               # Database schema
-│
+│   └── schema.prisma
 ├── shared/
-│   ├── types/                      # Shared TypeScript types (cross-service)
-│   ├── constants/                  # Enum, threshold constants
-│   └── utils/                      # Shared utilities
-│
+├── infrastructure/
 ├── scripts/
-│   ├── setup.sh
-│   ├── deploy.sh
-│   └── seed_db.sh
-│
 ├── docs/
-│   ├── README.md                   # File này
-│   ├── SPEC.md                     # Functional specification
-│   ├── ARCHITECTURE.md             # System architecture
-│   ├── API.md                      # API reference
-│   ├── DEPLOYMENT.md               # Hướng dẫn deploy
-│   └── CHANGELOG.md                # Nhật ký thay đổi dự án
-│
-├── .env.example
-├── .gitignore
-├── docker-compose.yml
-└── turbo.json                      # Turborepo monorepo config
+├── package.json
+└── turbo.json
 ```
 
+Sprint 2 triển khai trong cấu trúc này bằng cách mở rộng:
+
+- `stores/auth.store.ts`, `hooks/useAuth.ts`: user profile, role, membership.
+- `lib/services/*`: data access theo role/brand scope.
+- `components/dashboard`, `components/alerts`, `components/leads`, `components/reports`: widget theo vai trò.
+- `app/dashboard`, `app/alerts`, `app/leads`, `app/settings/brand`: giữ route hiện có, đổi nội dung/action theo quyền.
+- `apps/api/src/middleware`: auth, brand/tenant guard.
+- `apps/api/src/routes`: mở rộng route hiện có hoặc thêm route domain nhỏ khi cần.
+
 ---
 
-## 4. Công nghệ sử dụng
+## 8. Công nghệ sử dụng
 
-### Frontend
-| Layer | Công nghệ | Lý do chọn |
-|-------|-----------|-----------|
-| Framework | **Next.js 14** (App Router) | SSR/SSG, route-based code split, SEO |
-| Language | **TypeScript** | Type-safety toàn bộ codebase |
-| Styling | **Tailwind CSS v4** | Utility-first, nhất quán design system |
-| State | **Zustand** | Lightweight, dễ maintain hơn Redux |
-| Charts | **Recharts + Chart.js** | Sentiment chart, trend line, pie chart |
-| UI Kit | **shadcn/ui** | Accessible, customizable components |
-| Real-time | **Socket.IO** | Push cảnh báo và lead real-time |
-| HTTP | **Axios + React Query** | Cache, retry, background refetch |
+### Web
 
-### Backend API
-| Layer | Công nghệ | Lý do chọn |
-|-------|-----------|-----------|
-| Runtime | **Node.js 20 LTS** | Event-driven, phù hợp I/O-heavy |
-| Framework | **Express / Fastify** | REST API gateway |
-| Auth | **JWT + Refresh Token** | Stateless, multi-tenant |
-| ORM | **Prisma** | Type-safe DB access, migrations |
-| Validation | **Zod** | Schema validation + type inference |
-
-### NLP / AI Service
-| Layer | Công nghệ | Lý do chọn |
-|-------|-----------|-----------|
-| Language | **Python 3.11** | Hệ sinh thái ML mạnh nhất |
-| Framework | **FastAPI** | Async, hiệu năng cao, tự gen docs |
-| Models | **PhoBERT, mBERT** | Pre-trained tiếng Việt, fine-tunable |
-| ML Framework | **Hugging Face Transformers** | Dễ fine-tune, community lớn |
-| Dedup | **MinHash LSH** (datasketch) | Near-duplicate detection hiệu quả |
-| PII | **Presidio (Microsoft)** | PII detection & anonymization |
-
-### Crawling Service
 | Layer | Công nghệ |
-|-------|-----------|
-| Language | **Python 3.11** |
-| HTTP | **httpx + Playwright** (headless browser) |
-| Scheduling | **APScheduler** (tiered crawl theo giờ) |
-| Proxy | **Residential proxy pool** (rotation) |
-| Official API | **Meta Graph API**, YouTube Data API v3 |
+|---|---|
+| Framework | Next.js 14 |
+| Language | TypeScript |
+| UI runtime | React 18 |
+| Styling | Tailwind CSS |
+| State | Zustand |
+| Charts | Chart.js, react-chartjs-2, Recharts |
+| Auth/Data | Firebase/Firestore |
 
-### Infrastructure & Data
-| Layer | Công nghệ | Lý do chọn |
-|-------|-----------|-----------|
-| Message Queue | **Apache Kafka** | High-throughput, durable, replay |
-| Primary DB | **PostgreSQL 16** | Relational, full-text search, JSONB |
-| Cache | **Redis** | Real-time alert queue, session |
-| Search | **Elasticsearch** | Full-text search mention, analytics |
-| Object Storage | **S3-compatible** | Lưu raw crawl data, báo cáo PDF |
-| Container | **Docker + Kubernetes** | Deploy, scale, HPA |
-| Monorepo | **Turborepo** | Build cache, pipeline task |
+### API và backend
+
+| Layer | Công nghệ |
+|---|---|
+| Runtime | Node.js |
+| Framework | Fastify |
+| Auth admin | Firebase Admin |
+| ORM target | Prisma |
+| Workspace | npm workspaces |
+| Build orchestration | Turbo |
+
+### Services
+
+| Service | Vai trò |
+|---|---|
+| `services/crawler` | Cào dữ liệu và pipeline tiền xử lý |
+| `services/nlp` | AI/NLP labeling pipeline |
+| `services/alert` | Cảnh báo và rule khủng hoảng |
+| `services/lead` | Lead scoring và lead workflow |
+| `services/report` | Tổng hợp báo cáo |
 
 ---
 
-## 5. Cài đặt và chạy local
+## 9. Cài đặt và chạy local
 
 ### Yêu cầu
 
 - Node.js >= 20 LTS
-- Python >= 3.11
-- Docker & Docker Compose
-- pnpm >= 9
+- npm
+- Python >= 3.11 nếu chạy các service Python
+- Docker/Docker Compose nếu chạy hạ tầng phụ trợ
 
-### Bước 1: Clone & cài dependencies
+### Cài dependencies
 
 ```bash
-git clone https://github.com/your-org/insightflow.git
-cd insightflow
-pnpm install
+npm install
 ```
 
-### Bước 2: Cấu hình môi trường
+### Chạy toàn bộ workspace dev
 
 ```bash
-cp .env.example .env
-# Điền các biến: DATABASE_URL, KAFKA_BROKERS, REDIS_URL, API keys...
+npm run dev
 ```
 
-### Bước 3: Khởi động infrastructure
+### Chạy web
 
 ```bash
-docker-compose up -d postgres redis kafka elasticsearch
+npm run dev:web
 ```
 
-### Bước 4: Chạy migrations
+### Chạy API
 
 ```bash
-pnpm --filter @insightflow/api db:migrate
+npm run dev:api
 ```
 
-### Bước 5: Chạy tất cả services
+### Build
 
 ```bash
-pnpm dev
-# hoặc từng service:
-pnpm --filter @insightflow/web dev
-pnpm --filter @insightflow/api dev
-cd services/nlp && uvicorn main:app --reload
-cd services/crawler && python scheduler.py
+npm run build
+```
+
+### Lint
+
+```bash
+npm run lint
 ```
 
 ---
 
-## 6. Biến môi trường
+## 10. Biến môi trường
+
+Tùy môi trường triển khai, dự án có thể cần các nhóm biến sau:
 
 ```env
-# Database
-DATABASE_URL=postgresql://user:pass@localhost:5432/insightflow
+# Firebase / Auth / Firestore
+NEXT_PUBLIC_FIREBASE_API_KEY=
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=
+FIREBASE_PROJECT_ID=
+FIREBASE_CLIENT_EMAIL=
+FIREBASE_PRIVATE_KEY=
 
-# Redis
-REDIS_URL=redis://localhost:6379
+# Database target
+DATABASE_URL=
 
-# Kafka
-KAFKA_BROKERS=localhost:9092
-
-# Elasticsearch
-ELASTICSEARCH_URL=http://localhost:9200
-
-# AI / NLP
-OPENAI_API_KEY=sk-...             # Optional: fallback LLM
-HF_TOKEN=hf_...                   # Hugging Face token
-
-# Meta Graph API
-META_APP_ID=...
-META_APP_SECRET=...
-
-# YouTube Data API
-YOUTUBE_API_KEY=...
-
-# Notification
-TELEGRAM_BOT_TOKEN=...
-ZALO_OA_TOKEN=...
-
-# Auth
-JWT_SECRET=...
-JWT_REFRESH_SECRET=...
-
-# S3 Storage
-S3_ENDPOINT=...
-S3_ACCESS_KEY=...
-S3_SECRET_KEY=...
-S3_BUCKET=insightflow-data
+# Optional service integrations
+REDIS_URL=
+KAFKA_BROKERS=
+TELEGRAM_BOT_TOKEN=
+ZALO_OA_TOKEN=
+EMAIL_SERVICE_KEY=
 ```
 
----
-
-## 7. Quy trình phát triển (Agile)
-
-Dự án phát triển theo **Agile Scrum**, chia 3 giai đoạn lớn:
-
-| Giai đoạn | Mục tiêu |
-|-----------|---------|
-| **Phase 1** | End-to-end demo: crawl → NLP cơ bản → dashboard cho 9 thương hiệu F&B mục tiêu thuộc các nhóm Nhỏ (XLIII Coffee, Maison Marou, Laha Cafe), Vừa (KATINAT, Phê La, Pizza 4P's) và Lớn (Highlands, Phúc Long, Cộng Cà Phê) |
-| **Phase 2** | Chuẩn hóa platform, tập trung huấn luyện chuyên sâu mô hình NLP trên tập dữ liệu F&B thu được, nâng cao năng lực phân loại sắc thái cảm xúc, tự động gắn nhãn chủ đề và tối ưu hóa hệ thống cảnh báo sớm |
-| **Phase 3** | Tăng cường độ phủ dữ liệu, nâng cấp hạ tầng chịu tải lớn, bắt đầu mở rộng mô hình sang các ngành dọc khác và phát hành phiên bản thương mại chính thức |
-
-Mỗi sprint tạo ra increment demo được. Sau mỗi sprint: review + feedback loop.
+Không commit secret thật vào repo.
 
 ---
 
-## 8. Phạm vi sản phẩm
+## 11. Luồng dữ liệu Sprint 2
 
-### Phạm vi bao gồm (In-Scope)
+```text
+Crawler chạy mỗi 1-2 tiếng
+-> raw_collected
+-> preprocessed
+-> contact_resolved
+-> ai_labeled
+-> spam_assessed
+-> admin_reviewing
+-> approved_for_publish
+-> published
+-> contact_aggregated / priority_scored
+-> brand users xử lý theo role
+-> correction/audit/report
+```
 
-- Nguồn dữ liệu **công khai**: báo điện tử, Fanpage/Group công khai, YouTube, TikTok.
-- Dashboard biểu đồ, báo cáo PDF/Excel, Lead List, hệ thống cảnh báo.
+Quy tắc:
 
-### Phạm vi loại trừ (Out-of-Scope)
+- Dữ liệu chưa `published` không xuất hiện trong dashboard/report của brand.
+- Admin review là bước quản trị chất lượng dữ liệu, không phải nghiệp vụ xử lý khủng hoảng/lead.
+- Contact có nhiều nội dung tiêu cực, ảnh hưởng cao và spam score thấp được tăng mức ưu tiên xử lý.
+- Contact hoặc content có spam score cao không được boost priority như contact thật.
+- Nhãn đã được Quản lý thương hiệu duyệt sửa phải trở thành active label cho dashboard/report.
 
-- Tin nhắn cá nhân, group kín, tài khoản khóa bảo mật (tuân thủ Luật An ninh mạng).
-- Báo giấy, phát thanh, truyền hình chưa số hóa.
-- Xử lý khủng hoảng, gỡ bài tiêu cực (hệ thống chỉ phát hiện & báo cáo).
+---
 
-### Phạm vi đối tượng mục tiêu trong giai đoạn đầu (Target Brands)
+## 12. Contact Intelligence
 
-Để kiểm chứng pipeline xử lý dữ liệu và xây dựng phiên bản demo thực tế, InsightFlow sẽ tập trung quét dữ liệu, nhận diện thương hiệu và phân tích phản hồi xoay quanh **9 thương hiệu tiêu biểu thuộc ngành F&B (Cà phê, Trà sữa, Tiệm bánh) tại Việt Nam**, được phân chia theo 3 quy mô cụ thể sau:
+Contact Intelligence giúp InsightFlow hiểu bối cảnh của một đối tượng/contact với thương hiệu, thay vì chỉ nhìn từng mention rời rạc.
 
-| Phân nhóm quy mô | Thương hiệu tiêu biểu | Đặc điểm dữ liệu & Định hướng thu thập |
+Hệ thống cần tổng hợp:
+
+- Các post/comment của cùng contact trong cùng platform và brand.
+- Sentiment history: phần lớn nội dung là tích cực, trung tính hay tiêu cực.
+- Topic history: contact thường nói về vấn đề nào.
+- Influence score: dựa trên like, comment, share, reply, view hoặc follower nếu có.
+- Spam score: phát hiện content/contact có dấu hiệu spam, bot hoặc noise.
+- Priority score: mức ưu tiên xử lý sau khi xét sentiment, influence, recency và spam.
+
+Ví dụ:
+
+```text
+Một contact có 8 post/comment về Brand X trong 7 ngày
+-> 6 nội dung negative
+-> tổng tương tác cao
+-> spam score thấp
+-> hệ thống tăng priority trong crisis queue
+```
+
+Khuyến nghị Sprint 2:
+
+- Chỉ gom contact trong cùng platform trước.
+- Không gom cross-platform nếu chỉ dựa vào tên hiển thị.
+- Spam detection cần áp dụng ở cả content-level và contact-level.
+
+---
+
+## 13. Auto-response
+
+Auto-response phải an toàn theo brand.
+
+Mode đề xuất:
+
+- `off`: mặc định cho brand mới.
+- `suggest_only`: hệ thống gợi ý, người dùng gửi thủ công.
+- `auto_safe`: chỉ tự động trong tình huống rủi ro thấp đã cấu hình.
+- `manual_review_required`: chuẩn bị phản hồi nhưng cần duyệt.
+
+Quy tắc:
+
+- Quản lý thương hiệu bật/tắt auto-response cho brand mình.
+- High/critical crisis không được tự động phản hồi công khai nếu chưa qua manual review.
+- Mọi response event phải audit được.
+
+---
+
+## 14. Quy trình phát triển đề xuất
+
+Khi phát triển Sprint 2, ưu tiên theo thứ tự:
+
+1. Role profile, membership, route guard, sidebar theo quyền.
+2. Brand/data scope ở service/API layer.
+3. Data lifecycle và Admin review queue.
+4. Contact Intelligence: contact resolution, influence score, spam score, priority score.
+5. Label correction request workflow.
+6. Dashboard/report theo vai trò.
+7. Onboarding/user guide theo vai trò.
+8. Response template, auto-response setting và safety gate.
+9. Audit log cho các thao tác quan trọng.
+
+Nguyên tắc:
+
+- Không refactor cấu trúc thư mục nếu chưa cần.
+- Không chỉ ẩn menu ở frontend; quyền phải được enforce ở data access/API layer.
+- Không đưa dữ liệu AI chưa duyệt vào báo cáo thương hiệu.
+- Không để Admin bị lẫn vào workflow xử lý nghiệp vụ của brand.
+
+---
+
+## 15. Phạm vi sản phẩm
+
+### In scope
+
+- Dữ liệu truyền thông công khai.
+- Brand monitoring theo workspace/brand.
+- AI labeling và human-in-the-loop review.
+- Contact Intelligence trong cùng platform và brand.
+- Crisis workflow.
+- Lead workflow.
+- Role-based dashboard/report.
+- Auto-response có kiểm soát.
+- Audit các thao tác quan trọng.
+
+### Out of scope trong Sprint 2
+
+- Admin xử lý khủng hoảng hoặc lead thay brand.
+- Tự động phản hồi mọi tình huống không qua safety gate.
+- Cào dữ liệu private message, group kín hoặc dữ liệu không công khai.
+- Refactor bắt buộc toàn bộ cấu trúc thư mục/route.
+- Gom contact xuyên nền tảng bằng tín hiệu yếu như tên hiển thị.
+
+---
+
+## 16. Definition of Done cấp sản phẩm
+
+Sprint 2 được coi là đúng hướng khi:
+
+- Người dùng đăng nhập biết phải làm gì tiếp theo.
+- Mỗi vai trò chỉ thấy đúng dữ liệu và chức năng.
+- Admin được tách khỏi nghiệp vụ brand.
+- Dữ liệu đi qua lifecycle rõ ràng trước khi publish.
+- Có thể tổng hợp nhiều post/comment của cùng contact trong cùng platform và brand.
+- Priority tăng khi contact có nhiều nội dung tiêu cực, influence cao và không phải spam.
+- Spam contact/content không được ưu tiên như contact thật.
+- Nhân viên khủng hoảng gửi được request sửa nhãn.
+- Quản lý thương hiệu duyệt/từ chối/chỉnh request sửa nhãn.
+- Lead và crisis được tách quyền rõ.
+- Report dùng nhãn đã duyệt/latest active label.
+- Auto-response có bật/tắt, mode an toàn và audit.
+- Tài liệu `SPEC.md`, `ARCHITECTURE.md`, `README.md` thống nhất với nhau.
+
+---
+
+## 17. Change Log
+
+| Phiên bản | Ngày | Thay đổi |
 |---|---|---|
-| **Nhóm Nhỏ** *(Local Craft / Premium / Niche)* | **XLIII Coffee** | Chuỗi specialty coffee có footprint gọn hơn, hiện có các điểm ở Đà Nẵng, TP.HCM, Hội An và Hà Nội. Rất phù hợp để crawl pilot thực nghiệm cho nhóm thương hiệu ngách. |
-| | **Maison Marou** | Thương hiệu chocolate/patisserie cao cấp, sở hữu trang vị trí cửa hàng riêng và hệ sinh thái sản phẩm rõ ràng. Phù hợp để kiểm thử và tối ưu nhóm dữ liệu "food premium / local craft". |
-| | **Laha Cafe** | Local coffee brand có hiện diện online chính thức và hoạt động theo mô hình công ty/nhượng quyền. Footprint online hiện tại gọn hơn các chuỗi quốc dân, thích hợp để theo dõi luồng thảo luận quy mô nhỏ gọn. |
-| **Nhóm Vừa** *(Đang mở rộng nhanh / Phủ đa tỉnh)* | **KATINAT Coffee & Tea House** | Sở hữu hệ thống cửa hàng lớn và các thông báo vận hành "trên toàn quốc". Tốc độ tăng trưởng và độ thảo luận truyền thông đủ mạnh để đại diện cho nhóm brand đang mở rộng nhanh. |
-| | **Phê La** | Hệ thống cửa hàng hiện diện tại nhiều thành phố lớn (Đà Lạt, Đà Nẵng, Hà Nội, TP.HCM). Lượng thảo luận đặc trưng, cực kỳ phù hợp cho bài toán phân tích sắc thái cảm xúc (Sentiment) và brand mention. |
-| | **Pizza 4P’s** | Thương hiệu F&B gốc Việt có hơn 30 địa điểm trên nhiều thị trường. Độ phủ mạnh, tệp khách hàng trung thành cao nhưng chưa theo kiểu đại trà, nằm ở ranh giới giữa nhóm vừa và vừa-lớn. |
-| **Nhóm Lớn** *(Chuỗi Quốc dân / Volume khổng lồ)* | **Highlands Coffee** | Hệ thống tìm kiếm cửa hàng và menu đồng bộ trên toàn quốc. Là một trong những brand lớn nhất thị trường, lý tưởng để thử nghiệm khả năng cào dữ liệu và chịu tải với volume (dung lượng) lớn. |
-| | **Phúc Long** | Có trang tìm cửa hàng riêng và điều khoản hội viên áp dụng cho hệ thống toàn quốc. Lượng tương tác, bài đăng phản hồi lớn, đại diện xuất sắc cho nhóm thương hiệu lớn. |
-| | **Cộng Cà Phê** | Sở hữu mạng lưới 58 cửa hàng tại Việt Nam và 7 cửa hàng quốc tế. Brand mang đậm tính văn hóa bản địa, có lượng brand mention phong phú ở cả thị trường trong và ngoài nước, rất đáng theo dõi. |
-
----
-
-## 9. Đóng góp
-
-1. Fork repo, tạo branch `feature/ten-feature`
-2. Commit theo convention: `feat:`, `fix:`, `docs:`, `refactor:`
-3. Mở Pull Request, assign reviewer
-4. Merge sau khi pass CI và có ít nhất 1 approval
-
----
-
-## 10. Giấy phép
-
-© 2025 InsightFlow Team. Tất cả quyền được bảo lưu.
+| 2.1 | 2026-07-02 | Bổ sung Contact Intelligence: contact-level aggregation, influence score, spam score và priority boost. |
+| 2.0 | 2026-07-02 | Cập nhật README theo SPEC/ARCHITECTURE Sprint 2: role-based workflow, không đổi cấu trúc thư mục, label lifecycle, onboarding, report và auto-response safety. |
