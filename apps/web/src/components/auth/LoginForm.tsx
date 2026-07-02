@@ -4,11 +4,11 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { useTheme } from "@/contexts/ThemeContext";
-import { getDefaultRouteForRole, inferRoleFromEmail } from "@/lib/rbac";
+import { isValidRole } from "@/lib/rbac";
 
 export default function LoginForm() {
   const router = useRouter();
@@ -28,8 +28,16 @@ export default function LoginForm() {
     try {
       const credential = await signInWithEmailAndPassword(auth, email, password);
       const userSnapshot = await getDoc(doc(db, "users", credential.user.uid));
-      const savedDefaultRoute = userSnapshot.exists() ? userSnapshot.data().defaultRoute : undefined;
-      router.push(typeof savedDefaultRoute === "string" ? savedDefaultRoute : getDefaultRouteForRole(inferRoleFromEmail(email)));
+      const userData = userSnapshot.exists() ? userSnapshot.data() : null;
+
+      if (!userData || !isValidRole(userData.role)) {
+        await signOut(auth);
+        setError("Tai khoan nay chua duoc cap quyen truy cap InsightFlow. Vui long dung tai khoan do Admin/Quan ly thuong hieu cap.");
+        return;
+      }
+
+      const savedDefaultRoute = typeof userData.defaultRoute === "string" ? userData.defaultRoute : "/";
+      router.push(savedDefaultRoute);
     } catch (err: any) {
       const msg: Record<string, string> = {
         "auth/user-not-found": t("auth.errors.userNotFound"),
@@ -37,7 +45,7 @@ export default function LoginForm() {
         "auth/invalid-credential": t("auth.errors.invalidCredential"),
         "auth/too-many-requests": t("auth.errors.tooManyRequests"),
       };
-      setError(msg[err.code] ?? t("auth.errors.loginFailed"));
+      setError(msg[err.code] ?? err.message ?? t("auth.errors.loginFailed"));
     } finally {
       setLoading(false);
     }
