@@ -32,6 +32,7 @@ import type {
   Platform,
   DashboardFilters,
 } from "@/types/dashboard";
+import { canPerformAction, type UserRoleProfile } from "@/lib/rbac";
 
 // ─── Collection names ────────────────────────────────────────────────────────
 export const COLLECTION_NAMES = {
@@ -515,14 +516,25 @@ export class DashboardService {
   static async updateLeadStatus(
     id: string,
     status: Lead["status"],
+    profile: UserRoleProfile | null | undefined,
   ): Promise<void> {
+    if (!profile || !canPerformAction(profile, "update_lead_status")) {
+      throw new Error("User is not allowed to update lead status.");
+    }
+
+    const auditFields = {
+      updated_by: profile.uid,
+      updated_by_role: profile.role,
+      updated_at: new Date().toISOString(),
+    };
+
     try {
       const leadRef = doc(dbData, COLLECTION_NAMES.leads, id);
-      await updateDoc(leadRef, { status });
+      await updateDoc(leadRef, { status, ...auditFields });
     } catch (error) {
       try {
         const labelRef = doc(dbData, COLLECTION_NAMES.mentions, id);
-        await updateDoc(labelRef, { status });
+        await updateDoc(labelRef, { status, ...auditFields });
       } catch (fallbackError) {
         console.error("[DashboardService] updateLeadStatus error:", error);
         throw fallbackError;
@@ -536,18 +548,33 @@ export class DashboardService {
   static async updateLeadDetails(
     id: string,
     data: Partial<Lead>,
+    profile: UserRoleProfile | null | undefined,
   ): Promise<void> {
+    if (!profile || !canPerformAction(profile, "update_lead_details")) {
+      throw new Error("User is not allowed to update lead details.");
+    }
+
+    if (data.status && !canPerformAction(profile, "update_lead_status")) {
+      throw new Error("User is not allowed to update lead status.");
+    }
+
+    const auditFields = {
+      updated_by: profile.uid,
+      updated_by_role: profile.role,
+      updated_at: new Date().toISOString(),
+    };
+
     try {
       const leadRef = doc(dbData, COLLECTION_NAMES.leads, id);
       const cleanData = { ...data };
       delete cleanData.id;
-      await updateDoc(leadRef, cleanData);
+      await updateDoc(leadRef, { ...cleanData, ...auditFields });
     } catch (error) {
       try {
         const labelRef = doc(dbData, COLLECTION_NAMES.mentions, id);
         const cleanData = { ...data };
         delete cleanData.id;
-        await updateDoc(labelRef, cleanData);
+        await updateDoc(labelRef, { ...cleanData, ...auditFields });
       } catch (fallbackError) {
         console.error("[DashboardService] updateLeadDetails error:", error);
         throw fallbackError;

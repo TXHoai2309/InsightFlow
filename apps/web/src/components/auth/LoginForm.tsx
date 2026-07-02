@@ -5,10 +5,10 @@ import { useTranslation } from "react-i18next";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { signInWithEmailAndPassword, signOut } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { useTheme } from "@/contexts/ThemeContext";
-import { isValidRole } from "@/lib/rbac";
+import { getDefaultRouteForRole, normalizeRole } from "@/lib/rbac";
 
 export default function LoginForm() {
   const router = useRouter();
@@ -27,16 +27,29 @@ export default function LoginForm() {
     setError("");
     try {
       const credential = await signInWithEmailAndPassword(auth, email, password);
-      const userSnapshot = await getDoc(doc(db, "users", credential.user.uid));
+      const userRef = doc(db, "users", credential.user.uid);
+      const userSnapshot = await getDoc(userRef);
       const userData = userSnapshot.exists() ? userSnapshot.data() : null;
+      const normalizedRole = normalizeRole(userData?.role);
 
-      if (!userData || !isValidRole(userData.role)) {
+      if (!userData || !normalizedRole) {
         await signOut(auth);
         setError("Tai khoan nay chua duoc cap quyen truy cap InsightFlow. Vui long dung tai khoan do Admin/Quan ly thuong hieu cap.");
         return;
       }
 
-      const savedDefaultRoute = typeof userData.defaultRoute === "string" ? userData.defaultRoute : "/";
+      if (userData.role !== normalizedRole) {
+        await setDoc(
+          userRef,
+          {
+            role: normalizedRole,
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true },
+        );
+      }
+
+      const savedDefaultRoute = typeof userData.defaultRoute === "string" ? userData.defaultRoute : getDefaultRouteForRole(normalizedRole);
       router.push(savedDefaultRoute);
     } catch (err: any) {
       const msg: Record<string, string> = {

@@ -20,6 +20,24 @@ export interface UserRoleProfile {
   defaultRoute: string;
 }
 
+export type BusinessAction =
+  | "view_dashboard"
+  | "view_mentions"
+  | "view_crisis_queue"
+  | "update_crisis_status"
+  | "view_leads"
+  | "update_lead_status"
+  | "update_lead_details"
+  | "view_reports"
+  | "manage_staff"
+  | "manage_brand_settings"
+  | "review_labels"
+  | "create_label_request"
+  | "admin_panel"
+  | "admin_user_management"
+  | "admin_audit"
+  | "admin_crawler_health";
+
 interface RoleConfig {
   label: string;
   permissions: string[];
@@ -35,6 +53,45 @@ interface RoutePolicy {
 const LEGACY_ROLE_MAP: Record<LegacyUserRole, UserRole> = {
   crisis_staff: "crisis_employee",
   lead_staff: "lead_employee",
+};
+
+const ROLE_BUSINESS_ACTIONS: Record<UserRole, BusinessAction[]> = {
+  admin: [
+    "admin_panel",
+    "admin_user_management",
+    "admin_audit",
+    "admin_crawler_health",
+    "review_labels",
+  ],
+  brand_manager: [
+    "view_dashboard",
+    "view_mentions",
+    "view_crisis_queue",
+    "update_crisis_status",
+    "view_leads",
+    "update_lead_status",
+    "update_lead_details",
+    "view_reports",
+    "manage_staff",
+    "manage_brand_settings",
+    "create_label_request",
+  ],
+  crisis_employee: [
+    "view_dashboard",
+    "view_mentions",
+    "view_crisis_queue",
+    "update_crisis_status",
+    "view_reports",
+    "create_label_request",
+  ],
+  lead_employee: [
+    "view_dashboard",
+    "view_mentions",
+    "view_leads",
+    "update_lead_status",
+    "update_lead_details",
+    "view_reports",
+  ],
 };
 
 export const ROLE_CONFIG: Record<UserRole, RoleConfig> = {
@@ -157,6 +214,19 @@ export function getDefaultRouteForRole(role?: RoleInput | null) {
   return normalizedRole ? ROLE_CONFIG[normalizedRole].defaultRoute : "/login";
 }
 
+export function canPerformAction(
+  profile: Pick<UserRoleProfile, "role"> | null | undefined,
+  action: BusinessAction,
+) {
+  if (!profile) return false;
+  return ROLE_BUSINESS_ACTIONS[profile.role]?.includes(action) ?? false;
+}
+
+export function getBusinessActionsForRole(role?: RoleInput | null) {
+  const normalizedRole = normalizeRole(role);
+  return normalizedRole ? ROLE_BUSINESS_ACTIONS[normalizedRole] : [];
+}
+
 // Deprecated: only for legacy/dev fallback. Production auth must use users/{uid}.role.
 export function inferRoleFromEmail(email?: string | null): UserRole {
   const normalizedEmail = (email || "").trim().toLowerCase();
@@ -207,11 +277,11 @@ export function buildUserRoleProfile(params: {
   storedDefaultRoute?: unknown;
 }): UserRoleProfile {
   const email = (params.email || "").trim().toLowerCase();
-  if (!isValidRole(params.storedRole)) {
+  const role = normalizeRole(params.storedRole);
+  if (!role) {
     throw new Error("User is not provisioned with a valid InsightFlow role.");
   }
 
-  const role = params.storedRole;
   const companyDomain = email.includes("@") ? email.split("@")[1] : "";
   const permissions = Array.isArray(params.storedPermissions)
     ? params.storedPermissions.filter(

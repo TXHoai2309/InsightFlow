@@ -8,7 +8,7 @@
 import { useEffect, useState } from "react";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { DashboardService } from "@/lib/services/dashboard";
-import { filterByBrandScope } from "@/lib/brandScope";
+import { filterByBusinessPolicy } from "@/lib/brandScope";
 import { useAuth } from "@/hooks/useAuth";
 
 interface UseDashboardOptions {
@@ -43,13 +43,17 @@ export function useDashboard(options: UseDashboardOptions = {}) {
       // 1. Fetch raw data từ Firestore (không giới hạn records)
       const rawData =
         await DashboardService.fetchRawData();
-      const workspaces = filterByBrandScope(rawData.workspaces.map((workspace) => ({
-        ...workspace,
-        brand: workspace.brand_name,
-      })), profile);
-      const mentions = filterByBrandScope(rawData.mentions, profile);
-      const alerts = filterByBrandScope(rawData.alerts, profile);
-      const leads = filterByBrandScope(rawData.leads, profile);
+      const workspaces = filterByBusinessPolicy(
+        rawData.workspaces.map((workspace) => ({
+          ...workspace,
+          brand: workspace.brand_name,
+        })),
+        profile,
+        "view_dashboard",
+      );
+      const mentions = filterByBusinessPolicy(rawData.mentions, profile, "view_mentions");
+      const alerts = filterByBusinessPolicy(rawData.alerts, profile, "view_crisis_queue");
+      const leads = filterByBusinessPolicy(rawData.leads, profile, "view_leads");
 
       // 2. Aggregations từ toàn bộ dữ liệu
       const stats = DashboardService.calculateStats(mentions, alerts, leads);

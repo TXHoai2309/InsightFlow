@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
-import { buildUserRoleProfile, isValidRole } from "@/lib/rbac";
+import { buildUserRoleProfile, normalizeRole } from "@/lib/rbac";
 import { useAuthStore } from "@/stores/auth.store";
 
 let unsubscribeAuth: (() => void) | null = null;
@@ -40,8 +40,9 @@ function startAuthListener() {
       const userRef = doc(db, "users", firebaseUser.uid);
       const snapshot = await getDoc(userRef);
       const storedData = snapshot.exists() ? snapshot.data() : null;
+      const normalizedRole = normalizeRole(storedData?.role);
 
-      if (!storedData || !isValidRole(storedData.role)) {
+      if (!storedData || !normalizedRole) {
         await signOut(auth);
         setUser(null);
         setProfile(null);
@@ -53,7 +54,7 @@ function startAuthListener() {
         email: firebaseUser.email,
         displayName: firebaseUser.displayName,
         photoURL: firebaseUser.photoURL,
-        storedRole: storedData.role,
+        storedRole: normalizedRole,
         storedBrandId: storedData.brandId,
         storedBrandName: storedData.brandName,
         storedPermissions: storedData.permissions,
