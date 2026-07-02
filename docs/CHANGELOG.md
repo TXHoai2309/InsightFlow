@@ -10,7 +10,48 @@
 > - Các commit merge vẫn được giữ lại để phản ánh đúng dòng phát triển giữa các nhánh.
 >   Tất cả các thay đổi đáng chú ý đối với dự án này sẽ được ghi lại trong file này.
 >   Định dạng dựa trên [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) và dự án này tuân thủ [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [Unreleased] - 2026-07-02
 
+### Added
+
+- **Quản lý người dùng & Phân quyền (RBAC)**:
+  - Xây dựng cấu trúc dữ liệu lưu thông tin người dùng trên Firebase/Firestore, hỗ trợ các vai trò: `Admin`, `Brand Manager`, `Crisis Staff`, `Lead Staff` và `Viewer`.
+  - Mỗi tài khoản được gắn với vai trò và thương hiệu (Brand) tương ứng, hỗ trợ mở rộng thêm quyền trong các phiên bản sau.
+  - Triển khai cơ chế kiểm tra quyền truy cập (Role-Based Access Control) sau khi đăng nhập.
+  - Áp dụng Route Guard trên toàn bộ hệ thống, ngăn người dùng truy cập trái phép bằng URL trực tiếp.
+  - Điều hướng người dùng đến giao diện phù hợp theo vai trò được cấp.
+
+- **Quản lý tài khoản Brand Manager**:
+  - Thiết kế luồng cấp tài khoản do Admin thực hiện, loại bỏ quy trình Brand Manager tự đăng ký.
+  - Cho phép Admin tạo tài khoản Brand Manager với các thông tin cơ bản (họ tên, email, thương hiệu).
+  - Hỗ trợ tạo hoặc cấp mật khẩu tạm thời khi khởi tạo tài khoản.
+  - Tự động lưu tài khoản vào Firebase và gán đúng thương hiệu quản lý.
+
+- **Quản lý tài khoản nhân viên theo thương hiệu**:
+  - Cho phép Brand Manager tạo tài khoản nhân viên thuộc thương hiệu mình quản lý.
+  - Hỗ trợ nhập họ tên, email, số điện thoại và lựa chọn vai trò của nhân viên.
+  - Tự động gán Brand của Brand Manager cho tài khoản nhân viên khi tạo.
+  - Hỗ trợ cấp mật khẩu tạm thời cho tài khoản mới.
+
+- **Phân công nghiệp vụ nhân viên**:
+  - Cho phép Brand Manager phân công nghiệp vụ cho nhân viên theo từng chức năng.
+  - Hỗ trợ tối thiểu hai nhóm nghiệp vụ: `Crisis Staff` và `Lead Staff`.
+  - Thông tin phân công được lưu trên Firebase và có thể cập nhật khi cần.
+  - Nhân viên chỉ được truy cập các chức năng thuộc phạm vi nghiệp vụ đã được phân công.
+
+### Changed
+
+- Điều chỉnh quy trình quản lý tài khoản theo hướng tập trung:
+  - Admin chịu trách nhiệm tạo tài khoản Brand Manager.
+  - Brand Manager chịu trách nhiệm tạo và quản lý tài khoản nhân viên của thương hiệu mình.
+  - Loại bỏ luồng tự đăng ký và xác minh quyền đại diện thương hiệu của Brand Manager trong Sprint 2.
+
+### Security
+
+- Áp dụng cơ chế Role-Based Access Control (RBAC) trên toàn hệ thống.
+- Ngăn truy cập trái phép vào các chức năng thông qua kiểm tra quyền sau đăng nhập và Route Guard.
+- Chỉ người dùng có đủ quyền mới có thể truy cập hoặc thực hiện thao tác trên các chức năng tương ứng.
+- Giới hạn phạm vi dữ liệu theo thương hiệu, đảm bảo người dùng chỉ thao tác trên dữ liệu thuộc Brand được phân quyền.
 ---
 ## [Unreleased] - 2026-06-29
 

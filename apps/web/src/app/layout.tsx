@@ -139,21 +139,23 @@ export default function RootLayout({
                 </div>
               ) : (
                 /* Trang app (Dashboard, Mentions...) — có sidebar */
-                <div className="flex h-screen w-screen overflow-hidden" style={{ backgroundColor: "var(--color-bg-primary)" }}>
-                  <Sidebar
-                    isOpen={sidebarOpen}
-                    onClose={() => setSidebarOpen(false)}
-                  />
-                  <div className="flex flex-col flex-1 md:ml-64">
-                    <Header onMenuToggle={() => setSidebarOpen((prev) => !prev)} />
-                    <main
-                      data-app-scroll-root="true"
-                      className="flex-1 overflow-y-auto mt-16 pb-16 md:pb-0"
-                      style={{ backgroundColor: "var(--color-bg-primary)" }}
-                    >
-                      {children}
-                    </main>
-                    <MobileNav />
+                <ProtectedRoute>
+                  <div className="flex h-screen w-screen overflow-hidden" style={{ backgroundColor: "var(--color-bg-primary)" }}>
+                    <Sidebar
+                      isOpen={sidebarOpen}
+                      onClose={() => setSidebarOpen(false)}
+                    />
+                    <div className="flex flex-col flex-1 md:ml-64">
+                      <Header onMenuToggle={() => setSidebarOpen((prev) => !prev)} />
+                      <main
+                        data-app-scroll-root="true"
+                        className="flex-1 overflow-y-auto mt-16 pb-16 md:pb-0"
+                        style={{ backgroundColor: "var(--color-bg-primary)" }}
+                      >
+                        {children}
+                      </main>
+                      <MobileNav />
+                    </div>
                   </div>
                 </ProtectedRoute>
               )}
