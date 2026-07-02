@@ -1,7 +1,9 @@
 // apps/api/src/routes/auth.ts
 import { FastifyInstance, FastifyPluginOptions, FastifyReply, FastifyRequest } from "fastify";
 import { getAuth } from "firebase-admin/auth";
-import { authAdmin } from "../services/firebase";
+import { FieldValue } from "firebase-admin/firestore";
+import { authAdmin, db } from "../services/firebase";
+import { verifyToken } from "../middleware/auth";
 
 export default async function authRoutes(fastify: FastifyInstance, options: FastifyPluginOptions) {
   
@@ -61,6 +63,60 @@ export default async function authRoutes(fastify: FastifyInstance, options: Fast
       return reply.status(500).send({ 
         success: false, 
         error: "Failed to update password: " + error.message
+      });
+    }
+  });
+
+  fastify.post("/complete-first-password-change", async (request: FastifyRequest, reply: FastifyReply) => {
+    await verifyToken(request, reply);
+    if (reply.sent) return;
+
+    const requester = (request as any).user;
+
+    try {
+      const userRef = db.collection("users").doc(requester.uid);
+      const snapshot = await userRef.get();
+      const profile = snapshot.exists ? snapshot.data() : null;
+
+      await userRef.set(
+        {
+          temporaryPasswordIssued: false,
+          temporaryPassword: FieldValue.delete(),
+          passwordChangedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      if (profile?.brandId && ["crisis_staff", "lead_staff"].includes(profile.role)) {
+        await db
+          .collection("brands")
+          .doc(profile.brandId)
+          .collection("staff")
+          .doc(requester.uid)
+          .set(
+            {
+              temporaryPasswordIssued: false,
+              temporaryPassword: FieldValue.delete(),
+              passwordChangedAt: FieldValue.serverTimestamp(),
+              updatedAt: FieldValue.serverTimestamp(),
+            },
+            { merge: true },
+          );
+      }
+
+      const userRecord = await authAdmin.getUser(requester.uid);
+      await authAdmin.setCustomUserClaims(requester.uid, {
+        ...(userRecord.customClaims || {}),
+        temporaryPasswordIssued: false,
+      });
+
+      return { success: true };
+    } catch (error: any) {
+      request.log.error(error);
+      return reply.status(500).send({
+        success: false,
+        error: error.message || "Failed to complete first password change.",
       });
     }
   });

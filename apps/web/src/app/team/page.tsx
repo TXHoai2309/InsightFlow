@@ -1,8 +1,10 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import { EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
+import { validateStrongPassword } from "@/lib/passwordPolicy";
 
 type StaffRole = "crisis_staff" | "lead_staff";
 
@@ -15,6 +17,7 @@ interface StaffAccount {
   permissions: string[];
   defaultRoute: string;
   temporaryPassword?: string;
+  hasTemporaryPassword?: boolean;
 }
 
 const roleOptions: Array<{ value: StaffRole; label: string; description: string }> = [
@@ -64,6 +67,12 @@ export default function TeamPage() {
   const [loadingList, setLoadingList] = useState(true);
   const [error, setError] = useState("");
   const [createdAccount, setCreatedAccount] = useState<StaffAccount | null>(null);
+  const [revealedPasswords, setRevealedPasswords] = useState<Record<string, string>>({});
+  const [passwordRequestUid, setPasswordRequestUid] = useState<string | null>(null);
+  const [passwordRequestMode, setPasswordRequestMode] = useState<"reveal" | "reset">("reveal");
+  const [managerPassword, setManagerPassword] = useState("");
+  const [revealLoading, setRevealLoading] = useState(false);
+  const [revealError, setRevealError] = useState("");
 
   const availableOperations = useMemo(
     () => operationOptions.filter((operation) => operation.roles.includes(staffRole)),
@@ -123,6 +132,11 @@ export default function TeamPage() {
     setCreatedAccount(null);
 
     try {
+      const passwordPolicy = validateStrongPassword(temporaryPassword);
+      if (!passwordPolicy.valid) {
+        throw new Error(passwordPolicy.errors.join(" "));
+      }
+
       const token = await auth.currentUser?.getIdToken();
       if (!token) throw new Error("Ban can dang nhap bang tai khoan Quan ly thuong hieu.");
 
@@ -158,6 +172,82 @@ export default function TeamPage() {
       setError(err.message || "Khong the tao tai khoan nhan vien.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRevealTemporaryPassword = async (staffUid: string) => {
+    setRevealLoading(true);
+    setRevealError("");
+
+    try {
+      const user = auth.currentUser;
+      if (!user?.email) {
+        throw new Error("Phien dang nhap khong hop le. Vui long dang nhap lai.");
+      }
+
+      const credential = EmailAuthProvider.credential(user.email, managerPassword);
+      await reauthenticateWithCredential(user, credential);
+
+      const selectedStaff = staff.find((item) => item.uid === staffUid);
+      if (passwordRequestMode === "reveal" && selectedStaff?.temporaryPassword) {
+        setRevealedPasswords((current) => ({
+          ...current,
+          [staffUid]: selectedStaff.temporaryPassword as string,
+        }));
+        setPasswordRequestUid(null);
+        setManagerPassword("");
+        return;
+      }
+
+      const token = await user.getIdToken(true);
+      const endpoint =
+        passwordRequestMode === "reset"
+          ? `/api/staff/${staffUid}/reset-temporary-password`
+          : `/api/staff/${staffUid}/temporary-password`;
+
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 400) {
+          setStaff((current) =>
+            current.map((item) =>
+              item.uid === staffUid ? { ...item, hasTemporaryPassword: false, temporaryPassword: undefined } : item,
+            ),
+          );
+        }
+        throw new Error(data.error || "Khong the xem mat khau tam thoi.");
+      }
+
+      setRevealedPasswords((current) => ({
+        ...current,
+        [staffUid]: data.data.temporaryPassword,
+      }));
+      setStaff((current) =>
+        current.map((item) =>
+          item.uid === staffUid
+            ? { ...item, hasTemporaryPassword: true, temporaryPassword: data.data.temporaryPassword }
+            : item,
+        ),
+      );
+      setPasswordRequestUid(null);
+      setManagerPassword("");
+    } catch (err: any) {
+      const messageByCode: Record<string, string> = {
+        "auth/wrong-password": "Mat khau Quan ly thuong hieu khong dung.",
+        "auth/invalid-credential": "Mat khau Quan ly thuong hieu khong dung.",
+        "auth/too-many-requests": "Ban thu qua nhieu lan. Vui long doi mot lat roi thu lai.",
+      };
+      const backendMessage =
+        err.message === "Temporary password is no longer available for this account."
+          ? "Mat khau tam thoi khong con kha dung. Co the nhan vien da doi mat khau lan dau hoac tai khoan nay duoc tao truoc khi he thong luu mat khau tam."
+          : err.message;
+      setRevealError(messageByCode[err.code] || backendMessage || "Khong the xem mat khau tam thoi.");
+    } finally {
+      setRevealLoading(false);
     }
   };
 
@@ -271,7 +361,7 @@ export default function TeamPage() {
                 value={temporaryPassword}
                 onChange={(event) => setTemporaryPassword(event.target.value)}
                 required
-                minLength={6}
+                minLength={10}
                 className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2.5 text-[14px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]"
               />
               <button
@@ -335,16 +425,17 @@ export default function TeamPage() {
                 <th className="py-3 pr-4">Vai tro</th>
                 <th className="py-3 pr-4">Nghiep vu</th>
                 <th className="py-3 pr-4">Trang vao</th>
+                <th className="py-3 pr-4">Mat khau tam</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--color-border)]">
               {loadingList ? (
                 <tr>
-                  <td className="py-5 text-[var(--color-text-secondary)]" colSpan={4}>Dang tai danh sach...</td>
+                  <td className="py-5 text-[var(--color-text-secondary)]" colSpan={5}>Dang tai danh sach...</td>
                 </tr>
               ) : staff.length === 0 ? (
                 <tr>
-                  <td className="py-5 text-[var(--color-text-secondary)]" colSpan={4}>Chua co nhan vien nao.</td>
+                  <td className="py-5 text-[var(--color-text-secondary)]" colSpan={5}>Chua co nhan vien nao.</td>
                 </tr>
               ) : (
                 staff.map((item) => (
@@ -369,6 +460,39 @@ export default function TeamPage() {
                       </div>
                     </td>
                     <td className="py-4 pr-4 text-[var(--color-text-secondary)]">{item.defaultRoute}</td>
+                    <td className="py-4 pr-4">
+                      {revealedPasswords[item.uid] ? (
+                        <span className="font-mono text-[13px] text-[var(--color-text-primary)]">
+                          {revealedPasswords[item.uid]}
+                        </span>
+                      ) : item.hasTemporaryPassword || item.temporaryPassword ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPasswordRequestUid(item.uid);
+                            setPasswordRequestMode("reveal");
+                            setRevealError("");
+                            setManagerPassword("");
+                          }}
+                          className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 font-mono text-[13px] text-[var(--color-text-primary)] hover:bg-[var(--color-brand-subtle)]"
+                        >
+                          ••••••••••
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPasswordRequestUid(item.uid);
+                            setPasswordRequestMode("reset");
+                            setRevealError("");
+                            setManagerPassword("");
+                          }}
+                          className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-[12px] font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-brand-subtle)]"
+                        >
+                          Cap lai
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))
               )}
@@ -376,7 +500,63 @@ export default function TeamPage() {
           </table>
         </div>
       </section>
+
+      {passwordRequestUid && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-[420px] rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 shadow-xl">
+            <h3 className="text-[18px] font-bold text-[var(--color-text-primary)]">
+              {passwordRequestMode === "reset" ? "Xac thuc de cap lai mat khau" : "Xac thuc de xem mat khau"}
+            </h3>
+            <p className="mt-2 text-[13px] leading-5 text-[var(--color-text-secondary)]">
+              {passwordRequestMode === "reset"
+                ? "Nhap mat khau tai khoan Quan ly thuong hieu cua ban. He thong se tao mat khau tam moi cho nhan vien."
+                : "Nhap mat khau tai khoan Quan ly thuong hieu cua ban de xem mat khau tam thoi cua nhan vien."}
+            </p>
+
+            {revealError && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
+                {revealError}
+              </div>
+            )}
+
+            <label className="mt-5 block space-y-2">
+              <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">
+                Mat khau Quan ly thuong hieu
+              </span>
+              <input
+                value={managerPassword}
+                onChange={(event) => setManagerPassword(event.target.value)}
+                type="password"
+                autoFocus
+                className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2.5 text-[14px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]"
+              />
+            </label>
+
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setPasswordRequestUid(null);
+                  setPasswordRequestMode("reveal");
+                  setManagerPassword("");
+                  setRevealError("");
+                }}
+                className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-[13px] font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-brand-subtle)]"
+              >
+                Huy
+              </button>
+              <button
+                type="button"
+                disabled={revealLoading || !managerPassword}
+                onClick={() => handleRevealTemporaryPassword(passwordRequestUid)}
+                className="rounded-lg bg-[var(--color-brand)] px-4 py-2 text-[13px] font-semibold text-white hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {revealLoading ? "Dang xac thuc..." : passwordRequestMode === "reset" ? "Cap lai va xem" : "Xem mat khau"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-

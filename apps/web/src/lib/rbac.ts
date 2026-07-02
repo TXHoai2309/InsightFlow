@@ -11,6 +11,7 @@ export interface UserRoleProfile {
   photoURL?: string;
   permissions: string[];
   defaultRoute: string;
+  temporaryPasswordIssued?: boolean;
 }
 
 interface RoleConfig {
@@ -118,6 +119,7 @@ export function buildUserRoleProfile(params: {
   storedBrandName?: unknown;
   storedPermissions?: unknown;
   storedDefaultRoute?: unknown;
+  storedTemporaryPasswordIssued?: unknown;
 }): UserRoleProfile {
   const email = (params.email || "").trim().toLowerCase();
   if (!isValidRole(params.storedRole)) {
@@ -141,6 +143,7 @@ export function buildUserRoleProfile(params: {
     photoURL: params.photoURL || "",
     permissions,
     defaultRoute: typeof params.storedDefaultRoute === "string" ? params.storedDefaultRoute : ROLE_CONFIG[role].defaultRoute,
+    temporaryPasswordIssued: params.storedTemporaryPasswordIssued === true,
   };
 }
 

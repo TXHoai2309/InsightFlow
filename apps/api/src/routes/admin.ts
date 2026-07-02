@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyPluginOptions, FastifyReply, FastifyRequest } f
 import { FieldValue } from "firebase-admin/firestore";
 import { authAdmin, db } from "../services/firebase";
 import { verifyToken } from "../middleware/auth";
+import { validateStrongPassword } from "../utils/passwordPolicy";
 
 const brandManagerPermissions = ["dashboard", "mentions", "alerts", "leads", "reports", "brand_settings", "staff_management"];
 
@@ -59,10 +60,11 @@ export default async function adminRoutes(fastify: FastifyInstance, options: Fas
       });
     }
 
-    if (temporaryPassword.length < 6) {
+    const passwordPolicy = validateStrongPassword(temporaryPassword);
+    if (!passwordPolicy.valid) {
       return reply.status(400).send({
         success: false,
-        error: "Temporary password must be at least 6 characters.",
+        error: passwordPolicy.errors.join(" "),
       });
     }
 
@@ -102,6 +104,7 @@ export default async function adminRoutes(fastify: FastifyInstance, options: Fas
         brandName,
         permissions: brandManagerPermissions,
         defaultRoute: "/dashboard",
+        temporaryPasswordIssued: true,
       });
 
       const accountPayload = {

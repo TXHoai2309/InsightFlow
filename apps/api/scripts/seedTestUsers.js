@@ -25,6 +25,7 @@ const users = [
     companyDomain: "insightflow.com",
     defaultRoute: "/admin",
     permissions: ["admin_panel", "dashboard", "mentions", "alerts", "leads", "reports", "brand_settings"],
+    temporaryPasswordIssued: false,
   },
   {
     email: "manager@highlandscoffee.com",
@@ -35,6 +36,7 @@ const users = [
     companyDomain: "highlandscoffee.com",
     defaultRoute: "/dashboard",
     permissions: ["dashboard", "mentions", "alerts", "leads", "reports", "brand_settings", "staff_management"],
+    temporaryPasswordIssued: true,
   },
   {
     email: "nguyen_van_crisis@highlandscoffee.com",
@@ -45,6 +47,7 @@ const users = [
     companyDomain: "highlandscoffee.com",
     defaultRoute: "/alerts",
     permissions: ["dashboard", "mentions", "alerts", "reports", "brand_settings"],
+    temporaryPasswordIssued: true,
   },
   {
     email: "tran_thi_lead@highlandscoffee.com",
@@ -55,6 +58,7 @@ const users = [
     companyDomain: "highlandscoffee.com",
     defaultRoute: "/leads",
     permissions: ["dashboard", "mentions", "leads", "reports", "brand_settings"],
+    temporaryPasswordIssued: true,
   },
 ];
 
@@ -95,6 +99,8 @@ async function upsertUser(userConfig) {
       companyDomain: userConfig.companyDomain,
       permissions: userConfig.permissions,
       defaultRoute: userConfig.defaultRoute,
+      temporaryPasswordIssued: userConfig.temporaryPasswordIssued,
+      temporaryPassword: userConfig.temporaryPasswordIssued ? password : FieldValue.delete(),
       updatedAt: FieldValue.serverTimestamp(),
       seededForTesting: true,
     },
@@ -107,6 +113,7 @@ async function upsertUser(userConfig) {
     brandName: userConfig.brandName || null,
     permissions: userConfig.permissions,
     defaultRoute: userConfig.defaultRoute,
+    temporaryPasswordIssued: userConfig.temporaryPasswordIssued,
   });
 
   return { ...userConfig, uid: firebaseUser.uid };

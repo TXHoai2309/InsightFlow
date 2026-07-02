@@ -56,14 +56,15 @@ export default function LoginForm() {
           storedBrandName: claims.brandName,
           storedPermissions: claims.permissions,
           storedDefaultRoute: claims.defaultRoute,
+          storedTemporaryPasswordIssued: claims.temporaryPasswordIssued,
         });
 
-        router.push(profileFromClaims.defaultRoute);
+        router.push(profileFromClaims.temporaryPasswordIssued ? "/change-password" : profileFromClaims.defaultRoute);
         return;
       }
 
       const savedDefaultRoute = typeof userData.defaultRoute === "string" ? userData.defaultRoute : "/";
-      router.push(savedDefaultRoute);
+      router.push(userData.temporaryPasswordIssued === true ? "/change-password" : savedDefaultRoute);
     } catch (err: any) {
       const msg: Record<string, string> = {
         "auth/user-not-found": t("auth.errors.userNotFound"),

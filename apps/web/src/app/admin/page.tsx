@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import { auth } from "@/lib/firebase";
+import { validateStrongPassword } from "@/lib/passwordPolicy";
 
 interface CreatedAccount {
   uid: string;
@@ -45,6 +46,11 @@ export default function AdminPage() {
     setCreatedAccount(null);
 
     try {
+      const passwordPolicy = validateStrongPassword(temporaryPassword);
+      if (!passwordPolicy.valid) {
+        throw new Error(passwordPolicy.errors.join(" "));
+      }
+
       const token = await auth.currentUser?.getIdToken();
       if (!token) {
         throw new Error("Ban can dang nhap bang tai khoan Admin.");
@@ -185,7 +191,7 @@ export default function AdminPage() {
                 value={temporaryPassword}
                 onChange={(event) => setTemporaryPassword(event.target.value)}
                 required
-                minLength={6}
+                minLength={10}
                 className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2.5 text-[14px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]"
               />
               <button
@@ -229,4 +235,3 @@ export default function AdminPage() {
     </div>
   );
 }
-

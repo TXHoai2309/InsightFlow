@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyPluginOptions, FastifyReply, FastifyRequest } f
 import { FieldValue } from "firebase-admin/firestore";
 import { authAdmin, db } from "../services/firebase";
 import { verifyToken } from "../middleware/auth";
+import { validateStrongPassword } from "../utils/passwordPolicy";
 
 type StaffRole = "crisis_staff" | "lead_staff";
 
@@ -60,6 +61,12 @@ function resolveDefaultRoute(staffRole: StaffRole, permissions: string[]) {
   return defaultRoutePriority[staffRole].find((item) => permissions.includes(item.permission))?.route || "/dashboard";
 }
 
+function generateTemporaryPassword() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+  const randomPart = Array.from({ length: 10 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
+  return `IF@${randomPart}24`;
+}
+
 async function ensureBrandManager(request: FastifyRequest, reply: FastifyReply) {
   await verifyToken(request, reply);
   if (reply.sent) return null;
@@ -110,6 +117,7 @@ export default async function staffRoutes(fastify: FastifyInstance, options: Fas
           defaultRoute: data.defaultRoute,
           createdAt: data.createdAt,
           updatedAt: data.updatedAt,
+          hasTemporaryPassword: data.temporaryPasswordIssued === true && Boolean(data.temporaryPassword),
         };
       });
 
@@ -144,10 +152,11 @@ export default async function staffRoutes(fastify: FastifyInstance, options: Fas
       });
     }
 
-    if (temporaryPassword.length < 6) {
+    const passwordPolicy = validateStrongPassword(temporaryPassword);
+    if (!passwordPolicy.valid) {
       return reply.status(400).send({
         success: false,
-        error: "Temporary password must be at least 6 characters.",
+        error: passwordPolicy.errors.join(" "),
       });
     }
 
@@ -188,6 +197,7 @@ export default async function staffRoutes(fastify: FastifyInstance, options: Fas
         brandName: manager.brandName,
         permissions,
         defaultRoute,
+        temporaryPasswordIssued: true,
       });
 
       const accountPayload = {
@@ -202,6 +212,7 @@ export default async function staffRoutes(fastify: FastifyInstance, options: Fas
         permissions,
         defaultRoute,
         temporaryPasswordIssued: true,
+        temporaryPassword,
         updatedAt: FieldValue.serverTimestamp(),
         createdBy: manager.uid,
       };
@@ -226,6 +237,8 @@ export default async function staffRoutes(fastify: FastifyInstance, options: Fas
             displayName: fullName,
             role: staffRole,
             permissions,
+            temporaryPassword,
+            temporaryPasswordIssued: true,
             updatedAt: FieldValue.serverTimestamp(),
           },
           { merge: true },
@@ -244,6 +257,134 @@ export default async function staffRoutes(fastify: FastifyInstance, options: Fas
       return reply.status(500).send({
         success: false,
         error: error.message || "Failed to create staff account.",
+      });
+    }
+  });
+
+  fastify.post("/:uid/temporary-password", async (request: FastifyRequest, reply: FastifyReply) => {
+    const manager = await ensureBrandManager(request, reply);
+    if (!manager) return;
+
+    const authTime = (request as any).user?.auth_time;
+    const nowInSeconds = Math.floor(Date.now() / 1000);
+    if (!authTime || nowInSeconds - authTime > 300) {
+      return reply.status(403).send({
+        success: false,
+        error: "Please re-authenticate before viewing a temporary password.",
+      });
+    }
+
+    const { uid } = request.params as { uid: string };
+
+    try {
+      const staffDoc = await db.collection("users").doc(uid).get();
+      const staffProfile = staffDoc.exists ? staffDoc.data() : null;
+
+      if (
+        !staffProfile ||
+        staffProfile.brandId !== manager.brandId ||
+        !["crisis_staff", "lead_staff"].includes(staffProfile.role)
+      ) {
+        return reply.status(404).send({ success: false, error: "Staff account not found in your brand." });
+      }
+
+      if (staffProfile.temporaryPasswordIssued !== true || !staffProfile.temporaryPassword) {
+        return reply.status(400).send({
+          success: false,
+          error: "Temporary password is no longer available for this account.",
+        });
+      }
+
+      return {
+        success: true,
+        data: {
+          uid,
+          temporaryPassword: staffProfile.temporaryPassword,
+        },
+      };
+    } catch (error: any) {
+      request.log.error(error);
+      return reply.status(500).send({
+        success: false,
+        error: error.message || "Failed to reveal temporary password.",
+      });
+    }
+  });
+
+  fastify.post("/:uid/reset-temporary-password", async (request: FastifyRequest, reply: FastifyReply) => {
+    const manager = await ensureBrandManager(request, reply);
+    if (!manager) return;
+
+    const authTime = (request as any).user?.auth_time;
+    const nowInSeconds = Math.floor(Date.now() / 1000);
+    if (!authTime || nowInSeconds - authTime > 300) {
+      return reply.status(403).send({
+        success: false,
+        error: "Please re-authenticate before resetting a temporary password.",
+      });
+    }
+
+    const { uid } = request.params as { uid: string };
+
+    try {
+      const staffDoc = await db.collection("users").doc(uid).get();
+      const staffProfile = staffDoc.exists ? staffDoc.data() : null;
+
+      if (
+        !staffProfile ||
+        staffProfile.brandId !== manager.brandId ||
+        !["crisis_staff", "lead_staff"].includes(staffProfile.role)
+      ) {
+        return reply.status(404).send({ success: false, error: "Staff account not found in your brand." });
+      }
+
+      const temporaryPassword = generateTemporaryPassword();
+      await authAdmin.updateUser(uid, {
+        password: temporaryPassword,
+        disabled: false,
+      });
+
+      const userRecord = await authAdmin.getUser(uid);
+      await authAdmin.setCustomUserClaims(uid, {
+        ...(userRecord.customClaims || {}),
+        temporaryPasswordIssued: true,
+      });
+
+      await db.collection("users").doc(uid).set(
+        {
+          temporaryPassword,
+          temporaryPasswordIssued: true,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      await db
+        .collection("brands")
+        .doc(manager.brandId)
+        .collection("staff")
+        .doc(uid)
+        .set(
+          {
+            temporaryPassword,
+            temporaryPasswordIssued: true,
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+
+      return {
+        success: true,
+        data: {
+          uid,
+          temporaryPassword,
+        },
+      };
+    } catch (error: any) {
+      request.log.error(error);
+      return reply.status(500).send({
+        success: false,
+        error: error.message || "Failed to reset temporary password.",
       });
     }
   });
