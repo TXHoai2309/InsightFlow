@@ -179,12 +179,6 @@ export default function TopNavBar() {
                 >
                   {t("auth.login.loginBtn")}
                 </Link>
-                <Link
-                  href="/login"
-                  className="text-[14px] font-semibold text-white px-5 py-2 rounded-[10px] transition-all bg-[var(--color-brand)] hover:bg-[#5B3FE8] hover:shadow-lg hover:-translate-y-[1px]"
-                >
-                  {t("auth.login.loginBtn")}
-                </Link>
               </div>
             )}
 
