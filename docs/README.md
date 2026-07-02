@@ -420,3 +420,11 @@ Sprint 2 được coi là đúng hướng khi:
 |---|---|---|
 | 2.1 | 2026-07-02 | Bổ sung Contact Intelligence: contact-level aggregation, influence score, spam score và priority boost. |
 | 2.0 | 2026-07-02 | Cập nhật README theo SPEC/ARCHITECTURE Sprint 2: role-based workflow, không đổi cấu trúc thư mục, label lifecycle, onboarding, report và auto-response safety. |
+
+## 18. Tài khoản test
+Tài khoản test, mật khẩu chung: Test@123456
+Role	Email	Trang sau đăng nhập
+Admin	demo.admin@insightflow.com	/admin
+Quản lý thương hiệu	manager@highlandscoffee.com	/dashboard
+Nhân viên xử lý khủng hoảng	nguyen_van_crisis@highlandscoffee.com	/alerts
+Nhân viên xử lý lead	tran_thi_lead@highlandscoffee.com	/leads

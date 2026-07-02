@@ -6,6 +6,8 @@ import { useTranslation } from "react-i18next";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { useAlertStore } from "@/stores/alert.store";
 import { dbSecond } from "@/lib/firebase";
+import { useAuth } from "@/hooks/useAuth";
+import { getScopedBrandKey, isRecordInBrandScope } from "@/lib/brandScope";
 import { collection, getDocs } from "firebase/firestore";
 import {
   Chart as ChartJS,
@@ -129,6 +131,8 @@ function getFormattedSourceUrl(url: string, text: string): string {
  * Quản lý cảnh báo khủng hoảng thương hiệu real-time
  */
 export default function AlertsPage() {
+  const { profile, loading: authLoading } = useAuth();
+  const scopedBrandKey = getScopedBrandKey(profile);
   const { t, i18n } = useTranslation();
   const [spikeValue, setSpikeValue] = useState(40);
   const [reachValue, setReachValue] = useState(105000);
@@ -185,8 +189,9 @@ export default function AlertsPage() {
 
   // Load alerts on mount
   useEffect(() => {
-    fetchAlerts();
-  }, []);
+    if (authLoading) return;
+    fetchAlerts(scopedBrandKey);
+  }, [authLoading, scopedBrandKey, fetchAlerts]);
 
   // Filter alerts locally based on the "Tín hiệu" (signal) dropdown
   const filteredAlerts = alerts.filter((alert) => {
@@ -256,7 +261,7 @@ export default function AlertsPage() {
           </p>
         </div>
         <button
-          onClick={() => fetchAlerts()}
+          onClick={() => fetchAlerts(scopedBrandKey)}
           disabled={isLoading}
           className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-[var(--color-brand)]/10 border border-[var(--color-brand)]/20 text-[var(--color-brand)] text-xs font-bold hover:bg-[var(--color-brand)]/15 transition-all flex items-center justify-center gap-1.5 active:scale-95"
         >
@@ -376,7 +381,7 @@ export default function AlertsPage() {
             <p className="text-sm font-bold text-error">{t("alerts.list.error")}</p>
             <p className="text-xs text-on-surface-variant text-center max-w-md">{error}</p>
             <button
-              onClick={() => fetchAlerts()}
+              onClick={() => fetchAlerts(scopedBrandKey)}
               className="px-4 py-2 bg-primary text-white rounded-xl text-xs font-bold hover:opacity-90 active:scale-95 transition-all"
             >
               {t("alerts.list.retry")}
@@ -907,6 +912,8 @@ interface TrendModalProps {
 
 function TrendModal({ alert, onClose }: TrendModalProps) {
   const { t, i18n } = useTranslation();
+  const { profile } = useAuth();
+  const scopedBrandKey = getScopedBrandKey(profile);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<any>(null);
   const router = useRouter();
@@ -974,7 +981,7 @@ function TrendModal({ alert, onClose }: TrendModalProps) {
                 topic: String(firstTopic || d.topic || ""),
                 date: new Date(parseDateToISOString(d.labeled_at || d.uploaded_at || d.posted_at || d.created_at))
               };
-            });
+            }).filter((doc) => isRecordInBrandScope({ brand: doc.brand }, scopedBrandKey));
 
             const targetBrand = alert.brand.toLowerCase().trim();
             const targetTopic = alert.topic.toLowerCase().trim();

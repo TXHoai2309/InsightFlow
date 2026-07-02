@@ -147,7 +147,9 @@ export function isPublicPath(pathname: string) {
 
 export function isProtectedPath(pathname: string) {
   if (isPublicPath(pathname)) return false;
-  return ROUTE_POLICIES.some((policy) => pathMatchesRoute(pathname, policy.route));
+  return ROUTE_POLICIES.some((policy) =>
+    pathMatchesRoute(pathname, policy.route),
+  );
 }
 
 export function getDefaultRouteForRole(role?: RoleInput | null) {
@@ -202,9 +204,14 @@ export function buildUserRoleProfile(params: {
   storedBrandId?: unknown;
   storedBrandName?: unknown;
   storedPermissions?: unknown;
+  storedDefaultRoute?: unknown;
 }): UserRoleProfile {
   const email = (params.email || "").trim().toLowerCase();
-  const role = normalizeRole(params.storedRole) || inferRoleFromEmail(email);
+  if (!isValidRole(params.storedRole)) {
+    throw new Error("User is not provisioned with a valid InsightFlow role.");
+  }
+
+  const role = params.storedRole;
   const companyDomain = email.includes("@") ? email.split("@")[1] : "";
   const permissions = Array.isArray(params.storedPermissions)
     ? params.storedPermissions.filter(
@@ -228,7 +235,10 @@ export function buildUserRoleProfile(params: {
     displayName: params.displayName || "",
     photoURL: params.photoURL || "",
     permissions,
-    defaultRoute: ROLE_CONFIG[role].defaultRoute,
+    defaultRoute:
+      typeof params.storedDefaultRoute === "string"
+        ? params.storedDefaultRoute
+        : ROLE_CONFIG[role].defaultRoute,
   };
 }
 

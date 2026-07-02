@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { DashboardService } from "@/lib/services/dashboard";
 import { useDashboardStore } from "@/stores/dashboard.store";
+import { filterByBrandScope } from "@/lib/brandScope";
+import { useAuth } from "@/hooks/useAuth";
 
 interface UseMentionsOptions {
   autoFetch?: boolean;
@@ -11,6 +13,7 @@ interface UseMentionsOptions {
 
 export function useMentionsData(options: UseMentionsOptions = {}) {
   const { autoFetch = true, refetchInterval = 60000 } = options;
+  const { profile, loading: authLoading } = useAuth();
   const {
     setMentions,
     setWorkspaces,
@@ -26,8 +29,15 @@ export function useMentionsData(options: UseMentionsOptions = {}) {
   const fetchMentions = async () => {
     setLoading(true);
     try {
-      const { mentions, workspaces, alerts, leads } =
+      const rawData =
         await DashboardService.fetchRawData();
+      const mentions = filterByBrandScope(rawData.mentions, profile);
+      const workspaces = filterByBrandScope(rawData.workspaces.map((workspace) => ({
+        ...workspace,
+        brand: workspace.brand_name,
+      })), profile);
+      const alerts = filterByBrandScope(rawData.alerts, profile);
+      const leads = filterByBrandScope(rawData.leads, profile);
 
       setMentions(mentions);
       setWorkspaces(workspaces);
@@ -46,7 +56,7 @@ export function useMentionsData(options: UseMentionsOptions = {}) {
   };
 
   useEffect(() => {
-    if (!autoFetch) return;
+    if (!autoFetch || authLoading) return;
 
     fetchMentions();
     setIsInitialized(true);
@@ -54,7 +64,7 @@ export function useMentionsData(options: UseMentionsOptions = {}) {
     const interval = setInterval(fetchMentions, refetchInterval);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoFetch, refetchInterval]);
+  }, [autoFetch, refetchInterval, authLoading, profile?.brandId, profile?.brandName, profile?.role]);
 
   return {
     isInitialized,

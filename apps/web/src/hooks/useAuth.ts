@@ -1,9 +1,9 @@
 "use client";
 import { useEffect } from "react";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
-import { buildUserRoleProfile } from "@/lib/rbac";
+import { buildUserRoleProfile, isValidRole } from "@/lib/rbac";
 import { useAuthStore } from "@/stores/auth.store";
 
 let unsubscribeAuth: (() => void) | null = null;
@@ -33,7 +33,15 @@ function startAuthListener() {
     try {
       const userRef = doc(db, "users", firebaseUser.uid);
       const snapshot = await getDoc(userRef);
-      const storedData = snapshot.exists() ? snapshot.data() : {};
+      const storedData = snapshot.exists() ? snapshot.data() : null;
+
+      if (!storedData || !isValidRole(storedData.role)) {
+        await signOut(auth);
+        setUser(null);
+        setProfile(null);
+        return;
+      }
+
       const resolvedProfile = buildUserRoleProfile({
         uid: firebaseUser.uid,
         email: firebaseUser.email,
@@ -43,6 +51,7 @@ function startAuthListener() {
         storedBrandId: storedData.brandId,
         storedBrandName: storedData.brandName,
         storedPermissions: storedData.permissions,
+        storedDefaultRoute: storedData.defaultRoute,
       });
 
       await setDoc(
@@ -59,12 +68,9 @@ function startAuthListener() {
       setProfile(resolvedProfile);
     } catch (error) {
       console.error("Failed to resolve user role:", error);
-      setProfile(buildUserRoleProfile({
-        uid: firebaseUser.uid,
-        email: firebaseUser.email,
-        displayName: firebaseUser.displayName,
-        photoURL: firebaseUser.photoURL,
-      }));
+      await signOut(auth);
+      setUser(null);
+      setProfile(null);
     } finally {
       setProfileLoading(false);
       setLoading(false);
