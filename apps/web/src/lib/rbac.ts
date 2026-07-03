@@ -147,6 +147,7 @@ const PUBLIC_ROUTES = [
   "/nganh",
   "/ve-chung-toi",
   "/profile",
+  "/labeling_tool",
 ];
 
 const ROUTE_POLICIES: RoutePolicy[] = [

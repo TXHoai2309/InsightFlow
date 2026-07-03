@@ -41,9 +41,13 @@ export default function RootLayout({
   // Trang auth: không có sidebar, không có footer
   const isAuthPage = ["/login", "/forgot-password"].includes(pathname || "");
   // Trang public: không có sidebar, nhưng có footer
-  const isPublicPage = ["/", "/nganh", "/ve-chung-toi", "/profile"].includes(
-    pathname || "",
-  );
+  const isPublicPage = [
+    "/",
+    "/nganh",
+    "/ve-chung-toi",
+    "/profile",
+    "/labeling_tool",
+  ].includes(pathname || "");
   const hideShell = isAuthPage || isPublicPage;
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
