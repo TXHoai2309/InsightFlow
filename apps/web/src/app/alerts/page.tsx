@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { useAlertStore, type CorrectionRequest } from "@/stores/alert.store";
@@ -160,6 +160,16 @@ export default function AlertsPage() {
   const [viewMode, setViewMode] = useState<"priority" | "detailed">("priority");
   const [correctionModalItem, setCorrectionModalItem] = useState<any>(null);
   const hasLoadedRef = useRef(false);
+
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
+
+  useEffect(() => {
+    if (tabParam === "requests") {
+      setActiveTab("requests");
+      setViewMode("detailed");
+    }
+  }, [tabParam]);
 
   // Active configs for thesis presentation
   const [keywords, setKeywords] = useState(['Ngộ độc', 'Biểu tình', 'Tẩy chay', 'Chất lượng']);
@@ -1063,6 +1073,19 @@ export default function AlertsPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         <span className={`text-[9px] font-black px-2.5 py-1 rounded-lg uppercase tracking-widest ${severityBadge}`}>
                           {severityLabel}
+                        </span>
+                        <span className={`text-[9px] font-black px-2.5 py-1 rounded-lg uppercase tracking-widest ${
+                          alert.sentiment === "positive"
+                            ? "bg-green-600 text-white"
+                            : alert.sentiment === "neutral"
+                            ? "bg-gray-500 text-white"
+                            : "bg-red-600 text-white"
+                        }`}>
+                          {alert.sentiment === "positive"
+                            ? "Tích cực"
+                            : alert.sentiment === "neutral"
+                            ? "Trung tính"
+                            : "Tiêu cực"}
                         </span>
                         <span className="text-sm font-bold text-[var(--color-text-primary)]">{formatBrandName(alert.brand)}</span>
                         <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${sourceBadge}`}>
@@ -2707,8 +2730,9 @@ interface CorrectionRequestsListProps {
 function CorrectionRequestsList({ requests, resolveCorrectionRequest, isLoadingRequests, profile, triggerToast }: CorrectionRequestsListProps) {
   const { t } = useTranslation();
   const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [subFilter, setSubFilter] = useState<"pending" | "resolved">("pending");
 
-  const isManager = profile?.role === "manager" || profile?.role === "brand_manager" || profile?.role === "admin";
+  const isManager = profile?.role === "brand_manager" || profile?.role === "admin";
 
   const handleResolve = async (requestId: string, alertId: string, decision: "approved" | "rejected") => {
     setResolvingId(requestId);
@@ -2722,6 +2746,14 @@ function CorrectionRequestsList({ requests, resolveCorrectionRequest, isLoadingR
       setResolvingId(null);
     }
   };
+
+  const filteredRequests = useMemo(() => {
+    if (subFilter === "pending") {
+      return requests.filter((r) => r.status === "pending");
+    } else {
+      return requests.filter((r) => r.status === "approved" || r.status === "rejected");
+    }
+  }, [requests, subFilter]);
 
   if (isLoadingRequests) {
     return (
@@ -2737,21 +2769,52 @@ function CorrectionRequestsList({ requests, resolveCorrectionRequest, isLoadingR
     );
   }
 
-  if (requests.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center p-12 space-y-3 glass-card rounded-2xl">
-        <span className="material-symbols-outlined text-[var(--color-text-secondary)] text-4xl">folder_off</span>
-        <p className="text-sm font-bold text-[var(--color-text-primary)]">Không có yêu cầu chỉnh sửa nào</p>
-        <p className="text-xs text-[var(--color-text-secondary)] text-center">
-          Mọi đề xuất điều chỉnh nhãn AI từ nhân sự khủng hoảng sẽ được liệt kê tại đây.
-        </p>
-      </div>
-    );
-  }
+  const pendingCount = requests.filter(r => r.status === "pending").length;
+  const resolvedCount = requests.filter(r => r.status !== "pending").length;
 
   return (
     <div className="space-y-4">
-      {requests.map((req) => {
+      {/* Sub-tabs header */}
+      <div className="flex gap-2 border-b border-[var(--color-border)]/50 pb-3">
+        <button
+          onClick={() => setSubFilter("pending")}
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
+            subFilter === "pending"
+              ? "bg-[var(--color-brand)] text-white border-[var(--color-brand)] shadow-sm"
+              : "text-[var(--color-text-secondary)] bg-[var(--color-bg-surface-raised)] border-[var(--color-border)] hover:bg-[var(--color-bg-surface-high)]"
+          }`}
+        >
+          <span className="material-symbols-outlined text-[15px]">pending_actions</span>
+          Chờ duyệt ({pendingCount})
+        </button>
+        
+        <button
+          onClick={() => setSubFilter("resolved")}
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
+            subFilter === "resolved"
+              ? "bg-[var(--color-brand)] text-white border-[var(--color-brand)] shadow-sm"
+              : "text-[var(--color-text-secondary)] bg-[var(--color-bg-surface-raised)] border-[var(--color-border)] hover:bg-[var(--color-bg-surface-high)]"
+          }`}
+        >
+          <span className="material-symbols-outlined text-[15px]">history</span>
+          Lịch sử đã xử lý ({resolvedCount})
+        </button>
+      </div>
+
+      {filteredRequests.length === 0 ? (
+        <div className="flex flex-col items-center justify-center p-12 space-y-3 glass-card rounded-2xl">
+          <span className="material-symbols-outlined text-[var(--color-text-secondary)] text-4xl">folder_off</span>
+          <p className="text-sm font-bold text-[var(--color-text-primary)]">
+            {subFilter === "pending" ? "Không có yêu cầu chờ duyệt" : "Lịch sử xử lý trống"}
+          </p>
+          <p className="text-xs text-[var(--color-text-secondary)] text-center">
+            {subFilter === "pending"
+              ? "Mọi đề xuất điều chỉnh nhãn AI từ nhân sự khủng hoảng sẽ được liệt kê tại đây."
+              : "Danh sách lịch sử các yêu cầu đã được duyệt hoặc từ chối chỉnh sửa."}
+          </p>
+        </div>
+      ) : (
+        filteredRequests.map((req) => {
         const dateText = new Date(req.created_at).toLocaleString("vi-VN");
         const statusColors =
           req.status === "approved"
@@ -2869,7 +2932,8 @@ function CorrectionRequestsList({ requests, resolveCorrectionRequest, isLoadingR
             )}
           </div>
         );
-      })}
+      })
+      )}
     </div>
   );
 }

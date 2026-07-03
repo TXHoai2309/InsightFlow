@@ -38,9 +38,11 @@ Tài liệu này mô tả chi tiết chức năng cải tiến dành riêng cho 
     *   Click nút **Sửa nhãn** trên bất kỳ thẻ sự cố nào để mở form đề xuất điều chỉnh sắc thái (Sentiment), độ nghiêm trọng (Severity) hoặc chủ đề (Topic) kèm lý do chi tiết.
     *   Yêu cầu được lưu vào Firestore collection `insightflow_correction_requests` ở trạng thái `"pending"`.
 *   **Quản lý & Phê duyệt (Quản lý thương hiệu)**:
-    *   Truy cập tab thứ tư **Yêu cầu sửa nhãn** trên thanh tab bar.
-    *   Xem danh sách các đề xuất chờ duyệt trong phạm vi thương hiệu quản lý, đối chiếu sự thay đổi các nhãn và lý do đề xuất.
-    *   Bấm **Phê duyệt (Approve)**: Tự động cập nhật các trường nhãn tương ứng trên tài liệu `insightflow_labels` của Firestore và chuyển trạng thái yêu cầu thành `"approved"`.
+    *   Truy cập tab thứ tư **Yêu cầu sửa nhãn** trên thanh tab bar. Giao diện được tối ưu hóa bằng **2 tab phụ (sub-tabs)**:
+        *   **Chờ duyệt**: Chỉ hiển thị các yêu cầu có trạng thái `pending` để quản lý tập trung xử lý nhanh.
+        *   **Lịch sử đã xử lý**: Nơi gom toàn bộ lịch sử các yêu cầu đã được *Phê duyệt* hoặc *Từ chối* để tránh làm loãng hàng chờ làm việc.
+    *   Bấm **Phê duyệt (Approve)**: Tự động cập nhật các trường nhãn tương ứng (`sentiment`, `severity`, `urgency` và các trường root level tương đương) trên tài liệu `insightflow_labels` của Firestore và chuyển trạng thái yêu cầu thành `"approved"`.
+        *   *Lưu ý*: Hành động duyệt sửa nhãn **không làm thay đổi trạng thái xử lý sự vụ (`status`)**, do đó sự vụ đã sửa nhãn vẫn ở nguyên hàng đợi ban đầu (ví dụ: tab *Chưa giải quyết* hoặc *Đang giải quyết*) chứ không bị đưa vào tab *Đã giải quyết*.
     *   Bấm **Từ chối (Reject)**: Chuyển trạng thái yêu cầu thành `"rejected"`.
 
 ### D. Cơ chế Đồng bộ Thời gian thực (Firestore Real-time Sync)

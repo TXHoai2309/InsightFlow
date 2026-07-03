@@ -179,6 +179,10 @@ function calculateSeverity(data: any): string {
     return "high";
   }
 
+  if (urgency === "low") {
+    return "low";
+  }
+
   return "medium";
 }
 
@@ -258,7 +262,7 @@ export const useAlertStore = create<AlertState>()(
               labels.sentiment || data.baseline_sentiment || data.sentiment || "neutral",
             ).toLowerCase();
 
-            if (sentiment !== "negative") return;
+
 
             const text = String(
               data.clean_text ||
@@ -476,6 +480,7 @@ export const useAlertStore = create<AlertState>()(
           sentiment: req.new_sentiment,
           "labels.sentiment": req.new_sentiment,
           severity: req.new_severity,
+          urgency: req.new_severity,
           "labels.urgency": req.new_severity,
           topic: req.new_topic,
           "labels.topic": req.new_topic,
