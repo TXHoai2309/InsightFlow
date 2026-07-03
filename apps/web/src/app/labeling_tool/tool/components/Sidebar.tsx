@@ -1,14 +1,11 @@
-﻿import React, { useState } from 'react';
+﻿import React from 'react';
 import { LabelStats } from '../utils/storage';
-import { saveDailyGoal } from '../utils/storage';
 import { PendingAssignmentCounts, PlatformFilter } from '../utils/supabaseRest';
 
 interface SidebarProps {
   stats: LabelStats;
   postCount: number;
   itemCount: number;
-  dailyGoal: number;
-  onDailyGoalChange: (goal: number) => void;
   pendingCounts: PendingAssignmentCounts | null;
   pendingCountsLoading: boolean;
   platform: PlatformFilter;
@@ -29,28 +26,12 @@ export default function Sidebar({
   stats,
   postCount,
   itemCount,
-  dailyGoal,
-  onDailyGoalChange,
   pendingCounts,
   pendingCountsLoading,
   platform,
 }: SidebarProps) {
-  const [goalInput, setGoalInput] = useState(String(dailyGoal));
-  const [goalSaved, setGoalSaved] = useState(false);
-
   const total = stats.totalLabeled + stats.totalSkipped;
   const pctOf = (n: number) => total === 0 ? 0 : Math.round((n / total) * 100);
-  const todayPct = dailyGoal > 0 ? Math.min(Math.round((stats.todayLabeled / dailyGoal) * 100), 100) : 0;
-
-  const handleSetGoal = () => {
-    const n = parseInt(goalInput, 10);
-    if (!isNaN(n) && n > 0) {
-      saveDailyGoal(n);
-      onDailyGoalChange(n);
-      setGoalSaved(true);
-      setTimeout(() => setGoalSaved(false), 1500);
-    }
-  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -143,56 +124,6 @@ export default function Sidebar({
               ))}
             </div>
           </div>
-        )}
-      </div>
-
-      {/* Daily goal card */}
-      <div className="card p-4">
-        <h3 className="text-xs font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-3">
-          🎯 Mục tiêu hôm nay
-        </h3>
-
-        {/* Configurable goal input */}
-        <div className="flex gap-2 mb-3">
-          <input
-            type="number"
-            min={1}
-            max={9999}
-            value={goalInput}
-            onChange={e => setGoalInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') handleSetGoal(); }}
-            className="select-control flex-1 text-center text-sm font-semibold"
-            placeholder="100"
-          />
-          <button
-            onClick={handleSetGoal}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all
-              ${goalSaved
-                ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
-                : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50'
-              }`}
-          >
-            {goalSaved ? '✓ Đã lưu' : 'Set'}
-          </button>
-        </div>
-
-        <div className="flex justify-between text-sm mb-2">
-          <span className="text-gray-600 dark:text-gray-400">
-            {stats.todayLabeled} / {dailyGoal} items
-            {stats.todayLabeled >= dailyGoal && ' 🔥'}
-          </span>
-          <span className="font-semibold text-blue-600 dark:text-blue-400">{todayPct}%</span>
-        </div>
-        <div className="h-2 bg-gray-200 dark:bg-slate-700 rounded-full overflow-hidden">
-          <div
-            className="h-2 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-500"
-            style={{ width: `${todayPct}%` }}
-          />
-        </div>
-        {stats.todayLabeled >= dailyGoal && dailyGoal > 0 && (
-          <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-2 font-semibold">
-            🎉 Đạt mục tiêu! Xuất sắc!
-          </p>
         )}
       </div>
 

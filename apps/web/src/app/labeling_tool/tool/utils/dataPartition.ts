@@ -1,4 +1,4 @@
-﻿import { Item, Thread, EMPTY_STATS } from '../types';
+import { Item, Thread, EMPTY_STATS } from '../types';
 import { isAddressOnlyText, isGoogleMapsSpam, buildStats } from './parser';
 
 // ============================================================
@@ -38,10 +38,13 @@ export interface RawPost {
 }
 
 function canonicalPlatform(raw: Record<string, unknown>, displaySource: string): string {
-  const value = String(raw.platform ?? raw.source ?? displaySource)
+  let value = String(raw.platform ?? raw.source ?? displaySource)
     .trim()
     .toLowerCase()
     .replace(/[\s-]+/g, '_');
+  if (value === 'be') {
+    value = 'befood';
+  }
   return value || 'unknown';
 }
 

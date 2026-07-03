@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Person, Label, Thread, TopicKey, TOPIC_HOTKEYS } from './types';
-import { getDailyGoal } from './utils/storage';
 import { useData } from './hooks/useData';
 import { useLabeling } from './hooks/useLabeling';
 import ThreadView from './components/ThreadView';
@@ -35,11 +34,41 @@ const KBD_STYLE = `
 
 const SUPABASE_URL_KEY = 'insightflow_supabase_url';
 const SUPABASE_ANON_KEY = 'insightflow_supabase_anon_key';
+const LABELING_SESSION_KEY = 'insightflow_labeling_session';
 
+interface LabelingSession {
+  platform: PlatformFilter;
+  assignmentView: AssignmentView;
+  limit: number;
+  dateFrom: string;
+  dateTo: string;
+  currentThreadId: string | null;
+  savedAt: string;
+}
+
+function loadLabelingSession(): LabelingSession | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(LABELING_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<LabelingSession>;
+    if (!parsed.platform || !parsed.assignmentView) return null;
+    return {
+      platform: parsed.platform,
+      assignmentView: parsed.assignmentView,
+      limit: Number(parsed.limit) || 20,
+      dateFrom: parsed.dateFrom ?? '',
+      dateTo: parsed.dateTo ?? '',
+      currentThreadId: parsed.currentThreadId ?? null,
+      savedAt: parsed.savedAt ?? new Date().toISOString(),
+    };
+  } catch {
+    return null;
+  }
+}
 
 export default function App() {
-  // ─── Daily goal ────────────────────────────────────────
-  const [dailyGoal, setDailyGoal] = useState<number>(getDailyGoal);
+  const initialSessionRef = useRef<LabelingSession | null>(loadLabelingSession());
 
   // ─── Person ────────────────────────────────────────────
   const person: Person = 'Person A';
@@ -53,13 +82,27 @@ export default function App() {
   const [supabaseAnonKey, setSupabaseAnonKey] = useState(
     () => process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || localStorage.getItem(SUPABASE_ANON_KEY) || '',
   );
-  const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('facebook');
-  const [assignmentView, setAssignmentView] = useState<AssignmentView>('pending');
-  const [supabaseLimit, setSupabaseLimit] = useState(20);
-  const [queueDateFrom, setQueueDateFrom] = useState('');
-  const [queueDateTo, setQueueDateTo] = useState('');
+  const [platformFilter, setPlatformFilter] = useState<PlatformFilter>(
+    () => initialSessionRef.current?.platform ?? 'facebook',
+  );
+  const [assignmentView, setAssignmentView] = useState<AssignmentView>(
+    () => initialSessionRef.current?.assignmentView ?? 'pending',
+  );
+  const [supabaseLimit, setSupabaseLimit] = useState(
+    () => initialSessionRef.current?.limit ?? 20,
+  );
+  const [queueDateFrom, setQueueDateFrom] = useState(
+    () => initialSessionRef.current?.dateFrom ?? '',
+  );
+  const [queueDateTo, setQueueDateTo] = useState(
+    () => initialSessionRef.current?.dateTo ?? '',
+  );
   const [pendingCounts, setPendingCounts] = useState<PendingAssignmentCounts | null>(null);
   const [pendingCountsLoading, setPendingCountsLoading] = useState(false);
+  const [pendingRestoreThreadId, setPendingRestoreThreadId] = useState<string | null>(
+    () => initialSessionRef.current?.currentThreadId ?? null,
+  );
+  const autoLoadAttemptedRef = useRef(false);
 
   useEffect(() => {
     if (supabaseUrl.trim() && supabaseAnonKey.trim()) return;
@@ -127,6 +170,28 @@ export default function App() {
   }, [brandFilter, sourceFilter, onlyRated, skipGMapsSpam, jumpTo]);
 
   const currentThread: Thread | null = filteredThreads[currentThreadIndex] ?? null;
+
+  const saveLabelingSession = useCallback((threadId: string | null) => {
+    if (!supabaseUrl.trim() || !supabaseAnonKey.trim()) return;
+    const session: LabelingSession = {
+      platform: platformFilter,
+      assignmentView,
+      limit: supabaseLimit,
+      dateFrom: queueDateFrom,
+      dateTo: queueDateTo,
+      currentThreadId: threadId,
+      savedAt: new Date().toISOString(),
+    };
+    localStorage.setItem(LABELING_SESSION_KEY, JSON.stringify(session));
+  }, [
+    assignmentView,
+    platformFilter,
+    queueDateFrom,
+    queueDateTo,
+    supabaseAnonKey,
+    supabaseLimit,
+    supabaseUrl,
+  ]);
 
   const completedThreadCount = useMemo(
     () => Object.values(threadStates).filter(
@@ -263,10 +328,12 @@ export default function App() {
     getLabel, setLabel, setFocusedItemId,
   ]);
 
-  const handleSupabaseLoad = useCallback(async () => {
+  const handleSupabaseLoad = useCallback(async (restoreThreadId?: string | null) => {
     localStorage.setItem(SUPABASE_URL_KEY, supabaseUrl.trim());
     localStorage.setItem(SUPABASE_ANON_KEY, supabaseAnonKey.trim());
     setDataMode('supabase');
+    setPendingRestoreThreadId(restoreThreadId ?? currentThread?.post._entity_key ?? null);
+    saveLabelingSession(restoreThreadId ?? currentThread?.post._entity_key ?? null);
     await loadFromSupabase(
       { url: supabaseUrl.trim(), anonKey: supabaseAnonKey.trim() },
       platformFilter,
@@ -277,6 +344,7 @@ export default function App() {
     );
   }, [
     assignmentView,
+    currentThread,
     loadFromSupabase,
     person,
     platformFilter,
@@ -285,7 +353,29 @@ export default function App() {
     supabaseAnonKey,
     supabaseLimit,
     supabaseUrl,
+    saveLabelingSession,
   ]);
+
+  useEffect(() => {
+    if (rawThreads.length === 0 || !pendingRestoreThreadId) return;
+    const index = rawThreads.findIndex(thread => thread.post._entity_key === pendingRestoreThreadId);
+    if (index >= 0) jumpTo(index);
+    setPendingRestoreThreadId(null);
+  }, [jumpTo, pendingRestoreThreadId, rawThreads]);
+
+  useEffect(() => {
+    if (!currentThread) return;
+    saveLabelingSession(currentThread.post._entity_key);
+  }, [currentThread, saveLabelingSession]);
+
+  useEffect(() => {
+    if (autoLoadAttemptedRef.current) return;
+    if (!supabaseUrl.trim() || !supabaseAnonKey.trim()) return;
+    const session = initialSessionRef.current;
+    if (!session) return;
+    autoLoadAttemptedRef.current = true;
+    void handleSupabaseLoad(session.currentThreadId);
+  }, [handleSupabaseLoad, supabaseAnonKey, supabaseUrl]);
 
   // ─── Render ────────────────────────────────────────────
   return (
@@ -526,7 +616,7 @@ export default function App() {
 
           {/* 2-column layout */}
           {currentThread && (
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-5">
               {/* Left: Thread view */}
               <div>
                 <ThreadView
@@ -545,13 +635,11 @@ export default function App() {
               </div>
 
               {/* Right: Sidebar */}
-              <div className="lg:sticky lg:top-[140px] self-start">
+              <div className="lg:sticky lg:top-[132px] lg:max-h-[calc(100vh-148px)] lg:overflow-y-auto lg:pr-1 self-start">
                 <Sidebar
                   stats={stats}
                   postCount={postCount}
                   itemCount={itemCount}
-                  dailyGoal={dailyGoal}
-                  onDailyGoalChange={setDailyGoal}
                   pendingCounts={pendingCounts}
                   pendingCountsLoading={pendingCountsLoading}
                   platform={platformFilter}

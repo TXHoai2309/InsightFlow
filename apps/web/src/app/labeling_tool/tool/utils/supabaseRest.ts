@@ -1,4 +1,4 @@
-﻿import { isLabelComplete, Item, Label, StoredLabel, Thread } from '../types';
+import { isLabelComplete, Item, Label, StoredLabel, Thread } from '../types';
 import { parseCrawlerJson, RawComment, RawPost } from './dataPartition';
 
 export type PlatformFilter =
@@ -175,7 +175,9 @@ export async function loadPendingAssignmentCounts(
 ): Promise<PendingAssignmentCounts> {
   const platformFilter = platform === 'news'
     ? 'in.(news,news_html)'
-    : `eq.${platform}`;
+    : platform === 'befood'
+      ? 'in.(be,befood)'
+      : `eq.${platform}`;
   const entityBase = {
     select: 'platform',
     platform: platformFilter,
@@ -386,7 +388,9 @@ export async function loadSupabaseThreads(
 ): Promise<Thread[]> {
   const platformFilter = platform === 'news'
     ? 'in.(news,news_html)'
-    : `eq.${platform}`;
+    : platform === 'befood'
+      ? 'in.(be,befood)'
+      : `eq.${platform}`;
   const threads: Thread[] = [];
   const includedPostKeys = new Set<string>();
   const pageSize = hasDateRange(dateRange) ? 100 : limit;
@@ -438,9 +442,12 @@ export async function loadSupabaseThreads(
       parsed.post._queue_status = toQueueStatus(assignment.status);
       parsed.post._data_version = post.data_version;
 
+      const annoPlatform = (assignment.platform === 'befood' || assignment.platform === 'be')
+        ? 'in.(be,befood)'
+        : `eq.${assignment.platform}`;
       const annotationQuery = new URLSearchParams({
         select: 'entity_key,assignee,label,status,labeled_version,needs_review,updated_at',
-        platform: `eq.${assignment.platform}`,
+        platform: annoPlatform,
         post_id: `eq.${assignment.post_id}`,
         assignee: `eq.${assignee}`,
       }).toString();
@@ -454,7 +461,7 @@ export async function loadSupabaseThreads(
         continue;
       }
       const annotationByEntity = new Map(
-        annotations.map(annotation => [annotation.entity_key, annotation]),
+        annotations.map(annotation => [annotation.entity_key.replace(/^be:/, 'befood:'), annotation]),
       );
       for (const item of threadItems(parsed)) {
         const annotation = annotationByEntity.get(item._entity_key);
@@ -506,15 +513,17 @@ export async function saveSupabaseAnnotation(
   },
 ): Promise<void> {
   const now = new Date().toISOString();
-  const annotationId = (await digest(`${params.assignee}|${params.entityKey}`)).slice(0, 32);
+  const mappedEntityKey = params.entityKey.replace(/^befood:/, 'be:');
+  const mappedPlatform = params.platform === 'befood' ? 'be' : params.platform;
+  const annotationId = (await digest(`${params.assignee}|${mappedEntityKey}`)).slice(0, 32);
   const labelJson = JSON.stringify(params.label);
   const status = params.skipped
     ? 'skipped'
     : isLabelComplete(params.label) ? 'completed' : 'pending';
   const row = {
     annotation_id: annotationId,
-    entity_key: params.entityKey,
-    platform: params.platform,
+    entity_key: mappedEntityKey,
+    platform: mappedPlatform,
     entity_type: params.entityType === 'reply' ? 'comment' : params.entityType,
     post_id: params.postId,
     comment_id: params.commentId ?? null,
@@ -588,7 +597,7 @@ export async function updateSupabasePostAssignments(
 ): Promise<void> {
   const now = new Date().toISOString();
   const query = new URLSearchParams({
-    platform: `eq.${platform}`,
+    platform: platform === 'befood' || platform === 'be' ? 'in.(be,befood)' : `eq.${platform}`,
     post_id: `eq.${postId}`,
     status: 'in.(unassigned,assigned,updated_review)',
   }).toString();

@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Thread, Label, EMPTY_LABEL, isLabelComplete, PlatformStats } from '../types';
 import CommentItem from './CommentItem';
 import LabelSelector from './LabelSelector';
@@ -282,14 +282,43 @@ export default function ThreadView({
           <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
             {countComplete}/{allItems.length} items đã gán nhãn
           </div>
-          <div className="flex items-center justify-center gap-2 text-xs mt-1 flex-wrap">
-            <span className="text-emerald-700 dark:text-emerald-400">Da gan: {countComplete}</span>
-            <span className="text-orange-700 dark:text-orange-400">Chua gan: {countMissing}</span>
+
+          {/* Stacked mini progress bar */}
+          <div className="w-full min-w-[140px] max-w-[200px] mx-auto h-1.5 rounded-full bg-gray-200 dark:bg-gray-800 flex overflow-hidden mt-1.5" title="Tiến độ gán nhãn trong thread này">
+            {countComplete > 0 && (
+              <div
+                className="bg-emerald-500 dark:bg-emerald-600 transition-all duration-300"
+                style={{ width: `${(countComplete / allItems.length) * 100}%` }}
+              />
+            )}
+            {countMissing > 0 && (
+              <div
+                className="bg-orange-400 transition-all duration-300"
+                style={{ width: `${(countMissing / allItems.length) * 100}%` }}
+              />
+            )}
             {countReview > 0 && (
-              <span className="text-amber-700 dark:text-amber-400">Xem lai: {countReview}</span>
+              <div
+                className="bg-amber-400 transition-all duration-300"
+                style={{ width: `${(countReview / allItems.length) * 100}%` }}
+              />
             )}
             {countSkipped > 0 && (
-              <span className="text-gray-500 dark:text-gray-400">Bo qua: {countSkipped}</span>
+              <div
+                className="bg-gray-400 dark:bg-gray-600 transition-all duration-300"
+                style={{ width: `${(countSkipped / allItems.length) * 100}%` }}
+              />
+            )}
+          </div>
+
+          <div className="flex items-center justify-center gap-2 text-xs mt-1 flex-wrap">
+            <span className="text-emerald-700 dark:text-emerald-400">Đã gán: {countComplete}</span>
+            <span className="text-orange-700 dark:text-orange-400">Chưa gán: {countMissing}</span>
+            {countReview > 0 && (
+              <span className="text-amber-700 dark:text-amber-400">Xem lại: {countReview}</span>
+            )}
+            {countSkipped > 0 && (
+              <span className="text-gray-500 dark:text-gray-400">Bỏ qua: {countSkipped}</span>
             )}
           </div>
         </div>
