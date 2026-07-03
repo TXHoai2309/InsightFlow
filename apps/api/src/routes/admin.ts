@@ -36,7 +36,44 @@ async function ensureAdmin(request: FastifyRequest, reply: FastifyReply) {
   return true;
 }
 
+function serializeBrandManager(data: any) {
+  return {
+    uid: data.uid,
+    email: data.email,
+    displayName: data.displayName,
+    role: "brand_manager",
+    brandId: data.brandId,
+    brandName: data.brandName,
+    companyDomain: data.companyDomain,
+    permissions: Array.isArray(data.permissions) ? data.permissions : brandManagerPermissions,
+    defaultRoute: data.defaultRoute || "/dashboard",
+    disabled: data.disabled === true,
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
+  };
+}
+
 export default async function adminRoutes(fastify: FastifyInstance, options: FastifyPluginOptions) {
+  fastify.get("/brand-managers", async (request: FastifyRequest, reply: FastifyReply) => {
+    const isAdmin = await ensureAdmin(request, reply);
+    if (!isAdmin) return;
+
+    try {
+      const snapshot = await db.collection("users").where("role", "==", "brand_manager").get();
+      const brandManagers = snapshot.docs
+        .map((doc) => doc.data())
+        .map(serializeBrandManager);
+
+      return { success: true, data: brandManagers };
+    } catch (error: any) {
+      request.log.error(error);
+      return reply.status(500).send({
+        success: false,
+        error: error.message || "Failed to load Brand Manager accounts.",
+      });
+    }
+  });
+
   fastify.post("/brand-managers", async (request: FastifyRequest, reply: FastifyReply) => {
     const isAdmin = await ensureAdmin(request, reply);
     if (!isAdmin) return;
@@ -118,6 +155,7 @@ export default async function adminRoutes(fastify: FastifyInstance, options: Fas
         companyDomain,
         permissions: brandManagerPermissions,
         defaultRoute: "/dashboard",
+        disabled: false,
         temporaryPasswordIssued: true,
         updatedAt: FieldValue.serverTimestamp(),
         createdBy: (request as any).user.uid,
@@ -156,6 +194,133 @@ export default async function adminRoutes(fastify: FastifyInstance, options: Fas
       return reply.status(500).send({
         success: false,
         error: error.message || "Failed to create Brand Manager account.",
+      });
+    }
+  });
+
+  fastify.patch("/brand-managers/:uid", async (request: FastifyRequest, reply: FastifyReply) => {
+    const isAdmin = await ensureAdmin(request, reply);
+    if (!isAdmin) return;
+
+    const { uid } = request.params as { uid: string };
+    const body = request.body as {
+      fullName?: string;
+      brandName?: string;
+    };
+
+    const fullName = body.fullName?.trim();
+    const brandName = body.brandName?.trim();
+
+    if (!fullName || !brandName) {
+      return reply.status(400).send({
+        success: false,
+        error: "Full name and brandName are required.",
+      });
+    }
+
+    try {
+      const managerDoc = await db.collection("users").doc(uid).get();
+      const managerProfile = managerDoc.exists ? managerDoc.data() : null;
+
+      if (!managerProfile || managerProfile.role !== "brand_manager") {
+        return reply.status(404).send({ success: false, error: "Brand Manager account not found." });
+      }
+
+      const brandId = managerProfile.brandId || slugifyBrand(brandName);
+      const companyDomain = managerProfile.companyDomain || getDomainFromEmail(managerProfile.email || "");
+
+      await authAdmin.updateUser(uid, { displayName: fullName });
+      const userRecord = await authAdmin.getUser(uid);
+      await authAdmin.setCustomUserClaims(uid, {
+        ...(userRecord.customClaims || {}),
+        role: "brand_manager",
+        brandId,
+        brandName,
+        permissions: brandManagerPermissions,
+        defaultRoute: "/dashboard",
+      });
+
+      await db.collection("users").doc(uid).set(
+        {
+          displayName: fullName,
+          brandId,
+          brandName,
+          companyDomain,
+          permissions: brandManagerPermissions,
+          defaultRoute: "/dashboard",
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      await db.collection("brands").doc(brandId).set(
+        {
+          id: brandId,
+          name: brandName,
+          domain: companyDomain,
+          brandManagerUid: uid,
+          brandManagerEmail: managerProfile.email,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      const updatedDoc = await db.collection("users").doc(uid).get();
+      return {
+        success: true,
+        data: serializeBrandManager(updatedDoc.data()),
+      };
+    } catch (error: any) {
+      request.log.error(error);
+      return reply.status(500).send({
+        success: false,
+        error: error.message || "Failed to update Brand Manager account.",
+      });
+    }
+  });
+
+  fastify.patch("/brand-managers/:uid/status", async (request: FastifyRequest, reply: FastifyReply) => {
+    const isAdmin = await ensureAdmin(request, reply);
+    if (!isAdmin) return;
+
+    const { uid } = request.params as { uid: string };
+    const body = request.body as { disabled?: boolean };
+
+    if (typeof body.disabled !== "boolean") {
+      return reply.status(400).send({ success: false, error: "disabled must be a boolean." });
+    }
+
+    if (uid === (request as any).user.uid) {
+      return reply.status(400).send({ success: false, error: "Admin cannot change their own status here." });
+    }
+
+    try {
+      const managerDoc = await db.collection("users").doc(uid).get();
+      const managerProfile = managerDoc.exists ? managerDoc.data() : null;
+
+      if (!managerProfile || managerProfile.role !== "brand_manager") {
+        return reply.status(404).send({ success: false, error: "Brand Manager account not found." });
+      }
+
+      await authAdmin.updateUser(uid, { disabled: body.disabled });
+      await db.collection("users").doc(uid).set(
+        {
+          disabled: body.disabled,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      const updatedDoc = await db.collection("users").doc(uid).get();
+      return {
+        success: true,
+        data: serializeBrandManager(updatedDoc.data()),
+      };
+    } catch (error: any) {
+      request.log.error(error);
+      return reply.status(500).send({
+        success: false,
+        error: error.message || "Failed to update account status.",
       });
     }
   });

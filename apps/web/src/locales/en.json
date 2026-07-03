@@ -314,6 +314,7 @@
   "auth.errors.popupBlocked": "Browser blocked the popup. Please allow it.",
   "auth.errors.tooManyRequests": "Too many attempts. Please try again later.",
   "auth.errors.unknown": "Unknown error",
+  "auth.errors.userDisabled": "Your account has been locked.",
   "auth.errors.userNotFound": "Email not found.",
   "auth.errors.wrongPassword": "Incorrect password.",
   "auth.forgotPassword.backToLogin": "Back to login",

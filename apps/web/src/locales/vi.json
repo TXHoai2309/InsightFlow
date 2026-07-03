@@ -314,6 +314,7 @@
   "auth.errors.popupBlocked": "Trình duyệt đã chặn cửa sổ bật lên. Vui lòng bật lại.",
   "auth.errors.tooManyRequests": "Quá nhiều lần thử. Vui lòng thử lại sau.",
   "auth.errors.unknown": "Lỗi không xác định",
+  "auth.errors.userDisabled": "Tài khoản của bạn đã bị khóa.",
   "auth.errors.userNotFound": "Email không tồn tại.",
   "auth.errors.wrongPassword": "Mật khẩu không đúng.",
   "auth.forgotPassword.backToLogin": "Quay lại đăng nhập",

@@ -21,6 +21,7 @@ interface StaffAccount {
   defaultRoute: string;
   temporaryPassword?: string;
   hasTemporaryPassword?: boolean;
+  disabled?: boolean;
 }
 
 const roleOptions: Array<{ value: StaffRole; labelKey: string; descriptionKey: string }> = [
@@ -81,10 +82,21 @@ export default function TeamPage() {
   const [managerPassword, setManagerPassword] = useState("");
   const [revealLoading, setRevealLoading] = useState(false);
   const [revealError, setRevealError] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [editingStaff, setEditingStaff] = useState<StaffAccount | null>(null);
+  const [editFullName, setEditFullName] = useState("");
+  const [editStaffRole, setEditStaffRole] = useState<StaffRole>("crisis_employee");
+  const [editOperations, setEditOperations] = useState<string[]>([]);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const availableOperations = useMemo(
     () => operationOptions.filter((operation) => operation.roles.includes(staffRole)),
     [staffRole],
+  );
+
+  const availableEditOperations = useMemo(
+    () => operationOptions.filter((operation) => operation.roles.includes(editStaffRole)),
+    [editStaffRole],
   );
 
   useEffect(() => {
@@ -131,6 +143,30 @@ export default function TeamPage() {
       }
       return [...current, operation];
     });
+  };
+
+  const toggleEditOperation = (operation: string) => {
+    setEditOperations((current) => {
+      if (current.includes(operation)) {
+        return current.filter((item) => item !== operation);
+      }
+      return [...current, operation];
+    });
+  };
+
+  const normalizeRoleForEdit = (role: StaffRoleValue): StaffRole => {
+    return isCrisisRole(role) ? "crisis_employee" : "lead_employee";
+  };
+
+  const openEditModal = (account: StaffAccount) => {
+    const normalizedRole = normalizeRoleForEdit(account.role);
+    setEditingStaff(account);
+    setEditFullName(account.displayName || "");
+    setEditStaffRole(normalizedRole);
+    setEditOperations(account.permissions?.length ? account.permissions : normalizedRole === "crisis_employee"
+      ? ["dashboard", "mentions", "alerts", "reports"]
+      : ["dashboard", "mentions", "leads", "reports"]);
+    setActionError("");
   };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -259,6 +295,73 @@ export default function TeamPage() {
     }
   };
 
+  const handleEditStaff = async () => {
+    if (!editingStaff) return;
+    setSavingEdit(true);
+    setActionError("");
+
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error(t("team.errors.needBrandManager"));
+
+      const response = await fetch(`/api/staff/${editingStaff.uid}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          displayName: editFullName,
+          staffRole: editStaffRole,
+          operations: editOperations,
+        }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Không thể cập nhật tài khoản nhân viên.");
+      }
+
+      setStaff((current) =>
+        current.map((item) => (item.uid === editingStaff.uid ? { ...item, ...data.data } : item)),
+      );
+      setEditingStaff(null);
+    } catch (err: any) {
+      setActionError(err.message || "Không thể cập nhật tài khoản nhân viên.");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleToggleStatus = async (account: StaffAccount) => {
+    setActionError("");
+
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error(t("team.errors.needBrandManager"));
+
+      const response = await fetch(`/api/staff/${account.uid}/status`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ disabled: !account.disabled }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Không thể cập nhật trạng thái tài khoản.");
+      }
+
+      setStaff((current) =>
+        current.map((item) => (item.uid === account.uid ? { ...item, ...data.data } : item)),
+      );
+    } catch (err: any) {
+      setActionError(err.message || "Không thể cập nhật trạng thái tài khoản.");
+    }
+  };
+
   return (
     <div className="p-4 md:p-8 space-y-6">
       <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6">
@@ -320,11 +423,10 @@ export default function TeamPage() {
             {roleOptions.map((option) => (
               <label
                 key={option.value}
-                className={`cursor-pointer rounded-lg border p-4 transition ${
-                  staffRole === option.value
+                className={`cursor-pointer rounded-lg border p-4 transition ${staffRole === option.value
                     ? "border-[var(--color-brand)] bg-[var(--color-brand-subtle)]"
                     : "border-[var(--color-border)] bg-[var(--color-bg-surface-raised)]"
-                }`}
+                  }`}
               >
                 <input
                   type="radio"
@@ -424,24 +526,31 @@ export default function TeamPage() {
         </div>
 
         <div className="mt-5 overflow-x-auto">
+          {actionError && (
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-[14px] text-red-700">
+              {actionError}
+            </div>
+          )}
           <table className="min-w-full text-left text-[14px]">
             <thead className="text-[12px] uppercase tracking-[0.06em] text-[var(--color-text-muted)]">
               <tr>
                 <th className="py-3 pr-4">{t("team.table.employee")}</th>
                 <th className="py-3 pr-4">{t("team.table.role")}</th>
                 <th className="py-3 pr-4">{t("team.table.operations")}</th>
+                <th className="py-3 pr-4">Trang thai</th>
                 <th className="py-3 pr-4">{t("team.table.defaultRoute")}</th>
                 <th className="py-3 pr-4">{t("team.table.tempPassword")}</th>
+                <th className="py-3 pr-4">Hanh dong</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--color-border)]">
               {loadingList ? (
                 <tr>
-                  <td className="py-5 text-[var(--color-text-secondary)]" colSpan={5}>{t("team.table.loading")}</td>
+                  <td className="py-5 text-[var(--color-text-secondary)]" colSpan={7}>{t("team.table.loading")}</td>
                 </tr>
               ) : staff.length === 0 ? (
                 <tr>
-                  <td className="py-5 text-[var(--color-text-secondary)]" colSpan={5}>{t("team.table.empty")}</td>
+                  <td className="py-5 text-[var(--color-text-secondary)]" colSpan={7}>{t("team.table.empty")}</td>
                 </tr>
               ) : (
                 staff.map((item) => (
@@ -464,6 +573,12 @@ export default function TeamPage() {
                           </span>
                         ))}
                       </div>
+                    </td>
+                    <td className="py-4 pr-4">
+                      <span className={`rounded-full px-2.5 py-1 text-[12px] font-semibold ${item.disabled ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"
+                        }`}>
+                        {item.disabled ? "Đã khóa" : "Đang hoạt động"}
+                      </span>
                     </td>
                     <td className="py-4 pr-4 text-[var(--color-text-secondary)]">{item.defaultRoute}</td>
                     <td className="py-4 pr-4">
@@ -498,6 +613,27 @@ export default function TeamPage() {
                           {t("team.password.reset")}
                         </button>
                       )}
+                    </td>
+                    <td className="py-4 pr-4">
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openEditModal(item)}
+                          className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-[12px] font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-brand-subtle)]"
+                        >
+                          Sua
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleStatus(item)}
+                          className={`rounded-lg px-3 py-1.5 text-[12px] font-semibold ${item.disabled
+                              ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                              : "bg-red-600 text-white hover:bg-red-700"
+                            }`}
+                        >
+                          {item.disabled ? "Mở khóa" : "Khóa"}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -562,6 +698,90 @@ export default function TeamPage() {
                   : passwordRequestMode === "reset"
                     ? t("team.password.modal.resetAndReveal")
                     : t("team.password.modal.reveal")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingStaff && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-[560px] rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 shadow-xl">
+            <h3 className="text-[18px] font-bold text-[var(--color-text-primary)]">Chỉnh sửa tài khoản nhân viên</h3>
+            <p className="mt-1 text-[13px] text-[var(--color-text-secondary)]">{editingStaff.email}</p>
+
+            <label className="mt-5 block space-y-2">
+              <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">Họ tên</span>
+              <input
+                value={editFullName}
+                onChange={(event) => setEditFullName(event.target.value)}
+                className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2.5 text-[14px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]"
+              />
+            </label>
+
+            <div className="mt-5 grid gap-3 md:grid-cols-2">
+              {roleOptions.map((option) => (
+                <label
+                  key={option.value}
+                  className={`cursor-pointer rounded-lg border p-4 transition ${editStaffRole === option.value
+                      ? "border-[var(--color-brand)] bg-[var(--color-brand-subtle)]"
+                      : "border-[var(--color-border)] bg-[var(--color-bg-surface-raised)]"
+                    }`}
+                >
+                  <input
+                    type="radio"
+                    className="sr-only"
+                    checked={editStaffRole === option.value}
+                    onChange={() => {
+                      setEditStaffRole(option.value);
+                      setEditOperations(option.value === "crisis_employee"
+                        ? ["dashboard", "mentions", "alerts", "reports"]
+                        : ["dashboard", "mentions", "leads", "reports"]);
+                    }}
+                  />
+                  <span className="block text-[14px] font-bold text-[var(--color-text-primary)]">{t(option.labelKey)}</span>
+                  <span className="mt-1 block text-[12px] leading-5 text-[var(--color-text-secondary)]">
+                    {t(option.descriptionKey)}
+                  </span>
+                </label>
+              ))}
+            </div>
+
+            <fieldset className="mt-5 space-y-3">
+              <legend className="text-[13px] font-semibold text-[var(--color-text-primary)]">{t("team.form.operations")}</legend>
+              <div className="grid gap-2 md:grid-cols-2">
+                {availableEditOperations.map((operation) => (
+                  <label
+                    key={operation.value}
+                    className="flex items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-3 text-[14px] text-[var(--color-text-primary)]"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={editOperations.includes(operation.value)}
+                      onChange={() => toggleEditOperation(operation.value)}
+                      className="rounded text-[var(--color-brand)] focus:ring-[var(--color-brand)]"
+                    />
+                    {t(operation.labelKey)}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setEditingStaff(null)}
+                className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-[13px] font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-brand-subtle)]"
+              >
+                Huy
+              </button>
+              <button
+                type="button"
+                disabled={savingEdit || !editFullName.trim()}
+                onClick={handleEditStaff}
+                className="rounded-lg bg-[var(--color-brand)] px-4 py-2 text-[13px] font-semibold text-white hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {savingEdit ? "Dang luu..." : "Luu thay doi"}
               </button>
             </div>
           </div>

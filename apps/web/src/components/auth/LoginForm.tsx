@@ -70,6 +70,7 @@ export default function LoginForm() {
         "auth/user-not-found": t("auth.errors.userNotFound"),
         "auth/wrong-password": t("auth.errors.wrongPassword"),
         "auth/invalid-credential": t("auth.errors.invalidCredential"),
+        "auth/user-disabled": t("auth.errors.userDisabled"),
         "auth/too-many-requests": t("auth.errors.tooManyRequests"),
       };
       setError(msg[err.code] ?? err.message ?? t("auth.errors.loginFailed"));
