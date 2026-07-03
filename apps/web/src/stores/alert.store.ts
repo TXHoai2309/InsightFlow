@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 import { dbSecond } from "@/lib/firebase";
-import { collection, doc, limit, query, updateDoc, onSnapshot } from "firebase/firestore";
+import { collection, doc, limit, query, updateDoc, onSnapshot, addDoc } from "firebase/firestore";
 import { isRecordInBrandScope, isSameBrandScope } from "@/lib/brandScope";
 import { normalizeBrandName } from "@/lib/services/dashboard";
 import { canPerformAction, type UserRoleProfile } from "@/lib/rbac";
@@ -42,6 +42,26 @@ export interface AlertFilters {
   severity: string;
 }
 
+export interface CorrectionRequest {
+  id: string;
+  alert_id: string;
+  brand: string;
+  requester_uid: string;
+  requester_email: string;
+  created_at: string;
+  status: "pending" | "approved" | "rejected";
+  original_sentiment: string;
+  new_sentiment: string;
+  original_severity: string;
+  new_severity: string;
+  original_topic: string;
+  new_topic: string;
+  reason: string;
+  resolved_by?: string;
+  resolved_at?: string;
+  alert_text?: string;
+}
+
 interface AlertState {
   rawAlerts: AlertData[];
   alerts: AlertData[];
@@ -49,6 +69,8 @@ interface AlertState {
   isLoading: boolean;
   error: string | null;
   filters: AlertFilters;
+  correctionRequests: CorrectionRequest[];
+  isLoadingRequests: boolean;
   setFilters: (filters: Partial<AlertFilters>) => void;
   fetchAlerts: (scopedBrandKey?: string | null) => Promise<void>;
   updateAlertStatus: (
@@ -56,6 +78,14 @@ interface AlertState {
     newStatus: string,
     profile: UserRoleProfile | null | undefined,
     attempt?: { note: string; image_url?: string },
+  ) => Promise<void>;
+  fetchCorrectionRequests: (scopedBrandKey?: string | null) => Promise<void>;
+  createCorrectionRequest: (requestData: Omit<CorrectionRequest, "id" | "created_at" | "status">) => Promise<void>;
+  resolveCorrectionRequest: (
+    requestId: string,
+    alertId: string,
+    decision: "approved" | "rejected",
+    profile: UserRoleProfile | null | undefined
   ) => Promise<void>;
 }
 
@@ -186,6 +216,8 @@ export const useAlertStore = create<AlertState>()(
     brands: ["Highland Coffee", "Starbucks", "Mixue"],
     isLoading: false,
     error: null,
+    correctionRequests: [],
+    isLoadingRequests: false,
     filters: {
       brand: "all",
       status: "all",
@@ -359,6 +391,95 @@ export const useAlertStore = create<AlertState>()(
         await updateDoc(documentRef, updateData);
       } catch (error) {
         console.error("[AlertStore] Failed to persist alert status:", error);
+      }
+    },
+
+    fetchCorrectionRequests: async (scopedBrandKey = null) => {
+      set({ isLoadingRequests: true });
+      try {
+        if (!dbSecond) throw new Error("Firebase data project is not configured.");
+
+        const q = query(collection(dbSecond, "insightflow_correction_requests"), limit(500));
+        
+        onSnapshot(q, (snapshot) => {
+          const requests: CorrectionRequest[] = [];
+          snapshot.docs.forEach((docSnap) => {
+            const data = docSnap.data();
+            const req = {
+              id: docSnap.id,
+              alert_id: data.alert_id,
+              brand: data.brand,
+              requester_uid: data.requester_uid,
+              requester_email: data.requester_email,
+              created_at: data.created_at,
+              status: data.status,
+              original_sentiment: data.original_sentiment,
+              new_sentiment: data.new_sentiment,
+              original_severity: data.original_severity,
+              new_severity: data.new_severity,
+              original_topic: data.original_topic,
+              new_topic: data.new_topic,
+              reason: data.reason,
+              resolved_by: data.resolved_by,
+              resolved_at: data.resolved_at,
+              alert_text: data.alert_text,
+            } as CorrectionRequest;
+
+            if (!isRecordInBrandScope({ brand: req.brand }, scopedBrandKey)) return;
+            requests.push(req);
+          });
+
+          requests.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+          set({ correctionRequests: requests, isLoadingRequests: false });
+        }, (error) => {
+          console.error("[AlertStore] fetchCorrectionRequests error:", error);
+          set({ isLoadingRequests: false });
+        });
+      } catch (error) {
+        console.error("[AlertStore] fetchCorrectionRequests error:", error);
+        set({ isLoadingRequests: false });
+      }
+    },
+
+    createCorrectionRequest: async (requestData) => {
+      if (!dbSecond) throw new Error("Firebase data project is not configured.");
+      
+      const newDoc = {
+        ...requestData,
+        created_at: new Date().toISOString(),
+        status: "pending" as const,
+      };
+
+      await addDoc(collection(dbSecond, "insightflow_correction_requests"), newDoc);
+    },
+
+    resolveCorrectionRequest: async (requestId, alertId, decision, profile) => {
+      if (!dbSecond) throw new Error("Firebase data project is not configured.");
+      if (!profile) throw new Error("User is not authenticated.");
+
+      const requestRef = doc(dbSecond, "insightflow_correction_requests", requestId);
+      
+      await updateDoc(requestRef, {
+        status: decision,
+        resolved_by: profile.uid,
+        resolved_at: new Date().toISOString(),
+      });
+
+      if (decision === "approved") {
+        const req = get().correctionRequests.find((r) => r.id === requestId);
+        if (!req) return;
+
+        const alertRef = doc(dbSecond, "insightflow_labels", alertId);
+        
+        await updateDoc(alertRef, {
+          sentiment: req.new_sentiment,
+          "labels.sentiment": req.new_sentiment,
+          severity: req.new_severity,
+          "labels.urgency": req.new_severity,
+          topic: req.new_topic,
+          "labels.topic": req.new_topic,
+        });
       }
     },
   })),
