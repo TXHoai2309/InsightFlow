@@ -6,6 +6,8 @@
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 import { normalizeBrandName, DashboardService } from "@/lib/services/dashboard";
+import { canPerformAction, type UserRoleProfile } from "@/lib/rbac";
+import { isSameBrandScope } from "@/lib/brandScope";
 import type {
   DashboardStats,
   DashboardFilters,
@@ -52,8 +54,16 @@ interface DashboardState {
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
 
-  updateLeadStatus: (id: string, status: Lead["status"]) => Promise<void>;
-  updateLeadDetails: (id: string, data: Partial<Lead>) => Promise<void>;
+  updateLeadStatus: (
+    id: string,
+    status: Lead["status"],
+    profile: UserRoleProfile | null | undefined,
+  ) => Promise<void>;
+  updateLeadDetails: (
+    id: string,
+    data: Partial<Lead>,
+    profile: UserRoleProfile | null | undefined,
+  ) => Promise<void>;
 
   // ── Computed (client-side filtering) ─────────────────────────────────────
   getFilteredMentions: () => Mention[];
@@ -122,9 +132,17 @@ export const useDashboardStore = create<DashboardState>()(
     setLoading: (loading) => set({ isLoading: loading }),
     setError: (error) => set({ error }),
 
-    updateLeadStatus: async (id, status) => {
+    updateLeadStatus: async (id, status, profile) => {
       try {
-        await DashboardService.updateLeadStatus(id, status);
+        const currentLead = get().leads.find((lead) => lead.id === id);
+        if (!canPerformAction(profile, "update_lead_status")) {
+          throw new Error("User is not allowed to update lead status.");
+        }
+        if (!currentLead || !isSameBrandScope(profile, currentLead)) {
+          throw new Error("Lead is outside the user's brand scope.");
+        }
+
+        await DashboardService.updateLeadStatus(id, status, profile);
         set((state) => ({
           leads: state.leads.map((l) => (l.id === id ? { ...l, status } : l)),
         }));
@@ -134,9 +152,20 @@ export const useDashboardStore = create<DashboardState>()(
       }
     },
 
-    updateLeadDetails: async (id, data) => {
+    updateLeadDetails: async (id, data, profile) => {
       try {
-        await DashboardService.updateLeadDetails(id, data);
+        const currentLead = get().leads.find((lead) => lead.id === id);
+        if (!canPerformAction(profile, "update_lead_details")) {
+          throw new Error("User is not allowed to update lead details.");
+        }
+        if (data.status && !canPerformAction(profile, "update_lead_status")) {
+          throw new Error("User is not allowed to update lead status.");
+        }
+        if (!currentLead || !isSameBrandScope(profile, currentLead)) {
+          throw new Error("Lead is outside the user's brand scope.");
+        }
+
+        await DashboardService.updateLeadDetails(id, data, profile);
         set((state) => ({
           leads: state.leads.map((l) => (l.id === id ? { ...l, ...data } : l)),
         }));

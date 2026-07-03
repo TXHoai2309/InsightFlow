@@ -5,6 +5,9 @@ import { useTranslation } from "react-i18next";
 import { useDashboard } from "@/hooks/useDashboardData";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { LeadFilters, LeadStats, LeadCard } from "@/components/leads";
+import { useAuth } from "@/hooks/useAuth";
+import { canPerformAction } from "@/lib/rbac";
+import { hasBusinessBrandScope } from "@/lib/brandScope";
 
 import { normalizeBrandName } from "@/lib/services/dashboard";
 
@@ -15,8 +18,11 @@ import { normalizeBrandName } from "@/lib/services/dashboard";
  */
 export default function LeadsPage() {
   const { t } = useTranslation();
+  const { profile, loading: authLoading } = useAuth();
   const [activeTab, useStateTab] = useState<"hot" | "warm" | "cold" | any>("hot");
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
+  const canViewLeads = canPerformAction(profile, "view_leads");
+  const hasBrandScope = hasBusinessBrandScope(profile);
 
   const setActiveTab = (tab: "hot" | "warm" | "cold") => {
     useStateTab(tab);
@@ -25,7 +31,13 @@ export default function LeadsPage() {
   // 1. Tự động tải dữ liệu và cập nhật định kỳ từ Firebase (Project 2: datainsight)
   useDashboard({ autoFetch: true, refetchInterval: 60000 });
 
-  const { getFilteredLeads, workspaces, filters, leads, isLoading, error } = useDashboardStore();
+  const { getFilteredLeads, workspaces, filters, leads, isLoading, error, setFilters } = useDashboardStore();
+
+  useEffect(() => {
+    if (!profile || profile.role === "admin" || workspaces.length === 0) return;
+    if (filters.workspace_id !== "all") return;
+    setFilters({ workspace_id: workspaces[0].id });
+  }, [filters.workspace_id, profile, setFilters, workspaces]);
 
   // 2. Chạy đồng hồ ticking giây để cập nhật countdown cho toàn bộ Hot Lead Card đồng thời
   useEffect(() => {
@@ -54,6 +66,32 @@ export default function LeadsPage() {
   const currentTabLeads = useMemo(() => {
     return allFilteredLeads.filter((l) => l.intent === activeTab);
   }, [allFilteredLeads, activeTab]);
+
+  if (!authLoading && !canViewLeads) {
+    return (
+      <div className="p-4 md:p-8">
+        <div className="glass-card p-8 rounded-xl border border-[var(--color-border)]">
+          <h2 className="text-xl font-bold text-[var(--color-text-primary)]">Khong co quyen truy cap</h2>
+          <p className="text-sm text-[var(--color-text-secondary)] mt-2">
+            Vai tro hien tai khong duoc phep truy cap module quan ly lead.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!authLoading && !hasBrandScope) {
+    return (
+      <div className="p-4 md:p-8">
+        <div className="glass-card p-8 rounded-xl border border-[var(--color-border)]">
+          <h2 className="text-xl font-bold text-[var(--color-text-primary)]">Chua duoc gan thuong hieu</h2>
+          <p className="text-sm text-[var(--color-text-secondary)] mt-2">
+            Tai khoan can duoc gan brandId hoac brandName truoc khi xu ly lead.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-8 space-y-5 md:space-y-8 animate-in fade-in duration-500">
@@ -96,7 +134,7 @@ export default function LeadsPage() {
       <LeadStats leads={brandPlatformFilteredLeads} isLoading={isLoading} />
 
       {/* Lead Filters */}
-      <LeadFilters workspaces={workspaces} />
+      <LeadFilters workspaces={workspaces} brandLocked={profile?.role !== "admin"} />
 
       {/* Leads List */}
       <div className="space-y-4">

@@ -2,6 +2,9 @@ import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 import { dbSecond } from "@/lib/firebase";
 import { collection, doc, getDocs, limit, query, updateDoc } from "firebase/firestore";
+import { isRecordInBrandScope, isSameBrandScope } from "@/lib/brandScope";
+import { normalizeBrandName } from "@/lib/services/dashboard";
+import { canPerformAction, type UserRoleProfile } from "@/lib/rbac";
 
 export interface ResolutionAttempt {
   attempt_number: number;
@@ -47,11 +50,11 @@ interface AlertState {
   error: string | null;
   filters: AlertFilters;
   setFilters: (filters: Partial<AlertFilters>) => void;
-  fetchAlerts: () => Promise<void>;
+  fetchAlerts: (scopedBrandKey?: string | null) => Promise<void>;
   updateAlertStatus: (
     id: string,
     newStatus: string,
-    attempt?: { note: string; image_url?: string }
+    profile: UserRoleProfile | null | undefined,
   ) => Promise<void>;
 }
 
@@ -196,7 +199,7 @@ export const useAlertStore = create<AlertState>()(
       });
     },
 
-    fetchAlerts: async () => {
+    fetchAlerts: async (scopedBrandKey = null) => {
       set({ isLoading: true, error: null });
 
       try {
@@ -220,13 +223,13 @@ export const useAlertStore = create<AlertState>()(
 
           const text = String(
             data.clean_text ||
-              data.original_text ||
-              data.text ||
-              data.content ||
-              "",
+            data.original_text ||
+            data.text ||
+            data.content ||
+            "",
           );
 
-          fetchedAlerts.push({
+          const alert = {
             id: String(data.id || document.id),
             brand: formatBrandName(String(data.brand || "")),
             source: normalizeSource(String(data.source || "")),
@@ -236,9 +239,9 @@ export const useAlertStore = create<AlertState>()(
             severity: calculateSeverity(data),
             created_at: parseDate(
               data.labeled_at ||
-                data.uploaded_at ||
-                data.posted_at ||
-                data.created_at,
+              data.uploaded_at ||
+              data.posted_at ||
+              data.created_at,
             ),
             status: String(data.status || "new"),
             resolved_at: data.resolved_at ? parseDate(data.resolved_at) : undefined,
@@ -250,15 +253,21 @@ export const useAlertStore = create<AlertState>()(
             shares: Number(data.shares || data.share_count || 0),
             author: String(data.author || data.author_name || "Ẩn danh"),
             title: text.slice(0, 120),
-            social_profile_url: String(data.social_profile_url || data.contact || data.profile_url || ""),
-            resolution_history: Array.isArray(data.resolution_history) ? data.resolution_history : [],
-          });
+          };
+
+          if (!isRecordInBrandScope({ brand: alert.brand }, scopedBrandKey)) return;
+          fetchedAlerts.push(alert);
+        });
+
+        const scopedBrands = Array.from(new Set(fetchedAlerts.map((alert) => alert.brand))).sort();
+        const fallbackBrands = ["Highland Coffee", "Starbucks", "Mixue"].filter((brand) => {
+          return !scopedBrandKey || normalizeBrandName(brand) === scopedBrandKey;
         });
 
         set({
           rawAlerts: fetchedAlerts,
           alerts: applyFilters(fetchedAlerts, get().filters),
-          brands: ["Highland Coffee", "Starbucks", "Mixue"],
+          brands: scopedBrands.length ? scopedBrands : fallbackBrands,
           error: null,
         });
       } catch (error) {
@@ -271,11 +280,23 @@ export const useAlertStore = create<AlertState>()(
       }
     },
 
-    updateAlertStatus: async (id, newStatus, attempt) => {
-      const resolvedAt =
-        newStatus === "resolved" ? new Date().toISOString() : null;
+    updateAlertStatus: async (id, newStatus, profile) => {
+      const currentAlert = get().rawAlerts.find((alert) => alert.id === id);
+      if (!profile || !canPerformAction(profile, "update_crisis_status")) {
+        throw new Error("User is not allowed to update crisis status.");
+      }
+      if (!currentAlert || !isSameBrandScope(profile, { brand: currentAlert.brand })) {
+        throw new Error("Alert is outside the user's brand scope.");
+      }
 
-      let newAttemptItem: ResolutionAttempt | undefined = undefined;
+      const resolvedAt =
+        newStatus === "resolved" ? new Date().toISOString() : undefined;
+      const auditFields = {
+        updated_by: profile.uid,
+        updated_by_role: profile.role,
+        updated_at: new Date().toISOString(),
+        ...(resolvedAt ? { resolved_by: profile.uid } : {}),
+      };
 
       set((state) => {
         const nextRawAlerts = state.rawAlerts.map((alert) => {
@@ -310,21 +331,15 @@ export const useAlertStore = create<AlertState>()(
 
       try {
         const documentRef = doc(dbSecond, "insightflow_labels", id);
-        
+
         const updateData: Record<string, any> = {
           status: newStatus,
-          resolved_at: resolvedAt,
-        };
-
-        const targetAlert = get().rawAlerts.find(a => a.id === id);
-        if (targetAlert && targetAlert.resolution_history && targetAlert.resolution_history.length > 0) {
-          updateData.resolution_history = targetAlert.resolution_history;
-        }
-
-        await updateDoc(documentRef, updateData);
+          ...(resolvedAt ? { resolved_at: resolvedAt } : {}),
+          ...auditFields,
+        });
       } catch (error) {
-        console.error("[AlertStore] Failed to persist alert status:", error);
-      }
+  console.error("[AlertStore] Failed to persist alert status:", error);
+}
     },
   })),
 );

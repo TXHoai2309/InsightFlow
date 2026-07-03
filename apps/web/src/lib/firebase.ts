@@ -1,5 +1,5 @@
 import { initializeApp, getApps } from "firebase/app";
-import { getAuth, GoogleAuthProvider, FacebookAuthProvider, setPersistence, browserLocalPersistence } from "firebase/auth";
+import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth";
 import { getFirestore, Firestore } from "firebase/firestore";
 
 // Firebase project 1: Auth + user management (insightflow-6ce1f)
@@ -22,8 +22,6 @@ const app = getApps().find((a) => a.name === "[DEFAULT]") ?? initializeApp(fireb
 export const auth = getAuth(app);
 setPersistence(auth, browserLocalPersistence);
 export const db = getFirestore(app);
-export const googleProvider = new GoogleAuthProvider();
-export const facebookProvider = new FacebookAuthProvider();
 
 // Firebase project 2: Crawled data storage (datainsight-330eb)
 const secondFirebaseConfig = {

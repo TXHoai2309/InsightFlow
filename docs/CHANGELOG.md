@@ -11,18 +11,71 @@
 >   Tất cả các thay đổi đáng chú ý đối với dự án này sẽ được ghi lại trong file này.
 >   Định dạng dựa trên [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) và dự án này tuân thủ [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-07-02
+
+### Added
+
+- **Quản lý người dùng & Phân quyền (RBAC)**:
+  - Xây dựng cấu trúc dữ liệu lưu thông tin người dùng trên Firebase/Firestore, hỗ trợ các vai trò: `Admin`, `Brand Manager`, `Crisis Staff`, `Lead Staff` và `Viewer`.
+  - Mỗi tài khoản được gắn với vai trò và thương hiệu (Brand) tương ứng, hỗ trợ mở rộng thêm quyền trong các phiên bản sau.
+  - Triển khai cơ chế kiểm tra quyền truy cập (Role-Based Access Control) sau khi đăng nhập.
+  - Áp dụng Route Guard trên toàn bộ hệ thống, ngăn người dùng truy cập trái phép bằng URL trực tiếp.
+  - Điều hướng người dùng đến giao diện phù hợp theo vai trò được cấp.
+
+- **Quản lý tài khoản Brand Manager**:
+  - Thiết kế luồng cấp tài khoản do Admin thực hiện, loại bỏ quy trình Brand Manager tự đăng ký.
+  - Cho phép Admin tạo tài khoản Brand Manager với các thông tin cơ bản (họ tên, email, thương hiệu).
+  - Hỗ trợ tạo hoặc cấp mật khẩu tạm thời khi khởi tạo tài khoản.
+  - Tự động lưu tài khoản vào Firebase và gán đúng thương hiệu quản lý.
+
+- **Quản lý tài khoản nhân viên theo thương hiệu**:
+  - Cho phép Brand Manager tạo tài khoản nhân viên thuộc thương hiệu mình quản lý.
+  - Hỗ trợ nhập họ tên, email, số điện thoại và lựa chọn vai trò của nhân viên.
+  - Tự động gán Brand của Brand Manager cho tài khoản nhân viên khi tạo.
+  - Hỗ trợ cấp mật khẩu tạm thời cho tài khoản mới.
+
+- **Phân công nghiệp vụ nhân viên**:
+  - Cho phép Brand Manager phân công nghiệp vụ cho nhân viên theo từng chức năng.
+  - Hỗ trợ tối thiểu hai nhóm nghiệp vụ: `Crisis Staff` và `Lead Staff`.
+  - Thông tin phân công được lưu trên Firebase và có thể cập nhật khi cần.
+  - Nhân viên chỉ được truy cập các chức năng thuộc phạm vi nghiệp vụ đã được phân công.
+
+- **Bắt buộc đổi mật khẩu tạm thời lần đầu đăng nhập (Brand Manager & Nhân viên)**:
+  - Thiết kế luồng kiểm soát và bắt buộc đổi mật khẩu khi đăng nhập lần đầu bằng tài khoản được hệ thống cấp sẵn (mật khẩu tạm thời).
+  - Ngăn chặn người dùng sử dụng các chức năng của hệ thống cho đến khi hoàn thành việc đổi mật khẩu.
+  - Xây dựng chức năng đổi mật khẩu cho phép nhập mật khẩu tạm thời, thiết lập mật khẩu mới và xác nhận mật khẩu mới.
+  - Vô hiệu hóa hoàn toàn mật khẩu tạm thời ngay sau khi đổi mật khẩu thành công.
+  - Áp dụng các quy tắc bảo mật mật khẩu nghiêm ngặt (độ dài tối thiểu, ký tự đặc biệt, chữ hoa, chữ thường, chữ số) và lưu trữ mật khẩu an toàn.
+
+### Changed
+
+- Điều chỉnh quy trình quản lý tài khoản theo hướng tập trung:
+  - Admin chịu trách nhiệm tạo tài khoản Brand Manager.
+  - Brand Manager chịu trách nhiệm tạo và quản lý tài khoản nhân viên của thương hiệu mình.
+  - Loại bỏ luồng tự đăng ký và xác minh quyền đại diện thương hiệu của Brand Manager trong Sprint 2.
+
+### Security
+
+- Áp dụng cơ chế Role-Based Access Control (RBAC) trên toàn hệ thống.
+- Ngăn truy cập trái phép vào các chức năng thông qua kiểm tra quyền sau đăng nhập và Route Guard.
+- Chỉ người dùng có đủ quyền mới có thể truy cập hoặc thực hiện thao tác trên các chức năng tương ứng.
+- Giới hạn phạm vi dữ liệu theo thương hiệu, đảm bảo người dùng chỉ thao tác trên dữ liệu thuộc Brand được phân quyền.
+
 ---
+
 ## [Unreleased] - 2026-06-29
 
 ### Added
-- **Trang đăng ký (/register)**: 
+
+- **Trang đăng ký (/register)**:
   - Thêm tính năng xác thực tài khoản bằng mã OTP (gửi qua EmailJS).
   - Thêm chức năng gửi lại mã OTP sau 30 giây (có bộ đếm ngược).
   - Vô hiệu hóa các trường mật khẩu cho đến khi OTP được xác thực thành công.
-- **Trang báo cáo (/reports)**: 
+- **Trang báo cáo (/reports)**:
   - Mở rộng chức năng xuất báo cáo, hỗ trợ xuất báo cáo ra nhiều nền tảng thay vì chỉ TikTok.
 
 ### Fixed
+
 - **Trang quên mật khẩu (/forgot-password)**:
   - Thêm thông báo lỗi khi nhập sai mã OTP.
   - Thêm tính năng gửi lại mã OTP sau 30 giây.
@@ -51,24 +104,44 @@
   - Sửa hiển thị logo `TikTok` và `Threads` để dùng màu đen ở giao diện sáng và tự đổi sang màu trắng ở giao diện tối theo đúng CSS theme token của ứng dụng.
   - Căn giữa logo nền tảng trong ô hiển thị trên trang Mentions và đầu trang chi tiết đề cập.
 
- - **Lead card navigation & badge alignment (`/leads`)**
-   - Thu nhỏ badge logo nền tảng trong `LeadCard` bằng size `xs` riêng để cân đối với avatar khách hàng và không ảnh hưởng các màn hình Mentions/Detail.
-   - Cập nhật điều hướng từ Lead sang trang chi tiết đề cập để mở đúng post/comment/reply qua deep-link `/mentions/{postId}#comment-{commentId}`.
-   - Khôi phục tương tác mở chi tiết trên card lead: nội dung lead và nút xem chi tiết vẫn hoạt động khi tìm được mention nội bộ, kể cả khi bản ghi lead không có `url`.
+- **Lead card navigation & badge alignment (`/leads`)**
+  - Thu nhỏ badge logo nền tảng trong `LeadCard` bằng size `xs` riêng để cân đối với avatar khách hàng và không ảnh hưởng các màn hình Mentions/Detail.
+  - Cập nhật điều hướng từ Lead sang trang chi tiết đề cập để mở đúng post/comment/reply qua deep-link `/mentions/{postId}#comment-{commentId}`.
+  - Khôi phục tương tác mở chi tiết trên card lead: nội dung lead và nút xem chi tiết vẫn hoạt động khi tìm được mention nội bộ, kể cả khi bản ghi lead không có `url`.
 
 ## [Unreleased] - 2026-06-26
-  ### Fixed
-  - **Giao diện sáng/tối (Theme-aware UI)**:
-    - Khôi phục cơ chế tự động chuyển đổi logo cho các trang Auth (Đăng nhập, Đăng ký, Quên mật khẩu).
-    - Logo sẽ hiển thị `logo.png` khi bật chế độ tối (`dark theme`) và `logo-dark.png` khi bật chế độ sáng (`light theme`), đảm bảo độ tương phản tối ưu.
-    - Đồng bộ màu nền (`background`), màu chữ và các thành phần UI trong form Đăng nhập/Đăng ký để đồng nhất với theme của ứng dụng.
-  - **Tùy chỉnh Logo**:
-    - Tăng kích thước logo ở trang "Quên mật khẩu" từ `52px` lên `80px` để dễ nhìn hơn.
-     - Sửa lỗi `ReferenceError: handleGoogleLogin is not defined` trên trang Đăng nhập phát sinh sau quá trình refactor.
-   - **Sửa lỗi Code & Build**:
-     - Khắc phục lỗi cú pháp (Syntax Error) tại `RegisterForm.tsx` và `forgot-password/page.tsx` do quá trình thay thế mã không hoàn chỉnh.
-     - Giải quyết các xung đột merge (`merge conflicts`) phát sinh trong `TopNavBar.tsx` và `LoginForm.tsx` giúp ứng dụng biên dịch bình thường.
-     - Sửa lỗi khai báo trùng lặp biến `theme` tại `AboutLogoSection.tsx`.
+
+### Added
+
+- **Trang đăng ký (/register)**:
+  - Thêm tính năng xác thực tài khoản bằng mã OTP (gửi qua EmailJS).
+  - Thêm chức năng gửi lại mã OTP sau 30 giây (có bộ đếm ngược).
+  - Vô hiệu hóa các trường mật khẩu cho đến khi OTP được xác thực thành công.
+- **Trang báo cáo (/reports)**:
+  - Mở rộng chức năng xuất báo cáo, hỗ trợ xuất báo cáo ra nhiều nền tảng thay vì chỉ TikTok.
+
+### Fixed
+
+- **Trang quên mật khẩu (/forgot-password)**:
+  - Thêm thông báo lỗi khi nhập sai mã OTP.
+  - Thêm tính năng gửi lại mã OTP sau 30 giây.
+- **Trang đăng ký (/register)**:
+  - Khắc phục lỗi hydration ở thành phần `AtmosphereDots`.
+  - Khắc phục lỗi thiếu import `useEffect` và `emailjs`.
+
+### Fixed
+
+- **Giao diện sáng/tối (Theme-aware UI)**:
+  - Khôi phục cơ chế tự động chuyển đổi logo cho các trang Auth (Đăng nhập, Đăng ký, Quên mật khẩu).
+  - Logo sẽ hiển thị `logo.png` khi bật chế độ tối (`dark theme`) và `logo-dark.png` khi bật chế độ sáng (`light theme`), đảm bảo độ tương phản tối ưu.
+  - Đồng bộ màu nền (`background`), màu chữ và các thành phần UI trong form Đăng nhập/Đăng ký để đồng nhất với theme của ứng dụng.
+- **Tùy chỉnh Logo**:
+  - Tăng kích thước logo ở trang "Quên mật khẩu" từ `52px` lên `80px` để dễ nhìn hơn.
+  - Sửa lỗi `ReferenceError: handleGoogleLogin is not defined` trên trang Đăng nhập phát sinh sau quá trình refactor.
+- **Sửa lỗi Code & Build**:
+  - Khắc phục lỗi cú pháp (Syntax Error) tại `RegisterForm.tsx` và `forgot-password/page.tsx` do quá trình thay thế mã không hoàn chỉnh.
+  - Giải quyết các xung đột merge (`merge conflicts`) phát sinh trong `TopNavBar.tsx` và `LoginForm.tsx` giúp ứng dụng biên dịch bình thường.
+  - Sửa lỗi khai báo trùng lặp biến `theme` tại `AboutLogoSection.tsx`.
 
 ## Unreleased - 2026-06-22
 

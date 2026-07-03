@@ -6,6 +6,13 @@ import { useTranslation } from "react-i18next";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { useAlertStore } from "@/stores/alert.store";
 import { dbSecond } from "@/lib/firebase";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  getScopedBrandKey,
+  hasBusinessBrandScope,
+  isRecordInBrandScope,
+} from "@/lib/brandScope";
+import { canPerformAction } from "@/lib/rbac";
 import { collection, getDocs } from "firebase/firestore";
 import {
   Chart as ChartJS,
@@ -46,7 +53,7 @@ function normalizeBrandId(brand: string): string {
   if (b.includes("mixue")) return "mixue";
   if (b.includes("starbuck")) return "starbucks";
   if (b.includes("highland")) return "highland-coffee";
-  
+
   return b.replace(/[^a-z0-9]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
 }
 
@@ -57,7 +64,7 @@ function formatBrandName(brand: string): string {
   if (lower === "mixue") return "Mixue";
   if (lower.includes("starbuck")) return "Starbucks";
   if (lower.includes("highland")) return "Highland Coffee";
-  
+
   // Otherwise, clean up and capitalize each word
   return brand
     .split(/[-_\s]+/)
@@ -68,18 +75,18 @@ function formatBrandName(brand: string): string {
 // Helper function to append Chromium Scroll-to-Text Fragment target
 function getUrlWithTextFragment(url: string, text: string): string {
   if (!url || url === "#") return "#";
-  
+
   // Clear quotes, parentheses and other special characters that might break fragments
   const cleanText = text
     .replace(/["'“”`\[\]\(\)]/g, "")
     .trim();
-  
+
   if (!cleanText) return url;
-  
+
   // Take first sentence or first 60 characters to keep URL clean and unique
   const sentence = cleanText.split(/[.!?]/)[0];
   const fragment = sentence.length > 60 ? sentence.substring(0, 60).trim() : sentence.trim();
-  
+
   try {
     if (url.includes("#")) {
       if (url.includes(":~:text=")) {
@@ -99,7 +106,7 @@ function getFormattedSourceUrl(url: string, text: string): string {
 
   const lowerUrl = url.toLowerCase();
   const isYoutube = lowerUrl.includes("youtu.be") || lowerUrl.includes("youtube.com");
-  
+
   if (isYoutube) {
     // If the URL has a comment anchor like #comment_ID or #comment-ID
     const commentMatch = url.match(/#comment[_]([a-zA-Z0-9\-_]+)/) || url.match(/#comment[-]([a-zA-Z0-9\-_]+)/);
@@ -129,6 +136,13 @@ function getFormattedSourceUrl(url: string, text: string): string {
  * Quản lý cảnh báo khủng hoảng thương hiệu real-time
  */
 export default function AlertsPage() {
+  const { profile, loading: authLoading } = useAuth();
+  const scopedBrandKey = getScopedBrandKey(profile);
+  const canViewCrisisQueue = canPerformAction(profile, "view_crisis_queue");
+  const canUpdateCrisisStatus =
+    hasBusinessBrandScope(profile) &&
+    canPerformAction(profile, "update_crisis_status");
+  const brandFilterLocked = Boolean(profile && profile.role !== "admin");
   const { t, i18n } = useTranslation();
   const [spikeValue, setSpikeValue] = useState(40);
   const [reachValue, setReachValue] = useState(105000);
@@ -188,9 +202,41 @@ export default function AlertsPage() {
 
   // Load alerts on mount
   useEffect(() => {
-    setFilters({ status: "all" });
-    fetchAlerts();
-  }, []);
+    if (authLoading || !canViewCrisisQueue) return;
+    fetchAlerts(scopedBrandKey);
+  }, [authLoading, canViewCrisisQueue, scopedBrandKey, fetchAlerts]);
+
+  useEffect(() => {
+    if (!brandFilterLocked || brands.length === 0) return;
+    if (filters.brand !== "all") return;
+    setFilters({ brand: brands[0] });
+  }, [brandFilterLocked, brands, filters.brand, setFilters]);
+
+  if (!authLoading && !canViewCrisisQueue) {
+    return (
+      <div className="p-4 md:p-8">
+        <div className="glass-card p-8 rounded-xl border border-[var(--color-border)]">
+          <h1 className="text-xl font-bold text-[var(--color-text-primary)]">Khong co quyen truy cap</h1>
+          <p className="text-sm text-[var(--color-text-secondary)] mt-2">
+            Vai tro hien tai khong duoc phep truy cap hang doi xu ly khung hoang.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!authLoading && !hasBusinessBrandScope(profile)) {
+    return (
+      <div className="p-4 md:p-8">
+        <div className="glass-card p-8 rounded-xl border border-[var(--color-border)]">
+          <h1 className="text-xl font-bold text-[var(--color-text-primary)]">Chua duoc gan thuong hieu</h1>
+          <p className="text-sm text-[var(--color-text-secondary)] mt-2">
+            Tai khoan can duoc gan brandId hoac brandName truoc khi xu ly canh bao.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // Calculate counts for tabs based on current filters (brand, severity, signal)
   const newCountForTab = alerts.filter((alert) => {
@@ -365,7 +411,7 @@ export default function AlertsPage() {
           </p>
         </div>
         <button
-          onClick={() => fetchAlerts()}
+          onClick={() => fetchAlerts(scopedBrandKey)}
           disabled={isLoading}
           className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-[var(--color-brand)]/10 border border-[var(--color-brand)]/20 text-[var(--color-brand)] text-xs font-bold hover:bg-[var(--color-brand)]/15 transition-all flex items-center justify-center gap-1.5 active:scale-95"
         >
@@ -408,8 +454,8 @@ export default function AlertsPage() {
           <span className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-widest font-bold">{t("alerts.stats.sla")}</span>
           <div className="flex items-end justify-between gap-2">
             <span className="text-3xl md:text-4xl font-black text-[var(--color-text-primary)]">{slaText}</span>
-            <span className={isSlaOk 
-              ? "text-[var(--color-success)] bg-[var(--color-success-subtle)] text-[9px] px-2 py-1 rounded-full font-bold border border-[var(--color-success)]/30" 
+            <span className={isSlaOk
+              ? "text-[var(--color-success)] bg-[var(--color-success-subtle)] text-[9px] px-2 py-1 rounded-full font-bold border border-[var(--color-success)]/30"
               : "text-[var(--color-error)] bg-[var(--color-error-subtle)] text-[9px] px-2 py-1 rounded-full font-bold border border-[var(--color-error)]/30"
             }>
               {isSlaOk ? t("alerts.stats.slaMet") : t("alerts.stats.slaOverdue")}
@@ -422,55 +468,49 @@ export default function AlertsPage() {
       <div className="flex border-b border-[var(--color-border)] gap-2 pb-px overflow-x-auto scrollbar-none">
         <button
           onClick={() => setActiveTab("new")}
-          className={`flex items-center gap-2 px-6 py-3 font-bold text-sm border-b-2 transition-all duration-300 ${
-            activeTab === "new"
+          className={`flex items-center gap-2 px-6 py-3 font-bold text-sm border-b-2 transition-all duration-300 ${activeTab === "new"
               ? "border-[var(--color-brand)] text-[var(--color-brand)] bg-[var(--color-brand-subtle)]/30 rounded-t-xl"
               : "border-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)]/50 rounded-t-xl"
-          }`}
+            }`}
         >
           <span className="material-symbols-outlined text-base">notifications_active</span>
           <span>{t("alerts.tabs.new", { defaultValue: "Chưa giải quyết" })}</span>
-          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-            activeTab === "new"
+          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${activeTab === "new"
               ? "bg-[var(--color-brand)] text-white"
               : "bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]"
-          }`}>
+            }`}>
             {newCountForTab}
           </span>
         </button>
         <button
           onClick={() => setActiveTab("resolving")}
-          className={`flex items-center gap-2 px-6 py-3 font-bold text-sm border-b-2 transition-all duration-300 ${
-            activeTab === "resolving"
+          className={`flex items-center gap-2 px-6 py-3 font-bold text-sm border-b-2 transition-all duration-300 ${activeTab === "resolving"
               ? "border-[var(--color-brand)] text-[var(--color-brand)] bg-[var(--color-brand-subtle)]/30 rounded-t-xl"
               : "border-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)]/50 rounded-t-xl"
-          }`}
+            }`}
         >
           <span className="material-symbols-outlined text-base">hourglass_top</span>
           <span>{t("alerts.tabs.resolving", { defaultValue: "Đang giải quyết" })}</span>
-          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-            activeTab === "resolving"
+          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${activeTab === "resolving"
               ? "bg-[var(--color-brand)] text-white"
               : "bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]"
-          }`}>
+            }`}>
             {resolvingCountForTab}
           </span>
         </button>
         <button
           onClick={() => setActiveTab("resolved")}
-          className={`flex items-center gap-2 px-6 py-3 font-bold text-sm border-b-2 transition-all duration-300 ${
-            activeTab === "resolved"
+          className={`flex items-center gap-2 px-6 py-3 font-bold text-sm border-b-2 transition-all duration-300 ${activeTab === "resolved"
               ? "border-[var(--color-brand)] text-[var(--color-brand)] bg-[var(--color-brand-subtle)]/30 rounded-t-xl"
               : "border-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)]/50 rounded-t-xl"
-          }`}
+            }`}
         >
           <span className="material-symbols-outlined text-base">check_circle</span>
           <span>{t("alerts.tabs.resolved", { defaultValue: "Đã giải quyết" })}</span>
-          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-            activeTab === "resolved"
+          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${activeTab === "resolved"
               ? "bg-[var(--color-brand)] text-white"
               : "bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]"
-          }`}>
+            }`}>
             {resolvedCountForTab}
           </span>
         </button>
@@ -482,9 +522,12 @@ export default function AlertsPage() {
           <select
             value={filters.brand}
             onChange={(e) => setFilters({ brand: e.target.value })}
-            className="w-full select-app border border-[var(--color-border)] rounded-xl text-xs md:text-sm py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 font-medium"
+            disabled={brandFilterLocked}
+            className={`col-span-2 lg:col-span-1 w-full select-app border border-[var(--color-border)] rounded-xl text-xs md:text-sm py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 font-medium ${brandFilterLocked ? "opacity-70 cursor-not-allowed" : ""}`}
           >
-            <option value="all" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("alerts.filters.brandAll")}</option>
+            {!brandFilterLocked && (
+              <option value="all" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("alerts.filters.brandAll")}</option>
+            )}
             {brands.map((b) => (
               <option key={b} value={b} style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
                 {formatBrandName(b)}
@@ -533,7 +576,7 @@ export default function AlertsPage() {
             <p className="text-sm font-bold text-error">{t("alerts.list.error")}</p>
             <p className="text-xs text-on-surface-variant text-center max-w-md">{error}</p>
             <button
-              onClick={() => fetchAlerts()}
+              onClick={() => fetchAlerts(scopedBrandKey)}
               className="px-4 py-2 bg-primary text-white rounded-xl text-xs font-bold hover:opacity-90 active:scale-95 transition-all"
             >
               {t("alerts.list.retry")}
@@ -616,8 +659,8 @@ export default function AlertsPage() {
             const evidenceItems = [
               {
                 icon: source === 'facebook' || source === 'fb' ? 'public' :
-                      source === 'tiktok' || source === 'tt' ? 'movie' :
-                      source === 'youtube' || source === 'yt' ? 'video_library' : 'news',
+                  source === 'tiktok' || source === 'tt' ? 'movie' :
+                    source === 'youtube' || source === 'yt' ? 'video_library' : 'news',
                 text: alert.text,
                 title: alert.title || t("alerts.evidence.fallbackTitle", { brand: formatBrandName(alert.brand) }),
                 author: alert.author || t("alerts.card.anonymous"),
@@ -702,14 +745,13 @@ export default function AlertsPage() {
                     <div className="flex items-center gap-3 overflow-x-auto">
                       {[
                         { label: 'Telegram', icon: 'send', ok: true },
-                        { label: 'Email',    icon: 'mail', ok: true },
-                        { label: 'Zalo',     icon: 'chat', ok: false },
+                        { label: 'Email', icon: 'mail', ok: true },
+                        { label: 'Zalo', icon: 'chat', ok: false },
                       ].map((ch) => (
                         <div
                           key={ch.label}
-                          className={`flex items-center gap-1 flex-shrink-0 ${
-                            ch.ok ? 'text-[var(--color-success)]' : 'text-[var(--color-text-muted)] opacity-50'
-                          }`}
+                          className={`flex items-center gap-1 flex-shrink-0 ${ch.ok ? 'text-[var(--color-success)]' : 'text-[var(--color-text-muted)] opacity-50'
+                            }`}
                         >
                           <span className="material-symbols-outlined text-[14px]">{ch.icon}</span>
                           <span className="text-[10px] font-bold uppercase">{ch.label}</span>
@@ -718,11 +760,19 @@ export default function AlertsPage() {
                     </div>
 
                     {/* Action buttons */}
-                    <div className="grid grid-cols-2 sm:flex gap-2 items-center">
+                    <div className="grid grid-cols-3 sm:flex gap-2 items-center">
+                      {canUpdateCrisisStatus && alert.status === "new" && (
+                        <button
+                          onClick={() => updateAlertStatus(alert.id, "acknowledged", profile)}
+                          className="px-3 py-2.5 rounded-xl border border-[var(--color-border)] text-[11px] font-bold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)] transition-all"
+                        >
+                          {t("alerts.card.acknowledge")}
+                        </button>
+                      )}
                       {alert.status !== "resolved" ? (
                         alert.status === "resolving" ? (
                           <>
-                            <button 
+                            <button
                               onClick={() => setResolvingAlert(alert)}
                               className="px-3 py-2.5 rounded-xl border border-[var(--color-brand)]/30 text-[var(--color-brand)] text-[11px] font-bold hover:bg-[var(--color-brand-subtle)] transition-all cursor-pointer flex items-center gap-1"
                             >
@@ -739,7 +789,7 @@ export default function AlertsPage() {
                           </>
                         ) : (
                           <>
-                            <button 
+                            <button
                               onClick={() => setTrendAlert(alert)}
                               className="px-3 py-2.5 rounded-xl border border-[var(--color-brand)]/30 text-[var(--color-brand)] text-[11px] font-bold hover:bg-[var(--color-brand-subtle)] transition-all cursor-pointer flex items-center gap-1"
                             >
@@ -757,28 +807,22 @@ export default function AlertsPage() {
                         )
                       ) : (
                         <>
-                          <button 
+                          <button
                             onClick={() => setViewingHistoryAlert(alert)}
                             className="px-3 py-2.5 rounded-xl border border-[var(--color-brand)]/30 text-[var(--color-brand)] text-[11px] font-bold hover:bg-[var(--color-brand-subtle)] transition-all cursor-pointer flex items-center gap-1"
                           >
                             <span className="material-symbols-outlined text-[13px]">history</span>
                             {t("alerts.card.viewHistory", { defaultValue: "Xem lịch sử" })}
                           </button>
-                          <button 
-                            onClick={() => {
-                              const nextStatus = alert.resolution_history && alert.resolution_history.length > 0 ? "resolving" : "new";
-                              updateAlertStatus(alert.id, nextStatus);
-                            }}
-                            title="Khôi phục trạng thái xử lý"
-                            className="px-3 py-2.5 rounded-xl border border-[var(--color-border)] text-[var(--color-text-secondary)] text-[11px] font-bold hover:bg-[var(--color-bg-surface-raised)] transition-all cursor-pointer flex items-center gap-1 active:scale-95"
-                          >
-                            <span className="material-symbols-outlined text-[13px]">undo</span>
-                            {t("alerts.card.restore", { defaultValue: "Khôi phục" })}
-                          </button>
-                          <span className="text-[var(--color-success)] font-bold text-xs flex items-center gap-1 bg-[var(--color-success-subtle)] border border-[var(--color-success)]/30 px-3 py-1.5 rounded-xl">
-                            <span className="material-symbols-outlined text-sm">check_circle</span>
-                            {t("alerts.card.resolved")}
-                          </span>
+                          {canUpdateCrisisStatus && (
+                            <button
+                              onClick={() => updateAlertStatus(alert.id, "resolved", profile)}
+                              className="px-3 py-2.5 rounded-xl bg-[var(--color-brand)] text-white text-[11px] font-bold hover:bg-[var(--color-brand-hover)] active:scale-95 transition-all shadow-sm"
+                            >
+                              <span className="material-symbols-outlined text-[13px]">undo</span>
+                              {t("alerts.card.restore", { defaultValue: "Khôi phục" })}
+                            </button>
+                          )}
                         </>
                       )}
                     </div>
@@ -863,7 +907,7 @@ export default function AlertsPage() {
               <div className="pt-4 border-t border-[var(--color-border)]">
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-xs font-black text-[var(--color-text-primary)] uppercase tracking-wider">{t("alerts.config.keywordTitle")}</p>
-                  <button 
+                  <button
                     onClick={() => setShowAddKeywordInput(!showAddKeywordInput)}
                     className="text-[10px] font-black text-[var(--color-brand)] border border-[var(--color-brand-border)] px-2.5 py-1 rounded-lg hover:bg-[var(--color-brand-subtle)] transition-colors"
                   >
@@ -898,7 +942,7 @@ export default function AlertsPage() {
                   {keywords.map((kw) => (
                     <span key={kw} className="inline-flex items-center gap-1.5 rounded-xl bg-[var(--color-bg-surface-raised)] px-3 py-1.5 text-xs font-bold border border-[var(--color-border)] shadow-sm text-[var(--color-text-primary)]">
                       {kw}
-                      <span 
+                      <span
                         onClick={() => setKeywords(keywords.filter(k => k !== kw))}
                         className="material-symbols-outlined text-[13px] cursor-pointer hover:text-[var(--color-error)] transition-colors"
                       >
@@ -925,10 +969,10 @@ export default function AlertsPage() {
 
             <div className="space-y-3">
               {[
-                { name: t("alerts.config.channels.telegram.name"), status: t("alerts.config.channels.telegram.status"), enabled: true,  icon: 'send',          color: 'text-[#0088cc]' },
-                { name: t("alerts.config.channels.zalo.name"),     status: t("alerts.config.channels.zalo.status"),     enabled: false, icon: 'chat',          color: 'text-[#0068ff]' },
-                { name: t("alerts.config.channels.email.name"),    status: t("alerts.config.channels.email.status"),    enabled: true,  icon: 'mail',          color: 'text-[var(--color-brand)]' },
-                { name: t("alerts.config.channels.push.name"),     status: t("alerts.config.channels.push.status"),     enabled: true,  icon: 'notifications', color: 'text-[var(--color-warning)]' },
+                { name: t("alerts.config.channels.telegram.name"), status: t("alerts.config.channels.telegram.status"), enabled: true, icon: 'send', color: 'text-[#0088cc]' },
+                { name: t("alerts.config.channels.zalo.name"), status: t("alerts.config.channels.zalo.status"), enabled: false, icon: 'chat', color: 'text-[#0068ff]' },
+                { name: t("alerts.config.channels.email.name"), status: t("alerts.config.channels.email.status"), enabled: true, icon: 'mail', color: 'text-[var(--color-brand)]' },
+                { name: t("alerts.config.channels.push.name"), status: t("alerts.config.channels.push.status"), enabled: true, icon: 'notifications', color: 'text-[var(--color-warning)]' },
               ].map((ch) => (
                 <div key={ch.name} className="flex items-center justify-between gap-3 p-3 md:p-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] hover:bg-[var(--color-bg-surface-raised)] transition-all">
                   <div className="flex items-center gap-3 min-w-0">
@@ -955,7 +999,7 @@ export default function AlertsPage() {
           <button className="w-full sm:w-auto px-8 py-3 rounded-2xl font-bold text-sm text-[var(--color-text-secondary)] bg-[var(--color-bg-surface-raised)] hover:bg-[var(--color-bg-surface-high)] border border-[var(--color-border)] transition-all order-2 sm:order-1">
             {t("alerts.config.cancel")}
           </button>
-          <button 
+          <button
             onClick={handleSaveConfig}
             className="w-full sm:w-auto px-8 py-3 rounded-2xl font-bold text-sm bg-[var(--color-brand)] text-white shadow-lg hover:bg-[var(--color-brand-hover)] active:scale-95 transition-all order-1 sm:order-2"
           >
@@ -968,11 +1012,11 @@ export default function AlertsPage() {
       {selectedEvidence && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           {/* Backdrop */}
-          <div 
+          <div
             className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
             onClick={() => setSelectedEvidence(null)}
           />
-          
+
           {/* Modal Container */}
           <div className="glass-card w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl relative z-10 border border-app/30 flex flex-col max-h-[90vh] bg-app-surface">
             {/* Header */}
@@ -981,7 +1025,7 @@ export default function AlertsPage() {
                 <span className="material-symbols-outlined text-app-brand text-xl">auto_awesome</span>
                 <h3 className="font-bold text-app text-base md:text-lg">{t("alerts.evidence.title")}</h3>
               </div>
-              <button 
+              <button
                 onClick={() => setSelectedEvidence(null)}
                 className="w-8 h-8 rounded-full flex items-center justify-center text-app-text-secondary hover:bg-app-surface-raised transition-colors"
               >
@@ -993,12 +1037,11 @@ export default function AlertsPage() {
             <div className="p-4 md:p-6 space-y-5 overflow-y-auto">
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${
-                    selectedEvidence.source === 'facebook' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' :
-                    selectedEvidence.source === 'tiktok' ? 'bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-400' :
-                    selectedEvidence.source === 'youtube' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' :
-                    'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-                  }`}>
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${selectedEvidence.source === 'facebook' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' :
+                      selectedEvidence.source === 'tiktok' ? 'bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-400' :
+                        selectedEvidence.source === 'youtube' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' :
+                          'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                    }`}>
                     {selectedEvidence.source === 'news'
                       ? t("dashboard.filters.news", { defaultValue: "News" }).toUpperCase()
                       : selectedEvidence.source.toUpperCase()}
@@ -1035,20 +1078,19 @@ export default function AlertsPage() {
 
             {/* Footer */}
             <div className="p-4 border-t border-app/30 flex justify-end gap-2 bg-app-surface-raised/20">
-              <button 
+              <button
                 onClick={() => setSelectedEvidence(null)}
                 className="px-4 py-2 rounded-xl text-xs font-bold text-app-text-secondary bg-app-surface-raised hover:bg-app-surface-high transition-all active:scale-95 cursor-pointer"
               >
                 {t("alerts.evidence.close")}
               </button>
               {selectedEvidence.url && selectedEvidence.url !== "#" ? (
-                <button 
+                <button
                   onClick={() => handleAccessSource(selectedEvidence.url, selectedEvidence.text)}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer active:scale-95 ${
-                    copied 
-                      ? 'bg-green-600 hover:bg-green-700 text-white' 
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer active:scale-95 ${copied
+                      ? 'bg-green-600 hover:bg-green-700 text-white'
                       : 'bg-app-brand text-white hover:opacity-90'
-                  }`}
+                    }`}
                 >
                   <span className="material-symbols-outlined text-[14px]">
                     {copied ? 'done' : 'open_in_new'}
@@ -1071,9 +1113,9 @@ export default function AlertsPage() {
 
       {/* ── Resolution Modal ── */}
       {resolvingAlert && (
-        <ResolutionModal 
-          alert={resolvingAlert} 
-          onClose={() => setResolvingAlert(null)} 
+        <ResolutionModal
+          alert={resolvingAlert}
+          onClose={() => setResolvingAlert(null)}
           onSave={async (id, note, imageUrl, targetStatus = "resolving") => {
             await updateAlertStatus(id, targetStatus, { note, image_url: imageUrl });
           }}
@@ -1082,9 +1124,9 @@ export default function AlertsPage() {
 
       {/* ── History Modal ── */}
       {viewingHistoryAlert && (
-        <HistoryModal 
-          alert={viewingHistoryAlert} 
-          onClose={() => setViewingHistoryAlert(null)} 
+        <HistoryModal
+          alert={viewingHistoryAlert}
+          onClose={() => setViewingHistoryAlert(null)}
         />
       )}
 
@@ -1122,6 +1164,8 @@ interface TrendModalProps {
 
 function TrendModal({ alert, onClose }: TrendModalProps) {
   const { t, i18n } = useTranslation();
+  const { profile } = useAuth();
+  const scopedBrandKey = getScopedBrandKey(profile);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<any>(null);
   const router = useRouter();
@@ -1136,7 +1180,7 @@ function TrendModal({ alert, onClose }: TrendModalProps) {
     const dates = [];
     const values = [];
     const endDate = new Date();
-    
+
     // We generate 7 days of data
     for (let i = 6; i >= 0; i--) {
       const d = new Date(endDate);
@@ -1147,7 +1191,7 @@ function TrendModal({ alert, onClose }: TrendModalProps) {
           month: "2-digit",
         })
       );
-      
+
       if (i === 0) {
         // Today - Crisis Spike!
         const multiplier = alert.severity === "critical" ? 8 : alert.severity === "high" ? 5 : 3;
@@ -1160,7 +1204,7 @@ function TrendModal({ alert, onClose }: TrendModalProps) {
         values.push(Math.floor(Math.random() * 5) + 3);
       }
     }
-    
+
     return { dates, values };
   };
 
@@ -1189,7 +1233,7 @@ function TrendModal({ alert, onClose }: TrendModalProps) {
                 topic: String(firstTopic || d.topic || ""),
                 date: new Date(parseDateToISOString(d.labeled_at || d.uploaded_at || d.posted_at || d.created_at))
               };
-            });
+            }).filter((doc) => isRecordInBrandScope({ brand: doc.brand }, scopedBrandKey));
 
             const targetBrand = alert.brand.toLowerCase().trim();
             const targetTopic = alert.topic.toLowerCase().trim();
@@ -1350,11 +1394,11 @@ function TrendModal({ alert, onClose }: TrendModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
-      <div 
+      <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
         onClick={onClose}
       />
-      
+
       {/* Modal Container */}
       <div className="glass-card w-full max-w-xl rounded-2xl overflow-hidden shadow-2xl relative z-10 border border-app/30 flex flex-col max-h-[90vh] bg-app-surface">
         {/* Header */}
@@ -1363,7 +1407,7 @@ function TrendModal({ alert, onClose }: TrendModalProps) {
             <span className="material-symbols-outlined text-app-brand text-xl">trending_up</span>
             <h3 className="font-bold text-app text-base md:text-lg">{t("alerts.modal.trendTitle")}</h3>
           </div>
-          <button 
+          <button
             onClick={onClose}
             className="w-8 h-8 rounded-full flex items-center justify-center text-app-text-secondary hover:bg-app-surface-raised transition-colors"
           >
@@ -1405,13 +1449,13 @@ function TrendModal({ alert, onClose }: TrendModalProps) {
 
         {/* Footer */}
         <div className="p-4 border-t border-app/30 flex justify-end gap-2 bg-app-surface-raised/20">
-          <button 
+          <button
             onClick={onClose}
             className="px-4 py-2.5 rounded-xl text-xs font-bold text-app-text-secondary bg-app-surface-raised hover:bg-app-surface-high transition-all active:scale-95 cursor-pointer"
           >
             {t("alerts.modal.close")}
           </button>
-          <button 
+          <button
             onClick={handleNavigateToMentions}
             className="px-4 py-2.5 rounded-xl text-xs font-bold bg-app-brand text-white hover:opacity-90 active:scale-95 transition-all flex items-center gap-1 shadow-sm cursor-pointer"
           >
@@ -1478,11 +1522,11 @@ function ResolutionModal({ alert, onClose, onSave }: ResolutionModalProps) {
       img.onload = () => {
         const canvas = document.createElement("canvas");
         const ctx = canvas.getContext("2d");
-        
+
         const MAX_DIM = 600;
         let width = img.width;
         let height = img.height;
-        
+
         if (width > height) {
           if (width > MAX_DIM) {
             height *= MAX_DIM / width;
@@ -1494,11 +1538,11 @@ function ResolutionModal({ alert, onClose, onSave }: ResolutionModalProps) {
             height = MAX_DIM;
           }
         }
-        
+
         canvas.width = width;
         canvas.height = height;
         ctx?.drawImage(img, 0, 0, width, height);
-        
+
         const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7);
         setImagePreview(compressedBase64);
       };
@@ -1531,11 +1575,11 @@ function ResolutionModal({ alert, onClose, onSave }: ResolutionModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div 
+      <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
         onClick={onClose}
       />
-      
+
       <div className="glass-card w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl relative z-10 border border-app/30 flex flex-col max-h-[90vh] bg-app-surface">
         {/* Header */}
         <div className="p-4 md:p-6 border-b border-app/30 flex items-center justify-between">
@@ -1545,7 +1589,7 @@ function ResolutionModal({ alert, onClose, onSave }: ResolutionModalProps) {
               {t("alerts.resolution.title", { attempt: attemptNumber, defaultValue: `Giải quyết Cảnh báo (Lần ${attemptNumber})` })}
             </h3>
           </div>
-          <button 
+          <button
             type="button"
             onClick={onClose}
             className="w-8 h-8 rounded-full flex items-center justify-center text-app-text-secondary hover:bg-app-surface-raised transition-colors"
@@ -1567,7 +1611,7 @@ function ResolutionModal({ alert, onClose, onSave }: ResolutionModalProps) {
                 <span className="text-sm font-bold text-[var(--color-text-primary)]">{alert.author || t("alerts.card.anonymous", { defaultValue: "Ẩn danh" })}</span>
                 <span className="text-xs text-[var(--color-text-secondary)]">({alert.source})</span>
               </div>
-              <a 
+              <a
                 href={profileUrl}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -1605,9 +1649,9 @@ function ResolutionModal({ alert, onClose, onSave }: ResolutionModalProps) {
                       <p className="text-[var(--color-text-secondary)] whitespace-pre-wrap">{item.note}</p>
                       {item.image_url && (
                         <div className="mt-1 w-24 h-16 rounded overflow-hidden border border-[var(--color-border)] bg-black/5 flex items-center justify-center">
-                          <img 
-                            src={item.image_url} 
-                            alt={`Attempt ${idx + 1}`} 
+                          <img
+                            src={item.image_url}
+                            alt={`Attempt ${idx + 1}`}
                             className="max-h-full max-w-full object-contain cursor-zoom-in"
                             onClick={() => window.open(item.image_url, '_blank')}
                           />
@@ -1639,19 +1683,19 @@ function ResolutionModal({ alert, onClose, onSave }: ResolutionModalProps) {
             <label className="text-xs font-bold text-[var(--color-text-primary)]">
               {t("alerts.resolution.imageLabel", { defaultValue: "Hình ảnh bằng chứng (Tùy chọn)" })}
             </label>
-            
+
             <div className="flex items-center gap-3">
               <label className="flex items-center justify-center gap-1.5 px-4 py-2 border border-dashed border-[var(--color-brand)]/40 rounded-xl bg-[var(--color-brand-subtle)]/10 text-[var(--color-brand)] text-xs font-bold hover:bg-[var(--color-brand-subtle)]/20 transition-all cursor-pointer">
                 <span className="material-symbols-outlined text-sm">upload_file</span>
                 {t("alerts.resolution.chooseImage", { defaultValue: "Chọn ảnh chụp màn hình" })}
-                <input 
-                  type="file" 
-                  accept="image/*" 
-                  className="hidden" 
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
                   onChange={handleImageChange}
                 />
               </label>
-              
+
               {imageFile && (
                 <span className="text-xs text-[var(--color-text-secondary)] truncate max-w-[200px]">
                   {imageFile.name}
@@ -1661,9 +1705,9 @@ function ResolutionModal({ alert, onClose, onSave }: ResolutionModalProps) {
 
             {imagePreview && (
               <div className="relative w-full max-h-48 overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] flex items-center justify-center p-2">
-                <img 
-                  src={imagePreview} 
-                  alt="Evidence preview" 
+                <img
+                  src={imagePreview}
+                  alt="Evidence preview"
                   className="max-h-40 max-w-full object-contain rounded-lg"
                 />
                 <button
@@ -1690,7 +1734,7 @@ function ResolutionModal({ alert, onClose, onSave }: ResolutionModalProps) {
 
         {/* Footer */}
         <div className="p-4 border-t border-app/30 flex justify-end gap-2 bg-app-surface-raised/20">
-          <button 
+          <button
             type="button"
             disabled={isSaving}
             onClick={onClose}
@@ -1698,26 +1742,26 @@ function ResolutionModal({ alert, onClose, onSave }: ResolutionModalProps) {
           >
             {t("alerts.resolution.close", { defaultValue: "Đóng" })}
           </button>
-          
-          <button 
+
+          <button
             type="button"
             disabled={isSaving}
             onClick={() => handleAction("resolving")}
             className="px-4 py-2.5 rounded-xl text-xs font-bold bg-[var(--color-bg-surface-raised)] border border-[var(--color-brand)]/30 text-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)] active:scale-95 transition-all flex items-center gap-1 shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isSaving 
-              ? t("alerts.resolution.saving", { defaultValue: "Đang lưu..." }) 
+            {isSaving
+              ? t("alerts.resolution.saving", { defaultValue: "Đang lưu..." })
               : t("alerts.resolution.saveProgress", { defaultValue: "Lưu tiến độ" })}
           </button>
 
-          <button 
+          <button
             type="button"
             disabled={isSaving}
             onClick={() => handleAction("resolved")}
             className="px-5 py-2.5 rounded-xl text-xs font-bold bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand-hover)] active:scale-95 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isSaving 
-              ? t("alerts.resolution.saving", { defaultValue: "Đang lưu..." }) 
+            {isSaving
+              ? t("alerts.resolution.saving", { defaultValue: "Đang lưu..." })
               : t("alerts.resolution.complete", { defaultValue: "Giải quyết xong" })}
           </button>
         </div>
@@ -1734,16 +1778,16 @@ interface HistoryModalProps {
 
 function HistoryModal({ alert, onClose }: HistoryModalProps) {
   const { t } = useTranslation();
-  
+
   const historyList = alert.resolution_history || [];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div 
+      <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
         onClick={onClose}
       />
-      
+
       <div className="glass-card w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl relative z-10 border border-app/30 flex flex-col max-h-[90vh] bg-app-surface">
         <div className="p-4 md:p-6 border-b border-app/30 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -1752,7 +1796,7 @@ function HistoryModal({ alert, onClose }: HistoryModalProps) {
               {t("alerts.history.title", { defaultValue: "Lịch sử giải quyết" })}
             </h3>
           </div>
-          <button 
+          <button
             onClick={onClose}
             className="w-8 h-8 rounded-full flex items-center justify-center text-app-text-secondary hover:bg-app-surface-raised transition-colors"
           >
@@ -1811,9 +1855,9 @@ function HistoryModal({ alert, onClose }: HistoryModalProps) {
 
                     {item.image_url && (
                       <div className="mt-2 w-full max-h-48 overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] flex items-center justify-center p-2">
-                        <img 
-                          src={item.image_url} 
-                          alt={`Evidence attempt ${idx + 1}`} 
+                        <img
+                          src={item.image_url}
+                          alt={`Evidence attempt ${idx + 1}`}
                           className="max-h-40 max-w-full object-contain rounded-lg"
                         />
                       </div>
@@ -1826,7 +1870,7 @@ function HistoryModal({ alert, onClose }: HistoryModalProps) {
         </div>
 
         <div className="p-4 border-t border-app/30 flex justify-end bg-app-surface-raised/20">
-          <button 
+          <button
             onClick={onClose}
             className="px-5 py-2 rounded-xl text-xs font-bold text-app-text-secondary bg-app-surface-raised hover:bg-app-surface-high transition-all active:scale-95 cursor-pointer"
           >

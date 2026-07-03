@@ -5,6 +5,9 @@ import { useTranslation } from "react-i18next";
 import { useRouter } from "next/navigation";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { PLATFORM_META } from "@/lib/services/dashboard";
+import { useAuth } from "@/hooks/useAuth";
+import { canPerformAction } from "@/lib/rbac";
+import { isSameBrandScope } from "@/lib/brandScope";
 import {
   resolveMentionDetailTarget,
   type MentionDetailTarget,
@@ -55,7 +58,13 @@ const STATUS_META: Record<
 export function LeadCard({ lead, currentTime }: LeadCardProps) {
   const { t, i18n } = useTranslation();
   const router = useRouter();
+  const { profile } = useAuth();
   const { mentions, updateLeadDetails } = useDashboardStore();
+  const leadInScope = isSameBrandScope(profile, lead);
+  const canEditLead =
+    leadInScope && canPerformAction(profile, "update_lead_details");
+  const canUpdateLeadStatus =
+    leadInScope && canPerformAction(profile, "update_lead_status");
   const mentionById = useMemo(
     () => new Map<string, Mention>(mentions.map((item) => [item.id, item])),
     [mentions],
@@ -96,6 +105,11 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
   // Handle direct contact action
   const handleContactAction = async (channel: string, link: string) => {
     try {
+      if (!canEditLead) {
+        setSaveError("Ban khong co quyen cap nhat lead nay.");
+        return;
+      }
+
       setIsSaving(true);
       setSaveError(null);
 
@@ -109,7 +123,7 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
         updatedData.status = "processing";
       }
 
-      await updateLeadDetails(lead.id, updatedData);
+      await updateLeadDetails(lead.id, updatedData, profile);
 
       // Open contact link in new tab
       window.open(link, "_blank");
@@ -124,9 +138,14 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
   // Status select changes
   const handleStatusChange = async (newStatus: Lead["status"]) => {
     try {
+      if (!canUpdateLeadStatus) {
+        setSaveError("Ban khong co quyen cap nhat trang thai lead nay.");
+        return;
+      }
+
       setIsSaving(true);
       setSaveError(null);
-      await updateLeadDetails(lead.id, { status: newStatus });
+      await updateLeadDetails(lead.id, { status: newStatus }, profile);
     } catch (err) {
       setSaveError(t("leads.errors.status"));
       console.error(err);
@@ -138,9 +157,14 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
   // Notes update
   const handleSaveNote = async () => {
     try {
+      if (!canEditLead) {
+        setSaveError("Ban khong co quyen cap nhat lead nay.");
+        return;
+      }
+
       setIsSavingNote(true);
       setSaveError(null);
-      await updateLeadDetails(lead.id, { notes: noteText });
+      await updateLeadDetails(lead.id, { notes: noteText }, profile);
       setIsEditingNote(false);
       setShowSaveSuccess(true);
       setTimeout(() => setShowSaveSuccess(false), 2000);
@@ -626,11 +650,11 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
             <div className="relative">
               <select
                 value={lead.status}
-                disabled={isSaving}
+                disabled={isSaving || !canUpdateLeadStatus}
                 onChange={(e) =>
                   handleStatusChange(e.target.value as Lead["status"])
                 }
-                className={`appearance-none pl-3 pr-8 py-1.5 border rounded-full text-xs font-bold focus:ring-1 outline-none transition-all cursor-pointer shadow-sm ${statusInfo.bg} ${statusInfo.text} ${isSaving ? "opacity-50 cursor-not-allowed" : ""}`}
+                className={`appearance-none pl-3 pr-8 py-1.5 border rounded-full text-xs font-bold focus:ring-1 outline-none transition-all cursor-pointer shadow-sm ${statusInfo.bg} ${statusInfo.text} ${isSaving || !canUpdateLeadStatus ? "opacity-50 cursor-not-allowed" : ""}`}
                 style={{ backgroundColor: "var(--color-bg-surface)" }}
               >
                 <option
@@ -696,7 +720,7 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
                 onClick={() =>
                   handleContactAction("Zalo", `https://zalo.me/${lead.zalo_id}`)
                 }
-                disabled={isSaving}
+                disabled={isSaving || !canEditLead}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0068ff]/10 hover:bg-[#0068ff]/20 text-[#0068ff] border border-[#0068ff]/20 rounded-lg text-xs font-bold transition-all"
                 title={t("leads.card.zaloTooltip")}
               >
@@ -716,7 +740,7 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
                     `https://m.me/${lead.messenger_id}`,
                   )
                 }
-                disabled={isSaving}
+                disabled={isSaving || !canEditLead}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0084FF]/10 hover:bg-[#0084FF]/20 text-[#0084FF] border border-[#0084FF]/20 rounded-lg text-xs font-bold transition-all"
                 title={t("leads.card.messengerTooltip")}
               >
@@ -733,7 +757,7 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
                 onClick={() =>
                   handleContactAction("Email", `mailto:${lead.email}`)
                 }
-                disabled={isSaving}
+                disabled={isSaving || !canEditLead}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--color-info-subtle)] hover:bg-[var(--color-info)]/20 text-[var(--color-info)] border border-[var(--color-info)]/30 rounded-lg text-xs font-bold transition-all"
                 title={`Gửi email tới ${lead.email}`}
               >
@@ -750,7 +774,7 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
                 onClick={() =>
                   handleContactAction(profileContactMeta.label, contactUrl)
                 }
-                disabled={isSaving}
+                disabled={isSaving || !canEditLead}
                 className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${profileContactMeta.className}`}
                 title={profileContactMeta.title}
               >
@@ -799,9 +823,9 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
                   setIsEditingNote(true);
                 }}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") handleSaveNote();
+                  if (e.key === "Enter" && canEditLead) handleSaveNote();
                 }}
-                disabled={isSavingNote}
+                disabled={isSavingNote || !canEditLead}
                 className="w-full pl-3 pr-9 py-1.5 border rounded-lg text-xs outline-none focus:ring-1 focus:ring-primary transition-all"
                 style={{
                   backgroundColor: "var(--color-bg-surface-raised)",
@@ -809,10 +833,10 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
                   color: "var(--color-text-primary)",
                 }}
               />
-              {isEditingNote && (
+              {isEditingNote && canEditLead && (
                 <button
                   onClick={handleSaveNote}
-                  disabled={isSavingNote}
+                  disabled={isSavingNote || !canEditLead}
                   className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-primary hover:bg-primary/10 rounded flex items-center justify-center transition-all"
                   title={t("leads.card.saveNoteTooltip", {
                     defaultValue: "Lưu ghi chú",

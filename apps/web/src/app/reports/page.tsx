@@ -6,6 +6,8 @@ import { generateDailyReportPDF, generateCustomReportPDF } from "@/lib/pdfExport
 import { collection, getDocs } from "firebase/firestore";
 import { secondDb } from "@/lib/firebase";
 import { mapSourceToPlatform, PLATFORM_META } from "@/lib/services/dashboard";
+import { useAuth } from "@/hooks/useAuth";
+import { getScopedBrandKey, isRecordInBrandScope } from "@/lib/brandScope";
 
 
 /**
@@ -1028,6 +1030,8 @@ function LanguageSelectModal({
 
 export default function ReportsPage() {
   const { t, i18n } = useTranslation();
+  const { profile, loading: authLoading } = useAuth();
+  const scopedBrandKey = getScopedBrandKey(profile);
   const [activeTab, setActiveTab] = useState<"periodic" | "custom" | "archive">(
     "periodic",
   );
@@ -1224,6 +1228,7 @@ export default function ReportsPage() {
   useEffect(() => {
     async function fetchData() {
       try {
+        if (authLoading) return;
         setLoading(true);
         const snapshot = await getDocs(
           collection(secondDb, "insightflow_labels"),
@@ -1237,6 +1242,7 @@ export default function ReportsPage() {
           const labels = d.labels || {};
           const rawBrand = d.brand || d.workspace_id || "unknown";
           const b = formatBrandName(rawBrand);
+          if (!isRecordInBrandScope({ brand: b }, scopedBrandKey)) return;
           if (brandOrder.includes(b)) {
             brandSet.add(b);
           }
@@ -1256,7 +1262,13 @@ export default function ReportsPage() {
         });
 
         setMentions(data);
-        setBrands(brandOrder.filter((brand) => brandSet.has(brand)));
+        const scopedBrands = brandOrder.filter((brand) => brandSet.has(brand) && isRecordInBrandScope({ brand }, scopedBrandKey));
+        setBrands(scopedBrands);
+        if (scopedBrandKey && scopedBrands.length === 1) {
+          setSelectedBrand(scopedBrands[0]);
+          setCustomBrand(scopedBrands[0]);
+          setArchiveBrandFilter(scopedBrands[0]);
+        }
       } catch (err) {
         console.error("Error fetching mentions:", err);
       } finally {
@@ -1264,7 +1276,7 @@ export default function ReportsPage() {
       }
     }
     fetchData();
-  }, []);
+  }, [authLoading, scopedBrandKey]);
 
   // Generate Reports List directly from required date range
   const reportsList = useMemo(() => {
@@ -1635,6 +1647,10 @@ export default function ReportsPage() {
   // Memoized search & filter for Archive tab
   const filteredArchivedReports = useMemo(() => {
     return archivedReports.filter((rpt) => {
+      if (!isRecordInBrandScope({ brand: rpt.brand }, scopedBrandKey)) {
+        return false;
+      }
+
       const query = archiveSearchQuery.toLowerCase().trim();
       const matchesSearch =
         query === "" ||
@@ -1648,7 +1664,7 @@ export default function ReportsPage() {
 
       return matchesSearch && matchesBrand;
     });
-  }, [archivedReports, archiveSearchQuery, archiveBrandFilter]);
+  }, [archivedReports, archiveSearchQuery, archiveBrandFilter, scopedBrandKey]);
 
   const loadingMessages = [
     "Đang phân tích các bộ lọc và tìm kiếm đề cập tương thích...",
