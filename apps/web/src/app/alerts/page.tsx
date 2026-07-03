@@ -201,6 +201,7 @@ export default function AlertsPage() {
   } = useAlertStore();
 
   // Load alerts on mount
+  useEffect(() => {
     if (authLoading || !canViewCrisisQueue) return;
     setFilters({ status: "all" });
     fetchAlerts(scopedBrandKey);
