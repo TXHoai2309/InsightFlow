@@ -8,6 +8,7 @@ import type { DashboardFilters as Filters, Workspace, Platform } from "@/types/d
 
 interface LeadFiltersProps {
   workspaces: Workspace[];
+  brandLocked?: boolean;
 }
 
 const PLATFORM_ORDER: Platform[] = [
@@ -20,7 +21,7 @@ const PLATFORM_ORDER: Platform[] = [
   "news",
 ];
 
-export function LeadFilters({ workspaces }: LeadFiltersProps) {
+export function LeadFilters({ workspaces, brandLocked = false }: LeadFiltersProps) {
   const { t } = useTranslation();
   const { filters, setFilters } = useDashboardStore();
 
@@ -51,11 +52,14 @@ export function LeadFilters({ workspaces }: LeadFiltersProps) {
               <select
                 value={filters.workspace_id}
                 onChange={(e) => handleFilterChange("workspace_id", e.target.value)}
-                className="appearance-none pl-3 pr-9 py-2 rounded-lg text-sm focus:ring-1 focus:ring-[var(--color-brand)] outline-none transition-all cursor-pointer select-app w-full border border-[var(--color-border)]"
+                disabled={brandLocked}
+                className={`appearance-none pl-3 pr-9 py-2 rounded-lg text-sm focus:ring-1 focus:ring-[var(--color-brand)] outline-none transition-all select-app w-full border border-[var(--color-border)] ${brandLocked ? "opacity-70 cursor-not-allowed" : "cursor-pointer"}`}
               >
-                <option value="all" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
-                  {t("leads.filters.brandAll")}
-                </option>
+                {!brandLocked && (
+                  <option value="all" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
+                    {t("leads.filters.brandAll")}
+                  </option>
+                )}
                 {workspaces.map((ws) => (
                   <option key={ws.id} value={ws.id} style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
                     {ws.brand_name}

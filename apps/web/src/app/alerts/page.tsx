@@ -6,6 +6,13 @@ import { useTranslation } from "react-i18next";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { useAlertStore } from "@/stores/alert.store";
 import { dbSecond } from "@/lib/firebase";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  getScopedBrandKey,
+  hasBusinessBrandScope,
+  isRecordInBrandScope,
+} from "@/lib/brandScope";
+import { canPerformAction } from "@/lib/rbac";
 import { collection, getDocs } from "firebase/firestore";
 import {
   Chart as ChartJS,
@@ -129,6 +136,13 @@ function getFormattedSourceUrl(url: string, text: string): string {
  * Quản lý cảnh báo khủng hoảng thương hiệu real-time
  */
 export default function AlertsPage() {
+  const { profile, loading: authLoading } = useAuth();
+  const scopedBrandKey = getScopedBrandKey(profile);
+  const canViewCrisisQueue = canPerformAction(profile, "view_crisis_queue");
+  const canUpdateCrisisStatus =
+    hasBusinessBrandScope(profile) &&
+    canPerformAction(profile, "update_crisis_status");
+  const brandFilterLocked = Boolean(profile && profile.role !== "admin");
   const { t, i18n } = useTranslation();
   const [spikeValue, setSpikeValue] = useState(40);
   const [reachValue, setReachValue] = useState(105000);
@@ -187,10 +201,42 @@ export default function AlertsPage() {
   } = useAlertStore();
 
   // Load alerts on mount
-  useEffect(() => {
+    if (authLoading || !canViewCrisisQueue) return;
     setFilters({ status: "all" });
-    fetchAlerts();
-  }, []);
+    fetchAlerts(scopedBrandKey);
+  }, [authLoading, canViewCrisisQueue, scopedBrandKey, fetchAlerts, setFilters]);
+
+  useEffect(() => {
+    if (!brandFilterLocked || brands.length === 0) return;
+    if (filters.brand !== "all") return;
+    setFilters({ brand: brands[0] });
+  }, [brandFilterLocked, brands, filters.brand, setFilters]);
+
+  if (!authLoading && !canViewCrisisQueue) {
+    return (
+      <div className="p-4 md:p-8">
+        <div className="glass-card p-8 rounded-xl border border-[var(--color-border)]">
+          <h1 className="text-xl font-bold text-[var(--color-text-primary)]">Không có quyền truy cập</h1>
+          <p className="text-sm text-[var(--color-text-secondary)] mt-2">
+            Vai trò hiện tại không được phép truy cập hàng đợi xử lý khủng hoảng.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!authLoading && !hasBusinessBrandScope(profile)) {
+    return (
+      <div className="p-4 md:p-8">
+        <div className="glass-card p-8 rounded-xl border border-[var(--color-border)]">
+          <h1 className="text-xl font-bold text-[var(--color-text-primary)]">Chưa được gán thương hiệu</h1>
+          <p className="text-sm text-[var(--color-text-secondary)] mt-2">
+            Tài khoản cần được gán brandId hoặc brandName trước khi xử lý cảnh báo.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // Calculate counts for tabs based on current filters (brand, severity, signal)
   const newCountForTab = alerts.filter((alert) => {
@@ -365,7 +411,7 @@ export default function AlertsPage() {
           </p>
         </div>
         <button
-          onClick={() => fetchAlerts()}
+          onClick={() => fetchAlerts(scopedBrandKey)}
           disabled={isLoading}
           className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-[var(--color-brand)]/10 border border-[var(--color-brand)]/20 text-[var(--color-brand)] text-xs font-bold hover:bg-[var(--color-brand)]/15 transition-all flex items-center justify-center gap-1.5 active:scale-95"
         >
@@ -482,9 +528,12 @@ export default function AlertsPage() {
           <select
             value={filters.brand}
             onChange={(e) => setFilters({ brand: e.target.value })}
-            className="w-full select-app border border-[var(--color-border)] rounded-xl text-xs md:text-sm py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 font-medium"
+            disabled={brandFilterLocked}
+            className={`w-full select-app border border-[var(--color-border)] rounded-xl text-xs md:text-sm py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 font-medium ${brandFilterLocked ? "opacity-70 cursor-not-allowed" : ""}`}
           >
-            <option value="all" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("alerts.filters.brandAll")}</option>
+            {!brandFilterLocked && (
+              <option value="all" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("alerts.filters.brandAll")}</option>
+            )}
             {brands.map((b) => (
               <option key={b} value={b} style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
                 {formatBrandName(b)}
@@ -533,7 +582,7 @@ export default function AlertsPage() {
             <p className="text-sm font-bold text-error">{t("alerts.list.error")}</p>
             <p className="text-xs text-on-surface-variant text-center max-w-md">{error}</p>
             <button
-              onClick={() => fetchAlerts()}
+              onClick={() => fetchAlerts(scopedBrandKey)}
               className="px-4 py-2 bg-primary text-white rounded-xl text-xs font-bold hover:opacity-90 active:scale-95 transition-all"
             >
               {t("alerts.list.retry")}
@@ -718,7 +767,15 @@ export default function AlertsPage() {
                     </div>
 
                     {/* Action buttons */}
-                    <div className="grid grid-cols-2 sm:flex gap-2 items-center">
+                    <div className="grid grid-cols-3 sm:flex gap-2 items-center">
+                      {canUpdateCrisisStatus && alert.status === "new" && (
+                        <button
+                          onClick={() => updateAlertStatus(alert.id, "acknowledged", profile)}
+                          className="px-3 py-2.5 rounded-xl border border-[var(--color-border)] text-[11px] font-bold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)] transition-all"
+                        >
+                          {t("alerts.card.acknowledge")}
+                        </button>
+                      )}
                       {alert.status !== "resolved" ? (
                         alert.status === "resolving" ? (
                           <>
@@ -730,7 +787,7 @@ export default function AlertsPage() {
                               {t("alerts.card.resolveFurther", { defaultValue: "Giải quyết tiếp" })}
                             </button>
                             <button
-                              onClick={() => updateAlertStatus(alert.id, "resolved")}
+                              onClick={() => updateAlertStatus(alert.id, "resolved", profile)}
                               className="px-3 py-2.5 rounded-xl bg-[var(--color-brand)] text-white text-[11px] font-bold hover:bg-[var(--color-brand-hover)] active:scale-95 transition-all shadow-sm cursor-pointer flex items-center gap-1"
                             >
                               <span className="material-symbols-outlined text-[13px]">check_circle</span>
@@ -764,17 +821,19 @@ export default function AlertsPage() {
                             <span className="material-symbols-outlined text-[13px]">history</span>
                             {t("alerts.card.viewHistory", { defaultValue: "Xem lịch sử" })}
                           </button>
-                          <button 
-                            onClick={() => {
-                              const nextStatus = alert.resolution_history && alert.resolution_history.length > 0 ? "resolving" : "new";
-                              updateAlertStatus(alert.id, nextStatus);
-                            }}
-                            title="Khôi phục trạng thái xử lý"
-                            className="px-3 py-2.5 rounded-xl border border-[var(--color-border)] text-[var(--color-text-secondary)] text-[11px] font-bold hover:bg-[var(--color-bg-surface-raised)] transition-all cursor-pointer flex items-center gap-1 active:scale-95"
-                          >
-                            <span className="material-symbols-outlined text-[13px]">undo</span>
-                            {t("alerts.card.restore", { defaultValue: "Khôi phục" })}
-                          </button>
+                          {canUpdateCrisisStatus && (
+                            <button 
+                              onClick={() => {
+                                const nextStatus = alert.resolution_history && alert.resolution_history.length > 0 ? "resolving" : "new";
+                                updateAlertStatus(alert.id, nextStatus, profile);
+                              }}
+                              title="Khôi phục trạng thái xử lý"
+                              className="px-3 py-2.5 rounded-xl border border-[var(--color-border)] text-[var(--color-text-secondary)] text-[11px] font-bold hover:bg-[var(--color-bg-surface-raised)] transition-all cursor-pointer flex items-center gap-1 active:scale-95"
+                            >
+                              <span className="material-symbols-outlined text-[13px]">undo</span>
+                              {t("alerts.card.restore", { defaultValue: "Khôi phục" })}
+                            </button>
+                          )}
                           <span className="text-[var(--color-success)] font-bold text-xs flex items-center gap-1 bg-[var(--color-success-subtle)] border border-[var(--color-success)]/30 px-3 py-1.5 rounded-xl">
                             <span className="material-symbols-outlined text-sm">check_circle</span>
                             {t("alerts.card.resolved")}
@@ -1075,7 +1134,7 @@ export default function AlertsPage() {
           alert={resolvingAlert} 
           onClose={() => setResolvingAlert(null)} 
           onSave={async (id, note, imageUrl, targetStatus = "resolving") => {
-            await updateAlertStatus(id, targetStatus, { note, image_url: imageUrl });
+            await updateAlertStatus(id, targetStatus, profile, { note, image_url: imageUrl });
           }}
         />
       )}
@@ -1122,6 +1181,8 @@ interface TrendModalProps {
 
 function TrendModal({ alert, onClose }: TrendModalProps) {
   const { t, i18n } = useTranslation();
+  const { profile } = useAuth();
+  const scopedBrandKey = getScopedBrandKey(profile);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<any>(null);
   const router = useRouter();
@@ -1189,7 +1250,7 @@ function TrendModal({ alert, onClose }: TrendModalProps) {
                 topic: String(firstTopic || d.topic || ""),
                 date: new Date(parseDateToISOString(d.labeled_at || d.uploaded_at || d.posted_at || d.created_at))
               };
-            });
+            }).filter((doc) => isRecordInBrandScope({ brand: doc.brand }, scopedBrandKey));
 
             const targetBrand = alert.brand.toLowerCase().trim();
             const targetTopic = alert.topic.toLowerCase().trim();

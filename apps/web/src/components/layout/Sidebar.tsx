@@ -12,6 +12,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useTheme } from "@/contexts/ThemeContext";
+import { canAccessPath } from "@/lib/rbac";
+import { useAuth } from "@/hooks/useAuth";
 
 interface NavItem {
   href: string;
@@ -21,7 +23,9 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
+  { href: "/admin", label: "Admin", icon: "ti-shield-lock" },
   { href: "/dashboard", label: "nav.dashboard", icon: "ti-layout-dashboard" },
+  { href: "/team", label: "Nhan vien", icon: "ti-users" },
   { href: "/mentions", label: "nav.mentions", icon: "ti-message-circle" },
   { href: "/alerts", label: "nav.alerts", icon: "ti-bell" },
   { href: "/leads", label: "nav.leads", icon: "ti-chart-bar" },
@@ -39,7 +43,9 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const router = useRouter();
   const { t } = useTranslation();
   const { theme } = useTheme();
+  const { profile, role } = useAuth();
   const isDark = theme === "dark";
+  const accessibleNavItems = navItems.filter((item) => canAccessPath(role, item.href, profile?.permissions));
 
   // Đóng sidebar khi chuyển trang trên mobile
   useEffect(() => {
@@ -118,7 +124,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
         {/* Navigation */}
         <nav className="flex-1 space-y-1 overflow-y-auto">
-          {navItems.map((item) => {
+          {accessibleNavItems.map((item) => {
             const isActive =
               pathname === item.href || pathname?.startsWith(item.href);
             return (

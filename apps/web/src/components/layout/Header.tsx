@@ -13,6 +13,7 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { ROLE_CONFIG } from "@/lib/rbac";
 
 interface HeaderProps {
   onMenuToggle: () => void;
@@ -21,7 +22,7 @@ interface HeaderProps {
 export function Header({ onMenuToggle }: HeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const { t } = useTranslation();
   const { theme, toggleTheme } = useTheme();
   const { language, setLanguage } = useLanguage();
@@ -33,6 +34,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
   };
 
   const userName = user?.displayName || user?.email?.split("@")[0] || t("header.guest");
+  const roleLabel = role ? ROLE_CONFIG[role].label : t("header.guest");
   const initials = getInitials(user?.displayName || userName);
   const isDark = theme === "dark";
 
@@ -296,7 +298,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
               {userName}
             </p>
             <p className="text-[12px]" style={{ color: "var(--color-text-muted)" }}>
-              {user ? t("header.administrator") : t("header.guest")}
+              {user ? roleLabel : t("header.guest")}
             </p>
           </div>
           <div className="w-[36px] h-[36px] rounded-full bg-gradient-to-tr from-[#6C63FF] to-[#9B8FF8] flex items-center justify-center font-bold text-white text-[13px] cursor-pointer hover:scale-105 transition-transform shadow-sm">

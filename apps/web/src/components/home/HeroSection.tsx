@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "@/contexts/ThemeContext";
+import { getDefaultRouteForRole } from "@/lib/rbac";
 
 /* ─── KPI Counter Hook ─── */
 function useCountUp(target: number, duration = 1800, started = false) {
@@ -221,10 +222,11 @@ function KpiBar() {
 
 /* ─── Main HeroSection ─── */
 export default function HeroSection() {
-  const { user, loading } = useAuth();
+  const { user, profile, role, loading } = useAuth();
   const { t } = useTranslation();
   const { theme } = useTheme();
   const isDark = theme === "dark";
+  const appRoute = profile?.defaultRoute || getDefaultRouteForRole(role);
 
   return (
     <section
@@ -287,7 +289,7 @@ export default function HeroSection() {
             <div className="flex flex-wrap gap-3 pt-1">
               {!loading && user ? (
                 <Link
-                  href="/dashboard"
+                  href={appRoute}
                   className="flex items-center justify-center gap-2 text-white px-7 py-3.5 rounded-[12px] font-bold text-[15px] transition-all active:scale-95"
                   style={{
                     background: "linear-gradient(135deg, #6D4CFF, #4234b6)",
@@ -299,7 +301,7 @@ export default function HeroSection() {
                 </Link>
               ) : (
                 <Link
-                  href="/dashboard"
+                  href="/login"
                   className="flex items-center justify-center gap-2 text-white px-7 py-3.5 rounded-[12px] font-bold text-[15px] transition-all active:scale-95"
                   style={{
                     background: "linear-gradient(135deg, #6D4CFF, #4234b6)",
@@ -311,7 +313,7 @@ export default function HeroSection() {
                 </Link>
               )}
               <Link
-                href="/dashboard"
+                href={user ? appRoute : "/login"}
                 className="flex items-center justify-center gap-2 border-2 px-7 py-3.5 rounded-[12px] font-bold text-[15px] transition-all active:scale-95"
                 style={{ borderColor: "#6D4CFF", color: isDark ? "#9B8FF8" : "#6D4CFF" }}
               >

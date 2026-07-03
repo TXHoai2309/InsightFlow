@@ -8,6 +8,8 @@
 import { useEffect, useState } from "react";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { DashboardService } from "@/lib/services/dashboard";
+import { filterByBusinessPolicy } from "@/lib/brandScope";
+import { useAuth } from "@/hooks/useAuth";
 
 interface UseDashboardOptions {
   autoFetch?: boolean;
@@ -16,6 +18,7 @@ interface UseDashboardOptions {
 
 export function useDashboard(options: UseDashboardOptions = {}) {
   const { autoFetch = true, refetchInterval = 60000 } = options;
+  const { profile, loading: authLoading } = useAuth();
 
   const {
     setStats,
@@ -38,8 +41,19 @@ export function useDashboard(options: UseDashboardOptions = {}) {
       setLoading(true);
 
       // 1. Fetch raw data từ Firestore (không giới hạn records)
-      const { workspaces, mentions, alerts, leads } =
+      const rawData =
         await DashboardService.fetchRawData();
+      const workspaces = filterByBusinessPolicy(
+        rawData.workspaces.map((workspace) => ({
+          ...workspace,
+          brand: workspace.brand_name,
+        })),
+        profile,
+        "view_dashboard",
+      );
+      const mentions = filterByBusinessPolicy(rawData.mentions, profile, "view_mentions");
+      const alerts = filterByBusinessPolicy(rawData.alerts, profile, "view_crisis_queue");
+      const leads = filterByBusinessPolicy(rawData.leads, profile, "view_leads");
 
       // 2. Aggregations từ toàn bộ dữ liệu
       const stats = DashboardService.calculateStats(mentions, alerts, leads);
@@ -71,12 +85,12 @@ export function useDashboard(options: UseDashboardOptions = {}) {
   };
 
   useEffect(() => {
-    if (!autoFetch) return;
+    if (!autoFetch || authLoading) return;
     fetchDashboardData();
     setIsInitialized(true);
     const interval = setInterval(fetchDashboardData, refetchInterval);
     return () => clearInterval(interval);
-  }, [autoFetch, refetchInterval]);
+  }, [autoFetch, refetchInterval, authLoading, profile?.brandId, profile?.brandName, profile?.role]);
 
   // Re-tính trend data khi time_range filter thay đổi
   useEffect(() => {

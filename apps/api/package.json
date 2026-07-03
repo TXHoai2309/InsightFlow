@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "npx tsx watch src/index.ts",
-    "build": "tsc"
+    "build": "tsc",
+    "seed:test-users": "node scripts/seedTestUsers.js"
   },
   "dependencies": {
     "fastify": "^4.25.0",
