@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+import { getApiBaseUrl } from "@/lib/apiProxy";
 
 function getAuthorization(request: NextRequest) {
   return request.headers.get("authorization");
@@ -13,7 +12,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Ban can dang nhap bang tai khoan Quan ly thuong hieu." }, { status: 401 });
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/staff`, {
+    const response = await fetch(`${getApiBaseUrl(request)}/api/staff`, {
       method: "GET",
       headers: { Authorization: authorization },
     });
@@ -38,7 +37,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const response = await fetch(`${API_BASE_URL}/api/staff`, {
+    const response = await fetch(`${getApiBaseUrl(request)}/api/staff`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -58,4 +57,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Loi may chu. Vui long thu lai sau." }, { status: 500 });
   }
 }
-

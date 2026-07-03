@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+import { getApiBaseUrl } from "@/lib/apiProxy";
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,7 +9,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Ban can dang nhap bang tai khoan Admin." }, { status: 401 });
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/admin/brand-managers`, {
+    const response = await fetch(`${getApiBaseUrl(request)}/api/admin/brand-managers`, {
       method: "GET",
       headers: { Authorization: authorization },
     });
@@ -43,7 +42,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Ban can dang nhap bang tai khoan Admin." }, { status: 401 });
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/admin/brand-managers`, {
+    const response = await fetch(`${getApiBaseUrl(request)}/api/admin/brand-managers`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

@@ -6,14 +6,12 @@ import { useRouter } from "next/navigation";
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { validateStrongPassword } from "@/lib/passwordPolicy";
-import { useAuth } from "@/hooks/useAuth";
 import { useAuthStore } from "@/stores/auth.store";
 
 export default function ChangePasswordPage() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { profile } = useAuth();
-  const { setProfile } = useAuthStore();
+  const { profile, setProfile } = useAuthStore();
   const [temporaryPassword, setTemporaryPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");

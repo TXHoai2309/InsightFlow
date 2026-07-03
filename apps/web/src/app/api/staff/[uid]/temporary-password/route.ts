@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+import { getApiBaseUrl } from "@/lib/apiProxy";
 
 export async function POST(request: NextRequest, { params }: { params: { uid: string } }) {
   try {
@@ -9,7 +8,7 @@ export async function POST(request: NextRequest, { params }: { params: { uid: st
       return NextResponse.json({ error: "Ban can dang nhap bang tai khoan Quan ly thuong hieu." }, { status: 401 });
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/staff/${params.uid}/temporary-password`, {
+    const response = await fetch(`${getApiBaseUrl(request)}/api/staff/${params.uid}/temporary-password`, {
       method: "POST",
       headers: { Authorization: authorization },
     });
