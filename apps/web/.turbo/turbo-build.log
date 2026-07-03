@@ -18,10 +18,10 @@
    Collecting build traces ...
 
 Route (app)                                    Size     First Load JS
-┌ ○ /                                          9.54 kB         302 kB
+┌ ○ /                                          9.54 kB         303 kB
 ├ ○ /_not-found                                876 B          88.5 kB
 ├ ○ /admin                                     2.68 kB         282 kB
-├ ○ /alerts                                    12.4 kB         366 kB
+├ ○ /alerts                                    12.4 kB         367 kB
 ├ ƒ /api/admin/brand-managers                  0 B                0 B
 ├ ƒ /api/auth/complete-first-password-change   0 B                0 B
 ├ ƒ /api/auth/reset-password                   0 B                0 B
@@ -30,22 +30,22 @@ Route (app)                                    Size     First Load JS
 ├ ƒ /api/staff                                 0 B                0 B
 ├ ƒ /api/staff/[uid]/reset-temporary-password  0 B                0 B
 ├ ƒ /api/staff/[uid]/temporary-password        0 B                0 B
-├ ○ /change-password                           5.1 kB          284 kB
-├ ○ /dashboard                                 7.28 kB         361 kB
+├ ○ /change-password                           5.12 kB         284 kB
+├ ○ /dashboard                                 7.28 kB         362 kB
 ├ ○ /forgot-password                           5.45 kB          93 kB
-├ ○ /leads                                     8.76 kB         298 kB
-├ ○ /login                                     4.61 kB         292 kB
-├ ○ /mentions                                  6.19 kB         304 kB
-├ ƒ /mentions/[id]                             5.8 kB          304 kB
-├ ○ /nganh                                     6.47 kB         299 kB
+├ ○ /leads                                     12.7 kB         302 kB
+├ ○ /login                                     4.63 kB         292 kB
+├ ○ /mentions                                  6.42 kB         305 kB
+├ ƒ /mentions/[id]                             5.99 kB         304 kB
+├ ○ /nganh                                     6.47 kB         300 kB
 ├ ○ /profile                                   7.24 kB         300 kB
-├ ○ /reports                                   160 kB          444 kB
-├ ○ /settings/brand                            4.04 kB         266 kB
-├ ○ /team                                      6.97 kB         286 kB
-└ ○ /ve-chung-toi                              13.5 kB         306 kB
+├ ○ /reports                                   160 kB          445 kB
+├ ○ /settings/brand                            4.05 kB         266 kB
+├ ○ /team                                      7.27 kB         286 kB
+└ ○ /ve-chung-toi                              13.5 kB         307 kB
 + First Load JS shared by all                  87.6 kB
   ├ chunks/1dd3208c-4d948558e163dd97.js        53.6 kB
-  ├ chunks/528-7e11c70fd131a541.js             31.9 kB
+  ├ chunks/528-4422fdb0c14d9bad.js             31.9 kB
   └ other shared chunks (total)                2.1 kB
 
 

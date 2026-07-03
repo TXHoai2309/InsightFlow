@@ -3,7 +3,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { collection, getDocs, query, where } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
 import { validateStrongPassword } from "@/lib/passwordPolicy";
 
@@ -62,6 +63,42 @@ function isCrisisRole(role: StaffRoleValue) {
   return role === "crisis_employee" || role === "crisis_staff";
 }
 
+function normalizeStaffRole(role: unknown): StaffRole | null {
+  if (role === "crisis_employee" || role === "crisis_staff") return "crisis_employee";
+  if (role === "lead_employee" || role === "lead_staff") return "lead_employee";
+  return null;
+}
+
+function getDefaultRoute(role: StaffRole, permissions: string[]) {
+  const priority =
+    role === "crisis_employee"
+      ? [
+          { permission: "alerts", route: "/alerts" },
+          { permission: "mentions", route: "/mentions" },
+          { permission: "reports", route: "/reports" },
+          { permission: "dashboard", route: "/dashboard" },
+        ]
+      : [
+          { permission: "leads", route: "/leads" },
+          { permission: "mentions", route: "/mentions" },
+          { permission: "reports", route: "/reports" },
+          { permission: "dashboard", route: "/dashboard" },
+        ];
+
+  return priority.find((item) => permissions.includes(item.permission))?.route || "/dashboard";
+}
+
+function normalizePermissions(role: StaffRole, permissions: unknown) {
+  const fallback =
+    role === "crisis_employee"
+      ? ["dashboard", "mentions", "alerts", "reports"]
+      : ["dashboard", "mentions", "leads", "reports"];
+
+  return Array.isArray(permissions)
+    ? permissions.filter((permission): permission is string => typeof permission === "string")
+    : fallback;
+}
+
 export default function TeamPage() {
   const { t } = useTranslation();
   const { profile } = useAuth();
@@ -100,19 +137,48 @@ export default function TeamPage() {
     setError("");
 
     try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) throw new Error(t("team.errors.needBrandManager"));
-
-      const response = await fetch("/api/staff", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || t("team.errors.loadFailed"));
+      if (!profile?.brandId) {
+        throw new Error(t("team.errors.needBrandManager"));
       }
 
-      setStaff(data.data || []);
+      const snapshot = await getDocs(
+        query(collection(db, "users"), where("brandId", "==", profile.brandId)),
+      );
+
+      const staffAccounts = snapshot.docs
+        .map((snapshotDoc): StaffAccount | null => {
+          const data = snapshotDoc.data();
+          const role = normalizeStaffRole(data.role);
+          if (!role || data.uid === profile.uid) return null;
+
+          const permissions = normalizePermissions(role, data.permissions);
+
+          return {
+            uid: typeof data.uid === "string" ? data.uid : snapshotDoc.id,
+            email: typeof data.email === "string" ? data.email : "",
+            displayName: typeof data.displayName === "string" ? data.displayName : "",
+            role,
+            brandName:
+              typeof data.brandName === "string"
+                ? data.brandName
+                : profile.brandName || "",
+            permissions,
+            defaultRoute:
+              typeof data.defaultRoute === "string"
+                ? data.defaultRoute
+                : getDefaultRoute(role, permissions),
+            temporaryPassword:
+              typeof data.temporaryPassword === "string"
+                ? data.temporaryPassword
+                : undefined,
+            hasTemporaryPassword:
+              data.temporaryPasswordIssued === true && typeof data.temporaryPassword === "string",
+          };
+        })
+        .filter((account): account is StaffAccount => Boolean(account))
+        .sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+      setStaff(staffAccounts);
     } catch (err: any) {
       setError(err.message || t("team.errors.loadFailed"));
     } finally {
@@ -121,8 +187,10 @@ export default function TeamPage() {
   };
 
   useEffect(() => {
-    loadStaff();
-  }, []);
+    if (profile?.brandId) {
+      loadStaff();
+    }
+  }, [profile?.brandId]);
 
   const toggleOperation = (operation: string) => {
     setOperations((current) => {
@@ -145,23 +213,39 @@ export default function TeamPage() {
         throw new Error(passwordPolicy.errors.map((key) => t(key)).join(" "));
       }
 
-      const token = await auth.currentUser?.getIdToken();
+      const user = auth.currentUser;
+      const token = await user?.getIdToken(true);
       if (!token) throw new Error(t("team.errors.needBrandManager"));
 
-      const response = await fetch("/api/staff", {
+      const requestBody = JSON.stringify({
+        fullName,
+        email,
+        staffRole,
+        operations,
+        temporaryPassword,
+      });
+
+      let response = await fetch("/api/staff", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          fullName,
-          email,
-          staffRole,
-          operations,
-          temporaryPassword,
-        }),
+        body: requestBody,
       });
+
+      if (response.status === 401 && user) {
+        const refreshedToken = await user.getIdToken(true);
+        response = await fetch("/api/staff", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${refreshedToken}`,
+          },
+          body: requestBody,
+        });
+      }
+
       const data = await response.json();
 
       if (!response.ok) {
@@ -207,53 +291,29 @@ export default function TeamPage() {
         return;
       }
 
-      const token = await user.getIdToken(true);
-      const endpoint =
-        passwordRequestMode === "reset"
-          ? `/api/staff/${staffUid}/reset-temporary-password`
-          : `/api/staff/${staffUid}/temporary-password`;
-
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        if (response.status === 400) {
-          setStaff((current) =>
-            current.map((item) =>
-              item.uid === staffUid ? { ...item, hasTemporaryPassword: false, temporaryPassword: undefined } : item,
-            ),
-          );
-        }
-        throw new Error(data.error || t("team.errors.revealFailed"));
+      if (passwordRequestMode === "reset") {
+        throw new Error("Reset temporary password requires a privileged provisioning function.");
       }
 
-      setRevealedPasswords((current) => ({
-        ...current,
-        [staffUid]: data.data.temporaryPassword,
-      }));
       setStaff((current) =>
         current.map((item) =>
           item.uid === staffUid
-            ? { ...item, hasTemporaryPassword: true, temporaryPassword: data.data.temporaryPassword }
+            ? { ...item, hasTemporaryPassword: false, temporaryPassword: undefined }
             : item,
         ),
       );
-      setPasswordRequestUid(null);
-      setManagerPassword("");
+      throw new Error(t("team.errors.tempPasswordUnavailable"));
     } catch (err: any) {
       const messageByCode: Record<string, string> = {
         "auth/wrong-password": t("team.errors.managerPasswordWrong"),
         "auth/invalid-credential": t("team.errors.managerPasswordWrong"),
         "auth/too-many-requests": t("team.errors.tooManyRequests"),
       };
-      const backendMessage =
+      const unavailableMessage =
         err.message === "Temporary password is no longer available for this account."
           ? t("team.errors.tempPasswordUnavailable")
           : err.message;
-      setRevealError(messageByCode[err.code] || backendMessage || t("team.errors.revealFailed"));
+      setRevealError(messageByCode[err.code] || unavailableMessage || t("team.errors.revealFailed"));
     } finally {
       setRevealLoading(false);
     }

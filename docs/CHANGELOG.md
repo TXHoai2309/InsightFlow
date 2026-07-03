@@ -11,6 +11,81 @@
 >   Tất cả các thay đổi đáng chú ý đối với dự án này sẽ được ghi lại trong file này.
 >   Định dạng dựa trên [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) và dự án này tuân thủ [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-07-03
+
+### Added
+
+- **Lead Workbench cho nhân viên xử lý khách hàng tiềm năng (`/leads`)**:
+  - Thiết kế lại trang lead theo hướng workbench nghiệp vụ, ưu tiên danh sách lead cần xử lý thay vì dashboard thông tin dày đặc.
+  - Bổ sung các quick view phục vụ công việc hằng ngày: `Cần xử lý ngay`, `Của tôi`, `Chưa phân công`, `Cần ghi nhận`, `Sắp quá hạn`, `Follow-up`, `Chờ phản hồi`, `Chờ chuyển sales`, `Đã chuyển đổi`.
+  - Thêm logic tính điểm ưu tiên, SLA, trạng thái cần ghi nhận, follow-up và handoff sales trong `lead-workbench`.
+  - Thêm panel chi tiết xử lý lead với các tab `Xử lý`, `Hồ sơ`, `Lịch sử`, `Gợi ý`.
+  - Thêm component `LeadWorkbenchRow` và `LeadDetailPanel` để tách rõ danh sách lead và vùng thao tác nghiệp vụ.
+
+- **Ownership / phân công lead**:
+  - Mở rộng schema lead với các field `owner_id`, `owner_name`, `owner_email`, `assigned_at`, `assigned_by`, `claimed_at`.
+  - Hiển thị ownership trên từng lead: `Chưa phân công`, `Của tôi`, hoặc người đang phụ trách.
+  - Thêm hành động `Nhận xử lý` trước khi nhân viên liên hệ khách hàng.
+  - Ngăn nhân viên thao tác xử lý lead đang thuộc người khác, ngoại trừ quyền quản lý/override.
+
+- **Luồng CRM cho lead**:
+  - Mở rộng schema lead với các field `pending_result`, `first_contacted_at`, `last_action_at`, `last_action_type`, `last_contact_channel`, `result_type`, `result_recorded_at`, `follow_up_at`, `closed_at`, `sales_status`, `sales_owner_id`, `sales_owner_name`, `sales_transferred_at`, `crm_deal_id`.
+  - Bổ sung outcome xử lý: phản hồi tích cực, chưa phản hồi, hẹn lại, không phù hợp, đã chuyển đổi, chuyển sales.
+  - Thêm trạng thái `Chờ chuyển sales` cho lead đủ điều kiện bàn giao.
+
+### Changed
+
+- **Tinh gọn giao diện `/leads`**:
+  - Bỏ tiêu đề lớn và thanh tìm kiếm nội bộ trong trang lead để dùng thanh tìm kiếm global trên header.
+  - Đẩy các thẻ thống kê, quick view và danh sách lead lên cao hơn trong viewport.
+  - Rút gọn thẻ thống kê còn các chỉ số hành động chính: cần xử lý ngay, sắp quá hạn, follow-up hôm nay.
+  - Thiết kế lại row lead theo layout cố định để avatar, icon nền tảng, tên khách, lý do ưu tiên và nội dung không chồng lấn nhau.
+  - Chuyển ownership `Của tôi` / `Chưa phân công` thành logic lọc dữ liệu cho nhân viên xử lý tiềm năng, không dùng làm nhóm ưu tiên hiển thị chính.
+  - Với vai trò `lead_employee`, chỉ tính toán và hiển thị lead của chính nhân viên hoặc lead chưa có người nhận; lead đã thuộc người khác không xuất hiện trong danh sách, thống kê hoặc panel chi tiết.
+  - Điều chỉnh quick view của nhân viên theo ưu tiên nghiệp vụ: `Cần xử lý ngay`, `Sắp quá hạn`, `Follow-up`, `Cần ghi nhận`, `Chờ phản hồi`, `Chờ chuyển sales`.
+  - Cập nhật thẻ thống kê để hiển thị 3 chỉ số chính theo mẫu, kèm dòng phụ tách số lead `của tôi` và `chưa ai nhận`.
+  - Bỏ khối gợi ý `Việc tiếp theo` để giảm tải thông tin và dành không gian cho danh sách lead.
+  - Giới hạn danh sách lead còn 5 lead mỗi trang và bổ sung điều khiển phân trang `Trước` / `Sau`.
+  - Bỏ nút nổi `Lên đầu trang` vì danh sách đã được phân trang ngắn hơn.
+  - Cố định layout desktop của `/leads` thành hai cột: vùng danh sách linh hoạt và panel xử lý bên phải rộng 420px.
+
+- **Siết lại luồng liên hệ và ghi nhận kết quả**:
+  - Tách rõ `Nguồn lead` và `Kênh liên hệ`.
+  - Với Google Maps, đổi nhãn hành động sang `Mở Google Maps` thay vì dùng chung `Mở bài gốc`.
+  - Mở nguồn/bài gốc chỉ được xem là thao tác tham khảo, không tự đưa lead vào trạng thái `Cần ghi nhận`.
+  - Chỉ khi dùng kênh liên hệ thật như Messenger, Zalo, gọi điện, email hoặc profile thì lead mới được đánh dấu `pending_result`.
+  - Không cho ghi nhận kết quả trước khi đã nhận xử lý và liên hệ khách.
+  - Khi chọn `Hẹn lại`, giao diện mở ngay trường chọn ngày giờ follow-up và bắt buộc nhập trước khi lưu.
+
+- **Trang quản lý nhân viên (`/team`)**:
+  - Chuyển danh sách nhân viên sang đọc trực tiếp từ Firestore theo `brandId`, giảm phụ thuộc vào API backend cho thao tác tải danh sách.
+  - Khi tạo nhân viên, frontend force refresh Firebase ID token bằng `getIdToken(true)`.
+  - Nếu request tạo nhân viên gặp `401`, hệ thống tự refresh token và retry một lần.
+
+### Fixed
+
+- **Hiển thị Lead Workbench ở tỷ lệ 100%**:
+  - Sửa lỗi thẻ thống kê bị chồng icon, nhãn và số liệu khi trình duyệt ở zoom 100%.
+  - Điều chỉnh kích thước card thống kê, row lead và vùng CTA để dữ liệu quan trọng không bị đè hoặc cắt cụt bất thường.
+  - Giữ panel xử lý bên phải ở trạng thái sticky với body cuộn riêng, giúp panel luôn hiển thị đầy đủ khi danh sách lead thay đổi chiều cao.
+
+- **Xác thực và phân quyền**:
+  - Sửa Firebase Admin API project để verify ID token theo project auth chính `NEXT_PUBLIC_FIREBASE_PROJECT_ID`.
+  - Sửa middleware API parse header `Authorization: Bearer ...` chắc hơn và log cảnh báo khi verify token thất bại.
+  - Sửa luồng đổi mật khẩu lần đầu để nhân viên không bị điều hướng qua lại giữa `/change-password` và trang nghiệp vụ.
+  - Sửa route guard/RBAC để cho phép truy cập `/change-password` đúng vai trò.
+
+- **Lỗi 401 khi tải/tạo dữ liệu quản trị**:
+  - Giảm lỗi 401 do token cũ hoặc custom claims chưa refresh khi tạo tài khoản nhân viên.
+  - Bổ sung retry bằng token mới khi tạo tài khoản nhân viên từ trang quản lý.
+
+### Verification
+
+- Đã chạy `npm.cmd run build` thành công sau các thay đổi.
+- Đã kiểm tra `/leads` và `/team` phản hồi `200` trên dev server.
+
+---
+
 ## [Unreleased] - 2026-07-02
 
 ### Added

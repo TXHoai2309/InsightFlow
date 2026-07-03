@@ -76,8 +76,34 @@ export interface Lead {
   social_profile_url?: string;
   
   // CRM Tracking
+  owner_id?: string;
+  owner_name?: string;
+  owner_email?: string;
+  assigned_at?: string;
+  assigned_by?: string;
+  claimed_at?: string;
+  first_contacted_at?: string;
   contact_attempts?: number;
   last_contact_at?: string;
+  pending_result?: boolean;
+  last_action_at?: string;
+  last_action_type?: "open_source" | "message" | "call" | "email" | "open_profile" | "note";
+  last_contact_channel?: string;
+  result_type?:
+    | "positive"
+    | "no_response"
+    | "follow_up"
+    | "not_fit"
+    | "converted"
+    | "transfer_sales";
+  result_recorded_at?: string;
+  follow_up_at?: string;
+  closed_at?: string;
+  sales_status?: "not_ready" | "ready_to_transfer" | "transferred";
+  sales_owner_id?: string;
+  sales_owner_name?: string;
+  sales_transferred_at?: string;
+  crm_deal_id?: string;
   notes?: string;
   posted_at?: string;
 }

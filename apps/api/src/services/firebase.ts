@@ -6,7 +6,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 
 const SERVICE_ACCOUNT_PATH = path.join(process.cwd(), "service-account.json");
-const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_SECOND_PROJECT_ID || "datainsight-330eb";
+const AUTH_PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "insightflow-6ce1f";
 
 // Attempt to load .env.local for other variables
 const possiblePaths = [
@@ -36,8 +36,9 @@ for (const p of possiblePaths) {
   }
 }
 
-// Re-evaluate PROJECT_ID after loading env
-const projectId = process.env.NEXT_PUBLIC_FIREBASE_SECOND_PROJECT_ID || PROJECT_ID;
+// Re-evaluate project ID after loading env. The Admin app must use the auth
+// project, because frontend ID tokens are issued by NEXT_PUBLIC_FIREBASE_PROJECT_ID.
+const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || AUTH_PROJECT_ID;
 
 if (getApps().length === 0) {
   const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;

@@ -150,6 +150,10 @@ const PUBLIC_ROUTES = [
 ];
 
 const ROUTE_POLICIES: RoutePolicy[] = [
+  {
+    route: "/change-password",
+    roles: ["admin", "brand_manager", "crisis_employee", "lead_employee"],
+  },
   { route: "/admin", roles: ["admin"], permission: "admin_panel" },
   { route: "/team", roles: ["brand_manager"], permission: "staff_management" },
   {
