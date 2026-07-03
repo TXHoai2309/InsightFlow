@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { formatCount } from '../utils/parser';
 import { Item, Label, EMPTY_LABEL, isLabelComplete } from '../types';
 import LabelSelector from './LabelSelector';

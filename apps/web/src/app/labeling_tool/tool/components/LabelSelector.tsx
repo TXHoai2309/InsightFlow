@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+﻿import React, { useState, useRef, useEffect } from 'react';
 import { Label, TopicKey, Intent, SENTIMENT_LABELS, TOPIC_LABELS, URGENCY_LABELS, INTENT_LABELS } from '../types';
 
 interface LabelSelectorProps {

@@ -1,6 +1,9 @@
+﻿"use client";
+
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Person, Label, Thread, TopicKey, TOPIC_HOTKEYS } from './types';
-import { getDarkMode, saveDarkMode, getDailyGoal } from './utils/storage';
+import { getDailyGoal } from './utils/storage';
+import { useTheme } from '@/contexts/ThemeContext';
 import { useData } from './hooks/useData';
 import { useLabeling } from './hooks/useLabeling';
 import ThreadView from './components/ThreadView';
@@ -29,18 +32,11 @@ const KBD_STYLE = `
 const SUPABASE_URL_KEY = 'insightflow_supabase_url';
 const SUPABASE_ANON_KEY = 'insightflow_supabase_anon_key';
 
-function viteEnv(key: string): string {
-  const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
-  return env?.[key] ?? '';
-}
 
 export default function App() {
-  // ─── Dark mode ─────────────────────────────────────────
-  const [dark, setDark] = useState<boolean>(getDarkMode);
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', dark);
-    saveDarkMode(dark);
-  }, [dark]);
+  // Dark mode follows InsightFlow theme.
+  const { theme, toggleTheme } = useTheme();
+  const dark = theme === 'dark';
 
   // ─── Daily goal ────────────────────────────────────────
   const [dailyGoal, setDailyGoal] = useState<number>(getDailyGoal);
@@ -52,10 +48,10 @@ export default function App() {
   const { threads: rawThreads, loading, error, postCount, itemCount, loadFromSupabase } = useData();
   const [dataMode, setDataMode] = useState<'file' | 'supabase'>('file');
   const [supabaseUrl, setSupabaseUrl] = useState(
-    () => viteEnv('VITE_SUPABASE_URL') || localStorage.getItem(SUPABASE_URL_KEY) || '',
+    () => process.env.NEXT_PUBLIC_SUPABASE_URL || localStorage.getItem(SUPABASE_URL_KEY) || '',
   );
   const [supabaseAnonKey, setSupabaseAnonKey] = useState(
-    () => viteEnv('VITE_SUPABASE_ANON_KEY') || localStorage.getItem(SUPABASE_ANON_KEY) || '',
+    () => process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || localStorage.getItem(SUPABASE_ANON_KEY) || '',
   );
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('facebook');
   const [assignmentView, setAssignmentView] = useState<AssignmentView>('pending');
@@ -248,9 +244,9 @@ export default function App() {
     <>
       <style>{KBD_STYLE}</style>
 
-      <div className="min-h-screen bg-gray-100 dark:bg-surface-900">
+      <div className="min-h-screen bg-gray-100 dark:bg-slate-950">
         {/* ── Sticky Header ── */}
-        <header className="sticky top-0 z-40 bg-white dark:bg-surface-800 border-b border-gray-200 dark:border-surface-600 shadow-sm">
+        <header className="sticky top-0 z-40 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-surface-600 shadow-sm">
           <div className="max-w-[1600px] mx-auto px-4 py-3 flex flex-col gap-2">
             {/* Top row */}
             <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -334,7 +330,7 @@ export default function App() {
 
                 {/* Dark mode toggle */}
                 <button
-                  onClick={() => setDark(d => !d)}
+                  onClick={toggleTheme}
                   className="btn-secondary text-xs"
                   title="Toggle dark/light mode"
                 >

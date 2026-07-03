@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { LabelStats } from '../utils/storage';
 import { saveDailyGoal } from '../utils/storage';
 
@@ -12,7 +12,7 @@ interface SidebarProps {
 
 function StatBar({ pct, colorClass }: { pct: number; colorClass: string }) {
   return (
-    <div className="h-1.5 bg-gray-200 dark:bg-surface-600 rounded-full overflow-hidden">
+    <div className="h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full overflow-hidden">
       <div
         className={`h-1.5 rounded-full transition-all duration-500 ${colorClass}`}
         style={{ width: `${Math.min(pct, 100)}%` }}
@@ -170,7 +170,7 @@ export default function Sidebar({ stats, postCount, itemCount, dailyGoal, onDail
           </span>
           <span className="font-semibold text-blue-600 dark:text-blue-400">{todayPct}%</span>
         </div>
-        <div className="h-2 bg-gray-200 dark:bg-surface-600 rounded-full overflow-hidden">
+        <div className="h-2 bg-gray-200 dark:bg-slate-700 rounded-full overflow-hidden">
           <div
             className="h-2 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-500"
             style={{ width: `${todayPct}%` }}

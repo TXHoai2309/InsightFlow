@@ -1,4 +1,4 @@
-import { isLabelComplete, Item, Label, StoredLabel, Thread } from '../types';
+﻿import { isLabelComplete, Item, Label, StoredLabel, Thread } from '../types';
 import { parseCrawlerJson, RawComment, RawPost } from './dataPartition';
 
 export type PlatformFilter =

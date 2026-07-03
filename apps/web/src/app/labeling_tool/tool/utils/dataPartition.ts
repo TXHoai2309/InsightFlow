@@ -1,4 +1,4 @@
-import { Item, Thread, EMPTY_STATS } from '../types';
+﻿import { Item, Thread, EMPTY_STATS } from '../types';
 import { isAddressOnlyText, isGoogleMapsSpam, buildStats } from './parser';
 
 // ============================================================

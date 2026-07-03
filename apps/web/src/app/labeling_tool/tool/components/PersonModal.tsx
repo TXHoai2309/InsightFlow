@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { Person, PERSONS } from '../types';
 
 interface PersonModalProps {
@@ -58,7 +58,7 @@ export default function PersonModal({ onSelect }: PersonModalProps) {
         </div>
 
         <p className="text-xs text-gray-400 dark:text-gray-500 text-center">
-          Mỗi người tải file JSON riêng từ <code className="bg-gray-100 dark:bg-surface-700 px-1 rounded">pipeline/labeling_queue/</code>
+          Mỗi người tải file JSON riêng từ <code className="bg-gray-100 dark:bg-slate-800 px-1 rounded">pipeline/labeling_queue/</code>
         </p>
       </div>
     </div>

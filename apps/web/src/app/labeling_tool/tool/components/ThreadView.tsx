@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+﻿import React, { useCallback, useState } from 'react';
 import { Thread, Label, EMPTY_LABEL, isLabelComplete, PlatformStats } from '../types';
 import CommentItem from './CommentItem';
 import LabelSelector from './LabelSelector';
