@@ -1,6 +1,7 @@
 ﻿import React, { useState } from 'react';
 import { LabelStats } from '../utils/storage';
 import { saveDailyGoal } from '../utils/storage';
+import { PendingAssignmentCounts, PlatformFilter } from '../utils/supabaseRest';
 
 interface SidebarProps {
   stats: LabelStats;
@@ -8,6 +9,9 @@ interface SidebarProps {
   itemCount: number;
   dailyGoal: number;
   onDailyGoalChange: (goal: number) => void;
+  pendingCounts: PendingAssignmentCounts | null;
+  pendingCountsLoading: boolean;
+  platform: PlatformFilter;
 }
 
 function StatBar({ pct, colorClass }: { pct: number; colorClass: string }) {
@@ -21,7 +25,16 @@ function StatBar({ pct, colorClass }: { pct: number; colorClass: string }) {
   );
 }
 
-export default function Sidebar({ stats, postCount, itemCount, dailyGoal, onDailyGoalChange }: SidebarProps) {
+export default function Sidebar({
+  stats,
+  postCount,
+  itemCount,
+  dailyGoal,
+  onDailyGoalChange,
+  pendingCounts,
+  pendingCountsLoading,
+  platform,
+}: SidebarProps) {
   const [goalInput, setGoalInput] = useState(String(dailyGoal));
   const [goalSaved, setGoalSaved] = useState(false);
 
@@ -183,41 +196,65 @@ export default function Sidebar({ stats, postCount, itemCount, dailyGoal, onDail
         )}
       </div>
 
-      {/* Hotkeys cheatsheet */}
+      {/* Full pending queue */}
       <div className="card p-4">
-        <h3 className="text-xs font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-3">
-          ⌨️ Phím tắt
+        <h3 className="mb-1 text-xs font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400">
+          Hàng chờ toàn bộ
         </h3>
-        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-gray-400">
-          <div className="col-span-2 font-semibold text-gray-700 dark:text-gray-300 mt-0">Cảm xúc</div>
-          <div><kbd className="kbd">1</kbd> Tích cực</div>
-          <div><kbd className="kbd">2</kbd> Tiêu cực</div>
-          <div className="col-span-2"><kbd className="kbd">3</kbd> Trung tính</div>
-          <div className="col-span-2 font-semibold text-gray-700 dark:text-gray-300 mt-2">Chủ đề</div>
-          <div><kbd className="kbd">q</kbd> Chất lượng</div>
-          <div><kbd className="kbd">w</kbd> Giá</div>
-          <div><kbd className="kbd">e</kbd> Dịch vụ</div>
-          <div><kbd className="kbd">r</kbd> Địa điểm</div>
-          <div><kbd className="kbd">t</kbd> Khuyến mãi</div>
-          <div><kbd className="kbd">y</kbd> Khác</div>
-          <div className="col-span-2 font-semibold text-gray-700 dark:text-gray-300 mt-2">Liên quan &amp; Mức độ</div>
-          <div><kbd className="kbd">a</kbd> Có LQ</div>
-          <div><kbd className="kbd">s</kbd> Không LQ</div>
-          <div><kbd className="kbd">z</kbd> Bình thường</div>
-          <div><kbd className="kbd">x</kbd> Đáng chú ý</div>
-          <div className="col-span-2"><kbd className="kbd">c</kbd> 🚨 Crisis</div>
-          <div className="col-span-2 font-semibold text-gray-700 dark:text-gray-300 mt-2">Intent</div>
-          <div><kbd className="kbd">h</kbd> 🔥 Hot</div>
-          <div><kbd className="kbd">m</kbd> 🌡️ Warm</div>
-          <div><kbd className="kbd">b</kbd> 🧊 Cold</div>
-          <div><kbd className="kbd">n</kbd> ➖ None</div>
-          <div className="col-span-2 font-semibold text-gray-700 dark:text-gray-300 mt-2">Điều hướng</div>
-          <div><kbd className="kbd">Tab</kbd> Item tiếp</div>
-          <div><kbd className="kbd">Enter</kbd> Next thread</div>
-          <div><kbd className="kbd">→</kbd> Thread sau</div>
-          <div><kbd className="kbd">←</kbd> Thread trước</div>
-          <div className="col-span-2"><kbd className="kbd">Space</kbd> Bỏ qua thread</div>
-        </div>
+        <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
+          Nền tảng: <span className="capitalize">{platform.replace('_', ' ')}</span> · Không phụ thuộc lô đang tải
+        </p>
+        {pendingCountsLoading ? (
+          <div className="flex items-center justify-center gap-2 py-5 text-sm text-gray-500">
+            <span className="h-4 w-4 rounded-full border-2 border-indigo-200 border-t-indigo-600 animate-spin" />
+            Đang đếm dữ liệu...
+          </div>
+        ) : pendingCounts ? (
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-md border border-blue-100 bg-blue-50 p-3 dark:border-blue-900/40 dark:bg-blue-900/20">
+              <div className="text-xs text-blue-700 dark:text-blue-300">Post chưa gán</div>
+              <div className="mt-1 text-2xl font-bold text-blue-900 dark:text-blue-100">
+                {pendingCounts.posts.toLocaleString()}
+              </div>
+            </div>
+            <div className="rounded-md border border-amber-100 bg-amber-50 p-3 dark:border-amber-900/40 dark:bg-amber-900/20">
+              <div className="text-xs text-amber-700 dark:text-amber-300">Comment chưa gán</div>
+              <div className="mt-1 text-2xl font-bold text-amber-900 dark:text-amber-100">
+                {pendingCounts.comments.toLocaleString()}
+              </div>
+            </div>
+            <div className="rounded-md border border-emerald-100 bg-emerald-50 p-3 dark:border-emerald-900/40 dark:bg-emerald-900/20">
+              <div className="text-xs text-emerald-700 dark:text-emerald-300">Post đã gán</div>
+              <div className="mt-1 text-2xl font-bold text-emerald-900 dark:text-emerald-100">
+                {pendingCounts.labeledPosts.toLocaleString()}
+              </div>
+            </div>
+            <div className="rounded-md border border-teal-100 bg-teal-50 p-3 dark:border-teal-900/40 dark:bg-teal-900/20">
+              <div className="text-xs text-teal-700 dark:text-teal-300">Comment đã gán</div>
+              <div className="mt-1 text-2xl font-bold text-teal-900 dark:text-teal-100">
+                {pendingCounts.labeledComments.toLocaleString()}
+              </div>
+            </div>
+            <div className="col-span-2 flex justify-between border-t border-gray-100 pt-3 text-sm dark:border-surface-600">
+              <span className="text-gray-600 dark:text-gray-400">Tổng còn lại</span>
+              <span className="font-bold">{(pendingCounts.posts + pendingCounts.comments).toLocaleString()}</span>
+            </div>
+            <div className="col-span-2 flex justify-between text-sm">
+              <span className="text-gray-600 dark:text-gray-400">Tổng đã gán</span>
+              <span className="font-bold text-emerald-700 dark:text-emerald-300">
+                {(pendingCounts.labeledPosts + pendingCounts.labeledComments).toLocaleString()}
+              </span>
+            </div>
+            <div className="col-span-2 flex justify-between rounded-md bg-gray-50 px-3 py-2 text-sm dark:bg-surface-700/40">
+              <span className="text-gray-600 dark:text-gray-400">Thread hoàn tất</span>
+              <span className="font-bold text-gray-900 dark:text-gray-100">
+                {pendingCounts.completedThreads.toLocaleString()}
+              </span>
+            </div>
+          </div>
+        ) : (
+          <p className="py-4 text-center text-sm text-gray-500">Không tải được số liệu hàng chờ.</p>
+        )}
       </div>
     </div>
   );

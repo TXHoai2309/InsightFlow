@@ -144,7 +144,7 @@ export default function CommentItem({
     <div
       onMouseEnter={() => onFocus(item._internal_id)}
       onClick={() => onFocus(item._internal_id)}
-      className={`card p-3 transition-all duration-150 ${borderCls} ${focusCls} ${isReply ? 'ml-6' : ''}`}
+      className={`comment-item p-3 transition-all duration-150 ${borderCls} ${focusCls} ${isReply ? 'ml-6' : ''}`}
       data-item-id={item._internal_id}
     >
       {/* Header row */}
@@ -164,7 +164,7 @@ export default function CommentItem({
           )}
 
           {/* Avatar */}
-          <div className="w-7 h-7 rounded-full bg-blue-600 dark:bg-blue-700 flex items-center justify-center
+          <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-[#6C63FF] to-[#9B8FF8] flex items-center justify-center
                           text-white text-xs font-bold flex-shrink-0">
             {author.replace('@', '').charAt(0).toUpperCase()}
           </div>

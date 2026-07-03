@@ -1,7 +1,7 @@
 ﻿import { useState, useCallback } from 'react';
 import { Person, Thread } from '../types';
 import { parseCrawlerJson, RawPost } from '../utils/dataPartition';
-import { AssignmentView, loadSupabaseThreads, PlatformFilter, SupabaseConfig } from '../utils/supabaseRest';
+import { AssignmentView, loadSupabaseThreads, PlatformFilter, SupabaseConfig, SupabaseDateRange } from '../utils/supabaseRest';
 
 interface UseDataReturn {
   threads: Thread[];
@@ -16,6 +16,7 @@ interface UseDataReturn {
     limit: number,
     assignmentView: AssignmentView,
     assignee: Person,
+    dateRange?: SupabaseDateRange,
   ) => Promise<void>;
   resetData: () => void;
 }
@@ -120,6 +121,7 @@ export function useData(): UseDataReturn {
     limit: number,
     assignmentView: AssignmentView,
     assignee: Person,
+    dateRange: SupabaseDateRange = {},
   ) => {
     setLoading(true);
     setError(null);
@@ -135,6 +137,7 @@ export function useData(): UseDataReturn {
         limit,
         assignmentView,
         assignee,
+        dateRange,
       );
       if (nextThreads.length === 0) {
         setError('✅ Queue trống — không còn assignment nào cần gán trong queue này!');

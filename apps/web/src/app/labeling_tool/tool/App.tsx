@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Person, Label, Thread, TopicKey, TOPIC_HOTKEYS } from './types';
 import { getDailyGoal } from './utils/storage';
-import { useTheme } from '@/contexts/ThemeContext';
 import { useData } from './hooks/useData';
 import { useLabeling } from './hooks/useLabeling';
 import ThreadView from './components/ThreadView';
@@ -11,7 +10,13 @@ import ProgressBar from './components/ProgressBar';
 import FilterPanel from './components/FilterPanel';
 import Sidebar from './components/Sidebar';
 import ExportButton from './components/ExportButton';
-import { AssignmentView, PlatformFilter, SupabaseConfig } from './utils/supabaseRest';
+import {
+  AssignmentView,
+  loadPendingAssignmentCounts,
+  PendingAssignmentCounts,
+  PlatformFilter,
+  SupabaseConfig,
+} from './utils/supabaseRest';
 
 // ============================================================
 // Small kbd style injection (used in Sidebar)
@@ -34,10 +39,6 @@ const SUPABASE_ANON_KEY = 'insightflow_supabase_anon_key';
 
 
 export default function App() {
-  // Dark mode follows InsightFlow theme.
-  const { theme, toggleTheme } = useTheme();
-  const dark = theme === 'dark';
-
   // ─── Daily goal ────────────────────────────────────────
   const [dailyGoal, setDailyGoal] = useState<number>(getDailyGoal);
 
@@ -56,6 +57,10 @@ export default function App() {
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('facebook');
   const [assignmentView, setAssignmentView] = useState<AssignmentView>('pending');
   const [supabaseLimit, setSupabaseLimit] = useState(20);
+  const [queueDateFrom, setQueueDateFrom] = useState('');
+  const [queueDateTo, setQueueDateTo] = useState('');
+  const [pendingCounts, setPendingCounts] = useState<PendingAssignmentCounts | null>(null);
+  const [pendingCountsLoading, setPendingCountsLoading] = useState(false);
 
   useEffect(() => {
     if (supabaseUrl.trim() && supabaseAnonKey.trim()) return;
@@ -123,6 +128,39 @@ export default function App() {
   }, [brandFilter, sourceFilter, onlyRated, skipGMapsSpam, jumpTo]);
 
   const currentThread: Thread | null = filteredThreads[currentThreadIndex] ?? null;
+
+  const completedThreadCount = useMemo(
+    () => Object.values(threadStates).filter(
+      state => state.status === 'completed' || state.status === 'skipped',
+    ).length,
+    [threadStates],
+  );
+
+  useEffect(() => {
+    if (!supabaseUrl.trim() || !supabaseAnonKey.trim()) {
+      setPendingCounts(null);
+      return;
+    }
+    let cancelled = false;
+    setPendingCountsLoading(true);
+    loadPendingAssignmentCounts(
+      { url: supabaseUrl.trim(), anonKey: supabaseAnonKey.trim() },
+      platformFilter,
+      person,
+    )
+      .then(counts => {
+        if (!cancelled) setPendingCounts(counts);
+      })
+      .catch(() => {
+        if (!cancelled) setPendingCounts(null);
+      })
+      .finally(() => {
+        if (!cancelled) setPendingCountsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [completedThreadCount, platformFilter, supabaseAnonKey, supabaseUrl]);
 
   // ─── All items in current thread (flat, ordered) ───────
   const threadItems = useMemo(() => {
@@ -236,15 +274,26 @@ export default function App() {
       supabaseLimit,
       assignmentView,
       person,
+      { from: queueDateFrom || undefined, to: queueDateTo || undefined },
     );
-  }, [assignmentView, loadFromSupabase, person, platformFilter, supabaseAnonKey, supabaseLimit, supabaseUrl]);
+  }, [
+    assignmentView,
+    loadFromSupabase,
+    person,
+    platformFilter,
+    queueDateFrom,
+    queueDateTo,
+    supabaseAnonKey,
+    supabaseLimit,
+    supabaseUrl,
+  ]);
 
   // ─── Render ────────────────────────────────────────────
   return (
     <>
       <style>{KBD_STYLE}</style>
 
-      <div className="min-h-screen bg-gray-100 dark:bg-slate-950">
+      <div className="labeling-tool-scope min-h-screen bg-gray-100 dark:bg-slate-950">
         {/* ── Sticky Header ── */}
         <header className="sticky top-0 z-40 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-surface-600 shadow-sm">
           <div className="max-w-[1600px] mx-auto px-4 py-3 flex flex-col gap-2">
@@ -314,27 +363,65 @@ export default function App() {
                   value={supabaseLimit}
                   onChange={e => setSupabaseLimit(Math.max(1, Number(e.target.value) || 20))}
                   className="select-control text-xs w-20"
-                  title="Supabase thread limit"
+                  title="Số thread cần tải"
                 />
+
+                <label className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                  Từ
+                  <input
+                    type="date"
+                    value={queueDateFrom}
+                    onChange={e => setQueueDateFrom(e.target.value)}
+                    className="select-control text-xs w-32"
+                    title="Lọc theo ngày đăng của post/comment cần gán"
+                  />
+                </label>
+
+                <label className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                  Đến
+                  <input
+                    type="date"
+                    value={queueDateTo}
+                    onChange={e => setQueueDateTo(e.target.value)}
+                    className="select-control text-xs w-32"
+                    title="Lọc theo ngày đăng của post/comment cần gán"
+                  />
+                </label>
+
+                {(queueDateFrom || queueDateTo) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQueueDateFrom('');
+                      setQueueDateTo('');
+                    }}
+                    className="btn-secondary text-xs"
+                    title="Xóa lọc ngày"
+                  >
+                    Xóa ngày
+                  </button>
+                )}
 
                 <button
                   onClick={() => void handleSupabaseLoad()}
                   disabled={loading || !person || !supabaseUrl.trim() || !supabaseAnonKey.trim()}
-                  className="btn-primary text-xs disabled:opacity-50"
+                  className="btn-primary text-xs disabled:opacity-70 inline-flex items-center justify-center gap-2 min-w-[160px]"
                   title={person
-                    ? 'Load from Supabase demo anon mode'
+                    ? 'Tải dữ liệu / Load data'
                     : 'Chọn người gán nhãn trước khi tải Supabase'}
+                  aria-busy={loading}
                 >
-                  Supabase
-                </button>
-
-                {/* Dark mode toggle */}
-                <button
-                  onClick={toggleTheme}
-                  className="btn-secondary text-xs"
-                  title="Toggle dark/light mode"
-                >
-                  {dark ? '☀️ Light' : '🌙 Dark'}
+                  {loading ? (
+                    <>
+                      <span
+                        className="inline-block h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin"
+                        aria-hidden="true"
+                      />
+                      Đang tải / Loading...
+                    </>
+                  ) : (
+                    'Tải data / Load data'
+                  )}
                 </button>
 
                 {/* Export */}
@@ -409,6 +496,35 @@ export default function App() {
             </div>
           )}
 
+          {/* Loading state */}
+          {loading && (
+            <div
+              className="flex min-h-[420px] flex-col items-center justify-center gap-4 text-center"
+              role="status"
+              aria-live="polite"
+            >
+              <div className="relative flex h-16 w-16 items-center justify-center">
+                <span className="absolute inset-0 rounded-full border-4 border-indigo-100" />
+                <span className="absolute inset-0 rounded-full border-4 border-transparent border-t-indigo-600 animate-spin" />
+                <span className="h-2.5 w-2.5 rounded-full bg-indigo-600 animate-pulse" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
+                  Đang tải dữ liệu / Loading data
+                  <span className="inline-flex w-6 justify-start" aria-hidden="true">
+                    <span className="animate-pulse">...</span>
+                  </span>
+                </h2>
+                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                  Đang lọc bài viết và bình luận theo nền tảng, ngày đã chọn.
+                </p>
+              </div>
+              <div className="h-1.5 w-64 max-w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+                <div className="h-full w-1/3 rounded-full bg-indigo-600 animate-pulse" />
+              </div>
+            </div>
+          )}
+
           {/* Empty state */}
           {rawThreads.length === 0 && !loading && (
             <div className="flex flex-col items-center justify-center py-24 gap-4">
@@ -450,6 +566,9 @@ export default function App() {
                   itemCount={itemCount}
                   dailyGoal={dailyGoal}
                   onDailyGoalChange={setDailyGoal}
+                  pendingCounts={pendingCounts}
+                  pendingCountsLoading={pendingCountsLoading}
+                  platform={platformFilter}
                 />
               </div>
             </div>

@@ -1,34 +1,259 @@
+/* apps/web/src/app/labeling_tool/labeling-tool.css */
+
+/* Glass Card & System Sync for labeling tool */
 .labeling-tool-scope .card {
-  @apply rounded-lg border border-gray-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900;
+  background-color: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-card);
+  transition: var(--transition-theme);
 }
 
+.dark .labeling-tool-scope .card {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 0.5px solid rgba(255, 255, 255, 0.10);
+  border-radius: 14px;
+  box-shadow: none;
+}
+
+/* Select inputs */
 .labeling-tool-scope .select-control {
-  @apply cursor-pointer rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-100;
+  cursor: pointer;
+  border-radius: 8px;
+  border: 1.5px solid var(--color-border);
+  background-color: var(--color-bg-surface);
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  outline: none;
+}
+.labeling-tool-scope .select-control:focus {
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 2px var(--color-brand-border);
+}
+.dark .labeling-tool-scope .select-control {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
+/* Primary Button */
 .labeling-tool-scope .btn-primary {
-  @apply inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 8px;
+  background-color: var(--color-brand);
+  color: white;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  transition: background-color 0.2s, transform 0.1s;
+  border: none;
+  cursor: pointer;
+}
+.labeling-tool-scope .btn-primary:hover {
+  background-color: var(--color-brand-hover);
+}
+.dark .labeling-tool-scope .btn-primary {
+  background: rgba(139, 92, 246, 0.25);
+  border: 0.5px solid rgba(255, 255, 255, 0.18);
+  color: #E9DDFF;
+}
+.dark .labeling-tool-scope .btn-primary:hover {
+  background: rgba(139, 92, 246, 0.35);
 }
 
+/* Secondary Button */
 .labeling-tool-scope .btn-secondary {
-  @apply inline-flex items-center gap-2 rounded-lg bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-800 transition-colors hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 dark:bg-slate-800 dark:text-gray-200 dark:hover:bg-slate-700;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 8px;
+  background-color: var(--color-bg-surface-raised);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  transition: background-color 0.2s;
+  cursor: pointer;
+}
+.labeling-tool-scope .btn-secondary:hover {
+  background-color: var(--color-bg-overlay);
+}
+.dark .labeling-tool-scope .btn-secondary {
+  background-color: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: var(--color-text-primary);
+}
+.dark .labeling-tool-scope .btn-secondary:hover {
+  background-color: rgba(255, 255, 255, 0.12);
 }
 
+/* Danger Button */
 .labeling-tool-scope .btn-danger {
-  @apply inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 8px;
+  background-color: var(--color-error);
+  color: white;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  transition: background-color 0.2s;
+  border: none;
+  cursor: pointer;
+}
+.labeling-tool-scope .btn-danger:hover {
+  opacity: 0.9;
 }
 
-.labeling-tool-scope .item-unlabeled { @apply border-l-4 border-l-orange-400; }
-.labeling-tool-scope .item-complete { @apply border-l-4 border-l-emerald-500; }
-.labeling-tool-scope .item-skipped { @apply border-l-4 border-l-gray-400 opacity-50; }
-.labeling-tool-scope .item-focused { @apply ring-2 ring-blue-500 dark:ring-blue-400; }
-.labeling-tool-scope .badge-positive { @apply border border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300; }
-.labeling-tool-scope .badge-negative { @apply border border-red-300 bg-red-100 text-red-800 dark:border-red-700 dark:bg-red-900/40 dark:text-red-300; }
-.labeling-tool-scope .badge-neutral { @apply border border-gray-300 bg-gray-100 text-gray-700 dark:border-gray-600 dark:bg-gray-700/40 dark:text-gray-300; }
-.labeling-tool-scope .badge-crisis { @apply animate-pulse border border-red-400 bg-red-100 text-red-800 dark:bg-red-900/60 dark:text-red-300; }
-.labeling-tool-scope .badge-notable { @apply border border-yellow-300 bg-yellow-100 text-yellow-800 dark:border-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300; }
-.labeling-tool-scope .badge-normal { @apply border border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-300; }
-.labeling-tool-scope .brand-highlight { @apply rounded bg-yellow-200 px-0.5 dark:bg-yellow-800/60; }
-.labeling-tool-scope .topic-panel { @apply absolute z-50 mt-1 flex min-w-[180px] flex-col gap-0.5 rounded-lg border border-gray-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-800; }
-.labeling-tool-scope .topic-option { @apply flex cursor-pointer select-none items-center gap-2 rounded px-3 py-1.5 text-sm transition-colors hover:bg-gray-100 dark:hover:bg-slate-700; }
-.labeling-tool-scope .thread-separator { @apply my-3 border-t border-dashed border-gray-200 dark:border-slate-700; }
+/* Left borders for unlabeled/complete status */
+.labeling-tool-scope .item-unlabeled { border-left-width: 4px; border-left-color: var(--color-warning); }
+.labeling-tool-scope .item-complete { border-left-width: 4px; border-left-color: var(--color-success); }
+.labeling-tool-scope .item-skipped { border-left-width: 4px; border-left-color: var(--color-text-muted); opacity: 0.6; }
+.labeling-tool-scope .item-focused {
+  box-shadow: 0 0 0 2px var(--color-brand) !important;
+}
+
+/* Badges */
+.labeling-tool-scope .badge-positive {
+  background-color: var(--color-success-subtle);
+  color: var(--color-success);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}
+.labeling-tool-scope .badge-negative {
+  background-color: var(--color-error-subtle);
+  color: var(--color-error);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+.labeling-tool-scope .badge-neutral {
+  background-color: var(--color-bg-surface-raised);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+}
+.labeling-tool-scope .badge-crisis {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  background-color: var(--color-error-subtle);
+  color: var(--color-error);
+  border: 1px solid var(--color-error);
+}
+.labeling-tool-scope .badge-notable {
+  background-color: var(--color-warning-subtle);
+  color: var(--color-warning);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+.labeling-tool-scope .badge-normal {
+  background-color: var(--color-info-subtle);
+  color: var(--color-info);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+/* Intent Badges */
+.labeling-tool-scope .badge-intent-hot {
+  background-color: rgba(249, 115, 22, 0.15);
+  color: rgb(234, 88, 12);
+  border: 1px solid rgba(249, 115, 22, 0.3);
+}
+.labeling-tool-scope .badge-intent-warm {
+  background-color: rgba(234, 179, 8, 0.15);
+  color: rgb(161, 98, 7);
+  border: 1px solid rgba(234, 179, 8, 0.3);
+}
+.labeling-tool-scope .badge-intent-cold {
+  background-color: rgba(59, 130, 246, 0.15);
+  color: rgb(37, 99, 235);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+.labeling-tool-scope .badge-intent-none {
+  background-color: var(--color-bg-surface-raised);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+}
+
+/* Brand highlight */
+.labeling-tool-scope .brand-highlight {
+  background-color: var(--color-warning-subtle);
+  color: var(--color-text-primary);
+  font-weight: 600;
+  padding: 0 3px;
+  border-radius: 4px;
+}
+
+/* Topic dropdown panel */
+.labeling-tool-scope .topic-panel {
+  position: absolute;
+  z-index: 50;
+  margin-top: 0.25rem;
+  display: flex;
+  min-w: 180px;
+  flex-direction: column;
+  gap: 0.125rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background-color: var(--color-bg-surface);
+  padding: 0.5rem;
+  box-shadow: var(--shadow-dropdown);
+}
+.dark .labeling-tool-scope .topic-panel {
+  background-color: #161625;
+}
+
+.labeling-tool-scope .topic-option {
+  display: flex;
+  cursor: pointer;
+  user-select: none;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 4px;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+  color: var(--color-text-primary);
+  transition: background-color 0.15s;
+}
+.labeling-tool-scope .topic-option:hover {
+  background-color: var(--color-bg-surface-raised);
+}
+
+/* Thread structure for comments/replies */
+.labeling-tool-scope .comment-item {
+  background-color: transparent;
+  border-left: 2px solid var(--color-border);
+  margin-bottom: 0.5rem;
+  border-radius: 0;
+  transition: all 0.2s ease;
+}
+
+.labeling-tool-scope .comment-item:hover {
+  background-color: var(--color-bg-surface-raised);
+}
+
+.labeling-tool-scope .comment-item.item-focused {
+  border-left-color: var(--color-brand);
+  background-color: var(--color-bg-surface-raised);
+  box-shadow: none;
+}
+
+.labeling-tool-scope .comment-item.item-complete {
+  border-left-color: var(--color-success);
+}
+
+.labeling-tool-scope .comment-item.item-unlabeled {
+  border-left-color: var(--color-warning);
+}
+
+.labeling-tool-scope .comment-item.item-skipped {
+  border-left-color: var(--color-text-muted);
+  opacity: 0.6;
+}
+
+.labeling-tool-scope .thread-separator {
+  margin-top: 0.75rem;
+  margin-bottom: 0.75rem;
+  border-top: 1px dashed var(--color-border);
+}

@@ -17,6 +17,19 @@ export interface SupabaseConfig {
   anonKey: string;
 }
 
+export interface SupabaseDateRange {
+  from?: string;
+  to?: string;
+}
+
+export interface PendingAssignmentCounts {
+  posts: number;
+  comments: number;
+  labeledPosts: number;
+  labeledComments: number;
+  completedThreads: number;
+}
+
 interface SupabaseAssignment {
   assignment_id: string;
   entity_key: string;
@@ -120,6 +133,27 @@ async function request<T>(
   return JSON.parse(text) as T;
 }
 
+async function requestExactCount(
+  config: SupabaseConfig,
+  table: string,
+  query: string,
+): Promise<number> {
+  const response = await fetch(endpoint(config, table, query), {
+    headers: {
+      apikey: config.anonKey,
+      Authorization: `Bearer ${config.anonKey}`,
+      Prefer: 'count=exact',
+      Range: '0-0',
+    },
+  });
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(`Supabase ${table} ${response.status}: ${message}`);
+  }
+  const total = response.headers.get('content-range')?.split('/').pop();
+  return total && total !== '*' ? Number(total) || 0 : 0;
+}
+
 function encode(value: string): string {
   return encodeURIComponent(value);
 }
@@ -134,6 +168,113 @@ function toQueueStatus(status: string): 'unassigned' | 'updated_review' | null {
   return status === 'unassigned' || status === 'updated_review' ? status : null;
 }
 
+export async function loadPendingAssignmentCounts(
+  config: SupabaseConfig,
+  platform: PlatformFilter,
+  assignee = 'Person A',
+): Promise<PendingAssignmentCounts> {
+  const platformFilter = platform === 'news'
+    ? 'in.(news,news_html)'
+    : `eq.${platform}`;
+  const entityBase = {
+    select: 'platform',
+    platform: platformFilter,
+    crawl_status: 'eq.active',
+    limit: '1',
+  };
+  const annotationBase = {
+    select: 'annotation_id',
+    platform: platformFilter,
+    assignee: `eq.${assignee}`,
+    status: 'in.(completed,skipped)',
+    limit: '1',
+  };
+  const assignmentBase = {
+    select: 'assignment_id',
+    platform: platformFilter,
+    entity_type: 'eq.post',
+    status: 'in.(completed,skipped)',
+    limit: '1',
+  };
+  const [allPosts, allComments, handledPosts, handledComments, completedThreads] = await Promise.all([
+    requestExactCount(config, 'posts', new URLSearchParams(entityBase).toString()),
+    requestExactCount(config, 'comments', new URLSearchParams(entityBase).toString()),
+    requestExactCount(config, 'annotations', new URLSearchParams({
+      ...annotationBase,
+      entity_type: 'eq.post',
+    }).toString()),
+    requestExactCount(config, 'annotations', new URLSearchParams({
+      ...annotationBase,
+      entity_type: 'eq.comment',
+    }).toString()),
+    requestExactCount(config, 'labeling_assignments', new URLSearchParams(assignmentBase).toString()),
+  ]);
+  return {
+    posts: Math.max(allPosts - handledPosts, 0),
+    comments: Math.max(allComments - handledComments, 0),
+    labeledPosts: handledPosts,
+    labeledComments: handledComments,
+    completedThreads,
+  };
+}
+
+function hasDateRange(dateRange: SupabaseDateRange): boolean {
+  return Boolean(dateRange.from || dateRange.to);
+}
+
+function isWithinDateRange(value: string | null | undefined, dateRange: SupabaseDateRange): boolean {
+  if (!hasDateRange(dateRange)) return true;
+  if (!value) return false;
+  const time = new Date(value).getTime();
+  if (Number.isNaN(time)) return false;
+  if (dateRange.from) {
+    const from = new Date(`${dateRange.from}T00:00:00`).getTime();
+    if (time < from) return false;
+  }
+  if (dateRange.to) {
+    const to = new Date(`${dateRange.to}T23:59:59.999`).getTime();
+    if (time > to) return false;
+  }
+  return true;
+}
+
+function commentIdFromAssignment(assignment: SupabaseAssignment): string | null {
+  if (assignment.root_comment_id) return assignment.root_comment_id;
+  const parts = assignment.entity_key.split(':');
+  return parts.length >= 4 ? parts[parts.length - 1] : null;
+}
+
+function assignmentPostedAt(
+  assignment: SupabaseAssignment,
+  post: SupabasePost,
+  comments: SupabaseComment[],
+): string | null {
+  if (assignment.entity_type === 'post') return post.posted_at;
+  const commentId = commentIdFromAssignment(assignment);
+  if (!commentId) return null;
+  return comments.find(comment => comment.comment_id === commentId)?.posted_at ?? null;
+}
+
+async function loadAssignmentCommentPostedAt(
+  config: SupabaseConfig,
+  assignment: SupabaseAssignment,
+): Promise<string | null> {
+  const commentId = commentIdFromAssignment(assignment);
+  if (!commentId) return null;
+  const query = new URLSearchParams({
+    select: 'posted_at',
+    platform: `eq.${assignment.platform}`,
+    post_id: `eq.${assignment.post_id}`,
+    comment_id: `eq.${commentId}`,
+    limit: '1',
+  }).toString();
+  const rows = await request<Array<Pick<SupabaseComment, 'posted_at'>>>(
+    config,
+    'comments',
+    query,
+  );
+  return rows[0]?.posted_at ?? null;
+}
 function postRowToRaw(row: SupabasePost): RawPost {
   const payload = row.payload_json ?? {};
   return {
@@ -241,67 +382,88 @@ export async function loadSupabaseThreads(
   limit: number,
   assignmentView: AssignmentView = 'pending',
   assignee = 'Person A',
+  dateRange: SupabaseDateRange = {},
 ): Promise<Thread[]> {
   const platformFilter = platform === 'news'
     ? 'in.(news,news_html)'
     : `eq.${platform}`;
-  const assignmentQuery = new URLSearchParams({
-    select: '*',
-    platform: platformFilter,
-    status: assignmentView === 'completed'
-      ? 'eq.completed'
-      : 'in.(updated_review,unassigned)',
-    limit: String(limit),
-    order: assignmentView === 'completed' ? 'updated_at.desc' : 'updated_at.asc',
-  }).toString();
-  const assignments = await request<SupabaseAssignment[]>(
-    config,
-    'labeling_assignments',
-    assignmentQuery,
-  );
-  assignments.sort((a, b) => queueOrder(a.status) - queueOrder(b.status));
-
   const threads: Thread[] = [];
-  for (const assignment of assignments) {
-    const postQuery = `select=*&platform=eq.${encode(assignment.platform)}&post_id=eq.${encode(assignment.post_id)}&limit=1`;
-    const posts = await request<SupabasePost[]>(config, 'posts', postQuery);
-    const post = posts[0];
-    if (!post) continue;
+  const includedPostKeys = new Set<string>();
+  const pageSize = hasDateRange(dateRange) ? 100 : limit;
+  let offset = 0;
+  let exhausted = false;
 
-    const comments = await loadPostComments(config, assignment.platform, assignment.post_id);
-    const parsed = parseCrawlerJson([buildRawPost(post, comments)], false)[0];
-    if (!parsed) continue;
-
-    parsed._assignment_id = assignment.assignment_id;
-    parsed._assignment_entity_key = assignment.entity_key;
-    parsed._data_source = 'supabase';
-    parsed.post._queue_status = toQueueStatus(assignment.status);
-    parsed.post._data_version = post.data_version;
-
-    const annotationQuery = new URLSearchParams({
-      select: 'entity_key,assignee,label,status,labeled_version,needs_review,updated_at',
-      platform: `eq.${assignment.platform}`,
-      post_id: `eq.${assignment.post_id}`,
-      assignee: `eq.${assignee}`,
-    }).toString();
-    const annotations = await request<SupabaseAnnotation[]>(
+  while (!exhausted && threads.length < limit) {
+    const assignmentParams = new URLSearchParams({
+      select: '*',
+      platform: platformFilter,
+      status: assignmentView === 'completed'
+        ? 'eq.completed'
+        : 'in.(updated_review,unassigned)',
+      limit: String(pageSize),
+      offset: String(offset),
+      order: 'updated_at.desc',
+    });
+    const assignments = await request<SupabaseAssignment[]>(
       config,
-      'annotations',
-      annotationQuery,
+      'labeling_assignments',
+      assignmentParams.toString(),
     );
-    if (assignmentView === 'completed' && annotations.length === 0) {
-      await resetSupabaseAssignment(config, assignment.assignment_id);
-      continue;
+    assignments.sort((a, b) => queueOrder(a.status) - queueOrder(b.status));
+    exhausted = assignments.length < pageSize;
+    offset += assignments.length;
+
+    for (const assignment of assignments) {
+      const postKey = `${assignment.platform}:${assignment.post_id}`;
+      if (includedPostKeys.has(postKey)) continue;
+
+      const postQuery = `select=*&platform=eq.${encode(assignment.platform)}&post_id=eq.${encode(assignment.post_id)}&limit=1`;
+      const posts = await request<SupabasePost[]>(config, 'posts', postQuery);
+      const post = posts[0];
+      if (!post) continue;
+
+      const assignedPostedAt = assignment.entity_type === 'post'
+        ? post.posted_at
+        : await loadAssignmentCommentPostedAt(config, assignment);
+      if (!isWithinDateRange(assignedPostedAt, dateRange)) continue;
+
+      const comments = await loadPostComments(config, assignment.platform, assignment.post_id);
+      const parsed = parseCrawlerJson([buildRawPost(post, comments)], false)[0];
+      if (!parsed) continue;
+      includedPostKeys.add(postKey);
+
+      parsed._assignment_id = assignment.assignment_id;
+      parsed._assignment_entity_key = assignment.entity_key;
+      parsed._data_source = 'supabase';
+      parsed.post._queue_status = toQueueStatus(assignment.status);
+      parsed.post._data_version = post.data_version;
+
+      const annotationQuery = new URLSearchParams({
+        select: 'entity_key,assignee,label,status,labeled_version,needs_review,updated_at',
+        platform: `eq.${assignment.platform}`,
+        post_id: `eq.${assignment.post_id}`,
+        assignee: `eq.${assignee}`,
+      }).toString();
+      const annotations = await request<SupabaseAnnotation[]>(
+        config,
+        'annotations',
+        annotationQuery,
+      );
+      if (assignmentView === 'completed' && annotations.length === 0) {
+        await resetSupabaseAssignment(config, assignment.assignment_id);
+        continue;
+      }
+      const annotationByEntity = new Map(
+        annotations.map(annotation => [annotation.entity_key, annotation]),
+      );
+      for (const item of threadItems(parsed)) {
+        const annotation = annotationByEntity.get(item._entity_key);
+        const loadedLabel = annotation ? annotationToStoredLabel(annotation) : null;
+        if (loadedLabel) item._loaded_label = loadedLabel;
+      }
+      threads.push(parsed);
+      if (threads.length >= limit) break;
     }
-    const annotationByEntity = new Map(
-      annotations.map(annotation => [annotation.entity_key, annotation]),
-    );
-    for (const item of threadItems(parsed)) {
-      const annotation = annotationByEntity.get(item._entity_key);
-      const loadedLabel = annotation ? annotationToStoredLabel(annotation) : null;
-      if (loadedLabel) item._loaded_label = loadedLabel;
-    }
-    threads.push(parsed);
   }
   return threads;
 }
@@ -406,6 +568,34 @@ export async function updateSupabaseAssignment(
     config,
     'labeling_assignments',
     `assignment_id=eq.${encode(assignmentId)}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({
+        status,
+        completed_at: now,
+        updated_at: now,
+      }),
+      headers: { Prefer: 'return=minimal' },
+    },
+  );
+}
+
+export async function updateSupabasePostAssignments(
+  config: SupabaseConfig,
+  platform: string,
+  postId: string,
+  status: 'completed' | 'skipped',
+): Promise<void> {
+  const now = new Date().toISOString();
+  const query = new URLSearchParams({
+    platform: `eq.${platform}`,
+    post_id: `eq.${postId}`,
+    status: 'in.(unassigned,assigned,updated_review)',
+  }).toString();
+  await request<void>(
+    config,
+    'labeling_assignments',
+    query,
     {
       method: 'PATCH',
       body: JSON.stringify({

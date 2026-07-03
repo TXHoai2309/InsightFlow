@@ -43,13 +43,13 @@ function IntentBadge({ intent }: { intent: Label['intent'] }) {
   if (!intent) return <span className="text-gray-400 dark:text-gray-500 text-xs">--</span>;
   const meta = INTENT_LABELS[intent];
   const cls = {
-    hot:  'bg-orange-500 text-white',
-    warm: 'bg-yellow-500 text-white',
-    cold: 'bg-blue-400 text-white',
-    none: 'bg-gray-500 text-white',
+    hot:  'badge-intent-hot',
+    warm: 'badge-intent-warm',
+    cold: 'badge-intent-cold',
+    none: 'badge-intent-none',
   }[intent];
   return (
-    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${cls}`} title={meta.tooltip}>
+    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${cls}`} title={meta.tooltip}>
       {meta.emoji} {meta.label}
     </span>
   );

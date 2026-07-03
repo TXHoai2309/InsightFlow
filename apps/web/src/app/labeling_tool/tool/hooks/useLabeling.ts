@@ -22,7 +22,7 @@ import {
 import {
   saveSupabaseAnnotation,
   SupabaseConfig,
-  updateSupabaseAssignment,
+  updateSupabasePostAssignments,
 } from '../utils/supabaseRest';
 
 export type DisplayLabel = StoredLabel & { needs_review: boolean };
@@ -253,7 +253,12 @@ export function useLabeling(
         versionToken,
       );
       if (supabaseConfig && thread._assignment_id) {
-        await updateSupabaseAssignment(supabaseConfig, thread._assignment_id, 'completed');
+        await updateSupabasePostAssignments(
+          supabaseConfig,
+          thread.post._platform,
+          String(thread.post.post_id ?? ''),
+          'completed',
+        );
       }
       setThreadStates(previous => ({ ...previous, [state.thread_id]: state }));
     } finally {
@@ -356,7 +361,12 @@ export function useLabeling(
         threadVersionToken(thread),
       );
       if (supabaseConfig && thread._assignment_id) {
-        await updateSupabaseAssignment(supabaseConfig, thread._assignment_id, 'skipped');
+        await updateSupabasePostAssignments(
+          supabaseConfig,
+          thread.post._platform,
+          String(thread.post.post_id ?? ''),
+          'skipped',
+        );
       }
       setThreadStates(previous => ({ ...previous, [state.thread_id]: state }));
       goNext();
@@ -404,7 +414,12 @@ export function useLabeling(
         threadVersionToken(thread),
       );
       if (supabaseConfig && thread._assignment_id) {
-        await updateSupabaseAssignment(supabaseConfig, thread._assignment_id, 'completed');
+        await updateSupabasePostAssignments(
+          supabaseConfig,
+          thread.post._platform,
+          String(thread.post.post_id ?? ''),
+          'completed',
+        );
       }
       setThreadStates(previous => ({ ...previous, [state.thread_id]: state }));
       goNext();
