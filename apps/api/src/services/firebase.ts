@@ -6,7 +6,6 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 
 const SERVICE_ACCOUNT_PATH = path.join(process.cwd(), "service-account.json");
-const AUTH_PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "insightflow-6ce1f";
 
 // Attempt to load .env.local for other variables
 const possiblePaths = [

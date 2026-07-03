@@ -295,7 +295,6 @@ export const useAlertStore = create<AlertState>()(
       const resolvedAt =
         newStatus === "resolved" ? new Date().toISOString() : null;
 
-      let newAttemptItem: ResolutionAttempt | undefined = undefined;
       const auditFields = {
         updated_by: profile.uid,
         updated_by_role: profile.role,
@@ -308,7 +307,7 @@ export const useAlertStore = create<AlertState>()(
           if (alert.id === id) {
             let nextHistory = alert.resolution_history ? [...alert.resolution_history] : [];
             if (attempt) {
-              newAttemptItem = {
+              const newAttemptItem: ResolutionAttempt = {
                 attempt_number: nextHistory.length + 1,
                 timestamp: new Date().toISOString(),
                 note: attempt.note,
