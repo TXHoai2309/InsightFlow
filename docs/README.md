@@ -412,3 +412,57 @@ Các ghi chú dưới đây cập nhật trạng thái repo hiện tại và đ�
   - nút quay về đầu trang
   - summary panel bên phải đã được nén gọn để dễ xem đủ chỉ số hơn trên desktop
 - Hệ thống frontend hiện có thêm shared component `PlatformLogo` để đồng bộ logo nền tảng giữa bảng Mentions và trang chi tiết đề cập.
+
+---
+
+## Labeling Tool trong InsightFlow
+
+InsightFlow hien co them route rieng `/labeling_tool` de ho tro gan nhan du lieu social listening phuc vu huan luyen/kiem thu NLP va quy trinh du lieu.
+
+### Muc dich
+
+- Gan nhan sentiment, topic, relevance, urgency va intent cho post/comment.
+- Xem lai va sua nhan da gan.
+- Kiem soat hang cho gan nhan theo tung nen tang.
+- Tach biet du lieu goc, queue va nhan that de de cap nhat du lieu crawl moi ma khong mat nhan cu.
+
+### Cong nghe
+
+- Next.js 14 App Router, route `/labeling_tool`.
+- React + TypeScript cho UI gan nhan.
+- Tailwind CSS de dong bo giao dien voi InsightFlow.
+- Supabase Postgres de luu du lieu crawl, queue va annotations.
+- Supabase REST API de frontend doc/ghi du lieu trong ban demo.
+- SQLite + Python pipeline de import crawl, cap nhat du lieu va sync len Supabase.
+
+### Luong du lieu
+
+```text
+Crawler JSON -> SQLite local -> Supabase -> /labeling_tool -> annotations + revisions
+```
+
+### Bang lien quan
+
+- `posts`: bai viet goc sau crawl.
+- `comments`: comment/reply goc sau crawl.
+- `labeling_assignments`: queue/thread can gan nhan hoac da hoan tat.
+- `annotations`: nhan that cua tung item.
+- `annotation_revisions`: lich su sua nhan.
+- `metrics_history`: lich su metric sau moi lan crawl.
+- `change_events`: lich su thay doi du lieu.
+
+### Cach su dung demo
+
+1. Sync du lieu crawl len Supabase.
+2. Mo `/labeling_tool`.
+3. Chon nen tang va khoang ngay.
+4. Bam `Tai data / Load data`.
+5. Gan nhan tung post/comment.
+6. Bam hoan tat thread de cap nhat queue.
+
+### Luu y
+
+- `annotations` la noi luu nhan that.
+- `labeling_assignments` chi la bo dieu phoi queue/thread.
+- Mot thread co the hoan tat nhung so item co nhan co the lon hon 1 vi moi post/comment la mot item rieng.
+- Loc ngay co the cham neu khoang ngay rong; nen toi uu bang cot `sort_date` trong `labeling_assignments` khi len production.

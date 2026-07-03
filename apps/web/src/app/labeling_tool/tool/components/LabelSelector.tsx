@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Label, TopicKey, Intent, SENTIMENT_LABELS, TOPIC_LABELS, URGENCY_LABELS, INTENT_LABELS } from '../types';
 
 interface LabelSelectorProps {
@@ -12,7 +12,7 @@ interface LabelSelectorProps {
 // Badges
 // ============================================================
 function SentimentBadge({ sentiment }: { sentiment: Label['sentiment'] }) {
-  if (!sentiment) return <span className="text-gray-400 dark:text-gray-500 text-xs">--</span>;
+  if (!sentiment) return null;
   const cls = {
     positive: 'badge-positive',
     negative: 'badge-negative',
@@ -26,7 +26,7 @@ function SentimentBadge({ sentiment }: { sentiment: Label['sentiment'] }) {
 }
 
 function UrgencyBadge({ urgency }: { urgency: Label['urgency'] }) {
-  if (!urgency) return <span className="text-gray-400 dark:text-gray-500 text-xs">--</span>;
+  if (!urgency) return null;
   const cls = {
     normal: 'badge-normal',
     notable: 'badge-notable',
@@ -40,7 +40,7 @@ function UrgencyBadge({ urgency }: { urgency: Label['urgency'] }) {
 }
 
 function IntentBadge({ intent }: { intent: Label['intent'] }) {
-  if (!intent) return <span className="text-gray-400 dark:text-gray-500 text-xs">--</span>;
+  if (!intent) return null;
   const meta = INTENT_LABELS[intent];
   const cls = {
     hot:  'badge-intent-hot',
@@ -87,7 +87,7 @@ function TopicSelector({
   };
 
   const displayText = topics.length === 0
-    ? '--'
+    ? '-- Chủ đề'
     : topics.map(t => TOPIC_LABELS[t]).join(', ');
 
   return (

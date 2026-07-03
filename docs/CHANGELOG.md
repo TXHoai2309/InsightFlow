@@ -744,3 +744,34 @@ Khi đưa vào báo cáo sprint hoặc demo, có thể gom các commit thành 5 
 5. **Mốc 5 — Ổn định demo/deploy**: sửa Vercel, sửa TypeScript, sửa field dữ liệu, merge các nhánh cuối.
 
 File changelog trong repo nên giữ chi tiết commit như trên để truy vết; còn khi thuyết trình có thể dùng bản gom nhóm để dễ hiểu hơn.
+
+---
+
+## [Unreleased] - 2026-07-03
+
+### Added
+
+- Them route `/labeling_tool` de tich hop cong cu gan nhan vao InsightFlow ma khong anh huong cac man hinh chinh.
+- Them co che load queue tu Supabase theo nen tang: Facebook, Threads, TikTok, YouTube, Google Maps, BeFood va News.
+- Them hai che do lam viec: `Can gan` va `Da gan` de ho tro gan moi, xem lai va sua nhan.
+- Them bo loc ngay `Tu/Den` dua tren ngay dang cua post hoac comment can gan.
+- Them loading state ro rang khi tai du lieu tu Supabase.
+- Them card `Hang cho toan bo` trong sidebar de hien thi post/comment chua gan, post/comment da gan, tong con lai, tong da gan va thread hoan tat.
+- Them co che ghi nhan vao `annotations` va luu lich su vao `annotation_revisions`.
+
+### Changed
+
+- Doi nut `Supabase` thanh `Tai data / Load data` de dung nghia thao tac hon.
+- Bo cac dieu khien khong can thiet trong ban tich hop demo nhu chon person va load file local.
+- Doi logic hien thi trang thai gan nhan: nhan that duoc doc tu `annotations`, con `labeling_assignments` chi dong vai tro dieu phoi queue/thread.
+- Cap nhat logic hoan tat thread de update cac assignment lien quan cua cung post.
+
+### Fixed
+
+- Sua loi trung lap thread khi mot post co nhieu comment assignment.
+- Sua loi UI hien chu bi sai encoding trong man hinh labeling.
+- Sua cach dem thong ke de khong phu thuoc vao limit thread dang load.
+
+### Notes
+
+- Hien tai loc ngay van co the cham neu khoang ngay rong, vi tool phai doi chieu assignment voi post/comment. Huong toi uu tiep theo la them cot `sort_date` vao `labeling_assignments` de Supabase loc truc tiep.

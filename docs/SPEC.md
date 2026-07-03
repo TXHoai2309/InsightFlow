@@ -536,3 +536,110 @@ Các ghi chú dưới đây cập nhật phạm vi chức năng theo trạng th�
 
 - Route `/settings/brand` vẫn tồn tại trong app shell hiện tại.
 - Các mô tả cũ về `Settings Brand` trong tài liệu này tiếp tục có hiệu lực cho phạm vi frontend hiện có.
+
+---
+
+## SP-LABELING-01 - Cong cu gan nhan du lieu
+
+### Muc tieu
+
+Bo sung cong cu gan nhan vao InsightFlow de nguoi dung noi bo co the gan nhan post/comment sau crawl, xem lai nhan da gan va cap nhat nhan khi du lieu thay doi.
+
+### Route
+
+- URL: `/labeling_tool`
+- Trang nay tach rieng voi cac man hinh san pham chinh de phuc vu demo va phat trien tiep.
+
+### Doi tuong su dung
+
+- Admin/analyst noi bo.
+- Nhan vien gan nhan du lieu.
+- Nguoi kiem thu chat luong du lieu NLP.
+
+### Chuc nang
+
+#### FLT-01 - Tai queue tu Supabase
+
+- Nguoi dung chon nen tang.
+- Nguoi dung chon so thread can tai.
+- Nguoi dung chon che do `Can gan` hoac `Da gan`.
+- He thong tai queue tu `labeling_assignments` va lay noi dung tu `posts`, `comments`.
+
+Acceptance Criteria:
+
+- AC-1: Tai duoc thread theo nen tang da chon.
+- AC-2: Hien post va comment/reply trong cung mot thread.
+- AC-3: Khong hien lap cung mot post khi post co nhieu comment assignment.
+
+#### FLT-02 - Loc theo ngay
+
+- Nguoi dung co the nhap ngay `Tu` va `Den`.
+- Voi post assignment, ngay loc la `posts.posted_at`.
+- Voi comment assignment, ngay loc la `comments.posted_at`.
+- Post cu van co the hien ra neu co comment moi nam trong khoang ngay loc.
+
+Acceptance Criteria:
+
+- AC-1: Khoang ngay loc anh huong den queue duoc tai.
+- AC-2: Comment moi trong post cu van co the dua post do vao queue.
+- AC-3: Co nut xoa ngay de quay ve trang thai khong loc ngay.
+
+#### FLT-03 - Gan nhan item
+
+- Ho tro cac truong nhan:
+  - Sentiment: positive, negative, neutral.
+  - Topic: quality, price, service, location, promotion, other.
+  - Relevance: co lien quan/khong lien quan.
+  - Urgency: normal, notable, crisis.
+  - Intent: hot, warm, cold, none.
+- Nhan duoc ghi vao `annotations`.
+- Moi lan sua nhan tao revision trong `annotation_revisions`.
+
+Acceptance Criteria:
+
+- AC-1: Gan nhan post thanh cong.
+- AC-2: Gan nhan comment/reply thanh cong.
+- AC-3: Sua nhan cu khong lam mat lich su revision.
+
+#### FLT-04 - Hoan tat thread
+
+- Khi nguoi dung bam hoan tat, he thong update `labeling_assignments` cua thread/post sang `completed`.
+- Khi bo qua, update sang `skipped`.
+
+Acceptance Criteria:
+
+- AC-1: Thread hoan tat khong con nam trong che do `Can gan`.
+- AC-2: Thread da hoan tat co the xem lai trong che do `Da gan`.
+- AC-3: Nhung item da gan van lay tu `annotations`.
+
+#### FLT-05 - Thong ke hang cho
+
+Sidebar hien thi thong ke toan bo theo nen tang, khong phu thuoc so thread dang tai:
+
+- Post chua gan.
+- Comment chua gan.
+- Post da gan.
+- Comment da gan.
+- Tong con lai.
+- Tong da gan.
+- Thread hoan tat.
+
+Acceptance Criteria:
+
+- AC-1: So post/comment chua gan tinh tu du lieu active tru di annotations da completed/skipped.
+- AC-2: So post/comment da gan tinh tu `annotations`.
+- AC-3: So thread hoan tat tinh tu `labeling_assignments`.
+
+### Rang buoc ky thuat
+
+- Khong dung URL lam ID chinh.
+- Post key: `platform + post_id`.
+- Comment key: `platform + post_id + comment_id`.
+- Annotation key: `entity_key + assignee`.
+- Can giu nhan cu khi crawl moi cap nhat metric hoac them comment moi.
+
+### Ghi chu production
+
+- Ban demo co the dung anon policy cua Supabase.
+- Production nen dua ghi nhan qua backend duoc xac thuc boi Firebase/InsightFlow.
+- Nen them cot `sort_date` vao `labeling_assignments` de loc ngay nhanh hon.

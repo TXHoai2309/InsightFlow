@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Person, Label, Thread, TopicKey, TOPIC_HOTKEYS } from './types';
@@ -7,7 +7,6 @@ import { useData } from './hooks/useData';
 import { useLabeling } from './hooks/useLabeling';
 import ThreadView from './components/ThreadView';
 import ProgressBar from './components/ProgressBar';
-import FilterPanel from './components/FilterPanel';
 import Sidebar from './components/Sidebar';
 import ExportButton from './components/ExportButton';
 import {
@@ -465,20 +464,7 @@ export default function App() {
               </div>
             )}
 
-            {/* Filter row */}
-            {rawThreads.length > 0 && (
-              <FilterPanel
-                threads={rawThreads}
-                brandFilter={brandFilter}
-                sourceFilter={sourceFilter}
-                onBrandChange={setBrandFilter}
-                onSourceChange={setSourceFilter}
-                onlyRated={onlyRated}
-                onOnlyRatedChange={setOnlyRated}
-                skipGMapsSpam={skipGMapsSpam}
-                onSkipGMapsSpamChange={setSkipGMapsSpam}
-              />
-            )}
+
           </div>
         </header>
 
