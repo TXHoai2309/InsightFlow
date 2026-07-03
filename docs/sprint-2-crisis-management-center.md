@@ -1,6 +1,6 @@
 # Tài liệu tính năng: Trung tâm Xử lý Khẩn cấp & Đồng bộ Realtime (Sprint 2)
 
-Tài liệu này mô tả chi tiết chức năng cải tiến dành riêng cho **Nhân viên xử lý khủng hoảng (Crisis Staff)** tại trang quản lý Cảnh báo `/alerts`.
+Tài liệu này mô tả chi tiết chức năng cải tiến dành riêng cho **Nhân viên xử lý khủng hoảng (Crisis Staff)** và **Quản lý thương hiệu (Brand Manager)** tại trang quản lý Cảnh báo `/alerts`.
 
 ---
 
@@ -8,6 +8,7 @@ Tài liệu này mô tả chi tiết chức năng cải tiến dành riêng cho 
 *   **Nhận diện & Ưu tiên nhanh**: Giúp nhân viên ngay lập tức nhận diện các sự vụ/bình luận tiêu cực có rủi ro cao (`critical` / `high`) của nhãn hàng mình quản lý.
 *   **Liên hệ lập tức**: Gộp trực tiếp thông tin liên hệ của tác giả từ tệp khách hàng tiềm năng (`leads`) để nhân viên có thể gọi điện hoặc nhắn tin nhanh.
 *   **Tránh xử lý trùng lặp**: Đồng bộ realtime 100% trạng thái để khi một nhân viên bấm tiếp nhận sự vụ, nó tự động biến mất trên màn hình các nhân viên khác.
+*   **Sửa lỗi nhãn AI**: Cung cấp luồng gửi yêu cầu điều chỉnh các nhãn phân loại (sắc thái, độ nghiêm trọng, chủ đề) khi AI gán nhãn sai và cho phép cấp quản lý phê duyệt cập nhật tự động.
 
 ---
 
@@ -32,11 +33,22 @@ Tài liệu này mô tả chi tiết chức năng cải tiến dành riêng cho 
     *   **Xem bình luận gốc**: Link dẫn trực tiếp tới bài viết/bình luận xảy ra khủng hoảng ngoài đời thực (Facebook, TikTok...).
     *   **Gửi Email**: Link `mailto:` gửi thư điện tử nhanh.
 
-### C. Cơ chế Đồng bộ Thời gian thực (Firestore Real-time Sync)
-*   Hàm `fetchAlerts` trong `alert.store.ts` được nâng cấp sang cơ chế lắng nghe thay đổi liên tục của Firebase thông qua **`onSnapshot`**.
+### C. Luồng Yêu cầu Sửa nhãn AI (Label Correction Flow)
+*   **Gửi yêu cầu chỉnh sửa (Nhân viên khủng hoảng)**:
+    *   Click nút **Sửa nhãn** trên bất kỳ thẻ sự cố nào để mở form đề xuất điều chỉnh sắc thái (Sentiment), độ nghiêm trọng (Severity) hoặc chủ đề (Topic) kèm lý do chi tiết.
+    *   Yêu cầu được lưu vào Firestore collection `insightflow_correction_requests` ở trạng thái `"pending"`.
+*   **Quản lý & Phê duyệt (Quản lý thương hiệu)**:
+    *   Truy cập tab thứ tư **Yêu cầu sửa nhãn** trên thanh tab bar.
+    *   Xem danh sách các đề xuất chờ duyệt trong phạm vi thương hiệu quản lý, đối chiếu sự thay đổi các nhãn và lý do đề xuất.
+    *   Bấm **Phê duyệt (Approve)**: Tự động cập nhật các trường nhãn tương ứng trên tài liệu `insightflow_labels` của Firestore và chuyển trạng thái yêu cầu thành `"approved"`.
+    *   Bấm **Từ chối (Reject)**: Chuyển trạng thái yêu cầu thành `"rejected"`.
+
+### D. Cơ chế Đồng bộ Thời gian thực (Firestore Real-time Sync)
+*   Hàm `fetchAlerts` và `fetchCorrectionRequests` trong `alert.store.ts` được nâng cấp sang cơ chế lắng nghe thay đổi liên tục của Firebase thông qua **`onSnapshot`**.
 *   Khi **Nhân viên A** bấm **Tiếp nhận** một sự vụ, Firestore cập nhật trạng thái `status: "acknowledged"`.
 *   Tín hiệu thay đổi lập tức được truyền về máy tính của các **Nhân viên B, C...** khiến thẻ sự cố đó tự động biến mất khỏi hàng đợi "Chưa giải quyết" trong vòng dưới 1 giây mà không cần F5 hay bấm Sync, loại bỏ hoàn toàn nguy cơ tranh chấp/trùng lặp tác vụ.
+*   Khi quản lý bấm **Phê duyệt** yêu cầu sửa nhãn, nhãn của sự vụ được cập nhật trong Firestore và tự động phản ánh trực tiếp trên toàn bộ các máy trạm đang mở màn hình.
 
-### D. Xây dựng Báo cáo sự vụ nhanh (Incident Report generation)
+### E. Xây dựng Báo cáo sự vụ nhanh (Incident Report generation)
 *   Cho phép nhân viên bấm **Báo cáo** trên từng thẻ rủi ro cao để mở hộp thoại đánh giá mức độ ảnh hưởng và các bước ứng phó đề xuất (SOP).
 *   Hỗ trợ xuất báo cáo hoàn chỉnh ra file định dạng JSON tải về máy.
