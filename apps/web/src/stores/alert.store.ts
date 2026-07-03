@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 import { dbSecond } from "@/lib/firebase";
-import { collection, doc, getDocs, limit, query, updateDoc } from "firebase/firestore";
+import { collection, doc, limit, query, updateDoc, onSnapshot } from "firebase/firestore";
 import { isRecordInBrandScope, isSameBrandScope } from "@/lib/brandScope";
 import { normalizeBrandName } from "@/lib/services/dashboard";
 import { canPerformAction, type UserRoleProfile } from "@/lib/rbac";
@@ -55,6 +55,7 @@ interface AlertState {
     id: string,
     newStatus: string,
     profile: UserRoleProfile | null | undefined,
+    attempt?: { note: string; image_url?: string },
   ) => Promise<void>;
 }
 
@@ -176,6 +177,8 @@ function applyFilters(rawAlerts: AlertData[], filters: AlertFilters): AlertData[
   return result;
 }
 
+let activeUnsubscribe: (() => void) | null = null;
+
 export const useAlertStore = create<AlertState>()(
   subscribeWithSelector((set, get) => ({
     rawAlerts: [],
@@ -200,6 +203,11 @@ export const useAlertStore = create<AlertState>()(
     },
 
     fetchAlerts: async (scopedBrandKey = null) => {
+      if (activeUnsubscribe) {
+        activeUnsubscribe();
+        activeUnsubscribe = null;
+      }
+
       set({ isLoading: true, error: null });
 
       try {
@@ -207,80 +215,83 @@ export const useAlertStore = create<AlertState>()(
           throw new Error("Firebase data project is not configured.");
         }
 
-        const snapshot = await getDocs(
-          query(collection(dbSecond, "insightflow_labels"), limit(500)),
-        );
+        const q = query(collection(dbSecond, "insightflow_labels"), limit(500));
 
-        const fetchedAlerts: AlertData[] = [];
-        snapshot.docs.forEach((document) => {
-          const data = document.data();
-          const labels = data.labels || {};
-          const sentiment = String(
-            labels.sentiment || data.baseline_sentiment || data.sentiment || "neutral",
-          ).toLowerCase();
+        activeUnsubscribe = onSnapshot(q, (snapshot) => {
+          const fetchedAlerts: AlertData[] = [];
+          snapshot.docs.forEach((document) => {
+            const data = document.data();
+            const labels = data.labels || {};
+            const sentiment = String(
+              labels.sentiment || data.baseline_sentiment || data.sentiment || "neutral",
+            ).toLowerCase();
 
-          if (sentiment !== "negative") return;
+            if (sentiment !== "negative") return;
 
-          const text = String(
-            data.clean_text ||
-            data.original_text ||
-            data.text ||
-            data.content ||
-            "",
-          );
+            const text = String(
+              data.clean_text ||
+              data.original_text ||
+              data.text ||
+              data.content ||
+              "",
+            );
 
-          const alert = {
-            id: String(data.id || document.id),
-            brand: formatBrandName(String(data.brand || "")),
-            source: normalizeSource(String(data.source || "")),
-            text,
-            sentiment,
-            topic: normalizeTopic(labels.topic || data.topic),
-            severity: calculateSeverity(data),
-            created_at: parseDate(
-              data.labeled_at ||
-              data.uploaded_at ||
-              data.posted_at ||
-              data.created_at,
-            ),
-            status: String(data.status || "new"),
-            resolved_at: data.resolved_at ? parseDate(data.resolved_at) : undefined,
-            collectionName: "insightflow_labels",
-            url: String(data.url || ""),
-            reach: Number(data.reach || data.views || 0),
-            likes: Number(data.likes || data.like_count || 0),
-            comments: Number(data.comments || data.comment_count || 0),
-            shares: Number(data.shares || data.share_count || 0),
-            author: String(data.author || data.author_name || "Ẩn danh"),
-            title: text.slice(0, 120),
-          };
+            const alert = {
+              id: String(data.id || document.id),
+              brand: formatBrandName(String(data.brand || "")),
+              source: normalizeSource(String(data.source || "")),
+              text,
+              sentiment,
+              topic: normalizeTopic(labels.topic || data.topic),
+              severity: calculateSeverity(data),
+              created_at: parseDate(
+                data.labeled_at ||
+                data.uploaded_at ||
+                data.posted_at ||
+                data.created_at,
+              ),
+              status: String(data.status || "new"),
+              resolved_at: data.resolved_at ? parseDate(data.resolved_at) : undefined,
+              collectionName: "insightflow_labels",
+              url: String(data.url || ""),
+              reach: Number(data.reach || data.views || 0),
+              likes: Number(data.likes || data.like_count || 0),
+              comments: Number(data.comments || data.comment_count || 0),
+              shares: Number(data.shares || data.share_count || 0),
+              author: String(data.author || data.author_name || "Ẩn danh"),
+              title: text.slice(0, 120),
+            };
 
-          if (!isRecordInBrandScope({ brand: alert.brand }, scopedBrandKey)) return;
-          fetchedAlerts.push(alert);
-        });
+            if (!isRecordInBrandScope({ brand: alert.brand }, scopedBrandKey)) return;
+            fetchedAlerts.push(alert);
+          });
 
-        const scopedBrands = Array.from(new Set(fetchedAlerts.map((alert) => alert.brand))).sort();
-        const fallbackBrands = ["Highland Coffee", "Starbucks", "Mixue"].filter((brand) => {
-          return !scopedBrandKey || normalizeBrandName(brand) === scopedBrandKey;
-        });
+          const scopedBrands = Array.from(new Set(fetchedAlerts.map((alert) => alert.brand))).sort();
+          const fallbackBrands = ["Highland Coffee", "Starbucks", "Mixue"].filter((brand) => {
+            return !scopedBrandKey || normalizeBrandName(brand) === scopedBrandKey;
+          });
 
-        set({
-          rawAlerts: fetchedAlerts,
-          alerts: applyFilters(fetchedAlerts, get().filters),
-          brands: scopedBrands.length ? scopedBrands : fallbackBrands,
-          error: null,
+          set({
+            rawAlerts: fetchedAlerts,
+            alerts: applyFilters(fetchedAlerts, get().filters),
+            brands: scopedBrands.length ? scopedBrands : fallbackBrands,
+            error: null,
+            isLoading: false,
+          });
+        }, (error) => {
+          const message = error instanceof Error ? error.message : "Lỗi đồng bộ realtime";
+          set({ error: message, isLoading: false });
+          console.error("[AlertStore] onSnapshot error:", message, error);
         });
       } catch (error) {
         const message =
-          error instanceof Error ? error.message : "Không thể tải dữ liệu cảnh báo";
-        set({ error: message });
+          error instanceof Error ? error.message : "Không thể khởi tạo đồng bộ";
+        set({ error: message, isLoading: false });
         console.error("[AlertStore] fetchAlerts error:", message, error);
-      } finally {
-        set({ isLoading: false });
       }
     },
 
-    updateAlertStatus: async (id, newStatus, profile) => {
+    updateAlertStatus: async (id, newStatus, profile, attempt) => {
       const currentAlert = get().rawAlerts.find((alert) => alert.id === id);
       if (!profile || !canPerformAction(profile, "update_crisis_status")) {
         throw new Error("User is not allowed to update crisis status.");
@@ -297,6 +308,8 @@ export const useAlertStore = create<AlertState>()(
         updated_at: new Date().toISOString(),
         ...(resolvedAt ? { resolved_by: profile.uid } : {}),
       };
+
+      let newAttemptItem: ResolutionAttempt | undefined = undefined;
 
       set((state) => {
         const nextRawAlerts = state.rawAlerts.map((alert) => {
@@ -336,10 +349,17 @@ export const useAlertStore = create<AlertState>()(
           status: newStatus,
           ...(resolvedAt ? { resolved_at: resolvedAt } : {}),
           ...auditFields,
-        });
+        };
+
+        const targetAlert = get().rawAlerts.find((a) => a.id === id);
+        if (targetAlert && targetAlert.resolution_history && targetAlert.resolution_history.length > 0) {
+          updateData.resolution_history = targetAlert.resolution_history;
+        }
+
+        await updateDoc(documentRef, updateData);
       } catch (error) {
-  console.error("[AlertStore] Failed to persist alert status:", error);
-}
+        console.error("[AlertStore] Failed to persist alert status:", error);
+      }
     },
   })),
 );

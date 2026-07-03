@@ -10,6 +10,16 @@
 > - Các commit merge vẫn được giữ lại để phản ánh đúng dòng phát triển giữa các nhánh.
 >   Tất cả các thay đổi đáng chú ý đối với dự án này sẽ được ghi lại trong file này.
 >   Định dạng dựa trên [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) và dự án này tuân thủ [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [Unreleased] - 2026-07-03
+
+### Added
+
+- **Giao diện & Nghiệp vụ Xử lý Khủng hoảng (Crisis Command Center)**:
+  - Tích hợp Split View phân tách giao diện: Trung tâm khẩn cấp (Emergency Feed - tối giản, tập trung) và Xem tất cả (Detailed Queue - đầy đủ bảng biểu, lọc nâng cao).
+  - Tự động dò tìm thông tin liên lạc (leads) trùng tác giả hoặc nội dung để hiển thị SĐT, Email trực tiếp trên thẻ sự vụ.
+  - Tích hợp phím liên hệ khẩn cấp: Gọi điện (`tel:`), Nhắn Zalo qua số điện thoại (`https://zalo.me/`), Xem bình luận gốc (Platform link đã chuẩn hóa tuyệt đối), Gửi email (`mailto:`).
+  - Tự động chuyển đổi chế độ xem thông minh khi không có sự vụ rủi ro cao.
+  - Thiết lập cơ chế đồng bộ thời gian thực (Real-time Sync) 100% qua Firestore `onSnapshot` để thẻ sự cố tự động ẩn khỏi hàng chờ các nhân viên khác ngay khi được tiếp nhận.
 
 ## [Unreleased] - 2026-07-02
 

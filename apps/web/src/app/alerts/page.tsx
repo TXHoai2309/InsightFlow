@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { useAlertStore } from "@/stores/alert.store";
+import { useDashboard } from "@/hooks/useDashboardData";
 import { dbSecond } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
+import { PlatformLogo } from "@/components/platform/PlatformLogo";
 import {
   getScopedBrandKey,
   hasBusinessBrandScope,
@@ -153,12 +155,26 @@ export default function AlertsPage() {
   const [activeTab, setActiveTab] = useState<"new" | "resolving" | "resolved">("new");
   const [resolvingAlert, setResolvingAlert] = useState<any>(null);
   const [viewingHistoryAlert, setViewingHistoryAlert] = useState<any>(null);
+  const [reportModalItem, setReportModalItem] = useState<any>(null);
+  const [showReportToast, setShowReportToast] = useState(false);
+  const [viewMode, setViewMode] = useState<"priority" | "detailed">("priority");
+  const hasLoadedRef = useRef(false);
 
   // Active configs for thesis presentation
   const [keywords, setKeywords] = useState(['Ngộ độc', 'Biểu tình', 'Tẩy chay', 'Chất lượng']);
   const [showAddKeywordInput, setShowAddKeywordInput] = useState(false);
   const [newKeyword, setNewKeyword] = useState("");
   const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
+
+  const triggerToast = (msg: string) => {
+    setToastMessage(msg);
+    setShowToast(true);
+    setTimeout(() => {
+      setShowToast(false);
+      setToastMessage("");
+    }, 3000);
+  };
 
   const handleAddKeyword = () => {
     if (newKeyword.trim() && !keywords.includes(newKeyword.trim())) {
@@ -169,8 +185,7 @@ export default function AlertsPage() {
   };
 
   const handleSaveConfig = () => {
-    setShowToast(true);
-    setTimeout(() => setShowToast(false), 3000);
+    triggerToast(t("alerts.toast.saved"));
   };
 
   const handleAccessSource = async (url: string, text: string) => {
@@ -200,11 +215,58 @@ export default function AlertsPage() {
     updateAlertStatus,
   } = useAlertStore();
 
+  const dashboardStore = useDashboardStore();
+  useDashboard({ autoFetch: true, refetchInterval: 60000 });
+
+  // Compute lists of high-risk items for the Crisis Priority Center (unified Sự vụ & Bài viết & Thông tin liên hệ)
+  const highRiskIncidents = useMemo(() => {
+    // 1. Get unresolved critical/high alerts
+    const activeAlerts = alerts.filter(
+      a => (a.severity.toLowerCase() === "critical" || a.severity.toLowerCase() === "high") && a.status.toLowerCase() !== "resolved"
+    );
+
+    // 2. Enrich with lead contact details if author or content matches
+    return activeAlerts.map(a => {
+      const matchingLead = (dashboardStore.leads || []).find(
+        l => l.author === a.author || (l.content && a.text && l.content.toLowerCase().includes(a.text.toLowerCase()))
+      );
+
+      return {
+        id: a.id,
+        brand: a.brand,
+        platform: a.source || matchingLead?.platform || "tiktok",
+        author: a.author || matchingLead?.author || "Ẩn danh",
+        content: a.text || matchingLead?.content || "",
+        severity: a.severity,
+        created_at: a.created_at,
+        status: a.status,
+        url: a.url || matchingLead?.url || "",
+        social_profile_url: a.social_profile_url || matchingLead?.social_profile_url || "",
+        phone: matchingLead?.phone || "",
+        email: matchingLead?.email || "",
+        zalo_id: matchingLead?.zalo_id || "",
+        messenger_id: matchingLead?.messenger_id || "",
+        rawAlert: a,
+        rawLead: matchingLead
+      };
+    });
+  }, [alerts, dashboardStore.leads]);
+
   // Load alerts on mount
   useEffect(() => {
     if (authLoading || !canViewCrisisQueue) return;
     fetchAlerts(scopedBrandKey);
   }, [authLoading, canViewCrisisQueue, scopedBrandKey, fetchAlerts]);
+
+  // Auto-switch view Mode once based on high-risk counts
+  useEffect(() => {
+    if (!isLoading && rawAlerts.length > 0 && !hasLoadedRef.current) {
+      hasLoadedRef.current = true;
+      if (highRiskIncidents.length === 0) {
+        setViewMode("detailed");
+      }
+    }
+  }, [isLoading, rawAlerts, highRiskIncidents.length]);
 
   useEffect(() => {
     if (!brandFilterLocked || brands.length === 0) return;
@@ -365,6 +427,8 @@ export default function AlertsPage() {
     });
   }, [filteredAlerts, activeTab]);
 
+
+
   // Calculate stats based on all loaded raw alerts to maintain overall dashboard health visibility
   const totalCount = rawAlerts.length;
   const criticalCount = rawAlerts.filter(
@@ -464,7 +528,279 @@ export default function AlertsPage() {
         </div>
       </div>
 
-      {/* ── Tabs ── */}
+      {/* ── Segmented Control View Mode ── */}
+      <div className="flex bg-[var(--color-bg-surface-raised)] p-1 rounded-xl border border-[var(--color-border)] w-fit shadow-sm">
+        <button
+          onClick={() => setViewMode("priority")}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all duration-300 ${
+            viewMode === "priority"
+              ? "bg-[var(--color-brand)] text-white shadow-sm"
+              : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+          }`}
+        >
+          <span className="material-symbols-outlined text-sm">crisis_alert</span>
+          Trung tâm khẩn cấp
+          {highRiskIncidents.length > 0 && (
+            <span className="bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-black animate-pulse ml-1">
+              {highRiskIncidents.length}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setViewMode("detailed")}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all duration-300 ${
+            viewMode === "detailed"
+              ? "bg-[var(--color-brand)] text-white shadow-sm"
+              : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+          }`}
+        >
+          <span className="material-symbols-outlined text-sm">toc</span>
+          Xem tất cả (Bảng)
+        </button>
+      </div>
+
+      {viewMode === "priority" && (
+        <div className="glass-card border-l-4 border-[var(--color-error)] rounded-2xl p-5 md:p-6 space-y-4 shadow-md bg-[var(--color-bg-surface-raised)]/20">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[var(--color-border)] pb-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--color-error)] opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-[var(--color-error)]"></span>
+                </span>
+              <h2 className="text-lg md:text-xl font-black text-[var(--color-text-primary)] flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[var(--color-error)]">crisis_alert</span>
+                {t("alerts.priorityCenter.title")}
+              </h2>
+            </div>
+            <p className="text-xs text-[var(--color-text-secondary)] font-medium">
+              {t("alerts.priorityCenter.subtitle")}
+            </p>
+          </div>
+          <div className="bg-[var(--color-error-subtle)] text-[var(--color-error)] text-xs px-3.5 py-1.5 rounded-xl font-bold uppercase tracking-wider border border-[var(--color-error)]/20 self-start sm:self-auto">
+            {t("alerts.priorityCenter.summary", {
+              defaultValue: `CÓ ${highRiskIncidents.length} SỰ VỤ RỦI RO CAO CẦN XỬ LÝ KHẨN CẤP!`
+            })}
+          </div>
+        </div>
+
+        {highRiskIncidents.length === 0 ? (
+          <div className="flex flex-col items-center justify-center p-8 text-center text-[var(--color-text-secondary)] text-sm font-medium">
+            <span className="material-symbols-outlined text-[var(--color-success)] text-4xl mb-2 animate-bounce">check_circle</span>
+            <p className="font-bold text-[var(--color-text-primary)]">{t("alerts.priorityCenter.noHighRisk")}</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-6">
+            {highRiskIncidents.map(incident => (
+              <div key={incident.id} className="border border-[var(--color-error)]/20 bg-[var(--color-error)]/5 hover:bg-[var(--color-error)]/10 p-4 rounded-xl transition-all space-y-3.5 flex flex-col justify-between shadow-sm relative group overflow-hidden">
+                <div className="space-y-3">
+                  {/* Brand & Platform logo */}
+                  <div className="flex items-center justify-between text-[10px]">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold text-[var(--color-text-primary)]">{formatBrandName(incident.brand)}</span>
+                      <div className="flex items-center gap-0.5 bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] px-1 py-0.5 rounded-md">
+                        <PlatformLogo platform={incident.platform} size="xs" />
+                        <span className="text-[8px] font-bold text-[var(--color-text-secondary)] uppercase">
+                          {incident.platform}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="text-[var(--color-text-secondary)]">{getRelativeTime(incident.created_at, t)}</span>
+                  </div>
+
+                  {/* Topic & Severity */}
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-[var(--color-text-primary)] font-black uppercase tracking-wider flex items-center gap-1">
+                      <span className="material-symbols-outlined text-xs text-[var(--color-brand)]">topic</span>
+                      {t(`dashboard.topics.${incident.rawAlert?.topic.toLowerCase()}`, { defaultValue: incident.rawAlert?.topic || "Sự vụ" })}
+                    </p>
+                    <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-widest ${
+                      incident.severity.toLowerCase() === 'critical' ? 'bg-[var(--color-error)] text-white animate-pulse' : 'bg-amber-500 text-white'
+                    }`}>
+                      {incident.severity.toUpperCase()}
+                    </span>
+                  </div>
+
+                  {/* Comment / Post text content */}
+                  <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed italic border-l-2 border-[var(--color-error)]/30 pl-2 py-0.5">
+                    "{incident.content}"
+                  </p>
+
+                  {/* Contact detail box */}
+                  <div className="bg-[var(--color-bg-surface-raised)]/70 p-3 rounded-xl border border-[var(--color-border)] space-y-2">
+                    <p className="text-[9px] font-black text-[var(--color-text-muted)] uppercase tracking-wider flex items-center gap-0.5 border-b border-[var(--color-border)]/50 pb-1">
+                      <span className="material-symbols-outlined text-[11px] text-[var(--color-brand)]">contact_page</span>
+                      Liên hệ khách hàng
+                    </p>
+                    
+                    <div className="flex items-center justify-between text-xs font-bold text-[var(--color-text-primary)]">
+                      <span>@{incident.author}</span>
+                      {incident.rawLead ? (
+                        <span className="bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider border border-amber-200/50">
+                          Khách hàng HOT
+                        </span>
+                      ) : (
+                        <span className="bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-300 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider border border-red-200/50">
+                          Tác giả sự cố
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="text-[10px] space-y-2 text-[var(--color-text-secondary)] font-medium pt-1">
+                      {incident.phone && (
+                        <div className="flex items-center gap-1.5 justify-between">
+                          <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[12px] text-[var(--color-brand)]">phone</span>SĐT: {incident.phone}</span>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(incident.phone);
+                              triggerToast(t("alerts.priorityCenter.copied"));
+                            }}
+                            className="text-[9px] text-[var(--color-brand)] hover:underline font-bold"
+                          >
+                            Copy
+                          </button>
+                        </div>
+                      )}
+                      
+                      {incident.email && (
+                        <div className="flex items-center gap-1.5 justify-between">
+                          <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[12px] text-[var(--color-brand)]">mail</span>Email: {incident.email}</span>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(incident.email);
+                              triggerToast(t("alerts.priorityCenter.copied"));
+                            }}
+                            className="text-[9px] text-[var(--color-brand)] hover:underline font-bold"
+                          >
+                            Copy
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Direct Links */}
+                      <div className="flex flex-wrap gap-2 pt-1 border-t border-[var(--color-border)]/30 mt-1">
+                        <a
+                          href={getContactProfileUrl(incident)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-0.5 text-[var(--color-brand)] hover:underline font-bold"
+                        >
+                          <span className="material-symbols-outlined text-[11px]">account_box</span>
+                          Xem Profile
+                        </a>
+                        
+                        {incident.url && incident.url !== "#" && (
+                          <a
+                            href={getAbsoluteUrl(incident.url)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-0.5 text-[var(--color-brand)] hover:underline font-bold"
+                          >
+                            <span className="material-symbols-outlined text-[11px]">link</span>
+                            Xem Bình luận
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Quick actions row */}
+                <div className="flex items-center justify-between gap-1.5 pt-2.5 border-t border-[var(--color-border)] mt-auto">
+                  <div className="flex gap-1">
+                    {/* Dialer links */}
+                    {incident.phone ? (
+                      <>
+                        <a
+                          href={`tel:${incident.phone.replace(/[^0-9+]/g, "")}`}
+                          className="w-7 h-7 rounded-lg bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] hover:bg-[var(--color-bg-surface-high)] flex items-center justify-center text-[var(--color-text-primary)] hover:text-[var(--color-brand)] transition-colors"
+                          title={`Gọi điện: ${incident.phone}`}
+                        >
+                          <span className="material-symbols-outlined text-[13px]">call</span>
+                        </a>
+                        <a
+                          href={`https://zalo.me/${incident.phone.replace(/[^0-9+]/g, "")}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-7 h-7 rounded-lg bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] hover:bg-[var(--color-bg-surface-high)] flex items-center justify-center text-[var(--color-text-primary)] hover:text-blue-400 transition-colors"
+                          title="Nhắn tin Zalo"
+                        >
+                          <span className="material-symbols-outlined text-[13px]">sms</span>
+                        </a>
+                      </>
+                    ) : null}
+
+                    {/* Comment/Post direct link */}
+                    {incident.url && incident.url !== "#" ? (
+                      <a
+                        href={getAbsoluteUrl(incident.url)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-7 h-7 rounded-lg bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] hover:bg-[var(--color-bg-surface-high)] flex items-center justify-center text-[var(--color-text-primary)] hover:text-blue-500 transition-colors"
+                        title="Xem bình luận gốc"
+                      >
+                        <span className="material-symbols-outlined text-[13px]">link</span>
+                      </a>
+                    ) : null}
+
+                    {/* Email link */}
+                    {incident.email ? (
+                      <a
+                        href={`mailto:${incident.email}`}
+                        className="w-7 h-7 rounded-lg bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] hover:bg-[var(--color-bg-surface-high)] flex items-center justify-center text-[var(--color-text-primary)] hover:text-red-400 transition-colors"
+                        title={`Gửi email: ${incident.email}`}
+                      >
+                        <span className="material-symbols-outlined text-[13px]">mail</span>
+                      </a>
+                    ) : null}
+                  </div>
+
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => setReportModalItem({
+                        id: incident.id,
+                        brand: incident.brand,
+                        source: incident.platform,
+                        text: incident.content,
+                        severity: incident.severity,
+                        created_at: incident.created_at,
+                        author: incident.author,
+                        topic: incident.rawAlert?.topic || "other"
+                      })}
+                      className="px-2 py-1 rounded bg-white dark:bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] hover:bg-[var(--color-bg-surface-high)] text-[10px] font-bold text-[var(--color-text-primary)] transition-all flex items-center gap-0.5"
+                    >
+                      <span className="material-symbols-outlined text-[12px]">description</span>
+                      Báo cáo
+                    </button>
+                    
+                    {incident.status === "new" && (
+                      <button
+                        onClick={() => updateAlertStatus(incident.id, "acknowledged", profile)}
+                        className="px-2 py-1 rounded bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand-hover)] text-[10px] font-bold transition-all"
+                      >
+                        Tiếp nhận
+                      </button>
+                    )}
+                    {incident.status === "resolving" && (
+                      <button
+                        onClick={() => setResolvingAlert(incident.rawAlert)}
+                        className="px-2 py-1 rounded bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand-hover)] text-[10px] font-bold transition-all"
+                      >
+                        Xử lý
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    )}
+
+      {viewMode === "detailed" && (
+        <>
+          {/* ── Tabs ── */}
       <div className="flex border-b border-[var(--color-border)] gap-2 pb-px overflow-x-auto scrollbar-none">
         <button
           onClick={() => setActiveTab("new")}
@@ -780,7 +1116,7 @@ export default function AlertsPage() {
                               {t("alerts.card.resolveFurther", { defaultValue: "Giải quyết tiếp" })}
                             </button>
                             <button
-                              onClick={() => updateAlertStatus(alert.id, "resolved")}
+                              onClick={() => updateAlertStatus(alert.id, "resolved", profile)}
                               className="px-3 py-2.5 rounded-xl bg-[var(--color-brand)] text-white text-[11px] font-bold hover:bg-[var(--color-brand-hover)] active:scale-95 transition-all shadow-sm cursor-pointer flex items-center gap-1"
                             >
                               <span className="material-symbols-outlined text-[13px]">check_circle</span>
@@ -1007,6 +1343,8 @@ export default function AlertsPage() {
           </button>
         </div>
       </div>
+    </>
+  )}
 
       {/* ── Evidence Detail Modal ── */}
       {selectedEvidence && (
@@ -1117,7 +1455,7 @@ export default function AlertsPage() {
           alert={resolvingAlert}
           onClose={() => setResolvingAlert(null)}
           onSave={async (id, note, imageUrl, targetStatus = "resolving") => {
-            await updateAlertStatus(id, targetStatus, { note, image_url: imageUrl });
+            await updateAlertStatus(id, targetStatus, profile, { note, image_url: imageUrl });
           }}
         />
       )}
@@ -1130,11 +1468,20 @@ export default function AlertsPage() {
         />
       )}
 
+      {/* ── Incident Report Modal ── */}
+      {reportModalItem && (
+        <IncidentReportModal
+          item={reportModalItem}
+          onClose={() => setReportModalItem(null)}
+          triggerToast={triggerToast}
+        />
+      )}
+
       {/* Toast Alert */}
       {showToast && (
         <div className="fixed bottom-5 right-5 z-50 bg-green-600 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 border border-green-500 animate-bounce">
           <span className="material-symbols-outlined text-sm">check_circle</span>
-          <span className="text-xs font-bold">{t("alerts.toast.saved")}</span>
+          <span className="text-xs font-bold">{toastMessage || t("alerts.toast.saved")}</span>
         </div>
       )}
     </div>
@@ -1154,6 +1501,40 @@ function parseDateToISOString(field: any): string {
   const s = String(field).trim();
   if (!s) return new Date().toISOString();
   return s.includes("+") || s.endsWith("Z") ? s : s + "Z";
+}
+
+// Helper to guarantee absolute URLs for external links
+function getAbsoluteUrl(urlStr: string): string {
+  if (!urlStr || urlStr === "#" || urlStr.trim() === "") return "#";
+  const trimmed = urlStr.trim();
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("//")) {
+    return trimmed;
+  }
+  return `https://${trimmed}`;
+}
+
+// Helper to construct profile URL search or direct link
+function getContactProfileUrl(contact: any): string {
+  let url = contact.social_profile_url || "";
+  
+  if (url && url !== "#" && (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("//"))) {
+    return url;
+  }
+  
+  const authorName = contact.author || contact.name || url || "";
+  if (!authorName) return "#";
+  
+  const platform = contact.platform?.toLowerCase() || "";
+  if (platform === "facebook" || platform === "fb") {
+    return `https://www.facebook.com/search/top/?q=${encodeURIComponent(authorName.replace(/^@/, ""))}`;
+  }
+  if (platform === "tiktok" || platform === "tt") {
+    return `https://www.tiktok.com/search?q=${encodeURIComponent(authorName)}`;
+  }
+  if (platform === "youtube" || platform === "yt") {
+    return `https://www.youtube.com/results?search_query=${encodeURIComponent(authorName)}`;
+  }
+  return `https://www.google.com/search?q=${encodeURIComponent(authorName)}`;
 }
 
 // ── Trend Modal Component ──
@@ -1876,6 +2257,209 @@ function HistoryModal({ alert, onClose }: HistoryModalProps) {
           >
             {t("alerts.history.close", { defaultValue: "Đóng" })}
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Incident Report Modal Component ──
+interface IncidentReportModalProps {
+  item: any;
+  onClose: () => void;
+  triggerToast: (msg: string) => void;
+}
+
+function IncidentReportModal({ item, onClose, triggerToast }: IncidentReportModalProps) {
+  const { t } = useTranslation();
+  const [impactAssessment, setImpactAssessment] = useState(
+    t("alerts.report.impactPlaceholder", {
+      defaultValue: `Sự việc liên quan đến ${formatBrandName(item.brand)} trên nguồn ${item.source || item.platform} đang thu hút phản hồi tiêu cực từ dư luận. Nguy cơ gây tổn hại uy tín thương hiệu trung/dài hạn nếu không được giải quyết ngay.`
+    })
+  );
+  
+  const [sopActions, setSopActions] = useState(
+    t("alerts.report.sopPlaceholder", {
+      defaultValue: `1. Tiếp cận trực tiếp chủ sở hữu bài đăng để đối thoại giải quyết mâu thuẫn.\n2. Báo cáo Ban Giám đốc tình hình diễn biến và kịch bản ứng phó.\n3. Rà soát chất lượng vận hành nội bộ tại điểm chạm phát sinh sự cố.`
+    })
+  );
+  
+  const [status, setStatus] = useState("pending");
+
+  const brandName = formatBrandName(item.brand);
+  const sourceName = (item.source || item.platform || "unknown").toUpperCase();
+  const severityText = (item.severity || "high").toUpperCase();
+  const dateStr = new Date(item.created_at || Date.now()).toLocaleString("vi-VN");
+
+  const handleExport = () => {
+    const reportData = {
+      title: `Báo cáo Sự cố Khẩn cấp - ${brandName} - ${sourceName}`,
+      brand: brandName,
+      source: sourceName,
+      severity: severityText,
+      created_at: dateStr,
+      reporter: item.author || "Ẩn danh",
+      description: item.text || item.content || "",
+      impact_assessment: impactAssessment,
+      recommended_sop_actions: sopActions,
+      status: status,
+      generated_at: new Date().toISOString()
+    };
+
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(reportData, null, 2));
+    const downloadAnchor = document.createElement("a");
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `Incident_Report_${brandName.replace(/\s+/g, "_")}_${Date.now()}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  };
+
+  const handleSend = () => {
+    triggerToast(t("alerts.report.saveSuccess"));
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+        onClick={onClose}
+      />
+
+      {/* Modal Container */}
+      <div className="glass-card w-full max-w-2xl rounded-2xl overflow-hidden shadow-2xl relative z-10 border border-app/30 flex flex-col max-h-[90vh] bg-app-surface">
+        {/* Header */}
+        <div className="p-4 md:p-6 border-b border-app/30 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-[var(--color-error)] text-xl">description</span>
+            <h3 className="font-bold text-app text-base md:text-lg">
+              {t("alerts.report.modalTitle")}
+            </h3>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-full flex items-center justify-center text-app-text-secondary hover:bg-app-surface-raised transition-colors"
+          >
+            <span className="material-symbols-outlined text-base">close</span>
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-4 md:p-6 space-y-4 overflow-y-auto">
+          
+          {/* Metadata Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 bg-[var(--color-bg-surface-raised)]/30 p-4 rounded-xl border border-[var(--color-border)]">
+            <div>
+              <p className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider font-bold">{t("alerts.report.brand")}</p>
+              <p className="text-xs font-black text-[var(--color-text-primary)]">{brandName}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider font-bold">{t("alerts.report.source")}</p>
+              <p className="text-xs font-black text-[var(--color-text-primary)]">{sourceName}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider font-bold">{t("alerts.report.severity")}</p>
+              <span className={`inline-block text-[9px] font-black px-1.5 py-0.5 rounded uppercase ${
+                severityText === "CRITICAL" ? "bg-[var(--color-error)] text-white" : "bg-[var(--color-warning)] text-white"
+              }`}>
+                {severityText}
+              </span>
+            </div>
+            <div>
+              <p className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider font-bold">{t("alerts.report.author")}</p>
+              <p className="text-xs font-bold text-[var(--color-text-primary)]">@{item.author || "Ẩn danh"}</p>
+            </div>
+            <div className="col-span-2">
+              <p className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider font-bold">{t("alerts.report.time")}</p>
+              <p className="text-xs font-medium text-[var(--color-text-primary)]">{dateStr}</p>
+            </div>
+          </div>
+
+          {/* Description */}
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-[var(--color-text-primary)]">{t("alerts.report.desc")}</label>
+            <div className="p-3 bg-[var(--color-bg-surface-raised)] rounded-xl border border-[var(--color-border)] text-xs text-[var(--color-text-secondary)] italic">
+              "{item.text || item.content}"
+            </div>
+          </div>
+
+          {/* Impact Assessment */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-[var(--color-text-primary)] flex items-center gap-1">
+              <span className="material-symbols-outlined text-[14px] text-[var(--color-error)]">insights</span>
+              {t("alerts.report.impactLabel")}
+            </label>
+            <textarea
+              rows={3}
+              value={impactAssessment}
+              onChange={(e) => setImpactAssessment(e.target.value)}
+              className="w-full bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] rounded-xl text-xs py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 text-[var(--color-text-primary)]"
+            />
+          </div>
+
+          {/* Recommended SOP Actions */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-[var(--color-text-primary)] flex items-center gap-1">
+              <span className="material-symbols-outlined text-[14px] text-[var(--color-brand)]">task_alt</span>
+              {t("alerts.report.sopLabel")}
+            </label>
+            <textarea
+              rows={3}
+              value={sopActions}
+              onChange={(e) => setSopActions(e.target.value)}
+              className="w-full bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] rounded-xl text-xs py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 text-[var(--color-text-primary)]"
+            />
+          </div>
+
+          {/* Status Select */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-[var(--color-text-primary)]">{t("alerts.report.statusLabel")}</label>
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              className="w-full select-app border border-[var(--color-border)] rounded-xl text-xs py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 font-medium"
+            >
+              <option value="draft" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
+                {t("alerts.report.statusDraft")}
+              </option>
+              <option value="pending" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
+                {t("alerts.report.statusPending")}
+              </option>
+              <option value="sent" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
+                {t("alerts.report.statusSent")}
+              </option>
+            </select>
+          </div>
+
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 border-t border-app/30 flex justify-between items-center bg-app-surface-raised/20">
+          <button
+            onClick={handleExport}
+            className="px-4 py-2.5 rounded-xl text-xs font-bold border border-[var(--color-brand)]/30 text-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)] active:scale-95 transition-all flex items-center gap-1 shadow-sm"
+          >
+            <span className="material-symbols-outlined text-[14px]">download</span>
+            {t("alerts.report.exportBtn")}
+          </button>
+          
+          <div className="flex gap-2">
+            <button
+              onClick={onClose}
+              className="px-4 py-2.5 rounded-xl text-xs font-bold text-app-text-secondary bg-app-surface-raised hover:bg-app-surface-high transition-all"
+            >
+              {t("alerts.report.close")}
+            </button>
+            <button
+              onClick={handleSend}
+              className="px-4 py-2.5 rounded-xl text-xs font-bold bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand-hover)] active:scale-95 transition-all shadow-sm flex items-center gap-1"
+            >
+              <span className="material-symbols-outlined text-[14px]">send</span>
+              {t("alerts.report.sendBtn")}
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -15,6 +15,7 @@ InsightFlow không chỉ là dashboard hiển thị số liệu. Mục tiêu s�
 | `docs/API.md` | Tham khảo API hiện có/định hướng API |
 | `docs/DEPLOYMENT.md` | Hướng dẫn triển khai |
 | `docs/CHANGELOG.md` | Nhật ký thay đổi |
+| `docs/sprint-2-crisis-management-center.md` | Tài liệu tính năng Trung tâm Xử lý Khẩn cấp & Đồng bộ Realtime cho Nhân viên xử lý khủng hoảng |
 
 Nếu có xung đột, ưu tiên tài liệu theo thứ tự:
 
@@ -418,6 +419,7 @@ Sprint 2 được coi là đúng hướng khi:
 
 | Phiên bản | Ngày | Thay đổi |
 |---|---|---|
+| 2.2 | 2026-07-03 | Xây dựng Trung tâm Xử lý Khẩn cấp: Split View (Khẩn cấp/Chi tiết), tích hợp thông tin liên hệ và phím hành động nhanh (Call, Zalo, Email), đồng bộ thời gian thực Firestore onSnapshot. |
 | 2.1 | 2026-07-02 | Bổ sung Contact Intelligence: contact-level aggregation, influence score, spam score và priority boost. |
 | 2.0 | 2026-07-02 | Cập nhật README theo SPEC/ARCHITECTURE Sprint 2: role-based workflow, không đổi cấu trúc thư mục, label lifecycle, onboarding, report và auto-response safety. |
 
