@@ -39,7 +39,7 @@ export default function RootLayout({
   const { t, i18n } = useTranslation();
 
   // Trang auth: không có sidebar, không có footer
-  const isAuthPage = ["/login", "/forgot-password"].includes(pathname || "");
+  const isAuthPage = ["/login", "/forgot-password", "/change-password"].includes(pathname || "");
   // Trang public: không có sidebar, nhưng có footer
   const isPublicPage = [
     "/",

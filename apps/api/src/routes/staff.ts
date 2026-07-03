@@ -108,6 +108,25 @@ function normalizeStaffPermissions(role: StaffRole, permissions: unknown) {
   return savedPermissions.length > 0 ? savedPermissions : roleAllowedPermissions[role];
 }
 
+function serializeStaffAccount(data: any, manager: { brandId: string; brandName: string }) {
+  const role = inferStaffRoleFromProfile(data);
+  const permissions = normalizeStaffPermissions(role, data.permissions);
+  return {
+    uid: data.uid,
+    email: data.email,
+    displayName: data.displayName,
+    role,
+    brandId: data.brandId || manager.brandId,
+    brandName: data.brandName || manager.brandName,
+    permissions,
+    defaultRoute: data.defaultRoute || resolveDefaultRoute(role, permissions),
+    disabled: data.disabled === true,
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
+    hasTemporaryPassword: data.temporaryPasswordIssued === true && Boolean(data.temporaryPassword),
+  };
+}
+
 async function ensureBrandManager(request: FastifyRequest, reply: FastifyReply) {
   await verifyToken(request, reply);
   if (reply.sent) return null;
@@ -146,23 +165,7 @@ export default async function staffRoutes(fastify: FastifyInstance, options: Fas
       const staff = snapshot.docs
         .map((doc) => doc.data())
         .filter((data) => belongsToManagerBrand(data, manager) && isStaffAccount(data, manager))
-        .map((data) => {
-          const role = inferStaffRoleFromProfile(data);
-          const permissions = normalizeStaffPermissions(role, data.permissions);
-          return {
-            uid: data.uid,
-            email: data.email,
-            displayName: data.displayName,
-            role,
-            brandId: data.brandId || manager.brandId,
-            brandName: data.brandName || manager.brandName,
-            permissions,
-            defaultRoute: data.defaultRoute || resolveDefaultRoute(role, permissions),
-            createdAt: data.createdAt,
-            updatedAt: data.updatedAt,
-            hasTemporaryPassword: data.temporaryPasswordIssued === true && Boolean(data.temporaryPassword),
-          };
-        });
+        .map((data) => serializeStaffAccount(data, manager));
 
       return { success: true, data: staff };
     } catch (error: any) {
@@ -254,6 +257,7 @@ export default async function staffRoutes(fastify: FastifyInstance, options: Fas
         companyDomain,
         permissions,
         defaultRoute,
+        disabled: false,
         temporaryPasswordIssued: true,
         temporaryPassword,
         updatedAt: FieldValue.serverTimestamp(),
@@ -300,6 +304,141 @@ export default async function staffRoutes(fastify: FastifyInstance, options: Fas
       return reply.status(500).send({
         success: false,
         error: error.message || "Failed to create staff account.",
+      });
+    }
+  });
+
+  fastify.patch("/:uid", async (request: FastifyRequest, reply: FastifyReply) => {
+    const manager = await ensureBrandManager(request, reply);
+    if (!manager) return;
+
+    const { uid } = request.params as { uid: string };
+    const body = request.body as {
+      displayName?: string;
+      staffRole?: StaffRoleInput;
+      operations?: string[];
+    };
+
+    const displayName = body.displayName?.trim();
+    const staffRole = normalizeStaffRole(body.staffRole);
+
+    if (!displayName || !staffRole) {
+      return reply.status(400).send({
+        success: false,
+        error: "Display name and staffRole are required.",
+      });
+    }
+
+    const permissions = resolvePermissions(staffRole, body.operations);
+    const defaultRoute = resolveDefaultRoute(staffRole, permissions);
+
+    try {
+      const staffDoc = await db.collection("users").doc(uid).get();
+      const staffProfile = staffDoc.exists ? staffDoc.data() : null;
+
+      if (
+        !staffProfile ||
+        !belongsToManagerBrand(staffProfile, manager) ||
+        !isStaffAccount(staffProfile, manager)
+      ) {
+        return reply.status(404).send({ success: false, error: "Staff account not found in your brand." });
+      }
+
+      await authAdmin.updateUser(uid, { displayName });
+      const userRecord = await authAdmin.getUser(uid);
+      await authAdmin.setCustomUserClaims(uid, {
+        ...(userRecord.customClaims || {}),
+        role: staffRole,
+        brandId: manager.brandId,
+        brandName: manager.brandName,
+        permissions,
+        defaultRoute,
+      });
+
+      const payload = {
+        displayName,
+        role: staffRole,
+        permissions,
+        defaultRoute,
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+
+      await db.collection("users").doc(uid).set(payload, { merge: true });
+      await db
+        .collection("brands")
+        .doc(manager.brandId)
+        .collection("staff")
+        .doc(uid)
+        .set(payload, { merge: true });
+
+      const updatedDoc = await db.collection("users").doc(uid).get();
+      return {
+        success: true,
+        data: serializeStaffAccount(updatedDoc.data(), manager),
+      };
+    } catch (error: any) {
+      request.log.error(error);
+      return reply.status(500).send({
+        success: false,
+        error: error.message || "Failed to update staff account.",
+      });
+    }
+  });
+
+  fastify.patch("/:uid/status", async (request: FastifyRequest, reply: FastifyReply) => {
+    const manager = await ensureBrandManager(request, reply);
+    if (!manager) return;
+
+    const { uid } = request.params as { uid: string };
+    const body = request.body as { disabled?: boolean };
+
+    if (typeof body.disabled !== "boolean") {
+      return reply.status(400).send({ success: false, error: "disabled must be a boolean." });
+    }
+
+    try {
+      const staffDoc = await db.collection("users").doc(uid).get();
+      const staffProfile = staffDoc.exists ? staffDoc.data() : null;
+
+      if (
+        !staffProfile ||
+        !belongsToManagerBrand(staffProfile, manager) ||
+        !isStaffAccount(staffProfile, manager)
+      ) {
+        return reply.status(404).send({ success: false, error: "Staff account not found in your brand." });
+      }
+
+      await authAdmin.updateUser(uid, { disabled: body.disabled });
+      await db.collection("users").doc(uid).set(
+        {
+          disabled: body.disabled,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+      await db
+        .collection("brands")
+        .doc(manager.brandId)
+        .collection("staff")
+        .doc(uid)
+        .set(
+          {
+            disabled: body.disabled,
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+
+      const updatedDoc = await db.collection("users").doc(uid).get();
+      return {
+        success: true,
+        data: serializeStaffAccount(updatedDoc.data(), manager),
+      };
+    } catch (error: any) {
+      request.log.error(error);
+      return reply.status(500).send({
+        success: false,
+        error: error.message || "Failed to update account status.",
       });
     }
   });
