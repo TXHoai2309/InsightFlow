@@ -6,6 +6,7 @@ import { EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
 import { validateStrongPassword } from "@/lib/passwordPolicy";
+import { buildBrandEmail, getBrandEmailDomain } from "@/lib/brandEmail";
 
 type StaffRole = "crisis_employee" | "lead_employee";
 type LegacyStaffRole = "crisis_staff" | "lead_staff";
@@ -68,7 +69,7 @@ export default function TeamPage() {
   const { profile } = useAuth();
   const [staff, setStaff] = useState<StaffAccount[]>([]);
   const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
+  const [emailLocalPart, setEmailLocalPart] = useState("");
   const [staffRole, setStaffRole] = useState<StaffRole>("crisis_employee");
   const [operations, setOperations] = useState<string[]>(["dashboard", "mentions", "alerts", "reports"]);
   const [temporaryPassword, setTemporaryPassword] = useState(generateTemporaryPassword());
@@ -98,6 +99,8 @@ export default function TeamPage() {
     () => operationOptions.filter((operation) => operation.roles.includes(editStaffRole)),
     [editStaffRole],
   );
+  const brandEmailDomain = getBrandEmailDomain(profile?.brandName, profile?.companyDomain);
+  const fullEmail = buildBrandEmail(emailLocalPart, brandEmailDomain);
 
   useEffect(() => {
     const defaults =
@@ -192,7 +195,7 @@ export default function TeamPage() {
         },
         body: JSON.stringify({
           fullName,
-          email,
+          email: fullEmail,
           staffRole,
           operations,
           temporaryPassword,
@@ -210,7 +213,7 @@ export default function TeamPage() {
         return [data.data, ...withoutDuplicate];
       });
       setFullName("");
-      setEmail("");
+      setEmailLocalPart("");
       setTemporaryPassword(generateTemporaryPassword());
     } catch (err: any) {
       setError(err.message || t("team.errors.createFailed"));
@@ -408,14 +411,21 @@ export default function TeamPage() {
 
             <label className="space-y-2">
               <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">{t("team.form.email")}</span>
-              <input
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                required
-                type="email"
-                placeholder={t("team.form.emailPlaceholder")}
-                className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2.5 text-[14px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]"
-              />
+              <div className="flex overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] focus-within:border-[var(--color-brand)]">
+                <input
+                  value={emailLocalPart}
+                  onChange={(event) => setEmailLocalPart(event.target.value)}
+                  required
+                  placeholder="nhan_vien"
+                  className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-[14px] text-[var(--color-text-primary)] outline-none"
+                />
+                <span className="shrink-0 border-l border-[var(--color-border)] px-3 py-2.5 text-[14px] text-[var(--color-text-secondary)]">
+                  @{brandEmailDomain || "brand.com"}
+                </span>
+              </div>
+              {fullEmail && (
+                <span className="block text-[12px] text-[var(--color-text-muted)]">Email: {fullEmail}</span>
+              )}
             </label>
           </div>
 

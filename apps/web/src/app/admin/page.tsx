@@ -2,8 +2,12 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { collection, getDocs, limit, query } from "firebase/firestore";
 import { auth } from "@/lib/firebase";
+import { dbData } from "@/lib/firebase";
 import { validateStrongPassword } from "@/lib/passwordPolicy";
+import { buildBrandEmail, getBrandEmailDomain, slugifyBrandDomain, type BrandOption } from "@/lib/brandEmail";
+import { formatBrandDisplayName } from "@/lib/services/dashboard";
 
 interface CreatedAccount {
   uid: string;
@@ -29,8 +33,10 @@ function generateTemporaryPassword() {
 export default function AdminPage() {
   const { t } = useTranslation();
   const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
+  const [emailLocalPart, setEmailLocalPart] = useState("");
   const [brandName, setBrandName] = useState("");
+  const [brandOptions, setBrandOptions] = useState<BrandOption[]>([]);
+  const [loadingBrands, setLoadingBrands] = useState(true);
   const [temporaryPassword, setTemporaryPassword] = useState(generateTemporaryPassword());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -44,14 +50,60 @@ export default function AdminPage() {
   const [savingEdit, setSavingEdit] = useState(false);
 
   const brandPreview = useMemo(() => {
-    return brandName
-      .trim()
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "");
+    return slugifyBrandDomain(brandName);
   }, [brandName]);
+
+  const selectedBrand = useMemo(
+    () => brandOptions.find((brand) => brand.name === brandName),
+    [brandName, brandOptions],
+  );
+  const selectedBrandDomain = selectedBrand?.domain || getBrandEmailDomain(brandName);
+  const fullEmail = buildBrandEmail(emailLocalPart, selectedBrandDomain);
+
+  const loadCrawledBrands = async () => {
+    setLoadingBrands(true);
+
+    try {
+      const brandMap = new Map<string, BrandOption>();
+
+      const seedBrands = ["Highland Coffee", "Starbucks", "Mixue"];
+      seedBrands.forEach((name) => {
+        const key = slugifyBrandDomain(name);
+        brandMap.set(key, {
+          id: key,
+          name,
+          domain: getBrandEmailDomain(name),
+        });
+      });
+
+      if (dbData) {
+        const snapshot = await getDocs(query(collection(dbData, "insightflow_labels"), limit(1000)));
+        snapshot.docs.forEach((doc) => {
+          const data = doc.data();
+          const rawBrand = String(data.brand || data.workspace_id || data.brandName || "").trim();
+          if (!rawBrand) return;
+
+          const name = formatBrandDisplayName(rawBrand);
+          const key = slugifyBrandDomain(name);
+          if (!key) return;
+
+          brandMap.set(key, {
+            id: String(data.workspace_id || data.brand || key),
+            name,
+            domain: getBrandEmailDomain(name),
+          });
+        });
+      }
+
+      const brands = Array.from(brandMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+      setBrandOptions(brands);
+      setBrandName((current) => current || brands[0]?.name || "");
+    } catch (error) {
+      console.warn("Could not load crawled brands for Admin form.", error);
+    } finally {
+      setLoadingBrands(false);
+    }
+  };
 
   const loadBrandManagers = async () => {
     setLoadingList(true);
@@ -82,6 +134,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     loadBrandManagers();
+    loadCrawledBrands();
   }, []);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -109,7 +162,7 @@ export default function AdminPage() {
         },
         body: JSON.stringify({
           fullName,
-          email,
+          email: fullEmail,
           brandName,
           temporaryPassword,
         }),
@@ -127,8 +180,7 @@ export default function AdminPage() {
         return [data.data, ...withoutDuplicate];
       });
       setFullName("");
-      setEmail("");
-      setBrandName("");
+      setEmailLocalPart("");
       setTemporaryPassword(generateTemporaryPassword());
     } catch (err: any) {
       setError(err.message || t("admin.brandManager.errors.createFailed"));
@@ -280,28 +332,43 @@ export default function AdminPage() {
 
             <label className="space-y-2">
               <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">{t("admin.brandManager.form.email")}</span>
-              <input
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                required
-                type="email"
-                placeholder="manager@brand.com"
-                className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2.5 text-[14px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]"
-              />
+              <div className="flex overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] focus-within:border-[var(--color-brand)]">
+                <input
+                  value={emailLocalPart}
+                  onChange={(event) => setEmailLocalPart(event.target.value)}
+                  required
+                  placeholder="manager"
+                  className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-[14px] text-[var(--color-text-primary)] outline-none"
+                />
+                <span className="shrink-0 border-l border-[var(--color-border)] px-3 py-2.5 text-[14px] text-[var(--color-text-secondary)]">
+                  @{selectedBrandDomain || "brand.com"}
+                </span>
+              </div>
+              {fullEmail && (
+                <span className="block text-[12px] text-[var(--color-text-muted)]">Email: {fullEmail}</span>
+              )}
             </label>
           </div>
 
           <label className="space-y-2 block">
             <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">{t("admin.brandManager.form.brand")}</span>
-            <input
+            <select
               value={brandName}
               onChange={(event) => setBrandName(event.target.value)}
               required
-              placeholder="Highlands Coffee"
-              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2.5 text-[14px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]"
-            />
+              disabled={loadingBrands || brandOptions.length === 0}
+              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2.5 text-[14px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {brandOptions.map((brand) => (
+                <option key={brand.id} value={brand.name}>
+                  {brand.name}
+                </option>
+              ))}
+            </select>
             {brandPreview && (
-              <span className="block text-[12px] text-[var(--color-text-muted)]">Brand ID: {brandPreview}</span>
+              <span className="block text-[12px] text-[var(--color-text-muted)]">
+                Brand ID: {brandPreview} - Domain: {selectedBrandDomain}
+              </span>
             )}
           </label>
 
@@ -458,11 +525,21 @@ export default function AdminPage() {
 
             <label className="mt-4 block space-y-2">
               <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">Thuong hieu</span>
-              <input
+              <select
                 value={editBrandName}
                 onChange={(event) => setEditBrandName(event.target.value)}
+                disabled={brandOptions.length === 0}
                 className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2.5 text-[14px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]"
-              />
+              >
+                {editBrandName && !brandOptions.some((brand) => brand.name === editBrandName) && (
+                  <option value={editBrandName}>{editBrandName}</option>
+                )}
+                {brandOptions.map((brand) => (
+                  <option key={brand.id} value={brand.name}>
+                    {brand.name}
+                  </option>
+                ))}
+              </select>
             </label>
 
             <div className="mt-5 flex justify-end gap-3">
