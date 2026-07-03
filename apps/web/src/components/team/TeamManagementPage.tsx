@@ -732,6 +732,7 @@ export function TeamManagementPage({ view = "all" }: { view?: TeamManagementView
                 value={managerPassword}
                 onChange={(event) => setManagerPassword(event.target.value)}
                 type="password"
+                autoComplete="new-password"
                 autoFocus
                 className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2.5 text-[14px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]"
               />

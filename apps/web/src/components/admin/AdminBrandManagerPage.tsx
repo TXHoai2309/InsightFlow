@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useTranslation } from "react-i18next";
 import { collection, getDocs, limit, query } from "firebase/firestore";
+import { EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { dbData } from "@/lib/firebase";
 import { validateStrongPassword } from "@/lib/passwordPolicy";
@@ -22,6 +23,7 @@ interface CreatedAccount {
 
 interface BrandManagerAccount extends Omit<CreatedAccount, "temporaryPassword"> {
   temporaryPassword?: string;
+  hasTemporaryPassword?: boolean;
   disabled?: boolean;
 }
 
@@ -168,6 +170,13 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
   const [editBrandName, setEditBrandName] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+
+  const [revealedPasswords, setRevealedPasswords] = useState<Record<string, string>>({});
+  const [passwordRequestUid, setPasswordRequestUid] = useState<string | null>(null);
+  const [passwordRequestMode, setPasswordRequestMode] = useState<"reveal" | "reset">("reveal");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [revealLoading, setRevealLoading] = useState(false);
+  const [revealError, setRevealError] = useState("");
 
   const brandPreview = useMemo(() => {
     return slugifyBrandDomain(brandName);
@@ -397,6 +406,82 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
       );
     } catch (err: any) {
       setActionError(err.message || "Không thể cập nhật trạng thái tài khoản.");
+    }
+  };
+
+  const handleRevealTemporaryPassword = async (managerUid: string) => {
+    setRevealLoading(true);
+    setRevealError("");
+
+    try {
+      const user = auth.currentUser;
+      if (!user?.email) {
+        throw new Error("Phiên đăng nhập không hợp lệ.");
+      }
+
+      const credential = EmailAuthProvider.credential(user.email, adminPassword);
+      await reauthenticateWithCredential(user, credential);
+
+      const selectedManager = brandManagers.find((item) => item.uid === managerUid);
+      if (passwordRequestMode === "reveal" && selectedManager?.temporaryPassword) {
+        setRevealedPasswords((current) => ({
+          ...current,
+          [managerUid]: selectedManager.temporaryPassword as string,
+        }));
+        setPasswordRequestUid(null);
+        setAdminPassword("");
+        return;
+      }
+
+      const token = await user.getIdToken(true);
+      const endpoint =
+        passwordRequestMode === "reset"
+          ? `/api/admin/brand-managers/${managerUid}/reset-temporary-password`
+          : `/api/admin/brand-managers/${managerUid}/temporary-password`;
+
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 400) {
+          setBrandManagers((current) =>
+            current.map((item) =>
+              item.uid === managerUid ? { ...item, hasTemporaryPassword: false, temporaryPassword: undefined } : item,
+            ),
+          );
+        }
+        throw new Error(data.error || "Không thể thực hiện yêu cầu.");
+      }
+
+      setRevealedPasswords((current) => ({
+        ...current,
+        [managerUid]: data.data.temporaryPassword,
+      }));
+      setBrandManagers((current) =>
+        current.map((item) =>
+          item.uid === managerUid
+            ? { ...item, hasTemporaryPassword: true, temporaryPassword: data.data.temporaryPassword }
+            : item,
+        ),
+      );
+      setPasswordRequestUid(null);
+      setAdminPassword("");
+    } catch (err: any) {
+      const messageByCode: Record<string, string> = {
+        "auth/wrong-password": "Mật khẩu xác thực của Admin không đúng.",
+        "auth/invalid-credential": "Mật khẩu xác thực của Admin không đúng.",
+        "auth/too-many-requests": "Quá nhiều yêu cầu. Vui lòng thử lại sau.",
+      };
+      const backendMessage =
+        err.message === "Temporary password is no longer available for this account."
+          ? "Mật khẩu tạm thời không còn khả dụng cho tài khoản này."
+          : err.message;
+      setRevealError(messageByCode[err.code] || backendMessage || "Yêu cầu thất bại.");
+    } finally {
+      setRevealLoading(false);
     }
   };
 
@@ -751,6 +836,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
                   <th className="py-3 pr-4 font-semibold">Tài khoản</th>
                   <th className="py-3 pr-4 font-semibold">Thương hiệu</th>
                   <th className="py-3 pr-4 font-semibold">Trạng thái</th>
+                  <th className="py-3 pr-4 font-semibold">Mật khẩu tạm</th>
                   <th className="py-3 pr-4 font-semibold">Hành động</th>
                 </tr>
               </thead>
@@ -758,14 +844,14 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
                 {loadingList ? (
                   Array.from({ length: 3 }).map((_, i) => (
                     <tr key={i}>
-                      <td className="py-4 pr-4" colSpan={4}>
+                      <td className="py-4 pr-4" colSpan={5}>
                         <div className="h-10 w-full animate-pulse rounded-lg bg-[var(--color-bg-surface-raised)]" />
                       </td>
                     </tr>
                   ))
                 ) : filteredManagers.length === 0 ? (
                   <tr>
-                    <td className="py-10" colSpan={4}>
+                    <td className="py-10" colSpan={5}>
                       <div className="flex flex-col items-center gap-2 text-center">
                         <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--color-bg-surface-raised)] text-[var(--color-text-muted)]">
                           <Icon.Inbox className="h-5 w-5" />
@@ -804,6 +890,42 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
                         </span>
                       </td>
                       <td className="py-3.5 pr-4">
+                        {revealedPasswords[item.uid] ? (
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-[13px] text-[var(--color-text-primary)]">
+                              {revealedPasswords[item.uid]}
+                            </span>
+                            <CopyButton value={revealedPasswords[item.uid]} label="mật khẩu" />
+                          </div>
+                        ) : item.hasTemporaryPassword || item.temporaryPassword ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPasswordRequestUid(item.uid);
+                              setPasswordRequestMode("reveal");
+                              setRevealError("");
+                              setAdminPassword("");
+                            }}
+                            className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 font-mono text-[13px] text-[var(--color-text-primary)] transition hover:bg-[var(--color-brand-subtle)] hover:text-[var(--color-brand)]"
+                          >
+                            ••••••••••
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPasswordRequestUid(item.uid);
+                              setPasswordRequestMode("reset");
+                              setRevealError("");
+                              setAdminPassword("");
+                            }}
+                            className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-[12px] font-semibold text-[var(--color-text-primary)] transition hover:bg-[var(--color-brand-subtle)] hover:text-[var(--color-brand)]"
+                          >
+                            Cấp lại
+                          </button>
+                        )}
+                      </td>
+                      <td className="py-3.5 pr-4">
                         <div className="flex flex-wrap gap-2">
                           <button
                             type="button"
@@ -833,6 +955,68 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
             </table>
           </div>
         </section>
+      )}
+
+      {passwordRequestUid && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-[420px] rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 shadow-xl animate-in fade-in zoom-in-95 duration-150">
+            <h3 className="text-[18px] font-bold text-[var(--color-text-primary)]">
+              {passwordRequestMode === "reset" ? "Xác thực để cấp lại mật khẩu" : "Xác thực để xem mật khẩu"}
+            </h3>
+            <p className="mt-2 text-[13px] leading-5 text-[var(--color-text-secondary)]">
+              {passwordRequestMode === "reset"
+                ? "Nhập mật khẩu tài khoản Admin của bạn. Hệ thống sẽ tạo mật khẩu tạm mới cho Brand Manager."
+                : "Nhập mật khẩu tài khoản Admin của bạn để xem mật khẩu tạm thời hiện tại."}
+            </p>
+
+            {revealError && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
+                {revealError}
+              </div>
+            )}
+
+            <label className="mt-5 block space-y-2">
+              <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">
+                Mật khẩu Admin
+              </span>
+              <input
+                value={adminPassword}
+                onChange={(event) => setAdminPassword(event.target.value)}
+                type="password"
+                autoComplete="new-password"
+                autoFocus
+                className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2.5 text-[14px] text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/15"
+              />
+            </label>
+
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setPasswordRequestUid(null);
+                  setPasswordRequestMode("reveal");
+                  setAdminPassword("");
+                  setRevealError("");
+                }}
+                className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-[13px] font-semibold text-[var(--color-text-primary)] transition hover:bg-[var(--color-bg-surface-raised)]"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                disabled={revealLoading || !adminPassword}
+                onClick={() => handleRevealTemporaryPassword(passwordRequestUid)}
+                className="rounded-lg bg-[var(--color-brand)] px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {revealLoading
+                  ? "Đang xác thực..."
+                  : passwordRequestMode === "reset"
+                    ? "Cấp lại và xem"
+                    : "Xem mật khẩu"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Edit modal */}
