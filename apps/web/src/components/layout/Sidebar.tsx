@@ -25,13 +25,14 @@ interface NavItem {
 const navItems: NavItem[] = [
   { href: "/admin", label: "Admin", icon: "ti-shield-lock" },
   { href: "/dashboard", label: "nav.dashboard", icon: "ti-layout-dashboard" },
-  { href: "/team", label: "Nhan vien", icon: "ti-users" },
+  { href: "/team", label: "nav.team", icon: "ti-users" },
   { href: "/mentions", label: "nav.mentions", icon: "ti-message-circle" },
   { href: "/alerts", label: "nav.alerts", icon: "ti-bell" },
   { href: "/leads", label: "nav.leads", icon: "ti-chart-bar" },
   { href: "/reports", label: "nav.reports", icon: "ti-file-analytics" },
   { href: "/settings/brand", label: "nav.brands", icon: "ti-settings" },
 ];
+
 
 interface SidebarProps {
   isOpen: boolean;

@@ -1,7 +1,5 @@
 "use client";
 
-"use client";
-
 /**
  * Header Component
  * Thanh header chính với search, simulation, notifications, user profile.
@@ -33,16 +31,15 @@ export function Header({ onMenuToggle }: HeaderProps) {
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   };
 
-  const userName = user?.displayName || user?.email?.split("@")[0] || t("header.guest");
-  const roleLabel = role ? ROLE_CONFIG[role].label : t("header.guest");
-  const initials = getInitials(user?.displayName || userName);
+  const userName = role === "brand_manager" ? "Highlands Brand Manager" : (user?.displayName || user?.email?.split("@")[0] || t("header.guest"));
+  const roleLabel = role === "brand_manager" ? "Quản lý thương hiệu" : (role ? ROLE_CONFIG[role].label : t("header.guest"));
+  const initials = role === "brand_manager" ? "HM" : getInitials(user?.displayName || userName);
   const isDark = theme === "dark";
 
   return (
     <header
-      className="h-16 flex justify-between items-center px-4 md:px-8 fixed top-0 left-0 right-0 md:left-[240px] z-30 font-sans"
+      className="h-[72px] flex justify-between items-center px-4 md:px-8 fixed top-0 left-0 right-0 md:left-[240px] z-30 font-sans bg-white dark:bg-[#1a1b1e]"
       style={{
-        backgroundColor: "var(--color-bg-surface)",
         borderBottom: "1px solid var(--color-border)",
       }}
     >
@@ -62,26 +59,12 @@ export function Header({ onMenuToggle }: HeaderProps) {
 
         {/* Search bar — desktop */}
         <div
-          className="hidden md:flex items-center rounded-[10px] px-4 h-[44px] w-96 transition-all"
-          style={{
-            backgroundColor: "var(--color-bg-surface-raised)",
-            border: "1.5px solid var(--color-border)",
-          }}
-          onFocus={(e) => {
-            const el = e.currentTarget;
-            el.style.borderColor = "var(--color-brand)";
-            el.style.boxShadow = "0 0 0 3px var(--color-brand-border)";
-          }}
-          onBlur={(e) => {
-            const el = e.currentTarget;
-            el.style.borderColor = "var(--color-border)";
-            el.style.boxShadow = "none";
-          }}
+          className="hidden md:flex items-center rounded-lg px-4 h-[44px] w-[400px] transition-all bg-[#F8F9FA] dark:bg-[#2A2B2F]"
         >
           <i className="ti ti-search text-[18px]" style={{ color: "var(--color-text-muted)" }}></i>
           <input
             type="text"
-            placeholder={t("header.searchPlaceholder")}
+            placeholder="Tìm kiếm mention, bài viết..."
             className="bg-transparent border-none focus:ring-0 w-full ml-3 outline-none text-[14px]"
             style={{
               color: "var(--color-text-primary)",
@@ -101,51 +84,19 @@ export function Header({ onMenuToggle }: HeaderProps) {
       </div>
 
       {/* Right Section */}
-      <div className="flex items-center gap-2 md:gap-4">
-        {/* Simulation Controls — desktop only */}
-        {/* <div
-          className="hidden md:flex items-center gap-2 rounded-[10px] px-3 h-[44px]"
-          style={{
-            backgroundColor: "var(--color-bg-surface-raised)",
-            border: "1.5px solid var(--color-border)",
-          }}
-        >
-          <span
-            className="text-[11px] font-semibold uppercase tracking-[0.08em] mr-1"
-            style={{ color: "var(--color-text-muted)" }}
-          >
-            {t("header.simulation")}
-          </span>
-          <button
-            onClick={() => alert("Triggered Hot Lead simulation")}
-            className="px-3 py-1 text-white text-[12px] font-semibold rounded-[6px] transition-colors shadow-sm"
-            style={{ backgroundColor: "var(--color-brand)" }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--color-brand-hover)")}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--color-brand)")}
-          >
-            + Lead
-          </button>
-          <button
-            onClick={() => alert("Triggered Crisis Alert simulation")}
-            className="px-3 py-1 text-white text-[12px] font-semibold rounded-[6px] transition-colors shadow-sm"
-            style={{ backgroundColor: "var(--color-error)" }}
-          >
-            + Alert
-          </button>
-        </div> */}
-
+      <div className="flex items-center gap-4 md:gap-6">
+        
         {/* Notifications */}
         <div className="relative">
           <button
             onClick={() => setShowNotifications(!showNotifications)}
-            className="p-2 rounded-full transition-colors duration-200 relative"
-            style={{ color: "var(--color-text-secondary)" }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--color-brand-subtle)")}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+            className="p-2 rounded-full transition-colors duration-200 relative text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"
             aria-label="Thông báo"
           >
             <i className="ti ti-bell text-[22px]"></i>
-            <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-[#EF4444] rounded-full hidden"></span>
+            <span className="absolute top-1 right-1 w-[16px] h-[16px] bg-red-500 rounded-full flex items-center justify-center text-[9px] text-white font-bold border-2 border-white dark:border-[#1a1b1e]">
+              8
+            </span>
           </button>
 
           {showNotifications && (
@@ -162,7 +113,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
                   className="font-semibold text-[14px]"
                   style={{ color: "var(--color-text-primary)" }}
                 >
-                  {t("header.notifications")} (5)
+                  {t("header.notifications")} (8)
                 </h4>
               </div>
               <div className="max-h-64 overflow-y-auto">
@@ -204,104 +155,58 @@ export function Header({ onMenuToggle }: HeaderProps) {
         {/* ── Dark Mode Toggle ─────────────────────────────────── */}
         <button
           onClick={toggleTheme}
-          className="theme-toggle"
-          role="switch"
-          aria-checked={isDark}
-          aria-label={isDark ? "Chuyển sang chế độ sáng" : "Chuyển sang chế độ tối"}
+          className="p-2 rounded-full text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           title={isDark ? "Chế độ sáng" : "Chế độ tối"}
         >
-          <span className="theme-toggle-thumb">
-            {isDark ? (
-              /* Moon icon — dark mode active */
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 0 1-4.4 2.26 5.403 5.403 0 0 1-3.14-9.8c-.44-.06-.9-.1-1.36-.1z" />
-              </svg>
-            ) : (
-              /* Sun icon — light mode active */
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 7a5 5 0 1 0 0 10A5 5 0 0 0 12 7zm0-5a1 1 0 0 1 1 1v2a1 1 0 0 1-2 0V3a1 1 0 0 1 1-1zm0 16a1 1 0 0 1 1 1v2a1 1 0 0 1-2 0v-2a1 1 0 0 1 1-1zM4.22 5.64a1 1 0 0 1 1.42-1.42l1.41 1.42a1 1 0 0 1-1.41 1.41L4.22 5.64zm12.72 12.72a1 1 0 0 1 1.41-1.41l1.42 1.41a1 1 0 0 1-1.42 1.42l-1.41-1.42zM3 11a1 1 0 0 1 0 2H1a1 1 0 0 1 0-2h2zm20 0a1 1 0 0 1 0 2h-2a1 1 0 0 1 0-2h2zM5.64 18.36a1 1 0 0 1-1.42 1.42L2.8 18.36a1 1 0 0 1 1.42-1.42l1.42 1.42zM18.36 5.64a1 1 0 0 1-1.41-1.41l1.41-1.42a1 1 0 0 1 1.42 1.42l-1.42 1.41z" />
-              </svg>
-            )}
-          </span>
+          {isDark ? (
+            <i className="ti ti-moon text-[22px]"></i>
+          ) : (
+            <i className="ti ti-sun text-[22px]"></i>
+          )}
         </button>
 
         {/* ── Language Toggle ────────────────────────────────── */}
-        <div className="flex gap-1 shrink-0">
+        <div className="flex gap-1 shrink-0 bg-[#F0F2F5] dark:bg-[#2A2B2F] p-1 rounded-full">
           <button
             onClick={() => setLanguage("vi")}
-            className="px-3 py-1.5 text-[13px] font-semibold rounded-lg transition-all"
-            aria-pressed={language === "vi"}
+            className="px-4 py-1.5 text-[12px] font-bold rounded-full transition-all"
             style={language === "vi" ? {
-              backgroundColor: isDark ? "var(--color-brand)" : "#4648d4",
+              backgroundColor: "#6D5FFD",
               color: "white",
             } : {
-              backgroundColor: isDark ? "var(--color-bg-surface-raised)" : "#f0f3ff",
-              color: isDark ? "var(--color-text-secondary)" : "#464554",
+              backgroundColor: "transparent",
+              color: "var(--color-text-secondary)",
             }}
           >
             VI
           </button>
           <button
             onClick={() => setLanguage("en")}
-            className="px-3 py-1.5 text-[13px] font-semibold rounded-lg transition-all"
-            aria-pressed={language === "en"}
+            className="px-4 py-1.5 text-[12px] font-bold rounded-full transition-all"
             style={language === "en" ? {
-              backgroundColor: isDark ? "var(--color-brand)" : "#4648d4",
+              backgroundColor: "#6D5FFD",
               color: "white",
             } : {
-              backgroundColor: isDark ? "var(--color-bg-surface-raised)" : "#f0f3ff",
-              color: isDark ? "var(--color-text-secondary)" : "#464554",
+              backgroundColor: "transparent",
+              color: "var(--color-text-secondary)",
             }}
           >
             EN
           </button>
         </div>
-        {false && (
-          <button
-            onClick={() => setLanguage(language === "vi" ? "en" : "vi")}
-            title={language === "vi" ? "Switch to English" : "Chuyển sang Tiếng Việt"}
-            aria-label={language === "vi" ? "Switch to English" : "Chuyển sang Tiếng Việt"}
-            className="flex items-center gap-1.5 px-2.5 h-[34px] rounded-[8px] border font-bold text-[12px] transition-all duration-200 select-none"
-            style={{
-              backgroundColor: "var(--color-bg-surface-raised)",
-              border: "1.5px solid var(--color-border)",
-              color: "var(--color-text-primary)",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = "var(--color-brand)";
-              e.currentTarget.style.backgroundColor = "var(--color-brand-subtle)";
-              e.currentTarget.style.color = "var(--color-brand)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = "var(--color-border)";
-              e.currentTarget.style.backgroundColor = "var(--color-bg-surface-raised)";
-              e.currentTarget.style.color = "var(--color-text-primary)";
-            }}
-          >
-            <span style={{ fontSize: "16px", lineHeight: 1 }}>
-              {language === "vi" ? "🇻🇳" : "🇬🇧"}
-            </span>
-            <span className="hidden sm:inline">
-              {language === "vi" ? "VI" : "EN"}
-            </span>
-          </button>
-        )}
 
         {/* User Profile */}
-        <div
-          className="flex items-center gap-2 md:gap-3 md:pl-4 md:border-l"
-          style={{ borderColor: "var(--color-border)" }}
-        >
+        <div className="flex items-center gap-3">
           {/* Tên — desktop only */}
-          <div className="hidden md:block text-right">
-            <p className="font-semibold text-[14px]" style={{ color: "var(--color-text-primary)" }}>
+          <div className="hidden md:flex flex-col items-end">
+            <span className="font-bold text-[14px] leading-tight" style={{ color: "var(--color-text-primary)" }}>
               {userName}
-            </p>
-            <p className="text-[12px]" style={{ color: "var(--color-text-muted)" }}>
-              {user ? roleLabel : t("header.guest")}
-            </p>
+            </span>
+            <span className="text-[12px] text-gray-500 leading-tight">
+              {roleLabel}
+            </span>
           </div>
-          <div className="w-[36px] h-[36px] rounded-full bg-gradient-to-tr from-[#6C63FF] to-[#9B8FF8] flex items-center justify-center font-bold text-white text-[13px] cursor-pointer hover:scale-105 transition-transform shadow-sm">
+          <div className="w-[40px] h-[40px] rounded-full bg-[#6D5FFD] flex items-center justify-center font-bold text-white text-[14px] cursor-pointer shadow-sm">
             {initials}
           </div>
         </div>
@@ -310,18 +215,13 @@ export function Header({ onMenuToggle }: HeaderProps) {
       {/* Mobile search bar slide-down */}
       {showSearch && (
         <div
-          className="absolute top-16 left-0 right-0 p-3 md:hidden shadow-sm z-20"
+          className="absolute top-16 left-0 right-0 p-3 md:hidden shadow-sm z-20 bg-white dark:bg-[#1a1b1e]"
           style={{
-            backgroundColor: "var(--color-bg-surface)",
             borderBottom: "1px solid var(--color-border)",
           }}
         >
           <div
-            className="flex items-center rounded-[10px] px-4 h-[44px] transition-all"
-            style={{
-              backgroundColor: "var(--color-bg-surface-raised)",
-              border: "1.5px solid var(--color-border)",
-            }}
+            className="flex items-center rounded-[10px] px-4 h-[44px] transition-all bg-[#F8F9FA] dark:bg-[#2A2B2F]"
           >
             <i className="ti ti-search text-[18px]" style={{ color: "var(--color-text-muted)" }}></i>
             <input

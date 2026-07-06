@@ -1,24 +1,23 @@
 /**
- * US-13: Dashboard Page Route
- * Trang /dashboard - hiển thị Dashboard tổng quan
+ * /brand-manager — Trang Tổng quan Thương hiệu (Task 1)
+ * Dành riêng cho vai trò Brand Manager.
  */
 
 "use client";
 
 import React from "react";
-import { Dashboard } from "@/components/dashboard/Dashboard";
+import { BrandManagerDashboard } from "@/components/brand-manager";
 import { useDashboard } from "@/hooks/useDashboardData";
 
-export default function DashboardPage() {
-  // Fetch dashboard data on component mount
+export default function BrandManagerPage() {
   useDashboard({
     autoFetch: true,
-    refetchInterval: 60000, // Refetch every 60 seconds
+    refetchInterval: 60000, // Làm mới mỗi 60 giây
   });
 
   return (
-    <div className="p-4 md:p-8">
-      <Dashboard />
-    </div>
+    <>
+      <BrandManagerDashboard />
+    </>
   );
 }
