@@ -194,7 +194,7 @@ export default function CommentItem({
     <div
       onMouseEnter={() => onFocus(item._internal_id)}
       onClick={() => onFocus(item._internal_id)}
-      className={`comment-item p-3 transition-all duration-150 ${borderCls} ${focusCls} ${isReply ? 'ml-6' : ''}`}
+      className={`comment-item p-3 transition-all duration-150 ${borderCls} ${focusCls} ${isReply ? 'ml-6' : ''} ${isFocused ? 'z-20 relative' : ''}`}
       data-item-id={item._internal_id}
     >
       {/* Header row */}
@@ -267,13 +267,11 @@ export default function CommentItem({
       </div>
 
       {/* Label selectors */}
-      {!isSkipped && (
-        <LabelSelector label={currentLabel} onChange={onChange} compact />
-      )}
+      <LabelSelector label={currentLabel} onChange={onChange} compact />
 
       {isFocused && (
         <div className="mt-1.5 text-xs text-blue-500 dark:text-blue-400 opacity-70">
-          ↑ Đang focus — 1/2/3 · q-y · a/s · z/x/c
+          ↑ Đang focus — 1/2/3 · q-y · a/s · z/x/c/v · 0
         </div>
       )}
     </div>

@@ -14,6 +14,39 @@ interface LabelSelectorProps {
 }
 
 // ============================================================
+// Style helpers for color coding select dropdowns
+// ============================================================
+function getSentimentClass(sentiment: Label['sentiment']) {
+  if (!sentiment) return '';
+  if (sentiment === 'positive') return 'bg-emerald-50 border-emerald-300 text-emerald-800 dark:bg-emerald-950/30 dark:border-emerald-800 dark:text-emerald-300';
+  if (sentiment === 'negative') return 'bg-red-50 border-red-300 text-red-800 dark:bg-red-950/30 dark:border-red-800 dark:text-red-300';
+  return 'bg-gray-50 border-gray-300 text-gray-800 dark:bg-gray-800/40 dark:border-gray-700 dark:text-gray-300';
+}
+
+function getRelevanceClass(relevance: Label['relevance']) {
+  if (relevance === null || relevance === undefined) return '';
+  if (relevance === true) return 'bg-teal-50 border-teal-300 text-teal-800 dark:bg-teal-950/30 dark:border-teal-800 dark:text-teal-300';
+  return 'bg-slate-50 border-slate-300 text-slate-800 dark:bg-slate-800/40 dark:border-slate-700 dark:text-slate-300';
+}
+
+function getUrgencyClass(urgency: Label['urgency']) {
+  if (!urgency) return '';
+  if (urgency === 'none') return 'bg-gray-50 border-gray-300 text-gray-800 dark:bg-gray-800/40 dark:border-gray-700 dark:text-gray-300';
+  if (urgency === 'low') return 'bg-blue-50 border-blue-300 text-blue-800 dark:bg-blue-950/30 dark:border-blue-800 dark:text-blue-300';
+  if (urgency === 'medium') return 'bg-yellow-50 border-yellow-300 text-yellow-800 dark:bg-yellow-950/30 dark:border-yellow-800 dark:text-yellow-300';
+  if (urgency === 'high') return 'bg-orange-50 border-orange-300 text-orange-800 dark:bg-orange-950/30 dark:border-orange-800 dark:text-orange-300';
+  return 'bg-red-50 border-red-300 text-red-800 dark:bg-red-950/30 dark:border-red-800 dark:text-red-300';
+}
+
+function getIntentClass(intent: Label['intent']) {
+  if (!intent) return '';
+  if (intent === 'hot') return 'bg-orange-50 border-orange-300 text-orange-800 dark:bg-orange-950/30 dark:border-orange-800 dark:text-orange-300';
+  if (intent === 'warm') return 'bg-yellow-50 border-yellow-300 text-yellow-800 dark:bg-yellow-950/30 dark:border-yellow-800 dark:text-yellow-300';
+  if (intent === 'cold') return 'bg-blue-50 border-blue-300 text-blue-800 dark:bg-blue-950/30 dark:border-blue-800 dark:text-blue-300';
+  return 'bg-gray-50 border-gray-300 text-gray-800 dark:bg-gray-800/40 dark:border-gray-700 dark:text-gray-300';
+}
+
+// ============================================================
 // Multi-select topic dropdown
 // ============================================================
 const ALL_TOPICS: TopicKey[] = ['quality', 'price', 'service', 'location', 'promotion', 'recruitment', 'other'];
@@ -52,13 +85,17 @@ function TopicSelector({
     ? '-- Chủ đề'
     : topics.map(t => TOPIC_LABELS[t]).join(', ');
 
+  const activeClass = topics.length > 0
+    ? 'bg-indigo-50 border-indigo-300 text-indigo-800 dark:bg-indigo-950/30 dark:border-indigo-800 dark:text-indigo-300'
+    : '';
+
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className={`relative ${open ? 'z-50' : ''}`}>
       <button
         type="button"
         disabled={disabled}
         onClick={() => setOpen(o => !o)}
-        className="select-control min-w-[120px] text-left flex items-center justify-between gap-1"
+        className={`select-control min-w-[120px] text-left flex items-center justify-between gap-1 transition-colors ${activeClass}`}
         title="Chọn chủ đề (có thể chọn nhiều)"
       >
         <span className="truncate max-w-[100px] text-xs">{displayText}</span>
@@ -90,7 +127,7 @@ function TopicSelector({
 }
 
 // ============================================================
-// Main LabelSelector — 5 controls (no quick-assign button)
+// Main LabelSelector — 5 controls
 // ============================================================
 export default function LabelSelector({ label, onChange, disabled, compact }: LabelSelectorProps) {
   const update = <K extends keyof Label>(key: K, value: Label[K]) => {
@@ -105,13 +142,13 @@ export default function LabelSelector({ label, onChange, disabled, compact }: La
         disabled={disabled}
         value={label.sentiment ?? ''}
         onChange={e => update('sentiment', (e.target.value || null) as Label['sentiment'])}
-        className="select-control"
+        className={`select-control transition-colors ${getSentimentClass(label.sentiment)}`}
         title="Cảm xúc (1=Tích cực, 2=Tiêu cực, 3=Trung tính)"
       >
-        <option value="">-- Cảm xúc</option>
-        <option value="positive">😊 Tích cực</option>
-        <option value="negative">😠 Tiêu cực</option>
-        <option value="neutral">😐 Trung tính</option>
+        <option value="" className="bg-white dark:bg-slate-900 text-gray-800 dark:text-gray-200">-- Cảm xúc</option>
+        <option value="positive" className="bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300">🟢 Tích cực</option>
+        <option value="negative" className="bg-red-50 dark:bg-red-950/50 text-red-800 dark:text-red-300">🔴 Tiêu cực</option>
+        <option value="neutral" className="bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-300">🟡 Trung tính</option>
       </select>
 
       {/* 2. Topic multi-select */}
@@ -129,12 +166,12 @@ export default function LabelSelector({ label, onChange, disabled, compact }: La
           const v = e.target.value;
           update('relevance', v === '' ? null : v === 'yes');
         }}
-        className="select-control"
+        className={`select-control transition-colors ${getRelevanceClass(label.relevance)}`}
         title="Liên quan thương hiệu (a=Có, s=Không)"
       >
-        <option value="">-- Liên quan</option>
-        <option value="yes">✅ Có</option>
-        <option value="no">❌ Không</option>
+        <option value="" className="bg-white dark:bg-slate-900 text-gray-800 dark:text-gray-200">-- Liên quan</option>
+        <option value="yes" className="bg-teal-50 dark:bg-teal-950/50 text-teal-800 dark:text-teal-300">🔵 Có</option>
+        <option value="no" className="bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-300">⚪ Không</option>
       </select>
 
       {/* 4. Urgency */}
@@ -142,14 +179,15 @@ export default function LabelSelector({ label, onChange, disabled, compact }: La
         disabled={disabled}
         value={label.urgency ?? ''}
         onChange={e => update('urgency', (e.target.value || null) as Label['urgency'])}
-        className="select-control"
-        title="Mức độ (z=Thấp, x=Trung bình, c=Cao, v=Khẩn cấp)"
+        className={`select-control transition-colors ${getUrgencyClass(label.urgency)}`}
+        title="Mức độ (z=Thấp, x=Trung bình, c=Cao, v=Khẩn cấp, d=None)"
       >
-        <option value="">-- Mức độ</option>
-        <option value="low">🟢 Thấp</option>
-        <option value="medium">🟡 Trung bình</option>
-        <option value="high">🟠 Cao</option>
-        <option value="urgent">🔴 Khẩn cấp</option>
+        <option value="" className="bg-white dark:bg-slate-900 text-gray-800 dark:text-gray-200">-- Mức độ</option>
+        <option value="none" className="bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-300">⚪ None</option>
+        <option value="low" className="bg-blue-50 dark:bg-blue-950/50 text-blue-800 dark:text-blue-300">🟢 Thấp</option>
+        <option value="medium" className="bg-yellow-50 dark:bg-yellow-950/50 text-yellow-800 dark:text-yellow-300">🟡 Trung bình</option>
+        <option value="high" className="bg-orange-50 dark:bg-orange-950/50 text-orange-800 dark:text-orange-300">🟠 Cao</option>
+        <option value="urgent" className="bg-red-50 dark:bg-red-950/50 text-red-800 dark:text-red-300">🔴 Khẩn cấp</option>
       </select>
 
       {/* 5. Intent */}
@@ -157,14 +195,14 @@ export default function LabelSelector({ label, onChange, disabled, compact }: La
         disabled={disabled}
         value={label.intent ?? ''}
         onChange={e => update('intent', (e.target.value || null) as Intent)}
-        className="select-control"
+        className={`select-control transition-colors ${getIntentClass(label.intent)}`}
         title="Ý định mua hàng (h=Hot, m=Warm, b=Cold, n=None)"
       >
-        <option value="">-- Intent</option>
-        <option value="hot" title="Quan tâm mạnh — có ý định mua/ứng tuyển ngay">🔥 Hot</option>
-        <option value="warm" title="Quan tâm vừa — đang tìm hiểu, cân nhắc">🌡️ Warm</option>
-        <option value="cold" title="Ít quan tâm — đề cập nhưng không có ý định">🧧 Cold</option>
-        <option value="none" title="Không liên quan đến mua hàng/tuyển dụng">➖ None</option>
+        <option value="" className="bg-white dark:bg-slate-900 text-gray-800 dark:text-gray-200">-- Intent</option>
+        <option value="hot" className="bg-orange-50 dark:bg-orange-950/50 text-orange-800 dark:text-orange-300" title="Quan tâm mạnh — có ý định mua/ứng tuyển ngay">🔴 Hot</option>
+        <option value="warm" className="bg-yellow-50 dark:bg-yellow-950/50 text-yellow-800 dark:text-yellow-300" title="Quan tâm vừa — đang tìm hiểu, cân nhắc">🟡 Warm</option>
+        <option value="cold" className="bg-blue-50 dark:bg-blue-950/50 text-blue-800 dark:text-blue-300" title="Ít quan tâm — đề cập nhưng không có ý định">🔵 Cold</option>
+        <option value="none" className="bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-300" title="Không liên quan đến mua hàng/tuyển dụng">⚪ None</option>
       </select>
 
       {/* Quick-assign button (phím 0) */}
@@ -179,7 +217,7 @@ export default function LabelSelector({ label, onChange, disabled, compact }: La
             ? 'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700'
             : ''
         }`}
-        title="Bật/tắt nhãn nhanh: Trung tính · Khác · Không liên quan · Thấp · None (phím 0)"
+        title="Bật/tắt nhãn nhanh: Trung tính · Khác · Không liên quan · None · None (phím 0)"
         aria-label="Gán nhanh nhãn không liên quan"
         aria-pressed={isIrrelevantPreset(label)}
       >
@@ -201,11 +239,12 @@ export default function LabelSelector({ label, onChange, disabled, compact }: La
         )}
         {label.urgency && (
           <span className={`px-2 py-0.5 rounded-full font-semibold ${
+            label.urgency === 'none' ? 'badge-neutral' :
             label.urgency === 'low' ? 'badge-normal' :
             label.urgency === 'medium' ? 'badge-notable' :
             label.urgency === 'high' ? 'bg-orange-500 text-white' : 'badge-crisis'
           }`}>
-            {label.urgency === 'low' ? '🟢' : label.urgency === 'medium' ? '🟡' :
+            {label.urgency === 'none' ? '⚪' : label.urgency === 'low' ? '🟢' : label.urgency === 'medium' ? '🟡' :
              label.urgency === 'high' ? '🟠' : '🔴'}{' '}
             {URGENCY_LABELS[label.urgency]}
           </span>

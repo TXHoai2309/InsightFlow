@@ -166,7 +166,7 @@ export default function App() {
   const labeling = useLabeling(person, filteredThreads, activeSupabaseConfig);
   const {
     currentThreadIndex, labels, threadStates, stats, storageError,
-    getLabel, setLabel, skipThread, completeThread,
+    getLabel, setLabel, skipThread, unskipThread, completeThread,
     goNext, goPrev, jumpTo,
     focusedItemId, setFocusedItemId,
     totalThreads,
@@ -325,6 +325,7 @@ export default function App() {
       else if (key === 'x') { next.urgency = 'medium'; updated = true; }
       else if (key === 'c') { next.urgency = 'high'; updated = true; }
       else if (key === 'v') { next.urgency = 'urgent'; updated = true; }
+      else if (key === 'd') { next.urgency = 'none'; updated = true; }
       // Intent
       else if (key === 'h') { next.intent = 'hot';  updated = true; }
       else if (key === 'm') { next.intent = 'warm'; updated = true; }
@@ -681,11 +682,13 @@ export default function App() {
                   getLabel={getLabel}
                   setLabel={setLabel}
                   skipThread={skipThread}
+                  unskipThread={unskipThread}
                   completeThread={completeThread}
                   onNext={goNext}
                   onPrev={goPrev}
                   focusedItemId={focusedItemId}
                   setFocusedItemId={setFocusedItemId}
+                  threadState={threadStates[currentThread.post._entity_key] ?? null}
                 />
               </div>
 
