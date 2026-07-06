@@ -86,8 +86,58 @@ function HighlightedText({ text, brand }: { text: string; brand: string }) {
 function formatTime(iso: string): string {
   if (!iso) return '';
   try {
-    const d = new Date(iso);
+    let d: Date | null = null;
+    const cleanStr = iso.trim();
+
+    // 1. Check HH:mm(:ss) DD/MM/YYYY
+    const hmDmYRegex = /^(?:(\d{1,2}):(\d{2})(?::(\d{2}))?\s+)?(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/;
+    const matchHmDmY = cleanStr.match(hmDmYRegex);
+    if (matchHmDmY) {
+      const hour = matchHmDmY[1] ? parseInt(matchHmDmY[1], 10) : 0;
+      const minute = matchHmDmY[2] ? parseInt(matchHmDmY[2], 10) : 0;
+      const second = matchHmDmY[3] ? parseInt(matchHmDmY[3], 10) : 0;
+      const day = parseInt(matchHmDmY[4], 10);
+      const month = parseInt(matchHmDmY[5], 10) - 1; // 0-indexed
+      const year = parseInt(matchHmDmY[6], 10);
+      d = new Date(year, month, day, hour, minute, second);
+    }
+
+    // 2. Check DD/MM/YYYY HH:mm(:ss)
+    if (!d || isNaN(d.getTime())) {
+      const dmYRegex = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/;
+      const matchDmY = cleanStr.match(dmYRegex);
+      if (matchDmY) {
+        const day = parseInt(matchDmY[1], 10);
+        const month = parseInt(matchDmY[2], 10) - 1;
+        const year = parseInt(matchDmY[3], 10);
+        const hour = matchDmY[4] ? parseInt(matchDmY[4], 10) : 0;
+        const minute = matchDmY[5] ? parseInt(matchDmY[5], 10) : 0;
+        const second = matchDmY[6] ? parseInt(matchDmY[6], 10) : 0;
+        d = new Date(year, month, day, hour, minute, second);
+      }
+    }
+
+    // 3. Check YYYY-MM-DD HH:mm(:ss)
+    if (!d || isNaN(d.getTime())) {
+      const YmdRegex = /^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/;
+      const matchYmd = cleanStr.match(YmdRegex);
+      if (matchYmd) {
+        const year = parseInt(matchYmd[1], 10);
+        const month = parseInt(matchYmd[2], 10) - 1;
+        const day = parseInt(matchYmd[3], 10);
+        const hour = matchYmd[4] ? parseInt(matchYmd[4], 10) : 0;
+        const minute = matchYmd[5] ? parseInt(matchYmd[5], 10) : 0;
+        const second = matchYmd[6] ? parseInt(matchYmd[6], 10) : 0;
+        d = new Date(year, month, day, hour, minute, second);
+      }
+    }
+
+    if (!d || isNaN(d.getTime())) {
+      d = new Date(iso);
+    }
+
     if (isNaN(d.getTime())) return iso;
+
     return d.toLocaleString('vi-VN', {
       year: 'numeric', month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit',

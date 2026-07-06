@@ -1,4 +1,4 @@
-﻿import { useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { Person, Thread } from '../types';
 import { parseCrawlerJson, RawPost } from '../utils/dataPartition';
 import { AssignmentView, loadSupabaseThreads, PlatformFilter, SupabaseConfig, SupabaseDateRange } from '../utils/supabaseRest';
@@ -17,6 +17,8 @@ interface UseDataReturn {
     assignmentView: AssignmentView,
     assignee: Person,
     dateRange?: SupabaseDateRange,
+    brand?: string,
+    signal?: AbortSignal,
   ) => Promise<void>;
   resetData: () => void;
 }
@@ -122,6 +124,8 @@ export function useData(): UseDataReturn {
     assignmentView: AssignmentView,
     assignee: Person,
     dateRange: SupabaseDateRange = {},
+    brand?: string,
+    signal?: AbortSignal,
   ) => {
     setLoading(true);
     setError(null);
@@ -138,6 +142,8 @@ export function useData(): UseDataReturn {
         assignmentView,
         assignee,
         dateRange,
+        brand,
+        signal,
       );
       if (nextThreads.length === 0) {
         setError('✅ Queue trống — không còn assignment nào cần gán trong queue này!');
@@ -145,6 +151,10 @@ export function useData(): UseDataReturn {
       }
       applyThreads(nextThreads);
     } catch (err) {
+      if (err instanceof Error && (err.name === 'AbortError' || err.message.includes('aborted'))) {
+        setError('❌ Đã hủy tải dữ liệu từ Supabase.');
+        return;
+      }
       const msg = err instanceof Error ? err.message : 'Lỗi không xác định khi tải Supabase.';
       setError(msg);
     } finally {

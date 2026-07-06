@@ -199,17 +199,17 @@ export async function loadPendingAssignmentCounts(
     limit: '1',
   };
   const [allPosts, allComments, handledPosts, handledComments, completedThreads] = await Promise.all([
-    requestExactCount(config, 'posts', new URLSearchParams(entityBase).toString()),
-    requestExactCount(config, 'comments', new URLSearchParams(entityBase).toString()),
+    requestExactCount(config, 'posts', new URLSearchParams(entityBase).toString()).catch(() => 0),
+    requestExactCount(config, 'comments', new URLSearchParams(entityBase).toString()).catch(() => 0),
     requestExactCount(config, 'annotations', new URLSearchParams({
       ...annotationBase,
       entity_type: 'eq.post',
-    }).toString()),
+    }).toString()).catch(() => 0),
     requestExactCount(config, 'annotations', new URLSearchParams({
       ...annotationBase,
       entity_type: 'eq.comment',
-    }).toString()),
-    requestExactCount(config, 'labeling_assignments', new URLSearchParams(assignmentBase).toString()),
+    }).toString()).catch(() => 0),
+    requestExactCount(config, 'labeling_assignments', new URLSearchParams(assignmentBase).toString()).catch(() => 0),
   ]);
   return {
     posts: Math.max(allPosts - handledPosts, 0),
@@ -260,6 +260,7 @@ function assignmentPostedAt(
 async function loadAssignmentCommentPostedAt(
   config: SupabaseConfig,
   assignment: SupabaseAssignment,
+  signal?: AbortSignal,
 ): Promise<string | null> {
   const commentId = commentIdFromAssignment(assignment);
   if (!commentId) return null;
@@ -274,6 +275,7 @@ async function loadAssignmentCommentPostedAt(
     config,
     'comments',
     query,
+    { signal },
   );
   return rows[0]?.posted_at ?? null;
 }
@@ -385,6 +387,8 @@ export async function loadSupabaseThreads(
   assignmentView: AssignmentView = 'pending',
   assignee = 'Person A',
   dateRange: SupabaseDateRange = {},
+  brand?: string,
+  signal?: AbortSignal,
 ): Promise<Thread[]> {
   const platformFilter = platform === 'news'
     ? 'in.(news,news_html)'
@@ -393,11 +397,14 @@ export async function loadSupabaseThreads(
       : `eq.${platform}`;
   const threads: Thread[] = [];
   const includedPostKeys = new Set<string>();
-  const pageSize = hasDateRange(dateRange) ? 100 : limit;
+  const pageSize = (hasDateRange(dateRange) || (brand && brand !== 'all')) ? 100 : limit;
   let offset = 0;
   let exhausted = false;
 
   while (!exhausted && threads.length < limit) {
+    if (signal?.aborted) {
+      throw new DOMException('The user aborted a request.', 'AbortError');
+    }
     const assignmentParams = new URLSearchParams({
       select: '*',
       platform: platformFilter,
@@ -412,36 +419,52 @@ export async function loadSupabaseThreads(
       config,
       'labeling_assignments',
       assignmentParams.toString(),
+      { signal },
     );
     assignments.sort((a, b) => queueOrder(a.status) - queueOrder(b.status));
     exhausted = assignments.length < pageSize;
     offset += assignments.length;
 
-    for (const assignment of assignments) {
+    const postIds = assignments.map(a => a.post_id);
+    const uniquePostIds = Array.from(new Set(postIds));
+    const postsList = uniquePostIds.length > 0
+      ? await request<SupabasePost[]>(
+          config,
+          'posts',
+          `platform=${platformFilter}&post_id=in.(${uniquePostIds.map(encode).join(',')})`,
+          { signal }
+        )
+      : [];
+    const postMap = new Map(postsList.map(p => [p.post_id, p]));
+
+    const promises = assignments.map(async (assignment) => {
       const postKey = `${assignment.platform}:${assignment.post_id}`;
-      if (includedPostKeys.has(postKey)) continue;
+      if (includedPostKeys.has(postKey)) return null;
 
-      const postQuery = `select=*&platform=eq.${encode(assignment.platform)}&post_id=eq.${encode(assignment.post_id)}&limit=1`;
-      const posts = await request<SupabasePost[]>(config, 'posts', postQuery);
-      const post = posts[0];
-      if (!post) continue;
+      const post = postMap.get(assignment.post_id);
+      if (!post) return null;
 
-      const assignedPostedAt = assignment.entity_type === 'post'
-        ? post.posted_at
-        : await loadAssignmentCommentPostedAt(config, assignment);
-      if (!isWithinDateRange(assignedPostedAt, dateRange)) continue;
+      // Brand filter check first
+      if (brand && brand !== 'all') {
+        const clean = (s: string) => s.toLowerCase().replace(/[\s-_]+/g, '').replace(/s$/, '');
+        const target = clean(brand);
+        const postBrand = clean(post.brand || '');
+        const postBrandSlug = clean(post.brand_slug || '');
+        if (!postBrand.includes(target) && !postBrandSlug.includes(target)) {
+          return null;
+        }
+      }
 
-      const comments = await loadPostComments(config, assignment.platform, assignment.post_id);
-      const parsed = parseCrawlerJson([buildRawPost(post, comments)], false)[0];
-      if (!parsed) continue;
-      includedPostKeys.add(postKey);
+      // Date range check
+      let finalPostedAt = post.posted_at;
+      let assignedPostedAt: string | null = null;
+      if (assignment.entity_type === 'comment') {
+        assignedPostedAt = await loadAssignmentCommentPostedAt(config, assignment, signal);
+        finalPostedAt = assignedPostedAt;
+      }
+      if (!isWithinDateRange(finalPostedAt, dateRange)) return null;
 
-      parsed._assignment_id = assignment.assignment_id;
-      parsed._assignment_entity_key = assignment.entity_key;
-      parsed._data_source = 'supabase';
-      parsed.post._queue_status = toQueueStatus(assignment.status);
-      parsed.post._data_version = post.data_version;
-
+      // Lazily fetch comments and annotations in parallel only if the post matches brand/date filters!
       const annoPlatform = (assignment.platform === 'befood' || assignment.platform === 'be')
         ? 'in.(be,befood)'
         : `eq.${assignment.platform}`;
@@ -451,15 +474,26 @@ export async function loadSupabaseThreads(
         post_id: `eq.${assignment.post_id}`,
         assignee: `eq.${assignee}`,
       }).toString();
-      const annotations = await request<SupabaseAnnotation[]>(
-        config,
-        'annotations',
-        annotationQuery,
-      );
+
+      const [comments, annotations] = await Promise.all([
+        loadPostComments(config, assignment.platform, assignment.post_id, signal),
+        request<SupabaseAnnotation[]>(config, 'annotations', annotationQuery, { signal }),
+      ]);
+
+      const parsed = parseCrawlerJson([buildRawPost(post, comments)], false)[0];
+      if (!parsed) return null;
+
+      parsed._assignment_id = assignment.assignment_id;
+      parsed._assignment_entity_key = assignment.entity_key;
+      parsed._data_source = 'supabase';
+      parsed.post._queue_status = toQueueStatus(assignment.status);
+      parsed.post._data_version = post.data_version;
+
       if (assignmentView === 'completed' && annotations.length === 0) {
         await resetSupabaseAssignment(config, assignment.assignment_id);
-        continue;
+        return null;
       }
+
       const annotationByEntity = new Map(
         annotations.map(annotation => [annotation.entity_key.replace(/^be:/, 'befood:'), annotation]),
       );
@@ -468,10 +502,30 @@ export async function loadSupabaseThreads(
         const loadedLabel = annotation ? annotationToStoredLabel(annotation) : null;
         if (loadedLabel) item._loaded_label = loadedLabel;
       }
-      threads.push(parsed);
-      if (threads.length >= limit) break;
+      return { postKey, parsed };
+    });
+
+    const results = await Promise.all(promises);
+    for (const res of results) {
+      if (res && !includedPostKeys.has(res.postKey)) {
+        includedPostKeys.add(res.postKey);
+        threads.push(res.parsed);
+        if (threads.length >= limit) break;
+      }
     }
   }
+
+  threads.sort((a, b) => {
+    const statusOrderA = queueOrder(a.post._queue_status || '');
+    const statusOrderB = queueOrder(b.post._queue_status || '');
+    if (statusOrderA !== statusOrderB) {
+      return statusOrderA - statusOrderB;
+    }
+    const timeA = a.post._posted_at ? new Date(a.post._posted_at).getTime() : 0;
+    const timeB = b.post._posted_at ? new Date(b.post._posted_at).getTime() : 0;
+    return timeB - timeA;
+  });
+
   return threads;
 }
 
@@ -479,13 +533,14 @@ async function loadPostComments(
   config: SupabaseConfig,
   platform: string,
   postId: string,
+  signal?: AbortSignal,
 ): Promise<SupabaseComment[]> {
   const all: SupabaseComment[] = [];
   const pageSize = 1000;
   let offset = 0;
   while (true) {
     const commentsQuery = `select=*&platform=eq.${encode(platform)}&post_id=eq.${encode(postId)}&order=comment_level.asc,posted_at.asc&limit=${pageSize}&offset=${offset}`;
-    const page = await request<SupabaseComment[]>(config, 'comments', commentsQuery);
+    const page = await request<SupabaseComment[]>(config, 'comments', commentsQuery, { signal });
     all.push(...page);
     if (page.length < pageSize) return all;
     offset += pageSize;
