@@ -320,7 +320,9 @@ export default function AlertsPage() {
   // Load alerts on mount
   useEffect(() => {
     if (authLoading || !canViewCrisisQueue) return;
+    setFilters({ status: "all" });
     fetchAlerts(scopedBrandKey);
+<<<<<<< HEAD
     fetchCorrectionRequests(scopedBrandKey);
   }, [authLoading, canViewCrisisQueue, scopedBrandKey, fetchAlerts, fetchCorrectionRequests]);
 
@@ -333,6 +335,9 @@ export default function AlertsPage() {
       }
     }
   }, [isLoading, rawAlerts, highRiskIncidents.length]);
+=======
+  }, [authLoading, canViewCrisisQueue, scopedBrandKey, fetchAlerts, setFilters]);
+>>>>>>> e6849db9d79bbde1057a2bceaf9044b929da5402
 
   useEffect(() => {
     if (!brandFilterLocked || brands.length === 0) return;
@@ -344,9 +349,9 @@ export default function AlertsPage() {
     return (
       <div className="p-4 md:p-8">
         <div className="glass-card p-8 rounded-xl border border-[var(--color-border)]">
-          <h1 className="text-xl font-bold text-[var(--color-text-primary)]">Khong co quyen truy cap</h1>
+          <h1 className="text-xl font-bold text-[var(--color-text-primary)]">Không có quyền truy cập</h1>
           <p className="text-sm text-[var(--color-text-secondary)] mt-2">
-            Vai tro hien tai khong duoc phep truy cap hang doi xu ly khung hoang.
+            Vai trò hiện tại không được phép truy cập hàng đợi xử lý khủng hoảng.
           </p>
         </div>
       </div>
@@ -357,9 +362,9 @@ export default function AlertsPage() {
     return (
       <div className="p-4 md:p-8">
         <div className="glass-card p-8 rounded-xl border border-[var(--color-border)]">
-          <h1 className="text-xl font-bold text-[var(--color-text-primary)]">Chua duoc gan thuong hieu</h1>
+          <h1 className="text-xl font-bold text-[var(--color-text-primary)]">Chưa được gán thương hiệu</h1>
           <p className="text-sm text-[var(--color-text-secondary)] mt-2">
-            Tai khoan can duoc gan brandId hoac brandName truoc khi xu ly canh bao.
+            Tài khoản cần được gán brandId hoặc brandName trước khi xử lý cảnh báo.
           </p>
         </div>
       </div>
@@ -685,6 +690,7 @@ export default function AlertsPage() {
         </button>
       </div>
 
+<<<<<<< HEAD
       {activeTab === "priority" && (
         <div className="glass-card border-l-4 border-[var(--color-error)] rounded-2xl p-5 md:p-6 space-y-4 shadow-md bg-[var(--color-bg-surface-raised)]/20">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[var(--color-border)] pb-4">
@@ -711,6 +717,61 @@ export default function AlertsPage() {
                 defaultValue: `CÓ ${highRiskIncidents.length} SỰ VỤ RỦI RO CAO CẦN XỬ LÝ KHẨN CẤP!`
               })}
             </div>
+=======
+      {/* ── Filters Bar ── */}
+      <div className="glass-card rounded-xl p-3 md:p-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-3">
+          <select
+            value={filters.brand}
+            onChange={(e) => setFilters({ brand: e.target.value })}
+            disabled={brandFilterLocked}
+            className={`w-full select-app border border-[var(--color-border)] rounded-xl text-xs md:text-sm py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 font-medium ${brandFilterLocked ? "opacity-70 cursor-not-allowed" : ""}`}
+          >
+            {!brandFilterLocked && (
+              <option value="all" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("alerts.filters.brandAll")}</option>
+            )}
+            {brands.map((b) => (
+              <option key={b} value={b} style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
+                {formatBrandName(b)}
+              </option>
+            ))}
+          </select>
+          <select
+            value={filters.severity}
+            onChange={(e) => setFilters({ severity: e.target.value })}
+            className="w-full select-app border border-[var(--color-border)] rounded-xl text-xs md:text-sm py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 font-medium"
+          >
+            <option value="all" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("alerts.filters.severityAll")}</option>
+            <option value="critical" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("alerts.filters.severity.critical")}</option>
+            <option value="high" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("alerts.filters.severity.high")}</option>
+            <option value="medium" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("alerts.filters.severity.medium")}</option>
+            <option value="low" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("alerts.filters.severity.low")}</option>
+          </select>
+          <select
+            value={signalFilter}
+            onChange={(e) => setSignalFilter(e.target.value)}
+            className="w-full select-app border border-[var(--color-border)] rounded-xl text-xs md:text-sm py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 font-medium"
+          >
+            <option value="all" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("alerts.filters.signalAll")}</option>
+            <option value="spike" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("alerts.filters.spike")}</option>
+            <option value="reach" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("alerts.filters.reach")}</option>
+            <option value="sensitive" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("alerts.filters.sensitive")}</option>
+          </select>
+        </div>
+      </div>
+
+      {/* ── Alert Cards ── */}
+      <div className="space-y-4 md:space-y-5">
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center p-12 space-y-4 glass-card rounded-2xl">
+            <svg className="animate-spin h-8 w-8 text-primary" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+            </svg>
+            <p className="text-sm font-medium text-on-surface-variant animate-pulse">
+              {t("alerts.list.loading")}
+            </p>
+>>>>>>> e6849db9d79bbde1057a2bceaf9044b929da5402
           </div>
 
           {highRiskIncidents.length === 0 ? (
@@ -746,6 +807,7 @@ export default function AlertsPage() {
                           ? "bg-[var(--color-brand)]/10 border-[var(--color-brand)] shadow-sm"
                           : "bg-white dark:bg-[var(--color-bg-surface-raised)] border-[var(--color-border)] hover:bg-[var(--color-bg-surface-high)]/40"
                           }`}
+<<<<<<< HEAD
                       >
                         {/* Top row */}
                         <div className="flex items-center justify-between w-full">
@@ -795,6 +857,91 @@ export default function AlertsPage() {
                       </button>
                     );
                   })}
+=======
+                        >
+                          <span className="material-symbols-outlined text-[14px]">{ch.icon}</span>
+                          <span className="text-[10px] font-bold uppercase">{ch.label}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="grid grid-cols-3 sm:flex gap-2 items-center">
+                      {canUpdateCrisisStatus && alert.status === "new" && (
+                        <button
+                          onClick={() => updateAlertStatus(alert.id, "acknowledged", profile)}
+                          className="px-3 py-2.5 rounded-xl border border-[var(--color-border)] text-[11px] font-bold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)] transition-all"
+                        >
+                          {t("alerts.card.acknowledge")}
+                        </button>
+                      )}
+                      {alert.status !== "resolved" ? (
+                        alert.status === "resolving" ? (
+                          <>
+                            <button 
+                              onClick={() => setResolvingAlert(alert)}
+                              className="px-3 py-2.5 rounded-xl border border-[var(--color-brand)]/30 text-[var(--color-brand)] text-[11px] font-bold hover:bg-[var(--color-brand-subtle)] transition-all cursor-pointer flex items-center gap-1"
+                            >
+                              <span className="material-symbols-outlined text-[13px]">edit_note</span>
+                              {t("alerts.card.resolveFurther", { defaultValue: "Giải quyết tiếp" })}
+                            </button>
+                            <button
+                              onClick={() => updateAlertStatus(alert.id, "resolved", profile)}
+                              className="px-3 py-2.5 rounded-xl bg-[var(--color-brand)] text-white text-[11px] font-bold hover:bg-[var(--color-brand-hover)] active:scale-95 transition-all shadow-sm cursor-pointer flex items-center gap-1"
+                            >
+                              <span className="material-symbols-outlined text-[13px]">check_circle</span>
+                              {t("alerts.card.resolved", { defaultValue: "Đã giải quyết" })}
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button 
+                              onClick={() => setTrendAlert(alert)}
+                              className="px-3 py-2.5 rounded-xl border border-[var(--color-brand)]/30 text-[var(--color-brand)] text-[11px] font-bold hover:bg-[var(--color-brand-subtle)] transition-all cursor-pointer flex items-center gap-1"
+                            >
+                              <span className="material-symbols-outlined text-[13px]">trending_up</span>
+                              {t("alerts.card.trend")}
+                            </button>
+                            <button
+                              onClick={() => setResolvingAlert(alert)}
+                              className="px-3 py-2.5 rounded-xl bg-[var(--color-brand)] text-white text-[11px] font-bold hover:bg-[var(--color-brand-hover)] active:scale-95 transition-all shadow-sm cursor-pointer flex items-center gap-1"
+                            >
+                              <span className="material-symbols-outlined text-[13px]">pending_actions</span>
+                              {t("alerts.card.resolve", { defaultValue: "Giải quyết" })}
+                            </button>
+                          </>
+                        )
+                      ) : (
+                        <>
+                          <button 
+                            onClick={() => setViewingHistoryAlert(alert)}
+                            className="px-3 py-2.5 rounded-xl border border-[var(--color-brand)]/30 text-[var(--color-brand)] text-[11px] font-bold hover:bg-[var(--color-brand-subtle)] transition-all cursor-pointer flex items-center gap-1"
+                          >
+                            <span className="material-symbols-outlined text-[13px]">history</span>
+                            {t("alerts.card.viewHistory", { defaultValue: "Xem lịch sử" })}
+                          </button>
+                          {canUpdateCrisisStatus && (
+                            <button 
+                              onClick={() => {
+                                const nextStatus = alert.resolution_history && alert.resolution_history.length > 0 ? "resolving" : "new";
+                                updateAlertStatus(alert.id, nextStatus, profile);
+                              }}
+                              title="Khôi phục trạng thái xử lý"
+                              className="px-3 py-2.5 rounded-xl border border-[var(--color-border)] text-[var(--color-text-secondary)] text-[11px] font-bold hover:bg-[var(--color-bg-surface-raised)] transition-all cursor-pointer flex items-center gap-1 active:scale-95"
+                            >
+                              <span className="material-symbols-outlined text-[13px]">undo</span>
+                              {t("alerts.card.restore", { defaultValue: "Khôi phục" })}
+                            </button>
+                          )}
+                          <span className="text-[var(--color-success)] font-bold text-xs flex items-center gap-1 bg-[var(--color-success-subtle)] border border-[var(--color-success)]/30 px-3 py-1.5 rounded-xl">
+                            <span className="material-symbols-outlined text-sm">check_circle</span>
+                            {t("alerts.card.resolved")}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+>>>>>>> e6849db9d79bbde1057a2bceaf9044b929da5402
                 </div>
               </div>
 
@@ -1749,7 +1896,10 @@ export default function AlertsPage() {
           }}
           onSave={async (id, note, imageUrl, targetStatus = "resolving") => {
             await updateAlertStatus(id, targetStatus, profile, { note, image_url: imageUrl });
+<<<<<<< HEAD
             unlockAlertForResolution(id);
+=======
+>>>>>>> e6849db9d79bbde1057a2bceaf9044b929da5402
           }}
         />
       )}

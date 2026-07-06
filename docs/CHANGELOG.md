@@ -21,6 +21,81 @@
   - Tự động chuyển đổi chế độ xem thông minh khi không có sự vụ rủi ro cao.
   - Thiết lập cơ chế đồng bộ thời gian thực (Real-time Sync) 100% qua Firestore `onSnapshot` để thẻ sự cố tự động ẩn khỏi hàng chờ các nhân viên khác ngay khi được tiếp nhận.
 
+## [Unreleased] - 2026-07-03
+
+### Added
+
+- **Lead Workbench cho nhân viên xử lý khách hàng tiềm năng (`/leads`)**:
+  - Thiết kế lại trang lead theo hướng workbench nghiệp vụ, ưu tiên danh sách lead cần xử lý thay vì dashboard thông tin dày đặc.
+  - Bổ sung các quick view phục vụ công việc hằng ngày: `Cần xử lý ngay`, `Của tôi`, `Chưa phân công`, `Cần ghi nhận`, `Sắp quá hạn`, `Follow-up`, `Chờ phản hồi`, `Chờ chuyển sales`, `Đã chuyển đổi`.
+  - Thêm logic tính điểm ưu tiên, SLA, trạng thái cần ghi nhận, follow-up và handoff sales trong `lead-workbench`.
+  - Thêm panel chi tiết xử lý lead với các tab `Xử lý`, `Hồ sơ`, `Lịch sử`, `Gợi ý`.
+  - Thêm component `LeadWorkbenchRow` và `LeadDetailPanel` để tách rõ danh sách lead và vùng thao tác nghiệp vụ.
+
+- **Ownership / phân công lead**:
+  - Mở rộng schema lead với các field `owner_id`, `owner_name`, `owner_email`, `assigned_at`, `assigned_by`, `claimed_at`.
+  - Hiển thị ownership trên từng lead: `Chưa phân công`, `Của tôi`, hoặc người đang phụ trách.
+  - Thêm hành động `Nhận xử lý` trước khi nhân viên liên hệ khách hàng.
+  - Ngăn nhân viên thao tác xử lý lead đang thuộc người khác, ngoại trừ quyền quản lý/override.
+
+- **Luồng CRM cho lead**:
+  - Mở rộng schema lead với các field `pending_result`, `first_contacted_at`, `last_action_at`, `last_action_type`, `last_contact_channel`, `result_type`, `result_recorded_at`, `follow_up_at`, `closed_at`, `sales_status`, `sales_owner_id`, `sales_owner_name`, `sales_transferred_at`, `crm_deal_id`.
+  - Bổ sung outcome xử lý: phản hồi tích cực, chưa phản hồi, hẹn lại, không phù hợp, đã chuyển đổi, chuyển sales.
+  - Thêm trạng thái `Chờ chuyển sales` cho lead đủ điều kiện bàn giao.
+
+### Changed
+
+- **Tinh gọn giao diện `/leads`**:
+  - Bỏ tiêu đề lớn và thanh tìm kiếm nội bộ trong trang lead để dùng thanh tìm kiếm global trên header.
+  - Đẩy các thẻ thống kê, quick view và danh sách lead lên cao hơn trong viewport.
+  - Rút gọn thẻ thống kê còn các chỉ số hành động chính: cần xử lý ngay, sắp quá hạn, follow-up hôm nay.
+  - Thiết kế lại row lead theo layout cố định để avatar, icon nền tảng, tên khách, lý do ưu tiên và nội dung không chồng lấn nhau.
+  - Chuyển ownership `Của tôi` / `Chưa phân công` thành logic lọc dữ liệu cho nhân viên xử lý tiềm năng, không dùng làm nhóm ưu tiên hiển thị chính.
+  - Với vai trò `lead_employee`, chỉ tính toán và hiển thị lead của chính nhân viên hoặc lead chưa có người nhận; lead đã thuộc người khác không xuất hiện trong danh sách, thống kê hoặc panel chi tiết.
+  - Điều chỉnh quick view của nhân viên theo ưu tiên nghiệp vụ: `Cần xử lý ngay`, `Sắp quá hạn`, `Follow-up`, `Cần ghi nhận`, `Chờ phản hồi`, `Chờ chuyển sales`.
+  - Cập nhật thẻ thống kê để hiển thị 3 chỉ số chính theo mẫu, kèm dòng phụ tách số lead `của tôi` và `chưa ai nhận`.
+  - Bỏ khối gợi ý `Việc tiếp theo` để giảm tải thông tin và dành không gian cho danh sách lead.
+  - Giới hạn danh sách lead còn 5 lead mỗi trang và bổ sung điều khiển phân trang `Trước` / `Sau`.
+  - Bỏ nút nổi `Lên đầu trang` vì danh sách đã được phân trang ngắn hơn.
+  - Cố định layout desktop của `/leads` thành hai cột: vùng danh sách linh hoạt và panel xử lý bên phải rộng 420px.
+
+- **Siết lại luồng liên hệ và ghi nhận kết quả**:
+  - Tách rõ `Nguồn lead` và `Kênh liên hệ`.
+  - Với Google Maps, đổi nhãn hành động sang `Mở Google Maps` thay vì dùng chung `Mở bài gốc`.
+  - Mở nguồn/bài gốc chỉ được xem là thao tác tham khảo, không tự đưa lead vào trạng thái `Cần ghi nhận`.
+  - Chỉ khi dùng kênh liên hệ thật như Messenger, Zalo, gọi điện, email hoặc profile thì lead mới được đánh dấu `pending_result`.
+  - Không cho ghi nhận kết quả trước khi đã nhận xử lý và liên hệ khách.
+  - Khi chọn `Hẹn lại`, giao diện mở ngay trường chọn ngày giờ follow-up và bắt buộc nhập trước khi lưu.
+
+- **Trang quản lý nhân viên (`/team`)**:
+  - Chuyển danh sách nhân viên sang đọc trực tiếp từ Firestore theo `brandId`, giảm phụ thuộc vào API backend cho thao tác tải danh sách.
+  - Khi tạo nhân viên, frontend force refresh Firebase ID token bằng `getIdToken(true)`.
+  - Nếu request tạo nhân viên gặp `401`, hệ thống tự refresh token và retry một lần.
+
+### Fixed
+
+- **Hiển thị Lead Workbench ở tỷ lệ 100%**:
+  - Sửa lỗi thẻ thống kê bị chồng icon, nhãn và số liệu khi trình duyệt ở zoom 100%.
+  - Điều chỉnh kích thước card thống kê, row lead và vùng CTA để dữ liệu quan trọng không bị đè hoặc cắt cụt bất thường.
+  - Giữ panel xử lý bên phải ở trạng thái sticky với body cuộn riêng, giúp panel luôn hiển thị đầy đủ khi danh sách lead thay đổi chiều cao.
+
+- **Xác thực và phân quyền**:
+  - Sửa Firebase Admin API project để verify ID token theo project auth chính `NEXT_PUBLIC_FIREBASE_PROJECT_ID`.
+  - Sửa middleware API parse header `Authorization: Bearer ...` chắc hơn và log cảnh báo khi verify token thất bại.
+  - Sửa luồng đổi mật khẩu lần đầu để nhân viên không bị điều hướng qua lại giữa `/change-password` và trang nghiệp vụ.
+  - Sửa route guard/RBAC để cho phép truy cập `/change-password` đúng vai trò.
+
+- **Lỗi 401 khi tải/tạo dữ liệu quản trị**:
+  - Giảm lỗi 401 do token cũ hoặc custom claims chưa refresh khi tạo tài khoản nhân viên.
+  - Bổ sung retry bằng token mới khi tạo tài khoản nhân viên từ trang quản lý.
+
+### Verification
+
+- Đã chạy `npm.cmd run build` thành công sau các thay đổi.
+- Đã kiểm tra `/leads` và `/team` phản hồi `200` trên dev server.
+
+---
+
 ## [Unreleased] - 2026-07-02
 
 ### Added
@@ -76,6 +151,14 @@
 ## [Unreleased] - 2026-06-29
 
 ### Added
+- **Trang đăng ký (/register)**: 
+  - Thêm tính năng xác thực tài khoản bằng mã OTP (gửi qua EmailJS).
+  - Thêm chức năng gửi lại mã OTP sau 30 giây (có bộ đếm ngược).
+  - Vô hiệu hóa các trường mật khẩu cho đến khi OTP được xác thực thành công.
+- **Trang báo cáo (/reports)**: 
+  - Mở rộng chức năng xuất báo cáo, hỗ trợ xuất báo cáo ra nhiều nền tảng thay vì chỉ TikTok.
+
+### Fixed
 
 - **Trang đăng ký (/register)**:
   - Thêm tính năng xác thực tài khoản bằng mã OTP (gửi qua EmailJS).
@@ -120,6 +203,18 @@
   - Khôi phục tương tác mở chi tiết trên card lead: nội dung lead và nút xem chi tiết vẫn hoạt động khi tìm được mention nội bộ, kể cả khi bản ghi lead không có `url`.
 
 ## [Unreleased] - 2026-06-26
+  ### Fixed
+  - **Giao diện sáng/tối (Theme-aware UI)**:
+    - Khôi phục cơ chế tự động chuyển đổi logo cho các trang Auth (Đăng nhập, Đăng ký, Quên mật khẩu).
+    - Logo sẽ hiển thị `logo.png` khi bật chế độ tối (`dark theme`) và `logo-dark.png` khi bật chế độ sáng (`light theme`), đảm bảo độ tương phản tối ưu.
+    - Đồng bộ màu nền (`background`), màu chữ và các thành phần UI trong form Đăng nhập/Đăng ký để đồng nhất với theme của ứng dụng.
+  - **Tùy chỉnh Logo**:
+    - Tăng kích thước logo ở trang "Quên mật khẩu" từ `52px` lên `80px` để dễ nhìn hơn.
+     - Sửa lỗi `ReferenceError: handleGoogleLogin is not defined` trên trang Đăng nhập phát sinh sau quá trình refactor.
+   - **Sửa lỗi Code & Build**:
+     - Khắc phục lỗi cú pháp (Syntax Error) tại `RegisterForm.tsx` và `forgot-password/page.tsx` do quá trình thay thế mã không hoàn chỉnh.
+     - Giải quyết các xung đột merge (`merge conflicts`) phát sinh trong `TopNavBar.tsx` và `LoginForm.tsx` giúp ứng dụng biên dịch bình thường.
+     - Sửa lỗi khai báo trùng lặp biến `theme` tại `AboutLogoSection.tsx`.
 
 ### Added
 
@@ -827,3 +922,34 @@ Khi đưa vào báo cáo sprint hoặc demo, có thể gom các commit thành 5 
 5. **Mốc 5 — Ổn định demo/deploy**: sửa Vercel, sửa TypeScript, sửa field dữ liệu, merge các nhánh cuối.
 
 File changelog trong repo nên giữ chi tiết commit như trên để truy vết; còn khi thuyết trình có thể dùng bản gom nhóm để dễ hiểu hơn.
+
+---
+
+## [Unreleased] - 2026-07-03
+
+### Added
+
+- Them route `/labeling_tool` de tich hop cong cu gan nhan vao InsightFlow ma khong anh huong cac man hinh chinh.
+- Them co che load queue tu Supabase theo nen tang: Facebook, Threads, TikTok, YouTube, Google Maps, BeFood va News.
+- Them hai che do lam viec: `Can gan` va `Da gan` de ho tro gan moi, xem lai va sua nhan.
+- Them bo loc ngay `Tu/Den` dua tren ngay dang cua post hoac comment can gan.
+- Them loading state ro rang khi tai du lieu tu Supabase.
+- Them card `Hang cho toan bo` trong sidebar de hien thi post/comment chua gan, post/comment da gan, tong con lai, tong da gan va thread hoan tat.
+- Them co che ghi nhan vao `annotations` va luu lich su vao `annotation_revisions`.
+
+### Changed
+
+- Doi nut `Supabase` thanh `Tai data / Load data` de dung nghia thao tac hon.
+- Bo cac dieu khien khong can thiet trong ban tich hop demo nhu chon person va load file local.
+- Doi logic hien thi trang thai gan nhan: nhan that duoc doc tu `annotations`, con `labeling_assignments` chi dong vai tro dieu phoi queue/thread.
+- Cap nhat logic hoan tat thread de update cac assignment lien quan cua cung post.
+
+### Fixed
+
+- Sua loi trung lap thread khi mot post co nhieu comment assignment.
+- Sua loi UI hien chu bi sai encoding trong man hinh labeling.
+- Sua cach dem thong ke de khong phu thuoc vao limit thread dang load.
+
+### Notes
+
+- Hien tai loc ngay van co the cham neu khoang ngay rong, vi tool phai doi chieu assignment voi post/comment. Huong toi uu tiep theo la them cot `sort_date` vao `labeling_assignments` de Supabase loc truc tiep.

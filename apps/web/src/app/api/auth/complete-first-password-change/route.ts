@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+import { getApiBaseUrl } from "@/lib/apiProxy";
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,7 +8,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Ban can dang nhap de hoan tat doi mat khau." }, { status: 401 });
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/auth/complete-first-password-change`, {
+    const response = await fetch(`${getApiBaseUrl(request)}/api/auth/complete-first-password-change`, {
       method: "POST",
       headers: { Authorization: authorization },
     });

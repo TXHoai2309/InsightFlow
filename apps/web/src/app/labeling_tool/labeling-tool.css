@@ -1,0 +1,380 @@
+/* apps/web/src/app/labeling_tool/labeling-tool.css */
+
+/* ============================================================
+   Global Scale-Down & Typo variables
+   ============================================================ */
+.labeling-tool-scope {
+  font-size: 0.8125rem !important; /* 13px base font size */
+}
+
+/* Font scale-down overrides */
+.labeling-tool-scope .text-xs {
+  font-size: 0.6875rem !important; /* 11px */
+}
+.labeling-tool-scope .text-sm {
+  font-size: 0.75rem !important; /* 12px */
+}
+.labeling-tool-scope .text-base {
+  font-size: 0.8125rem !important; /* 13px */
+}
+.labeling-tool-scope .text-lg {
+  font-size: 0.875rem !important; /* 14px */
+}
+.labeling-tool-scope .text-xl {
+  font-size: 1rem !important; /* 16px */
+}
+.labeling-tool-scope .text-2xl {
+  font-size: 1.125rem !important; /* 18px */
+}
+
+/* Header & layout spacing scale-down */
+.labeling-tool-scope header {
+  padding-top: 0.5rem !important;
+  padding-bottom: 0.5rem !important;
+}
+.labeling-tool-scope header .py-3 {
+  padding-top: 0.375rem !important;
+  padding-bottom: 0.375rem !important;
+}
+.labeling-tool-scope header .gap-2 {
+  gap: 0.375rem !important;
+}
+.labeling-tool-scope .py-6 {
+  padding-top: 1rem !important;
+  padding-bottom: 1rem !important;
+}
+.labeling-tool-scope .gap-6 {
+  gap: 1rem !important;
+}
+
+/* ============================================================
+   Glass Card & System Sync for labeling tool
+   ============================================================ */
+.labeling-tool-scope .card {
+  background-color: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-card);
+  transition: var(--transition-theme);
+  padding: 0.625rem 0.875rem !important; /* Tighter padding */
+}
+
+.dark .labeling-tool-scope .card {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 0.5px solid rgba(255, 255, 255, 0.10);
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+/* Select inputs - Compact sizes */
+.labeling-tool-scope .select-control {
+  cursor: pointer;
+  border-radius: 6px;
+  border: 1.5px solid var(--color-border);
+  background-color: var(--color-bg-surface);
+  padding: 0.15rem 0.4rem !important;
+  font-size: 0.7rem !important;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  outline: none;
+}
+.labeling-tool-scope select.select-control {
+  padding-right: 1.5rem !important; /* Prevent text overlap with arrow */
+}
+.labeling-tool-scope .select-control:focus {
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 2px var(--color-brand-border);
+}
+.dark .labeling-tool-scope .select-control {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Primary Button - Compact sizes */
+.labeling-tool-scope .btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 6px;
+  background-color: var(--color-brand);
+  color: white;
+  padding: 0.2rem 0.5rem !important;
+  font-size: 0.7rem !important;
+  font-weight: 600;
+  transition: background-color 0.2s, transform 0.1s;
+  border: none;
+  cursor: pointer;
+}
+.labeling-tool-scope .btn-primary:hover {
+  background-color: var(--color-brand-hover);
+}
+.dark .labeling-tool-scope .btn-primary {
+  background: rgba(139, 92, 246, 0.25);
+  border: 0.5px solid rgba(255, 255, 255, 0.18);
+  color: #E9DDFF;
+}
+.dark .labeling-tool-scope .btn-primary:hover {
+  background: rgba(139, 92, 246, 0.35);
+}
+
+/* Secondary Button - Compact sizes */
+.labeling-tool-scope .btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 6px;
+  background-color: var(--color-bg-surface-raised);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  padding: 0.2rem 0.5rem !important;
+  font-size: 0.7rem !important;
+  font-weight: 600;
+  transition: background-color 0.2s;
+  cursor: pointer;
+}
+.labeling-tool-scope .btn-secondary:hover {
+  background-color: var(--color-bg-overlay);
+}
+.dark .labeling-tool-scope .btn-secondary {
+  background-color: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: var(--color-text-primary);
+}
+.dark .labeling-tool-scope .btn-secondary:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+/* Danger Button - Compact sizes */
+.labeling-tool-scope .btn-danger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 6px;
+  background-color: var(--color-error);
+  color: white;
+  padding: 0.2rem 0.5rem !important;
+  font-size: 0.7rem !important;
+  font-weight: 600;
+  transition: background-color 0.2s;
+  border: none;
+  cursor: pointer;
+}
+.labeling-tool-scope .btn-danger:hover {
+  opacity: 0.9;
+}
+
+/* Left borders for unlabeled/complete status */
+.labeling-tool-scope .item-unlabeled { border-left-width: 3.5px; border-left-color: var(--color-warning); }
+.labeling-tool-scope .item-complete { border-left-width: 3.5px; border-left-color: var(--color-success); }
+.labeling-tool-scope .item-skipped { border-left-width: 3.5px; border-left-color: var(--color-text-muted); opacity: 0.6; }
+.labeling-tool-scope .item-focused {
+  box-shadow: 0 0 0 2px var(--color-brand) !important;
+}
+
+/* Badges - Compact sizes */
+.labeling-tool-scope .badge-positive,
+.labeling-tool-scope .badge-negative,
+.labeling-tool-scope .badge-neutral,
+.labeling-tool-scope .badge-crisis,
+.labeling-tool-scope .badge-notable,
+.labeling-tool-scope .badge-normal {
+  font-size: 0.625rem !important; /* 10px */
+  padding: 0.075rem 0.375rem !important;
+  font-weight: 600;
+  border-radius: 4px;
+}
+
+.labeling-tool-scope .badge-positive {
+  background-color: var(--color-success-subtle);
+  color: var(--color-success);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}
+.labeling-tool-scope .badge-negative {
+  background-color: var(--color-error-subtle);
+  color: var(--color-error);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+.labeling-tool-scope .badge-neutral {
+  background-color: var(--color-bg-surface-raised);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+}
+.labeling-tool-scope .badge-crisis {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  background-color: var(--color-error-subtle);
+  color: var(--color-error);
+  border: 1px solid var(--color-error);
+}
+.labeling-tool-scope .badge-notable {
+  background-color: var(--color-warning-subtle);
+  color: var(--color-warning);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+.labeling-tool-scope .badge-normal {
+  background-color: var(--color-info-subtle);
+  color: var(--color-info);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+/* Intent Badges - Compact sizes */
+.labeling-tool-scope .badge-intent-hot,
+.labeling-tool-scope .badge-intent-warm,
+.labeling-tool-scope .badge-intent-cold,
+.labeling-tool-scope .badge-intent-none {
+  font-size: 0.625rem !important; /* 10px */
+  padding: 0.075rem 0.375rem !important;
+  font-weight: 600;
+  border-radius: 4px;
+}
+
+.labeling-tool-scope .badge-intent-hot {
+  background-color: rgba(249, 115, 22, 0.15);
+  color: rgb(234, 88, 12);
+  border: 1px solid rgba(249, 115, 22, 0.3);
+}
+.labeling-tool-scope .badge-intent-warm {
+  background-color: rgba(234, 179, 8, 0.15);
+  color: rgb(161, 98, 7);
+  border: 1px solid rgba(234, 179, 8, 0.3);
+}
+.labeling-tool-scope .badge-intent-cold {
+  background-color: rgba(59, 130, 246, 0.15);
+  color: rgb(37, 99, 235);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+.labeling-tool-scope .badge-intent-none {
+  background-color: var(--color-bg-surface-raised);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+}
+
+/* Brand highlight */
+.labeling-tool-scope .brand-highlight {
+  background-color: var(--color-warning-subtle);
+  color: var(--color-text-primary);
+  font-weight: 600;
+  padding: 0 2px;
+  border-radius: 3px;
+}
+
+/* Topic dropdown panel */
+.labeling-tool-scope .topic-panel {
+  position: absolute;
+  z-index: 50;
+  margin-top: 0.25rem;
+  display: flex;
+  min-w: 180px;
+  flex-direction: column;
+  gap: 0.125rem;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background-color: var(--color-bg-surface);
+  padding: 0.375rem;
+  box-shadow: var(--shadow-dropdown);
+}
+.dark .labeling-tool-scope .topic-panel {
+  background-color: #161625;
+}
+
+.labeling-tool-scope .topic-option {
+  display: flex;
+  cursor: pointer;
+  user-select: none;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  color: var(--color-text-primary);
+  transition: background-color 0.15s;
+}
+.labeling-tool-scope .topic-option:hover {
+  background-color: var(--color-bg-surface-raised);
+}
+
+/* Thread structure for comments/replies - Compact sizes */
+.labeling-tool-scope .comment-item {
+  background-color: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 0.625rem 0.75rem !important; /* Reduced padding */
+  margin-bottom: 0.4rem !important; /* Reduced margin */
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.01);
+  transition: all 0.2s ease;
+}
+
+.dark .labeling-tool-scope .comment-item {
+  background-color: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.06);
+  box-shadow: none;
+}
+
+/* Hover state */
+.labeling-tool-scope .comment-item:hover {
+  background-color: var(--color-bg-surface-raised);
+  transform: translateY(-0.5px);
+  box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+}
+
+.dark .labeling-tool-scope .comment-item:hover {
+  background-color: rgba(255, 255, 255, 0.06);
+}
+
+/* Status left borders */
+.labeling-tool-scope .comment-item.item-unlabeled {
+  border-left: 3.5px solid var(--color-warning) !important;
+}
+
+.labeling-tool-scope .comment-item.item-complete {
+  border-left: 3.5px solid var(--color-success) !important;
+}
+
+.labeling-tool-scope .comment-item.item-skipped {
+  border-left: 3.5px solid var(--color-text-muted) !important;
+  opacity: 0.7;
+}
+
+/* Focused comment highlight */
+.labeling-tool-scope .comment-item.item-focused {
+  border-color: var(--color-brand) !important;
+  box-shadow: 0 0 0 2px var(--color-brand-subtle) !important;
+  background-color: var(--color-bg-surface-raised) !important;
+}
+
+.dark .labeling-tool-scope .comment-item.item-focused {
+  border-color: var(--color-brand) !important;
+  box-shadow: 0 0 0 2px rgba(196, 172, 255, 0.12) !important;
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Nested replies */
+.labeling-tool-scope .comment-item.ml-6 {
+  background-color: var(--color-bg-surface-raised);
+  border-left-width: 2.5px;
+}
+
+.dark .labeling-tool-scope .comment-item.ml-6 {
+  background-color: rgba(255, 255, 255, 0.01);
+}
+
+.labeling-tool-scope .thread-separator {
+  margin-top: 0.4rem !important;
+  margin-bottom: 0.4rem !important;
+  border-top: 1px dashed var(--color-border);
+}
+
+/* Avatar size reduction */
+.labeling-tool-scope .w-7.h-7 {
+  width: 1.5rem !important;
+  height: 1.5rem !important;
+  font-size: 0.625rem !important;
+}
+
+/* Input goal field reduction */
+.labeling-tool-scope input[type="number"].select-control {
+  padding-left: 0.25rem !important;
+  padding-right: 0.25rem !important;
+}

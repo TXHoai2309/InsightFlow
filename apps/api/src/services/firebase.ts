@@ -6,7 +6,6 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 
 const SERVICE_ACCOUNT_PATH = path.join(process.cwd(), "service-account.json");
-const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_SECOND_PROJECT_ID || "datainsight-330eb";
 
 // Attempt to load .env.local for other variables
 const possiblePaths = [
@@ -36,9 +35,12 @@ for (const p of possiblePaths) {
   }
 }
 
-// Re-evaluate PROJECT_ID after loading env
-const primaryProjectId = "insightflow-6ce1f";
-const secondaryProjectId = process.env.NEXT_PUBLIC_FIREBASE_SECOND_PROJECT_ID || PROJECT_ID;
+// Re-evaluate PROJECT_ID after loading env.
+// The default Admin app must use the auth project (primaryProjectId), because frontend ID tokens
+// are issued by NEXT_PUBLIC_FIREBASE_PROJECT_ID. The named app (secondaryProjectId) is used for Firestore.
+const primaryProjectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "insightflow-6ce1f";
+const secondaryProjectId = process.env.NEXT_PUBLIC_FIREBASE_SECOND_PROJECT_ID || "datainsight-330eb";
+
 
 if (getApps().length === 0) {
   const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;

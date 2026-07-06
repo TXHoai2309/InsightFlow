@@ -1,6 +1,7 @@
 // apps/web/src/app/api/auth/reset-password/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth } from "@/lib/firebase-admin";
+import { getApiBaseUrl } from "@/lib/apiProxy";
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,6 +17,11 @@ export async function POST(request: NextRequest) {
 
     // Tìm user theo email bằng Firebase Admin SDK
     const userRecord = await adminAuth.getUserByEmail(email.trim());
+    const response = await fetch(`${getApiBaseUrl(request)}/api/auth/reset-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, newPassword }),
+    });
 
     // Cập nhật mật khẩu trực tiếp
     await adminAuth.updateUser(userRecord.uid, { password: newPassword });

@@ -79,7 +79,7 @@ interface AlertState {
     id: string,
     newStatus: string,
     profile: UserRoleProfile | null | undefined,
-    attempt?: { note: string; image_url?: string },
+    attempt?: { note: string; image_url?: string }
   ) => Promise<void>;
   fetchCorrectionRequests: (scopedBrandKey?: string | null) => Promise<void>;
   createCorrectionRequest: (requestData: Omit<CorrectionRequest, "id" | "created_at" | "status">) => Promise<void>;
@@ -356,8 +356,6 @@ export const useAlertStore = create<AlertState>()(
         updated_at: new Date().toISOString(),
       };
 
-      let newAttemptItem: ResolutionAttempt | undefined = undefined;
-
       set((state) => {
         const nextRawAlerts = state.rawAlerts.map((alert) => {
           if (alert.id === id) {
@@ -373,7 +371,7 @@ export const useAlertStore = create<AlertState>()(
 
             let nextHistory = alert.resolution_history ? [...alert.resolution_history] : [];
             if (attempt) {
-              newAttemptItem = {
+              const newAttemptItem: ResolutionAttempt = {
                 attempt_number: nextHistory.length + 1,
                 timestamp: new Date().toISOString(),
                 note: attempt.note,

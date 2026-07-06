@@ -20,6 +20,12 @@ function getDomainFromEmail(email: string) {
   return email.includes("@") ? email.split("@")[1].toLowerCase() : "";
 }
 
+function generateTemporaryPassword() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+  const randomPart = Array.from({ length: 10 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
+  return `IF@${randomPart}24`;
+}
+
 async function ensureAdmin(request: FastifyRequest, reply: FastifyReply) {
   await verifyToken(request, reply);
   if (reply.sent) return false;
@@ -50,6 +56,7 @@ function serializeBrandManager(data: any) {
     disabled: data.disabled === true,
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
+    hasTemporaryPassword: data.temporaryPasswordIssued === true && Boolean(data.temporaryPassword),
   };
 }
 
@@ -321,6 +328,112 @@ export default async function adminRoutes(fastify: FastifyInstance, options: Fas
       return reply.status(500).send({
         success: false,
         error: error.message || "Failed to update account status.",
+      });
+    }
+  });
+
+  fastify.post("/brand-managers/:uid/temporary-password", async (request: FastifyRequest, reply: FastifyReply) => {
+    const isAdmin = await ensureAdmin(request, reply);
+    if (!isAdmin) return;
+
+    const authTime = (request as any).user?.auth_time;
+    const nowInSeconds = Math.floor(Date.now() / 1000);
+    if (!authTime || nowInSeconds - authTime > 300) {
+      return reply.status(403).send({
+        success: false,
+        error: "Please re-authenticate before viewing a temporary password.",
+      });
+    }
+
+    const { uid } = request.params as { uid: string };
+
+    try {
+      const managerDoc = await db.collection("users").doc(uid).get();
+      const managerProfile = managerDoc.exists ? managerDoc.data() : null;
+
+      if (!managerProfile || managerProfile.role !== "brand_manager") {
+        return reply.status(404).send({ success: false, error: "Brand Manager account not found." });
+      }
+
+      if (managerProfile.temporaryPasswordIssued !== true || !managerProfile.temporaryPassword) {
+        return reply.status(400).send({
+          success: false,
+          error: "Temporary password is no longer available for this account.",
+        });
+      }
+
+      return {
+        success: true,
+        data: {
+          uid,
+          temporaryPassword: managerProfile.temporaryPassword,
+        },
+      };
+    } catch (error: any) {
+      request.log.error(error);
+      return reply.status(500).send({
+        success: false,
+        error: error.message || "Failed to reveal temporary password.",
+      });
+    }
+  });
+
+  fastify.post("/brand-managers/:uid/reset-temporary-password", async (request: FastifyRequest, reply: FastifyReply) => {
+    const isAdmin = await ensureAdmin(request, reply);
+    if (!isAdmin) return;
+
+    const authTime = (request as any).user?.auth_time;
+    const nowInSeconds = Math.floor(Date.now() / 1000);
+    if (!authTime || nowInSeconds - authTime > 300) {
+      return reply.status(403).send({
+        success: false,
+        error: "Please re-authenticate before resetting a temporary password.",
+      });
+    }
+
+    const { uid } = request.params as { uid: string };
+
+    try {
+      const managerDoc = await db.collection("users").doc(uid).get();
+      const managerProfile = managerDoc.exists ? managerDoc.data() : null;
+
+      if (!managerProfile || managerProfile.role !== "brand_manager") {
+        return reply.status(404).send({ success: false, error: "Brand Manager account not found." });
+      }
+
+      const temporaryPassword = generateTemporaryPassword();
+      await authAdmin.updateUser(uid, {
+        password: temporaryPassword,
+        disabled: false,
+      });
+
+      const userRecord = await authAdmin.getUser(uid);
+      await authAdmin.setCustomUserClaims(uid, {
+        ...(userRecord.customClaims || {}),
+        temporaryPasswordIssued: true,
+      });
+
+      await db.collection("users").doc(uid).set(
+        {
+          temporaryPassword,
+          temporaryPasswordIssued: true,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      return {
+        success: true,
+        data: {
+          uid,
+          temporaryPassword,
+        },
+      };
+    } catch (error: any) {
+      request.log.error(error);
+      return reply.status(500).send({
+        success: false,
+        error: error.message || "Failed to reset temporary password.",
       });
     }
   });

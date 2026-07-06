@@ -440,11 +440,39 @@ export class DashboardService {
               d.contact,
               d.profile_url,
             ),
+            owner_id: normalizeOptionalText(d.owner_id),
+            owner_name: normalizeOptionalText(d.owner_name),
+            owner_email: normalizeOptionalText(d.owner_email),
+            assigned_at: d.assigned_at ? parseDate(d.assigned_at) : undefined,
+            assigned_by: normalizeOptionalText(d.assigned_by),
+            claimed_at: d.claimed_at ? parseDate(d.claimed_at) : undefined,
+            first_contacted_at: d.first_contacted_at
+              ? parseDate(d.first_contacted_at)
+              : undefined,
             contact_attempts:
               typeof d.contact_attempts === "number" ? d.contact_attempts : 0,
             last_contact_at: d.last_contact_at
               ? parseDate(d.last_contact_at)
               : undefined,
+            pending_result: d.pending_result === true,
+            last_action_at: d.last_action_at
+              ? parseDate(d.last_action_at)
+              : undefined,
+            last_action_type: normalizeOptionalText(d.last_action_type) as Lead["last_action_type"],
+            last_contact_channel: normalizeOptionalText(d.last_contact_channel),
+            result_type: normalizeOptionalText(d.result_type) as Lead["result_type"],
+            result_recorded_at: d.result_recorded_at
+              ? parseDate(d.result_recorded_at)
+              : undefined,
+            follow_up_at: d.follow_up_at ? parseDate(d.follow_up_at) : undefined,
+            closed_at: d.closed_at ? parseDate(d.closed_at) : undefined,
+            sales_status: normalizeOptionalText(d.sales_status) as Lead["sales_status"],
+            sales_owner_id: normalizeOptionalText(d.sales_owner_id),
+            sales_owner_name: normalizeOptionalText(d.sales_owner_name),
+            sales_transferred_at: d.sales_transferred_at
+              ? parseDate(d.sales_transferred_at)
+              : undefined,
+            crm_deal_id: normalizeOptionalText(d.crm_deal_id),
             notes: d.notes ? String(d.notes) : undefined,
             posted_at: d.posted_at ? parseDate(d.posted_at) : undefined,
           };
@@ -487,11 +515,39 @@ export class DashboardService {
               d.contact,
               d.profile_url,
             ),
+            owner_id: normalizeOptionalText(d.owner_id),
+            owner_name: normalizeOptionalText(d.owner_name),
+            owner_email: normalizeOptionalText(d.owner_email),
+            assigned_at: d.assigned_at ? parseDate(d.assigned_at) : undefined,
+            assigned_by: normalizeOptionalText(d.assigned_by),
+            claimed_at: d.claimed_at ? parseDate(d.claimed_at) : undefined,
+            first_contacted_at: d.first_contacted_at
+              ? parseDate(d.first_contacted_at)
+              : undefined,
             contact_attempts:
               typeof d.contact_attempts === "number" ? d.contact_attempts : 0,
             last_contact_at: d.last_contact_at
               ? parseDate(d.last_contact_at)
               : undefined,
+            pending_result: d.pending_result === true,
+            last_action_at: d.last_action_at
+              ? parseDate(d.last_action_at)
+              : undefined,
+            last_action_type: normalizeOptionalText(d.last_action_type) as Lead["last_action_type"],
+            last_contact_channel: normalizeOptionalText(d.last_contact_channel),
+            result_type: normalizeOptionalText(d.result_type) as Lead["result_type"],
+            result_recorded_at: d.result_recorded_at
+              ? parseDate(d.result_recorded_at)
+              : undefined,
+            follow_up_at: d.follow_up_at ? parseDate(d.follow_up_at) : undefined,
+            closed_at: d.closed_at ? parseDate(d.closed_at) : undefined,
+            sales_status: normalizeOptionalText(d.sales_status) as Lead["sales_status"],
+            sales_owner_id: normalizeOptionalText(d.sales_owner_id),
+            sales_owner_name: normalizeOptionalText(d.sales_owner_name),
+            sales_transferred_at: d.sales_transferred_at
+              ? parseDate(d.sales_transferred_at)
+              : undefined,
+            crm_deal_id: normalizeOptionalText(d.crm_deal_id),
             notes: d.notes ? String(d.notes) : undefined,
             posted_at: d.posted_at ? parseDate(d.posted_at) : undefined,
           });

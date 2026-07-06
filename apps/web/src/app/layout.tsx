@@ -39,11 +39,15 @@ export default function RootLayout({
   const { t, i18n } = useTranslation();
 
   // Trang auth: không có sidebar, không có footer
-  const isAuthPage = ["/login", "/forgot-password"].includes(pathname || "");
+  const isAuthPage = ["/login", "/forgot-password", "/change-password"].includes(pathname || "");
   // Trang public: không có sidebar, nhưng có footer
-  const isPublicPage = ["/", "/nganh", "/ve-chung-toi", "/profile"].includes(
-    pathname || "",
-  );
+  const isPublicPage = [
+    "/",
+    "/nganh",
+    "/ve-chung-toi",
+    "/profile",
+    "/labeling_tool",
+  ].includes(pathname || "");
   const hideShell = isAuthPage || isPublicPage;
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -121,6 +125,11 @@ export default function RootLayout({
           href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css"
         />
         <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+        <script dangerouslySetInnerHTML={{ __html: `
+          tailwind.config = {
+            darkMode: 'class'
+          };
+        ` }} />
         <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
       </head>
       <body

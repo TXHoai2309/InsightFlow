@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+import { getApiBaseUrl } from "@/lib/apiProxy";
 
 export async function PATCH(request: NextRequest, { params }: { params: { uid: string } }) {
   try {
@@ -10,7 +9,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { uid: s
     }
 
     const body = await request.json();
-    const response = await fetch(`${API_BASE_URL}/api/staff/${params.uid}/status`, {
+    const response = await fetch(`${getApiBaseUrl(request)}/api/staff/${params.uid}/status`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",

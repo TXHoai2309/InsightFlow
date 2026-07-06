@@ -9,11 +9,13 @@ import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { useTheme } from "@/contexts/ThemeContext";
 import { buildUserRoleProfile, normalizeRole } from "@/lib/rbac";
+import { useAuthStore } from "@/stores/auth.store";
 
 export default function LoginForm() {
   const router = useRouter();
   const { t } = useTranslation();
   const { theme } = useTheme();
+  const { setUser, setProfile, setLoading: setAuthLoading, setProfileLoading } = useAuthStore();
   const isDark = theme === "dark";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -59,12 +61,32 @@ export default function LoginForm() {
           storedTemporaryPasswordIssued: claims.temporaryPasswordIssued,
         });
 
-        router.push(profileFromClaims.temporaryPasswordIssued ? "/change-password" : profileFromClaims.defaultRoute);
+        setUser(credential.user);
+        setProfile(profileFromClaims);
+        setAuthLoading(false);
+        setProfileLoading(false);
+        router.replace(profileFromClaims.temporaryPasswordIssued ? "/change-password" : profileFromClaims.defaultRoute);
         return;
       }
 
-      const savedDefaultRoute = typeof userData.defaultRoute === "string" ? userData.defaultRoute : "/";
-      router.push(userData.temporaryPasswordIssued === true ? "/change-password" : savedDefaultRoute);
+      const profileFromStore = buildUserRoleProfile({
+        uid: credential.user.uid,
+        email: credential.user.email,
+        displayName: credential.user.displayName,
+        photoURL: credential.user.photoURL,
+        storedRole: userData.role,
+        storedBrandId: userData.brandId,
+        storedBrandName: userData.brandName,
+        storedPermissions: userData.permissions,
+        storedDefaultRoute: userData.defaultRoute,
+        storedTemporaryPasswordIssued: userData.temporaryPasswordIssued,
+      });
+
+      setUser(credential.user);
+      setProfile(profileFromStore);
+      setAuthLoading(false);
+      setProfileLoading(false);
+      router.replace(profileFromStore.temporaryPasswordIssued ? "/change-password" : profileFromStore.defaultRoute);
     } catch (err: any) {
       const msg: Record<string, string> = {
         "auth/user-not-found": t("auth.errors.userNotFound"),
@@ -196,10 +218,6 @@ export default function LoginForm() {
             </button>
           </form>
 
-          {/* Footer */}
-          <footer className="mt-12 text-center">
-            <Link href="/forgot-password" className="text-[12px] font-medium text-[#4648d4] hover:text-[#645efb] transition-colors">{t("auth.login.forgotPassword")}</Link>
-          </footer>
         </div>
 
         {/* System status bar */}

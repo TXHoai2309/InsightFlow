@@ -578,6 +578,67 @@ Các logical module cần bổ sung có thể nằm trong file/service hiện c�
 | Response templates/auto-response | `app/settings/brand` và component brand settings hiện có |
 | Onboarding/user guide | `profile`, layout shell, hoặc modal/checklist trong route sau login |
 
+- `workspace` vẫn là đơn vị tổ chức dữ liệu thương hiệu trong frontend store/service.
+- Route cấu hình thương hiệu riêng (`/settings/brand`) vẫn là một phần của app shell hiện tại.
+
+---
+
+## Labeling Tool Architecture
+
+`labeling_tool` duoc tich hop vao InsightFlow qua route rieng `/labeling_tool`. Route nay tach biet voi cac man hinh chinh de co the demo, test va tiep tuc phat trien ma khong anh huong dashboard hien tai.
+
+### Cong nghe su dung
+
+| Thanh phan | Cong nghe |
+|---|---|
+| Web route | Next.js 14 App Router |
+| UI | React + TypeScript |
+| Styling | Tailwind CSS, dung chung theme InsightFlow |
+| Data online | Supabase Postgres |
+| API | Supabase REST API |
+| Data local truoc sync | SQLite |
+| Crawl/import/sync | Python pipeline |
+
+### Luong du lieu
+
+```text
+Crawler -> JSON output -> SQLite local -> Supabase sync -> Labeling Tool -> annotations/revisions
+```
+
+### Vai tro cac bang
+
+- `posts` va `comments` la du lieu goc sau crawl.
+- `labeling_assignments` la bo dieu phoi queue/thread, dung de biet thread nao can gan, da gan hoac can xem lai.
+- `annotations` la nguon dung de biet item nao co nhan that.
+- `annotation_revisions` giu lich su sua nhan.
+- `metrics_history` va `change_events` giu lich su crawl/update du lieu.
+
+### Co che load trong tool
+
+- Nguoi dung chon nen tang, so thread can load va khoang ngay.
+- Tool doc `labeling_assignments` theo nen tang va trang thai.
+- Voi moi assignment, tool lay post, comment lien quan va annotations da co.
+- Neu assignment la comment, ngay loc dua tren `comments.posted_at`; neu la post, ngay loc dua tren `posts.posted_at`.
+- Tool gom du lieu thanh thread gom post va danh sach comment/reply de gan nhan.
+
+### Co che gan nhan
+
+- Khi nguoi dung gan nhan mot item, tool upsert vao `annotations`.
+- Moi lan gan/sua nhan tao them record trong `annotation_revisions`.
+- Khi bam hoan tat thread, tool update cac assignment lien quan cua post sang `completed` hoac `skipped`.
+
+### Thong ke sidebar
+
+Card `Hang cho toan bo` tinh theo toan bo nen tang dang chon, khong phu thuoc limit thread dang load:
+
+- `Post chua gan`: active posts tru di post annotations da completed/skipped.
+- `Comment chua gan`: active comments tru di comment annotations da completed/skipped.
+- `Post da gan` va `Comment da gan`: dem tu `annotations`.
+- `Thread hoan tat`: dem tu `labeling_assignments` voi `entity_type = post` va status `completed/skipped`.
+
+### Diem can toi uu
+
+Loc ngay hien tai co the cham neu khoang ngay rong vi tool can doi chieu assignment voi post/comment. Huong toi uu tot hon la them cot `sort_date` hoac `assigned_entity_posted_at` vao `labeling_assignments`, sau do loc truc tiep tren Supabase.
 Ví dụ:
 
 - `/dashboard` vẫn là route dashboard, nhưng nội dung bên trong được chọn theo role.
