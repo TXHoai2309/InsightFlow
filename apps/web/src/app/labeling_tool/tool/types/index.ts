@@ -218,6 +218,7 @@ export interface Thread {
   }>;
   _assignment_id?: string;
   _assignment_entity_key?: string;
+  _assigned_entity_keys?: string[];
   _data_source?: 'file' | 'supabase';
 }
 

@@ -298,10 +298,18 @@ export default function ThreadView({
   const isPostFocused = focusedItemId === post._internal_id;
   const isPostSkipped = postLabel?.skipped === true;
 
+  const isPostAssigned = true;
+
   // For address-only posts, count doesn't include the synthetic post item
-  const allItems = isAddressOnly
+  const allItems = (isAddressOnly
     ? comments.flatMap(c => [c.comment, ...c.replies])
-    : [post, ...comments.flatMap(c => [c.comment, ...c.replies])];
+    : [post, ...comments.flatMap(c => [c.comment, ...c.replies])]
+  ).filter(item => {
+    if (thread._data_source === 'supabase' && thread._assigned_entity_keys) {
+      return thread._assigned_entity_keys.includes(item._entity_key);
+    }
+    return true;
+  });
 
   const countComplete = allItems.filter(i => {
     const l = getLabel(i._internal_id);
@@ -413,7 +421,8 @@ export default function ThreadView({
         /* Normal post card */
         <div
           className={`card p-4 border-l-4 transition-all duration-150
-            ${isPostSkipped ? 'border-l-gray-400 opacity-50 item-skipped'
+            ${!isPostAssigned ? 'border-l-gray-200 dark:border-l-surface-600'
+              : isPostSkipped ? 'border-l-gray-400 opacity-50 item-skipped'
               : isPostComplete ? 'border-l-emerald-500 item-complete'
               : 'border-l-orange-400 item-unlabeled'}
             ${isPostFocused ? 'item-focused z-20 relative' : ''}
@@ -467,18 +476,20 @@ export default function ThreadView({
           </div>
 
           {/* Post labels */}
-          <div className="mt-3 pt-3 border-t border-gray-100 dark:border-surface-600">
-            <LabelSelector
-              label={postLabelVal}
-              onChange={(l) => setLabel(post._internal_id, l)}
-              compact
-            />
-            {isPostFocused && (
-              <p className="text-xs text-blue-500 dark:text-blue-400 opacity-70 mt-1">
-                ↑ Đang focus — phím tắt: 1/2/3 · q-y · a/s · z/x/c/v · 0
-              </p>
-            )}
-          </div>
+          {isPostAssigned && (
+            <div className="mt-3 pt-3 border-t border-gray-100 dark:border-surface-600">
+              <LabelSelector
+                label={postLabelVal}
+                onChange={(l) => setLabel(post._internal_id, l)}
+                compact
+              />
+              {isPostFocused && (
+                <p className="text-xs text-blue-500 dark:text-blue-400 opacity-70 mt-1">
+                  ↑ Đang focus — phím tắt: 1/2/3 · q-y · a/s · z/x/c/v · 0
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -500,6 +511,7 @@ export default function ThreadView({
             isFocused={focusedItemId === comment._internal_id}
             onFocus={setFocusedItemId}
             onChange={(l) => setLabel(comment._internal_id, l)}
+            isAssigned={true}
           />
           {replies.map(reply => (
             <CommentItem
@@ -510,6 +522,7 @@ export default function ThreadView({
               isFocused={focusedItemId === reply._internal_id}
               onFocus={setFocusedItemId}
               onChange={(l) => setLabel(reply._internal_id, l)}
+              isAssigned={true}
             />
           ))}
         </div>

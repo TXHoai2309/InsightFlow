@@ -235,10 +235,14 @@ export function useLabeling(
     if (thread._data_source === 'supabase' && !supabaseConfig) return;
     const items = threadItems(thread);
     if (items.some(item => pendingLabelWritesRef.current.has(item._entity_key))) return;
-    if (items.some(item => {
+    const missing = items.filter(item => {
+      if (thread._data_source === 'supabase' && thread._assigned_entity_keys) {
+        if (!thread._assigned_entity_keys.includes(item._entity_key)) return false;
+      }
       const label = labelsRef.current[item._entity_key];
       return !label || label.skipped || !isLabelComplete(label);
-    })) return;
+    });
+    if (missing.length > 0) return;
 
     const threadId = thread.post._entity_key;
     const versionToken = threadVersionToken(thread);
@@ -420,6 +424,9 @@ export function useLabeling(
     if (!person) return { ok: false, message: 'Chưa chọn người gán nhãn.' };
     const items = threadItems(thread);
     const missing = items.filter(item => {
+      if (thread._data_source === 'supabase' && thread._assigned_entity_keys) {
+        if (!thread._assigned_entity_keys.includes(item._entity_key)) return false;
+      }
       const label = labelsRef.current[item._entity_key];
       return !label || label.skipped || !isLabelComplete(label);
     });
@@ -432,8 +439,15 @@ export function useLabeling(
 
     setStorageError(null);
     try {
-      const reviewed = await Promise.all(items.map(item => {
+      const itemsToPersist = items.filter(item => {
+        if (thread._data_source === 'supabase' && thread._assigned_entity_keys) {
+          return thread._assigned_entity_keys.includes(item._entity_key);
+        }
+        return true;
+      });
+      const reviewed = await Promise.all(itemsToPersist.map(item => {
         const label = labelsRef.current[item._entity_key];
+        if (!label) return null;
         if (label.data_version >= itemVersion(item)) return label;
         return persistLabel(item, {
           sentiment: label.sentiment,
@@ -444,7 +458,9 @@ export function useLabeling(
         }, false);
       }));
       const nextLabels = { ...labelsRef.current };
-      for (const label of reviewed) nextLabels[label.entity_key] = label;
+      for (const label of reviewed) {
+        if (label) nextLabels[label.entity_key] = label;
+      }
       labelsRef.current = nextLabels;
       setLabels(nextLabels);
       const state = await saveThreadState(

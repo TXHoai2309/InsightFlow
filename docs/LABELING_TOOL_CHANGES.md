@@ -68,3 +68,12 @@ Tài liệu này ghi lại các thay đổi chính của `labeling_tool` khi tí
 - Dữ liệu cũ được giữ lại, metric mới được cập nhật và ghi vào lịch sử.
 - Queue gán nhãn chỉ tạo/cập nhật cho dữ liệu mới hoặc dữ liệu cần xem lại.
 - Supabase sync đẩy các bảng cần thiết từ SQLite lên Supabase.
+
+## Tối Ưu Gán Nhãn Cho Nguồn Review Nhiều Comments (Google Maps, BeFood)
+
+- **Cơ chế chỉ kiểm tra hoàn thành với items được phân công**:
+  - Đối với Google Maps hoặc BeFood, một thread (địa điểm chi nhánh) có thể có hàng trăm bình luận (reviews) nhưng người dùng chỉ được phân công gán nhãn cho một số lượng nhỏ.
+  - Đã thêm trường `_assigned_entity_keys: string[]` vào Thread để theo dõi các bình luận thực tế được giao trong lô tải về.
+  - Giao diện gán nhãn chỉ hiển thị bộ gán nhãn `LabelSelector` cho những bình luận thực sự nằm trong danh sách được giao, đồng thời ẩn đi ở những bình luận khác (chỉ dùng làm ngữ cảnh đọc hiểu) để giảm thiểu nhiễu UI.
+  - Các bình luận không được giao sẽ hiển thị viền xám nhạt trung tính và tag "Không yêu cầu gán".
+  - Nút bấm **`✅ Xong → Next`** (Enter) và thanh tiến trình chỉ tính toán và yêu cầu hoàn thành các bài viết/bình luận thực tế được giao. Giúp khắc phục triệt để lỗi bị kẹt "Chưa gán đủ nhãn" và giúp đồng bộ trạng thái `'completed'` lên Supabase thành công.

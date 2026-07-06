@@ -165,6 +165,7 @@ interface CommentItemProps {
   isFocused: boolean;
   onFocus: (id: string) => void;
   onChange: (label: Label) => void;
+  isAssigned?: boolean;
 }
 
 export default function CommentItem({
@@ -174,6 +175,7 @@ export default function CommentItem({
   isFocused,
   onFocus,
   onChange,
+  isAssigned = true,
 }: CommentItemProps) {
   const isSkipped = label?.skipped === true;
   const needsReview = label?.needs_review === true;
@@ -244,20 +246,22 @@ export default function CommentItem({
         </div>
 
         {/* Status pill */}
-        {isSkipped && (
-          <span className="text-xs px-2 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded-full line-through">Đã bỏ qua</span>
-        )}
-        {needsReview && !isSkipped && (
-          <span className="text-xs px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-full">
-            Cần xác nhận lại
-          </span>
-        )}
-        {isComplete && !isSkipped && (
-          <span className="text-xs px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-full">✓ Đã gán</span>
-        )}
-        {!isComplete && !isSkipped && !needsReview && (
-          <span className="text-xs px-2 py-0.5 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 rounded-full">Chưa gán</span>
-        )}
+        <>
+          {isSkipped && (
+            <span className="text-xs px-2 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded-full line-through">Đã bỏ qua</span>
+          )}
+          {needsReview && !isSkipped && (
+            <span className="text-xs px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-full">
+              Cần xác nhận lại
+            </span>
+          )}
+          {isComplete && !isSkipped && (
+            <span className="text-xs px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-full">✓ Đã gán</span>
+          )}
+          {!isComplete && !isSkipped && !needsReview && (
+            <span className="text-xs px-2 py-0.5 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 rounded-full">Chưa gán</span>
+          )}
+        </>
       </div>
 
       {/* Content */}
@@ -267,13 +271,14 @@ export default function CommentItem({
       </div>
 
       {/* Label selectors */}
-      <LabelSelector label={currentLabel} onChange={onChange} compact />
-
-      {isFocused && (
-        <div className="mt-1.5 text-xs text-blue-500 dark:text-blue-400 opacity-70">
-          ↑ Đang focus — 1/2/3 · q-y · a/s · z/x/c/v · 0
-        </div>
-      )}
+      <>
+        <LabelSelector label={currentLabel} onChange={onChange} compact />
+        {isFocused && (
+          <div className="mt-1.5 text-xs text-blue-500 dark:text-blue-400 opacity-70">
+            ↑ Đang focus — 1/2/3 · q-y · a/s · z/x/c/v · 0
+          </div>
+        )}
+      </>
     </div>
   );
 }
