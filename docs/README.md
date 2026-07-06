@@ -515,3 +515,13 @@ Admin	demo.admin@insightflow.com	/admin
 Quản lý thương hiệu	manager@highlandscoffee.com	/dashboard
 Nhân viên xử lý khủng hoảng	nguyen_van_crisis@highlandscoffee.com	/alerts
 Nhân viên xử lý lead	tran_thi_lead@highlandscoffee.com	/leads
+
+## 19. Trang Chi tiết vụ việc (Alert Detail Page) & Phân quyền Thao tác
+Trang chi tiết vụ việc (`/alerts/[id]`) được xây dựng trên mô hình phân chia trách nhiệm rõ ràng (RBAC):
+- **Nhân viên trực (`crisis_employee`)**:
+  - Được quyền thay đổi trạng thái xử lý sự vụ (Status Stepper) và gửi ý kiến đóng góp lên Timeline hoặc ghi chú nội bộ.
+  - Không có quyền trực tiếp thay đổi mức độ rủi ro (Severity). Nút sửa nhãn bị ẩn.
+  - Muốn đề xuất thay đổi nhãn phải điền và gửi qua form đề xuất (Correction Request Form) để chờ quản lý duyệt.
+- **Quản lý thương hiệu (`brand_manager` / `admin`)**:
+  - Được quyền bấm nút "Sửa nhãn" để cập nhật trực tiếp mức độ rủi ro của sự vụ trên Firestore.
+

@@ -11,6 +11,8 @@ export interface ResolutionAttempt {
   timestamp: string;
   note: string;
   image_url?: string;
+  resolved_by_email?: string;
+  resolved_by_name?: string;
 }
 
 export interface AlertData {
@@ -36,6 +38,8 @@ export interface AlertData {
   being_resolved_by?: string | null;
   being_resolved_at?: string | null;
   resolution_history?: ResolutionAttempt[];
+  resolved_by_email?: string | null;
+  resolved_by_name?: string | null;
   post_content?: string;
   comment_content?: string;
   parent_id?: string | null;
@@ -394,6 +398,8 @@ export const useAlertStore = create<AlertState>()(
                 status: newStatus,
                 resolution_history: undefined,
                 resolved_at: undefined,
+                resolved_by_email: null,
+                resolved_by_name: null,
               };
             }
 
@@ -403,6 +409,8 @@ export const useAlertStore = create<AlertState>()(
                 attempt_number: nextHistory.length + 1,
                 timestamp: new Date().toISOString(),
                 note: attempt.note,
+                resolved_by_email: profile.email ?? undefined,
+                resolved_by_name: profile.displayName ?? undefined,
                 ...(attempt.image_url ? { image_url: attempt.image_url } : {}),
               };
               nextHistory.push(newAttemptItem);
@@ -412,6 +420,8 @@ export const useAlertStore = create<AlertState>()(
               status: newStatus,
               resolution_history: nextHistory,
               resolved_at: resolvedAt || undefined,
+              resolved_by_email: resolvedAt ? profile.email : null,
+              resolved_by_name: resolvedAt ? profile.displayName : null,
             };
           }
           return alert;
@@ -432,12 +442,16 @@ export const useAlertStore = create<AlertState>()(
           status: newStatus,
           resolved_at: resolvedAt,
           resolved_by: resolvedAt ? profile.uid : null,
+          resolved_by_email: resolvedAt ? profile.email : null,
+          resolved_by_name: resolvedAt ? profile.displayName : null,
           ...auditFields,
         };
 
         if (newStatus === "new") {
           // Khôi phục: clear resolution history so alert restarts from Lần 1
           updateData.resolution_history = [];
+          updateData.resolved_by_email = null;
+          updateData.resolved_by_name = null;
         } else {
           const targetAlert = get().rawAlerts.find((a) => a.id === id);
           if (targetAlert && targetAlert.resolution_history && targetAlert.resolution_history.length > 0) {
