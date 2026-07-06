@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDashboard } from "@/hooks/useDashboardData";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import {
@@ -60,6 +60,13 @@ export default function LeadsPage() {
   const hasReconciledRestoreLead = useRef(false);
   const canViewLeads = canPerformAction(profile, "view_leads");
   const hasBrandScope = hasBusinessBrandScope(profile);
+
+  const clearPendingRestore = useCallback((clearHighlight = false) => {
+    pendingRestoreLeadId.current = null;
+    pendingRestoreScrollTop.current = null;
+    pendingRestorePanelScrollTop.current = null;
+    if (clearHighlight) setHighlightedLeadId(null);
+  }, []);
 
   useDashboard({ autoFetch: true, refetchInterval: 60000 });
 
@@ -234,10 +241,7 @@ export default function LeadsPage() {
       setRestoreNotice(
         "Lead vừa kiểm tra không còn trong phạm vi hàng chờ tiềm năng hiện tại.",
       );
-      pendingRestoreLeadId.current = null;
-      pendingRestoreScrollTop.current = null;
-      pendingRestorePanelScrollTop.current = null;
-      setHighlightedLeadId(null);
+      clearPendingRestore(true);
       hasReconciledRestoreLead.current = true;
       return;
     }
@@ -262,10 +266,7 @@ export default function LeadsPage() {
       setRestoreNotice(
         "Lead vừa kiểm tra không còn nằm trong hàng chờ xử lý tiềm năng.",
       );
-      pendingRestoreLeadId.current = null;
-      pendingRestoreScrollTop.current = null;
-      pendingRestorePanelScrollTop.current = null;
-      setHighlightedLeadId(null);
+      clearPendingRestore(true);
       hasReconciledRestoreLead.current = true;
       return;
     }
@@ -286,6 +287,7 @@ export default function LeadsPage() {
     isLoading,
     leads.length,
     profile,
+    clearPendingRestore,
     visibleBaseLeads,
     visibleLeads,
     workbenchViews,
@@ -297,6 +299,8 @@ export default function LeadsPage() {
     if (!paginatedLeads.some((lead) => lead.id === restoredLeadId)) return;
 
     const scrollTimer = window.setTimeout(() => {
+      if (pendingRestoreLeadId.current !== restoredLeadId) return;
+
       const row = document.getElementById(`lead-row-${restoredLeadId}`);
       if (row) {
         row.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -316,22 +320,21 @@ export default function LeadsPage() {
           });
         }
       }
+
+      clearPendingRestore(false);
     }, 120);
 
     const highlightTimer = window.setTimeout(() => {
       setHighlightedLeadId((current) =>
         current === restoredLeadId ? null : current,
       );
-      pendingRestoreLeadId.current = null;
-      pendingRestoreScrollTop.current = null;
-      pendingRestorePanelScrollTop.current = null;
     }, 4000);
 
     return () => {
       window.clearTimeout(scrollTimer);
       window.clearTimeout(highlightTimer);
     };
-  }, [paginatedLeads]);
+  }, [clearPendingRestore, paginatedLeads]);
 
   const firstLeadNumber =
     visibleLeads.length === 0 ? 0 : (currentPage - 1) * LEADS_PAGE_SIZE + 1;
@@ -535,6 +538,7 @@ export default function LeadsPage() {
                   selected={selectedLeadId === lead.id}
                   highlighted={highlightedLeadId === lead.id}
                   onSelect={(nextLead: Lead) => {
+                    clearPendingRestore(true);
                     setSelectedLeadId(nextLead.id);
                     setRestoreNotice("");
                   }}

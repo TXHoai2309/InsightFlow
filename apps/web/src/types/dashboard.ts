@@ -41,6 +41,7 @@ export interface Mention {
   created_at: string;         // ISO string (từ crawled_at)
   posted_at: string;          // ISO string (ngày đăng bài thật: post_date / created_at từ nguồn)
   url?: string;
+  labels?: ClassificationLabel;
 }
 
 export interface Alert {
@@ -55,6 +56,74 @@ export interface Alert {
   status: "new" | "acknowledged" | "resolved";
 }
 
+export type LabelQueue = "lead" | "crisis" | "monitoring" | "none" | "review";
+
+export type LabelSentiment = "positive" | "negative" | "neutral";
+export type LabelTopic =
+  | "quality"
+  | "price"
+  | "service"
+  | "location"
+  | "promotion"
+  | "other";
+export type LabelUrgency = "normal" | "notable" | "crisis";
+export type LabelIntent = "hot" | "warm" | "cold" | "none";
+
+export interface ClassificationLabel {
+  sentiment: LabelSentiment | null;
+  topic: LabelTopic[];
+  relevance: boolean | null;
+  urgency: LabelUrgency | null;
+  intent: LabelIntent | null;
+}
+
+export type LabelValue =
+  | "lead_hot"
+  | "lead_warm"
+  | "lead_cold"
+  | "not_lead"
+  | "crisis_complaint"
+  | "crisis_negative_high_risk"
+  | "crisis_legal"
+  | "spam"
+  | "irrelevant"
+  | "monitoring"
+  | "needs_review";
+
+export interface LabelChangeRequest {
+  id: string;
+  source_type: "lead" | "mention" | "comment" | "post";
+  source_id: string;
+  lead_id?: string;
+  mention_id?: string;
+  workspace_id: string;
+  platform: Platform;
+  author?: string;
+  content_preview: string;
+  source_url?: string;
+  current_labels: ClassificationLabel;
+  requested_labels: ClassificationLabel;
+  changed_fields: Array<keyof ClassificationLabel>;
+  current_queue: LabelQueue;
+  requested_queue: LabelQueue;
+  current_label?: LabelValue;
+  requested_label?: LabelValue;
+  reason_code: string;
+  reason_note: string;
+  evidence_checked: boolean;
+  status: "pending" | "approved" | "rejected" | "cancelled";
+  requested_by: string;
+  requested_by_name: string;
+  requested_by_role: string;
+  requested_at: string;
+  reviewed_by?: string;
+  reviewed_by_name?: string;
+  reviewed_at?: string;
+  review_note?: string;
+  applied_at?: string;
+  audit_log_id?: string;
+}
+
 export interface Lead {
   id: string;
   mention_id?: string;
@@ -67,12 +136,17 @@ export interface Lead {
   author?: string;
   content: string;
   intent: "hot" | "warm" | "cold" | "none";
+  current_label?: LabelValue;
+  labels?: ClassificationLabel;
   intent_signals: string[];
   status: "new" | "processing" | "completed" | "skipped";
   created_at: string;
   expiry_at?: string;
   url?: string;
   source_url?: string;
+  label_correction_status?: "none" | "pending" | "approved" | "rejected";
+  pending_label_request_id?: string;
+  last_label_corrected_at?: string;
   
   // Contact Info
   phone?: string;

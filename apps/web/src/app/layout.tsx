@@ -124,12 +124,6 @@ export default function RootLayout({
           rel="stylesheet"
           href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css"
         />
-        <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
-        <script dangerouslySetInnerHTML={{ __html: `
-          tailwind.config = {
-            darkMode: 'class'
-          };
-        ` }} />
         <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
       </head>
       <body
