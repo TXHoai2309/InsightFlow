@@ -516,12 +516,27 @@ Quản lý thương hiệu	manager@highlandscoffee.com	/dashboard
 Nhân viên xử lý khủng hoảng	nguyen_van_crisis@highlandscoffee.com	/alerts
 Nhân viên xử lý lead	tran_thi_lead@highlandscoffee.com	/leads
 
-## 19. Trang Chi tiết vụ việc (Alert Detail Page) & Phân quyền Thao tác
-Trang chi tiết vụ việc (`/alerts/[id]`) được xây dựng trên mô hình phân chia trách nhiệm rõ ràng (RBAC):
+## 19. Trang Hàng chờ Cảnh báo (/alerts) & Chi tiết vụ việc (/alerts/[id])
+
+### A. Trang Hàng chờ Cảnh báo (/alerts) - Giao diện Chia cột Mới
+Trang hàng chờ xử lý khủng hoảng đã được thiết kế lại toàn diện thành giao diện chia cột hiện đại:
+- **Cột trái (Hàng chờ ưu tiên - Priority Process Queue)**:
+  - Hiển thị danh sách các vụ việc rủi ro kèm theo chỉ số Risk Score, nền tảng nguồn tin, thời gian phát hiện bài viết và thời gian SLA đếm ngược (đã định dạng thân thiện theo ngày/giờ/phút).
+  - Tích hợp các bộ lọc nhanh: Tìm kiếm theo từ khóa nội dung, chọn Thương hiệu, Nguồn Platform, lọc theo mức độ rủi ro (Khẩn cấp, Cao, Trung bình, Thấp) và chế độ xem các vụ việc "Của tôi" đang phụ trách.
+  - Phân mục Accordion dưới chân trang: Hiển thị các vụ việc đã giải quyết gần đây và các yêu cầu sửa nhãn đang chờ duyệt.
+- **Cột phải (Widget liên quan)**:
+  - **Trending Now**: Liệt kê các từ khóa đang nóng và xu hướng thảo luận.
+  - **Hoạt động đội ngũ**: Nhật ký hành động thời gian thực của các nhân viên trực trực thuộc thương hiệu.
+  - **Hiệu suất trực**: Thống kê số lượng vụ việc đã xử lý và tỷ lệ hoàn thành KPI.
+
+### B. Trang Chi tiết vụ việc (/alerts/[id]) & Phân quyền Thao tác (RBAC)
+Trang chi tiết vụ việc hỗ trợ quy trình xử lý chuyên sâu trên thời gian thực với Firestore, tuân thủ đúng phân quyền vai trò:
 - **Nhân viên trực (`crisis_employee`)**:
-  - Được quyền thay đổi trạng thái xử lý sự vụ (Status Stepper) và gửi ý kiến đóng góp lên Timeline hoặc ghi chú nội bộ.
-  - Không có quyền trực tiếp thay đổi mức độ rủi ro (Severity). Nút sửa nhãn bị ẩn.
-  - Muốn đề xuất thay đổi nhãn phải điền và gửi qua form đề xuất (Correction Request Form) để chờ quản lý duyệt.
+  - Có quyền thay đổi trạng thái xử lý sự vụ (Status Stepper), gửi ý kiến đóng góp lên Timeline lịch sử xử lý, viết private notes nội bộ và gửi Escalation khẩn cấp.
+  - Không có quyền trực tiếp can thiệp dữ liệu rủi ro. Nút **"Sửa nhãn"** bị ẩn đi.
+  - Khi cần chỉnh sửa mức độ rủi ro, sắc thái hay chủ đề, nhân viên bắt buộc phải gửi thông qua thẻ **"Gửi yêu cầu sửa nhãn"** (Correction Request Form) để quản lý duyệt.
 - **Quản lý thương hiệu (`brand_manager` / `admin`)**:
-  - Được quyền bấm nút "Sửa nhãn" để cập nhật trực tiếp mức độ rủi ro của sự vụ trên Firestore.
+  - Được quyền bấm nút **"Sửa nhãn"** để chỉnh sửa và lưu trực tiếp mức độ rủi ro của sự vụ trên Firestore.
+  - Thẻ biểu mẫu đề xuất sửa nhãn được ẩn đi.
+
 
