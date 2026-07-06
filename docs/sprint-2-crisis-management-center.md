@@ -54,3 +54,40 @@ Tài liệu này mô tả chi tiết chức năng cải tiến dành riêng cho 
 ### E. Xây dựng Báo cáo sự vụ nhanh (Incident Report generation)
 *   Cho phép nhân viên bấm **Báo cáo** trên từng thẻ rủi ro cao để mở hộp thoại đánh giá mức độ ảnh hưởng và các bước ứng phó đề xuất (SOP).
 *   Hỗ trợ xuất báo cáo hoàn chỉnh ra file định dạng JSON tải về máy.
+
+### F. Cơ chế Khóa xử lý Thời gian thực (Real-time Presence Lock)
+*   Nhằm tránh việc nhiều nhân viên xử lý trùng lặp một sự vụ khi đang cùng mở hộp thoại xử lý:
+    *   Khi một nhân viên click vào nút **"Xử lý"** hoặc **"Giải quyết tiếp"** (mở ResolutionModal), hệ thống ghi nhận khóa `being_resolved_by` (email của nhân sự đang xử lý) vào Firestore của tài liệu đó.
+    *   Trên giao diện của các nhân viên khác, các nút bấm hành động trên thẻ sự vụ đó sẽ ngay lập tức được thay thế bằng một banner cảnh báo nhấp nháy màu hổ phách: **"🔒 Đang được xử lý bởi [Email]"** để ngăn người khác can thiệp.
+    *   Khóa sẽ được giải phóng lập tức khi nhân viên lưu hoặc đóng modal, hoặc khi họ rời trang/đóng tab nhờ hook dọn dẹp (cleanup hook) tự động.
+
+---
+
+## 3. Quy trình Lựa chọn và Phân loại Dữ liệu Khẩn cấp
+
+Trung tâm xử lý khẩn cấp sử dụng thuật toán thông minh để tự động phân loại, lọc và bổ sung thông tin liên hệ. Dưới đây là chi tiết luồng xử lý:
+
+### A. Phân loại độ nghiêm trọng (`severity`) tự động
+Mỗi cảnh báo khi đồng bộ từ Firestore sẽ được phân tích qua hàm định nghĩa độ nghiêm trọng để gán nhãn mức độ rủi ro:
+1.  **Nguy cấp (`critical`)**: Được thiết lập nếu thuộc một trong các tiêu chí:
+    *   Nhãn khẩn cấp từ AI (`urgency` hoặc `labels.urgency`) có giá trị `"critical"`.
+    *   Chủ đề cảnh báo (`topic`) thuộc nhóm Pháp lý (`legal`).
+    *   Nội dung văn bản gốc (`clean_text`/`original_text`) chứa các từ khóa khủng hoảng cao như: **"ngộ độc"**, **"tẩy chay"**, **"khủng hoảng"**.
+2.  **Cao (`high`)**: Được thiết lập nếu thuộc một trong các tiêu chí:
+    *   Nhãn khẩn cấp từ AI có giá trị `"high"`.
+    *   Chủ đề cảnh báo thuộc nhóm Chất lượng sản phẩm (`quality`) hoặc Dịch vụ khách hàng (`service`).
+3.  **Trung bình (`medium`)**: Mức mặc định khi không thỏa mãn các điều kiện trên.
+4.  **Thấp (`low`)**: Được thiết lập khi nhãn AI có giá trị `"low"`.
+
+### B. Tiêu chí chọn hiển thị trên Trung tâm Khẩn cấp
+Để tối ưu hóa hàng đợi xử lý của nhân viên, hệ thống lọc cục bộ trên phía Client bằng cách chỉ lấy các sự vụ có:
+*   Mức độ nghiêm trọng (`severity`) thuộc nhóm `critical` hoặc `high`.
+*   Trạng thái xử lý (`status`) **chưa được giải quyết hoàn toàn** (khác `resolved`). Nghĩa là các sự vụ mới (`new`) hoặc đang xử lý (`resolving` / `acknowledged`) sẽ được ưu tiên xuất hiện.
+
+### C. Cơ chế liên kết dữ liệu liên hệ (Lead Enrichment)
+Mỗi sự vụ khẩn cấp sẽ được chạy qua bộ so khớp dữ liệu thời gian thực để tìm kiếm thông tin liên hệ (Email, Số điện thoại, ID Zalo/Messenger) trong cơ sở dữ liệu `leads`:
+*   **Điều kiện so khớp**:
+    *   Tên tác giả sự vụ (`author`) trùng khớp với tên tác giả ghi nhận trong tệp leads (`lead.author`).
+    *   Hoặc nội dung văn bản sự vụ có chứa các từ khóa/nội dung trùng khớp với ghi chú của lead.
+*   **Kết quả**: Khi tìm thấy lead phù hợp, thẻ sự vụ sẽ được đính kèm nút gọi điện trực tiếp (`tel:`), nút nhắn tin Zalo nhanh (`https://zalo.me/[phone]`), và các thông tin liên hệ khác để phục vụ việc tiếp cận và giải quyết khẩn cấp.
+

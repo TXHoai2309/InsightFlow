@@ -33,6 +33,8 @@ export interface AlertData {
   author?: string;
   title?: string;
   social_profile_url?: string;
+  being_resolved_by?: string | null;
+  being_resolved_at?: string | null;
   resolution_history?: ResolutionAttempt[];
 }
 
@@ -87,6 +89,8 @@ interface AlertState {
     decision: "approved" | "rejected",
     profile: UserRoleProfile | null | undefined
   ) => Promise<void>;
+  lockAlertForResolution: (id: string, profile: UserRoleProfile | null | undefined) => Promise<void>;
+  unlockAlertForResolution: (id: string) => Promise<void>;
 }
 
 function parseDate(field: unknown): string {
@@ -296,6 +300,9 @@ export const useAlertStore = create<AlertState>()(
               shares: Number(data.shares || data.share_count || 0),
               author: String(data.author || data.author_name || "Ẩn danh"),
               title: text.slice(0, 120),
+              being_resolved_by: data.being_resolved_by || null,
+              being_resolved_at: data.being_resolved_at || null,
+              resolution_history: Array.isArray(data.resolution_history) ? data.resolution_history : undefined,
             };
 
             if (!isRecordInBrandScope({ brand: alert.brand }, scopedBrandKey)) return;
@@ -328,21 +335,25 @@ export const useAlertStore = create<AlertState>()(
     },
 
     updateAlertStatus: async (id, newStatus, profile, attempt) => {
+      console.log("[AlertStore] updateAlertStatus called:", { id, newStatus, profileEmail: profile?.email, profileRole: profile?.role });
       const currentAlert = get().rawAlerts.find((alert) => alert.id === id);
+      console.log("[AlertStore] currentAlert found:", currentAlert);
+
       if (!profile || !canPerformAction(profile, "update_crisis_status")) {
+        console.error("[AlertStore] Permission check failed:", { profileExists: !!profile, hasPermission: profile ? canPerformAction(profile, "update_crisis_status") : false });
         throw new Error("User is not allowed to update crisis status.");
       }
       if (!currentAlert || !isSameBrandScope(profile, { brand: currentAlert.brand })) {
+        console.error("[AlertStore] Brand scope check failed:", { alertExists: !!currentAlert, sameScope: currentAlert ? isSameBrandScope(profile, { brand: currentAlert.brand }) : false });
         throw new Error("Alert is outside the user's brand scope.");
       }
 
       const resolvedAt =
-        newStatus === "resolved" ? new Date().toISOString() : undefined;
+        newStatus === "resolved" ? new Date().toISOString() : null;
       const auditFields = {
         updated_by: profile.uid,
         updated_by_role: profile.role,
         updated_at: new Date().toISOString(),
-        ...(resolvedAt ? { resolved_by: profile.uid } : {}),
       };
 
       let newAttemptItem: ResolutionAttempt | undefined = undefined;
@@ -350,13 +361,23 @@ export const useAlertStore = create<AlertState>()(
       set((state) => {
         const nextRawAlerts = state.rawAlerts.map((alert) => {
           if (alert.id === id) {
+            // When restoring to 'new' (Khôi phục), clear history so the alert starts fresh
+            if (newStatus === "new") {
+              return {
+                ...alert,
+                status: newStatus,
+                resolution_history: undefined,
+                resolved_at: undefined,
+              };
+            }
+
             let nextHistory = alert.resolution_history ? [...alert.resolution_history] : [];
             if (attempt) {
               newAttemptItem = {
                 attempt_number: nextHistory.length + 1,
                 timestamp: new Date().toISOString(),
                 note: attempt.note,
-                image_url: attempt.image_url,
+                ...(attempt.image_url ? { image_url: attempt.image_url } : {}),
               };
               nextHistory.push(newAttemptItem);
             }
@@ -383,18 +404,38 @@ export const useAlertStore = create<AlertState>()(
 
         const updateData: Record<string, any> = {
           status: newStatus,
-          ...(resolvedAt ? { resolved_at: resolvedAt } : {}),
+          resolved_at: resolvedAt,
+          resolved_by: resolvedAt ? profile.uid : null,
           ...auditFields,
         };
 
-        const targetAlert = get().rawAlerts.find((a) => a.id === id);
-        if (targetAlert && targetAlert.resolution_history && targetAlert.resolution_history.length > 0) {
-          updateData.resolution_history = targetAlert.resolution_history;
+        if (newStatus === "new") {
+          // Khôi phục: clear resolution history so alert restarts from Lần 1
+          updateData.resolution_history = [];
+        } else {
+          const targetAlert = get().rawAlerts.find((a) => a.id === id);
+          if (targetAlert && targetAlert.resolution_history && targetAlert.resolution_history.length > 0) {
+            updateData.resolution_history = targetAlert.resolution_history;
+          }
         }
 
         await updateDoc(documentRef, updateData);
       } catch (error) {
         console.error("[AlertStore] Failed to persist alert status:", error);
+        // Revert local state update
+        set((state) => {
+          const nextRawAlerts = state.rawAlerts.map((alert) => {
+            if (alert.id === id) {
+              return currentAlert;
+            }
+            return alert;
+          });
+          return {
+            rawAlerts: nextRawAlerts,
+            alerts: applyFilters(nextRawAlerts, state.filters),
+          };
+        });
+        throw error;
       }
     },
 
@@ -404,15 +445,23 @@ export const useAlertStore = create<AlertState>()(
         if (!dbSecond) throw new Error("Firebase data project is not configured.");
 
         const q = query(collection(dbSecond, "insightflow_correction_requests"), limit(500));
-        
+
         onSnapshot(q, (snapshot) => {
           const requests: CorrectionRequest[] = [];
           snapshot.docs.forEach((docSnap) => {
             const data = docSnap.data();
+            let recordBrand = data.brand;
+            if (!recordBrand) {
+              const email = String(data.requester_email || "").toLowerCase();
+              if (email.includes("highland")) recordBrand = "Highland Coffee";
+              else if (email.includes("starbuck")) recordBrand = "Starbucks";
+              else if (email.includes("mixue")) recordBrand = "Mixue";
+            }
+
             const req = {
               id: docSnap.id,
               alert_id: data.alert_id,
-              brand: data.brand,
+              brand: recordBrand || "",
               requester_uid: data.requester_uid,
               requester_email: data.requester_email,
               created_at: data.created_at,
@@ -448,7 +497,7 @@ export const useAlertStore = create<AlertState>()(
 
     createCorrectionRequest: async (requestData) => {
       if (!dbSecond) throw new Error("Firebase data project is not configured.");
-      
+
       const newDoc = {
         ...requestData,
         created_at: new Date().toISOString(),
@@ -462,20 +511,22 @@ export const useAlertStore = create<AlertState>()(
       if (!dbSecond) throw new Error("Firebase data project is not configured.");
       if (!profile) throw new Error("User is not authenticated.");
 
+      // Read correction data synchronously BEFORE any await.
+      // Firestore SDK may call the onSnapshot callback before await resolves,
+      // replacing correctionRequests in the store. Reading first avoids the race condition.
+      const req = get().correctionRequests.find((r) => r.id === requestId);
+
       const requestRef = doc(dbSecond, "insightflow_correction_requests", requestId);
-      
+
       await updateDoc(requestRef, {
         status: decision,
         resolved_by: profile.uid,
         resolved_at: new Date().toISOString(),
       });
 
-      if (decision === "approved") {
-        const req = get().correctionRequests.find((r) => r.id === requestId);
-        if (!req) return;
-
+      if (decision === "approved" && req) {
         const alertRef = doc(dbSecond, "insightflow_labels", alertId);
-        
+
         await updateDoc(alertRef, {
           sentiment: req.new_sentiment,
           "labels.sentiment": req.new_sentiment,
@@ -485,6 +536,32 @@ export const useAlertStore = create<AlertState>()(
           topic: req.new_topic,
           "labels.topic": req.new_topic,
         });
+      }
+    },
+
+    lockAlertForResolution: async (id, profile) => {
+      if (!dbSecond || !profile) return;
+      try {
+        const documentRef = doc(dbSecond, "insightflow_labels", id);
+        await updateDoc(documentRef, {
+          being_resolved_by: profile.email,
+          being_resolved_at: new Date().toISOString(),
+        });
+      } catch (error) {
+        console.error("[AlertStore] Failed to lock alert:", error);
+      }
+    },
+
+    unlockAlertForResolution: async (id) => {
+      if (!dbSecond) return;
+      try {
+        const documentRef = doc(dbSecond, "insightflow_labels", id);
+        await updateDoc(documentRef, {
+          being_resolved_by: null,
+          being_resolved_at: null,
+        });
+      } catch (error) {
+        console.error("[AlertStore] Failed to unlock alert:", error);
       }
     },
   })),
