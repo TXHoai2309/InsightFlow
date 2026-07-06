@@ -29,6 +29,11 @@ import {
   type LeadDetailPanelTab,
 } from "@/lib/lead-return-context";
 import { normalizeBrandName } from "@/lib/services/dashboard";
+import {
+  isLabelRequestForLead,
+  isPendingLeadLabelRequest,
+  isPendingLeadRerouteRequest,
+} from "@/lib/label-change";
 
 const LEADS_PAGE_SIZE = 5;
 const APP_SCROLL_ROOT_SELECTOR = '[data-app-scroll-root="true"]';
@@ -76,6 +81,7 @@ export default function LeadsPage() {
     filters,
     leads,
     mentions,
+    labelChangeRequests,
     isLoading,
     error,
     setFilters,
@@ -170,23 +176,58 @@ export default function LeadsPage() {
     [visibleBaseLeads, currentTime],
   );
 
+  const pendingLabelRequestByLeadId = useMemo(() => {
+    const sortedRequests = [...labelChangeRequests]
+      .filter(isPendingLeadLabelRequest)
+      .sort((a, b) => {
+        const aBlocks = isPendingLeadRerouteRequest(a);
+        const bBlocks = isPendingLeadRerouteRequest(b);
+        if (aBlocks !== bBlocks) return aBlocks ? -1 : 1;
+        return (
+          new Date(b.requested_at).getTime() -
+          new Date(a.requested_at).getTime()
+        );
+      });
+
+    return visibleBaseLeads.reduce((map, lead) => {
+      const request = sortedRequests.find((item) =>
+        isLabelRequestForLead(item, lead),
+      );
+      if (request) map.set(lead.id, request);
+      return map;
+    }, new Map<string, (typeof sortedRequests)[number]>());
+  }, [labelChangeRequests, visibleBaseLeads]);
+
+  const labelReviewLeads = useMemo(() => {
+    return sortedLeads.filter((lead) => pendingLabelRequestByLeadId.has(lead.id));
+  }, [pendingLabelRequestByLeadId, sortedLeads]);
+
   const viewCounts = useMemo(() => {
     return workbenchViews.reduce(
       (acc, view) => {
         acc[view.id] = visibleBaseLeads.filter((lead) =>
-          matchesLeadWorkbenchView(lead, view.id, currentTime, profile),
+          view.id === "label_review"
+            ? pendingLabelRequestByLeadId.has(lead.id)
+            : matchesLeadWorkbenchView(lead, view.id, currentTime, profile),
         ).length;
         return acc;
       },
       {} as Record<LeadWorkbenchView, number>,
     );
-  }, [currentTime, profile, visibleBaseLeads, workbenchViews]);
+  }, [
+    currentTime,
+    pendingLabelRequestByLeadId,
+    profile,
+    visibleBaseLeads,
+    workbenchViews,
+  ]);
 
   const visibleLeads = useMemo(() => {
+    if (activeView === "label_review") return labelReviewLeads;
     return sortedLeads.filter((lead) =>
       matchesLeadWorkbenchView(lead, activeView, currentTime, profile),
     );
-  }, [activeView, sortedLeads, currentTime, profile]);
+  }, [activeView, currentTime, labelReviewLeads, profile, sortedLeads]);
 
   const totalPages = Math.max(1, Math.ceil(visibleLeads.length / LEADS_PAGE_SIZE));
 
@@ -465,6 +506,31 @@ export default function LeadsPage() {
           </section>
         )}
 
+        {viewCounts.label_review > 0 && activeView !== "label_review" && (
+          <section className="flex flex-col gap-3 rounded-xl border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] p-3 md:flex-row md:items-center md:justify-between">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="material-symbols-outlined text-[var(--color-brand)]">
+                rule
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-[var(--color-text-primary)]">
+                  Có {viewCounts.label_review} lead đang chờ duyệt nhãn
+                </p>
+                <p className="truncate text-sm text-[var(--color-text-secondary)]">
+                  Theo dõi các request sửa nhãn, đặc biệt những lead đang tạm khóa do chờ chuyển queue.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveView("label_review")}
+              className="rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm font-bold text-[var(--color-brand)]"
+            >
+              Xem trạng thái
+            </button>
+          </section>
+        )}
+
         <section className="space-y-3">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex flex-wrap gap-2">
@@ -522,10 +588,14 @@ export default function LeadsPage() {
                   inbox
                 </span>
                 <h3 className="mt-3 text-lg font-bold text-[var(--color-text-primary)]">
-                  Không có lead trong nhóm này
+                  {activeView === "label_review"
+                    ? "Không có lead nào đang chờ duyệt nhãn"
+                    : "Không có lead trong nhóm này"}
                 </h3>
                 <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-                  Chuyển quick view hoặc mở bộ lọc để xem nhóm lead khác.
+                  {activeView === "label_review"
+                    ? "Các request sửa nhãn đang chờ quản lý duyệt sẽ xuất hiện tại đây."
+                    : "Chuyển quick view hoặc mở bộ lọc để xem nhóm lead khác."}
                 </p>
               </div>
             ) : (
@@ -537,6 +607,7 @@ export default function LeadsPage() {
                   nowMs={currentTime}
                   selected={selectedLeadId === lead.id}
                   highlighted={highlightedLeadId === lead.id}
+                  labelRequest={pendingLabelRequestByLeadId.get(lead.id)}
                   onSelect={(nextLead: Lead) => {
                     clearPendingRestore(true);
                     setSelectedLeadId(nextLead.id);

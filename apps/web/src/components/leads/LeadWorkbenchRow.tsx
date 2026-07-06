@@ -7,7 +7,13 @@ import { useAuth } from "@/hooks/useAuth";
 import { canPerformAction } from "@/lib/rbac";
 import { isSameBrandScope } from "@/lib/brandScope";
 import { PlatformLogo } from "@/components/platform/PlatformLogo";
-import type { Lead } from "@/types/dashboard";
+import type { LabelChangeRequest, Lead } from "@/types/dashboard";
+import {
+  getLabelRequestStatusLabel,
+  getLabelRequestWorkflowLabel,
+  getQueueLabel,
+  isPendingLeadRerouteRequest,
+} from "@/lib/label-change";
 import {
   formatLeadSla,
   getLeadOwnershipMeta,
@@ -22,6 +28,7 @@ interface LeadWorkbenchRowProps {
   nowMs: number;
   selected?: boolean;
   highlighted?: boolean;
+  labelRequest?: LabelChangeRequest;
   onSelect: (lead: Lead) => void;
   onStartedAction?: (lead: Lead) => void;
 }
@@ -39,6 +46,7 @@ export function LeadWorkbenchRow({
   nowMs,
   selected = false,
   highlighted = false,
+  labelRequest,
   onSelect,
   onStartedAction,
 }: LeadWorkbenchRowProps) {
@@ -51,6 +59,7 @@ export function LeadWorkbenchRow({
   const primaryAction = getPrimaryLeadAction(lead);
   const sourceAction = getLeadSourceAction(lead);
   const platformMeta = PLATFORM_META[lead.platform];
+  const isLeadWorkflowBlocked = isPendingLeadRerouteRequest(labelRequest);
   const canEdit =
     isSameBrandScope(profile, lead) &&
     canPerformAction(profile, "update_lead_details");
@@ -67,14 +76,18 @@ export function LeadWorkbenchRow({
         ? "border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] text-[var(--color-warning)]"
         : "border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]";
 
-  const ctaLabel = ownership.canClaim
+  const ctaLabel = isLeadWorkflowBlocked
+    ? "Xem trạng thái"
+    : ownership.canClaim
     ? "Nhận xử lý"
     : !ownership.canWork
       ? "Xem chi tiết"
       : meta.needsResultCapture
         ? "Ghi nhận kết quả"
         : meta.nextActionLabel;
-  const ctaIcon = ownership.canClaim
+  const ctaIcon = isLeadWorkflowBlocked
+    ? "lock_clock"
+    : ownership.canClaim
     ? "person_add"
     : !ownership.canWork
       ? "visibility"
@@ -87,6 +100,10 @@ export function LeadWorkbenchRow({
 
   const handleClaim = async () => {
     if (!canEdit || !profile) return;
+    if (isLeadWorkflowBlocked) {
+      onSelect(lead);
+      return;
+    }
     const nowIso = new Date().toISOString();
     const ownerData: Partial<Lead> = {
       owner_id: profile.uid,
@@ -104,6 +121,11 @@ export function LeadWorkbenchRow({
 
   const handlePrimaryAction = async (event: React.MouseEvent) => {
     event.stopPropagation();
+
+    if (isLeadWorkflowBlocked) {
+      onSelect(lead);
+      return;
+    }
 
     if (ownership.canClaim) {
       try {
@@ -240,6 +262,19 @@ export function LeadWorkbenchRow({
             <span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${ownerChipClass}`}>
               {ownership.label}
             </span>
+            {labelRequest && (
+              <span
+                className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${
+                  isLeadWorkflowBlocked
+                    ? "border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] text-[var(--color-warning)]"
+                    : labelRequest.status === "pending"
+                      ? "border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] text-[var(--color-brand)]"
+                      : "border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]"
+                }`}
+              >
+                {getLabelRequestStatusLabel(labelRequest.status)} · {getLabelRequestWorkflowLabel(labelRequest)}
+              </span>
+            )}
           </div>
           <div className="flex min-w-0 items-center gap-2">
             <span className="shrink-0 text-xs font-bold text-[var(--color-error)]">
@@ -252,6 +287,12 @@ export function LeadWorkbenchRow({
           <p className="truncate text-sm text-[var(--color-text-secondary)]">
             {lead.content}
           </p>
+          {labelRequest && (
+            <p className="truncate text-xs font-semibold text-[var(--color-text-secondary)]">
+              Sửa nhãn: {getQueueLabel(labelRequest.current_queue)} → {getQueueLabel(labelRequest.requested_queue)}
+              {labelRequest.review_note ? ` · ${labelRequest.review_note}` : ""}
+            </p>
+          )}
           {error && (
             <p className="text-xs font-semibold text-[var(--color-error)]">
               {error}
