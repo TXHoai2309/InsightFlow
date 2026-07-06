@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { LabelStats } from '../utils/storage';
 import { PendingAssignmentCounts, PlatformFilter } from '../utils/supabaseRest';
 
@@ -95,9 +95,9 @@ export default function Sidebar({
               </div>
               <StatBar pct={pctOf(stats.neutral)} colorClass="bg-gray-400" />
             </div>
-            {stats.crisis > 0 && (
+            {stats.urgent > 0 && (
               <div className="text-xs text-red-500 dark:text-red-400 font-semibold pt-1">
-                🚨 Crisis: {stats.crisis} items
+                🔴 Khẩn cấp: {stats.urgent} items
               </div>
             )}
           </div>

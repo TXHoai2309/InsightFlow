@@ -43,6 +43,7 @@ interface LabelingSession {
   limit: number;
   dateFrom: string;
   dateTo: string;
+  brand: string;
   currentThreadId: string | null;
   savedAt: string;
 }
@@ -60,6 +61,7 @@ function loadLabelingSession(): LabelingSession | null {
       limit: Number(parsed.limit) || 20,
       dateFrom: parsed.dateFrom ?? '',
       dateTo: parsed.dateTo ?? '',
+      brand: parsed.brand ?? 'all',
       currentThreadId: parsed.currentThreadId ?? null,
       savedAt: parsed.savedAt ?? new Date().toISOString(),
     };
@@ -98,12 +100,22 @@ export default function App() {
   const [queueDateTo, setQueueDateTo] = useState(
     () => initialSessionRef.current?.dateTo ?? '',
   );
+  const [supabaseBrandQuery, setSupabaseBrandQuery] = useState(
+    () => initialSessionRef.current?.brand ?? 'all',
+  );
   const [pendingCounts, setPendingCounts] = useState<PendingAssignmentCounts | null>(null);
   const [pendingCountsLoading, setPendingCountsLoading] = useState(false);
   const [pendingRestoreThreadId, setPendingRestoreThreadId] = useState<string | null>(
     () => initialSessionRef.current?.currentThreadId ?? null,
   );
   const autoLoadAttemptedRef = useRef(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const handleCancelLoad = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+  }, []);
 
   useEffect(() => {
     if (supabaseUrl.trim() && supabaseAnonKey.trim()) return;
@@ -181,6 +193,7 @@ export default function App() {
       limit: supabaseLimit,
       dateFrom: queueDateFrom,
       dateTo: queueDateTo,
+      brand: supabaseBrandQuery,
       currentThreadId: threadId,
       savedAt: new Date().toISOString(),
     };
@@ -190,6 +203,7 @@ export default function App() {
     platformFilter,
     queueDateFrom,
     queueDateTo,
+    supabaseBrandQuery,
     supabaseAnonKey,
     supabaseLimit,
     supabaseUrl,
@@ -307,9 +321,10 @@ export default function App() {
       else if (key === 'a') { next.relevance = true; updated = true; }
       else if (key === 's') { next.relevance = false; updated = true; }
       // Urgency
-      else if (key === 'z') { next.urgency = 'normal'; updated = true; }
-      else if (key === 'x') { next.urgency = 'notable'; updated = true; }
-      else if (key === 'c') { next.urgency = 'crisis'; updated = true; }
+      else if (key === 'z') { next.urgency = 'low'; updated = true; }
+      else if (key === 'x') { next.urgency = 'medium'; updated = true; }
+      else if (key === 'c') { next.urgency = 'high'; updated = true; }
+      else if (key === 'v') { next.urgency = 'urgent'; updated = true; }
       // Intent
       else if (key === 'h') { next.intent = 'hot';  updated = true; }
       else if (key === 'm') { next.intent = 'warm'; updated = true; }
@@ -331,19 +346,34 @@ export default function App() {
   ]);
 
   const handleSupabaseLoad = useCallback(async (restoreThreadId?: string | null) => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     localStorage.setItem(SUPABASE_URL_KEY, supabaseUrl.trim());
     localStorage.setItem(SUPABASE_ANON_KEY, supabaseAnonKey.trim());
     setDataMode('supabase');
     setPendingRestoreThreadId(restoreThreadId ?? currentThread?.post._entity_key ?? null);
     saveLabelingSession(restoreThreadId ?? currentThread?.post._entity_key ?? null);
-    await loadFromSupabase(
-      { url: supabaseUrl.trim(), anonKey: supabaseAnonKey.trim() },
-      platformFilter,
-      supabaseLimit,
-      assignmentView,
-      person,
-      { from: queueDateFrom || undefined, to: queueDateTo || undefined },
-    );
+    
+    try {
+      await loadFromSupabase(
+        { url: supabaseUrl.trim(), anonKey: supabaseAnonKey.trim() },
+        platformFilter,
+        supabaseLimit,
+        assignmentView,
+        person,
+        { from: queueDateFrom || undefined, to: queueDateTo || undefined },
+        supabaseBrandQuery,
+        controller.signal,
+      );
+    } finally {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
+    }
   }, [
     assignmentView,
     currentThread,
@@ -352,6 +382,7 @@ export default function App() {
     platformFilter,
     queueDateFrom,
     queueDateTo,
+    supabaseBrandQuery,
     supabaseAnonKey,
     supabaseLimit,
     supabaseUrl,
@@ -447,6 +478,18 @@ export default function App() {
                   <option value="news">News</option>
                 </select>
 
+                <select
+                  value={supabaseBrandQuery}
+                  onChange={e => setSupabaseBrandQuery(e.target.value)}
+                  className="select-control text-xs w-32"
+                  title="Thương hiệu cần gán nhãn"
+                >
+                  <option value="all">Tất cả Brand</option>
+                  <option value="highlands-coffee">Highlands Coffee</option>
+                  <option value="starbucks">Starbucks</option>
+                  <option value="mixue">Mixue</option>
+                </select>
+
                 <input
                   type="number"
                   min={1}
@@ -493,27 +536,30 @@ export default function App() {
                   </button>
                 )}
 
-                <button
-                  onClick={() => void handleSupabaseLoad()}
-                  disabled={loading || !person || !supabaseUrl.trim() || !supabaseAnonKey.trim()}
-                  className="btn-primary text-xs disabled:opacity-70 inline-flex items-center justify-center gap-2 min-w-[160px]"
-                  title={person
-                    ? 'Tải dữ liệu / Load data'
-                    : 'Chọn người gán nhãn trước khi tải Supabase'}
-                  aria-busy={loading}
-                >
-                  {loading ? (
-                    <>
-                      <span
-                        className="inline-block h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin"
-                        aria-hidden="true"
-                      />
-                      Đang tải / Loading...
-                    </>
-                  ) : (
-                    'Tải data / Load data'
-                  )}
-                </button>
+                {loading ? (
+                  <button
+                    onClick={handleCancelLoad}
+                    className="btn-secondary text-xs inline-flex items-center justify-center gap-2 min-w-[160px] border-red-200 text-red-700 bg-red-50 hover:bg-red-100 dark:border-red-900/30 dark:bg-red-950/20 dark:hover:bg-red-950/30 dark:text-red-400 font-semibold"
+                    title="Hủy quá trình tải dữ liệu"
+                  >
+                    <span
+                      className="inline-block h-4 w-4 rounded-full border-2 border-red-500/40 border-t-red-500 animate-spin"
+                      aria-hidden="true"
+                    />
+                    Hủy tải / Stop
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => void handleSupabaseLoad()}
+                    disabled={!person || !supabaseUrl.trim() || !supabaseAnonKey.trim()}
+                    className="btn-primary text-xs disabled:opacity-70 inline-flex items-center justify-center gap-2 min-w-[160px]"
+                    title={person
+                      ? 'Tải dữ liệu / Load data'
+                      : 'Chọn người gán nhãn trước khi tải Supabase'}
+                  >
+                    Tải data / Load data
+                  </button>
+                )}
 
                 {/* Export */}
                 {person && rawThreads.length > 0 && (
@@ -600,6 +646,13 @@ export default function App() {
               <div className="h-1.5 w-64 max-w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
                 <div className="h-full w-1/3 rounded-full bg-indigo-600 animate-pulse" />
               </div>
+              <button
+                type="button"
+                onClick={handleCancelLoad}
+                className="mt-2 rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 dark:border-red-900/30 dark:bg-red-950/20 dark:hover:bg-red-950/30 dark:text-red-400 px-4 py-2 text-sm font-semibold transition"
+              >
+                Hủy tải / Stop loading
+              </button>
             </div>
           )}
 
