@@ -1,26 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getApiBaseUrl } from "@/lib/apiProxy";
+import { verifyBearerToken } from "@/lib/server/auth";
+import { revealTemporaryPassword, StaffServiceError } from "@/lib/server/staffService";
 
 export async function POST(request: NextRequest, { params }: { params: { uid: string } }) {
   try {
-    const authorization = request.headers.get("authorization");
-    if (!authorization) {
-      return NextResponse.json({ error: "Ban can dang nhap bang tai khoan Quan ly thuong hieu." }, { status: 401 });
+    const user = await verifyBearerToken(request.headers.get("authorization"));
+    if (!user) {
+      return NextResponse.json({ error: "Bạn cần đăng nhập bằng tài khoản Quản lý thương hiệu." }, { status: 401 });
     }
 
-    const response = await fetch(`${getApiBaseUrl(request)}/api/staff/${params.uid}/temporary-password`, {
-      method: "POST",
-      headers: { Authorization: authorization },
-    });
-    const data = await response.json();
-
-    if (!response.ok) {
-      return NextResponse.json({ error: data.error || "Khong the xem mat khau tam thoi." }, { status: response.status });
-    }
-
-    return NextResponse.json(data, { status: response.status });
+    const data = await revealTemporaryPassword(user, params.uid);
+    return NextResponse.json({ success: true, data });
   } catch (error: any) {
-    console.error("[API Proxy] reveal temporary password error:", error);
-    return NextResponse.json({ error: "Loi may chu. Vui long thu lai sau." }, { status: 500 });
+    if (error instanceof StaffServiceError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    console.error("[Staff API] reveal password error:", error);
+    return NextResponse.json({ error: "Không thể xem mật khẩu tạm thời." }, { status: 500 });
   }
 }

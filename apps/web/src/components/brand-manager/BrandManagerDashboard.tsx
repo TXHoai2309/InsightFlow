@@ -18,10 +18,8 @@ import { BMHeroRow } from "./BMHeroRow";
 import { BMKpiCards } from "./BMKpiCards";
 import { BMAlertBanner } from "./BMAlertBanner";
 import { BMSentimentChart } from "./BMSentimentChart";
-import { BMAlertTable } from "./BMAlertTable";
 import { BMTopSources } from "./BMTopSources";
 import { BMTopTopics } from "./BMTopTopics";
-import { BMTodayFocus } from "./BMTodayFocus";
 
 import type { Workspace } from "@/types/dashboard";
 
@@ -158,7 +156,55 @@ export function BrandManagerDashboard({
   const brandHealthScore = Math.min(100, Math.max(0, Math.round(baseHealth)));
   const brandHealthTrend = Math.round((stats.net_sentiment - prevStats.net_sentiment) / 2);
 
-  const highAlerts = filteredAlerts.filter(
+  /* ── Derived alerts from real mentions when DB alerts is empty ── */
+  const derivedAlerts = useMemo(() => {
+    if (filteredAlerts.length > 0) return filteredAlerts;
+    // Tạo alerts từ mentions tiêu cực nhóm theo topic
+    const negMentions = currentMentions.filter((m) => m.sentiment === "negative");
+    if (negMentions.length === 0) return [];
+
+    // Group by topic
+    const topicCounts: Record<string, { count: number; mentions: typeof negMentions }> = {};
+    negMentions.forEach((m) => {
+      const topic = m.topic || "other";
+      if (!topicCounts[topic]) topicCounts[topic] = { count: 0, mentions: [] };
+      topicCounts[topic].count++;
+      topicCounts[topic].mentions.push(m);
+    });
+
+    const totalNeg = negMentions.length;
+    const totalAll = currentMentions.length || 1;
+    const negRatio = totalNeg / totalAll;
+
+    return Object.entries(topicCounts)
+      .sort((a, b) => b[1].count - a[1].count)
+      .slice(0, 5)
+      .map(([topic, data], i) => {
+        const ratio = data.count / totalAll;
+        const severity =
+          ratio > 0.3 ? "critical" : ratio > 0.15 ? "high" : ratio > 0.05 ? "medium" : "low";
+        const sample = data.mentions[0];
+        const TOPIC_LABELS: Record<string, string> = {
+          quality: "Chất lượng sản phẩm", service: "Phục vụ & CSKH",
+          price: "Giá cả", delivery: "Giao hàng", staff: "Thái độ nhân viên",
+          legal: "Pháp lý", operation: "Vận hành", marketing: "Marketing",
+          experience: "Trải nghiệm", competitor: "Đối thủ", other: "Chủ đề khác",
+        };
+        return {
+          id: `derived-${topic}-${i}`,
+          workspace_id: sample?.workspace_id || "",
+          severity: severity as "critical" | "high" | "medium" | "low",
+          signal_type: (negRatio > 0.2 ? "mention_spike" : "sensitive_topic") as "mention_spike" | "high_reach" | "sensitive_topic",
+          message: `${TOPIC_LABELS[topic] || topic}: ${data.count} bình luận tiêu cực (${Math.round(ratio * 100)}% tổng thảo luận)`,
+          spike_multiplier: parseFloat((data.count / Math.max(totalAll / 10, 1)).toFixed(1)),
+          affected_mentions_count: data.count,
+          created_at: sample?.created_at || new Date().toISOString(),
+          status: "new" as const,
+        };
+      });
+  }, [filteredAlerts, currentMentions]);
+
+  const highAlerts = derivedAlerts.filter(
     (a) => a.severity === "critical" || a.severity === "high"
   );
   const unprocessedContacts = filteredLeads.filter((l) => l.status === "new").length;
@@ -203,33 +249,16 @@ export function BrandManagerDashboard({
         alertsTotal={stats.alerts_today}
         alertsHigh={highAlerts.length}
         unprocessed={unprocessedContacts}
-        crises={filteredAlerts.filter((a) => a.severity === "critical").length}
+        crises={derivedAlerts.filter((a) => a.severity === "critical").length}
         hotLeads={stats.hot_leads_today}
       />
 
-      {/* ── 5. Main Grid: Chart + Today Focus ──────────────────── */}
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-        {/* Chart — 8 cols */}
-        <div className="xl:col-span-8">
-          <BMSentimentChart filteredMentions={currentMentions} />
-        </div>
-
-        {/* Today Focus — 4 cols */}
-        <div className="xl:col-span-4">
-          <BMTodayFocus
-            unprocessedContacts={unprocessedContacts}
-            newAlerts={filteredAlerts.filter((a) => a.status === "new").length}
-            highAlerts={highAlerts.length}
-            crises={filteredAlerts.filter((a) => a.severity === "critical").length}
-            hotLeads={stats.hot_leads_today}
-          />
-        </div>
+      {/* ── 5. Row 2: Sentiment Trend (Full Width) ──────────────── */}
+      <div className="grid grid-cols-1 gap-6">
+        <BMSentimentChart filteredMentions={currentMentions} />
       </div>
 
-      {/* ── 6. Alerts Table ─────────────────────────────────────── */}
-      <BMAlertTable alerts={filteredAlerts.slice(0, 8)} />
-
-      {/* ── 7. Bottom Row: Top Sources + Top Topics ─────────────── */}
+      {/* ── 6. Row 3: Top Sources + Top Topics ─────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-4">
           <BMTopSources sources={topSources} />

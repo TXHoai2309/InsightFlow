@@ -82,7 +82,6 @@ const ROLE_BUSINESS_ACTIONS: Record<UserRole, BusinessAction[]> = {
     "label_request_review",
   ],
   crisis_employee: [
-    "view_dashboard",
     "view_mentions",
     "view_crisis_queue",
     "update_crisis_status",
@@ -90,7 +89,6 @@ const ROLE_BUSINESS_ACTIONS: Record<UserRole, BusinessAction[]> = {
     "create_label_request",
   ],
   lead_employee: [
-    "view_dashboard",
     "view_mentions",
     "view_leads",
     "update_lead_status",
@@ -131,7 +129,6 @@ export const ROLE_CONFIG: Record<UserRole, RoleConfig> = {
   crisis_employee: {
     label: "Nhan vien xu ly khung hoang",
     permissions: [
-      "dashboard",
       "mentions",
       "alerts",
       "reports",
@@ -141,7 +138,7 @@ export const ROLE_CONFIG: Record<UserRole, RoleConfig> = {
   },
   lead_employee: {
     label: "Nhan vien xu ly khach hang tiem nang",
-    permissions: ["dashboard", "mentions", "leads", "reports", "label_request_create"],
+    permissions: ["mentions", "leads", "reports"],
     defaultRoute: "/leads",
   },
 };
@@ -166,7 +163,7 @@ const ROUTE_POLICIES: RoutePolicy[] = [
   { route: "/label-requests", roles: ["brand_manager"] },
   {
     route: "/dashboard",
-    roles: ["brand_manager", "crisis_employee", "lead_employee"],
+    roles: ["brand_manager"],
     permission: "dashboard",
   },
   {
@@ -299,8 +296,8 @@ export function buildUserRoleProfile(params: {
   const companyDomain = email.includes("@") ? email.split("@")[1] : "";
   const permissions = Array.isArray(params.storedPermissions)
     ? params.storedPermissions.filter(
-        (permission): permission is string => typeof permission === "string",
-      )
+      (permission): permission is string => typeof permission === "string",
+    )
     : ROLE_CONFIG[role].permissions;
 
   return {

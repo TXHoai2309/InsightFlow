@@ -1,31 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getApiBaseUrl } from "@/lib/apiProxy";
+import { verifyBearerToken } from "@/lib/server/auth";
+import { StaffServiceError, updateStaff } from "@/lib/server/staffService";
 
 export async function PATCH(request: NextRequest, { params }: { params: { uid: string } }) {
   try {
-    const authorization = request.headers.get("authorization");
-    if (!authorization) {
-      return NextResponse.json({ error: "Ban can dang nhap bang tai khoan Quan ly thuong hieu." }, { status: 401 });
+    const user = await verifyBearerToken(request.headers.get("authorization"));
+    if (!user) {
+      return NextResponse.json({ error: "Bạn cần đăng nhập bằng tài khoản Quản lý thương hiệu." }, { status: 401 });
     }
 
     const body = await request.json();
-    const response = await fetch(`${getApiBaseUrl(request)}/api/staff/${params.uid}`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: authorization,
-      },
-      body: JSON.stringify(body),
-    });
-    const data = await response.json();
-
-    if (!response.ok) {
-      return NextResponse.json({ error: data.error || "Khong the cap nhat tai khoan nhan vien." }, { status: response.status });
-    }
-
-    return NextResponse.json(data, { status: response.status });
+    const data = await updateStaff(user, params.uid, body);
+    return NextResponse.json({ success: true, data });
   } catch (error: any) {
-    console.error("[API Proxy] update staff error:", error);
-    return NextResponse.json({ error: "Loi may chu. Vui long thu lai sau." }, { status: 500 });
+    if (error instanceof StaffServiceError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    console.error("[Staff API] update error:", error);
+    return NextResponse.json({ error: "Không thể cập nhật tài khoản nhân viên." }, { status: 500 });
   }
 }
