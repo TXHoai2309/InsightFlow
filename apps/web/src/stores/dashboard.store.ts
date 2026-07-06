@@ -14,6 +14,7 @@ import type {
   Mention,
   Alert,
   Lead,
+  LabelChangeRequest,
   Workspace,
   TopSource,
   TopTopic,
@@ -26,6 +27,7 @@ interface DashboardState {
   mentions: Mention[];
   alerts: Alert[];
   leads: Lead[];
+  labelChangeRequests: LabelChangeRequest[];
   workspaces: Workspace[];
   topSources: TopSource[];
   topTopics: TopTopic[];
@@ -43,6 +45,7 @@ interface DashboardState {
   setMentions: (mentions: Mention[]) => void;
   setAlerts: (alerts: Alert[]) => void;
   setLeads: (leads: Lead[]) => void;
+  setLabelChangeRequests: (requests: LabelChangeRequest[]) => void;
   setWorkspaces: (workspaces: Workspace[]) => void;
   setTopSources: (sources: TopSource[]) => void;
   setTopTopics: (topics: TopTopic[]) => void;
@@ -64,6 +67,18 @@ interface DashboardState {
     data: Partial<Lead>,
     profile: UserRoleProfile | null | undefined,
   ) => Promise<void>;
+  createLabelChangeRequest: (
+    data: Omit<
+      LabelChangeRequest,
+      | "id"
+      | "status"
+      | "requested_by"
+      | "requested_by_name"
+      | "requested_by_role"
+      | "requested_at"
+    >,
+    profile: UserRoleProfile | null | undefined,
+  ) => Promise<LabelChangeRequest>;
 
   // ── Computed (client-side filtering) ─────────────────────────────────────
   getFilteredMentions: () => Mention[];
@@ -104,6 +119,7 @@ export const useDashboardStore = create<DashboardState>()(
     mentions: [],
     alerts: [],
     leads: [],
+    labelChangeRequests: [],
     workspaces: [],
     topSources: [],
     topTopics: [],
@@ -117,6 +133,8 @@ export const useDashboardStore = create<DashboardState>()(
     setMentions: (mentions) => set({ mentions }),
     setAlerts: (alerts) => set({ alerts }),
     setLeads: (leads) => set({ leads }),
+    setLabelChangeRequests: (labelChangeRequests) =>
+      set({ labelChangeRequests }),
     setWorkspaces: (workspaces) => set({ workspaces }),
     setTopSources: (sources) => set({ topSources: sources }),
     setTopTopics: (topics) => set({ topTopics: topics }),
@@ -176,6 +194,52 @@ export const useDashboardStore = create<DashboardState>()(
     },
 
     // ── Client-side filtered views ──────────────────────────────────────────────
+    createLabelChangeRequest: async (data, profile) => {
+      try {
+        const currentLead = get().leads.find((lead) => lead.id === data.lead_id);
+        if (!canPerformAction(profile, "create_label_request")) {
+          throw new Error("User is not allowed to create label change requests.");
+        }
+        if (!currentLead || !isSameBrandScope(profile, currentLead)) {
+          throw new Error("Lead is outside the user's brand scope.");
+        }
+
+        const hasPendingRequest = get().labelChangeRequests.some(
+          (request) =>
+            request.status === "pending" &&
+            (request.lead_id === data.lead_id ||
+              request.source_id === data.source_id ||
+              request.mention_id === data.mention_id),
+        );
+        if (hasPendingRequest) {
+          throw new Error("Lead already has a pending label change request.");
+        }
+
+        const request = await DashboardService.createLabelChangeRequest(
+          data,
+          profile,
+        );
+
+        set((state) => ({
+          labelChangeRequests: [request, ...state.labelChangeRequests],
+          leads: state.leads.map((lead) =>
+            lead.id === data.lead_id
+              ? {
+                  ...lead,
+                  label_correction_status: "pending",
+                  pending_label_request_id: request.id,
+                }
+              : lead,
+          ),
+        }));
+
+        return request;
+      } catch (error) {
+        console.error("[DashboardStore] createLabelChangeRequest error:", error);
+        throw error;
+      }
+    },
+
     getFilteredMentions: () => {
       const { mentions, filters } = get();
       const cutoff = getCutoffMs(filters.time_range);

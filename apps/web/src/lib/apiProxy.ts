@@ -19,11 +19,25 @@ export function getApiBaseUrl(request: NextRequest) {
   if (configuredUrl) return normalizeBaseUrl(configuredUrl);
 
   const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || "";
-  const hostname = host.split(":")[0];
+  const [hostname, currentPort] = host.split(":");
 
   if (hostname && isLocalOrPrivateHost(hostname)) {
-    return `http://${hostname}:3001`;
+    const apiPort = process.env.API_PORT || (currentPort === "3001" ? "3002" : "3001");
+    return `http://${hostname}:${apiPort}`;
   }
 
   return "http://localhost:3001";
+}
+
+export async function readApiResponse(response: Response) {
+  const text = await response.text();
+  if (!text) return {};
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return {
+      error: text || response.statusText || "API response is not valid JSON.",
+    };
+  }
 }

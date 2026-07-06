@@ -35,6 +35,7 @@ const KBD_STYLE = `
 const SUPABASE_URL_KEY = 'insightflow_supabase_url';
 const SUPABASE_ANON_KEY = 'insightflow_supabase_anon_key';
 const LABELING_SESSION_KEY = 'insightflow_labeling_session';
+const SUPABASE_CONFIG_PATH = process.env.NEXT_PUBLIC_SUPABASE_CONFIG_PATH || '';
 
 interface LabelingSession {
   platform: PlatformFilter;
@@ -118,8 +119,9 @@ export default function App() {
 
   useEffect(() => {
     if (supabaseUrl.trim() && supabaseAnonKey.trim()) return;
+    if (!SUPABASE_CONFIG_PATH.trim()) return;
     let cancelled = false;
-    fetch('/supabase-config.json', { cache: 'no-store' })
+    fetch(SUPABASE_CONFIG_PATH, { cache: 'no-store' })
       .then(response => response.ok ? response.json() : null)
       .then((config: unknown) => {
         if (cancelled || !config || typeof config !== 'object') return;

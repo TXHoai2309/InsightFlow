@@ -92,6 +92,7 @@ const ROLE_BUSINESS_ACTIONS: Record<UserRole, BusinessAction[]> = {
     "update_lead_status",
     "update_lead_details",
     "view_reports",
+    "create_label_request",
   ],
 };
 
@@ -135,7 +136,7 @@ export const ROLE_CONFIG: Record<UserRole, RoleConfig> = {
   },
   lead_employee: {
     label: "Nhan vien xu ly khach hang tiem nang",
-    permissions: ["dashboard", "mentions", "leads", "reports"],
+    permissions: ["dashboard", "mentions", "leads", "reports", "label_request_create"],
     defaultRoute: "/leads",
   },
 };

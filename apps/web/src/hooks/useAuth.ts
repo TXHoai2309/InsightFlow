@@ -51,6 +51,10 @@ async function resolveUserProfile(firebaseUser: NonNullable<typeof auth.currentU
   let resolvedProfile: UserRoleProfile;
 
   if (storedData && normalizeRole(storedData.role)) {
+    if (storedData.disabled === true) {
+      throw new Error("User account is disabled.");
+    }
+
     resolvedProfile = buildUserRoleProfile({
       uid: firebaseUser.uid,
       email: firebaseUser.email,

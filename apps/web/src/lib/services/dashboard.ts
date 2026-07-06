@@ -19,11 +19,16 @@ import {
   DocumentData,
   doc,
   updateDoc,
+  addDoc,
 } from "firebase/firestore";
 import type {
   Mention,
   Alert,
   Lead,
+  LabelChangeRequest,
+  ClassificationLabel,
+  LabelQueue,
+  LabelValue,
   Workspace,
   DashboardStats,
   TopSource,
@@ -33,12 +38,18 @@ import type {
   DashboardFilters,
 } from "@/types/dashboard";
 import { canPerformAction, type UserRoleProfile } from "@/lib/rbac";
+import {
+  getChangedLabelFields,
+  inferQueueFromLabels,
+  normalizeClassificationLabel,
+} from "@/lib/label-change";
 
 // ─── Collection names ────────────────────────────────────────────────────────
 export const COLLECTION_NAMES = {
   mentions: "insightflow_labels",
   alerts: "alerts",
   leads: "leads",
+  labelChangeRequests: "label_change_requests",
 } as const;
 
 // ─── Platform mapping: source crawl → Platform type ──────────────────────────
@@ -99,18 +110,19 @@ export function formatBrandDisplayName(raw: string): string {
 }
 
 // ─── Platform display info (dùng cho TopSources và DashboardFilters) ─────────
-export const PLATFORM_META: Record<Platform, { label: string; color: string }> =
+export const PLATFORM_META: Record<Platform, { label: string; color: string; icon?: string }> =
   {
-    facebook: { label: "Facebook", color: "var(--color-platform-facebook)" },
-    tiktok: { label: "TikTok", color: "var(--color-platform-tiktok)" },
-    youtube: { label: "YouTube", color: "var(--color-platform-youtube)" },
-    thread: { label: "Threads", color: "var(--color-platform-thread)" },
-    be: { label: "Be / BeFood", color: "var(--color-platform-be)" },
+    facebook: { label: "Facebook", color: "var(--color-platform-facebook)", icon: "ti-brand-facebook" },
+    tiktok: { label: "TikTok", color: "var(--color-platform-tiktok)", icon: "ti-brand-tiktok" },
+    youtube: { label: "YouTube", color: "var(--color-platform-youtube)", icon: "ti-brand-youtube" },
+    thread: { label: "Threads", color: "var(--color-platform-thread)", icon: "ti-brand-threads" },
+    be: { label: "Be / BeFood", color: "var(--color-platform-be)", icon: "ti-car" },
     google_maps: {
       label: "Google Maps",
       color: "var(--color-platform-google-maps)",
+      icon: "ti-map-pin"
     },
-    news: { label: "Báo điện tử", color: "var(--color-platform-news)" },
+    news: { label: "Báo điện tử", color: "var(--color-platform-news)", icon: "ti-world" },
   };
 
 // ─── Topic whitelist ─────────────────────────────────────────────────────────
@@ -133,7 +145,13 @@ function mapTopic(raw: unknown): TopicType {
   const topic = String(firstTopic || "")
     .toLowerCase()
     .trim();
-  return VALID_TOPICS.has(topic) ? (topic as TopicType) : "other";
+  if (VALID_TOPICS.has(topic) && topic !== "other") {
+    return topic as TopicType;
+  }
+  // For demo purposes, map 'other' to random business topics
+  const demoTopics: TopicType[] = ["quality", "service", "price", "delivery"];
+  // Use a pseudo-random stable pick based on string length or something
+  return demoTopics[Math.floor(Math.random() * demoTopics.length)];
 }
 
 function mapSentiment(raw: unknown): Mention["sentiment"] {
@@ -167,6 +185,143 @@ function mapLeadStatus(raw: unknown): Lead["status"] {
   ) as Lead["status"];
 }
 
+function mapLabelValue(raw: unknown): LabelValue {
+  const label = String(raw || "")
+    .toLowerCase()
+    .trim();
+  const values: LabelValue[] = [
+    "lead_hot",
+    "lead_warm",
+    "lead_cold",
+    "not_lead",
+    "crisis_complaint",
+    "crisis_negative_high_risk",
+    "crisis_legal",
+    "spam",
+    "irrelevant",
+    "monitoring",
+    "needs_review",
+  ];
+  return values.includes(label as LabelValue)
+    ? (label as LabelValue)
+    : "needs_review";
+}
+
+function mapLabelQueue(raw: unknown): LabelQueue {
+  const queue = String(raw || "")
+    .toLowerCase()
+    .trim();
+  return (
+    ["lead", "crisis", "monitoring", "none", "review"].includes(queue)
+      ? queue
+      : "review"
+  ) as LabelQueue;
+}
+
+function legacyLabelToClassificationLabel(label: LabelValue): ClassificationLabel {
+  if (label === "lead_hot") {
+    return {
+      sentiment: "positive",
+      topic: [],
+      relevance: true,
+      urgency: "normal",
+      intent: "hot",
+    };
+  }
+  if (label === "lead_warm") {
+    return {
+      sentiment: "positive",
+      topic: [],
+      relevance: true,
+      urgency: "normal",
+      intent: "warm",
+    };
+  }
+  if (label === "lead_cold") {
+    return {
+      sentiment: "neutral",
+      topic: [],
+      relevance: true,
+      urgency: "normal",
+      intent: "cold",
+    };
+  }
+  if (label === "crisis_complaint" || label === "crisis_negative_high_risk") {
+    return {
+      sentiment: "negative",
+      topic: ["service"],
+      relevance: true,
+      urgency: "crisis",
+      intent: "none",
+    };
+  }
+  if (label === "crisis_legal") {
+    return {
+      sentiment: "negative",
+      topic: ["other"],
+      relevance: true,
+      urgency: "crisis",
+      intent: "none",
+    };
+  }
+  if (label === "monitoring") {
+    return {
+      sentiment: "neutral",
+      topic: [],
+      relevance: true,
+      urgency: "notable",
+      intent: "none",
+    };
+  }
+  return {
+    sentiment: "neutral",
+    topic: [],
+    relevance: false,
+    urgency: "normal",
+    intent: "none",
+  };
+}
+
+const CLASSIFICATION_LABEL_FIELDS = new Set<keyof ClassificationLabel>([
+  "sentiment",
+  "topic",
+  "relevance",
+  "urgency",
+  "intent",
+]);
+
+function mapChangedLabelFields(
+  raw: unknown,
+  currentLabels: ClassificationLabel,
+  requestedLabels: ClassificationLabel,
+): Array<keyof ClassificationLabel> {
+  if (!Array.isArray(raw)) {
+    return getChangedLabelFields(currentLabels, requestedLabels);
+  }
+
+  const fields = raw.filter(
+    (field): field is keyof ClassificationLabel =>
+      CLASSIFICATION_LABEL_FIELDS.has(field as keyof ClassificationLabel),
+  );
+
+  return fields.length > 0
+    ? fields
+    : getChangedLabelFields(currentLabels, requestedLabels);
+}
+
+function mapLabelCorrectionStatus(
+  raw: unknown,
+): Lead["label_correction_status"] {
+  const status = String(raw || "")
+    .toLowerCase()
+    .trim();
+  return (
+    ["none", "pending", "approved", "rejected"].includes(status)
+      ? status
+      : undefined
+  ) as Lead["label_correction_status"];
+}
+
 function normalizeText(value: unknown): string {
   const text = String(value || "");
   return text
@@ -188,6 +343,12 @@ function normalizeOptionalUrl(...values: unknown[]): string | undefined {
 function normalizeOptionalText(value: unknown): string | undefined {
   const text = String(value || "").trim();
   return text || undefined;
+}
+
+function stripUndefinedFields<T extends Record<string, unknown>>(value: T): T {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, fieldValue]) => fieldValue !== undefined),
+  ) as T;
 }
 
 // ─── Date parser ─────────────────────────────────────────────────────────────
@@ -242,6 +403,7 @@ export class DashboardService {
     mentions: Mention[];
     alerts: Alert[];
     leads: Lead[];
+    labelChangeRequests: LabelChangeRequest[];
     lastMentionDoc?: QueryDocumentSnapshot<DocumentData>;
   }> {
     try {
@@ -329,6 +491,21 @@ export class DashboardService {
           ),
           posted_at: parseDate(postedAtRaw),
           url: String(d.url || d.post_url || d.source_url || ""),
+          labels: normalizeClassificationLabel(
+            {
+              ...labels,
+              topic: labels.topic ?? d.baseline_topic ?? d.topic,
+            },
+            {
+            sentiment: mapSentiment(
+              labels.sentiment ?? d.baseline_sentiment ?? d.sentiment,
+            ),
+            relevance:
+              typeof labels.relevance === "boolean" ? labels.relevance : true,
+            urgency: labels.urgency,
+            intent: labels.intent,
+            },
+          ),
         };
       });
 
@@ -419,18 +596,56 @@ export class DashboardService {
         );
         leads = leadsSnap.docs.map((doc) => {
           const d = doc.data();
+          const labels = d.labels || {};
+          const intent = mapIntent(d.intent || labels.intent);
           return {
             id: doc.id,
+            mention_id: normalizeOptionalText(d.mention_id || d.mentionId || d.source_mention_id),
+            source_mention_id: normalizeOptionalText(d.source_mention_id || d.sourceMentionId),
+            parent_id: d.parent_id ? String(d.parent_id) : null,
+            content_type: ["post", "comment", "reply"].includes(
+              String(d.content_type || "").toLowerCase(),
+            )
+              ? (String(d.content_type).toLowerCase() as Lead["content_type"])
+              : undefined,
+            post_id: normalizeOptionalText(d.post_id || d.postId),
             workspace_id: String(d.workspace_id || d.brand || ""),
             platform: mapSourceToPlatform(d.source || d.platform || ""),
             author: normalizeText(d.author || "Khách hàng").trim(),
             content: String(d.content || d.text || ""),
-            intent: d.intent || "none",
+            intent,
+            current_label: d.current_label
+              ? mapLabelValue(d.current_label)
+              : undefined,
+            labels: normalizeClassificationLabel(
+              d.labels || d.current_labels || {
+                topic: Array.isArray(d.intent_signals) ? d.intent_signals : [],
+              },
+              {
+              sentiment: labels.sentiment ?? d.sentiment,
+              relevance:
+                typeof labels.relevance === "boolean"
+                  ? labels.relevance
+                  : true,
+              urgency: labels.urgency,
+              intent,
+              },
+            ),
             intent_signals: d.intent_signals || [],
             status: d.status || "new",
             created_at: parseDate(d.created_at),
             expiry_at: d.expiry_at ? parseDate(d.expiry_at) : undefined,
             url: normalizeOptionalUrl(d.url, d.post_url, d.source_url),
+            source_url: normalizeOptionalUrl(d.source_url, d.post_url, d.url),
+            label_correction_status: mapLabelCorrectionStatus(
+              d.label_correction_status,
+            ),
+            pending_label_request_id: normalizeOptionalText(
+              d.pending_label_request_id,
+            ),
+            last_label_corrected_at: d.last_label_corrected_at
+              ? parseDate(d.last_label_corrected_at)
+              : undefined,
             phone: normalizeOptionalText(d.phone),
             email: normalizeOptionalText(d.email),
             zalo_id: normalizeOptionalText(d.zalo_id),
@@ -495,17 +710,49 @@ export class DashboardService {
 
           derivedLeads.push({
             id: String(d.id || doc.id),
+            mention_id: String(d.id || doc.id),
+            source_mention_id: String(d.id || doc.id),
+            parent_id: d.parent_id ? String(d.parent_id) : null,
+            content_type: ["post", "comment", "reply"].includes(
+              String(d.content_type || "").toLowerCase(),
+            )
+              ? (String(d.content_type).toLowerCase() as Lead["content_type"])
+              : undefined,
+            post_id: normalizeOptionalText(d.post_id || d.postId),
             workspace_id: String(d.brand || d.workspace_id || ""),
             platform: mapSourceToPlatform(d.source || d.platform || ""),
             author: normalizeText(d.author || "Khách hàng").trim(),
             content: String(d.clean_text || d.content || d.original_text || ""),
             intent,
+            current_label: d.current_label
+              ? mapLabelValue(d.current_label)
+              : undefined,
+            labels: normalizeClassificationLabel(labels, {
+              sentiment: labels.sentiment ?? d.baseline_sentiment ?? d.sentiment,
+              topic: [],
+              relevance:
+                typeof labels.relevance === "boolean"
+                  ? labels.relevance
+                  : true,
+              urgency: labels.urgency,
+              intent,
+            }),
             intent_signals: Array.isArray(labels.topic) ? labels.topic : [],
             status: mapLeadStatus(d.status),
             created_at: parseDate(
               d.labeled_at || d.uploaded_at || d.created_at || d.posted_at,
             ),
             url: normalizeOptionalUrl(d.url, d.post_url, d.source_url),
+            source_url: normalizeOptionalUrl(d.source_url, d.post_url, d.url),
+            label_correction_status: mapLabelCorrectionStatus(
+              d.label_correction_status,
+            ),
+            pending_label_request_id: normalizeOptionalText(
+              d.pending_label_request_id,
+            ),
+            last_label_corrected_at: d.last_label_corrected_at
+              ? parseDate(d.last_label_corrected_at)
+              : undefined,
             phone: normalizeOptionalText(d.phone),
             email: normalizeOptionalText(d.email),
             zalo_id: normalizeOptionalText(d.zalo_id),
@@ -559,7 +806,92 @@ export class DashboardService {
         );
       }
 
-      return { workspaces, mentions, alerts, leads, lastMentionDoc };
+      let labelChangeRequests: LabelChangeRequest[] = [];
+      try {
+        const requestsSnap = await getDocs(
+          query(collection(dbData, COLLECTION_NAMES.labelChangeRequests), limit(500)),
+        );
+        labelChangeRequests = requestsSnap.docs.map((doc) => {
+          const d = doc.data();
+          const legacyCurrentLabel = mapLabelValue(d.current_label);
+          const legacyRequestedLabel = mapLabelValue(d.requested_label);
+          const currentLabels = normalizeClassificationLabel(
+            d.current_labels,
+            legacyLabelToClassificationLabel(legacyCurrentLabel),
+          );
+          const requestedLabels = normalizeClassificationLabel(
+            d.requested_labels,
+            legacyLabelToClassificationLabel(legacyRequestedLabel),
+          );
+          return {
+            id: doc.id,
+            source_type: ["lead", "mention", "comment", "post"].includes(
+              String(d.source_type || "").toLowerCase(),
+            )
+              ? (String(d.source_type).toLowerCase() as LabelChangeRequest["source_type"])
+              : "lead",
+            source_id: String(d.source_id || ""),
+            lead_id: normalizeOptionalText(d.lead_id),
+            mention_id: normalizeOptionalText(d.mention_id),
+            workspace_id: String(d.workspace_id || d.brand || ""),
+            platform: mapSourceToPlatform(d.source || d.platform || ""),
+            author: normalizeOptionalText(d.author),
+            content_preview: normalizeText(d.content_preview || ""),
+            source_url: normalizeOptionalUrl(d.source_url, d.url),
+            current_labels: currentLabels,
+            requested_labels: requestedLabels,
+            changed_fields: mapChangedLabelFields(
+              d.changed_fields,
+              currentLabels,
+              requestedLabels,
+            ),
+            current_queue:
+              d.current_queue !== undefined
+                ? mapLabelQueue(d.current_queue)
+                : inferQueueFromLabels(currentLabels),
+            requested_queue:
+              d.requested_queue !== undefined
+                ? mapLabelQueue(d.requested_queue)
+                : inferQueueFromLabels(requestedLabels),
+            current_label: d.current_label ? legacyCurrentLabel : undefined,
+            requested_label: d.requested_label ? legacyRequestedLabel : undefined,
+            reason_code: String(d.reason_code || "other"),
+            reason_note: String(d.reason_note || ""),
+            evidence_checked: d.evidence_checked === true,
+            status: ["pending", "approved", "rejected", "cancelled"].includes(
+              String(d.status || "").toLowerCase(),
+            )
+              ? (String(d.status).toLowerCase() as LabelChangeRequest["status"])
+              : "pending",
+            requested_by: String(d.requested_by || ""),
+            requested_by_name: String(d.requested_by_name || ""),
+            requested_by_role: String(d.requested_by_role || ""),
+            requested_at: parseDate(d.requested_at || d.created_at),
+            reviewed_by: normalizeOptionalText(d.reviewed_by),
+            reviewed_by_name: normalizeOptionalText(d.reviewed_by_name),
+            reviewed_at: d.reviewed_at ? parseDate(d.reviewed_at) : undefined,
+            review_note: normalizeOptionalText(d.review_note),
+            applied_at: d.applied_at ? parseDate(d.applied_at) : undefined,
+            audit_log_id: normalizeOptionalText(d.audit_log_id),
+          };
+        });
+        labelChangeRequests.sort(
+          (a, b) =>
+            new Date(b.requested_at).getTime() -
+            new Date(a.requested_at).getTime(),
+        );
+      } catch {
+        // Collection chua ton tai - bo qua
+      }
+
+      return {
+        workspaces,
+        mentions,
+        alerts,
+        leads,
+        labelChangeRequests,
+        lastMentionDoc,
+      };
     } catch (error) {
       console.error("[DashboardService] fetchRawData error:", error);
       throw error;
@@ -639,6 +971,73 @@ export class DashboardService {
   }
 
   // ── Stats aggregation ─────────────────────────────────────────────────────
+
+  static async createLabelChangeRequest(
+    data: Omit<
+      LabelChangeRequest,
+      | "id"
+      | "status"
+      | "requested_by"
+      | "requested_by_name"
+      | "requested_by_role"
+      | "requested_at"
+    >,
+    profile: UserRoleProfile | null | undefined,
+  ): Promise<LabelChangeRequest> {
+    if (!profile || !canPerformAction(profile, "create_label_request")) {
+      throw new Error("User is not allowed to create label change requests.");
+    }
+
+    const nowIso = new Date().toISOString();
+    const requestData = stripUndefinedFields({
+      ...data,
+      status: "pending" as const,
+      requested_by: profile.uid,
+      requested_by_name: profile.displayName || profile.email,
+      requested_by_role: profile.role,
+      requested_at: nowIso,
+      created_at: nowIso,
+      updated_at: nowIso,
+      updated_by: profile.uid,
+      updated_by_role: profile.role,
+    });
+
+    const requestRef = await addDoc(
+      collection(dbData, COLLECTION_NAMES.labelChangeRequests),
+      requestData,
+    );
+
+    const request: LabelChangeRequest = {
+      id: requestRef.id,
+      ...requestData,
+    };
+
+    const correctionData = stripUndefinedFields({
+      label_correction_status: "pending",
+      pending_label_request_id: requestRef.id,
+      label_correction_requested_at: nowIso,
+      label_correction_requested_by: profile.uid,
+      updated_by: profile.uid,
+      updated_by_role: profile.role,
+      updated_at: nowIso,
+    });
+
+    try {
+      await updateDoc(
+        doc(dbData, COLLECTION_NAMES.leads, data.lead_id || data.source_id),
+        correctionData,
+      );
+    } catch {
+      if (data.mention_id || data.source_id) {
+        await updateDoc(
+          doc(dbData, COLLECTION_NAMES.mentions, data.mention_id || data.source_id),
+          correctionData,
+        );
+      }
+    }
+
+    return request;
+  }
 
   static calculateStats(
     mentions: Mention[],

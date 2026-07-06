@@ -253,7 +253,27 @@ export default function MentionDetailPage() {
     useState<CommentFilters>(DEFAULT_COMMENT_FILTERS);
   const [requestedTargetId, setRequestedTargetId] = useState("");
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const [leadReturnHref, setLeadReturnHref] = useState("");
   const autoFocusedTargetKeyRef = useRef("");
+
+  useEffect(() => {
+    const currentParams = new URLSearchParams(window.location.search);
+    if (currentParams.get("from") !== "leads") return;
+
+    const params = new URLSearchParams();
+    const view = currentParams.get("view");
+    const page = currentParams.get("page");
+    const leadId = currentParams.get("leadId");
+    const returnToken = currentParams.get("returnToken");
+
+    if (view) params.set("view", view);
+    if (page) params.set("page", page);
+    if (leadId) params.set("leadId", leadId);
+    if (returnToken) params.set("returnToken", returnToken);
+
+    const query = params.toString();
+    setLeadReturnHref(`/leads${query ? `?${query}` : ""}`);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -492,10 +512,10 @@ export default function MentionDetailPage() {
             {error ? t(error) : t("mentionDetail.notFoundDescription")}
           </p>
           <button
-            onClick={() => router.push("/mentions")}
+            onClick={() => router.push(leadReturnHref || "/mentions")}
             className="mt-6 rounded-xl bg-[var(--color-brand)] px-5 py-3 text-sm font-bold text-white"
           >
-            {t("mentionDetail.backToMentions")}
+            {leadReturnHref ? "Quay lại xử lý lead" : t("mentionDetail.backToMentions")}
           </button>
         </div>
       </div>
@@ -530,9 +550,9 @@ export default function MentionDetailPage() {
         <div className="flex items-center justify-between gap-4 px-4 py-4 md:px-8">
           <div className="flex items-center gap-4">
             <button
-              onClick={() => router.push("/mentions")}
+              onClick={() => router.push(leadReturnHref || "/mentions")}
               className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)]"
-              aria-label={t("mentionDetail.back")}
+              aria-label={leadReturnHref ? "Quay lại xử lý lead" : t("mentionDetail.back")}
             >
               <span className="material-symbols-outlined">arrow_back</span>
             </button>
@@ -542,6 +562,17 @@ export default function MentionDetailPage() {
               </p>
             </div>
           </div>
+          {leadReturnHref && (
+            <Link
+              href={leadReturnHref}
+              className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-brand)] px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-[var(--color-brand-hover)]"
+            >
+              <span className="material-symbols-outlined text-base">
+                assignment_return
+              </span>
+              Quay lại xử lý lead
+            </Link>
+          )}
         </div>
       </div>
 
