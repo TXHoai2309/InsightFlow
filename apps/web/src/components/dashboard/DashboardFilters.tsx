@@ -38,57 +38,46 @@ export function DashboardFilters({ workspaces }: DashboardFiltersProps) {
   );
 
   return (
-    <div
-      className="rounded-xl p-4 md:p-6 shadow-sm mb-4 md:mb-6"
-      style={{
-        backgroundColor: "var(--color-bg-surface)",
-        border: "1px solid var(--color-border)",
-      }}
-    >
-      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:justify-between sm:items-center gap-4">
+    <div className="mb-4 md:mb-6 pt-4">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h2 className="font-bold text-xl md:text-2xl mb-1" style={{ color: "var(--color-text-primary)" }}>
+          <h2 className="font-bold text-2xl md:text-[28px] mb-2 flex items-center gap-2 text-[#2A2B2F] dark:text-white">
             {t("dashboard.overview.title")}
           </h2>
-          <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
+          <p className="text-[13px] text-gray-500 font-medium">
             {t("dashboard.overview.subtitle")}
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2 md:gap-3 w-full sm:w-auto">
+        <div className="flex flex-wrap items-end gap-3 md:gap-4">
           {/* Workspace Filter */}
-          <div className="flex flex-col">
-            <label className="text-xs font-bold uppercase mb-1" style={{ color: "var(--color-text-muted)" }}>
-              {t("dashboard.filters.brandLabel")}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] font-bold uppercase text-gray-400">
+              {t("dashboard.filters.brand", "THƯƠNG HIỆU")}
             </label>
             <div className="relative">
               <select
                 value={filters.workspace_id}
                 onChange={(e) => handleFilterChange("workspace_id", e.target.value)}
-                className="appearance-none pl-3 pr-9 py-2 rounded-lg text-sm focus:ring-1 outline-none cursor-pointer w-full min-w-[160px]"
-                style={{
-                  backgroundColor: "var(--color-bg-surface)",
-                  border: "1px solid var(--color-border)",
-                  color: "var(--color-text-primary)",
-                }}
+                className="appearance-none pl-4 pr-10 py-2.5 rounded-lg text-[13px] font-medium bg-white dark:bg-[#1a1b1e] border border-gray-200 dark:border-gray-800 focus:outline-none focus:ring-1 focus:ring-[#6D5FFD] cursor-pointer min-w-[160px]"
               >
-                <option value="all" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("dashboard.filters.allBrands")}</option>
+                <option value="all">{t("dashboard.filters.allBrandsOption", "Tất cả thương hiệu")}</option>
                 {workspaces.map((ws) => (
-                  <option key={ws.id} value={ws.id} style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
+                  <option key={ws.id} value={ws.id}>
                     {ws.brand_name}
                   </option>
                 ))}
               </select>
-              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center" style={{ color: "var(--color-text-muted)" }}>
-                <span className="material-symbols-outlined text-sm">keyboard_arrow_down</span>
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                <i className="ti ti-chevron-down text-[14px]"></i>
               </div>
             </div>
           </div>
 
           {/* Time Range Filter */}
-          <div className="flex flex-col">
-            <label className="text-xs font-bold uppercase mb-1" style={{ color: "var(--color-text-muted)" }}>
-              {t("dashboard.filters.timeRange")}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] font-bold uppercase text-gray-400">
+              {t("dashboard.filters.time", "THỜI GIAN")}
             </label>
             <div className="relative">
               <select
@@ -96,28 +85,23 @@ export function DashboardFilters({ workspaces }: DashboardFiltersProps) {
                 onChange={(e) =>
                   handleFilterChange("time_range", e.target.value as DashboardFilters["time_range"])
                 }
-                className="appearance-none pl-3 pr-9 py-2 rounded-lg text-sm focus:ring-1 outline-none cursor-pointer w-full min-w-[120px]"
-                style={{
-                  backgroundColor: "var(--color-bg-surface)",
-                  border: "1px solid var(--color-border)",
-                  color: "var(--color-text-primary)",
-                }}
+                className="appearance-none pl-4 pr-10 py-2.5 rounded-lg text-[13px] font-medium bg-white dark:bg-[#1a1b1e] border border-gray-200 dark:border-gray-800 focus:outline-none focus:ring-1 focus:ring-[#6D5FFD] cursor-pointer min-w-[140px]"
               >
-                <option value="all" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("dashboard.filters.allTime")}</option>
-                <option value="24h" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("dashboard.filters.today24h")}</option>
-                <option value="7d" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("dashboard.filters.7days")}</option>
-                <option value="30d" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("dashboard.filters.30days")}</option>
+                <option value="7d">{t("dashboard.filters.7days", "7 ngày qua")}</option>
+                <option value="all">{t("dashboard.filters.allTime")}</option>
+                <option value="24h">{t("dashboard.filters.today24h")}</option>
+                <option value="30d">{t("dashboard.filters.30days")}</option>
               </select>
-              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center" style={{ color: "var(--color-text-muted)" }}>
-                <span className="material-symbols-outlined text-sm">keyboard_arrow_down</span>
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                <i className="ti ti-chevron-down text-[14px]"></i>
               </div>
             </div>
           </div>
 
           {/* Platform Filter */}
-          <div className="flex flex-col">
-            <label className="text-xs font-bold uppercase mb-1" style={{ color: "var(--color-text-muted)" }}>
-              {t("dashboard.filters.platform")}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] font-bold uppercase text-gray-400">
+              {t("dashboard.filters.platform", "NỀN TẢNG")}
             </label>
             <div className="relative">
               <select
@@ -125,22 +109,47 @@ export function DashboardFilters({ workspaces }: DashboardFiltersProps) {
                 onChange={(e) =>
                   handleFilterChange("platform", e.target.value as DashboardFilters["platform"])
                 }
-                className="appearance-none pl-3 pr-9 py-2 rounded-lg text-sm focus:ring-1 outline-none cursor-pointer w-full min-w-[140px]"
-                style={{
-                  backgroundColor: "var(--color-bg-surface)",
-                  border: "1px solid var(--color-border)",
-                  color: "var(--color-text-primary)",
-                }}
+                className="appearance-none pl-4 pr-10 py-2.5 rounded-lg text-[13px] font-medium bg-white dark:bg-[#1a1b1e] border border-gray-200 dark:border-gray-800 focus:outline-none focus:ring-1 focus:ring-[#6D5FFD] cursor-pointer min-w-[150px]"
               >
-                <option value="all" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("dashboard.filters.allPlatforms")}</option>
+                <option value="all">{t("dashboard.filters.allPlatformsOption", "Tất cả nền tảng")}</option>
                 {PLATFORM_ORDER.map((p) => (
-                  <option key={p} value={p} style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
+                  <option key={p} value={p}>
                     {t(`dashboard.filters.${p}`)}
                   </option>
                 ))}
               </select>
-              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center" style={{ color: "var(--color-text-muted)" }}>
-                <span className="material-symbols-outlined text-sm">keyboard_arrow_down</span>
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                <i className="ti ti-chevron-down text-[14px]"></i>
+              </div>
+            </div>
+          </div>
+          
+          {/* Custom Date Range Picker */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] font-bold uppercase text-gray-400">
+              {t("dashboard.filters.dateRange", "TỪ NGÀY - ĐẾN NGÀY")}
+            </label>
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <input
+                  type="date"
+                  className="appearance-none pl-10 pr-3 py-2.5 rounded-lg text-[13px] font-medium bg-white dark:bg-[#1a1b1e] border border-gray-200 dark:border-gray-800 focus:outline-none focus:ring-1 focus:ring-[#6D5FFD] cursor-pointer"
+                  onChange={(e) => console.log('Start date changed:', e.target.value)}
+                />
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                  <i className="ti ti-calendar text-[16px]"></i>
+                </div>
+              </div>
+              <span className="text-gray-400">-</span>
+              <div className="relative">
+                <input
+                  type="date"
+                  className="appearance-none pl-10 pr-3 py-2.5 rounded-lg text-[13px] font-medium bg-white dark:bg-[#1a1b1e] border border-gray-200 dark:border-gray-800 focus:outline-none focus:ring-1 focus:ring-[#6D5FFD] cursor-pointer"
+                  onChange={(e) => console.log('End date changed:', e.target.value)}
+                />
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                  <i className="ti ti-calendar text-[16px]"></i>
+                </div>
               </div>
             </div>
           </div>

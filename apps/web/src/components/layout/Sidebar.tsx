@@ -35,6 +35,7 @@ const navItems: NavItem[] = [
   { href: "/settings/brand", label: "nav.brands", icon: "ti-settings" },
 ];
 
+
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;

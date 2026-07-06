@@ -1,3 +1,4 @@
+// i18n config — updated 2026-07-02
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import en from './locales/en.json';
