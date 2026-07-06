@@ -24,6 +24,8 @@ const TOPIC_META: Record<string, { label: string; icon: string; color: string; b
   operation: { label: "Vận hành",              icon: "build",         color: "#EA580C", bg: "rgba(234,88,12,0.1)"  },
   marketing: { label: "Marketing",             icon: "campaign",      color: "#EC4899", bg: "rgba(236,72,153,0.1)" },
   staff:     { label: "Nhân viên",             icon: "person",        color: "#10B981", bg: "rgba(16,185,129,0.1)" },
+  experience:{ label: "Trải nghiệm",           icon: "sentiment_satisfied", color: "#06B6D4", bg: "rgba(6,182,212,0.1)" },
+  competitor:{ label: "Đối thủ cạnh tranh",    icon: "emoji_events",  color: "#7C3AED", bg: "rgba(124,58,237,0.1)" },
   other:     { label: "Khác",                  icon: "label",         color: "#94A3B8", bg: "rgba(148,163,184,0.1)" },
 };
 
@@ -145,10 +147,51 @@ export function BMTopTopics({ topics }: BMTopTopicsProps) {
                       <div style={{ width: `${(neg / total) * 100}%`, background: "#EF4444" }} />
                     </div>
                   )}
+
+                  {/* Sentiment count badges */}
+                  {total > 0 && (
+                    <div className="bm-topic-sentiment-counts">
+                      <span className="bm-sent-badge bm-sent-pos">
+                        <span className="material-symbols-outlined" style={{ fontSize: 11 }}>sentiment_satisfied</span>
+                        {pos}
+                      </span>
+                      <span className="bm-sent-badge bm-sent-neu">
+                        <span className="material-symbols-outlined" style={{ fontSize: 11 }}>sentiment_neutral</span>
+                        {neu}
+                      </span>
+                      <span className="bm-sent-badge bm-sent-neg">
+                        <span className="material-symbols-outlined" style={{ fontSize: 11 }}>sentiment_dissatisfied</span>
+                        {neg}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </Link>
             );
           })}
+        </div>
+      )}
+
+      {/* Color Legend */}
+      {displayed.length > 0 && (
+        <div className="bm-topics-legend">
+          <span className="bm-legend-label">{t("bm.topics.legend.title")}:</span>
+          <div className="bm-legend-item">
+            <span className="bm-legend-dot" style={{ background: "#22C55E" }} />
+            <span>{t("bm.topics.legend.positive")}</span>
+          </div>
+          <div className="bm-legend-item">
+            <span className="bm-legend-dot" style={{ background: "#94A3B8" }} />
+            <span>{t("bm.topics.legend.neutral")}</span>
+          </div>
+          <div className="bm-legend-item">
+            <span className="bm-legend-dot" style={{ background: "#EF4444" }} />
+            <span>{t("bm.topics.legend.negative")}</span>
+          </div>
+          <span className="bm-legend-desc">
+            <span className="material-symbols-outlined" style={{ fontSize: 12, verticalAlign: "middle" }}>info</span>
+            {" "}{t("bm.topics.legend.barDesc")}
+          </span>
         </div>
       )}
 
@@ -249,8 +292,47 @@ export function BMTopTopics({ topics }: BMTopTopicsProps) {
         }
         .bm-topic-sentiment-strip {
           display: flex; height: 3px; border-radius: 2px; overflow: hidden; gap: 1px;
+          margin-bottom: 4px;
         }
         .bm-topic-sentiment-strip > div { border-radius: 2px; }
+
+        .bm-topic-sentiment-counts {
+          display: flex; gap: 6px; margin-top: 2px;
+        }
+        .bm-sent-badge {
+          display: inline-flex; align-items: center; gap: 2px;
+          font-size: 10px; font-weight: 600; padding: 1px 5px;
+          border-radius: 10px;
+        }
+        .bm-sent-pos { background: rgba(34,197,94,0.12); color: #16A34A; }
+        .bm-sent-neu { background: rgba(148,163,184,0.15); color: #64748B; }
+        .bm-sent-neg { background: rgba(239,68,68,0.12); color: #DC2626; }
+
+        /* Legend */
+        .bm-topics-legend {
+          display: flex; align-items: center; flex-wrap: wrap;
+          gap: 8px 14px; margin-top: 16px;
+          padding: 10px 14px;
+          background: var(--color-bg-surface-raised);
+          border: 1px solid var(--color-border);
+          border-radius: 10px;
+          font-size: 11px; color: var(--color-text-secondary);
+        }
+        .bm-legend-label {
+          font-weight: 700; color: var(--color-text-muted);
+          text-transform: uppercase; letter-spacing: 0.05em; font-size: 10px;
+        }
+        .bm-legend-item {
+          display: flex; align-items: center; gap: 5px; font-weight: 600;
+        }
+        .bm-legend-dot {
+          width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+        }
+        .bm-legend-desc {
+          margin-left: auto; font-style: italic;
+          color: var(--color-text-muted); font-size: 10px;
+          display: flex; align-items: center; gap: 3px;
+        }
       `}</style>
     </div>
   );

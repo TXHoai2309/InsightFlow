@@ -134,13 +134,10 @@ function mapTopic(raw: unknown): TopicType {
   const topic = String(firstTopic || "")
     .toLowerCase()
     .trim();
-  if (VALID_TOPICS.has(topic) && topic !== "other") {
+  if (VALID_TOPICS.has(topic)) {
     return topic as TopicType;
   }
-  // For demo purposes, map 'other' to random business topics
-  const demoTopics: TopicType[] = ["quality", "service", "price", "delivery"];
-  // Use a pseudo-random stable pick based on string length or something
-  return demoTopics[Math.floor(Math.random() * demoTopics.length)];
+  return "other";
 }
 
 function mapSentiment(raw: unknown): Mention["sentiment"] {

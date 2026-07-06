@@ -1,7 +1,7 @@
 "use client";
 
-import TeamManagementPage from "@/components/team/TeamManagementPage";
+import { redirect } from "next/navigation";
 
 export default function TeamPage() {
-  return <TeamManagementPage view="overview" />;
+  redirect("/team/staff");
 }

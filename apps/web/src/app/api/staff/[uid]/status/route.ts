@@ -1,31 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getApiBaseUrl } from "@/lib/apiProxy";
+import { verifyBearerToken } from "@/lib/server/auth";
+import { StaffServiceError, updateStaffStatus } from "@/lib/server/staffService";
 
 export async function PATCH(request: NextRequest, { params }: { params: { uid: string } }) {
   try {
-    const authorization = request.headers.get("authorization");
-    if (!authorization) {
-      return NextResponse.json({ error: "Ban can dang nhap bang tai khoan Quan ly thuong hieu." }, { status: 401 });
+    const user = await verifyBearerToken(request.headers.get("authorization"));
+    if (!user) {
+      return NextResponse.json({ error: "Bạn cần đăng nhập bằng tài khoản Quản lý thương hiệu." }, { status: 401 });
     }
 
     const body = await request.json();
-    const response = await fetch(`${getApiBaseUrl(request)}/api/staff/${params.uid}/status`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: authorization,
-      },
-      body: JSON.stringify(body),
-    });
-    const data = await response.json();
-
-    if (!response.ok) {
-      return NextResponse.json({ error: data.error || "Khong the cap nhat trang thai tai khoan." }, { status: response.status });
+    if (typeof body.disabled !== "boolean") {
+      return NextResponse.json({ error: "Trạng thái không hợp lệ." }, { status: 400 });
     }
 
-    return NextResponse.json(data, { status: response.status });
+    const data = await updateStaffStatus(user, params.uid, body.disabled);
+    return NextResponse.json({ success: true, data });
   } catch (error: any) {
-    console.error("[API Proxy] update staff status error:", error);
-    return NextResponse.json({ error: "Loi may chu. Vui long thu lai sau." }, { status: 500 });
+    if (error instanceof StaffServiceError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    console.error("[Staff API] status error:", error);
+    return NextResponse.json({ error: "Không thể cập nhật trạng thái tài khoản." }, { status: 500 });
   }
 }

@@ -78,7 +78,6 @@ const ROLE_BUSINESS_ACTIONS: Record<UserRole, BusinessAction[]> = {
     "create_label_request",
   ],
   crisis_employee: [
-    "view_dashboard",
     "view_mentions",
     "view_crisis_queue",
     "update_crisis_status",
@@ -86,7 +85,6 @@ const ROLE_BUSINESS_ACTIONS: Record<UserRole, BusinessAction[]> = {
     "create_label_request",
   ],
   lead_employee: [
-    "view_dashboard",
     "view_mentions",
     "view_leads",
     "update_lead_status",
@@ -125,7 +123,6 @@ export const ROLE_CONFIG: Record<UserRole, RoleConfig> = {
   crisis_employee: {
     label: "Nhan vien xu ly khung hoang",
     permissions: [
-      "dashboard",
       "mentions",
       "alerts",
       "reports",
@@ -135,7 +132,7 @@ export const ROLE_CONFIG: Record<UserRole, RoleConfig> = {
   },
   lead_employee: {
     label: "Nhan vien xu ly khach hang tiem nang",
-    permissions: ["dashboard", "mentions", "leads", "reports"],
+    permissions: ["mentions", "leads", "reports"],
     defaultRoute: "/leads",
   },
 };
@@ -159,7 +156,7 @@ const ROUTE_POLICIES: RoutePolicy[] = [
   { route: "/team", roles: ["brand_manager"], permission: "staff_management" },
   {
     route: "/dashboard",
-    roles: ["brand_manager", "crisis_employee", "lead_employee"],
+    roles: ["brand_manager"],
     permission: "dashboard",
   },
   {

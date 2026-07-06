@@ -1,30 +1,24 @@
-"use client";
+﻿"use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useTranslation } from "react-i18next";
+import { useRouter, useSearchParams } from "next/navigation";
 import { EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
 import { validateStrongPassword } from "@/lib/passwordPolicy";
 import { buildBrandEmail, getBrandEmailDomain } from "@/lib/brandEmail";
+import { Shield } from "lucide-react";
 
-type StaffRole = "crisis_employee" | "lead_employee";
-type LegacyStaffRole = "crisis_staff" | "lead_staff";
-type StaffRoleValue = StaffRole | LegacyStaffRole;
-
-interface StaffAccount {
-  uid: string;
-  email: string;
-  displayName: string;
-  role: StaffRoleValue;
-  brandName: string;
-  permissions: string[];
-  defaultRoute: string;
-  temporaryPassword?: string;
-  hasTemporaryPassword?: boolean;
-  disabled?: boolean;
-}
+import type { StaffAccount, StaffRole, StaffRoleValue, OperationOption } from "./types";
+import { TeamPageHeader } from "./TeamPageHeader";
+import { TeamStatsCards } from "./TeamStatsCards";
+import { TeamTabs } from "./TeamTabs";
+import { EmployeeToolbar } from "./EmployeeToolbar";
+import { EmployeeTable } from "./EmployeeTable";
+import { EmployeeEmptyState } from "./EmployeeEmptyState";
+import { EmployeeCreateForm } from "./EmployeeCreateForm";
+import { EmployeeCreateHandoff } from "./EmployeeCreateHandoff";
 
 const roleOptions: Array<{ value: StaffRole; labelKey: string; descriptionKey: string }> = [
   {
@@ -39,21 +33,13 @@ const roleOptions: Array<{ value: StaffRole; labelKey: string; descriptionKey: s
   },
 ];
 
-const operationOptions = [
+const operationOptions: OperationOption[] = [
   { value: "dashboard", labelKey: "team.operations.dashboard", roles: ["crisis_employee", "lead_employee"] },
   { value: "mentions", labelKey: "team.operations.mentions", roles: ["crisis_employee", "lead_employee"] },
   { value: "alerts", labelKey: "team.operations.alerts", roles: ["crisis_employee"] },
   { value: "reports", labelKey: "team.operations.reports", roles: ["crisis_employee", "lead_employee"] },
   { value: "leads", labelKey: "team.operations.leads", roles: ["lead_employee"] },
 ];
-
-const permissionLabels: Record<string, string> = {
-  dashboard: "team.permissions.dashboard",
-  mentions: "team.permissions.mentions",
-  alerts: "team.permissions.alerts",
-  reports: "team.permissions.reports",
-  leads: "team.permissions.leads",
-};
 
 function generateTemporaryPassword() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
@@ -65,33 +51,48 @@ function isCrisisRole(role: StaffRoleValue) {
   return role === "crisis_employee" || role === "crisis_staff";
 }
 
-type TeamManagementView = "overview" | "create" | "list" | "all";
+interface TeamManagementPageProps {
+  initialTab?: "list" | "create";
+}
 
-export function TeamManagementPage({ view = "all" }: { view?: TeamManagementView }) {
+export function TeamManagementPage({ initialTab = "list" }: TeamManagementPageProps) {
   const { t } = useTranslation();
-  const { profile } = useAuth();
+  const { profile, loading: authLoading } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const [activeTab, setActiveTab] = useState<"list" | "create">(initialTab);
+
   const [staff, setStaff] = useState<StaffAccount[]>([]);
+  const [loadingList, setLoadingList] = useState(true);
+  const [listError, setListError] = useState("");
+  const [createError, setCreateError] = useState("");
+  const [actionError, setActionError] = useState("");
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+
   const [fullName, setFullName] = useState("");
   const [emailLocalPart, setEmailLocalPart] = useState("");
   const [staffRole, setStaffRole] = useState<StaffRole>("crisis_employee");
   const [operations, setOperations] = useState<string[]>(["dashboard", "mentions", "alerts", "reports"]);
   const [temporaryPassword, setTemporaryPassword] = useState(generateTemporaryPassword());
   const [loading, setLoading] = useState(false);
-  const [loadingList, setLoadingList] = useState(true);
-  const [error, setError] = useState("");
   const [createdAccount, setCreatedAccount] = useState<StaffAccount | null>(null);
+
+  const [editingStaff, setEditingStaff] = useState<StaffAccount | null>(null);
+  const [editFullName, setEditFullName] = useState("");
+  const [editStaffRole, setEditStaffRole] = useState<StaffRole>("crisis_employee");
+  const [editOperations, setEditOperations] = useState<string[]>([]);
+  const [savingEdit, setSavingEdit] = useState(false);
+
   const [revealedPasswords, setRevealedPasswords] = useState<Record<string, string>>({});
   const [passwordRequestUid, setPasswordRequestUid] = useState<string | null>(null);
   const [passwordRequestMode, setPasswordRequestMode] = useState<"reveal" | "reset">("reveal");
   const [managerPassword, setManagerPassword] = useState("");
   const [revealLoading, setRevealLoading] = useState(false);
   const [revealError, setRevealError] = useState("");
-  const [actionError, setActionError] = useState("");
-  const [editingStaff, setEditingStaff] = useState<StaffAccount | null>(null);
-  const [editFullName, setEditFullName] = useState("");
-  const [editStaffRole, setEditStaffRole] = useState<StaffRole>("crisis_employee");
-  const [editOperations, setEditOperations] = useState<string[]>([]);
-  const [savingEdit, setSavingEdit] = useState(false);
 
   const availableOperations = useMemo(
     () => operationOptions.filter((operation) => operation.roles.includes(staffRole)),
@@ -102,8 +103,19 @@ export function TeamManagementPage({ view = "all" }: { view?: TeamManagementView
     () => operationOptions.filter((operation) => operation.roles.includes(editStaffRole)),
     [editStaffRole],
   );
+
   const brandEmailDomain = getBrandEmailDomain(profile?.brandName, profile?.companyDomain);
   const fullEmail = buildBrandEmail(emailLocalPart, brandEmailDomain);
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
+
+  useEffect(() => {
+    const role = searchParams.get("role");
+    if (role === "crisis") setRoleFilter("crisis_employee");
+    else if (role === "lead") setRoleFilter("lead_employee");
+  }, [searchParams]);
 
   useEffect(() => {
     const defaults =
@@ -115,738 +127,289 @@ export function TeamManagementPage({ view = "all" }: { view?: TeamManagementView
 
   const loadStaff = async () => {
     setLoadingList(true);
-    setError("");
-
+    setListError("");
     try {
       const token = await auth.currentUser?.getIdToken();
       if (!token) throw new Error(t("team.errors.needBrandManager"));
-
       const response = await fetch("/api/staff", {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || t("team.errors.loadFailed"));
+      const contentType = response.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        throw new Error(t("team.errors.loadFailed"));
       }
-
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || t("team.errors.loadFailed"));
       setStaff(data.data || []);
     } catch (err: any) {
-      setError(err.message || t("team.errors.loadFailed"));
+      setListError(err.message || t("team.errors.loadFailed"));
     } finally {
       setLoadingList(false);
     }
   };
 
   useEffect(() => {
+    if (authLoading || !profile) return;
     loadStaff();
-  }, []);
+  }, [authLoading, profile]);
 
-  const toggleOperation = (operation: string) => {
-    setOperations((current) => {
-      if (current.includes(operation)) {
-        return current.filter((item) => item !== operation);
-      }
-      return [...current, operation];
-    });
-  };
-
-  const toggleEditOperation = (operation: string) => {
-    setEditOperations((current) => {
-      if (current.includes(operation)) {
-        return current.filter((item) => item !== operation);
-      }
-      return [...current, operation];
-    });
-  };
-
-  const normalizeRoleForEdit = (role: StaffRoleValue): StaffRole => {
-    return isCrisisRole(role) ? "crisis_employee" : "lead_employee";
-  };
-
-  const openEditModal = (account: StaffAccount) => {
-    const normalizedRole = normalizeRoleForEdit(account.role);
-    setEditingStaff(account);
-    setEditFullName(account.displayName || "");
-    setEditStaffRole(normalizedRole);
-    setEditOperations(account.permissions?.length ? account.permissions : normalizedRole === "crisis_employee"
-      ? ["dashboard", "mentions", "alerts", "reports"]
-      : ["dashboard", "mentions", "leads", "reports"]);
+  const navigateToTab = (tab: "list" | "create") => {
+    setActiveTab(tab);
     setActionError("");
+    setCreateError("");
+    if (tab === "create") {
+      router.push("/team/create-staff");
+    } else {
+      router.push("/team/staff");
+    }
   };
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+  const toggleOperation = (op: string) => setOperations((curr) => curr.includes(op) ? curr.filter(i => i !== op) : [...curr, op]);
+  const toggleEditOperation = (op: string) => setEditOperations((curr) => curr.includes(op) ? curr.filter(i => i !== op) : [...curr, op]);
+
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setLoading(true);
-    setError("");
-    setCreatedAccount(null);
-
+    setCreateError("");
     try {
-      const passwordPolicy = validateStrongPassword(temporaryPassword);
-      if (!passwordPolicy.valid) {
-        throw new Error(passwordPolicy.errors.map((key) => t(key)).join(" "));
-      }
-
+      const policy = validateStrongPassword(temporaryPassword);
+      if (!policy.valid) throw new Error(policy.errors.map(k => t(k)).join(" "));
       const token = await auth.currentUser?.getIdToken();
-      if (!token) throw new Error(t("team.errors.needBrandManager"));
-
-      const response = await fetch("/api/staff", {
+      const res = await fetch("/api/staff", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          fullName,
-          email: fullEmail,
-          staffRole,
-          operations,
-          temporaryPassword,
-        }),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ fullName, email: fullEmail, staffRole, operations, temporaryPassword }),
       });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || t("team.errors.createFailed"));
-      }
-
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || t("team.errors.createFailed"));
       setCreatedAccount(data.data);
-      setStaff((current) => {
-        const withoutDuplicate = current.filter((item) => item.uid !== data.data.uid);
-        return [data.data, ...withoutDuplicate];
-      });
+      setStaff((curr) => [data.data, ...curr.filter(i => i.uid !== data.data.uid)]);
       setFullName("");
       setEmailLocalPart("");
       setTemporaryPassword(generateTemporaryPassword());
     } catch (err: any) {
-      setError(err.message || t("team.errors.createFailed"));
+      setCreateError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleRevealTemporaryPassword = async (staffUid: string) => {
+  const handleOpenCreateTab = () => {
+    setCreateError("");
+    navigateToTab("create");
+  };
+
+  const handleRevealTemporaryPassword = async (uid: string) => {
     setRevealLoading(true);
     setRevealError("");
-
     try {
-      const user = auth.currentUser;
-      if (!user?.email) {
-        throw new Error(t("team.errors.invalidSession"));
-      }
-
-      const credential = EmailAuthProvider.credential(user.email, managerPassword);
-      await reauthenticateWithCredential(user, credential);
-
-      const selectedStaff = staff.find((item) => item.uid === staffUid);
-      if (passwordRequestMode === "reveal" && selectedStaff?.temporaryPassword) {
-        setRevealedPasswords((current) => ({
-          ...current,
-          [staffUid]: selectedStaff.temporaryPassword as string,
-        }));
-        setPasswordRequestUid(null);
-        setManagerPassword("");
-        return;
-      }
-
+      const user = auth.currentUser!;
+      await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email!, managerPassword));
       const token = await user.getIdToken(true);
-      const endpoint =
-        passwordRequestMode === "reset"
-          ? `/api/staff/${staffUid}/reset-temporary-password`
-          : `/api/staff/${staffUid}/temporary-password`;
-
-      const response = await fetch(endpoint, {
+      const res = await fetch(passwordRequestMode === "reset" ? `/api/staff/${uid}/reset-temporary-password` : `/api/staff/${uid}/temporary-password`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}` }
       });
-      const data = await response.json();
-
-      if (!response.ok) {
-        if (response.status === 400) {
-          setStaff((current) =>
-            current.map((item) =>
-              item.uid === staffUid ? { ...item, hasTemporaryPassword: false, temporaryPassword: undefined } : item,
-            ),
-          );
-        }
-        throw new Error(data.error || t("team.errors.revealFailed"));
-      }
-
-      setRevealedPasswords((current) => ({
-        ...current,
-        [staffUid]: data.data.temporaryPassword,
-      }));
-      setStaff((current) =>
-        current.map((item) =>
-          item.uid === staffUid
-            ? { ...item, hasTemporaryPassword: true, temporaryPassword: data.data.temporaryPassword }
-            : item,
-        ),
-      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setRevealedPasswords((c) => ({ ...c, [uid]: data.data.temporaryPassword }));
+      setStaff((c) => c.map(i => i.uid === uid ? { ...i, hasTemporaryPassword: true, temporaryPassword: data.data.temporaryPassword } : i));
       setPasswordRequestUid(null);
       setManagerPassword("");
-    } catch (err: any) {
-      const messageByCode: Record<string, string> = {
-        "auth/wrong-password": t("team.errors.managerPasswordWrong"),
-        "auth/invalid-credential": t("team.errors.managerPasswordWrong"),
-        "auth/too-many-requests": t("team.errors.tooManyRequests"),
-      };
-      const backendMessage =
-        err.message === "Temporary password is no longer available for this account."
-          ? t("team.errors.tempPasswordUnavailable")
-          : err.message;
-      setRevealError(messageByCode[err.code] || backendMessage || t("team.errors.revealFailed"));
-    } finally {
-      setRevealLoading(false);
-    }
+    } catch (err: any) { setRevealError(err.message); } finally { setRevealLoading(false); }
   };
 
   const handleEditStaff = async () => {
     if (!editingStaff) return;
     setSavingEdit(true);
     setActionError("");
-
     try {
       const token = await auth.currentUser?.getIdToken();
-      if (!token) throw new Error(t("team.errors.needBrandManager"));
-
-      const response = await fetch(`/api/staff/${editingStaff.uid}`, {
+      const res = await fetch(`/api/staff/${editingStaff.uid}`, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          displayName: editFullName,
-          staffRole: editStaffRole,
-          operations: editOperations,
-        }),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ displayName: editFullName, staffRole: editStaffRole, operations: editOperations }),
       });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Không thể cập nhật tài khoản nhân viên.");
-      }
-
-      setStaff((current) =>
-        current.map((item) => (item.uid === editingStaff.uid ? { ...item, ...data.data } : item)),
-      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setStaff((c) => c.map(i => i.uid === editingStaff.uid ? { ...i, ...data.data } : i));
       setEditingStaff(null);
-    } catch (err: any) {
-      setActionError(err.message || "Không thể cập nhật tài khoản nhân viên.");
-    } finally {
-      setSavingEdit(false);
-    }
+    } catch (err: any) { setActionError(err.message); } finally { setSavingEdit(false); }
   };
 
   const handleToggleStatus = async (account: StaffAccount) => {
     setActionError("");
-
     try {
       const token = await auth.currentUser?.getIdToken();
-      if (!token) throw new Error(t("team.errors.needBrandManager"));
-
-      const response = await fetch(`/api/staff/${account.uid}/status`, {
+      const res = await fetch(`/api/staff/${account.uid}/status`, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ disabled: !account.disabled }),
       });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Không thể cập nhật trạng thái tài khoản.");
-      }
-
-      setStaff((current) =>
-        current.map((item) => (item.uid === account.uid ? { ...item, ...data.data } : item)),
-      );
-    } catch (err: any) {
-      setActionError(err.message || "Không thể cập nhật trạng thái tài khoản.");
-    }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setStaff((c) => c.map(i => i.uid === account.uid ? { ...i, ...data.data } : i));
+    } catch (err: any) { setActionError(err.message); }
   };
 
-  if (view === "overview") {
-    return (
-      <div className="mx-auto max-w-[1000px] space-y-6 p-4 md:p-8">
-        <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6">
-          <p className="text-[13px] font-semibold uppercase tracking-[0.08em] text-[var(--color-brand)]">
-            {t("team.badge")}
-          </p>
-          <h1 className="mt-2 text-[28px] font-bold text-[var(--color-text-primary)]">
-            Quan ly nhan vien {profile?.brandName || ""}
-          </h1>
-          <p className="mt-2 max-w-3xl text-[14px] leading-6 text-[var(--color-text-secondary)]">
-            Chon tac vu can thuc hien: tao tai khoan nhan vien moi hoac xem va quan ly danh sach nhan vien trong thuong hieu cua ban.
-          </p>
-        </section>
+  const handleExport = () => {
+    const headers = ["Há» vÃ  tÃªn", "Email", "Vai trÃ²", "Tráº¡ng thÃ¡i"];
+    const rows = filteredStaff.map(s => [s.displayName, s.email, s.role, s.disabled ? "ÄÃ£ khÃ³a" : "Äang hoáº¡t Ä‘á»™ng"]);
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+    const link = document.createElement("a");
+    link.setAttribute("href", encodeURI(csvContent));
+    link.setAttribute("download", "danh_sach_nhan_vien.csv");
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+  };
 
-        <section className="grid gap-4 md:grid-cols-2">
-          <Link
-            href="/team/create-staff"
-            className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 transition hover:border-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)]"
-          >
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--color-brand-subtle)] text-[var(--color-brand)]">
-              <i className="ti ti-user-plus text-[24px]" />
-            </div>
-            <h2 className="text-[18px] font-bold text-[var(--color-text-primary)]">Tao tai khoan nhan vien</h2>
-            <p className="mt-2 text-[13px] leading-6 text-[var(--color-text-secondary)]">
-              Tao tai khoan, gan vai tro khung hoang/lead va cap quyen nghiep vu theo brand hien tai.
-            </p>
-          </Link>
+  const filteredStaff = useMemo(() => {
+    return staff.filter((s) => {
+      const searchMatch = !searchQuery
+        || (s.displayName || "").toLowerCase().includes(searchQuery.toLowerCase())
+        || (s.email || "").toLowerCase().includes(searchQuery.toLowerCase());
+      const normalizedRole = isCrisisRole(s.role) ? "crisis_employee" : "lead_employee";
+      const roleMatch = roleFilter === "all" || normalizedRole === roleFilter;
+      const statusMatch = statusFilter === "all" || (statusFilter === "active" && !s.disabled) || (statusFilter === "disabled" && s.disabled);
+      return searchMatch && roleMatch && statusMatch;
+    });
+  }, [staff, searchQuery, roleFilter, statusFilter]);
 
-          <Link
-            href="/team/staff"
-            className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 transition hover:border-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)]"
-          >
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--color-brand-subtle)] text-[var(--color-brand)]">
-              <i className="ti ti-users text-[24px]" />
-            </div>
-            <h2 className="text-[18px] font-bold text-[var(--color-text-primary)]">Danh sach nhan vien</h2>
-            <p className="mt-2 text-[13px] leading-6 text-[var(--color-text-secondary)]">
-              Xem, chinh sua, khoa/mo khoa va cap lai mat khau tam thoi cho nhan vien thuoc brand cua ban.
-            </p>
-          </Link>
-        </section>
-      </div>
-    );
-  }
+  const openEditModal = (account: StaffAccount) => {
+    const normalizedRole = isCrisisRole(account.role) ? "crisis_employee" : "lead_employee";
+    setEditingStaff(account);
+    setEditFullName(account.displayName || "");
+    setEditStaffRole(normalizedRole);
+    setEditOperations(account.permissions?.length ? account.permissions : normalizedRole === "crisis_employee" ? ["dashboard", "mentions", "alerts", "reports"] : ["dashboard", "mentions", "leads", "reports"]);
+  };
 
   return (
-    <div className="p-4 md:p-8 space-y-6">
-      <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6">
-        <p className="text-[13px] font-semibold uppercase tracking-[0.08em] text-[var(--color-brand)]">
-          {t("team.badge")}
-        </p>
-        <h1 className="mt-2 text-[28px] font-bold text-[var(--color-text-primary)]">
-          {t("team.title")}
-        </h1>
-        <p className="mt-2 max-w-3xl text-[14px] leading-6 text-[var(--color-text-secondary)]">
-          {t("team.subtitle", { brandName: profile?.brandName || t("team.currentBrandFallback") })}
-        </p>
-      </section>
+    <div className="max-w-[1440px] mx-auto p-4 md:p-8">
+      <TeamPageHeader onAddClick={handleOpenCreateTab} showAddButton={activeTab !== "create"} />
+      <TeamStatsCards staff={staff} />
+      <TeamTabs
+        activeTab={activeTab}
+        onChange={(tab) => {
+          if (tab === "create") handleOpenCreateTab();
+          else navigateToTab("list");
+        }}
+      />
 
-      {(view === "all" || view === "create") && (
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
-        <form
-          onSubmit={handleSubmit}
-          className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 space-y-5"
-        >
-          <div>
-            <h2 className="text-[20px] font-bold text-[var(--color-text-primary)]">{t("team.form.title")}</h2>
-            <p className="mt-1 text-[13px] text-[var(--color-text-secondary)]">
-              {t("team.form.subtitle")}
-            </p>
-          </div>
-
-          {error && (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-[14px] text-red-700">
-              {error}
-            </div>
+      {activeTab === "list" && (
+        <div className="space-y-4">
+          {listError && (
+            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[14px] text-red-700">{listError}</div>
           )}
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="space-y-2">
-              <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">{t("team.form.fullName")}</span>
-              <input
-                value={fullName}
-                onChange={(event) => setFullName(event.target.value)}
-                required
-                placeholder={t("team.form.fullNamePlaceholder")}
-                className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2.5 text-[14px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]"
-              />
-            </label>
-
-            <label className="space-y-2">
-              <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">{t("team.form.email")}</span>
-              <div className="flex overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] focus-within:border-[var(--color-brand)]">
-                <input
-                  value={emailLocalPart}
-                  onChange={(event) => setEmailLocalPart(event.target.value)}
-                  required
-                  placeholder="nhan_vien"
-                  className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-[14px] text-[var(--color-text-primary)] outline-none"
-                />
-                <span className="shrink-0 border-l border-[var(--color-border)] px-3 py-2.5 text-[14px] text-[var(--color-text-secondary)]">
-                  @{brandEmailDomain || "brand.com"}
-                </span>
-              </div>
-              {fullEmail && (
-                <span className="block text-[12px] text-[var(--color-text-muted)]">Email: {fullEmail}</span>
-              )}
-            </label>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-2">
-            {roleOptions.map((option) => (
-              <label
-                key={option.value}
-                className={`cursor-pointer rounded-lg border p-4 transition ${staffRole === option.value
-                    ? "border-[var(--color-brand)] bg-[var(--color-brand-subtle)]"
-                    : "border-[var(--color-border)] bg-[var(--color-bg-surface-raised)]"
-                  }`}
-              >
-                <input
-                  type="radio"
-                  className="sr-only"
-                  checked={staffRole === option.value}
-                  onChange={() => setStaffRole(option.value)}
-                />
-                <span className="block text-[14px] font-bold text-[var(--color-text-primary)]">{t(option.labelKey)}</span>
-                <span className="mt-1 block text-[12px] leading-5 text-[var(--color-text-secondary)]">
-                  {t(option.descriptionKey)}
-                </span>
-              </label>
-            ))}
-          </div>
-
-          <fieldset className="space-y-3">
-            <legend className="text-[13px] font-semibold text-[var(--color-text-primary)]">{t("team.form.operations")}</legend>
-            <div className="grid gap-2 md:grid-cols-2">
-              {availableOperations.map((operation) => (
-                <label
-                  key={operation.value}
-                  className="flex items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-3 text-[14px] text-[var(--color-text-primary)]"
-                >
-                  <input
-                    type="checkbox"
-                    checked={operations.includes(operation.value)}
-                    onChange={() => toggleOperation(operation.value)}
-                    className="rounded text-[var(--color-brand)] focus:ring-[var(--color-brand)]"
-                  />
-                  {t(operation.labelKey)}
-                </label>
-              ))}
+          {loadingList ? (
+            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-gray-200 bg-white py-20 shadow-sm">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#6C5CE7] border-t-transparent" />
+              <p className="text-[14px] text-gray-500">{t("team.listLoading")}</p>
             </div>
-          </fieldset>
-
-          <label className="space-y-2 block">
-            <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">{t("team.form.tempPassword")}</span>
-            <div className="flex gap-2">
-              <input
-                value={temporaryPassword}
-                onChange={(event) => setTemporaryPassword(event.target.value)}
-                required
-                minLength={10}
-                className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2.5 text-[14px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]"
-              />
-              <button
-                type="button"
-                onClick={() => setTemporaryPassword(generateTemporaryPassword())}
-                className="rounded-lg border border-[var(--color-border)] px-4 text-[13px] font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-brand-subtle)]"
-              >
-                {t("team.form.generate")}
-              </button>
-            </div>
-          </label>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="rounded-lg bg-[var(--color-brand)] px-5 py-3 text-[14px] font-semibold text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {loading ? t("team.form.submitting") : t("team.form.submit")}
-          </button>
-        </form>
-
-        <aside className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6">
-          <h2 className="text-[18px] font-bold text-[var(--color-text-primary)]">{t("team.handoff.title")}</h2>
-          {createdAccount ? (
-            <div className="mt-4 space-y-3 text-[13px] text-[var(--color-text-secondary)]">
-              <p><span className="font-semibold text-[var(--color-text-primary)]">{t("team.handoff.employee")}</span> {createdAccount.displayName}</p>
-              <p><span className="font-semibold text-[var(--color-text-primary)]">Email:</span> {createdAccount.email}</p>
-              <p><span className="font-semibold text-[var(--color-text-primary)]">{t("team.handoff.brand")}</span> {createdAccount.brandName}</p>
-              <p><span className="font-semibold text-[var(--color-text-primary)]">{t("team.handoff.tempPassword")}</span> {createdAccount.temporaryPassword}</p>
-              <p><span className="font-semibold text-[var(--color-text-primary)]">{t("team.handoff.defaultRoute")}</span> {createdAccount.defaultRoute}</p>
-            </div>
+          ) : staff.length === 0 ? (
+            <EmployeeEmptyState onAddClick={handleOpenCreateTab} />
           ) : (
-            <p className="mt-4 text-[13px] leading-6 text-[var(--color-text-secondary)]">
-              {t("team.handoff.empty")}
-            </p>
+            <>
+              {actionError && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[14px] text-red-700">{actionError}</div>}
+              <EmployeeToolbar searchQuery={searchQuery} onSearchChange={setSearchQuery} roleFilter={roleFilter} onRoleChange={setRoleFilter} statusFilter={statusFilter} onStatusChange={setStatusFilter} onRefresh={loadStaff} onExport={handleExport} />
+              <EmployeeTable staff={filteredStaff} onEdit={openEditModal} onToggleStatus={handleToggleStatus} onResetPassword={(acc) => { setPasswordRequestUid(acc.uid); setPasswordRequestMode("reset"); setRevealError(""); setManagerPassword(""); }} onRevealPassword={(acc) => { setPasswordRequestUid(acc.uid); setPasswordRequestMode("reveal"); setRevealError(""); setManagerPassword(""); }} revealedPasswords={revealedPasswords} />
+            </>
           )}
-        </aside>
-      </section>
+        </div>
       )}
 
-      {(view === "all" || view === "list") && (
-      <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-[20px] font-bold text-[var(--color-text-primary)]">{t("team.list.title")}</h2>
-            <p className="text-[13px] text-[var(--color-text-secondary)]">
-              {t("team.list.subtitle", { brandName: profile?.brandName || t("team.list.brandFallback") })}
-            </p>
-          </div>
-          <button
-            onClick={loadStaff}
-            className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-[13px] font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-brand-subtle)]"
-          >
-            {t("team.list.reload")}
-          </button>
+      {activeTab === "create" && (
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+          <EmployeeCreateForm
+            fullName={fullName}
+            setFullName={setFullName}
+            emailLocalPart={emailLocalPart}
+            setEmailLocalPart={setEmailLocalPart}
+            brandEmailDomain={brandEmailDomain}
+            fullEmail={fullEmail}
+            staffRole={staffRole}
+            setStaffRole={setStaffRole}
+            operations={operations}
+            toggleOperation={toggleOperation}
+            availableOperations={availableOperations}
+            temporaryPassword={temporaryPassword}
+            setTemporaryPassword={setTemporaryPassword}
+            onGeneratePassword={() => setTemporaryPassword(generateTemporaryPassword())}
+            loading={loading}
+            error={createError}
+            onSubmit={handleSubmit}
+            onBack={() => navigateToTab("list")}
+            roleOptions={roleOptions}
+            t={t}
+          />
+          <EmployeeCreateHandoff createdAccount={createdAccount} t={t} />
         </div>
-
-        <div className="mt-5 overflow-x-auto">
-          {actionError && (
-            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-[14px] text-red-700">
-              {actionError}
-            </div>
-          )}
-          <table className="min-w-full text-left text-[14px]">
-            <thead className="text-[12px] uppercase tracking-[0.06em] text-[var(--color-text-muted)]">
-              <tr>
-                <th className="py-3 pr-4">{t("team.table.employee")}</th>
-                <th className="py-3 pr-4">{t("team.table.role")}</th>
-                <th className="py-3 pr-4">{t("team.table.operations")}</th>
-                <th className="py-3 pr-4">Trang thai</th>
-                <th className="py-3 pr-4">{t("team.table.defaultRoute")}</th>
-                <th className="py-3 pr-4">{t("team.table.tempPassword")}</th>
-                <th className="py-3 pr-4">Hanh dong</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--color-border)]">
-              {loadingList ? (
-                <tr>
-                  <td className="py-5 text-[var(--color-text-secondary)]" colSpan={7}>{t("team.table.loading")}</td>
-                </tr>
-              ) : staff.length === 0 ? (
-                <tr>
-                  <td className="py-5 text-[var(--color-text-secondary)]" colSpan={7}>{t("team.table.empty")}</td>
-                </tr>
-              ) : (
-                staff.map((item) => (
-                  <tr key={item.uid}>
-                    <td className="py-4 pr-4">
-                      <p className="font-semibold text-[var(--color-text-primary)]">{item.displayName}</p>
-                      <p className="text-[12px] text-[var(--color-text-secondary)]">{item.email}</p>
-                    </td>
-                    <td className="py-4 pr-4 text-[var(--color-text-secondary)]">
-                      {isCrisisRole(item.role) ? t("team.staffRole.crisis") : t("team.staffRole.lead")}
-                    </td>
-                    <td className="py-4 pr-4">
-                      <div className="flex flex-wrap gap-2">
-                        {(item.permissions || []).map((permission) => (
-                          <span
-                            key={permission}
-                            className="rounded-full bg-[var(--color-brand-subtle)] px-2.5 py-1 text-[12px] font-semibold text-[var(--color-brand)]"
-                          >
-                            {permissionLabels[permission] ? t(permissionLabels[permission]) : permission}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="py-4 pr-4">
-                      <span className={`rounded-full px-2.5 py-1 text-[12px] font-semibold ${item.disabled ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"
-                        }`}>
-                        {item.disabled ? "Đã khóa" : "Đang hoạt động"}
-                      </span>
-                    </td>
-                    <td className="py-4 pr-4 text-[var(--color-text-secondary)]">{item.defaultRoute}</td>
-                    <td className="py-4 pr-4">
-                      {revealedPasswords[item.uid] ? (
-                        <span className="font-mono text-[13px] text-[var(--color-text-primary)]">
-                          {revealedPasswords[item.uid]}
-                        </span>
-                      ) : item.hasTemporaryPassword || item.temporaryPassword ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPasswordRequestUid(item.uid);
-                            setPasswordRequestMode("reveal");
-                            setRevealError("");
-                            setManagerPassword("");
-                          }}
-                          className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 font-mono text-[13px] text-[var(--color-text-primary)] hover:bg-[var(--color-brand-subtle)]"
-                        >
-                          ••••••••••
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPasswordRequestUid(item.uid);
-                            setPasswordRequestMode("reset");
-                            setRevealError("");
-                            setManagerPassword("");
-                          }}
-                          className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-[12px] font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-brand-subtle)]"
-                        >
-                          {t("team.password.reset")}
-                        </button>
-                      )}
-                    </td>
-                    <td className="py-4 pr-4">
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => openEditModal(item)}
-                          className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-[12px] font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-brand-subtle)]"
-                        >
-                          Sua
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleToggleStatus(item)}
-                          className={`rounded-lg px-3 py-1.5 text-[12px] font-semibold ${item.disabled
-                              ? "bg-emerald-600 text-white hover:bg-emerald-700"
-                              : "bg-red-600 text-white hover:bg-red-700"
-                            }`}
-                        >
-                          {item.disabled ? "Mở khóa" : "Khóa"}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
       )}
 
       {passwordRequestUid && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-[420px] rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 shadow-xl">
-            <h3 className="text-[18px] font-bold text-[var(--color-text-primary)]">
-              {passwordRequestMode === "reset" ? t("team.password.modal.resetTitle") : t("team.password.modal.revealTitle")}
-            </h3>
-            <p className="mt-2 text-[13px] leading-5 text-[var(--color-text-secondary)]">
-              {passwordRequestMode === "reset"
-                ? t("team.password.modal.resetDesc")
-                : t("team.password.modal.revealDesc")}
-            </p>
-
-            {revealError && (
-              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
-                {revealError}
-              </div>
-            )}
-
-            <label className="mt-5 block space-y-2">
-              <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">
-                {t("team.password.modal.managerPassword")}
-              </span>
-              <input
-                value={managerPassword}
-                onChange={(event) => setManagerPassword(event.target.value)}
-                type="password"
-                autoComplete="new-password"
-                autoFocus
-                className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2.5 text-[14px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]"
-              />
-            </label>
-
-            <div className="mt-5 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setPasswordRequestUid(null);
-                  setPasswordRequestMode("reveal");
-                  setManagerPassword("");
-                  setRevealError("");
-                }}
-                className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-[13px] font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-brand-subtle)]"
-              >
-                {t("team.password.modal.cancel")}
-              </button>
-              <button
-                type="button"
-                disabled={revealLoading || !managerPassword}
-                onClick={() => handleRevealTemporaryPassword(passwordRequestUid)}
-                className="rounded-lg bg-[var(--color-brand)] px-4 py-2 text-[13px] font-semibold text-white hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {revealLoading
-                  ? t("team.password.modal.authenticating")
-                  : passwordRequestMode === "reset"
-                    ? t("team.password.modal.resetAndReveal")
-                    : t("team.password.modal.reveal")}
-              </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 p-4">
+          <div className="w-full max-w-[420px] rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="text-[20px] font-bold text-gray-900">{passwordRequestMode === "reset" ? t("team.password.modal.resetTitle") : t("team.password.modal.revealTitle")}</h3>
+            <p className="mt-2 text-[14px] text-gray-500">{passwordRequestMode === "reset" ? t("team.password.modal.resetDesc") : t("team.password.modal.revealDesc")}</p>
+            {revealError && <div className="mt-4 rounded-xl bg-red-50 p-3 text-[14px] text-red-700">{revealError}</div>}
+            <input
+              type="password"
+              value={managerPassword}
+              onChange={(e) => setManagerPassword(e.target.value)}
+              placeholder={t("team.password.modal.managerPassword")}
+              className="mt-4 w-full rounded-xl border border-gray-200 p-3 text-[14px] outline-none focus:border-[#6C5CE7] focus:ring-1 focus:ring-[#6C5CE7]"
+            />
+            <div className="mt-6 flex justify-end gap-3">
+              <button onClick={() => { setPasswordRequestUid(null); setManagerPassword(""); setRevealError(""); }} className="rounded-xl border border-gray-200 px-5 py-2.5 text-[14px] font-medium text-gray-700 hover:bg-gray-50">Há»§y</button>
+              <button onClick={() => handleRevealTemporaryPassword(passwordRequestUid)} disabled={revealLoading || !managerPassword} className="rounded-xl bg-[#6C5CE7] px-5 py-2.5 text-[14px] font-semibold text-white disabled:opacity-60">XÃ¡c nháº­n</button>
             </div>
           </div>
         </div>
       )}
 
       {editingStaff && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-[560px] rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 shadow-xl">
-            <h3 className="text-[18px] font-bold text-[var(--color-text-primary)]">Chỉnh sửa tài khoản nhân viên</h3>
-            <p className="mt-1 text-[13px] text-[var(--color-text-secondary)]">{editingStaff.email}</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-gray-900/60 p-4">
+          <div className="w-full max-w-[560px] rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="text-[20px] font-bold text-gray-900">Chá»‰nh sá»­a nhÃ¢n viÃªn</h3>
+            <p className="mt-1 text-[14px] text-gray-500">{editingStaff.email}</p>
 
-            <label className="mt-5 block space-y-2">
-              <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">Họ tên</span>
-              <input
-                value={editFullName}
-                onChange={(event) => setEditFullName(event.target.value)}
-                className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2.5 text-[14px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]"
-              />
+            <label className="mt-6 block">
+              <span className="text-[14px] font-semibold text-gray-900">Há» tÃªn</span>
+              <input value={editFullName} onChange={(e) => setEditFullName(e.target.value)} className="mt-2 w-full rounded-xl border border-gray-200 p-3 text-[14px] outline-none focus:border-[#6C5CE7] focus:ring-1 focus:ring-[#6C5CE7]" />
             </label>
 
-            <div className="mt-5 grid gap-3 md:grid-cols-2">
-              {roleOptions.map((option) => (
-                <label
-                  key={option.value}
-                  className={`cursor-pointer rounded-lg border p-4 transition ${editStaffRole === option.value
-                      ? "border-[var(--color-brand)] bg-[var(--color-brand-subtle)]"
-                      : "border-[var(--color-border)] bg-[var(--color-bg-surface-raised)]"
-                    }`}
-                >
-                  <input
-                    type="radio"
-                    className="sr-only"
-                    checked={editStaffRole === option.value}
-                    onChange={() => {
-                      setEditStaffRole(option.value);
-                      setEditOperations(option.value === "crisis_employee"
-                        ? ["dashboard", "mentions", "alerts", "reports"]
-                        : ["dashboard", "mentions", "leads", "reports"]);
-                    }}
-                  />
-                  <span className="block text-[14px] font-bold text-[var(--color-text-primary)]">{t(option.labelKey)}</span>
-                  <span className="mt-1 block text-[12px] leading-5 text-[var(--color-text-secondary)]">
-                    {t(option.descriptionKey)}
-                  </span>
-                </label>
-              ))}
-            </div>
-
-            <fieldset className="mt-5 space-y-3">
-              <legend className="text-[13px] font-semibold text-[var(--color-text-primary)]">{t("team.form.operations")}</legend>
-              <div className="grid gap-2 md:grid-cols-2">
-                {availableEditOperations.map((operation) => (
-                  <label
-                    key={operation.value}
-                    className="flex items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-3 text-[14px] text-[var(--color-text-primary)]"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={editOperations.includes(operation.value)}
-                      onChange={() => toggleEditOperation(operation.value)}
-                      className="rounded text-[var(--color-brand)] focus:ring-[var(--color-brand)]"
-                    />
-                    {t(operation.labelKey)}
+            <div className="mt-6">
+              <span className="text-[14px] font-semibold text-gray-900">Vai trÃ²</span>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                {roleOptions.map((opt) => (
+                  <label key={opt.value} className={`cursor-pointer rounded-xl border-2 p-4 transition-all ${editStaffRole === opt.value ? "border-[#6C5CE7] bg-[#6C5CE7]/5" : "border-gray-200 hover:border-gray-300"}`}>
+                    <input type="radio" className="sr-only" checked={editStaffRole === opt.value} onChange={() => { setEditStaffRole(opt.value); setEditOperations(opt.value === "crisis_employee" ? ["dashboard", "mentions", "alerts", "reports"] : ["dashboard", "mentions", "leads", "reports"]); }} />
+                    <span className="block text-[14px] font-semibold text-gray-900">{t(opt.labelKey)}</span>
+                    <span className="mt-1 block text-[12px] text-gray-500">{t(opt.descriptionKey)}</span>
                   </label>
                 ))}
               </div>
+            </div>
+
+            <fieldset className="mt-6 space-y-3">
+              <legend className="flex items-center gap-2 text-[14px] font-semibold text-gray-900">
+                <Shield className="h-4 w-4 text-gray-400" />
+                {t("team.form.operations")}
+              </legend>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {availableEditOperations.map((operation) => {
+                  const checked = editOperations.includes(operation.value);
+                  return (
+                    <label key={operation.value} className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 ${checked ? "border-[#6C5CE7]/30 bg-[#6C5CE7]/5" : "border-gray-200"}`}>
+                      <input type="checkbox" checked={checked} onChange={() => toggleEditOperation(operation.value)} className="h-4 w-4 rounded text-[#6C5CE7]" />
+                      <span className="text-[13px] font-medium text-gray-700">{t(operation.labelKey)}</span>
+                    </label>
+                  );
+                })}
+              </div>
             </fieldset>
 
-            <div className="mt-5 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setEditingStaff(null)}
-                className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-[13px] font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-brand-subtle)]"
-              >
-                Huy
-              </button>
-              <button
-                type="button"
-                disabled={savingEdit || !editFullName.trim()}
-                onClick={handleEditStaff}
-                className="rounded-lg bg-[var(--color-brand)] px-4 py-2 text-[13px] font-semibold text-white hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {savingEdit ? "Dang luu..." : "Luu thay doi"}
-              </button>
+            <div className="mt-8 flex justify-end gap-3">
+              <button onClick={() => setEditingStaff(null)} className="rounded-xl border border-gray-200 px-5 py-2.5 text-[14px] font-medium text-gray-700 hover:bg-gray-50">Há»§y</button>
+              <button onClick={handleEditStaff} disabled={savingEdit || !editFullName.trim()} className="rounded-xl bg-[#6C5CE7] px-5 py-2.5 text-[14px] font-semibold text-white disabled:opacity-60">{savingEdit ? "Äang lÆ°u..." : "LÆ°u thay Ä‘á»•i"}</button>
             </div>
           </div>
         </div>
