@@ -428,6 +428,15 @@ export class DashboardService {
           const d = doc.data();
           return {
             id: doc.id,
+            mention_id: normalizeOptionalText(d.mention_id || d.mentionId || d.source_mention_id),
+            source_mention_id: normalizeOptionalText(d.source_mention_id || d.sourceMentionId),
+            parent_id: d.parent_id ? String(d.parent_id) : null,
+            content_type: ["post", "comment", "reply"].includes(
+              String(d.content_type || "").toLowerCase(),
+            )
+              ? (String(d.content_type).toLowerCase() as Lead["content_type"])
+              : undefined,
+            post_id: normalizeOptionalText(d.post_id || d.postId),
             workspace_id: String(d.workspace_id || d.brand || ""),
             platform: mapSourceToPlatform(d.source || d.platform || ""),
             author: normalizeText(d.author || "Khách hàng").trim(),
@@ -438,6 +447,7 @@ export class DashboardService {
             created_at: parseDate(d.created_at),
             expiry_at: d.expiry_at ? parseDate(d.expiry_at) : undefined,
             url: normalizeOptionalUrl(d.url, d.post_url, d.source_url),
+            source_url: normalizeOptionalUrl(d.source_url, d.post_url, d.url),
             phone: normalizeOptionalText(d.phone),
             email: normalizeOptionalText(d.email),
             zalo_id: normalizeOptionalText(d.zalo_id),
@@ -502,6 +512,15 @@ export class DashboardService {
 
           derivedLeads.push({
             id: String(d.id || doc.id),
+            mention_id: String(d.id || doc.id),
+            source_mention_id: String(d.id || doc.id),
+            parent_id: d.parent_id ? String(d.parent_id) : null,
+            content_type: ["post", "comment", "reply"].includes(
+              String(d.content_type || "").toLowerCase(),
+            )
+              ? (String(d.content_type).toLowerCase() as Lead["content_type"])
+              : undefined,
+            post_id: normalizeOptionalText(d.post_id || d.postId),
             workspace_id: String(d.brand || d.workspace_id || ""),
             platform: mapSourceToPlatform(d.source || d.platform || ""),
             author: normalizeText(d.author || "Khách hàng").trim(),
@@ -513,6 +532,7 @@ export class DashboardService {
               d.labeled_at || d.uploaded_at || d.created_at || d.posted_at,
             ),
             url: normalizeOptionalUrl(d.url, d.post_url, d.source_url),
+            source_url: normalizeOptionalUrl(d.source_url, d.post_url, d.url),
             phone: normalizeOptionalText(d.phone),
             email: normalizeOptionalText(d.email),
             zalo_id: normalizeOptionalText(d.zalo_id),

@@ -1,12 +1,20 @@
 "use client";
 
+import Link from "next/link";
 import React, { useMemo, useState } from "react";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { PLATFORM_META } from "@/lib/services/dashboard";
 import { useAuth } from "@/hooks/useAuth";
 import { canPerformAction } from "@/lib/rbac";
 import { isSameBrandScope } from "@/lib/brandScope";
-import type { Lead } from "@/types/dashboard";
+import { resolveLeadMentionTarget } from "@/lib/mention-navigation";
+import {
+  LEAD_DETAIL_PANEL_SCROLL_ID,
+  createLeadReturnToken,
+  saveLeadReturnContext,
+  type LeadDetailPanelTab,
+} from "@/lib/lead-return-context";
+import type { DashboardFilters, Lead, Mention } from "@/types/dashboard";
 import {
   formatFollowUpTime,
   formatLeadSla,
@@ -15,17 +23,28 @@ import {
   getLeadSourceAction,
   getLeadWorkbenchMeta,
   type LeadActionLink,
+  type LeadWorkbenchView,
 } from "@/lib/lead-workbench";
 
 interface LeadDetailPanelProps {
   lead: Lead | null;
+  mentions?: Mention[];
   nowMs: number;
   onClose: () => void;
   onAfterResult?: () => void;
   onStartedAction?: (lead: Lead) => void;
+  returnContext?: {
+    view: LeadWorkbenchView;
+    page: number;
+    selectedLeadId?: string | null;
+    filters?: Partial<DashboardFilters>;
+    listScrollTop?: number;
+  };
+  activeTab?: LeadDetailPanelTab;
+  onTabChange?: (tab: LeadDetailPanelTab) => void;
 }
 
-type PanelTab = "action" | "profile" | "history" | "suggestion";
+type PanelTab = LeadDetailPanelTab;
 type ResultAction =
   | "positive"
   | "no_response"
@@ -68,16 +87,46 @@ function toTimeInputValue(dateIso?: string) {
   return new Date(dateIso).toTimeString().slice(0, 5);
 }
 
+function appendLeadReturnParams(
+  href: string,
+  lead: Lead,
+  returnContext?: LeadDetailPanelProps["returnContext"],
+  token?: string,
+) {
+  if (!href) return href;
+
+  const [pathAndQuery, hash] = href.split("#");
+  const params = new URLSearchParams({
+    from: "leads",
+    leadId: returnContext?.selectedLeadId || lead.id,
+    view: returnContext?.view || "priority",
+    page: String(returnContext?.page || 1),
+  });
+  if (token) params.set("returnToken", token);
+  const separator = pathAndQuery.includes("?") ? "&" : "?";
+
+  return `${pathAndQuery}${separator}${params.toString()}${hash ? `#${hash}` : ""}`;
+}
+
+function getPanelScrollTop() {
+  if (typeof window === "undefined") return 0;
+  return document.getElementById(LEAD_DETAIL_PANEL_SCROLL_ID)?.scrollTop || 0;
+}
+
 export function LeadDetailPanel({
   lead,
+  mentions = [],
   nowMs,
   onClose,
   onAfterResult,
   onStartedAction,
+  returnContext,
+  activeTab: activeTabProp,
+  onTabChange,
 }: LeadDetailPanelProps) {
   const { profile } = useAuth();
   const { updateLeadDetails } = useDashboardStore();
-  const [activeTab, setActiveTab] = useState<PanelTab>("action");
+  const [internalActiveTab, setInternalActiveTab] = useState<PanelTab>("action");
   const [selectedResult, setSelectedResult] = useState<ResultAction | null>(null);
   const [note, setNote] = useState("");
   const [followUpDate, setFollowUpDate] = useState("");
@@ -85,10 +134,34 @@ export function LeadDetailPanel({
   const [isSaving, setIsSaving] = useState(false);
   const [isOpening, setIsOpening] = useState("");
   const [saveError, setSaveError] = useState("");
+  const activeTab = activeTabProp || internalActiveTab;
 
   const meta = useMemo(
     () => (lead ? getLeadWorkbenchMeta(lead, nowMs) : null),
     [lead, nowMs],
+  );
+
+  const mentionById = useMemo(
+    () => new Map(mentions.map((item) => [item.id, item])),
+    [mentions],
+  );
+
+  const mentionTarget = useMemo(
+    () => (lead ? resolveLeadMentionTarget(lead, mentionById) : null),
+    [lead, mentionById],
+  );
+
+  const returnToken = useMemo(
+    () => (lead ? createLeadReturnToken(lead.id) : ""),
+    [lead],
+  );
+
+  const mentionDetailHref = useMemo(
+    () =>
+      lead && mentionTarget?.canOpenMentionDetail
+        ? appendLeadReturnParams(mentionTarget.href, lead, returnContext, returnToken)
+        : "",
+    [lead, mentionTarget, returnContext, returnToken],
   );
 
   if (!lead || !meta) {
@@ -112,6 +185,31 @@ export function LeadDetailPanel({
 
   const getOwnerName = () =>
     profile?.displayName || profile?.email || "Nhân viên xử lý";
+
+  const handleTabChange = (tab: PanelTab) => {
+    if (onTabChange) {
+      onTabChange(tab);
+      return;
+    }
+    setInternalActiveTab(tab);
+  };
+
+  const handleOpenMentionDetail = () => {
+    if (!returnToken) return;
+
+    saveLeadReturnContext({
+      token: returnToken,
+      leadId: lead.id,
+      selectedLeadId: returnContext?.selectedLeadId || lead.id,
+      view: returnContext?.view || "priority",
+      page: returnContext?.page || 1,
+      filters: returnContext?.filters || {},
+      panelTab: activeTab,
+      listScrollTop: returnContext?.listScrollTop || 0,
+      panelScrollTop: getPanelScrollTop(),
+      openedAt: new Date().toISOString(),
+    });
+  };
 
   const handleClaim = async () => {
     if (!canEdit || !profile) return;
@@ -299,7 +397,7 @@ export function LeadDetailPanel({
             <button
               key={tab.id}
               type="button"
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => handleTabChange(tab.id)}
               className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
                 activeTab === tab.id
                   ? "bg-[var(--color-brand-subtle)] text-[var(--color-brand)]"
@@ -312,7 +410,10 @@ export function LeadDetailPanel({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
+      <div
+        id={LEAD_DETAIL_PANEL_SCROLL_ID}
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4"
+      >
         {activeTab === "action" && (
           <div className="space-y-4">
             <section className="rounded-xl border border-[var(--color-border)] p-4">
@@ -392,21 +493,40 @@ export function LeadDetailPanel({
               <p className="text-sm font-bold text-[var(--color-text-primary)]">
                 Nguồn lead
               </p>
+              {mentionTarget?.canOpenMentionDetail && mentionDetailHref ? (
+                <Link
+                  href={mentionDetailHref}
+                  onClick={handleOpenMentionDetail}
+                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold text-white transition hover:bg-[var(--color-brand-hover)]"
+                >
+                  <span className="material-symbols-outlined text-base">
+                    article
+                  </span>
+                  Xem chi tiết đề cập
+                </Link>
+              ) : (
+                <p className="mt-3 rounded-lg bg-[var(--color-bg-surface-raised)] p-3 text-sm text-[var(--color-text-secondary)]">
+                  Chưa tìm thấy bản ghi đề cập trong hệ thống.
+                </p>
+              )}
+
               {sourceAction ? (
                 <button
                   type="button"
                   onClick={() => handleOpenAction(sourceAction)}
-                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-brand-subtle)]"
+                  className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-brand-subtle)]"
                 >
                   <span className="material-symbols-outlined text-base">
                     {sourceAction.icon}
                   </span>
-                  {isOpening === sourceAction.label ? "Đang mở..." : sourceAction.label}
+                  {isOpening === sourceAction.label ? "Đang mở..." : "Mở nguồn bên ngoài"}
                 </button>
               ) : (
-                <p className="mt-2 rounded-lg bg-[var(--color-bg-surface-raised)] p-3 text-sm text-[var(--color-text-secondary)]">
-                  Lead này chưa có đường dẫn nguồn.
-                </p>
+                !mentionTarget?.canOpenMentionDetail && (
+                  <p className="mt-2 rounded-lg bg-[var(--color-bg-surface-raised)] p-3 text-sm text-[var(--color-text-secondary)]">
+                    Lead này chưa có đường dẫn nguồn.
+                  </p>
+                )
               )}
             </section>
 

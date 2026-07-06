@@ -57,6 +57,11 @@ export interface Alert {
 
 export interface Lead {
   id: string;
+  mention_id?: string;
+  source_mention_id?: string;
+  parent_id?: string | null;
+  content_type?: "post" | "comment" | "reply";
+  post_id?: string;
   workspace_id: string;
   platform: Platform;
   author?: string;
@@ -67,6 +72,7 @@ export interface Lead {
   created_at: string;
   expiry_at?: string;
   url?: string;
+  source_url?: string;
   
   // Contact Info
   phone?: string;

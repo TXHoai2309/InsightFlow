@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useDashboard } from "@/hooks/useDashboardData";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import {
@@ -22,9 +22,25 @@ import {
   sortLeadsForWorkbench,
   type LeadWorkbenchView,
 } from "@/lib/lead-workbench";
+import {
+  LEAD_DETAIL_PANEL_SCROLL_ID,
+  clearLeadReturnContext,
+  loadLeadReturnContext,
+  type LeadDetailPanelTab,
+} from "@/lib/lead-return-context";
 import { normalizeBrandName } from "@/lib/services/dashboard";
 
 const LEADS_PAGE_SIZE = 5;
+const APP_SCROLL_ROOT_SELECTOR = '[data-app-scroll-root="true"]';
+
+function getAppScrollRoot() {
+  return document.querySelector<HTMLElement>(APP_SCROLL_ROOT_SELECTOR);
+}
+
+function getLeadListScrollTop() {
+  if (typeof window === "undefined") return 0;
+  return getAppScrollRoot()?.scrollTop || window.scrollY || 0;
+}
 
 export default function LeadsPage() {
   const { profile, loading: authLoading } = useAuth();
@@ -33,6 +49,15 @@ export default function LeadsPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [currentTime, setCurrentTime] = useState(Date.now());
+  const [detailTab, setDetailTab] = useState<LeadDetailPanelTab>("action");
+  const [highlightedLeadId, setHighlightedLeadId] = useState<string | null>(null);
+  const [restoreNotice, setRestoreNotice] = useState("");
+  const hasRestoredReturnContext = useRef(false);
+  const skipNextPageReset = useRef(false);
+  const pendingRestoreLeadId = useRef<string | null>(null);
+  const pendingRestoreScrollTop = useRef<number | null>(null);
+  const pendingRestorePanelScrollTop = useRef<number | null>(null);
+  const hasReconciledRestoreLead = useRef(false);
   const canViewLeads = canPerformAction(profile, "view_leads");
   const hasBrandScope = hasBusinessBrandScope(profile);
 
@@ -43,6 +68,7 @@ export default function LeadsPage() {
     workspaces,
     filters,
     leads,
+    mentions,
     isLoading,
     error,
     setFilters,
@@ -78,6 +104,55 @@ export default function LeadsPage() {
     );
   }, [profile, workbenchViews]);
 
+  useEffect(() => {
+    if (hasRestoredReturnContext.current || workbenchViews.length === 0) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const returnToken = params.get("returnToken");
+    const returnContext = loadLeadReturnContext(returnToken);
+    const requestedFilters = returnContext?.filters;
+    const requestedPanelTab = returnContext?.panelTab;
+    const requestedView = params.get("view") as LeadWorkbenchView | null;
+    const requestedPage = Number(params.get("page") || "1");
+    const requestedLeadId = params.get("leadId");
+    const nextView = returnContext?.view || requestedView;
+    const nextPage = returnContext?.page || requestedPage;
+    const nextLeadId =
+      returnContext?.selectedLeadId ||
+      returnContext?.leadId ||
+      requestedLeadId;
+
+    if (requestedFilters && Object.keys(requestedFilters).length > 0) {
+      skipNextPageReset.current = true;
+      setFilters(requestedFilters);
+    }
+
+    if (requestedPanelTab) {
+      setDetailTab(requestedPanelTab);
+    }
+
+    if (nextView && workbenchViews.some((view) => view.id === nextView)) {
+      skipNextPageReset.current = true;
+      setActiveView(nextView);
+    }
+
+    if (Number.isFinite(nextPage) && nextPage > 0) {
+      setCurrentPage(Math.floor(nextPage));
+    }
+
+    if (nextLeadId) {
+      pendingRestoreLeadId.current = nextLeadId;
+      pendingRestoreScrollTop.current = returnContext?.listScrollTop ?? null;
+      pendingRestorePanelScrollTop.current = returnContext?.panelScrollTop ?? null;
+      setSelectedLeadId(nextLeadId);
+      setHighlightedLeadId(nextLeadId);
+      setRestoreNotice("Đã quay lại đúng lead bạn vừa kiểm tra.");
+    }
+
+    hasRestoredReturnContext.current = true;
+    clearLeadReturnContext(returnToken);
+  }, [setFilters, workbenchViews]);
+
   const visibleBaseLeads = useMemo(
     () => baseLeads.filter((lead) => canLeadBeVisibleToUser(lead, profile)),
     [baseLeads, profile],
@@ -109,6 +184,10 @@ export default function LeadsPage() {
   const totalPages = Math.max(1, Math.ceil(visibleLeads.length / LEADS_PAGE_SIZE));
 
   useEffect(() => {
+    if (skipNextPageReset.current) {
+      skipNextPageReset.current = false;
+      return;
+    }
     setCurrentPage(1);
   }, [activeView, filters.workspace_id, filters.platform]);
 
@@ -122,6 +201,17 @@ export default function LeadsPage() {
   }, [currentPage, visibleLeads]);
 
   useEffect(() => {
+    const restoredLeadId = pendingRestoreLeadId.current;
+    if (restoredLeadId) {
+      if (
+        paginatedLeads.some((lead) => lead.id === restoredLeadId) &&
+        selectedLeadId !== restoredLeadId
+      ) {
+        setSelectedLeadId(restoredLeadId);
+      }
+      return;
+    }
+
     if (paginatedLeads.length === 0) {
       setSelectedLeadId(null);
       return;
@@ -136,6 +226,112 @@ export default function LeadsPage() {
     visibleLeads.find((lead) => lead.id === selectedLeadId) ||
     visibleBaseLeads.find((lead) => lead.id === selectedLeadId) ||
     null;
+
+  useEffect(() => {
+    const restoredLeadId = pendingRestoreLeadId.current;
+    if (!restoredLeadId || hasReconciledRestoreLead.current || isLoading) return;
+    if (visibleBaseLeads.length === 0 && leads.length > 0) {
+      setRestoreNotice(
+        "Lead vừa kiểm tra không còn trong phạm vi hàng chờ tiềm năng hiện tại.",
+      );
+      pendingRestoreLeadId.current = null;
+      pendingRestoreScrollTop.current = null;
+      pendingRestorePanelScrollTop.current = null;
+      setHighlightedLeadId(null);
+      hasReconciledRestoreLead.current = true;
+      return;
+    }
+
+    const restoredLead = visibleBaseLeads.find((lead) => lead.id === restoredLeadId);
+    if (!restoredLead) return;
+
+    if (!visibleLeads.some((lead) => lead.id === restoredLeadId)) {
+      const nextView = workbenchViews.find((view) =>
+        matchesLeadWorkbenchView(restoredLead, view.id, currentTime, profile),
+      );
+
+      if (nextView) {
+        skipNextPageReset.current = true;
+        setActiveView(nextView.id);
+        setRestoreNotice(
+          `Lead vừa kiểm tra đã đổi nhóm, hệ thống đã mở lại trong "${nextView.label}".`,
+        );
+        return;
+      }
+
+      setRestoreNotice(
+        "Lead vừa kiểm tra không còn nằm trong hàng chờ xử lý tiềm năng.",
+      );
+      pendingRestoreLeadId.current = null;
+      pendingRestoreScrollTop.current = null;
+      pendingRestorePanelScrollTop.current = null;
+      setHighlightedLeadId(null);
+      hasReconciledRestoreLead.current = true;
+      return;
+    }
+
+    const visibleIndex = visibleLeads.findIndex((lead) => lead.id === restoredLeadId);
+    if (visibleIndex >= 0) {
+      const pageForLead = Math.floor(visibleIndex / LEADS_PAGE_SIZE) + 1;
+      if (pageForLead !== currentPage) {
+        setCurrentPage(pageForLead);
+        return;
+      }
+    }
+
+    hasReconciledRestoreLead.current = true;
+  }, [
+    currentPage,
+    currentTime,
+    isLoading,
+    leads.length,
+    profile,
+    visibleBaseLeads,
+    visibleLeads,
+    workbenchViews,
+  ]);
+
+  useEffect(() => {
+    const restoredLeadId = pendingRestoreLeadId.current;
+    if (!restoredLeadId) return;
+    if (!paginatedLeads.some((lead) => lead.id === restoredLeadId)) return;
+
+    const scrollTimer = window.setTimeout(() => {
+      const row = document.getElementById(`lead-row-${restoredLeadId}`);
+      if (row) {
+        row.scrollIntoView({ block: "center", behavior: "smooth" });
+      } else if (pendingRestoreScrollTop.current !== null) {
+        const scrollTop = Math.max(0, pendingRestoreScrollTop.current);
+        const scrollRoot = getAppScrollRoot();
+        if (scrollRoot) scrollRoot.scrollTo({ top: scrollTop, behavior: "smooth" });
+        else window.scrollTo({ top: scrollTop, behavior: "smooth" });
+      }
+
+      if (pendingRestorePanelScrollTop.current !== null) {
+        const panel = document.getElementById(LEAD_DETAIL_PANEL_SCROLL_ID);
+        if (panel) {
+          panel.scrollTo({
+            top: Math.max(0, pendingRestorePanelScrollTop.current),
+            behavior: "auto",
+          });
+        }
+      }
+    }, 120);
+
+    const highlightTimer = window.setTimeout(() => {
+      setHighlightedLeadId((current) =>
+        current === restoredLeadId ? null : current,
+      );
+      pendingRestoreLeadId.current = null;
+      pendingRestoreScrollTop.current = null;
+      pendingRestorePanelScrollTop.current = null;
+    }, 4000);
+
+    return () => {
+      window.clearTimeout(scrollTimer);
+      window.clearTimeout(highlightTimer);
+    };
+  }, [paginatedLeads]);
 
   const firstLeadNumber =
     visibleLeads.length === 0 ? 0 : (currentPage - 1) * LEADS_PAGE_SIZE + 1;
@@ -224,6 +420,19 @@ export default function LeadsPage() {
           profile={profile}
           onSelectView={(view) => setActiveView(view)}
         />
+
+        {restoreNotice && (
+          <section className="flex items-center justify-between gap-3 rounded-xl border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] px-4 py-3 text-sm font-semibold text-[var(--color-text-primary)]">
+            <span>{restoreNotice}</span>
+            <button
+              type="button"
+              onClick={() => setRestoreNotice("")}
+              className="rounded-lg px-2 py-1 text-[var(--color-brand)] hover:bg-[var(--color-bg-surface)]"
+            >
+              Đóng
+            </button>
+          </section>
+        )}
 
         {pendingResultLead && (
           <section className="flex flex-col gap-3 rounded-xl border border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] p-3 md:flex-row md:items-center md:justify-between">
@@ -324,7 +533,11 @@ export default function LeadsPage() {
                   rank={(currentPage - 1) * LEADS_PAGE_SIZE + index + 1}
                   nowMs={currentTime}
                   selected={selectedLeadId === lead.id}
-                  onSelect={(nextLead: Lead) => setSelectedLeadId(nextLead.id)}
+                  highlighted={highlightedLeadId === lead.id}
+                  onSelect={(nextLead: Lead) => {
+                    setSelectedLeadId(nextLead.id);
+                    setRestoreNotice("");
+                  }}
                   onStartedAction={handleStartedAction}
                 />
               ))
@@ -364,10 +577,20 @@ export default function LeadsPage() {
 
       <LeadDetailPanel
         lead={selectedLead}
+        mentions={mentions}
         nowMs={currentTime}
         onClose={() => setSelectedLeadId(null)}
         onAfterResult={handleAfterResult}
         onStartedAction={handleStartedAction}
+        returnContext={{
+          view: activeView,
+          page: currentPage,
+          selectedLeadId,
+          filters,
+          listScrollTop: getLeadListScrollTop(),
+        }}
+        activeTab={detailTab}
+        onTabChange={setDetailTab}
       />
     </div>
   );
