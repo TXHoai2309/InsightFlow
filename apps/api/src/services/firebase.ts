@@ -36,8 +36,9 @@ for (const p of possiblePaths) {
 }
 
 // Re-evaluate PROJECT_ID after loading env.
-// The default Admin app must use the auth project (primaryProjectId), because frontend ID tokens
-// are issued by NEXT_PUBLIC_FIREBASE_PROJECT_ID. The named app (secondaryProjectId) is used for Firestore.
+// The default Admin app must use the auth/user-management project because frontend
+// ID tokens are issued by NEXT_PUBLIC_FIREBASE_PROJECT_ID, and account profiles live
+// in that same project's `users` collection.
 const primaryProjectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "insightflow-6ce1f";
 const secondaryProjectId = process.env.NEXT_PUBLIC_FIREBASE_SECOND_PROJECT_ID || "datainsight-330eb";
 
@@ -122,6 +123,7 @@ if (getApps().length === 0) {
 const defaultApp = getApps().find(app => app.name === "[DEFAULT]");
 const secondApp = getApps().find(app => app.name === "datainsight") || defaultApp;
 
-export const db = secondApp ? getFirestore(secondApp) : getFirestore();
+export const db = defaultApp ? getFirestore(defaultApp) : getFirestore();
+export const dataDb = secondApp ? getFirestore(secondApp) : db;
 export const authAdmin = defaultApp ? getAuth(defaultApp) : getAuth();
 export default defaultApp;

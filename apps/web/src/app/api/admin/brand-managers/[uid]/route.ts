@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getApiBaseUrl } from "@/lib/apiProxy";
+import { getApiBaseUrl, readApiResponse } from "@/lib/apiProxy";
 
 export async function PATCH(request: NextRequest, { params }: { params: { uid: string } }) {
   try {
@@ -17,7 +17,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { uid: s
       },
       body: JSON.stringify(body),
     });
-    const data = await response.json();
+    const data = await readApiResponse(response);
 
     if (!response.ok) {
       return NextResponse.json({ error: data.error || "Khong the cap nhat tai khoan." }, { status: response.status });

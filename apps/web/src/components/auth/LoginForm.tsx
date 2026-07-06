@@ -69,6 +69,12 @@ export default function LoginForm() {
         return;
       }
 
+      if (userData.disabled === true) {
+        await signOut(auth);
+        setError(t("auth.errors.userDisabled"));
+        return;
+      }
+
       const profileFromStore = buildUserRoleProfile({
         uid: credential.user.uid,
         email: credential.user.email,
