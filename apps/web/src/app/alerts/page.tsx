@@ -15,7 +15,7 @@ import {
   isRecordInBrandScope,
 } from "@/lib/brandScope";
 import { canPerformAction } from "@/lib/rbac";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, doc, getDoc } from "firebase/firestore";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -150,6 +150,8 @@ export default function AlertsPage() {
   const [reachValue, setReachValue] = useState(105000);
   const [signalFilter, setSignalFilter] = useState("all");
   const [selectedEvidence, setSelectedEvidence] = useState<any>(null);
+  const [parentText, setParentText] = useState<string | null>(null);
+  const [loadingParent, setLoadingParent] = useState(false);
   const [copied, setCopied] = useState(false);
   const [trendAlert, setTrendAlert] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<"priority" | "new" | "resolving" | "resolved" | "requests">("priority");
@@ -242,6 +244,57 @@ export default function AlertsPage() {
     };
   }, [resolvingAlert?.id, unlockAlertForResolution]);
 
+  // Resolve parent post/comment text for Evidence Detail Modal
+  useEffect(() => {
+    if (!selectedEvidence) {
+      setParentText(null);
+      return;
+    }
+
+    // 1. If evidence has post_content and comment_content, and they are different, use them
+    if (
+      selectedEvidence.post_content &&
+      selectedEvidence.comment_content &&
+      selectedEvidence.post_content.trim() !== selectedEvidence.comment_content.trim()
+    ) {
+      setParentText(selectedEvidence.post_content);
+      return;
+    }
+
+    // 2. If it has parent_id, try to find the parent comment/post text in alerts/rawAlerts or Firestore
+    if (selectedEvidence.parent_id) {
+      const parent =
+        alerts.find((a) => a.id === selectedEvidence.parent_id) ||
+        rawAlerts.find((a) => a.id === selectedEvidence.parent_id);
+      if (parent) {
+        setParentText(parent.text);
+        return;
+      }
+
+      setLoadingParent(true);
+      const fetchParent = async () => {
+        try {
+          const docRef = doc(dbSecond, "insightflow_labels", selectedEvidence.parent_id);
+          const snap = await getDoc(docRef);
+          if (snap.exists()) {
+            const data = snap.data();
+            const text = String(
+              data.clean_text || data.original_text || data.text || data.content || ""
+            );
+            setParentText(text);
+          }
+        } catch (err) {
+          console.error("Failed to fetch parent post from firestore:", err);
+        } finally {
+          setLoadingParent(false);
+        }
+      };
+      fetchParent();
+    } else {
+      setParentText(null);
+    }
+  }, [selectedEvidence, alerts, rawAlerts]);
+
   const dashboardStore = useDashboardStore();
   useDashboard({ autoFetch: true, refetchInterval: 60000 });
 
@@ -322,9 +375,8 @@ export default function AlertsPage() {
     if (authLoading || !canViewCrisisQueue) return;
     setFilters({ status: "all" });
     fetchAlerts(scopedBrandKey);
-<<<<<<< HEAD
     fetchCorrectionRequests(scopedBrandKey);
-  }, [authLoading, canViewCrisisQueue, scopedBrandKey, fetchAlerts, fetchCorrectionRequests]);
+  }, [authLoading, canViewCrisisQueue, scopedBrandKey, fetchAlerts, fetchCorrectionRequests, setFilters]);
 
   // Auto-switch view Mode once based on high-risk counts
   useEffect(() => {
@@ -335,9 +387,6 @@ export default function AlertsPage() {
       }
     }
   }, [isLoading, rawAlerts, highRiskIncidents.length]);
-=======
-  }, [authLoading, canViewCrisisQueue, scopedBrandKey, fetchAlerts, setFilters]);
->>>>>>> e6849db9d79bbde1057a2bceaf9044b929da5402
 
   useEffect(() => {
     if (!brandFilterLocked || brands.length === 0) return;
@@ -690,7 +739,6 @@ export default function AlertsPage() {
         </button>
       </div>
 
-<<<<<<< HEAD
       {activeTab === "priority" && (
         <div className="glass-card border-l-4 border-[var(--color-error)] rounded-2xl p-5 md:p-6 space-y-4 shadow-md bg-[var(--color-bg-surface-raised)]/20">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[var(--color-border)] pb-4">
@@ -717,61 +765,6 @@ export default function AlertsPage() {
                 defaultValue: `CÓ ${highRiskIncidents.length} SỰ VỤ RỦI RO CAO CẦN XỬ LÝ KHẨN CẤP!`
               })}
             </div>
-=======
-      {/* ── Filters Bar ── */}
-      <div className="glass-card rounded-xl p-3 md:p-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-3">
-          <select
-            value={filters.brand}
-            onChange={(e) => setFilters({ brand: e.target.value })}
-            disabled={brandFilterLocked}
-            className={`w-full select-app border border-[var(--color-border)] rounded-xl text-xs md:text-sm py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 font-medium ${brandFilterLocked ? "opacity-70 cursor-not-allowed" : ""}`}
-          >
-            {!brandFilterLocked && (
-              <option value="all" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("alerts.filters.brandAll")}</option>
-            )}
-            {brands.map((b) => (
-              <option key={b} value={b} style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
-                {formatBrandName(b)}
-              </option>
-            ))}
-          </select>
-          <select
-            value={filters.severity}
-            onChange={(e) => setFilters({ severity: e.target.value })}
-            className="w-full select-app border border-[var(--color-border)] rounded-xl text-xs md:text-sm py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 font-medium"
-          >
-            <option value="all" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("alerts.filters.severityAll")}</option>
-            <option value="critical" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("alerts.filters.severity.critical")}</option>
-            <option value="high" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("alerts.filters.severity.high")}</option>
-            <option value="medium" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("alerts.filters.severity.medium")}</option>
-            <option value="low" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("alerts.filters.severity.low")}</option>
-          </select>
-          <select
-            value={signalFilter}
-            onChange={(e) => setSignalFilter(e.target.value)}
-            className="w-full select-app border border-[var(--color-border)] rounded-xl text-xs md:text-sm py-2.5 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 font-medium"
-          >
-            <option value="all" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("alerts.filters.signalAll")}</option>
-            <option value="spike" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("alerts.filters.spike")}</option>
-            <option value="reach" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("alerts.filters.reach")}</option>
-            <option value="sensitive" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>{t("alerts.filters.sensitive")}</option>
-          </select>
-        </div>
-      </div>
-
-      {/* ── Alert Cards ── */}
-      <div className="space-y-4 md:space-y-5">
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center p-12 space-y-4 glass-card rounded-2xl">
-            <svg className="animate-spin h-8 w-8 text-primary" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-            </svg>
-            <p className="text-sm font-medium text-on-surface-variant animate-pulse">
-              {t("alerts.list.loading")}
-            </p>
->>>>>>> e6849db9d79bbde1057a2bceaf9044b929da5402
           </div>
 
           {highRiskIncidents.length === 0 ? (
@@ -807,7 +800,6 @@ export default function AlertsPage() {
                           ? "bg-[var(--color-brand)]/10 border-[var(--color-brand)] shadow-sm"
                           : "bg-white dark:bg-[var(--color-bg-surface-raised)] border-[var(--color-border)] hover:bg-[var(--color-bg-surface-high)]/40"
                           }`}
-<<<<<<< HEAD
                       >
                         {/* Top row */}
                         <div className="flex items-center justify-between w-full">
@@ -857,91 +849,6 @@ export default function AlertsPage() {
                       </button>
                     );
                   })}
-=======
-                        >
-                          <span className="material-symbols-outlined text-[14px]">{ch.icon}</span>
-                          <span className="text-[10px] font-bold uppercase">{ch.label}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Action buttons */}
-                    <div className="grid grid-cols-3 sm:flex gap-2 items-center">
-                      {canUpdateCrisisStatus && alert.status === "new" && (
-                        <button
-                          onClick={() => updateAlertStatus(alert.id, "acknowledged", profile)}
-                          className="px-3 py-2.5 rounded-xl border border-[var(--color-border)] text-[11px] font-bold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)] transition-all"
-                        >
-                          {t("alerts.card.acknowledge")}
-                        </button>
-                      )}
-                      {alert.status !== "resolved" ? (
-                        alert.status === "resolving" ? (
-                          <>
-                            <button 
-                              onClick={() => setResolvingAlert(alert)}
-                              className="px-3 py-2.5 rounded-xl border border-[var(--color-brand)]/30 text-[var(--color-brand)] text-[11px] font-bold hover:bg-[var(--color-brand-subtle)] transition-all cursor-pointer flex items-center gap-1"
-                            >
-                              <span className="material-symbols-outlined text-[13px]">edit_note</span>
-                              {t("alerts.card.resolveFurther", { defaultValue: "Giải quyết tiếp" })}
-                            </button>
-                            <button
-                              onClick={() => updateAlertStatus(alert.id, "resolved", profile)}
-                              className="px-3 py-2.5 rounded-xl bg-[var(--color-brand)] text-white text-[11px] font-bold hover:bg-[var(--color-brand-hover)] active:scale-95 transition-all shadow-sm cursor-pointer flex items-center gap-1"
-                            >
-                              <span className="material-symbols-outlined text-[13px]">check_circle</span>
-                              {t("alerts.card.resolved", { defaultValue: "Đã giải quyết" })}
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <button 
-                              onClick={() => setTrendAlert(alert)}
-                              className="px-3 py-2.5 rounded-xl border border-[var(--color-brand)]/30 text-[var(--color-brand)] text-[11px] font-bold hover:bg-[var(--color-brand-subtle)] transition-all cursor-pointer flex items-center gap-1"
-                            >
-                              <span className="material-symbols-outlined text-[13px]">trending_up</span>
-                              {t("alerts.card.trend")}
-                            </button>
-                            <button
-                              onClick={() => setResolvingAlert(alert)}
-                              className="px-3 py-2.5 rounded-xl bg-[var(--color-brand)] text-white text-[11px] font-bold hover:bg-[var(--color-brand-hover)] active:scale-95 transition-all shadow-sm cursor-pointer flex items-center gap-1"
-                            >
-                              <span className="material-symbols-outlined text-[13px]">pending_actions</span>
-                              {t("alerts.card.resolve", { defaultValue: "Giải quyết" })}
-                            </button>
-                          </>
-                        )
-                      ) : (
-                        <>
-                          <button 
-                            onClick={() => setViewingHistoryAlert(alert)}
-                            className="px-3 py-2.5 rounded-xl border border-[var(--color-brand)]/30 text-[var(--color-brand)] text-[11px] font-bold hover:bg-[var(--color-brand-subtle)] transition-all cursor-pointer flex items-center gap-1"
-                          >
-                            <span className="material-symbols-outlined text-[13px]">history</span>
-                            {t("alerts.card.viewHistory", { defaultValue: "Xem lịch sử" })}
-                          </button>
-                          {canUpdateCrisisStatus && (
-                            <button 
-                              onClick={() => {
-                                const nextStatus = alert.resolution_history && alert.resolution_history.length > 0 ? "resolving" : "new";
-                                updateAlertStatus(alert.id, nextStatus, profile);
-                              }}
-                              title="Khôi phục trạng thái xử lý"
-                              className="px-3 py-2.5 rounded-xl border border-[var(--color-border)] text-[var(--color-text-secondary)] text-[11px] font-bold hover:bg-[var(--color-bg-surface-raised)] transition-all cursor-pointer flex items-center gap-1 active:scale-95"
-                            >
-                              <span className="material-symbols-outlined text-[13px]">undo</span>
-                              {t("alerts.card.restore", { defaultValue: "Khôi phục" })}
-                            </button>
-                          )}
-                          <span className="text-[var(--color-success)] font-bold text-xs flex items-center gap-1 bg-[var(--color-success-subtle)] border border-[var(--color-success)]/30 px-3 py-1.5 rounded-xl">
-                            <span className="material-symbols-outlined text-sm">check_circle</span>
-                            {t("alerts.card.resolved")}
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  </div>
->>>>>>> e6849db9d79bbde1057a2bceaf9044b929da5402
                 </div>
               </div>
 
@@ -1406,7 +1313,11 @@ export default function AlertsPage() {
                       shares: alert.shares || 0
                     }),
                     source: alert.source,
-                    url: alert.url || "#"
+                    url: alert.url || "#",
+                    post_content: alert.post_content || "",
+                    comment_content: alert.comment_content || "",
+                    parent_id: alert.parent_id,
+                    content_type: alert.content_type
                   }
                 ];
 
@@ -1823,12 +1734,56 @@ export default function AlertsPage() {
                   </span>
                   <span className="text-xs font-bold text-app-text-secondary">{selectedEvidence.author}</span>
                 </div>
-                <h4 className="text-base font-bold text-app leading-snug">{selectedEvidence.title}</h4>
+                {!(parentText && parentText.trim() !== selectedEvidence.text.trim()) && (
+                  <h4 className="text-base font-bold text-app leading-snug">{selectedEvidence.title}</h4>
+                )}
               </div>
 
-              <p className="text-sm text-app-text-secondary leading-relaxed bg-app-surface-raised/50 p-4 rounded-xl border border-app/20">
-                "{selectedEvidence.text}"
-              </p>
+              {loadingParent ? (
+                <div className="flex flex-col items-center justify-center py-8 gap-2 text-app-text-secondary">
+                  <div className="w-6 h-6 rounded-full border-2 border-app-brand border-t-transparent animate-spin" />
+                  <span className="text-xs font-semibold">Đang tải nội dung gốc...</span>
+                </div>
+              ) : parentText && parentText.trim() !== selectedEvidence.text.trim() ? (
+                <div className="space-y-4">
+                  {/* Original Post */}
+                  <div className="relative p-4 rounded-xl bg-app-surface-raised/20 border border-app/10 hover:border-app/25 transition-all">
+                    <div className="flex items-center gap-1.5 mb-2 text-[10px] font-bold text-app-text-secondary uppercase tracking-wider">
+                      <span className="material-symbols-outlined text-xs text-app-brand">feed</span>
+                      {selectedEvidence.content_type === "reply"
+                        ? t("alerts.evidence.parentComment", { defaultValue: "Bình luận gốc" })
+                        : t("alerts.evidence.originalPost", { defaultValue: "Bài đăng gốc" })}
+                    </div>
+                    <p className="text-sm text-app-text-secondary leading-relaxed italic line-clamp-4 hover:line-clamp-none transition-all cursor-pointer">
+                      "{parentText}"
+                    </p>
+                  </div>
+
+                  {/* Connector Line */}
+                  <div className="flex justify-center -my-3 relative z-10">
+                    <div className="w-8 h-8 rounded-full bg-app-surface border border-app/20 flex items-center justify-center text-app-text-secondary shadow-sm">
+                      <span className="material-symbols-outlined text-sm">subdirectory_arrow_right</span>
+                    </div>
+                  </div>
+
+                  {/* Flagger/Comment */}
+                  <div className="p-4 rounded-xl bg-app-surface-raised/50 border border-app/30 shadow-sm relative">
+                    <div className="flex items-center gap-1.5 mb-2 text-[10px] font-black text-app-brand uppercase tracking-wider">
+                      <span className="material-symbols-outlined text-xs">comment</span>
+                      {selectedEvidence.content_type === "reply"
+                        ? t("alerts.evidence.flaggedReply", { defaultValue: "Phản hồi liên quan" })
+                        : t("alerts.evidence.flaggedComment", { defaultValue: "Bình luận liên quan" })}
+                    </div>
+                    <p className="text-sm text-app-text-secondary leading-relaxed font-semibold">
+                      "{selectedEvidence.text}"
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-app-text-secondary leading-relaxed bg-app-surface-raised/50 p-4 rounded-xl border border-app/20">
+                  "{selectedEvidence.text}"
+                </p>
+              )}
 
               {/* Metrics grid */}
               <div className="grid grid-cols-2 gap-3 bg-app-surface-raised/30 p-3 rounded-xl border border-app/10">
@@ -1896,10 +1851,7 @@ export default function AlertsPage() {
           }}
           onSave={async (id, note, imageUrl, targetStatus = "resolving") => {
             await updateAlertStatus(id, targetStatus, profile, { note, image_url: imageUrl });
-<<<<<<< HEAD
             unlockAlertForResolution(id);
-=======
->>>>>>> e6849db9d79bbde1057a2bceaf9044b929da5402
           }}
         />
       )}

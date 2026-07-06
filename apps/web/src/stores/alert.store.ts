@@ -36,6 +36,10 @@ export interface AlertData {
   being_resolved_by?: string | null;
   being_resolved_at?: string | null;
   resolution_history?: ResolutionAttempt[];
+  post_content?: string;
+  comment_content?: string;
+  parent_id?: string | null;
+  content_type?: string;
 }
 
 export interface AlertFilters {
@@ -276,6 +280,26 @@ export const useAlertStore = create<AlertState>()(
               "",
             );
 
+            const post_content = String(
+              data.post_content ||
+              data.post_text ||
+              data.post_caption ||
+              data.caption ||
+              data.original_post ||
+              ""
+            );
+
+            const comment_content = String(
+              data.comment_content ||
+              data.comment_text ||
+              data.comment ||
+              data.clean_text ||
+              data.processed_text ||
+              data.text ||
+              data.content ||
+              ""
+            );
+
             const alert = {
               id: String(data.id || document.id),
               brand: formatBrandName(String(data.brand || "")),
@@ -303,6 +327,10 @@ export const useAlertStore = create<AlertState>()(
               being_resolved_by: data.being_resolved_by || null,
               being_resolved_at: data.being_resolved_at || null,
               resolution_history: Array.isArray(data.resolution_history) ? data.resolution_history : undefined,
+              post_content,
+              comment_content,
+              parent_id: data.parent_id ? String(data.parent_id) : null,
+              content_type: data.content_type ? String(data.content_type) : undefined,
             };
 
             if (!isRecordInBrandScope({ brand: alert.brand }, scopedBrandKey)) return;
