@@ -6,60 +6,40 @@
   - Environments: .env.local
 
    Creating an optimized production build ...
+ ⚠ Compiled with warnings
+
+./src/lib/server/firebaseAdmin.ts
+Critical dependency: the request of a dependency is an expression
+
+Import trace for requested module:
+./src/lib/server/firebaseAdmin.ts
+./src/lib/server/auth.ts
+./src/app/api/staff/route.ts
+
  ✓ Compiled successfully
    Linting and checking validity of types ...
    Collecting page data ...
-   Generating static pages (0/29) ...
-   Generating static pages (7/29) 
-   Generating static pages (14/29) 
-   Generating static pages (21/29) 
- ✓ Generating static pages (29/29)
-   Finalizing page optimization ...
-   Collecting build traces ...
+PageNotFoundError: Cannot find module for page: /api/debug-firestore
+    at getPagePath (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\server\require.js:94:15)
+    at requirePage (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\server\require.js:99:22)
+    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\server\load-components.js:103:84
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async loadComponentsImpl (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\server\load-components.js:103:26)
+    at async D:\Thuc_Tap\InsightFlow\node_modules\next\dist\build\utils.js:1116:32
+    at async Span.traceAsyncFn (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\trace\trace.js:154:20) {
+  code: 'ENOENT'
+}
 
-Route (app)                                                   Size     First Load JS
-┌ ○ /                                                         9.54 kB         302 kB
-├ ○ /_not-found                                               876 B          88.2 kB
-├ ○ /admin                                                    161 B           301 kB
-├ ○ /admin/brand-managers                                     163 B           301 kB
-├ ○ /admin/create-brand-manager                               163 B           301 kB
-├ ○ /alerts                                                   16.2 kB         370 kB
-├ ƒ /api/admin/brand-managers                                 0 B                0 B
-├ ƒ /api/admin/brand-managers/[uid]                           0 B                0 B
-├ ƒ /api/admin/brand-managers/[uid]/reset-temporary-password  0 B                0 B
-├ ƒ /api/admin/brand-managers/[uid]/status                    0 B                0 B
-├ ƒ /api/admin/brand-managers/[uid]/temporary-password        0 B                0 B
-├ ƒ /api/auth/complete-first-password-change                  0 B                0 B
-├ ƒ /api/auth/reset-password                                  0 B                0 B
-├ ○ /api/debug-firestore                                      0 B                0 B
-├ ○ /api/reports/latest                                       0 B                0 B
-├ ƒ /api/staff                                                0 B                0 B
-├ ƒ /api/staff/[uid]                                          0 B                0 B
-├ ƒ /api/staff/[uid]/reset-temporary-password                 0 B                0 B
-├ ƒ /api/staff/[uid]/status                                   0 B                0 B
-├ ƒ /api/staff/[uid]/temporary-password                       0 B                0 B
-├ ○ /change-password                                          3.5 kB          282 kB
-├ ○ /dashboard                                                7.48 kB         361 kB
-├ ○ /forgot-password                                          5.44 kB        92.8 kB
-├ ○ /labeling_tool                                            1.25 kB        88.6 kB
-├ ○ /leads                                                    12.7 kB         302 kB
-├ ○ /login                                                    5.68 kB         293 kB
-├ ○ /mentions                                                 6.41 kB         304 kB
-├ ƒ /mentions/[id]                                            5.99 kB         304 kB
-├ ○ /nganh                                                    6.45 kB         299 kB
-├ ○ /profile                                                  7.23 kB         300 kB
-├ ○ /reports                                                  22.8 kB         307 kB
-├ ○ /settings/brand                                           4.06 kB         266 kB
-├ ○ /team                                                     4.04 kB         300 kB
-├ ○ /team/create-staff                                        198 B           296 kB
-├ ○ /team/staff                                               198 B           296 kB
-└ ○ /ve-chung-toi                                             13.5 kB         306 kB
-+ First Load JS shared by all                                 87.4 kB
-  ├ chunks/1528-6613e1c1fa8266e6.js                           31.7 kB
-  ├ chunks/1dd3208c-1eae7e473ee6cc75.js                       53.6 kB
-  └ other shared chunks (total)                               2 kB
-
-
-○  (Static)   prerendered as static content
-ƒ  (Dynamic)  server-rendered on demand
-
+> Build error occurred
+Error: Failed to collect page data for /api/debug-firestore
+    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\build\utils.js:1269:15
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5) {
+  type: 'Error'
+}
+npm error Lifecycle script `build` failed with error:
+npm error code 1
+npm error path D:\Thuc_Tap\InsightFlow\apps\web
+npm error workspace @insightflow/web@1.0.0
+npm error location D:\Thuc_Tap\InsightFlow\apps\web
+npm error command failed
+npm error command C:\WINDOWS\system32\cmd.exe /d /s /c next build

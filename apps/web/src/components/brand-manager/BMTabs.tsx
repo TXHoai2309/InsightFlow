@@ -11,8 +11,7 @@ export function BMTabs() {
 
   const TABS = [
     { href: "/dashboard", label: t("bm.tab.overview"), icon: "dashboard" },
-    { href: "/dashboard/team", label: t("bm.tab.team"), icon: "group" },
-    { href: "/dashboard/processing", label: t("bm.tab.contact"), icon: "support_agent" },
+    { href: "/dashboard/insights", label: "Tiềm năng & Khủng hoảng", icon: "trending_up" },
   ];
 
 

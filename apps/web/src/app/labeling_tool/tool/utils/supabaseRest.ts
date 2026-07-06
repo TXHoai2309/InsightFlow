@@ -483,8 +483,12 @@ export async function loadSupabaseThreads(
       const parsed = parseCrawlerJson([buildRawPost(post, comments)], false)[0];
       if (!parsed) return null;
 
+      const postAssignments = assignments.filter(a => a.post_id === assignment.post_id);
+      const assignedKeys = postAssignments.map(a => a.entity_key.replace(/^be:/, 'befood:'));
+
       parsed._assignment_id = assignment.assignment_id;
       parsed._assignment_entity_key = assignment.entity_key;
+      parsed._assigned_entity_keys = assignedKeys;
       parsed._data_source = 'supabase';
       parsed.post._queue_status = toQueueStatus(assignment.status);
       parsed.post._data_version = post.data_version;
