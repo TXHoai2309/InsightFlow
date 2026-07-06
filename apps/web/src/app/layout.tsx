@@ -46,7 +46,6 @@ export default function RootLayout({
     "/nganh",
     "/ve-chung-toi",
     "/profile",
-    "/labeling_tool",
   ].includes(pathname || "");
   const hideShell = isAuthPage || isPublicPage;
 
@@ -76,6 +75,10 @@ export default function RootLayout({
         return "metadata.leads.title";
       case "/reports":
         return "metadata.reports.title";
+      case "/labeling_tool":
+        return "Gan nhan du lieu";
+      case "/label-requests":
+        return "Duyet yeu cau gan lai nhan";
       default:
         if (path.startsWith("/settings")) return "metadata.settings.title";
         return "metadata.default.title";

@@ -1,0 +1,1344 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import {
+  addDoc,
+  collection,
+  doc,
+  getDocs,
+  limit,
+  query,
+  serverTimestamp,
+  updateDoc,
+} from "firebase/firestore";
+import { useAuth } from "@/hooks/useAuth";
+import { dbData } from "@/lib/firebase";
+
+type Sentiment = "positive" | "negative" | "neutral" | null;
+type Urgency = "normal" | "notable" | "crisis" | null;
+type Intent = "hot" | "warm" | "cold" | "none" | null;
+
+interface LabelValue {
+  sentiment?: Sentiment;
+  topic?: string;
+  relevance?: boolean | null;
+  urgency?: Urgency;
+  intent?: Intent;
+}
+
+interface LabelHistoryItem {
+  action: string;
+  by_name?: string;
+  by_email?: string;
+  at?: string;
+  note?: string;
+  from?: LabelValue;
+  to?: LabelValue;
+}
+
+interface LabelRequest {
+  id: string;
+  status: "pending" | "approved" | "rejected" | "edited";
+  brand_id?: string;
+  brand_name?: string;
+  mention_id: string;
+  requested_by_name: string;
+  requested_by_email?: string;
+  requested_by_role?: string;
+  reason?: string;
+  old_label: LabelValue;
+  proposed_label: LabelValue;
+  final_label?: LabelValue;
+  mention: {
+    id: string;
+    parent_id?: string | null;
+    platform: string;
+    content_type: "post" | "comment" | "reply";
+    content: string;
+    post_content?: string;
+    comment_content?: string;
+    author?: string;
+    posted_at?: string;
+    created_at?: string;
+    url?: string;
+  };
+  history?: LabelHistoryItem[];
+  created_at?: unknown;
+  isDemo?: boolean;
+}
+
+interface LabelAuditEntry {
+  id: string;
+  request_id?: string;
+  brand_id?: string;
+  brand_name?: string;
+  mention_id: string;
+  mention_content?: string;
+  action: LabelRequest["status"] | "created" | "note_added";
+  status: LabelRequest["status"] | "pending";
+  old_label: LabelValue;
+  new_label: LabelValue;
+  requested_by_name: string;
+  requested_by_email?: string;
+  requested_by_role?: string;
+  reviewed_by_name?: string;
+  reviewed_by_email?: string;
+  changed_at: unknown;
+  source?: string;
+  note?: string;
+  isDemo?: boolean;
+}
+
+interface HistoryFilters {
+  fromDate: string;
+  toDate: string;
+  labelType: "all" | "sentiment" | "topic" | "relevance" | "urgency" | "intent";
+  requester: string;
+  status: "all" | LabelRequest["status"] | "created" | "note_added";
+}
+
+const TOPIC_OPTIONS = [
+  "quality",
+  "price",
+  "service",
+  "staff",
+  "delivery",
+  "experience",
+  "legal",
+  "operation",
+  "marketing",
+  "competitor",
+  "other",
+];
+
+const SENTIMENT_LABELS: Record<NonNullable<Sentiment>, string> = {
+  positive: "Tích cực",
+  neutral: "Trung tính",
+  negative: "Tiêu cực",
+};
+
+const TOPIC_LABELS: Record<string, string> = {
+  quality: "Chất lượng",
+  price: "Giá",
+  service: "Dịch vụ",
+  staff: "Nhân viên",
+  delivery: "Giao hàng",
+  experience: "Trải nghiệm",
+  legal: "Pháp lý",
+  operation: "Vận hành",
+  marketing: "Marketing",
+  competitor: "Đối thủ",
+  other: "Khác",
+};
+
+const URGENCY_LABELS: Record<string, string> = {
+  normal: "Bình thường",
+  notable: "Đáng chú ý",
+  crisis: "🚨 Crisis",
+};
+
+const INTENT_LABELS: Record<string, { label: string; emoji: string }> = {
+  hot: { label: "Hot", emoji: "🔥" },
+  warm: { label: "Warm", emoji: "🌡️" },
+  cold: { label: "Cold", emoji: "🧊" },
+  none: { label: "None", emoji: "➖" },
+};
+
+function getDemoRequests(brandName?: string): LabelRequest[] {
+  const now = new Date();
+  return [
+    {
+      id: "demo-comment-request",
+      isDemo: true,
+      status: "pending",
+      brand_name: brandName || "Thương hiệu demo",
+      mention_id: "demo-fb-comment-001",
+      requested_by_name: "Nhân viên xử lý khủng hoảng",
+      requested_by_role: "crisis_employee",
+      reason:
+        "Bình luận này đang bị gắn trung tính, nhưng nội dung có dấu hiệu phàn nàn về dịch vụ và cần xử lý sớm.",
+      old_label: { sentiment: "neutral", topic: "service" },
+      proposed_label: { sentiment: "negative", topic: "service" },
+      mention: {
+        id: "demo-fb-comment-001",
+        parent_id: "demo-fb-post-001",
+        platform: "facebook",
+        content_type: "comment",
+        post_content:
+          "Thương hiệu ra mắt combo mới cho mùa hè, áp dụng tại tất cả cửa hàng trong tuần này.",
+        content: "Mình đợi hơn 30 phút nhưng nhân viên không xử lý đơn, trải nghiệm quá tệ.",
+        comment_content:
+          "Mình đợi hơn 30 phút nhưng nhân viên không xử lý đơn, trải nghiệm quá tệ.",
+        author: "Nguyễn Minh Anh",
+        posted_at: now.toISOString(),
+        url: "https://facebook.com/demo-post",
+      },
+      history: [
+        {
+          action: "created",
+          by_name: "Nhân viên xử lý khủng hoảng",
+          at: now.toISOString(),
+          from: { sentiment: "neutral", topic: "service" },
+          to: { sentiment: "negative", topic: "service" },
+          note: "Đề xuất chuyển sang tiêu cực vì khách hàng phàn nàn trực tiếp.",
+        },
+      ],
+      created_at: now.toISOString(),
+    },
+    {
+      id: "demo-post-request",
+      isDemo: true,
+      status: "pending",
+      brand_name: brandName || "Thương hiệu demo",
+      mention_id: "demo-thread-post-002",
+      requested_by_name: "Nhân viên xử lý tiềm năng",
+      requested_by_role: "lead_employee",
+      reason:
+        "Bài viết có ý định mua hàng rõ ràng, nên chuyển chủ đề sang marketing/deal để team tiềm năng theo dõi.",
+      old_label: { sentiment: "positive", topic: "other" },
+      proposed_label: { sentiment: "positive", topic: "marketing" },
+      mention: {
+        id: "demo-thread-post-002",
+        platform: "thread",
+        content_type: "post",
+        content: "Đang cần đặt đồ ăn cho team 20 người vào trưa mai, bên mình có gói ưu đãi nào không?",
+        post_content:
+          "Đang cần đặt đồ ăn cho team 20 người vào trưa mai, bên mình có gói ưu đãi nào không?",
+        author: "Trần Bảo Long",
+        posted_at: new Date(now.getTime() - 1000 * 60 * 42).toISOString(),
+        url: "https://threads.net/demo-post",
+      },
+      history: [
+        {
+          action: "created",
+          by_name: "Nhân viên xử lý tiềm năng",
+          at: new Date(now.getTime() - 1000 * 60 * 35).toISOString(),
+          from: { sentiment: "positive", topic: "other" },
+          to: { sentiment: "positive", topic: "marketing" },
+          note: "Có dấu hiệu nhu cầu mua hàng số lượng lớn.",
+        },
+      ],
+      created_at: new Date(now.getTime() - 1000 * 60 * 35).toISOString(),
+    },
+    {
+      id: "demo-history-request",
+      isDemo: true,
+      status: "pending",
+      brand_name: brandName || "Thương hiệu demo",
+      mention_id: "demo-gmaps-review-003",
+      requested_by_name: "Nhân viên xử lý khủng hoảng",
+      requested_by_role: "crisis_employee",
+      reason: "Đánh giá 1 sao nhưng hệ thống gắn topic giá, cần sửa sang chất lượng dịch vụ.",
+      old_label: { sentiment: "negative", topic: "price" },
+      proposed_label: { sentiment: "negative", topic: "quality" },
+      mention: {
+        id: "demo-gmaps-review-003",
+        platform: "google_maps",
+        content_type: "comment",
+        post_content: "Đánh giá của khách hàng trên Google Maps về chi nhánh quận.",
+        content: "Đồ uống bị nguội, bàn giao chậm và không ai xin lỗi. 1 sao.",
+        comment_content: "Đồ uống bị nguội, bàn giao chậm và không ai xin lỗi. 1 sao.",
+        author: "Lê Hoàng",
+        posted_at: new Date(now.getTime() - 1000 * 60 * 90).toISOString(),
+        url: "https://maps.google.com/demo-review",
+      },
+      history: [
+        {
+          action: "created",
+          by_name: "Nhân viên xử lý khủng hoảng",
+          at: new Date(now.getTime() - 1000 * 60 * 88).toISOString(),
+          from: { sentiment: "negative", topic: "price" },
+          to: { sentiment: "negative", topic: "quality" },
+          note: "Nội dung liên quan chất lượng sản phẩm và vận hành hơn là giá.",
+        },
+        {
+          action: "note_added",
+          by_name: "Brand Manager demo",
+          at: new Date(now.getTime() - 1000 * 60 * 75).toISOString(),
+          from: { sentiment: "negative", topic: "price" },
+          to: { sentiment: "negative", topic: "quality" },
+          note: "Cần kiểm tra với cửa hàng trước khi duyệt nhãn cuối.",
+        },
+      ],
+      created_at: new Date(now.getTime() - 1000 * 60 * 88).toISOString(),
+    },
+  ];
+}
+
+function normalizeLabel(value: unknown, fallback: LabelValue): LabelValue {
+  if (!value || typeof value !== "object") return fallback;
+  const row = value as Partial<LabelValue>;
+  return {
+    sentiment:
+      row.sentiment === "positive" || row.sentiment === "negative" || row.sentiment === "neutral"
+        ? row.sentiment
+        : fallback.sentiment,
+    topic: typeof row.topic === "string" ? row.topic : fallback.topic,
+    relevance: typeof row.relevance === "boolean" ? row.relevance : fallback.relevance,
+    urgency: row.urgency || fallback.urgency,
+    intent: row.intent || fallback.intent,
+  };
+}
+
+function formatDate(value: unknown) {
+  if (!value) return "Chưa rõ thời gian";
+  const maybeTimestamp = value as { toDate?: () => Date };
+  const date = typeof maybeTimestamp.toDate === "function" ? maybeTimestamp.toDate() : new Date(String(value));
+  if (Number.isNaN(date.getTime())) return "Chưa rõ thời gian";
+  return date.toLocaleString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function toDateValue(value: unknown): Date | null {
+  if (!value) return null;
+  const maybeTimestamp = value as { toDate?: () => Date };
+  const date = typeof maybeTimestamp.toDate === "function" ? maybeTimestamp.toDate() : new Date(String(value));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function hasLabelTypeChanged(oldLabel: LabelValue, newLabel: LabelValue, labelType: HistoryFilters["labelType"]) {
+  if (labelType === "all") return true;
+  return JSON.stringify(oldLabel[labelType]) !== JSON.stringify(newLabel[labelType]);
+}
+
+function requestToAuditEntries(request: LabelRequest): LabelAuditEntry[] {
+  const history = request.history || [];
+  if (history.length === 0) {
+    return [
+      {
+        id: `${request.id}-created`,
+        request_id: request.id,
+        brand_id: request.brand_id,
+        brand_name: request.brand_name,
+        mention_id: request.mention_id,
+        mention_content: request.mention.content,
+        action: "created",
+        status: request.status,
+        old_label: request.old_label,
+        new_label: request.proposed_label,
+        requested_by_name: request.requested_by_name,
+        requested_by_email: request.requested_by_email,
+        requested_by_role: request.requested_by_role,
+        changed_at: request.created_at,
+        source: "request",
+        note: request.reason,
+        isDemo: request.isDemo,
+      },
+    ];
+  }
+
+  return history.map((item, index) => ({
+    id: `${request.id}-history-${index}`,
+    request_id: request.id,
+    brand_id: request.brand_id,
+    brand_name: request.brand_name,
+    mention_id: request.mention_id,
+    mention_content: request.mention.content,
+    action: item.action as LabelAuditEntry["action"],
+    status: request.status,
+    old_label: item.from || request.old_label,
+    new_label: item.to || request.final_label || request.proposed_label,
+    requested_by_name: request.requested_by_name,
+    requested_by_email: request.requested_by_email,
+    requested_by_role: request.requested_by_role,
+    reviewed_by_name: item.by_name,
+    reviewed_by_email: item.by_email,
+    changed_at: item.at || request.created_at,
+    source: "request_history",
+    note: item.note || request.reason,
+    isDemo: request.isDemo,
+  }));
+}
+
+const PLATFORM_LABELS: Record<string, string> = {
+  facebook: "Facebook",
+  thread: "Threads",
+  google_maps: "Google Maps",
+  unknown: "Không rõ nguồn",
+};
+
+const CONTENT_TYPE_LABELS: Record<string, string> = {
+  post: "Bài viết",
+  comment: "Bình luận",
+  reply: "Phản hồi",
+};
+
+function sentimentTone(sentiment: Sentiment) {
+  if (sentiment === "negative")
+    return {
+      text: "text-[var(--color-error)]",
+      bg: "bg-[var(--color-error-subtle)]",
+      border: "border-[var(--color-error)]/30",
+      solidBg: "bg-[var(--color-error)]",
+    };
+  if (sentiment === "positive")
+    return {
+      text: "text-[var(--color-success)]",
+      bg: "bg-[var(--color-success-subtle)]",
+      border: "border-[var(--color-success)]/30",
+      solidBg: "bg-[var(--color-success)]",
+    };
+  return {
+    text: "text-[var(--color-info)]",
+    bg: "bg-[var(--color-info-subtle)]",
+    border: "border-[var(--color-info)]/30",
+    solidBg: "bg-[var(--color-info)]",
+  };
+}
+
+function LabelPill({ label, size = "md" }: { label: LabelValue; size?: "sm" | "md" }) {
+  const tone = sentimentTone(label.sentiment as Sentiment);
+  const padding = size === "sm" ? "px-2.5 py-1 text-[11px]" : "px-3 py-1.5 text-xs";
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {label.sentiment && (
+        <span className={`rounded-full font-semibold tracking-wide ${padding} ${tone.bg} ${tone.text}`}>
+          {SENTIMENT_LABELS[label.sentiment as NonNullable<Sentiment>] || label.sentiment}
+        </span>
+      )}
+      {label.topic && (
+        <span
+          className={`rounded-full border font-semibold tracking-wide text-[var(--color-text-secondary)] border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] ${padding}`}
+        >
+          {TOPIC_LABELS[label.topic] || label.topic}
+        </span>
+      )}
+      {label.relevance !== undefined && label.relevance !== null && (
+        <span
+          className={`rounded-full border font-semibold tracking-wide text-[var(--color-text-secondary)] border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] ${padding}`}
+        >
+          {label.relevance ? "Có liên quan" : "Không liên quan"}
+        </span>
+      )}
+      {label.urgency && (
+        <span
+          className={`rounded-full border font-semibold tracking-wide text-[var(--color-text-secondary)] border-[var(--color-border)] bg-[var(--color-warning-subtle)] ${padding}`}
+        >
+          {URGENCY_LABELS[label.urgency] || label.urgency}
+        </span>
+      )}
+      {label.intent && (
+        <span
+          className={`rounded-full border font-semibold tracking-wide text-[var(--color-text-secondary)] border-[var(--color-border)] bg-[var(--color-info-subtle)] ${padding}`}
+        >
+          {INTENT_LABELS[label.intent]?.emoji} {INTENT_LABELS[label.intent]?.label || label.intent}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** Signature element: an editorial "track-changes" strip that reads left-to-right
+ *  like a proofreader's redline — cũ → đề xuất → cuối cùng — the same motion a
+ *  Brand Manager makes when deciding whether to accept an edit. */
+function LabelDiffStrip({
+  oldLabel,
+  proposedLabel,
+  finalLabel,
+}: {
+  oldLabel: LabelValue;
+  proposedLabel: LabelValue;
+  finalLabel: LabelValue;
+}) {
+  const stops: { key: string; caption: string; value: LabelValue; emphasis?: boolean }[] = [
+    { key: "old", caption: "Nhãn cũ", value: oldLabel },
+    { key: "proposed", caption: "Nhân viên đề xuất", value: proposedLabel },
+    { key: "final", caption: "Nhãn cuối cùng", value: finalLabel, emphasis: true },
+  ];
+
+  return (
+    <div className="flex flex-col gap-0 sm:flex-row sm:items-stretch">
+      {stops.map((stop, index) => (
+        <div key={stop.key} className="flex flex-1 items-stretch">
+          <div
+            className={`flex flex-1 flex-col gap-3 rounded-2xl border px-5 py-4 ${stop.emphasis
+                ? "border-[var(--color-brand)]/40 bg-[var(--color-brand-subtle)]/30"
+                : "border-[var(--color-border)] bg-[var(--color-bg-surface)]"
+              }`}
+          >
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-text-muted)]">
+              {String(index + 1).padStart(2, "0")} · {stop.caption}
+            </p>
+            <LabelPill label={stop.value} />
+          </div>
+          {index < stops.length - 1 && (
+            <div className="hidden shrink-0 items-center px-2 sm:flex">
+              <svg width="22" height="16" viewBox="0 0 22 16" fill="none" className="text-[var(--color-text-muted)]">
+                <path d="M1 8H20M20 8L14 2M20 8L14 14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function BrandLabelHistoryPanel({
+  entries,
+  filters,
+  requesterOptions,
+  statusLabels,
+  onFiltersChange,
+}: {
+  entries: LabelAuditEntry[];
+  filters: HistoryFilters;
+  requesterOptions: string[];
+  statusLabels: Record<string, string>;
+  onFiltersChange: (filters: HistoryFilters) => void;
+}) {
+  return (
+    <div className="space-y-5">
+      <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-4">
+        <div className="mb-4 flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-text-muted)]">
+              Lịch sử chỉnh sửa nhãn theo thương hiệu
+            </p>
+            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+              Tổng hợp {entries.length} bản ghi từ request của thương hiệu hiện tại.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() =>
+              onFiltersChange({
+                fromDate: "",
+                toDate: "",
+                labelType: "all",
+                requester: "all",
+                status: "all",
+              })
+            }
+            className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-xs font-semibold text-[var(--color-text-secondary)] transition hover:bg-[var(--color-bg-surface)]"
+          >
+            Xóa lọc
+          </button>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-5">
+          <label className="space-y-1.5">
+            <span className="text-[11px] font-semibold text-[var(--color-text-muted)]">Từ ngày</span>
+            <input
+              type="date"
+              value={filters.fromDate}
+              onChange={(event) => onFiltersChange({ ...filters, fromDate: event.target.value })}
+              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none"
+            />
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-[11px] font-semibold text-[var(--color-text-muted)]">Đến ngày</span>
+            <input
+              type="date"
+              value={filters.toDate}
+              onChange={(event) => onFiltersChange({ ...filters, toDate: event.target.value })}
+              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none"
+            />
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-[11px] font-semibold text-[var(--color-text-muted)]">Loại nhãn</span>
+            <select
+              value={filters.labelType}
+              onChange={(event) =>
+                onFiltersChange({ ...filters, labelType: event.target.value as HistoryFilters["labelType"] })
+              }
+              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none"
+            >
+              <option value="all">Tất cả</option>
+              <option value="sentiment">Sắc thái</option>
+              <option value="topic">Chủ đề</option>
+              <option value="relevance">Liên quan</option>
+              <option value="urgency">Urgency</option>
+              <option value="intent">Intent</option>
+            </select>
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-[11px] font-semibold text-[var(--color-text-muted)]">Người yêu cầu</span>
+            <select
+              value={filters.requester}
+              onChange={(event) => onFiltersChange({ ...filters, requester: event.target.value })}
+              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none"
+            >
+              <option value="all">Tất cả</option>
+              {requesterOptions.map((requester) => (
+                <option key={requester} value={requester}>
+                  {requester}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-[11px] font-semibold text-[var(--color-text-muted)]">Trạng thái</span>
+            <select
+              value={filters.status}
+              onChange={(event) =>
+                onFiltersChange({ ...filters, status: event.target.value as HistoryFilters["status"] })
+              }
+              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none"
+            >
+              <option value="all">Tất cả</option>
+              <option value="created">Tạo yêu cầu</option>
+              <option value="pending">Chờ duyệt</option>
+              <option value="approved">Đã duyệt</option>
+              <option value="edited">Đã sửa & duyệt</option>
+              <option value="rejected">Từ chối</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      {entries.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-[var(--color-border)] p-6 text-center text-sm text-[var(--color-text-muted)]">
+          Không có lịch sử chỉnh sửa nhãn phù hợp với bộ lọc.
+        </p>
+      ) : (
+        entries.map((item, index) => {
+          const isLast = index === entries.length - 1;
+          return (
+            <div key={item.id} className="relative flex gap-4 pb-6 last:pb-0">
+              <div className="flex flex-col items-center">
+                <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-[var(--color-brand)]" />
+                {!isLast && <span className="w-px flex-1 bg-[var(--color-border)]" />}
+              </div>
+              <div className="flex-1 rounded-xl border border-[var(--color-border)] p-4">
+                <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-base font-semibold text-[var(--color-text-primary)]">
+                        {statusLabels[item.action] || item.action}
+                      </p>
+                      <span className="rounded-full bg-[var(--color-bg-surface-raised)] px-2 py-0.5 text-[10px] font-semibold uppercase text-[var(--color-text-muted)]">
+                        {statusLabels[item.status] || item.status}
+                      </span>
+                      {item.isDemo && (
+                        <span className="rounded-full bg-[var(--color-brand-subtle)] px-2 py-0.5 text-[10px] font-semibold uppercase text-[var(--color-brand)]">
+                          Demo
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+                      Người yêu cầu: {item.requested_by_name}
+                    </p>
+                    {item.reviewed_by_name && (
+                      <p className="text-xs text-[var(--color-text-muted)]">
+                        Người xử lý: {item.reviewed_by_name}
+                      </p>
+                    )}
+                  </div>
+                  <span className="text-[11px] text-[var(--color-text-muted)]">
+                    {formatDate(item.changed_at)}
+                  </span>
+                </div>
+
+                <p className="mt-3 line-clamp-2 text-sm text-[var(--color-text-secondary)]">
+                  #{item.mention_id} · {item.mention_content || "Không có nội dung mention"}
+                </p>
+
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <div>
+                    <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">
+                      Nhãn cũ
+                    </p>
+                    <LabelPill label={item.old_label} size="sm" />
+                  </div>
+                  <div>
+                    <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">
+                      Nhãn mới
+                    </p>
+                    <LabelPill label={item.new_label} size="sm" />
+                  </div>
+                </div>
+
+                {item.note && (
+                  <p className="mt-3 text-sm leading-6 text-[var(--color-text-secondary)]">
+                    {item.note}
+                  </p>
+                )}
+              </div>
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
+export default function LabelRequestsPage() {
+  const { profile } = useAuth();
+  const [requests, setRequests] = useState<LabelRequest[]>([]);
+  const [auditEntries, setAuditEntries] = useState<LabelAuditEntry[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [mode, setMode] = useState<"detail" | "compare" | "history">("detail");
+  const [draftLabel, setDraftLabel] = useState<LabelValue>({ sentiment: "neutral", topic: "other" });
+  const [historyFilters, setHistoryFilters] = useState<HistoryFilters>({
+    fromDate: "",
+    toDate: "",
+    labelType: "all",
+    requester: "all",
+    status: "all",
+  });
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadRequests() {
+      setLoading(true);
+      try {
+        const snapshot = await getDocs(query(collection(dbData, "label_change_requests"), limit(100)));
+        const rows = snapshot.docs.map((item) => {
+          const data = item.data();
+          const oldLabel = normalizeLabel(data.old_label, { sentiment: "neutral", topic: "other" });
+          const proposedLabel = normalizeLabel(data.proposed_label, oldLabel);
+          const mention = (data.mention || {}) as LabelRequest["mention"];
+
+          return {
+            id: item.id,
+            status: data.status || "pending",
+            brand_id: data.brand_id,
+            brand_name: data.brand_name,
+            mention_id: data.mention_id || mention.id || item.id,
+            requested_by_name: data.requested_by_name || data.requested_by_email || "Nhân viên",
+            requested_by_email: data.requested_by_email,
+            requested_by_role: data.requested_by_role,
+            reason: data.reason,
+            old_label: oldLabel,
+            proposed_label: proposedLabel,
+            final_label: data.final_label ? normalizeLabel(data.final_label, proposedLabel) : undefined,
+            mention: {
+              id: mention.id || data.mention_id || item.id,
+              parent_id: mention.parent_id || null,
+              platform: mention.platform || "unknown",
+              content_type: mention.content_type || "post",
+              content: mention.content || "",
+              post_content: mention.post_content || "",
+              comment_content: mention.comment_content || "",
+              author: mention.author || "",
+              posted_at: mention.posted_at || mention.created_at || "",
+              url: mention.url || "",
+            },
+            history: Array.isArray(data.history) ? data.history : [],
+            created_at: data.created_at,
+          } satisfies LabelRequest;
+        });
+
+        const scopedRows = profile?.brandId
+          ? rows.filter((item) => !item.brand_id || item.brand_id === profile.brandId)
+          : rows;
+
+        let persistedAuditEntries: LabelAuditEntry[] = [];
+        try {
+          const historySnapshot = await getDocs(query(collection(dbData, "label_change_history"), limit(300)));
+          persistedAuditEntries = historySnapshot.docs
+            .map((item) => {
+              const data = item.data();
+              const oldLabel = normalizeLabel(data.old_label, { sentiment: "neutral", topic: "other" });
+              const newLabel = normalizeLabel(data.new_label, oldLabel);
+              return {
+                id: item.id,
+                request_id: data.request_id,
+                brand_id: data.brand_id,
+                brand_name: data.brand_name,
+                mention_id: String(data.mention_id || ""),
+                mention_content: data.mention_content,
+                action: data.action || data.status || "edited",
+                status: data.status || "edited",
+                old_label: oldLabel,
+                new_label: newLabel,
+                requested_by_name: data.requested_by_name || data.requested_by_email || "Nhân viên",
+                requested_by_email: data.requested_by_email,
+                requested_by_role: data.requested_by_role,
+                reviewed_by_name: data.reviewed_by_name,
+                reviewed_by_email: data.reviewed_by_email,
+                changed_at: data.changed_at || data.created_at,
+                source: data.source || "label_change_history",
+                note: data.note,
+              } satisfies LabelAuditEntry;
+            })
+            .filter((item) => !profile?.brandId || !item.brand_id || item.brand_id === profile.brandId);
+        } catch (historyError) {
+          console.warn("Failed to load label change history:", historyError);
+        }
+
+        if (active) {
+          const visibleRows = scopedRows.length > 0 ? scopedRows : getDemoRequests(profile?.brandName);
+          setRequests(visibleRows);
+          setSelectedId(visibleRows[0]?.id || null);
+          setAuditEntries([
+            ...persistedAuditEntries,
+            ...visibleRows.flatMap(requestToAuditEntries),
+          ]);
+        }
+      } catch (error) {
+        console.error("Failed to load label requests:", error);
+        if (active) {
+          const demoRows = getDemoRequests(profile?.brandName);
+          setRequests(demoRows);
+          setSelectedId(demoRows[0]?.id || null);
+          setAuditEntries(demoRows.flatMap(requestToAuditEntries));
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    loadRequests();
+    return () => {
+      active = false;
+    };
+  }, [profile?.brandId]);
+
+  const selectedRequest = useMemo(
+    () => requests.find((item) => item.id === selectedId) || requests[0],
+    [requests, selectedId],
+  );
+
+  useEffect(() => {
+    if (selectedRequest) {
+      setDraftLabel(selectedRequest.final_label || selectedRequest.proposed_label);
+    }
+  }, [selectedRequest]);
+
+  const pendingCount = requests.filter((item) => item.status === "pending").length;
+  const isUsingDemoData = requests.some((item) => item.isDemo);
+  const requesterOptions = useMemo(
+    () => Array.from(new Set(auditEntries.map((item) => item.requested_by_name).filter(Boolean))).sort(),
+    [auditEntries],
+  );
+  const filteredAuditEntries = useMemo(() => {
+    return auditEntries
+      .filter((item) => {
+        const changedDate = toDateValue(item.changed_at);
+        if (historyFilters.fromDate) {
+          const fromTime = new Date(`${historyFilters.fromDate}T00:00:00`).getTime();
+          if (!changedDate || changedDate.getTime() < fromTime) return false;
+        }
+        if (historyFilters.toDate) {
+          const toTime = new Date(`${historyFilters.toDate}T23:59:59.999`).getTime();
+          if (!changedDate || changedDate.getTime() > toTime) return false;
+        }
+        if (historyFilters.requester !== "all" && item.requested_by_name !== historyFilters.requester) return false;
+        if (historyFilters.status !== "all" && item.status !== historyFilters.status && item.action !== historyFilters.status) return false;
+        if (!hasLabelTypeChanged(item.old_label, item.new_label, historyFilters.labelType)) return false;
+        return true;
+      })
+      .sort((a, b) => (toDateValue(b.changed_at)?.getTime() || 0) - (toDateValue(a.changed_at)?.getTime() || 0));
+  }, [auditEntries, historyFilters]);
+
+  const updateRequestStatus = async (status: LabelRequest["status"], finalLabel = draftLabel) => {
+    if (!selectedRequest) return;
+    setSaving(true);
+    const changedAt = new Date().toISOString();
+
+    const nextHistory = [
+      ...(selectedRequest.history || []),
+      {
+        action: status,
+        by_name: profile?.displayName || profile?.email || "Brand Manager",
+        by_email: profile?.email,
+        at: changedAt,
+        from: selectedRequest.old_label,
+        to: finalLabel,
+      },
+    ];
+
+    const nextAuditEntry: LabelAuditEntry = {
+      id: `${selectedRequest.id}-${status}-${Date.now()}`,
+      request_id: selectedRequest.id,
+      brand_id: selectedRequest.brand_id || profile?.brandId,
+      brand_name: selectedRequest.brand_name || profile?.brandName,
+      mention_id: selectedRequest.mention_id,
+      mention_content: selectedRequest.mention.content,
+      action: status,
+      status,
+      old_label: selectedRequest.old_label,
+      new_label: finalLabel,
+      requested_by_name: selectedRequest.requested_by_name,
+      requested_by_email: selectedRequest.requested_by_email,
+      requested_by_role: selectedRequest.requested_by_role,
+      reviewed_by_name: profile?.displayName || profile?.email || "Brand Manager",
+      reviewed_by_email: profile?.email,
+      changed_at: changedAt,
+      source: "brand_manager_review",
+      note: selectedRequest.reason,
+      isDemo: selectedRequest.isDemo,
+    };
+
+    try {
+      if (!selectedRequest.isDemo) {
+        await updateDoc(doc(dbData, "label_change_requests", selectedRequest.id), {
+          status,
+          final_label: finalLabel,
+          reviewed_by_uid: profile?.uid || "",
+          reviewed_by_name: profile?.displayName || profile?.email || "",
+          reviewed_at: serverTimestamp(),
+          history: nextHistory,
+          updated_at: serverTimestamp(),
+        });
+        await addDoc(collection(dbData, "label_change_history"), {
+          request_id: selectedRequest.id,
+          brand_id: selectedRequest.brand_id || profile?.brandId || "",
+          brand_name: selectedRequest.brand_name || profile?.brandName || "",
+          mention_id: selectedRequest.mention_id,
+          mention_content: selectedRequest.mention.content,
+          action: status,
+          status,
+          old_label: selectedRequest.old_label,
+          new_label: finalLabel,
+          requested_by_name: selectedRequest.requested_by_name,
+          requested_by_email: selectedRequest.requested_by_email || "",
+          requested_by_role: selectedRequest.requested_by_role || "",
+          reviewed_by_uid: profile?.uid || "",
+          reviewed_by_name: profile?.displayName || profile?.email || "",
+          reviewed_by_email: profile?.email || "",
+          note: selectedRequest.reason || "",
+          source: "brand_manager_review",
+          changed_at: serverTimestamp(),
+          created_at: serverTimestamp(),
+        });
+      }
+
+      setRequests((current) =>
+        current.map((item) =>
+          item.id === selectedRequest.id
+            ? { ...item, status, final_label: finalLabel, history: nextHistory }
+            : item,
+        ),
+      );
+      setAuditEntries((current) => [nextAuditEntry, ...current]);
+    } catch (error) {
+      console.error("Failed to update label request:", error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const STATUS_LABELS: Record<LabelRequest["status"], string> = {
+    pending: "Chờ duyệt",
+    approved: "Đã duyệt",
+    rejected: "Từ chối",
+    edited: "Đã sửa & duyệt",
+  };
+  const HISTORY_STATUS_LABELS: Record<string, string> = {
+    ...STATUS_LABELS,
+    created: "Tạo yêu cầu",
+    note_added: "Ghi chú",
+  };
+
+  return (
+    <div className="p-4 md:p-8">
+      
+
+      {/* Header */}
+      <div className="mb-7 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-brand)]">
+            Quản lý thương hiệu · Bàn duyệt nhãn
+          </p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--color-text-primary)] md:text-[2.5rem]">
+            Duyệt yêu cầu gắn lại nhãn
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--color-text-secondary)]">
+            Xem các đề xuất sửa nhãn từ nhân viên, so sánh nhãn cũ với nhãn mới, duyệt hoặc chỉnh lại
+            nhãn trước khi đẩy xuống dữ liệu sử dụng.
+          </p>
+        </div>
+        <div className="relative shrink-0 self-start rounded-2xl border border-[var(--color-warning)]/40 bg-[var(--color-warning-subtle)] px-5 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)]">
+            Chờ duyệt
+          </p>
+          <p className="mt-0.5 text-3xl font-semibold text-[var(--color-warning)]">
+            {pendingCount}
+          </p>
+        </div>
+      </div>
+
+      {isUsingDemoData && (
+        <div className="mb-6 flex gap-3 rounded-xl border border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] px-4 py-3 text-sm text-[var(--color-text-primary)]">
+          <span className="material-symbols-outlined shrink-0 text-lg text-[var(--color-warning)]">science</span>
+          <p className="leading-6">
+            <span className="font-bold">Dữ liệu demo:</span> hiện chưa có yêu cầu thật từ nhân viên, nên
+            trang đang hiển thị yêu cầu mẫu để test thao tác duyệt, sửa nhãn, so sánh và xem lịch sử. Các
+            thao tác trên yêu cầu demo chỉ cập nhật giao diện, không ghi lên Firestore.
+          </p>
+        </div>
+      )}
+
+      <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
+        {/* Request list */}
+        <section className="h-fit rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)]">
+          <div className="border-b border-[var(--color-border)] px-4 py-3.5">
+            <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">
+              Danh sách yêu cầu
+            </h2>
+            <p className="text-[11px] text-[var(--color-text-muted)]">
+              {loading ? "Đang tải…" : `${requests.length} yêu cầu`}
+            </p>
+          </div>
+          <div className="max-h-[calc(100vh-320px)] overflow-y-auto">
+            {requests.map((item) => {
+              const tone = sentimentTone(item.old_label.sentiment ?? null);
+              const isActive = selectedRequest?.id === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedId(item.id);
+                    setMode("detail");
+                  }}
+                  className={`flex w-full gap-3 border-b border-[var(--color-border)] px-4 py-4 text-left transition hover:bg-[var(--color-bg-surface-raised)] ${isActive ? "bg-[var(--color-brand-subtle)]/40" : ""
+                    }`}
+                >
+                  <span className={`w-1 shrink-0 self-stretch rounded-full ${tone.solidBg}`} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="truncate font-semibold text-[var(--color-text-primary)]">
+                        {item.mention.author || "Không rõ tác giả"}
+                      </p>
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${item.status === "pending"
+                            ? "bg-[var(--color-warning-subtle)] text-[var(--color-warning)]"
+                            : "bg-[var(--color-success-subtle)] text-[var(--color-success)]"
+                          }`}
+                      >
+                        {STATUS_LABELS[item.status]}
+                      </span>
+                    </div>
+                    <p className="mt-1 line-clamp-2 text-sm text-[var(--color-text-secondary)]">
+                      {item.mention.content}
+                    </p>
+                    <div className="mt-2.5 flex items-center justify-between text-[11px] text-[var(--color-text-muted)]">
+                      <span className="truncate">{item.requested_by_name}</span>
+                      <span className="shrink-0">{formatDate(item.created_at || item.history?.[0]?.at)}</span>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        {!loading && requests.length === 0 && (
+          <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-10 text-center">
+            <span className="material-symbols-outlined text-4xl text-[var(--color-text-muted)]">
+              inventory_2
+            </span>
+            <h2 className="mt-3 text-xl font-semibold text-[var(--color-text-primary)]">
+              Chưa có yêu cầu gắn lại nhãn
+            </h2>
+            <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[var(--color-text-secondary)]">
+              Khi nhân viên xử lý khủng hoảng hoặc tiềm năng gửi đề xuất sửa nhãn từ trang Mentions, yêu
+              cầu sẽ xuất hiện tại đây để Brand Manager xem, so sánh và duyệt.
+            </p>
+          </section>
+        )}
+
+        {selectedRequest && (
+          <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)]">
+            <div className="flex flex-col gap-3 border-b border-[var(--color-border)] px-6 py-5 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.14em] text-[var(--color-text-muted)]">
+                  {PLATFORM_LABELS[selectedRequest.mention.platform] || selectedRequest.mention.platform} ·{" "}
+                  {CONTENT_TYPE_LABELS[selectedRequest.mention.content_type] || selectedRequest.mention.content_type}
+                </p>
+                <h2 className="mt-1 text-2xl font-semibold text-[var(--color-text-primary)]">
+                  Yêu cầu #{selectedRequest.mention_id}
+                </h2>
+              </div>
+              <div className="flex gap-1 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-1">
+                {[
+                  { key: "detail", label: "Xem & duyệt" },
+                  { key: "compare", label: "So sánh nhãn" },
+                  { key: "history", label: "Lịch sử sửa nhãn" },
+                ].map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => setMode(item.key as typeof mode)}
+                    className={`rounded-lg px-3.5 py-2 text-xs font-semibold transition ${mode === item.key
+                        ? "bg-[var(--color-brand)] text-white shadow-sm"
+                        : "text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface)]"
+                      }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="p-6">
+              {mode === "detail" && (
+                <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+                  <div className="space-y-4">
+                    <div>
+                      <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-text-muted)]">
+                        Bài viết gốc
+                      </p>
+                      <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-4">
+                        <p className="text-sm leading-6 text-[var(--color-text-primary)]">
+                          {selectedRequest.mention.post_content || selectedRequest.mention.content}
+                        </p>
+                      </div>
+                    </div>
+
+                    {selectedRequest.mention.content_type !== "post" && (
+                      <div>
+                        <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-text-muted)]">
+                          Nội dung cần duyệt
+                        </p>
+                        <div className="rounded-xl border border-[var(--color-brand)]/30 bg-[var(--color-brand-subtle)]/30 p-4">
+                          <p className="text-sm font-semibold text-[var(--color-text-primary)]">
+                            {selectedRequest.mention.author || "Khách hàng"}
+                          </p>
+                          <p className="mt-2 text-lg leading-7 text-[var(--color-text-primary)]">
+                            {selectedRequest.mention.comment_content || selectedRequest.mention.content}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedRequest.reason && (
+                      <div className="rounded-xl border border-dashed border-[var(--color-border)] p-4">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-text-muted)]">
+                          Lý do nhân viên gửi
+                        </p>
+                        <p className="mt-2 text-sm leading-6 text-[var(--color-text-secondary)]">
+                          {selectedRequest.reason}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  <aside className="space-y-4">
+                    <div>
+                      <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-text-muted)]">
+                        Nhãn sẽ áp dụng
+                      </p>
+                      <div className="space-y-3 rounded-xl border border-[var(--color-border)] p-4">
+                        <label className="block space-y-2">
+                          <span className="text-xs font-semibold text-[var(--color-text-secondary)]">Sắc thái</span>
+                          <select
+                            value={draftLabel.sentiment || ""}
+                            onChange={(event) =>
+                              setDraftLabel((current) => ({
+                                ...current,
+                                sentiment: (event.target.value || null) as Sentiment,
+                              }))
+                            }
+                            className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none"
+                          >
+                            <option value="">-- Cảm xúc --</option>
+                            {Object.entries(SENTIMENT_LABELS).map(([value, label]) => (
+                              <option key={value} value={value}>
+                                {label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <label className="block space-y-2">
+                          <span className="text-xs font-semibold text-[var(--color-text-secondary)]">Chủ đề</span>
+                          <select
+                            value={draftLabel.topic || ""}
+                            onChange={(event) =>
+                              setDraftLabel((current) => ({ ...current, topic: event.target.value }))
+                            }
+                            className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none"
+                          >
+                            <option value="">-- Chủ đề --</option>
+                            {TOPIC_OPTIONS.map((topic) => (
+                              <option key={topic} value={topic}>
+                                {TOPIC_LABELS[topic] || topic}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        
+                        <label className="block space-y-2">
+                          <span className="text-xs font-semibold text-[var(--color-text-secondary)]">Liên quan</span>
+                          <select
+                            value={draftLabel.relevance === null || draftLabel.relevance === undefined ? "" : draftLabel.relevance ? "yes" : "no"}
+                            onChange={(event) => {
+                              const val = event.target.value;
+                              setDraftLabel((current) => ({ ...current, relevance: val === "" ? null : val === "yes" }));
+                            }}
+                            className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none"
+                          >
+                            <option value="">-- Liên quan --</option>
+                            <option value="yes">Có</option>
+                            <option value="no">Không</option>
+                          </select>
+                        </label>
+
+                        <label className="block space-y-2">
+                          <span className="text-xs font-semibold text-[var(--color-text-secondary)]">Mức độ (Urgency)</span>
+                          <select
+                            value={draftLabel.urgency || ""}
+                            onChange={(event) =>
+                              setDraftLabel((current) => ({
+                                ...current,
+                                urgency: (event.target.value || null) as Urgency,
+                              }))
+                            }
+                            className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none"
+                          >
+                            <option value="">-- Mức độ --</option>
+                            {Object.entries(URGENCY_LABELS).map(([value, label]) => (
+                              <option key={value} value={value}>
+                                {label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <label className="block space-y-2">
+                          <span className="text-xs font-semibold text-[var(--color-text-secondary)]">Ý định (Intent)</span>
+                          <select
+                            value={draftLabel.intent || ""}
+                            onChange={(event) =>
+                              setDraftLabel((current) => ({
+                                ...current,
+                                intent: (event.target.value || null) as Intent,
+                              }))
+                            }
+                            className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none"
+                          >
+                            <option value="">-- Ý định --</option>
+                            {Object.entries(INTENT_LABELS).map(([value, { label, emoji }]) => (
+                              <option key={value} value={value}>
+                                {emoji} {label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <button
+                        type="button"
+                        disabled={saving || selectedRequest.status !== "pending"}
+                        onClick={() => updateRequestStatus("approved", selectedRequest.proposed_label)}
+                        className="rounded-lg bg-[var(--color-success)] px-4 py-3 text-sm font-bold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Duyệt yêu cầu
+                      </button>
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => updateRequestStatus("edited", draftLabel)}
+                        className="rounded-lg bg-[var(--color-brand)] px-4 py-3 text-sm font-bold text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Sửa lại nhãn và duyệt
+                      </button>
+                      <button
+                        type="button"
+                        disabled={saving || selectedRequest.status !== "pending"}
+                        onClick={() => updateRequestStatus("rejected", selectedRequest.old_label)}
+                        className="rounded-lg border border-[var(--color-border)] px-4 py-3 text-sm font-bold text-[var(--color-text-secondary)] transition hover:bg-[var(--color-bg-surface-raised)] disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Không duyệt
+                      </button>
+                    </div>
+                  </aside>
+                </div>
+              )}
+
+              {mode === "compare" && (
+                <div className="space-y-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-text-muted)]">
+                    Đường đi của nhãn — từ lúc gắn ban đầu đến khi Brand Manager chốt
+                  </p>
+                  <LabelDiffStrip
+                    oldLabel={selectedRequest.old_label}
+                    proposedLabel={selectedRequest.proposed_label}
+                    finalLabel={selectedRequest.final_label || draftLabel}
+                  />
+                </div>
+              )}
+
+              {mode === "history" && (
+                <div className="space-y-0">
+                  <BrandLabelHistoryPanel
+                    entries={filteredAuditEntries}
+                    filters={historyFilters}
+                    requesterOptions={requesterOptions}
+                    statusLabels={HISTORY_STATUS_LABELS}
+                    onFiltersChange={setHistoryFilters}
+                  />
+                  <div className="hidden">
+                    <p className="mb-4 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-text-muted)]">
+                      Lịch sử riêng của yêu cầu đang chọn
+                    </p>
+                  {(selectedRequest.history || []).length === 0 ? (
+                    <p className="rounded-xl border border-dashed border-[var(--color-border)] p-6 text-center text-sm text-[var(--color-text-muted)]">
+                      Chưa có lịch sử sửa nhãn.
+                    </p>
+                  ) : (
+                    selectedRequest.history?.map((item, index) => {
+                      const isLast = index === (selectedRequest.history?.length || 0) - 1;
+                      return (
+                        <div key={`${item.action}-${index}`} className="relative flex gap-4 pb-6 last:pb-0">
+                          <div className="flex flex-col items-center">
+                            <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-[var(--color-brand)]" />
+                            {!isLast && <span className="w-px flex-1 bg-[var(--color-border)]" />}
+                          </div>
+                          <div className="flex-1 rounded-xl border border-[var(--color-border)] p-4">
+                            <div className="flex flex-col gap-1 md:flex-row md:items-start md:justify-between">
+                              <div>
+                                <p className="text-base font-semibold capitalize text-[var(--color-text-primary)]">
+                                  {item.action}
+                                </p>
+                                <p className="text-sm text-[var(--color-text-secondary)]">
+                                  {item.by_name || item.by_email || "Hệ thống"}
+                                </p>
+                              </div>
+                              <span className="text-[11px] text-[var(--color-text-muted)]">
+                                {formatDate(item.at)}
+                              </span>
+                            </div>
+                            <div className="mt-3 grid gap-3 md:grid-cols-2">
+                              {item.from && (
+                                <div>
+                                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">
+                                    Từ
+                                  </p>
+                                  <LabelPill label={item.from} size="sm" />
+                                </div>
+                              )}
+                              {item.to && (
+                                <div>
+                                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">
+                                    Thành
+                                  </p>
+                                  <LabelPill label={item.to} size="sm" />
+                                </div>
+                              )}
+                            </div>
+                            {item.note && (
+                              <p className="mt-3 text-sm leading-6 text-[var(--color-text-secondary)]">
+                                {item.note}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+      </div>
+    </div>
+  );
+}
