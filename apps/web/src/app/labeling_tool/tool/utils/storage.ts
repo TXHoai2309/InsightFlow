@@ -190,6 +190,13 @@ export async function saveThreadState(
   return state;
 }
 
+export async function deleteThreadState(person: Person, threadId: string): Promise<void> {
+  const db = await openDatabase();
+  const transaction = db.transaction(THREAD_STORE, 'readwrite');
+  transaction.objectStore(THREAD_STORE).delete(threadStorageKey(person, threadId));
+  await transactionDone(transaction);
+}
+
 export interface LabelStats {
   totalLabeled: number;
   totalSkipped: number;

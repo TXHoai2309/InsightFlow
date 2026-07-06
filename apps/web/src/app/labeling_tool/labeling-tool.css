@@ -263,7 +263,7 @@
 /* Topic dropdown panel */
 .labeling-tool-scope .topic-panel {
   position: absolute;
-  z-index: 50;
+  z-index: 100;
   margin-top: 0.25rem;
   display: flex;
   min-w: 180px;

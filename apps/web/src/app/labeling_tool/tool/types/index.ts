@@ -4,7 +4,7 @@
 
 export type Sentiment = 'positive' | 'negative' | 'neutral' | null;
 export type TopicKey = 'quality' | 'price' | 'service' | 'location' | 'promotion' | 'recruitment' | 'other';
-export type Urgency = 'low' | 'medium' | 'high' | 'urgent' | null;
+export type Urgency = 'low' | 'medium' | 'high' | 'urgent' | 'none' | null;
 export type Intent = 'hot' | 'warm' | 'cold' | 'none' | null;
 export type Person = 'Person A' | 'Person B' | 'Person C' | 'Person D';
 
@@ -41,6 +41,7 @@ export const URGENCY_LABELS: Record<NonNullable<Urgency>, string> = {
   medium: 'Trung bình',
   high: 'Cao',
   urgent: 'Khẩn cấp',
+  none: 'None',
 };
 
 export const INTENT_LABELS: Record<NonNullable<Intent>, { label: string; emoji: string; tooltip: string }> = {
@@ -71,7 +72,7 @@ export const IRRELEVANT_PRESET_LABEL: Label = {
   sentiment: 'neutral',
   topic: ['other'],
   relevance: false,
-  urgency: 'low',
+  urgency: 'none',
   intent: 'none',
 };
 
@@ -79,7 +80,7 @@ export function isIrrelevantPreset(label: Label): boolean {
   return (
     label.sentiment === 'neutral' &&
     label.relevance === false &&
-    label.urgency === 'low' &&
+    label.urgency === 'none' &&
     label.intent === 'none' &&
     label.topic.length === 1 &&
     label.topic[0] === 'other'

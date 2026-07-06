@@ -12,11 +12,13 @@ interface ThreadViewProps {
   getLabel: (itemId: string) => (Label & { skipped?: boolean; needs_review?: boolean }) | null;
   setLabel: (itemId: string, label: Label) => void;
   skipThread: (thread: Thread) => Promise<void>;
+  unskipThread: (thread: Thread) => Promise<void>;
   completeThread: (thread: Thread) => Promise<{ ok: boolean; message?: string }>;
   onNext: () => void;
   onPrev: () => void;
   focusedItemId: string | null;
   setFocusedItemId: (id: string | null) => void;
+  threadState: any;
 }
 
 function HighlightedText({ text, brand }: { text: string; brand: string }) {
@@ -273,11 +275,13 @@ export default function ThreadView({
   getLabel,
   setLabel,
   skipThread,
+  unskipThread,
   completeThread,
   onNext,
   onPrev,
   focusedItemId,
   setFocusedItemId,
+  threadState,
 }: ThreadViewProps) {
   const { post, comments } = thread;
   const [completionError, setCompletionError] = useState<string | null>(null);
@@ -306,6 +310,8 @@ export default function ThreadView({
   const countReview = allItems.filter(i => getLabel(i._internal_id)?.needs_review === true).length;
   const countSkipped = allItems.filter(i => getLabel(i._internal_id)?.skipped === true).length;
   const countMissing = Math.max(0, allItems.length - countComplete - countReview - countSkipped);
+
+  const isThreadSkipped = threadState?.status === 'skipped' || (allItems.length > 0 && countSkipped === allItems.length);
 
   const handleSkip = useCallback(() => {
     setCompletionError(null);
@@ -410,7 +416,7 @@ export default function ThreadView({
             ${isPostSkipped ? 'border-l-gray-400 opacity-50 item-skipped'
               : isPostComplete ? 'border-l-emerald-500 item-complete'
               : 'border-l-orange-400 item-unlabeled'}
-            ${isPostFocused ? 'item-focused' : ''}
+            ${isPostFocused ? 'item-focused z-20 relative' : ''}
           `}
           onMouseEnter={() => setFocusedItemId(post._internal_id)}
           onClick={() => setFocusedItemId(post._internal_id)}
@@ -461,20 +467,18 @@ export default function ThreadView({
           </div>
 
           {/* Post labels */}
-          {!isPostSkipped && (
-            <div className="mt-3 pt-3 border-t border-gray-100 dark:border-surface-600">
-              <LabelSelector
-                label={postLabelVal}
-                onChange={(l) => setLabel(post._internal_id, l)}
-                compact
-              />
-              {isPostFocused && (
-                <p className="text-xs text-blue-500 dark:text-blue-400 opacity-70 mt-1">
-                  ↑ Đang focus — phím tắt: 1/2/3 · q-y · a/s · z/x/c
-                </p>
-              )}
-            </div>
-          )}
+          <div className="mt-3 pt-3 border-t border-gray-100 dark:border-surface-600">
+            <LabelSelector
+              label={postLabelVal}
+              onChange={(l) => setLabel(post._internal_id, l)}
+              compact
+            />
+            {isPostFocused && (
+              <p className="text-xs text-blue-500 dark:text-blue-400 opacity-70 mt-1">
+                ↑ Đang focus — phím tắt: 1/2/3 · q-y · a/s · z/x/c/v · 0
+              </p>
+            )}
+          </div>
         </div>
       )}
 
@@ -525,9 +529,15 @@ export default function ThreadView({
         </div>
       )}
       <div className="flex items-center justify-between card px-4 py-3 mt-1">
-        <button onClick={handleSkip} className="btn-secondary text-sm gap-2">
-          ⏭ Bỏ qua thread
-        </button>
+        {isThreadSkipped ? (
+          <button onClick={() => void unskipThread(thread)} className="btn-secondary text-sm gap-2 border-emerald-500/50 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/20">
+            ↩️ Khôi phục thread
+          </button>
+        ) : (
+          <button onClick={handleSkip} className="btn-secondary text-sm gap-2">
+            ⏭ Bỏ qua thread
+          </button>
+        )}
         <div className="text-xs text-gray-400 dark:text-gray-500 hidden sm:block">
           Space = Bỏ qua · Enter = Xong → Next
         </div>
