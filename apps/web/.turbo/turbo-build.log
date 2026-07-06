@@ -9,43 +9,57 @@
  ✓ Compiled successfully
    Linting and checking validity of types ...
    Collecting page data ...
-   Generating static pages (0/18) ...
-   Generating static pages (4/18) 
-   Generating static pages (8/18) 
-   Generating static pages (13/18) 
- ✓ Generating static pages (18/18)
+   Generating static pages (0/29) ...
+   Generating static pages (7/29) 
+   Generating static pages (14/29) 
+   Generating static pages (21/29) 
+ ✓ Generating static pages (29/29)
    Finalizing page optimization ...
    Collecting build traces ...
 
-Route (app)                              Size     First Load JS
-┌ ○ /                                    9.43 kB         301 kB
-├ ○ /_not-found                          876 B          88.5 kB
-├ ○ /alerts                              9.73 kB         363 kB
-├ ƒ /api/auth/reset-password             0 B                0 B
-├ ○ /api/debug-firestore                 0 B                0 B
-├ ○ /api/reports/latest                  0 B                0 B
-├ ○ /dashboard                           5.21 kB         359 kB
-├ ○ /forgot-password                     4.94 kB        92.5 kB
-├ ○ /leads                               9.75 kB         295 kB
-├ ○ /login                               4.11 kB         292 kB
-├ ○ /mentions                            7.58 kB         302 kB
-├ ƒ /mentions/[id]                       8.13 kB         302 kB
-├ ○ /nganh                               6.41 kB         298 kB
-├ ○ /profile                             7.23 kB         299 kB
-├ ○ /register                            3.16 kB         291 kB
-├ ○ /reports                             157 kB          436 kB
-└ ○ /ve-chung-toi                        13.4 kB         305 kB
-+ First Load JS shared by all            87.6 kB
-  ├ chunks/1dd3208c-4d948558e163dd97.js  53.6 kB
-  ├ chunks/528-7e11c70fd131a541.js       31.9 kB
-  └ other shared chunks (total)          2.1 kB
+Route (app)                                                   Size     First Load JS
+┌ ○ /                                                         9.54 kB         302 kB
+├ ○ /_not-found                                               876 B          88.2 kB
+├ ○ /admin                                                    161 B           301 kB
+├ ○ /admin/brand-managers                                     163 B           301 kB
+├ ○ /admin/create-brand-manager                               163 B           301 kB
+├ ○ /alerts                                                   16.2 kB         370 kB
+├ ƒ /api/admin/brand-managers                                 0 B                0 B
+├ ƒ /api/admin/brand-managers/[uid]                           0 B                0 B
+├ ƒ /api/admin/brand-managers/[uid]/reset-temporary-password  0 B                0 B
+├ ƒ /api/admin/brand-managers/[uid]/status                    0 B                0 B
+├ ƒ /api/admin/brand-managers/[uid]/temporary-password        0 B                0 B
+├ ƒ /api/auth/complete-first-password-change                  0 B                0 B
+├ ƒ /api/auth/reset-password                                  0 B                0 B
+├ ○ /api/debug-firestore                                      0 B                0 B
+├ ○ /api/reports/latest                                       0 B                0 B
+├ ƒ /api/staff                                                0 B                0 B
+├ ƒ /api/staff/[uid]                                          0 B                0 B
+├ ƒ /api/staff/[uid]/reset-temporary-password                 0 B                0 B
+├ ƒ /api/staff/[uid]/status                                   0 B                0 B
+├ ƒ /api/staff/[uid]/temporary-password                       0 B                0 B
+├ ○ /change-password                                          3.5 kB          282 kB
+├ ○ /dashboard                                                7.48 kB         361 kB
+├ ○ /forgot-password                                          5.44 kB        92.8 kB
+├ ○ /labeling_tool                                            1.25 kB        88.6 kB
+├ ○ /leads                                                    12.7 kB         302 kB
+├ ○ /login                                                    5.68 kB         293 kB
+├ ○ /mentions                                                 6.41 kB         304 kB
+├ ƒ /mentions/[id]                                            5.99 kB         304 kB
+├ ○ /nganh                                                    6.45 kB         299 kB
+├ ○ /profile                                                  7.23 kB         300 kB
+├ ○ /reports                                                  22.8 kB         307 kB
+├ ○ /settings/brand                                           4.06 kB         266 kB
+├ ○ /team                                                     4.04 kB         300 kB
+├ ○ /team/create-staff                                        198 B           296 kB
+├ ○ /team/staff                                               198 B           296 kB
+└ ○ /ve-chung-toi                                             13.5 kB         306 kB
++ First Load JS shared by all                                 87.4 kB
+  ├ chunks/1528-6613e1c1fa8266e6.js                           31.7 kB
+  ├ chunks/1dd3208c-1eae7e473ee6cc75.js                       53.6 kB
+  └ other shared chunks (total)                               2 kB
 
 
 ○  (Static)   prerendered as static content
 ƒ  (Dynamic)  server-rendered on demand
 
-npm notice
-npm notice New minor version of npm available! 11.13.0 -> 11.18.0
-npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.18.0
-npm notice To update run: npm install -g npm@11.18.0
-npm notice

@@ -39,9 +39,15 @@ export default function RootLayout({
   const { t, i18n } = useTranslation();
 
   // Trang auth: không có sidebar, không có footer
-  const isAuthPage = ["/login", "/forgot-password"].includes(pathname || "");
+  const isAuthPage = ["/login", "/forgot-password", "/change-password"].includes(pathname || "");
   // Trang public: không có sidebar, nhưng có footer
-  const isPublicPage = ["/", "/nganh", "/ve-chung-toi", "/profile"].includes(pathname || "");
+  const isPublicPage = [
+    "/",
+    "/nganh",
+    "/ve-chung-toi",
+    "/profile",
+    "/labeling_tool",
+  ].includes(pathname || "");
   const hideShell = isAuthPage || isPublicPage;
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -104,10 +110,7 @@ export default function RootLayout({
         {/* Anti-FOUC: set dark class trước React render để tránh flash */}
         <script dangerouslySetInnerHTML={{ __html: antiFoucScript }} />
         <title>{t(titleKey)}</title>
-        <meta
-          name="description"
-          content={t(descKey)}
-        />
+        <meta name="description" content={t(descKey)} />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link
           rel="stylesheet"
@@ -122,9 +125,20 @@ export default function RootLayout({
           href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css"
         />
         <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+        <script dangerouslySetInnerHTML={{ __html: `
+          tailwind.config = {
+            darkMode: 'class'
+          };
+        ` }} />
         <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
       </head>
-      <body style={{ margin: 0, padding: 0, backgroundColor: "var(--color-bg-primary)" }}>
+      <body
+        style={{
+          margin: 0,
+          padding: 0,
+          backgroundColor: "var(--color-bg-primary)",
+        }}
+      >
         <I18nextProvider i18n={i18nInstance}>
           <ThemeProvider>
             <LanguageProvider>
@@ -140,13 +154,18 @@ export default function RootLayout({
               ) : (
                 /* Trang app (Dashboard, Mentions...) — có sidebar */
                 <ProtectedRoute>
-                  <div className="flex h-screen w-screen overflow-hidden" style={{ backgroundColor: "var(--color-bg-primary)" }}>
+                  <div
+                    className="flex h-screen w-screen overflow-hidden"
+                    style={{ backgroundColor: "var(--color-bg-primary)" }}
+                  >
                     <Sidebar
                       isOpen={sidebarOpen}
                       onClose={() => setSidebarOpen(false)}
                     />
                     <div className="flex flex-col flex-1 md:ml-64">
-                      <Header onMenuToggle={() => setSidebarOpen((prev) => !prev)} />
+                      <Header
+                        onMenuToggle={() => setSidebarOpen((prev) => !prev)}
+                      />
                       <main
                         data-app-scroll-root="true"
                         className="flex-1 overflow-y-auto mt-16 pb-16 md:pb-0"
@@ -166,4 +185,3 @@ export default function RootLayout({
     </html>
   );
 }
-

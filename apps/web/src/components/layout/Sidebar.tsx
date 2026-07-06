@@ -23,9 +23,11 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { href: "/admin", label: "Admin", icon: "ti-shield-lock" },
+  { href: "/admin/create-brand-manager", label: "Tao tai khoan brand", icon: "ti-user-plus" },
+  { href: "/admin/brand-managers", label: "Danh sach brand", icon: "ti-building-store" },
   { href: "/dashboard", label: "nav.dashboard", icon: "ti-layout-dashboard" },
-  { href: "/team", label: "nav.team", icon: "ti-users" },
+  { href: "/team/create-staff", label: "Tao nhan vien", icon: "ti-user-plus" },
+  { href: "/team/staff", label: "Danh sach nhan vien", icon: "ti-users" },
   { href: "/mentions", label: "nav.mentions", icon: "ti-message-circle" },
   { href: "/alerts", label: "nav.alerts", icon: "ti-bell" },
   { href: "/leads", label: "nav.leads", icon: "ti-chart-bar" },

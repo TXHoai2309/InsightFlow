@@ -24,7 +24,14 @@ const users = [
     role: "admin",
     companyDomain: "insightflow.com",
     defaultRoute: "/admin",
-    permissions: ["admin_panel", "dashboard", "mentions", "alerts", "leads", "reports", "brand_settings"],
+    permissions: [
+      "admin_panel",
+      "admin_user_management",
+      "admin_label_review",
+      "admin_crawler_health",
+      "admin_audit",
+    ],
+    temporaryPasswordIssued: false,
   },
   {
     email: "manager@highlandscoffee.com",
@@ -34,27 +41,40 @@ const users = [
     brandName: "Highlands Coffee",
     companyDomain: "highlandscoffee.com",
     defaultRoute: "/dashboard",
-    permissions: ["dashboard", "mentions", "alerts", "leads", "reports", "brand_settings", "staff_management"],
+    permissions: [
+      "dashboard",
+      "mentions",
+      "alerts",
+      "leads",
+      "reports",
+      "staff_management",
+      "brand_settings",
+      "label_request_review",
+      "response_settings",
+    ],
+    temporaryPasswordIssued: true,
   },
   {
     email: "nguyen_van_crisis@highlandscoffee.com",
     displayName: "Nguyen Van Crisis",
-    role: "crisis_staff",
+    role: "crisis_employee",
     brandId: "highlands-coffee",
     brandName: "Highlands Coffee",
     companyDomain: "highlandscoffee.com",
     defaultRoute: "/alerts",
-    permissions: ["dashboard", "mentions", "alerts", "reports", "brand_settings"],
+    permissions: ["dashboard", "mentions", "alerts", "reports", "label_request_create"],
+    temporaryPasswordIssued: true,
   },
   {
     email: "tran_thi_lead@highlandscoffee.com",
     displayName: "Tran Thi Lead",
-    role: "lead_staff",
+    role: "lead_employee",
     brandId: "highlands-coffee",
     brandName: "Highlands Coffee",
     companyDomain: "highlandscoffee.com",
     defaultRoute: "/leads",
-    permissions: ["dashboard", "mentions", "leads", "reports", "brand_settings"],
+    permissions: ["dashboard", "mentions", "leads", "reports"],
+    temporaryPasswordIssued: true,
   },
 ];
 
@@ -95,11 +115,22 @@ async function upsertUser(userConfig) {
       companyDomain: userConfig.companyDomain,
       permissions: userConfig.permissions,
       defaultRoute: userConfig.defaultRoute,
+      temporaryPasswordIssued: userConfig.temporaryPasswordIssued,
+      temporaryPassword: userConfig.temporaryPasswordIssued ? password : FieldValue.delete(),
       updatedAt: FieldValue.serverTimestamp(),
       seededForTesting: true,
     },
     { merge: true },
   );
+
+  await auth.setCustomUserClaims(firebaseUser.uid, {
+    role: userConfig.role,
+    brandId: userConfig.brandId || null,
+    brandName: userConfig.brandName || null,
+    permissions: userConfig.permissions,
+    defaultRoute: userConfig.defaultRoute,
+    temporaryPasswordIssued: userConfig.temporaryPasswordIssued,
+  });
 
   return { ...userConfig, uid: firebaseUser.uid };
 }

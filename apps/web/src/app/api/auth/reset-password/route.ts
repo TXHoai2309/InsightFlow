@@ -1,7 +1,6 @@
 // apps/web/src/app/api/auth/reset-password/route.ts
 import { NextRequest, NextResponse } from "next/server";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+import { getApiBaseUrl } from "@/lib/apiProxy";
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,7 +14,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/auth/reset-password`, {
+    const response = await fetch(`${getApiBaseUrl(request)}/api/auth/reset-password`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, newPassword }),

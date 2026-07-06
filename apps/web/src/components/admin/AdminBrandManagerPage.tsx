@@ -1,0 +1,1098 @@
+"use client";
+
+import React, { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useTranslation } from "react-i18next";
+import { collection, getDocs, limit, query } from "firebase/firestore";
+import { EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
+import { auth } from "@/lib/firebase";
+import { dbData } from "@/lib/firebase";
+import { validateStrongPassword } from "@/lib/passwordPolicy";
+import { buildBrandEmail, getBrandEmailDomain, slugifyBrandDomain, type BrandOption } from "@/lib/brandEmail";
+import { formatBrandDisplayName } from "@/lib/services/dashboard";
+
+interface CreatedAccount {
+  uid: string;
+  email: string;
+  displayName: string;
+  brandName: string;
+  brandId: string;
+  temporaryPassword: string;
+  defaultRoute: string;
+}
+
+interface BrandManagerAccount extends Omit<CreatedAccount, "temporaryPassword"> {
+  temporaryPassword?: string;
+  hasTemporaryPassword?: boolean;
+  disabled?: boolean;
+}
+
+function generateTemporaryPassword() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+  const randomPart = Array.from({ length: 10 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
+  return `IF@${randomPart}24`;
+}
+
+function getInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+/* ---------- Inline icons (no extra deps) ---------- */
+const Icon = {
+  Shield: (p: React.SVGProps<SVGSVGElement>) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}>
+      <path d="M12 3l7 3v6c0 4.5-3 8-7 9-4-1-7-4.5-7-9V6l7-3z" />
+    </svg>
+  ),
+  User: (p: React.SVGProps<SVGSVGElement>) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}>
+      <circle cx="12" cy="8" r="3.5" />
+      <path d="M5 20c1.2-3.6 4-5.5 7-5.5s5.8 1.9 7 5.5" />
+    </svg>
+  ),
+  Mail: (p: React.SVGProps<SVGSVGElement>) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="M3.5 6.5l8.5 6 8.5-6" />
+    </svg>
+  ),
+  Building: (p: React.SVGProps<SVGSVGElement>) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}>
+      <rect x="4" y="3" width="10" height="18" rx="1" />
+      <path d="M14 8h6v13h-6M7 7h.01M11 7h.01M7 11h.01M11 11h.01M7 15h.01M11 15h.01" />
+    </svg>
+  ),
+  Key: (p: React.SVGProps<SVGSVGElement>) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}>
+      <circle cx="8" cy="15" r="4" />
+      <path d="M11 12l8-8M16 4l3 3M13 7l2.5 2.5" />
+    </svg>
+  ),
+  Refresh: (p: React.SVGProps<SVGSVGElement>) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}>
+      <path d="M4 4v5h5M20 20v-5h-5" />
+      <path d="M5.5 15a7.5 7.5 0 0013.4 2.5M18.5 9A7.5 7.5 0 005.1 6.5" />
+    </svg>
+  ),
+  Copy: (p: React.SVGProps<SVGSVGElement>) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}>
+      <rect x="9" y="9" width="12" height="12" rx="2" />
+      <path d="M5 15V5a2 2 0 012-2h10" />
+    </svg>
+  ),
+  Check: (p: React.SVGProps<SVGSVGElement>) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}>
+      <path d="M20 6L9 17l-5-5" />
+    </svg>
+  ),
+  Pencil: (p: React.SVGProps<SVGSVGElement>) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}>
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />
+    </svg>
+  ),
+  Lock: (p: React.SVGProps<SVGSVGElement>) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}>
+      <rect x="4" y="10" width="16" height="10" rx="2" />
+      <path d="M8 10V7a4 4 0 018 0v3" />
+    </svg>
+  ),
+  Unlock: (p: React.SVGProps<SVGSVGElement>) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}>
+      <rect x="4" y="10" width="16" height="10" rx="2" />
+      <path d="M8 10V7a4 4 0 017.6-1.8" />
+    </svg>
+  ),
+  Search: (p: React.SVGProps<SVGSVGElement>) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}>
+      <circle cx="11" cy="11" r="7" />
+      <path d="M21 21l-4.35-4.35" />
+    </svg>
+  ),
+  Inbox: (p: React.SVGProps<SVGSVGElement>) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}>
+      <path d="M3 12h5l2 3h4l2-3h5" />
+      <path d="M5.5 5h13L21 12v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6L5.5 5z" />
+    </svg>
+  ),
+  X: (p: React.SVGProps<SVGSVGElement>) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}>
+      <path d="M18 6L6 18M6 6l12 12" />
+    </svg>
+  ),
+};
+
+function CopyButton({ value, label }: { value: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch {
+      /* clipboard unavailable — silently ignore */
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      aria-label={`Copy ${label}`}
+      className="inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-[11px] font-semibold text-[var(--color-text-secondary)] transition hover:border-[var(--color-brand)] hover:text-[var(--color-brand)]"
+    >
+      {copied ? <Icon.Check className="h-3 w-3" /> : <Icon.Copy className="h-3 w-3" />}
+      {copied ? "Đã sao chép" : "Sao chép"}
+    </button>
+  );
+}
+
+type AdminBrandManagerView = "overview" | "create" | "list" | "all";
+
+export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManagerView }) {
+  const { t } = useTranslation();
+  const [fullName, setFullName] = useState("");
+  const [emailLocalPart, setEmailLocalPart] = useState("");
+  const [brandName, setBrandName] = useState("");
+  const [brandOptions, setBrandOptions] = useState<BrandOption[]>([]);
+  const [loadingBrands, setLoadingBrands] = useState(true);
+  const [temporaryPassword, setTemporaryPassword] = useState(generateTemporaryPassword());
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [createdAccount, setCreatedAccount] = useState<CreatedAccount | null>(null);
+  const [brandManagers, setBrandManagers] = useState<BrandManagerAccount[]>([]);
+  const [loadingList, setLoadingList] = useState(true);
+  const [actionError, setActionError] = useState("");
+  const [editingAccount, setEditingAccount] = useState<BrandManagerAccount | null>(null);
+  const [editFullName, setEditFullName] = useState("");
+  const [editBrandName, setEditBrandName] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const [revealedPasswords, setRevealedPasswords] = useState<Record<string, string>>({});
+  const [passwordRequestUid, setPasswordRequestUid] = useState<string | null>(null);
+  const [passwordRequestMode, setPasswordRequestMode] = useState<"reveal" | "reset">("reveal");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [revealLoading, setRevealLoading] = useState(false);
+  const [revealError, setRevealError] = useState("");
+
+  const brandPreview = useMemo(() => {
+    return slugifyBrandDomain(brandName);
+  }, [brandName]);
+
+  const selectedBrand = useMemo(
+    () => brandOptions.find((brand) => brand.name === brandName),
+    [brandName, brandOptions],
+  );
+  const selectedBrandDomain = selectedBrand?.domain || getBrandEmailDomain(brandName);
+  const fullEmail = buildBrandEmail(emailLocalPart, selectedBrandDomain);
+
+  const filteredManagers = useMemo(() => {
+    if (!searchTerm.trim()) return brandManagers;
+    const q = searchTerm.trim().toLowerCase();
+    return brandManagers.filter(
+      (item) =>
+        item.displayName?.toLowerCase().includes(q) ||
+        item.email?.toLowerCase().includes(q) ||
+        item.brandName?.toLowerCase().includes(q),
+    );
+  }, [brandManagers, searchTerm]);
+
+  const stats = useMemo(() => {
+    const total = brandManagers.length;
+    const active = brandManagers.filter((item) => !item.disabled).length;
+    const disabled = total - active;
+    return { total, active, disabled };
+  }, [brandManagers]);
+
+  const loadCrawledBrands = async () => {
+    setLoadingBrands(true);
+
+    try {
+      const brandMap = new Map<string, BrandOption>();
+
+      const seedBrands = ["Highland Coffee", "Starbucks", "Mixue"];
+      seedBrands.forEach((name) => {
+        const key = slugifyBrandDomain(name);
+        brandMap.set(key, {
+          id: key,
+          name,
+          domain: getBrandEmailDomain(name),
+        });
+      });
+
+      if (dbData) {
+        const snapshot = await getDocs(query(collection(dbData, "insightflow_labels"), limit(1000)));
+        snapshot.docs.forEach((doc) => {
+          const data = doc.data();
+          const rawBrand = String(data.brand || data.workspace_id || data.brandName || "").trim();
+          if (!rawBrand) return;
+
+          const name = formatBrandDisplayName(rawBrand);
+          const key = slugifyBrandDomain(name);
+          if (!key) return;
+
+          brandMap.set(key, {
+            id: String(data.workspace_id || data.brand || key),
+            name,
+            domain: getBrandEmailDomain(name),
+          });
+        });
+      }
+
+      const brands = Array.from(brandMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+      setBrandOptions(brands);
+      setBrandName((current) => current || brands[0]?.name || "");
+    } catch (error) {
+      console.warn("Could not load crawled brands for Admin form.", error);
+    } finally {
+      setLoadingBrands(false);
+    }
+  };
+
+  const loadBrandManagers = async () => {
+    setLoadingList(true);
+    setActionError("");
+
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) {
+        throw new Error(t("admin.brandManager.errors.needAdmin"));
+      }
+
+      const response = await fetch("/api/admin/brand-managers", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Khong the tai danh sach Brand Manager.");
+      }
+
+      setBrandManagers(data.data || []);
+    } catch (err: any) {
+      setActionError(err.message || "Khong the tai danh sach Brand Manager.");
+    } finally {
+      setLoadingList(false);
+    }
+  };
+
+  useEffect(() => {
+    loadBrandManagers();
+    loadCrawledBrands();
+  }, []);
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+    setCreatedAccount(null);
+
+    try {
+      const passwordPolicy = validateStrongPassword(temporaryPassword);
+      if (!passwordPolicy.valid) {
+        throw new Error(passwordPolicy.errors.map((key) => t(key)).join(" "));
+      }
+
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) {
+        throw new Error(t("admin.brandManager.errors.needAdmin"));
+      }
+
+      const response = await fetch("/api/admin/brand-managers", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          fullName,
+          email: fullEmail,
+          brandName,
+          temporaryPassword,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || t("admin.brandManager.errors.createFailed"));
+      }
+
+      setCreatedAccount(data.data);
+      setBrandManagers((current) => {
+        const withoutDuplicate = current.filter((item) => item.uid !== data.data.uid);
+        return [data.data, ...withoutDuplicate];
+      });
+      setFullName("");
+      setEmailLocalPart("");
+      setTemporaryPassword(generateTemporaryPassword());
+    } catch (err: any) {
+      setError(err.message || t("admin.brandManager.errors.createFailed"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openEditModal = (account: BrandManagerAccount) => {
+    setEditingAccount(account);
+    setEditFullName(account.displayName || "");
+    setEditBrandName(account.brandName || "");
+    setActionError("");
+  };
+
+  const handleEditAccount = async () => {
+    if (!editingAccount) return;
+    setSavingEdit(true);
+    setActionError("");
+
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error(t("admin.brandManager.errors.needAdmin"));
+
+      const response = await fetch(`/api/admin/brand-managers/${editingAccount.uid}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          fullName: editFullName,
+          brandName: editBrandName,
+        }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Không thể cập nhật tài khoản.");
+      }
+
+      setBrandManagers((current) =>
+        current.map((item) => (item.uid === editingAccount.uid ? { ...item, ...data.data } : item)),
+      );
+      setEditingAccount(null);
+    } catch (err: any) {
+      setActionError(err.message || "Không thể cập nhật tài khoản.");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleToggleStatus = async (account: BrandManagerAccount) => {
+    setActionError("");
+
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error(t("admin.brandManager.errors.needAdmin"));
+
+      const response = await fetch(`/api/admin/brand-managers/${account.uid}/status`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ disabled: !account.disabled }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Không thể cập nhật trạng thái tài khoản.");
+      }
+
+      setBrandManagers((current) =>
+        current.map((item) => (item.uid === account.uid ? { ...item, ...data.data } : item)),
+      );
+    } catch (err: any) {
+      setActionError(err.message || "Không thể cập nhật trạng thái tài khoản.");
+    }
+  };
+
+  const handleRevealTemporaryPassword = async (managerUid: string) => {
+    setRevealLoading(true);
+    setRevealError("");
+
+    try {
+      const user = auth.currentUser;
+      if (!user?.email) {
+        throw new Error("Phiên đăng nhập không hợp lệ.");
+      }
+
+      const credential = EmailAuthProvider.credential(user.email, adminPassword);
+      await reauthenticateWithCredential(user, credential);
+
+      const selectedManager = brandManagers.find((item) => item.uid === managerUid);
+      if (passwordRequestMode === "reveal" && selectedManager?.temporaryPassword) {
+        setRevealedPasswords((current) => ({
+          ...current,
+          [managerUid]: selectedManager.temporaryPassword as string,
+        }));
+        setPasswordRequestUid(null);
+        setAdminPassword("");
+        return;
+      }
+
+      const token = await user.getIdToken(true);
+      const endpoint =
+        passwordRequestMode === "reset"
+          ? `/api/admin/brand-managers/${managerUid}/reset-temporary-password`
+          : `/api/admin/brand-managers/${managerUid}/temporary-password`;
+
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 400) {
+          setBrandManagers((current) =>
+            current.map((item) =>
+              item.uid === managerUid ? { ...item, hasTemporaryPassword: false, temporaryPassword: undefined } : item,
+            ),
+          );
+        }
+        throw new Error(data.error || "Không thể thực hiện yêu cầu.");
+      }
+
+      setRevealedPasswords((current) => ({
+        ...current,
+        [managerUid]: data.data.temporaryPassword,
+      }));
+      setBrandManagers((current) =>
+        current.map((item) =>
+          item.uid === managerUid
+            ? { ...item, hasTemporaryPassword: true, temporaryPassword: data.data.temporaryPassword }
+            : item,
+        ),
+      );
+      setPasswordRequestUid(null);
+      setAdminPassword("");
+    } catch (err: any) {
+      const messageByCode: Record<string, string> = {
+        "auth/wrong-password": "Mật khẩu xác thực của Admin không đúng.",
+        "auth/invalid-credential": "Mật khẩu xác thực của Admin không đúng.",
+        "auth/too-many-requests": "Quá nhiều yêu cầu. Vui lòng thử lại sau.",
+      };
+      const backendMessage =
+        err.message === "Temporary password is no longer available for this account."
+          ? "Mật khẩu tạm thời không còn khả dụng cho tài khoản này."
+          : err.message;
+      setRevealError(messageByCode[err.code] || backendMessage || "Yêu cầu thất bại.");
+    } finally {
+      setRevealLoading(false);
+    }
+  };
+
+  const flowSteps = [
+    t("admin.brandManager.flow.1"),
+    t("admin.brandManager.flow.2"),
+    t("admin.brandManager.flow.3"),
+    t("admin.brandManager.flow.4"),
+    t("admin.brandManager.flow.5"),
+  ];
+
+  if (view === "overview") {
+    return (
+      <div className="mx-auto max-w-[1000px] space-y-6 p-4 md:p-8">
+        <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 md:p-7">
+          <p className="text-[12px] font-bold uppercase tracking-[0.12em] text-[var(--color-brand)]">
+            Admin Console
+          </p>
+          <h1 className="mt-2 text-[28px] font-bold text-[var(--color-text-primary)]">
+            Quản trị tài khoản Brand Manager
+          </h1>
+          <p className="mt-2 max-w-2xl text-[14px] leading-6 text-[var(--color-text-secondary)]">
+            Chọn tác vụ cần thực hiện: cấp tài khoản quản lý thương hiệu mới hoặc xem và quản lý danh sách tài khoản đã tạo.
+          </p>
+        </section>
+
+        <section className="grid gap-4 md:grid-cols-2">
+          <Link
+            href="/admin/create-brand-manager"
+            className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 transition hover:border-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)]"
+          >
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--color-brand-subtle)] text-[var(--color-brand)]">
+              <Icon.User className="h-6 w-6" />
+            </div>
+            <h2 className="mt-4 text-[18px] font-bold text-[var(--color-text-primary)]">
+              Tao tai khoan Brand Manager
+            </h2>
+            <p className="mt-2 text-[13px] leading-6 text-[var(--color-text-secondary)]">
+              Chọn thương hiệu từ dữ liệu đã cao, nhập thông tin người quản lý và cấp mật khẩu tạm thời.
+            </p>
+          </Link>
+
+          <Link
+            href="/admin/brand-managers"
+            className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 transition hover:border-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)]"
+          >
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--color-brand-subtle)] text-[var(--color-brand)]">
+              <Icon.Building className="h-6 w-6" />
+            </div>
+            <h2 className="mt-4 text-[18px] font-bold text-[var(--color-text-primary)]">
+              Danh sách Brand Manager
+            </h2>
+            <p className="mt-2 text-[13px] leading-6 text-[var(--color-text-secondary)]">
+              Xem, tìm kiếm, chỉnh sửa, khóa hoặc mở khóa các tài khoản quản lý thương hiệu.
+            </p>
+          </Link>
+        </section>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-[1200px] space-y-6 p-4 md:p-8">
+      {/* Header */}
+      <section className="relative overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 md:p-7">
+        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[var(--color-brand)] via-[var(--color-brand)]/60 to-transparent" />
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--color-brand-subtle)] text-[var(--color-brand)]">
+              <Icon.Shield className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-[12px] font-bold uppercase tracking-[0.12em] text-[var(--color-brand)]">
+                {t("admin.brandManager.badge")}
+              </p>
+              <h1 className="mt-1 text-[26px] font-bold leading-tight text-[var(--color-text-primary)] md:text-[28px]">
+                {t("admin.brandManager.title")}
+              </h1>
+              <p className="mt-1.5 max-w-2xl text-[14px] leading-6 text-[var(--color-text-secondary)]">
+                {t("admin.brandManager.subtitle")}
+              </p>
+            </div>
+          </div>
+
+          {/* Quick stats */}
+          <div className="grid grid-cols-3 gap-2 md:shrink-0">
+            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-4 py-2.5 text-center">
+              <p className="text-[20px] font-bold leading-none text-[var(--color-text-primary)]">{stats.total}</p>
+              <p className="mt-1 text-[11px] font-medium text-[var(--color-text-muted)]">Tổng số</p>
+            </div>
+            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-4 py-2.5 text-center">
+              <p className="text-[20px] font-bold leading-none text-emerald-600">{stats.active}</p>
+              <p className="mt-1 text-[11px] font-medium text-[var(--color-text-muted)]">Hoạt động</p>
+            </div>
+            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-4 py-2.5 text-center">
+              <p className="text-[20px] font-bold leading-none text-red-600">{stats.disabled}</p>
+              <p className="mt-1 text-[11px] font-medium text-[var(--color-text-muted)]">Đã khóa</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Flow stepper */}
+      {(view === "all" || view === "create") && (
+        <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6">
+          <p className="mb-4 text-[12px] font-bold uppercase tracking-[0.1em] text-[var(--color-text-muted)]">
+            Quy trình cấp tài khoản
+          </p>
+          <div className="grid gap-3 md:grid-cols-5">
+            {flowSteps.map((step, index) => (
+              <div key={step} className="relative flex md:flex-col md:items-start">
+                <div className="flex items-center md:mb-3">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-[var(--color-brand)] bg-[var(--color-bg-surface)] text-[12px] font-bold text-[var(--color-brand)]">
+                    {index + 1}
+                  </div>
+                  {index < flowSteps.length - 1 && (
+                    <div className="mx-2 hidden h-[2px] flex-1 bg-[var(--color-border)] md:block" />
+                  )}
+                </div>
+                <p className="ml-3 text-[13px] font-medium leading-5 text-[var(--color-text-primary)] md:ml-0">
+                  {step}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Create account + result panel */}
+      {(view === "all" || view === "create") && (
+        <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <form
+            onSubmit={handleSubmit}
+            className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 space-y-5"
+          >
+            <div>
+              <h2 className="text-[18px] font-bold text-[var(--color-text-primary)]">
+                {t("admin.brandManager.form.title")}
+              </h2>
+              <p className="mt-1 text-[13px] text-[var(--color-text-secondary)]">
+                {t("admin.brandManager.form.subtitle")}
+              </p>
+            </div>
+
+            {error && (
+              <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
+                <Icon.X className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="space-y-2">
+                <span className="flex items-center gap-1.5 text-[13px] font-semibold text-[var(--color-text-primary)]">
+                  <Icon.User className="h-3.5 w-3.5 text-[var(--color-text-muted)]" />
+                  {t("admin.brandManager.form.fullName")}
+                </span>
+                <input
+                  value={fullName}
+                  onChange={(event) => setFullName(event.target.value)}
+                  required
+                  placeholder={t("admin.brandManager.form.fullNamePlaceholder")}
+                  className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2.5 text-[14px] text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/15"
+                />
+              </label>
+
+              <label className="space-y-2">
+                <span className="flex items-center gap-1.5 text-[13px] font-semibold text-[var(--color-text-primary)]">
+                  <Icon.Mail className="h-3.5 w-3.5 text-[var(--color-text-muted)]" />
+                  {t("admin.brandManager.form.email")}
+                </span>
+                <div className="flex overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] transition focus-within:border-[var(--color-brand)] focus-within:ring-2 focus-within:ring-[var(--color-brand)]/15">
+                  <input
+                    value={emailLocalPart}
+                    onChange={(event) => setEmailLocalPart(event.target.value)}
+                    required
+                    placeholder="manager"
+                    className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-[14px] text-[var(--color-text-primary)] outline-none"
+                  />
+                  <span className="shrink-0 border-l border-[var(--color-border)] px-3 py-2.5 text-[14px] text-[var(--color-text-secondary)]">
+                    @{selectedBrandDomain || "brand.com"}
+                  </span>
+                </div>
+                {fullEmail && (
+                  <span className="block truncate text-[12px] text-[var(--color-text-muted)]">{fullEmail}</span>
+                )}
+              </label>
+            </div>
+
+            <label className="space-y-2 block">
+              <span className="flex items-center gap-1.5 text-[13px] font-semibold text-[var(--color-text-primary)]">
+                <Icon.Building className="h-3.5 w-3.5 text-[var(--color-text-muted)]" />
+                {t("admin.brandManager.form.brand")}
+              </span>
+              <select
+                value={brandName}
+                onChange={(event) => setBrandName(event.target.value)}
+                required
+                disabled={loadingBrands || brandOptions.length === 0}
+                className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2.5 text-[14px] text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/15 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {brandOptions.map((brand) => (
+                  <option key={brand.id} value={brand.name}>
+                    {brand.name}
+                  </option>
+                ))}
+              </select>
+              {brandPreview && (
+                <span className="flex flex-wrap gap-x-3 text-[12px] text-[var(--color-text-muted)]">
+                  <span>Brand ID: <code className="text-[var(--color-text-secondary)]">{brandPreview}</code></span>
+                  <span>Domain: <code className="text-[var(--color-text-secondary)]">{selectedBrandDomain}</code></span>
+                </span>
+              )}
+            </label>
+
+            <label className="space-y-2 block">
+              <span className="flex items-center gap-1.5 text-[13px] font-semibold text-[var(--color-text-primary)]">
+                <Icon.Key className="h-3.5 w-3.5 text-[var(--color-text-muted)]" />
+                {t("admin.brandManager.form.tempPassword")}
+              </span>
+              <div className="flex gap-2">
+                <input
+                  value={temporaryPassword}
+                  onChange={(event) => setTemporaryPassword(event.target.value)}
+                  required
+                  minLength={10}
+                  className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2.5 font-mono text-[14px] text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/15"
+                />
+                <button
+                  type="button"
+                  onClick={() => setTemporaryPassword(generateTemporaryPassword())}
+                  className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-4 text-[13px] font-semibold text-[var(--color-text-primary)] transition hover:border-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)]"
+                >
+                  <Icon.Refresh className="h-3.5 w-3.5" />
+                  {t("admin.brandManager.form.generate")}
+                </button>
+              </div>
+            </label>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-lg bg-[var(--color-brand)] px-5 py-3 text-[14px] font-semibold text-white shadow-sm transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-60 md:w-auto"
+            >
+              {loading ? t("admin.brandManager.form.submitting") : t("admin.brandManager.form.submit")}
+            </button>
+          </form>
+
+          <aside className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6">
+            <h2 className="text-[16px] font-bold text-[var(--color-text-primary)]">
+              {t("admin.brandManager.result.title")}
+            </h2>
+            {createdAccount ? (
+              <div className="mt-4 space-y-4">
+                <div className="flex items-center gap-3 rounded-xl bg-[var(--color-brand-subtle)] p-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand)] text-[13px] font-bold text-white">
+                    {getInitials(createdAccount.displayName)}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-[14px] font-semibold text-[var(--color-text-primary)]">
+                      {createdAccount.displayName}
+                    </p>
+                    <p className="truncate text-[12px] text-[var(--color-text-secondary)]">{createdAccount.brandName}</p>
+                  </div>
+                </div>
+
+                <dl className="space-y-3 text-[13px]">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <dt className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Email</dt>
+                      <dd className="truncate text-[var(--color-text-primary)]">{createdAccount.email}</dd>
+                    </div>
+                    <CopyButton value={createdAccount.email} label="email" />
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <dt className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+                        {t("admin.brandManager.result.tempPassword")}
+                      </dt>
+                      <dd className="truncate font-mono text-[var(--color-text-primary)]">{createdAccount.temporaryPassword}</dd>
+                    </div>
+                    <CopyButton value={createdAccount.temporaryPassword} label="mật khẩu" />
+                  </div>
+                  <div>
+                    <dt className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Brand ID</dt>
+                    <dd className="text-[var(--color-text-primary)]">{createdAccount.brandId}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+                      {t("admin.brandManager.result.defaultRoute")}
+                    </dt>
+                    <dd className="text-[var(--color-text-primary)]">{createdAccount.defaultRoute}</dd>
+                  </div>
+                </dl>
+              </div>
+            ) : (
+              <div className="mt-6 flex flex-col items-center gap-2 text-center">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--color-bg-surface-raised)] text-[var(--color-text-muted)]">
+                  <Icon.Inbox className="h-5 w-5" />
+                </div>
+                <p className="text-[13px] leading-6 text-[var(--color-text-secondary)]">
+                  {t("admin.brandManager.result.empty")}
+                </p>
+              </div>
+            )}
+          </aside>
+        </section>
+      )}
+
+      {/* Brand manager list */}
+      {(view === "all" || view === "list") && (
+        <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-[18px] font-bold text-[var(--color-text-primary)]">Danh sách Brand Manager</h2>
+              <p className="text-[13px] text-[var(--color-text-secondary)]">
+                Quản lý toàn bộ tài khoản quản lý thương hiệu.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Icon.Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--color-text-muted)]" />
+                <input
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Tìm theo tên, email, thương hiệu..."
+                  className="w-56 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] py-2 pl-8 pr-3 text-[13px] text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/15"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={loadBrandManagers}
+                className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-4 py-2 text-[13px] font-semibold text-[var(--color-text-primary)] transition hover:border-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)]"
+              >
+                <Icon.Refresh className="h-3.5 w-3.5" />
+                Tải lại
+              </button>
+            </div>
+          </div>
+
+          {actionError && (
+            <div className="mt-4 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
+              <Icon.X className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{actionError}</span>
+            </div>
+          )}
+
+          <div className="mt-5 overflow-x-auto">
+            <table className="min-w-full text-left text-[14px]">
+              <thead className="text-[11px] uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
+                <tr className="border-b border-[var(--color-border)]">
+                  <th className="py-3 pr-4 font-semibold">Tài khoản</th>
+                  <th className="py-3 pr-4 font-semibold">Thương hiệu</th>
+                  <th className="py-3 pr-4 font-semibold">Trạng thái</th>
+                  <th className="py-3 pr-4 font-semibold">Mật khẩu tạm</th>
+                  <th className="py-3 pr-4 font-semibold">Hành động</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {loadingList ? (
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <tr key={i}>
+                      <td className="py-4 pr-4" colSpan={5}>
+                        <div className="h-10 w-full animate-pulse rounded-lg bg-[var(--color-bg-surface-raised)]" />
+                      </td>
+                    </tr>
+                  ))
+                ) : filteredManagers.length === 0 ? (
+                  <tr>
+                    <td className="py-10" colSpan={5}>
+                      <div className="flex flex-col items-center gap-2 text-center">
+                        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--color-bg-surface-raised)] text-[var(--color-text-muted)]">
+                          <Icon.Inbox className="h-5 w-5" />
+                        </div>
+                        <p className="text-[13px] text-[var(--color-text-secondary)]">
+                          {searchTerm ? "Không tìm thấy tài khoản phù hợp." : "Chưa có Brand Manager nào."}
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredManagers.map((item) => (
+                    <tr key={item.uid} className="transition hover:bg-[var(--color-bg-surface-raised)]">
+                      <td className="py-3.5 pr-4">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-[12px] font-bold text-[var(--color-brand)]">
+                            {getInitials(item.displayName)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate font-semibold text-[var(--color-text-primary)]">{item.displayName}</p>
+                            <p className="truncate text-[12px] text-[var(--color-text-secondary)]">{item.email}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3.5 pr-4">
+                        <p className="text-[var(--color-text-primary)]">{item.brandName}</p>
+                        <p className="text-[12px] text-[var(--color-text-muted)]">{item.brandId}</p>
+                      </td>
+                      <td className="py-3.5 pr-4">
+                        <span
+                          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold ${item.disabled ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"
+                            }`}
+                        >
+                          <span className={`h-1.5 w-1.5 rounded-full ${item.disabled ? "bg-red-500" : "bg-emerald-500"}`} />
+                          {item.disabled ? "Đã khóa" : "Đang hoạt động"}
+                        </span>
+                      </td>
+                      <td className="py-3.5 pr-4">
+                        {revealedPasswords[item.uid] ? (
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-[13px] text-[var(--color-text-primary)]">
+                              {revealedPasswords[item.uid]}
+                            </span>
+                            <CopyButton value={revealedPasswords[item.uid]} label="mật khẩu" />
+                          </div>
+                        ) : item.hasTemporaryPassword || item.temporaryPassword ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPasswordRequestUid(item.uid);
+                              setPasswordRequestMode("reveal");
+                              setRevealError("");
+                              setAdminPassword("");
+                            }}
+                            className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 font-mono text-[13px] text-[var(--color-text-primary)] transition hover:bg-[var(--color-brand-subtle)] hover:text-[var(--color-brand)]"
+                          >
+                            ••••••••••
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPasswordRequestUid(item.uid);
+                              setPasswordRequestMode("reset");
+                              setRevealError("");
+                              setAdminPassword("");
+                            }}
+                            className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-[12px] font-semibold text-[var(--color-text-primary)] transition hover:bg-[var(--color-brand-subtle)] hover:text-[var(--color-brand)]"
+                          >
+                            Cấp lại
+                          </button>
+                        )}
+                      </td>
+                      <td className="py-3.5 pr-4">
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(item)}
+                            className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-[12px] font-semibold text-[var(--color-text-primary)] transition hover:border-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)]"
+                          >
+                            <Icon.Pencil className="h-3.5 w-3.5" />
+                            Sửa
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleStatus(item)}
+                            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold transition ${item.disabled
+                              ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                              : "bg-red-600 text-white hover:bg-red-700"
+                              }`}
+                          >
+                            {item.disabled ? <Icon.Unlock className="h-3.5 w-3.5" /> : <Icon.Lock className="h-3.5 w-3.5" />}
+                            {item.disabled ? "Mở khóa" : "Khóa"}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {passwordRequestUid && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-[420px] rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 shadow-xl animate-in fade-in zoom-in-95 duration-150">
+            <h3 className="text-[18px] font-bold text-[var(--color-text-primary)]">
+              {passwordRequestMode === "reset" ? "Xác thực để cấp lại mật khẩu" : "Xác thực để xem mật khẩu"}
+            </h3>
+            <p className="mt-2 text-[13px] leading-5 text-[var(--color-text-secondary)]">
+              {passwordRequestMode === "reset"
+                ? "Nhập mật khẩu tài khoản Admin của bạn. Hệ thống sẽ tạo mật khẩu tạm mới cho Brand Manager."
+                : "Nhập mật khẩu tài khoản Admin của bạn để xem mật khẩu tạm thời hiện tại."}
+            </p>
+
+            {revealError && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
+                {revealError}
+              </div>
+            )}
+
+            <label className="mt-5 block space-y-2">
+              <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">
+                Mật khẩu Admin
+              </span>
+              <input
+                value={adminPassword}
+                onChange={(event) => setAdminPassword(event.target.value)}
+                type="password"
+                autoComplete="new-password"
+                autoFocus
+                className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2.5 text-[14px] text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/15"
+              />
+            </label>
+
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setPasswordRequestUid(null);
+                  setPasswordRequestMode("reveal");
+                  setAdminPassword("");
+                  setRevealError("");
+                }}
+                className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-[13px] font-semibold text-[var(--color-text-primary)] transition hover:bg-[var(--color-bg-surface-raised)]"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                disabled={revealLoading || !adminPassword}
+                onClick={() => handleRevealTemporaryPassword(passwordRequestUid)}
+                className="rounded-lg bg-[var(--color-brand)] px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {revealLoading
+                  ? "Đang xác thực..."
+                  : passwordRequestMode === "reset"
+                    ? "Cấp lại và xem"
+                    : "Xem mật khẩu"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit modal */}
+      {editingAccount && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-[440px] rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 shadow-xl">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-[12px] font-bold text-[var(--color-brand)]">
+                  {getInitials(editingAccount.displayName)}
+                </div>
+                <div>
+                  <h3 className="text-[16px] font-bold text-[var(--color-text-primary)]">Chỉnh sửa Brand Manager</h3>
+                  <p className="text-[12px] text-[var(--color-text-secondary)]">{editingAccount.email}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingAccount(null)}
+                aria-label="Đóng"
+                className="rounded-lg p-1 text-[var(--color-text-muted)] transition hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-primary)]"
+              >
+                <Icon.X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <label className="mt-5 block space-y-2">
+              <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">Họ tên</span>
+              <input
+                value={editFullName}
+                onChange={(event) => setEditFullName(event.target.value)}
+                className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2.5 text-[14px] text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/15"
+              />
+            </label>
+
+            <label className="mt-4 block space-y-2">
+              <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">Thương hiệu</span>
+              <select
+                value={editBrandName}
+                onChange={(event) => setEditBrandName(event.target.value)}
+                disabled={brandOptions.length === 0}
+                className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2.5 text-[14px] text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/15"
+              >
+                {editBrandName && !brandOptions.some((brand) => brand.name === editBrandName) && (
+                  <option value={editBrandName}>{editBrandName}</option>
+                )}
+                {brandOptions.map((brand) => (
+                  <option key={brand.id} value={brand.name}>
+                    {brand.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setEditingAccount(null)}
+                className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-[13px] font-semibold text-[var(--color-text-primary)] transition hover:bg-[var(--color-bg-surface-raised)]"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                disabled={savingEdit || !editFullName.trim() || !editBrandName.trim()}
+                onClick={handleEditAccount}
+                className="rounded-lg bg-[var(--color-brand)] px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {savingEdit ? "Đang lưu..." : "Lưu thay đổi"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default AdminBrandManagerPage;

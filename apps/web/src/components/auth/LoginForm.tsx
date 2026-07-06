@@ -4,16 +4,18 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { getIdTokenResult, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { useTheme } from "@/contexts/ThemeContext";
-import { getDefaultRouteForRole, inferRoleFromEmail } from "@/lib/rbac";
+import { buildUserRoleProfile, normalizeRole } from "@/lib/rbac";
+import { useAuthStore } from "@/stores/auth.store";
 
 export default function LoginForm() {
   const router = useRouter();
   const { t } = useTranslation();
   const { theme } = useTheme();
+  const { setUser, setProfile, setLoading: setAuthLoading, setProfileLoading } = useAuthStore();
   const isDark = theme === "dark";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -27,17 +29,73 @@ export default function LoginForm() {
     setError("");
     try {
       const credential = await signInWithEmailAndPassword(auth, email, password);
-      const userSnapshot = await getDoc(doc(db, "users", credential.user.uid));
-      const savedDefaultRoute = userSnapshot.exists() ? userSnapshot.data().defaultRoute : undefined;
-      router.push(typeof savedDefaultRoute === "string" ? savedDefaultRoute : getDefaultRouteForRole(inferRoleFromEmail(email)));
+      let userData: Record<string, any> | null = null;
+
+      try {
+        const userSnapshot = await getDoc(doc(db, "users", credential.user.uid));
+        userData = userSnapshot.exists() ? userSnapshot.data() : null;
+      } catch (profileError) {
+        console.warn("Could not read Firestore user profile during login. Falling back to token claims.", profileError);
+      }
+
+      if (!userData || !normalizeRole(userData.role)) {
+        const tokenResult = await getIdTokenResult(credential.user, true);
+        const claims = tokenResult.claims;
+
+        if (!normalizeRole(claims.role)) {
+          await signOut(auth);
+          setError(t("auth.errors.unprovisioned"));
+          return;
+        }
+
+        const profileFromClaims = buildUserRoleProfile({
+          uid: credential.user.uid,
+          email: credential.user.email,
+          displayName: credential.user.displayName,
+          photoURL: credential.user.photoURL,
+          storedRole: claims.role,
+          storedBrandId: claims.brandId,
+          storedBrandName: claims.brandName,
+          storedPermissions: claims.permissions,
+          storedDefaultRoute: claims.defaultRoute,
+          storedTemporaryPasswordIssued: claims.temporaryPasswordIssued,
+        });
+
+        setUser(credential.user);
+        setProfile(profileFromClaims);
+        setAuthLoading(false);
+        setProfileLoading(false);
+        router.replace(profileFromClaims.temporaryPasswordIssued ? "/change-password" : profileFromClaims.defaultRoute);
+        return;
+      }
+
+      const profileFromStore = buildUserRoleProfile({
+        uid: credential.user.uid,
+        email: credential.user.email,
+        displayName: credential.user.displayName,
+        photoURL: credential.user.photoURL,
+        storedRole: userData.role,
+        storedBrandId: userData.brandId,
+        storedBrandName: userData.brandName,
+        storedPermissions: userData.permissions,
+        storedDefaultRoute: userData.defaultRoute,
+        storedTemporaryPasswordIssued: userData.temporaryPasswordIssued,
+      });
+
+      setUser(credential.user);
+      setProfile(profileFromStore);
+      setAuthLoading(false);
+      setProfileLoading(false);
+      router.replace(profileFromStore.temporaryPasswordIssued ? "/change-password" : profileFromStore.defaultRoute);
     } catch (err: any) {
       const msg: Record<string, string> = {
         "auth/user-not-found": t("auth.errors.userNotFound"),
         "auth/wrong-password": t("auth.errors.wrongPassword"),
         "auth/invalid-credential": t("auth.errors.invalidCredential"),
+        "auth/user-disabled": t("auth.errors.userDisabled"),
         "auth/too-many-requests": t("auth.errors.tooManyRequests"),
       };
-      setError(msg[err.code] ?? t("auth.errors.loginFailed"));
+      setError(msg[err.code] ?? err.message ?? t("auth.errors.loginFailed"));
     } finally {
       setLoading(false);
     }
@@ -160,10 +218,6 @@ export default function LoginForm() {
             </button>
           </form>
 
-          {/* Footer */}
-          <footer className="mt-12 text-center">
-            <Link href="/forgot-password" className="text-[12px] font-medium text-[#4648d4] hover:text-[#645efb] transition-colors">{t("auth.login.forgotPassword")}</Link>
-          </footer>
         </div>
 
         {/* System status bar */}

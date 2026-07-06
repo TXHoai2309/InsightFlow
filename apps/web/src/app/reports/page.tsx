@@ -2,10 +2,12 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { generateDailyReportPDF, generateCustomReportPDF } from "@/lib/pdfExport";
+import { generateDailyReportExcel, generateCustomReportExcel } from "@/lib/excelExport";
 import { collection, getDocs } from "firebase/firestore";
 import { secondDb } from "@/lib/firebase";
 import { mapSourceToPlatform, PLATFORM_META } from "@/lib/services/dashboard";
+import { useAuth } from "@/hooks/useAuth";
+import { getScopedBrandKey, isRecordInBrandScope } from "@/lib/brandScope";
 
 
 /**
@@ -162,7 +164,7 @@ function ReportPreviewModal({
                 download
               </span>
             )}
-            Tải PDF
+            Tải Excel
           </button>
         </div>
       </div>
@@ -406,7 +408,7 @@ function ArchivedReportDetailModal({
                   download
                 </span>
               )}
-              {t("reports.common.downloadPdf", { defaultValue: "Tải PDF" })}
+              {t("reports.common.download", { defaultValue: "Tải Excel" })}
             </button>
           </div>
         </div>
@@ -989,7 +991,7 @@ function LanguageSelectModal({
         </div>
 
         <p className="text-xs text-[var(--color-text-secondary)] -mt-2">
-          Vui lòng lựa chọn ngôn ngữ phù hợp cho bản báo cáo PDF tải xuống.
+          Vui lòng lựa chọn ngôn ngữ phù hợp cho file Excel tải xuống.
         </p>
 
         <div className="grid grid-cols-2 gap-3">
@@ -1018,7 +1020,7 @@ function LanguageSelectModal({
         {isExporting && (
           <div className="flex items-center justify-center gap-2 text-xs text-[var(--color-brand)] font-bold mt-1">
             <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
-            Đang xuất báo cáo PDF...
+            Đang xuất báo cáo Excel...
           </div>
         )}
       </div>
@@ -1028,6 +1030,8 @@ function LanguageSelectModal({
 
 export default function ReportsPage() {
   const { t, i18n } = useTranslation();
+  const { profile, loading: authLoading } = useAuth();
+  const scopedBrandKey = getScopedBrandKey(profile);
   const [activeTab, setActiveTab] = useState<"periodic" | "custom" | "archive">(
     "periodic",
   );
@@ -1041,13 +1045,14 @@ export default function ReportsPage() {
   const [generatingPdfId, setGeneratingPdfId] = useState<string | null>(null);
   const [previewReport, setPreviewReport] = useState<DailyReport | null>(null);
   const [exportConfig, setExportConfig] = useState<{
-    type: "periodic" | "custom" | "archive";
+    type: "periodic" | "range" | "custom" | "archive";
     data: any;
   } | null>(null);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [customMentionsPage, setCustomMentionsPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
+  const [periodicExportRange, setPeriodicExportRange] = useState("7");
 
   // ── States for Custom Report ──
   const [customBrand, setCustomBrand] = useState("all");
@@ -1224,6 +1229,7 @@ export default function ReportsPage() {
   useEffect(() => {
     async function fetchData() {
       try {
+        if (authLoading) return;
         setLoading(true);
         const snapshot = await getDocs(
           collection(secondDb, "insightflow_labels"),
@@ -1237,6 +1243,7 @@ export default function ReportsPage() {
           const labels = d.labels || {};
           const rawBrand = d.brand || d.workspace_id || "unknown";
           const b = formatBrandName(rawBrand);
+          if (!isRecordInBrandScope({ brand: b }, scopedBrandKey)) return;
           if (brandOrder.includes(b)) {
             brandSet.add(b);
           }
@@ -1256,7 +1263,13 @@ export default function ReportsPage() {
         });
 
         setMentions(data);
-        setBrands(brandOrder.filter((brand) => brandSet.has(brand)));
+        const scopedBrands = brandOrder.filter((brand) => brandSet.has(brand) && isRecordInBrandScope({ brand }, scopedBrandKey));
+        setBrands(scopedBrands);
+        if (scopedBrandKey && scopedBrands.length === 1) {
+          setSelectedBrand(scopedBrands[0]);
+          setCustomBrand(scopedBrands[0]);
+          setArchiveBrandFilter(scopedBrands[0]);
+        }
       } catch (err) {
         console.error("Error fetching mentions:", err);
       } finally {
@@ -1264,7 +1277,7 @@ export default function ReportsPage() {
       }
     }
     fetchData();
-  }, []);
+  }, [authLoading, scopedBrandKey]);
 
   // Generate Reports List directly from required date range
   const reportsList = useMemo(() => {
@@ -1401,8 +1414,69 @@ export default function ReportsPage() {
     };
   }, [mentions, reportsList]);
 
-  const handleExportPDF = (report: DailyReport) => {
+  const handleExportExcel = (report: DailyReport) => {
     setExportConfig({ type: "periodic", data: report });
+  };
+
+  const getPeriodicRangeStartDate = (range: string) => {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    if (range === "90") {
+      start.setMonth(start.getMonth() - 3);
+    } else if (range === "180") {
+      start.setMonth(start.getMonth() - 6);
+    } else if (range === "365") {
+      start.setFullYear(start.getFullYear() - 1);
+    } else {
+      start.setDate(start.getDate() - (Number(range) - 1));
+    }
+    return start;
+  };
+
+  const getPeriodicRangeMentions = (range: string) => {
+    const start = getPeriodicRangeStartDate(range);
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+
+    return mentions.filter((m) => {
+      if (selectedBrand !== "all" && m.brand !== selectedBrand) return false;
+      const postedDate = parsePostedAtDate(m.posted_at);
+      if (!postedDate) return false;
+      return postedDate >= start && postedDate <= end;
+    });
+  };
+
+  const getPeriodicRangeLabel = (range: string) => {
+    const labels: Record<string, string> = {
+      "7": "7 ngày",
+      "30": "30 ngày",
+      "90": "3 tháng",
+      "180": "6 tháng",
+      "365": "1 năm",
+    };
+    return labels[range] || `${range} ngày`;
+  };
+
+  const handleExportPeriodicRangeExcel = () => {
+    const rangeMentions = getPeriodicRangeMentions(periodicExportRange);
+    if (rangeMentions.length === 0) {
+      alert("Không có mention nào trong khoảng thời gian đã chọn.");
+      return;
+    }
+
+    const start = getPeriodicRangeStartDate(periodicExportRange);
+    const end = new Date();
+    setExportConfig({
+      type: "range",
+      data: {
+        id: `range-${periodicExportRange}`,
+        brand: selectedBrand === "all" ? "Tất cả thương hiệu" : selectedBrand,
+        startDate: start.toISOString(),
+        endDate: end.toISOString(),
+        rangeLabel: getPeriodicRangeLabel(periodicExportRange),
+        mentions: rangeMentions,
+      },
+    });
   };
 
   // ── Custom report actions ──
@@ -1509,7 +1583,7 @@ export default function ReportsPage() {
     }, 2400);
   };
 
-  const handleExportCustomPDF = () => {
+  const handleExportCustomExcel = () => {
     if (!customReportData) return;
     setExportConfig({ type: "custom", data: customReportData });
   };
@@ -1551,21 +1625,44 @@ export default function ReportsPage() {
     );
   };
 
-  const handleExportArchivedPDF = (report: any) => {
+  const handleExportArchivedExcel = (report: any) => {
     setExportConfig({ type: "archive", data: report });
   };
 
-  const executeExportPDF = async (lang: "vi" | "en") => {
+  const executeExportExcel = async (lang: "vi" | "en") => {
     if (!exportConfig) return;
     const { type, data } = exportConfig;
     const fixedT = i18n.getFixedT(lang);
     try {
-      setGeneratingPdfId(data.id || "export-pdf");
+      setGeneratingPdfId(data.id || "export-excel");
       if (type === "periodic") {
-        await generateDailyReportPDF(
+        await generateDailyReportExcel(
           data.brand,
           data.dateStr,
           data.mentions,
+          fixedT,
+          lang
+        );
+      } else if (type === "range") {
+        const startFormatted = new Date(data.startDate).toLocaleDateString(
+          lang === "vi" ? "vi-VN" : "en-US",
+        );
+        const endFormatted = new Date(data.endDate).toLocaleDateString(
+          lang === "vi" ? "vi-VN" : "en-US",
+        );
+        const filtersSummary =
+          lang === "vi"
+            ? `Khoảng thời gian: ${data.rangeLabel}`
+            : `Date range: ${data.rangeLabel}`;
+        const insights = generateAIInsights(data.brand, data.mentions, "", lang);
+
+        await generateCustomReportExcel(
+          data.brand,
+          startFormatted,
+          endFormatted,
+          data.mentions,
+          insights,
+          filtersSummary,
           fixedT,
           lang
         );
@@ -1579,7 +1676,7 @@ export default function ReportsPage() {
         );
         const insights = generateAIInsights(customBrand, data.mentions, customPrompt, lang);
 
-        await generateCustomReportPDF(
+        await generateCustomReportExcel(
           customBrand,
           dateStartFormatted,
           dateEndFormatted,
@@ -1601,7 +1698,7 @@ export default function ReportsPage() {
           ? generateAIInsights(data.brand, data.mentions, "", lang)
           : data.insights || "";
 
-        await generateCustomReportPDF(
+        await generateCustomReportExcel(
           data.brand,
           startFormatted,
           endFormatted,
@@ -1613,7 +1710,7 @@ export default function ReportsPage() {
         );
       }
     } catch (error) {
-      console.error("Lỗi xuất PDF:", error);
+      console.error("Lỗi xuất Excel:", error);
     } finally {
       setGeneratingPdfId(null);
       setExportConfig(null);
@@ -1635,6 +1732,10 @@ export default function ReportsPage() {
   // Memoized search & filter for Archive tab
   const filteredArchivedReports = useMemo(() => {
     return archivedReports.filter((rpt) => {
+      if (!isRecordInBrandScope({ brand: rpt.brand }, scopedBrandKey)) {
+        return false;
+      }
+
       const query = archiveSearchQuery.toLowerCase().trim();
       const matchesSearch =
         query === "" ||
@@ -1648,7 +1749,7 @@ export default function ReportsPage() {
 
       return matchesSearch && matchesBrand;
     });
-  }, [archivedReports, archiveSearchQuery, archiveBrandFilter]);
+  }, [archivedReports, archiveSearchQuery, archiveBrandFilter, scopedBrandKey]);
 
   const loadingMessages = [
     "Đang phân tích các bộ lọc và tìm kiếm đề cập tương thích...",
@@ -1664,7 +1765,7 @@ export default function ReportsPage() {
           report={previewReport}
           onClose={() => setPreviewReport(null)}
           onExport={() => {
-            handleExportPDF(previewReport);
+            handleExportExcel(previewReport);
           }}
           isExporting={generatingPdfId === previewReport.id}
         />
@@ -1683,7 +1784,7 @@ export default function ReportsPage() {
       <LanguageSelectModal
         isOpen={!!exportConfig}
         onClose={() => setExportConfig(null)}
-        onSelect={executeExportPDF}
+        onSelect={executeExportExcel}
         isExporting={!!generatingPdfId}
       />
 
@@ -1841,6 +1942,36 @@ export default function ReportsPage() {
                   <option value="month">{t("reports.filters.month", { defaultValue: "Tháng này" })}</option>
                 </select>
               </div>
+              <div className="flex items-center gap-2 flex-1 md:flex-none min-w-[140px]">
+                <span className="text-[11px] text-[var(--color-text-muted)] font-bold uppercase tracking-wider hidden sm:block">
+                  Xuất:
+                </span>
+                <select
+                  value={periodicExportRange}
+                  onChange={(e) => setPeriodicExportRange(e.target.value)}
+                  className="select-app border border-[var(--color-border)] rounded-lg text-xs py-2 px-3 outline-none font-bold focus:ring-2 focus:ring-[var(--color-brand)]/20 w-full"
+                >
+                  <option value="7">7 ngày</option>
+                  <option value="30">30 ngày</option>
+                  <option value="90">3 tháng</option>
+                  <option value="180">6 tháng</option>
+                  <option value="365">1 năm</option>
+                </select>
+              </div>
+              <button
+                onClick={handleExportPeriodicRangeExcel}
+                disabled={generatingPdfId === `range-${periodicExportRange}`}
+                className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--color-brand)] text-white text-xs font-bold hover:bg-[var(--color-brand-hover)] disabled:opacity-50 transition-colors"
+              >
+                {generatingPdfId === `range-${periodicExportRange}` ? (
+                  <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
+                ) : (
+                  <span className="material-symbols-outlined text-[16px]">
+                    table_view
+                  </span>
+                )}
+                Xuất Excel
+              </button>
             </div>
           )}
 
@@ -1907,7 +2038,7 @@ export default function ReportsPage() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleExportPDF(rpt);
+                            handleExportExcel(rpt);
                           }}
                           disabled={
                             generatingPdfId === rpt.id ||
@@ -1919,10 +2050,10 @@ export default function ReportsPage() {
                             <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
                           ) : (
                             <span className="material-symbols-outlined text-[16px]">
-                              picture_as_pdf
+                              table_view
                             </span>
                           )}
-                          {generatingPdfId === rpt.id ? t("reports.common.generating", { defaultValue: "Đang tạo..." }) : t("reports.common.pdf", { defaultValue: "PDF" })}
+                          {generatingPdfId === rpt.id ? t("reports.common.generating", { defaultValue: "Đang tạo..." }) : "Excel"}
                         </button>
                         <button className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-brand)] hover:text-white hover:border-[var(--color-brand)] transition-all text-[11px] font-bold">
                           <span className="material-symbols-outlined text-[16px]">
@@ -2021,20 +2152,20 @@ export default function ReportsPage() {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleExportPDF(rpt);
+                                  handleExportExcel(rpt);
                                 }}
                                 disabled={
                                   generatingPdfId === rpt.id ||
                                   rpt.mentions.length === 0
                                 }
                                 className="p-2 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)] transition-colors disabled:opacity-50"
-                                title="Xuất PDF"
+                                title="Xuất Excel"
                               >
                                 {generatingPdfId === rpt.id ? (
                                   <span className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin inline-block"></span>
                                 ) : (
                                   <span className="material-symbols-outlined text-xl">
-                                    picture_as_pdf
+                                    table_view
                                   </span>
                                 )}
                               </button>
@@ -2448,7 +2579,7 @@ export default function ReportsPage() {
                       Lưu trữ báo cáo
                     </button>
                     <button
-                      onClick={handleExportCustomPDF}
+                      onClick={handleExportCustomExcel}
                       disabled={generatingPdfId === "custom-export"}
                       className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-5 py-2 bg-[var(--color-brand)] text-white rounded-xl font-bold text-xs hover:bg-[var(--color-brand-hover)] transition-all disabled:opacity-50"
                     >
@@ -2456,10 +2587,10 @@ export default function ReportsPage() {
                         <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
                       ) : (
                         <span className="material-symbols-outlined text-[16px]">
-                          picture_as_pdf
+                          table_view
                         </span>
                       )}
-                      {t("reports.custom.downloadPdf", { defaultValue: "Tải báo cáo PDF" })}
+                      Tải báo cáo Excel
                     </button>
                   </div>
                 </div>
@@ -2691,7 +2822,7 @@ export default function ReportsPage() {
                         Xem
                       </button>
                       <button
-                        onClick={() => handleExportArchivedPDF(rpt)}
+                        onClick={() => handleExportArchivedExcel(rpt)}
                         disabled={generatingPdfId === rpt.id}
                         className="flex-1 md:flex-none flex items-center justify-center gap-1 px-4 py-2.5 bg-[var(--color-brand)]/10 text-[var(--color-brand)] border border-[var(--color-brand)]/20 rounded-xl font-bold text-xs hover:bg-[var(--color-brand)]/25 transition-colors disabled:opacity-50"
                       >

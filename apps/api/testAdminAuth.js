@@ -37,7 +37,7 @@ if (serviceAccountJson) {
     console.log("Successfully parsed service account JSON.");
     console.log("Service Account Project ID:", serviceAccount.project_id);
     console.log("Client Email:", serviceAccount.client_email);
-    
+
     initializeApp({
       credential: cert(serviceAccount),
       projectId,
