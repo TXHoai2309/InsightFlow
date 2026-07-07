@@ -116,12 +116,21 @@ export interface LabelChangeRequest {
   requested_by_name: string;
   requested_by_role: string;
   requested_at: string;
+  updated_at?: string;
+  updated_by?: string;
+  updated_by_name?: string;
+  updated_by_role?: string;
   reviewed_by?: string;
   reviewed_by_name?: string;
   reviewed_at?: string;
   review_note?: string;
+  cancelled_at?: string;
+  cancelled_by?: string;
+  cancelled_by_name?: string;
+  cancel_reason?: string;
   applied_at?: string;
   audit_log_id?: string;
+  revision_count?: number;
 }
 
 export interface Lead {

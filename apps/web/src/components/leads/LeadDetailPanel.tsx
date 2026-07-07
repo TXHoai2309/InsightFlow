@@ -156,6 +156,8 @@ export function LeadDetailPanel({
   const {
     updateLeadDetails,
     createLabelChangeRequest,
+    updateLabelChangeRequest,
+    cancelLabelChangeRequest,
     labelChangeRequests,
   } = useDashboardStore();
   const [internalActiveTab, setInternalActiveTab] = useState<PanelTab>("action");
@@ -167,6 +169,9 @@ export function LeadDetailPanel({
   const [labelReasonNote, setLabelReasonNote] = useState("");
   const [hasCheckedOriginal, setHasCheckedOriginal] = useState(false);
   const [isSubmittingLabelRequest, setIsSubmittingLabelRequest] = useState(false);
+  const [cancelLabelRequestReason, setCancelLabelRequestReason] = useState("");
+  const [isCancellingLabelRequest, setIsCancellingLabelRequest] = useState(false);
+  const [showCancelLabelRequest, setShowCancelLabelRequest] = useState(false);
   const [labelRequestMessage, setLabelRequestMessage] = useState("");
   const [labelRequestError, setLabelRequestError] = useState("");
   const [note, setNote] = useState("");
@@ -216,6 +221,14 @@ export function LeadDetailPanel({
   useEffect(() => {
     if (!lead) return;
     setRequestedLabels(currentLabels);
+    setShowLabelRequestForm(false);
+    setShowCancelLabelRequest(false);
+    setCancelLabelRequestReason("");
+    setLabelReason("wrong_queue");
+    setLabelReasonNote("");
+    setHasCheckedOriginal(false);
+    setLabelRequestMessage("");
+    setLabelRequestError("");
   }, [currentLabels, lead?.id]);
 
   const currentQueue = useMemo(
@@ -267,6 +280,8 @@ export function LeadDetailPanel({
   const ownership = getLeadOwnershipMeta(lead, profile);
   const canRequestLabelChange =
     canCreateLabelRequestForBrand && ownership.canWork;
+  const canRevisePendingLabelRequest =
+    canRequestLabelChange && pendingLabelRequest?.requested_by === profile?.uid;
   const labelRequestUnavailableMessage = !canCreateLabelRequestForBrand
     ? "Vai trò hiện tại chưa được cấp quyền gửi yêu cầu sửa nhãn."
     : ownership.canClaim
@@ -289,6 +304,14 @@ export function LeadDetailPanel({
     meta.priorityReasons.join(", ") || "Có tín hiệu quan tâm cần kiểm tra.";
   const pendingLabelRequestKeepsLeadQueue =
     Boolean(pendingLabelRequest) && !isLeadWorkflowBlocked;
+  const labelRequestPreview =
+    pendingLabelRequest && !showLabelRequestForm
+      ? pendingLabelRequest.requested_labels
+      : requestedLabels;
+  const labelRequestPreviewQueue =
+    pendingLabelRequest && !showLabelRequestForm
+      ? pendingLabelRequest.requested_queue
+      : requestedQueue;
 
   const getOwnerName = () =>
     profile?.displayName || profile?.email || "Nhân viên xử lý";
@@ -337,6 +360,37 @@ export function LeadDetailPanel({
     }));
   };
 
+  const openCreateLabelRequestForm = () => {
+    setRequestedLabels(currentLabels);
+    setLabelReason("wrong_queue");
+    setLabelReasonNote("");
+    setHasCheckedOriginal(false);
+    setShowCancelLabelRequest(false);
+    setLabelRequestError("");
+    setLabelRequestMessage("");
+    setShowLabelRequestForm(true);
+  };
+
+  const openEditLabelRequestForm = () => {
+    if (!pendingLabelRequest) return;
+    setRequestedLabels(pendingLabelRequest.requested_labels);
+    setLabelReason(pendingLabelRequest.reason_code || "wrong_queue");
+    setLabelReasonNote(pendingLabelRequest.reason_note || "");
+    setHasCheckedOriginal(pendingLabelRequest.evidence_checked);
+    setShowCancelLabelRequest(false);
+    setLabelRequestError("");
+    setLabelRequestMessage("");
+    setShowLabelRequestForm(true);
+  };
+
+  const closeLabelRequestForm = () => {
+    setShowLabelRequestForm(false);
+    setRequestedLabels(pendingLabelRequest?.requested_labels || currentLabels);
+    setLabelReason(pendingLabelRequest?.reason_code || "wrong_queue");
+    setLabelReasonNote(pendingLabelRequest?.reason_note || "");
+    setHasCheckedOriginal(Boolean(pendingLabelRequest?.evidence_checked));
+  };
+
   const handleSubmitLabelRequest = async () => {
     if (!canCreateLabelRequestForBrand || !profile) {
       setLabelRequestError("Bạn không có quyền gửi yêu cầu sửa nhãn.");
@@ -348,7 +402,7 @@ export function LeadDetailPanel({
       return;
     }
 
-    if (pendingLabelRequest) {
+    if (pendingLabelRequest && !canRevisePendingLabelRequest) {
       setLabelRequestError("Lead này đang có yêu cầu sửa nhãn chờ duyệt.");
       return;
     }
@@ -378,43 +432,60 @@ export function LeadDetailPanel({
       setLabelRequestError("");
       setLabelRequestMessage("");
 
-      await createLabelChangeRequest(
-        {
-          source_type: "lead",
-          source_id: lead.id,
-          lead_id: lead.id,
-          mention_id:
-            mentionTarget?.matchedMention?.id ||
-            lead.mention_id ||
-            lead.source_mention_id ||
-            mentionTarget?.detailId ||
-            undefined,
-          workspace_id: lead.workspace_id,
-          platform: lead.platform,
-          author: lead.author,
-          content_preview: lead.content.slice(0, 300),
-          source_url:
-            lead.source_url ||
-            lead.url ||
-            mentionTarget?.fallbackUrl ||
-            undefined,
-          current_labels: currentLabels,
-          requested_labels: requestedLabels,
-          changed_fields: changedLabelFields,
-          current_queue: currentQueue,
-          requested_queue: requestedQueue,
-          reason_code: labelReason,
-          reason_note: labelReasonNote.trim(),
-          evidence_checked: true,
-        },
-        profile,
-      );
+      if (pendingLabelRequest) {
+        await updateLabelChangeRequest(
+          pendingLabelRequest.id,
+          {
+            requested_labels: requestedLabels,
+            changed_fields: changedLabelFields,
+            requested_queue: requestedQueue,
+            reason_code: labelReason,
+            reason_note: labelReasonNote.trim(),
+            evidence_checked: true,
+          },
+          profile,
+        );
+      } else {
+        await createLabelChangeRequest(
+          {
+            source_type: "lead",
+            source_id: lead.id,
+            lead_id: lead.id,
+            mention_id:
+              mentionTarget?.matchedMention?.id ||
+              lead.mention_id ||
+              lead.source_mention_id ||
+              mentionTarget?.detailId ||
+              undefined,
+            workspace_id: lead.workspace_id,
+            platform: lead.platform,
+            author: lead.author,
+            content_preview: lead.content.slice(0, 300),
+            source_url:
+              lead.source_url ||
+              lead.url ||
+              mentionTarget?.fallbackUrl ||
+              undefined,
+            current_labels: currentLabels,
+            requested_labels: requestedLabels,
+            changed_fields: changedLabelFields,
+            current_queue: currentQueue,
+            requested_queue: requestedQueue,
+            reason_code: labelReason,
+            reason_note: labelReasonNote.trim(),
+            evidence_checked: true,
+          },
+          profile,
+        );
+      }
 
       setShowLabelRequestForm(false);
       setHasCheckedOriginal(false);
       setLabelReasonNote("");
       setLabelRequestMessage(
-        requestedQueue !== currentQueue
+        pendingLabelRequest
+          ? "Đã cập nhật yêu cầu sửa nhãn đang chờ duyệt."
+          : requestedQueue !== currentQueue
           ? "Đã gửi yêu cầu sửa nhãn. Nếu quản lý duyệt, item sẽ được chuyển sang queue phù hợp."
           : "Đã gửi yêu cầu sửa nhãn cho quản lý duyệt.",
       );
@@ -423,6 +494,39 @@ export function LeadDetailPanel({
       setLabelRequestError("Không thể gửi yêu cầu sửa nhãn. Vui lòng thử lại.");
     } finally {
       setIsSubmittingLabelRequest(false);
+    }
+  };
+
+  const handleCancelLabelRequest = async () => {
+    if (!pendingLabelRequest || !profile) return;
+    if (!canRevisePendingLabelRequest) {
+      setLabelRequestError("Chỉ người tạo yêu cầu mới được gỡ yêu cầu này.");
+      return;
+    }
+    if (cancelLabelRequestReason.trim().length < 5) {
+      setLabelRequestError("Vui lòng nhập lý do gỡ yêu cầu.");
+      return;
+    }
+
+    try {
+      setIsCancellingLabelRequest(true);
+      setLabelRequestError("");
+      setLabelRequestMessage("");
+      await cancelLabelChangeRequest(
+        pendingLabelRequest.id,
+        cancelLabelRequestReason.trim(),
+        profile,
+      );
+      setShowCancelLabelRequest(false);
+      setShowLabelRequestForm(false);
+      setCancelLabelRequestReason("");
+      setRequestedLabels(currentLabels);
+      setLabelRequestMessage("Đã gỡ yêu cầu sửa nhãn.");
+    } catch (error) {
+      console.error(error);
+      setLabelRequestError("Không thể gỡ yêu cầu sửa nhãn. Vui lòng thử lại.");
+    } finally {
+      setIsCancellingLabelRequest(false);
     }
   };
 
@@ -790,10 +894,10 @@ export function LeadDetailPanel({
                     Nếu duyệt
                   </p>
                   <p className="mt-1 text-sm font-bold text-[var(--color-text-primary)]">
-                    {formatClassificationLabelSummary(requestedLabels)}
+                    {formatClassificationLabelSummary(labelRequestPreview)}
                   </p>
                   <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
-                    Queue: {getQueueLabel(requestedQueue)}
+                    Queue: {getQueueLabel(labelRequestPreviewQueue)}
                   </p>
                 </div>
               </div>
@@ -839,6 +943,63 @@ export function LeadDetailPanel({
                       </dd>
                     </div>
                   </dl>
+                  {canRevisePendingLabelRequest && (
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={openEditLabelRequestForm}
+                        className="rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-brand-subtle)]"
+                      >
+                        Chỉnh sửa yêu cầu
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowLabelRequestForm(false);
+                          setShowCancelLabelRequest((current) => !current);
+                          setLabelRequestError("");
+                          setLabelRequestMessage("");
+                        }}
+                        className="rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-bg-surface)] px-3 py-2 text-sm font-bold text-[var(--color-error)] transition hover:bg-[var(--color-error-subtle)]"
+                      >
+                        Gỡ yêu cầu
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {showCancelLabelRequest && pendingLabelRequest && canRevisePendingLabelRequest && (
+                <div className="mt-3 space-y-3 rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-error-subtle)]/40 p-3">
+                  <p className="text-sm font-bold text-[var(--color-text-primary)]">
+                    Gỡ yêu cầu sửa nhãn
+                  </p>
+                  <textarea
+                    value={cancelLabelRequestReason}
+                    onChange={(event) => setCancelLabelRequestReason(event.target.value)}
+                    placeholder="Nhập lý do gỡ yêu cầu, ví dụ: gửi nhầm lead hoặc đã kiểm tra lại bài gốc..."
+                    className="min-h-[72px] w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-3 text-sm text-[var(--color-text-primary)] outline-none focus:border-[var(--color-error)]"
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCancelLabelRequest(false);
+                        setCancelLabelRequestReason("");
+                      }}
+                      className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm font-bold text-[var(--color-text-primary)]"
+                    >
+                      Không gỡ
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCancelLabelRequest}
+                      disabled={isCancellingLabelRequest}
+                      className="rounded-lg bg-[var(--color-error)] px-3 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isCancellingLabelRequest ? "Đang gỡ..." : "Xác nhận gỡ"}
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -863,11 +1024,7 @@ export function LeadDetailPanel({
               {!pendingLabelRequest && canRequestLabelChange && !showLabelRequestForm && (
                 <button
                   type="button"
-                  onClick={() => {
-                    setLabelRequestError("");
-                    setLabelRequestMessage("");
-                    setShowLabelRequestForm(true);
-                  }}
+                  onClick={openCreateLabelRequestForm}
                   className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--color-brand-border)] px-3 py-2 text-sm font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-brand-subtle)]"
                 >
                   <span className="material-symbols-outlined text-base">
@@ -883,7 +1040,7 @@ export function LeadDetailPanel({
                 </p>
               )}
 
-              {showLabelRequestForm && !pendingLabelRequest && (
+              {showLabelRequestForm && (!pendingLabelRequest || canRevisePendingLabelRequest) && (
                 <div className="mt-3 space-y-3 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)]/20 p-3">
                   <label className="block text-xs font-bold text-[var(--color-text-secondary)]">
                     Cảm xúc
@@ -1046,7 +1203,7 @@ export function LeadDetailPanel({
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
-                      onClick={() => setShowLabelRequestForm(false)}
+                      onClick={closeLabelRequestForm}
                       className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm font-bold text-[var(--color-text-primary)]"
                     >
                       Hủy
@@ -1057,7 +1214,11 @@ export function LeadDetailPanel({
                       disabled={isSubmittingLabelRequest}
                       className="rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {isSubmittingLabelRequest ? "Đang gửi..." : "Gửi quản lý"}
+                      {isSubmittingLabelRequest
+                        ? "Đang gửi..."
+                        : pendingLabelRequest
+                          ? "Cập nhật yêu cầu"
+                          : "Gửi quản lý"}
                     </button>
                   </div>
                 </div>

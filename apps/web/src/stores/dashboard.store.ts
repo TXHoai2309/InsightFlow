@@ -79,6 +79,24 @@ interface DashboardState {
     >,
     profile: UserRoleProfile | null | undefined,
   ) => Promise<LabelChangeRequest>;
+  updateLabelChangeRequest: (
+    requestId: string,
+    data: Pick<
+      LabelChangeRequest,
+      | "requested_labels"
+      | "changed_fields"
+      | "requested_queue"
+      | "reason_code"
+      | "reason_note"
+      | "evidence_checked"
+    >,
+    profile: UserRoleProfile | null | undefined,
+  ) => Promise<LabelChangeRequest>;
+  cancelLabelChangeRequest: (
+    requestId: string,
+    cancelReason: string,
+    profile: UserRoleProfile | null | undefined,
+  ) => Promise<LabelChangeRequest>;
 
   // ── Computed (client-side filtering) ─────────────────────────────────────
   getFilteredMentions: () => Mention[];
@@ -236,6 +254,91 @@ export const useDashboardStore = create<DashboardState>()(
         return request;
       } catch (error) {
         console.error("[DashboardStore] createLabelChangeRequest error:", error);
+        throw error;
+      }
+    },
+
+    updateLabelChangeRequest: async (requestId, data, profile) => {
+      try {
+        const currentRequest = get().labelChangeRequests.find(
+          (request) => request.id === requestId,
+        );
+        if (!canPerformAction(profile, "create_label_request")) {
+          throw new Error("User is not allowed to update label change requests.");
+        }
+        if (!currentRequest || !isSameBrandScope(profile, currentRequest)) {
+          throw new Error("Label request is outside the user's brand scope.");
+        }
+        if (currentRequest.status !== "pending") {
+          throw new Error("Only pending label change requests can be updated.");
+        }
+        if (currentRequest.requested_by !== profile?.uid) {
+          throw new Error("Only the requester can update this label change request.");
+        }
+
+        const updatedRequest = await DashboardService.updateLabelChangeRequest(
+          currentRequest,
+          data,
+          profile,
+        );
+
+        set((state) => ({
+          labelChangeRequests: state.labelChangeRequests.map((request) =>
+            request.id === requestId ? updatedRequest : request,
+          ),
+        }));
+
+        return updatedRequest;
+      } catch (error) {
+        console.error("[DashboardStore] updateLabelChangeRequest error:", error);
+        throw error;
+      }
+    },
+
+    cancelLabelChangeRequest: async (requestId, cancelReason, profile) => {
+      try {
+        const currentRequest = get().labelChangeRequests.find(
+          (request) => request.id === requestId,
+        );
+        if (!canPerformAction(profile, "create_label_request")) {
+          throw new Error("User is not allowed to cancel label change requests.");
+        }
+        if (!currentRequest || !isSameBrandScope(profile, currentRequest)) {
+          throw new Error("Label request is outside the user's brand scope.");
+        }
+        if (currentRequest.status !== "pending") {
+          throw new Error("Only pending label change requests can be cancelled.");
+        }
+        if (currentRequest.requested_by !== profile?.uid) {
+          throw new Error("Only the requester can cancel this label change request.");
+        }
+
+        const cancelledRequest = await DashboardService.cancelLabelChangeRequest(
+          currentRequest,
+          cancelReason,
+          profile,
+        );
+
+        set((state) => ({
+          labelChangeRequests: state.labelChangeRequests.map((request) =>
+            request.id === requestId ? cancelledRequest : request,
+          ),
+          leads: state.leads.map((lead) =>
+            lead.id === currentRequest.lead_id ||
+            lead.id === currentRequest.source_id ||
+            lead.pending_label_request_id === currentRequest.id
+              ? {
+                  ...lead,
+                  label_correction_status: "none",
+                  pending_label_request_id: undefined,
+                }
+              : lead,
+          ),
+        }));
+
+        return cancelledRequest;
+      } catch (error) {
+        console.error("[DashboardStore] cancelLabelChangeRequest error:", error);
         throw error;
       }
     },

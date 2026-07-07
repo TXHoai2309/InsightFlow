@@ -11,6 +11,7 @@
 import { dbData } from "@/lib/firebase";
 import {
   collection,
+  getDoc,
   getDocs,
   query,
   limit,
@@ -20,6 +21,7 @@ import {
   doc,
   updateDoc,
   addDoc,
+  deleteField,
 } from "firebase/firestore";
 import type {
   Mention,
@@ -50,6 +52,7 @@ export const COLLECTION_NAMES = {
   alerts: "alerts",
   leads: "leads",
   labelChangeRequests: "label_change_requests",
+  labelChangeHistory: "label_change_history",
 } as const;
 
 // ─── Platform mapping: source crawl → Platform type ──────────────────────────
@@ -864,12 +867,22 @@ export class DashboardService {
             requested_by_name: String(d.requested_by_name || ""),
             requested_by_role: String(d.requested_by_role || ""),
             requested_at: parseDate(d.requested_at || d.created_at),
+            updated_at: d.updated_at ? parseDate(d.updated_at) : undefined,
+            updated_by: normalizeOptionalText(d.updated_by),
+            updated_by_name: normalizeOptionalText(d.updated_by_name),
+            updated_by_role: normalizeOptionalText(d.updated_by_role),
             reviewed_by: normalizeOptionalText(d.reviewed_by),
             reviewed_by_name: normalizeOptionalText(d.reviewed_by_name),
             reviewed_at: d.reviewed_at ? parseDate(d.reviewed_at) : undefined,
             review_note: normalizeOptionalText(d.review_note),
+            cancelled_at: d.cancelled_at ? parseDate(d.cancelled_at) : undefined,
+            cancelled_by: normalizeOptionalText(d.cancelled_by),
+            cancelled_by_name: normalizeOptionalText(d.cancelled_by_name),
+            cancel_reason: normalizeOptionalText(d.cancel_reason),
             applied_at: d.applied_at ? parseDate(d.applied_at) : undefined,
             audit_log_id: normalizeOptionalText(d.audit_log_id),
+            revision_count:
+              typeof d.revision_count === "number" ? d.revision_count : undefined,
           };
         });
         labelChangeRequests.sort(
@@ -1034,6 +1047,214 @@ export class DashboardService {
     }
 
     return request;
+  }
+
+  static async updateLabelChangeRequest(
+    request: LabelChangeRequest,
+    data: Pick<
+      LabelChangeRequest,
+      | "requested_labels"
+      | "changed_fields"
+      | "requested_queue"
+      | "reason_code"
+      | "reason_note"
+      | "evidence_checked"
+    >,
+    profile: UserRoleProfile | null | undefined,
+  ): Promise<LabelChangeRequest> {
+    if (!profile || !canPerformAction(profile, "create_label_request")) {
+      throw new Error("User is not allowed to update label change requests.");
+    }
+    if (request.status !== "pending") {
+      throw new Error("Only pending label change requests can be updated.");
+    }
+    if (request.requested_by !== profile.uid) {
+      throw new Error("Only the requester can update this label change request.");
+    }
+
+    const nowIso = new Date().toISOString();
+    const updatedRequest: LabelChangeRequest = {
+      ...request,
+      ...data,
+      updated_at: nowIso,
+      updated_by: profile.uid,
+      updated_by_name: profile.displayName || profile.email,
+      updated_by_role: profile.role,
+      revision_count: (request.revision_count || 0) + 1,
+    };
+
+    const updateData = stripUndefinedFields({
+      requested_labels: data.requested_labels,
+      changed_fields: data.changed_fields,
+      requested_queue: data.requested_queue,
+      reason_code: data.reason_code,
+      reason_note: data.reason_note,
+      evidence_checked: data.evidence_checked,
+      updated_at: updatedRequest.updated_at,
+      updated_by: updatedRequest.updated_by,
+      updated_by_name: updatedRequest.updated_by_name,
+      updated_by_role: updatedRequest.updated_by_role,
+      revision_count: updatedRequest.revision_count,
+    });
+
+    await updateDoc(
+      doc(dbData, COLLECTION_NAMES.labelChangeRequests, request.id),
+      updateData,
+    );
+
+    await addDoc(
+      collection(dbData, COLLECTION_NAMES.labelChangeHistory),
+      stripUndefinedFields({
+        request_id: request.id,
+        action: "updated",
+        status: "pending",
+        source_type: request.source_type,
+        source_id: request.source_id,
+        lead_id: request.lead_id,
+        mention_id: request.mention_id,
+        workspace_id: request.workspace_id,
+        platform: request.platform,
+        author: request.author,
+        content_preview: request.content_preview,
+        source_url: request.source_url,
+        current_labels: request.current_labels,
+        previous_requested_labels: request.requested_labels,
+        requested_labels: data.requested_labels,
+        changed_fields: data.changed_fields,
+        current_queue: request.current_queue,
+        requested_queue: data.requested_queue,
+        reason_code: data.reason_code,
+        reason_note: data.reason_note,
+        evidence_checked: data.evidence_checked,
+        changed_by: profile.uid,
+        changed_by_name: profile.displayName || profile.email,
+        changed_by_role: profile.role,
+        changed_at: nowIso,
+        source: "lead_detail_panel",
+      }),
+    );
+
+    return updatedRequest;
+  }
+
+  static async cancelLabelChangeRequest(
+    request: LabelChangeRequest,
+    cancelReason: string,
+    profile: UserRoleProfile | null | undefined,
+  ): Promise<LabelChangeRequest> {
+    if (!profile || !canPerformAction(profile, "create_label_request")) {
+      throw new Error("User is not allowed to cancel label change requests.");
+    }
+    if (request.status !== "pending") {
+      throw new Error("Only pending label change requests can be cancelled.");
+    }
+    if (request.requested_by !== profile.uid) {
+      throw new Error("Only the requester can cancel this label change request.");
+    }
+
+    const nowIso = new Date().toISOString();
+    const cancelledRequest: LabelChangeRequest = {
+      ...request,
+      status: "cancelled",
+      updated_at: nowIso,
+      updated_by: profile.uid,
+      updated_by_name: profile.displayName || profile.email,
+      updated_by_role: profile.role,
+      cancelled_at: nowIso,
+      cancelled_by: profile.uid,
+      cancelled_by_name: profile.displayName || profile.email,
+      cancel_reason: cancelReason.trim(),
+    };
+
+    const cancelData = stripUndefinedFields({
+      status: "cancelled",
+      cancel_reason: cancelledRequest.cancel_reason,
+      cancelled_at: nowIso,
+      cancelled_by: profile.uid,
+      cancelled_by_name: profile.displayName || profile.email,
+      updated_at: nowIso,
+      updated_by: profile.uid,
+      updated_by_name: profile.displayName || profile.email,
+      updated_by_role: profile.role,
+    });
+
+    await updateDoc(
+      doc(dbData, COLLECTION_NAMES.labelChangeRequests, request.id),
+      cancelData,
+    );
+
+    const correctionClearData = {
+      label_correction_status: "none",
+      pending_label_request_id: deleteField(),
+      label_correction_requested_at: deleteField(),
+      label_correction_requested_by: deleteField(),
+      updated_by: profile.uid,
+      updated_by_role: profile.role,
+      updated_at: nowIso,
+    };
+
+    const clearPendingPointer = async (
+      collectionName: "leads" | "insightflow_labels",
+      targetId?: string,
+    ) => {
+      if (!targetId) return false;
+      const targetRef = doc(dbData, collectionName, targetId);
+      const snapshot = await getDoc(targetRef);
+      if (!snapshot.exists()) return false;
+      if (snapshot.data().pending_label_request_id !== request.id) return false;
+      await updateDoc(targetRef, correctionClearData);
+      return true;
+    };
+
+    const leadTargetId = request.lead_id || request.source_id;
+    try {
+      const clearedLead = await clearPendingPointer(
+        COLLECTION_NAMES.leads,
+        leadTargetId,
+      );
+      if (!clearedLead) {
+        await clearPendingPointer(
+          COLLECTION_NAMES.mentions,
+          request.mention_id || request.source_id,
+        );
+      }
+    } catch {
+      await clearPendingPointer(
+        COLLECTION_NAMES.mentions,
+        request.mention_id || request.source_id,
+      );
+    }
+
+    await addDoc(
+      collection(dbData, COLLECTION_NAMES.labelChangeHistory),
+      stripUndefinedFields({
+        request_id: request.id,
+        action: "cancelled",
+        status: "cancelled",
+        source_type: request.source_type,
+        source_id: request.source_id,
+        lead_id: request.lead_id,
+        mention_id: request.mention_id,
+        workspace_id: request.workspace_id,
+        platform: request.platform,
+        author: request.author,
+        content_preview: request.content_preview,
+        source_url: request.source_url,
+        current_labels: request.current_labels,
+        requested_labels: request.requested_labels,
+        changed_fields: request.changed_fields,
+        current_queue: request.current_queue,
+        requested_queue: request.requested_queue,
+        cancel_reason: cancelledRequest.cancel_reason,
+        changed_by: profile.uid,
+        changed_by_name: profile.displayName || profile.email,
+        changed_by_role: profile.role,
+        changed_at: nowIso,
+        source: "lead_detail_panel",
+      }),
+    );
+
+    return cancelledRequest;
   }
 
   static calculateStats(

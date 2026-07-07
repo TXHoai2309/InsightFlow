@@ -38,7 +38,7 @@ interface LabelHistoryItem {
 
 interface LabelRequest {
   id: string;
-  status: "pending" | "approved" | "rejected" | "edited";
+  status: "pending" | "approved" | "rejected" | "edited" | "cancelled";
   brand_id?: string;
   brand_name?: string;
   mention_id: string;
@@ -74,7 +74,7 @@ interface LabelAuditEntry {
   brand_name?: string;
   mention_id: string;
   mention_content?: string;
-  action: LabelRequest["status"] | "created" | "note_added";
+  action: LabelRequest["status"] | "created" | "updated" | "note_added";
   status: LabelRequest["status"] | "pending";
   old_label: LabelValue;
   new_label: LabelValue;
@@ -94,7 +94,7 @@ interface HistoryFilters {
   toDate: string;
   labelType: "all" | "sentiment" | "topic" | "relevance" | "urgency" | "intent";
   requester: string;
-  status: "all" | LabelRequest["status"] | "created" | "note_added";
+  status: "all" | LabelRequest["status"] | "created" | "updated" | "note_added";
 }
 
 const TOPIC_OPTIONS = [
@@ -273,11 +273,22 @@ function normalizeLabel(value: unknown, fallback: LabelValue): LabelValue {
       row.sentiment === "positive" || row.sentiment === "negative" || row.sentiment === "neutral"
         ? row.sentiment
         : fallback.sentiment,
-    topic: typeof row.topic === "string" ? row.topic : fallback.topic,
+    topic: Array.isArray(row.topic)
+      ? String(row.topic[0] || fallback.topic)
+      : typeof row.topic === "string"
+        ? row.topic
+        : fallback.topic,
     relevance: typeof row.relevance === "boolean" ? row.relevance : fallback.relevance,
     urgency: row.urgency || fallback.urgency,
     intent: row.intent || fallback.intent,
   };
+}
+
+function normalizeRequestStatus(value: unknown): LabelRequest["status"] {
+  const status = String(value || "").toLowerCase();
+  return ["pending", "approved", "rejected", "edited", "cancelled"].includes(status)
+    ? (status as LabelRequest["status"])
+    : "pending";
 }
 
 function formatDate(value: unknown) {
@@ -587,6 +598,8 @@ function BrandLabelHistoryPanel({
               <option value="approved">Đã duyệt</option>
               <option value="edited">Đã sửa & duyệt</option>
               <option value="rejected">Từ chối</option>
+              <option value="cancelled">Đã hủy</option>
+              <option value="updated">Đã chỉnh yêu cầu</option>
             </select>
           </label>
         </div>
@@ -694,34 +707,34 @@ export default function LabelRequestsPage() {
         const snapshot = await getDocs(query(collection(dbData, "label_change_requests"), limit(100)));
         const rows = snapshot.docs.map((item) => {
           const data = item.data();
-          const oldLabel = normalizeLabel(data.old_label, { sentiment: "neutral", topic: "other" });
-          const proposedLabel = normalizeLabel(data.proposed_label, oldLabel);
+          const oldLabel = normalizeLabel(data.old_label || data.current_labels, { sentiment: "neutral", topic: "other" });
+          const proposedLabel = normalizeLabel(data.proposed_label || data.requested_labels, oldLabel);
           const mention = (data.mention || {}) as LabelRequest["mention"];
 
           return {
             id: item.id,
-            status: data.status || "pending",
-            brand_id: data.brand_id,
-            brand_name: data.brand_name,
+            status: normalizeRequestStatus(data.status),
+            brand_id: data.brand_id || data.workspace_id,
+            brand_name: data.brand_name || data.workspace_id,
             mention_id: data.mention_id || mention.id || item.id,
             requested_by_name: data.requested_by_name || data.requested_by_email || "Nhân viên",
             requested_by_email: data.requested_by_email,
             requested_by_role: data.requested_by_role,
-            reason: data.reason,
+            reason: data.reason || data.reason_note,
             old_label: oldLabel,
             proposed_label: proposedLabel,
             final_label: data.final_label ? normalizeLabel(data.final_label, proposedLabel) : undefined,
             mention: {
               id: mention.id || data.mention_id || item.id,
               parent_id: mention.parent_id || null,
-              platform: mention.platform || "unknown",
+              platform: mention.platform || data.platform || "unknown",
               content_type: mention.content_type || "post",
-              content: mention.content || "",
-              post_content: mention.post_content || "",
-              comment_content: mention.comment_content || "",
-              author: mention.author || "",
+              content: mention.content || data.mention_content || data.content_preview || "",
+              post_content: mention.post_content || data.post_content || "",
+              comment_content: mention.comment_content || data.comment_content || "",
+              author: mention.author || data.author || "",
               posted_at: mention.posted_at || mention.created_at || "",
-              url: mention.url || "",
+              url: mention.url || data.url || data.source_url || "",
             },
             history: Array.isArray(data.history) ? data.history : [],
             created_at: data.created_at,
@@ -738,27 +751,34 @@ export default function LabelRequestsPage() {
           persistedAuditEntries = historySnapshot.docs
             .map((item) => {
               const data = item.data();
-              const oldLabel = normalizeLabel(data.old_label, { sentiment: "neutral", topic: "other" });
-              const newLabel = normalizeLabel(data.new_label, oldLabel);
+              const oldLabel = normalizeLabel(data.old_label || data.current_labels, { sentiment: "neutral", topic: "other" });
+              const newLabel = normalizeLabel(
+                data.new_label || data.requested_labels || data.previous_requested_labels,
+                oldLabel,
+              );
               return {
                 id: item.id,
                 request_id: data.request_id,
-                brand_id: data.brand_id,
-                brand_name: data.brand_name,
+                brand_id: data.brand_id || data.workspace_id,
+                brand_name: data.brand_name || data.workspace_id,
                 mention_id: String(data.mention_id || ""),
-                mention_content: data.mention_content,
+                mention_content: data.mention_content || data.content_preview,
                 action: data.action || data.status || "edited",
-                status: data.status || "edited",
+                status: normalizeRequestStatus(data.status || data.action),
                 old_label: oldLabel,
                 new_label: newLabel,
-                requested_by_name: data.requested_by_name || data.requested_by_email || "Nhân viên",
+                requested_by_name:
+                  data.requested_by_name ||
+                  data.changed_by_name ||
+                  data.requested_by_email ||
+                  "Nhân viên",
                 requested_by_email: data.requested_by_email,
                 requested_by_role: data.requested_by_role,
-                reviewed_by_name: data.reviewed_by_name,
+                reviewed_by_name: data.reviewed_by_name || data.changed_by_name,
                 reviewed_by_email: data.reviewed_by_email,
                 changed_at: data.changed_at || data.created_at,
                 source: data.source || "label_change_history",
-                note: data.note,
+                note: data.note || data.reason_note || data.cancel_reason,
               } satisfies LabelAuditEntry;
             })
             .filter((item) => !profile?.brandId || !item.brand_id || item.brand_id === profile.brandId);
@@ -924,10 +944,12 @@ export default function LabelRequestsPage() {
     approved: "Đã duyệt",
     rejected: "Từ chối",
     edited: "Đã sửa & duyệt",
+    cancelled: "Đã hủy",
   };
   const HISTORY_STATUS_LABELS: Record<string, string> = {
     ...STATUS_LABELS,
     created: "Tạo yêu cầu",
+    updated: "Đã chỉnh yêu cầu",
     note_added: "Ghi chú",
   };
 
@@ -1232,7 +1254,7 @@ export default function LabelRequestsPage() {
                       </button>
                       <button
                         type="button"
-                        disabled={saving}
+                        disabled={saving || selectedRequest.status !== "pending"}
                         onClick={() => updateRequestStatus("edited", draftLabel)}
                         className="rounded-lg bg-[var(--color-brand)] px-4 py-3 text-sm font-bold text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50"
                       >
