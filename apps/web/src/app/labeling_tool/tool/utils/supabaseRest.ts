@@ -224,11 +224,66 @@ function hasDateRange(dateRange: SupabaseDateRange): boolean {
   return Boolean(dateRange.from || dateRange.to);
 }
 
+function parseDateString(iso: string): Date | null {
+  if (!iso) return null;
+  try {
+    const cleanStr = iso.trim();
+
+    // 1. Check HH:mm(:ss) DD/MM/YYYY
+    const hmDmYRegex = /^(?:(\d{1,2}):(\d{2})(?::(\d{2}))?\s+)?(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/;
+    const matchHmDmY = cleanStr.match(hmDmYRegex);
+    if (matchHmDmY) {
+      const hour = matchHmDmY[1] ? parseInt(matchHmDmY[1], 10) : 0;
+      const minute = matchHmDmY[2] ? parseInt(matchHmDmY[2], 10) : 0;
+      const second = matchHmDmY[3] ? parseInt(matchHmDmY[3], 10) : 0;
+      const day = parseInt(matchHmDmY[4], 10);
+      const month = parseInt(matchHmDmY[5], 10) - 1; // 0-indexed
+      const year = parseInt(matchHmDmY[6], 10);
+      const d = new Date(year, month, day, hour, minute, second);
+      if (!isNaN(d.getTime())) return d;
+    }
+
+    // 2. Check DD/MM/YYYY HH:mm(:ss)
+    const dmYRegex = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/;
+    const matchDmY = cleanStr.match(dmYRegex);
+    if (matchDmY) {
+      const day = parseInt(matchDmY[1], 10);
+      const month = parseInt(matchDmY[2], 10) - 1;
+      const year = parseInt(matchDmY[3], 10);
+      const hour = matchDmY[4] ? parseInt(matchDmY[4], 10) : 0;
+      const minute = matchDmY[5] ? parseInt(matchDmY[5], 10) : 0;
+      const second = matchDmY[6] ? parseInt(matchDmY[6], 10) : 0;
+      const d = new Date(year, month, day, hour, minute, second);
+      if (!isNaN(d.getTime())) return d;
+    }
+
+    // 3. Check YYYY-MM-DD HH:mm(:ss)
+    const YmdRegex = /^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/;
+    const matchYmd = cleanStr.match(YmdRegex);
+    if (matchYmd) {
+      const year = parseInt(matchYmd[1], 10);
+      const month = parseInt(matchYmd[2], 10) - 1;
+      const day = parseInt(matchYmd[3], 10);
+      const hour = matchYmd[4] ? parseInt(matchYmd[4], 10) : 0;
+      const minute = matchYmd[5] ? parseInt(matchYmd[5], 10) : 0;
+      const second = matchYmd[6] ? parseInt(matchYmd[6], 10) : 0;
+      const d = new Date(year, month, day, hour, minute, second);
+      if (!isNaN(d.getTime())) return d;
+    }
+
+    const fallback = new Date(iso);
+    return isNaN(fallback.getTime()) ? null : fallback;
+  } catch {
+    return null;
+  }
+}
+
 function isWithinDateRange(value: string | null | undefined, dateRange: SupabaseDateRange): boolean {
   if (!hasDateRange(dateRange)) return true;
   if (!value) return false;
-  const time = new Date(value).getTime();
-  if (Number.isNaN(time)) return false;
+  const dateVal = parseDateString(value);
+  if (!dateVal) return false;
+  const time = dateVal.getTime();
   if (dateRange.from) {
     const from = new Date(`${dateRange.from}T00:00:00`).getTime();
     if (time < from) return false;
@@ -264,20 +319,29 @@ async function loadAssignmentCommentPostedAt(
 ): Promise<string | null> {
   const commentId = commentIdFromAssignment(assignment);
   if (!commentId) return null;
+  const platform = assignment.platform;
+  const platformQuery = platform === 'news' || platform === 'news_html'
+    ? 'in.(news,news_html)'
+    : platform === 'be' || platform === 'befood'
+      ? 'in.(be,befood)'
+      : `eq.${platform}`;
+
   const query = new URLSearchParams({
-    select: 'posted_at',
-    platform: `eq.${assignment.platform}`,
+    select: 'posted_at,payload_json',
+    platform: platformQuery,
     post_id: `eq.${assignment.post_id}`,
     comment_id: `eq.${commentId}`,
     limit: '1',
   }).toString();
-  const rows = await request<Array<Pick<SupabaseComment, 'posted_at'>>>(
+  const rows = await request<Array<Pick<SupabaseComment, 'posted_at' | 'payload_json'>>>(
     config,
     'comments',
     query,
     { signal },
   );
-  return rows[0]?.posted_at ?? null;
+  const row = rows[0];
+  if (!row) return null;
+  return row.posted_at ?? (row.payload_json?.posted_at as string | null) ?? null;
 }
 function postRowToRaw(row: SupabasePost): RawPost {
   const payload = row.payload_json ?? {};
@@ -462,7 +526,9 @@ export async function loadSupabaseThreads(
         assignedPostedAt = await loadAssignmentCommentPostedAt(config, assignment, signal);
         finalPostedAt = assignedPostedAt;
       }
-      if (!isWithinDateRange(finalPostedAt, dateRange)) return null;
+      const isReviewPlatform = ['google_maps', 'befood', 'be'].includes(assignment.platform);
+      const shouldCheckDate = !(assignment.entity_type === 'post' && isReviewPlatform);
+      if (shouldCheckDate && !isWithinDateRange(finalPostedAt, dateRange)) return null;
 
       // Lazily fetch comments and annotations in parallel only if the post matches brand/date filters!
       const annoPlatform = (assignment.platform === 'befood' || assignment.platform === 'be')
@@ -614,7 +680,7 @@ export async function saveSupabaseAnnotation(
       body: JSON.stringify([{
         revision_id: `${annotationId}_${Date.now()}`,
         annotation_id: annotationId,
-        revision: Date.now(),
+        revision: Math.floor(Date.now() / 1000),
         data_version: params.dataVersion,
         label: labelJson,
         note: null,

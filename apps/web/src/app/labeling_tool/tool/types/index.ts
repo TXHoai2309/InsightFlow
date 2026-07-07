@@ -107,6 +107,26 @@ export function isPositiveColdPreset(label: Label): boolean {
   );
 }
 
+/** Nhãn mặc định cho "Tích cực, None" — gán nhanh bằng phím 8 */
+export const POSITIVE_NONE_PRESET_LABEL: Label = {
+  sentiment: 'positive',
+  topic: ['other'],
+  relevance: true,
+  urgency: 'none',
+  intent: 'none',
+};
+
+export function isPositiveNonePreset(label: Label): boolean {
+  return (
+    label.sentiment === 'positive' &&
+    label.relevance === true &&
+    label.urgency === 'none' &&
+    label.intent === 'none' &&
+    label.topic.length === 1 &&
+    label.topic[0] === 'other'
+  );
+}
+
 export function isLabelComplete(label: Label | undefined): boolean {
   if (!label) return false;
   return (
