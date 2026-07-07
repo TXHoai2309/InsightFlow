@@ -11,6 +11,7 @@ interface ThreadViewProps {
   totalThreads: number;
   getLabel: (itemId: string) => (Label & { skipped?: boolean; needs_review?: boolean }) | null;
   setLabel: (itemId: string, label: Label) => void;
+  setItemSkipped: (itemId: string, skipped: boolean) => void;
   skipThread: (thread: Thread) => Promise<void>;
   unskipThread: (thread: Thread) => Promise<void>;
   completeThread: (thread: Thread) => Promise<{ ok: boolean; message?: string }>;
@@ -274,6 +275,7 @@ export default function ThreadView({
   totalThreads,
   getLabel,
   setLabel,
+  setItemSkipped,
   skipThread,
   unskipThread,
   completeThread,
@@ -482,10 +484,12 @@ export default function ThreadView({
                 label={postLabelVal}
                 onChange={(l) => setLabel(post._internal_id, l)}
                 compact
+                skipped={isPostSkipped}
+                onToggleSkip={() => setItemSkipped(post._internal_id, !isPostSkipped)}
               />
               {isPostFocused && (
                 <p className="text-xs text-blue-500 dark:text-blue-400 opacity-70 mt-1">
-                  ↑ Đang focus — phím tắt: 1/2/3 · q-y · a/s · z/x/c/v · 0 · 9
+                  ↑ Đang focus — phím tắt: 1/2/3 · q-y · a/s · z/x/c/v · 0 · 8 · 9 · i
                 </p>
               )}
             </div>
@@ -511,6 +515,7 @@ export default function ThreadView({
             isFocused={focusedItemId === comment._internal_id}
             onFocus={setFocusedItemId}
             onChange={(l) => setLabel(comment._internal_id, l)}
+            onToggleSkip={() => setItemSkipped(comment._internal_id, !getLabel(comment._internal_id)?.skipped)}
             isAssigned={true}
           />
           {replies.map(reply => (
@@ -522,6 +527,7 @@ export default function ThreadView({
               isFocused={focusedItemId === reply._internal_id}
               onFocus={setFocusedItemId}
               onChange={(l) => setLabel(reply._internal_id, l)}
+              onToggleSkip={() => setItemSkipped(reply._internal_id, !getLabel(reply._internal_id)?.skipped)}
               isAssigned={true}
             />
           ))}

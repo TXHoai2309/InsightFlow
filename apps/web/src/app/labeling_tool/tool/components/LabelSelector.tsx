@@ -6,6 +6,7 @@ import {
   EMPTY_LABEL, IRRELEVANT_PRESET_LABEL, isIrrelevantPreset,
   POSITIVE_COLD_PRESET_LABEL, isPositiveColdPreset,
   NEGATIVE_STAFF_ATTITUDE_PRESET_LABEL, isNegativeStaffAttitudePreset,
+  POSITIVE_NONE_PRESET_LABEL, isPositiveNonePreset,
 } from '../types';
 
 interface LabelSelectorProps {
@@ -13,6 +14,8 @@ interface LabelSelectorProps {
   onChange: (label: Label) => void;
   disabled?: boolean;
   compact?: boolean;
+  skipped?: boolean;
+  onToggleSkip?: () => void;
 }
 
 // ============================================================
@@ -84,7 +87,7 @@ function TopicSelector({
   };
 
   const displayText = topics.length === 0
-    ? '-- Chủ đề'
+    ? '-- Chá»§ Ä‘á»'
     : topics.map(t => TOPIC_LABELS[t]).join(', ');
 
   const activeClass = topics.length > 0
@@ -98,7 +101,7 @@ function TopicSelector({
         disabled={disabled}
         onClick={() => setOpen(o => !o)}
         className={`select-control min-w-[120px] text-left flex items-center justify-between gap-1 transition-colors ${activeClass}`}
-        title="Chọn chủ đề (có thể chọn nhiều)"
+        title="Chá»n chá»§ Ä‘á» (cÃ³ thá»ƒ chá»n nhiá»u)"
       >
         <span className="truncate max-w-[100px] text-xs">{displayText}</span>
         <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -129,9 +132,16 @@ function TopicSelector({
 }
 
 // ============================================================
-// Main LabelSelector — 5 controls
+// Main LabelSelector â€” 5 controls
 // ============================================================
-export default function LabelSelector({ label, onChange, disabled, compact }: LabelSelectorProps) {
+export default function LabelSelector({
+  label,
+  onChange,
+  disabled,
+  compact,
+  skipped,
+  onToggleSkip,
+}: LabelSelectorProps) {
   const update = <K extends keyof Label>(key: K, value: Label[K]) => {
     onChange({ ...label, [key]: value });
   };
@@ -145,12 +155,12 @@ export default function LabelSelector({ label, onChange, disabled, compact }: La
         value={label.sentiment ?? ''}
         onChange={e => update('sentiment', (e.target.value || null) as Label['sentiment'])}
         className={`select-control transition-colors ${getSentimentClass(label.sentiment)}`}
-        title="Cảm xúc (1=Tích cực, 2=Tiêu cực, 3=Trung tính)"
+        title="Cáº£m xÃºc (1=TÃ­ch cá»±c, 2=TiÃªu cá»±c, 3=Trung tÃ­nh)"
       >
-        <option value="" className="bg-white dark:bg-slate-900 text-gray-800 dark:text-gray-200">-- Cảm xúc</option>
-        <option value="positive" className="bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300">🟢 Tích cực</option>
-        <option value="negative" className="bg-red-50 dark:bg-red-950/50 text-red-800 dark:text-red-300">🔴 Tiêu cực</option>
-        <option value="neutral" className="bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-300">🟡 Trung tính</option>
+        <option value="" className="bg-white dark:bg-slate-900 text-gray-800 dark:text-gray-200">-- Cáº£m xÃºc</option>
+        <option value="positive" className="bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300">ðŸŸ¢ TÃ­ch cá»±c</option>
+        <option value="negative" className="bg-red-50 dark:bg-red-950/50 text-red-800 dark:text-red-300">ðŸ”´ TiÃªu cá»±c</option>
+        <option value="neutral" className="bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-300">ðŸŸ¡ Trung tÃ­nh</option>
       </select>
 
       {/* 2. Topic multi-select */}
@@ -169,11 +179,11 @@ export default function LabelSelector({ label, onChange, disabled, compact }: La
           update('relevance', v === '' ? null : v === 'yes');
         }}
         className={`select-control transition-colors ${getRelevanceClass(label.relevance)}`}
-        title="Liên quan thương hiệu (a=Có, s=Không)"
+        title="LiÃªn quan thÆ°Æ¡ng hiá»‡u (a=CÃ³, s=KhÃ´ng)"
       >
-        <option value="" className="bg-white dark:bg-slate-900 text-gray-800 dark:text-gray-200">-- Liên quan</option>
-        <option value="yes" className="bg-teal-50 dark:bg-teal-950/50 text-teal-800 dark:text-teal-300">🔵 Có</option>
-        <option value="no" className="bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-300">⚪ Không</option>
+        <option value="" className="bg-white dark:bg-slate-900 text-gray-800 dark:text-gray-200">-- LiÃªn quan</option>
+        <option value="yes" className="bg-teal-50 dark:bg-teal-950/50 text-teal-800 dark:text-teal-300">ðŸ”µ CÃ³</option>
+        <option value="no" className="bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-300">âšª KhÃ´ng</option>
       </select>
 
       {/* 4. Urgency */}
@@ -182,14 +192,14 @@ export default function LabelSelector({ label, onChange, disabled, compact }: La
         value={label.urgency ?? ''}
         onChange={e => update('urgency', (e.target.value || null) as Label['urgency'])}
         className={`select-control transition-colors ${getUrgencyClass(label.urgency)}`}
-        title="Mức độ (z=Thấp, x=Trung bình, c=Cao, v=Khẩn cấp, d=None)"
+        title="Má»©c Ä‘á»™ (z=Tháº¥p, x=Trung bÃ¬nh, c=Cao, v=Kháº©n cáº¥p, d=None)"
       >
-        <option value="" className="bg-white dark:bg-slate-900 text-gray-800 dark:text-gray-200">-- Mức độ</option>
-        <option value="none" className="bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-300">⚪ None</option>
-        <option value="low" className="bg-blue-50 dark:bg-blue-950/50 text-blue-800 dark:text-blue-300">🟢 Thấp</option>
-        <option value="medium" className="bg-yellow-50 dark:bg-yellow-950/50 text-yellow-800 dark:text-yellow-300">🟡 Trung bình</option>
-        <option value="high" className="bg-orange-50 dark:bg-orange-950/50 text-orange-800 dark:text-orange-300">🟠 Cao</option>
-        <option value="urgent" className="bg-red-50 dark:bg-red-950/50 text-red-800 dark:text-red-300">🔴 Khẩn cấp</option>
+        <option value="" className="bg-white dark:bg-slate-900 text-gray-800 dark:text-gray-200">-- Má»©c Ä‘á»™</option>
+        <option value="none" className="bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-300">âšª None</option>
+        <option value="low" className="bg-blue-50 dark:bg-blue-950/50 text-blue-800 dark:text-blue-300">ðŸŸ¢ Tháº¥p</option>
+        <option value="medium" className="bg-yellow-50 dark:bg-yellow-950/50 text-yellow-800 dark:text-yellow-300">ðŸŸ¡ Trung bÃ¬nh</option>
+        <option value="high" className="bg-orange-50 dark:bg-orange-950/50 text-orange-800 dark:text-orange-300">ðŸŸ  Cao</option>
+        <option value="urgent" className="bg-red-50 dark:bg-red-950/50 text-red-800 dark:text-red-300">ðŸ”´ Kháº©n cáº¥p</option>
       </select>
 
       {/* 5. Intent */}
@@ -198,16 +208,35 @@ export default function LabelSelector({ label, onChange, disabled, compact }: La
         value={label.intent ?? ''}
         onChange={e => update('intent', (e.target.value || null) as Intent)}
         className={`select-control transition-colors ${getIntentClass(label.intent)}`}
-        title="Ý định mua hàng (h=Hot, m=Warm, b=Cold, n=None)"
+        title="Ã Ä‘á»‹nh mua hÃ ng (h=Hot, m=Warm, b=Cold, n=None)"
       >
         <option value="" className="bg-white dark:bg-slate-900 text-gray-800 dark:text-gray-200">-- Intent</option>
-        <option value="hot" className="bg-orange-50 dark:bg-orange-950/50 text-orange-800 dark:text-orange-300" title="Quan tâm mạnh — có ý định mua/ứng tuyển ngay">🔴 Hot</option>
-        <option value="warm" className="bg-yellow-50 dark:bg-yellow-950/50 text-yellow-800 dark:text-yellow-300" title="Quan tâm vừa — đang tìm hiểu, cân nhắc">🟡 Warm</option>
-        <option value="cold" className="bg-blue-50 dark:bg-blue-950/50 text-blue-800 dark:text-blue-300" title="Ít quan tâm — đề cập nhưng không có ý định">🔵 Cold</option>
-        <option value="none" className="bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-300" title="Không liên quan đến mua hàng/tuyển dụng">⚪ None</option>
+        <option value="hot" className="bg-orange-50 dark:bg-orange-950/50 text-orange-800 dark:text-orange-300" title="Quan tÃ¢m máº¡nh â€” cÃ³ Ã½ Ä‘á»‹nh mua/á»©ng tuyá»ƒn ngay">ðŸ”´ Hot</option>
+        <option value="warm" className="bg-yellow-50 dark:bg-yellow-950/50 text-yellow-800 dark:text-yellow-300" title="Quan tÃ¢m vá»«a â€” Ä‘ang tÃ¬m hiá»ƒu, cÃ¢n nháº¯c">ðŸŸ¡ Warm</option>
+        <option value="cold" className="bg-blue-50 dark:bg-blue-950/50 text-blue-800 dark:text-blue-300" title="Ãt quan tÃ¢m â€” Ä‘á» cáº­p nhÆ°ng khÃ´ng cÃ³ Ã½ Ä‘á»‹nh">ðŸ”µ Cold</option>
+        <option value="none" className="bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-300" title="KhÃ´ng liÃªn quan Ä‘áº¿n mua hÃ ng/tuyá»ƒn dá»¥ng">âšª None</option>
       </select>
 
-      {/* Quick-assign button (phím 0) */}
+      {onToggleSkip && (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={onToggleSkip}
+          className={`select-control inline-flex items-center gap-1.5 font-medium transition-colors ${
+            skipped
+              ? 'bg-rose-100 text-rose-700 border-rose-300 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-700'
+              : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+          }`}
+          title={skipped ? "KhÃ´i phá»¥c comment Ä‘á»ƒ gÃ¡n nhÃ£n" : "Bá» qua/KhÃ´ng gÃ¡n nhÃ£n cho comment nÃ y (phÃ­m i)"}
+          aria-label="Bá» qua comment nÃ y"
+          aria-pressed={skipped}
+        >
+          <span>{skipped ? 'â†©ï¸ KhÃ´i phá»¥c' : 'ðŸš« Bá» qua cmt'}</span>
+          <kbd className="kbd">i</kbd>
+        </button>
+      )}
+
+      {/* Quick-assign button (phÃ­m 0) */}
       <button
         type="button"
         disabled={disabled}
@@ -219,16 +248,37 @@ export default function LabelSelector({ label, onChange, disabled, compact }: La
             ? 'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700'
             : ''
         }`}
-        title="Bật/tắt nhãn nhanh: Trung tính · Khác · Không liên quan · None · None (phím 0)"
-        aria-label="Gán nhanh nhãn không liên quan"
+        title="Báº­t/táº¯t nhÃ£n nhanh: Trung tÃ­nh Â· KhÃ¡c Â· KhÃ´ng liÃªn quan Â· None Â· None (phÃ­m 0)"
+        aria-label="GÃ¡n nhanh nhÃ£n khÃ´ng liÃªn quan"
         aria-pressed={isIrrelevantPreset(label)}
       >
         <Zap className="h-3.5 w-3.5" aria-hidden="true" />
-        <span>{isIrrelevantPreset(label) ? 'Bỏ gán nhanh' : 'Không liên quan'}</span>
+        <span>{isIrrelevantPreset(label) ? 'Bá» gÃ¡n nhanh' : 'KhÃ´ng liÃªn quan'}</span>
         <kbd className="kbd">0</kbd>
       </button>
 
-      {/* Quick-assign button (phím 9) */}
+      {/* Quick-assign button (phÃ­m 8) */}
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => onChange({
+          ...(isPositiveNonePreset(label) ? EMPTY_LABEL : POSITIVE_NONE_PRESET_LABEL),
+        })}
+        className={`select-control inline-flex items-center gap-1.5 font-medium transition-colors ${
+          isPositiveNonePreset(label)
+            ? 'bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700'
+            : ''
+        }`}
+        title="Báº­t/táº¯t nhÃ£n nhanh: TÃ­ch cá»±c Â· KhÃ¡c Â· CÃ³ Â· None Â· None (phÃ­m 8)"
+        aria-label="GÃ¡n nhanh nhÃ£n tÃ­ch cá»±c, none"
+        aria-pressed={isPositiveNonePreset(label)}
+      >
+        <Zap className="h-3.5 w-3.5" aria-hidden="true" />
+        <span>{isPositiveNonePreset(label) ? 'Bá» gÃ¡n nhanh' : 'TÃ­ch cá»±c, None'}</span>
+        <kbd className="kbd">8</kbd>
+      </button>
+
+      {/* Quick-assign button (phÃ­m 9) */}
       <button
         type="button"
         disabled={disabled}
@@ -240,16 +290,16 @@ export default function LabelSelector({ label, onChange, disabled, compact }: La
             ? 'bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700'
             : ''
         }`}
-        title="Bật/tắt nhãn nhanh: Tích cực · Khác · Có · None · Cold (phím 9)"
-        aria-label="Gán nhanh nhãn tích cực, cold"
+        title="Báº­t/táº¯t nhÃ£n nhanh: TÃ­ch cá»±c Â· KhÃ¡c Â· CÃ³ Â· None Â· Cold (phÃ­m 9)"
+        aria-label="GÃ¡n nhanh nhÃ£n tÃ­ch cá»±c, cold"
         aria-pressed={isPositiveColdPreset(label)}
       >
         <Zap className="h-3.5 w-3.5" aria-hidden="true" />
-        <span>{isPositiveColdPreset(label) ? 'Bỏ gán nhanh' : 'Tích cực, Cold'}</span>
+        <span>{isPositiveColdPreset(label) ? 'Bá» gÃ¡n nhanh' : 'TÃ­ch cá»±c, Cold'}</span>
         <kbd className="kbd">9</kbd>
       </button>
 
-      {/* Quick-assign button (phím 8) */}
+      {/* Quick-assign button (phÃ­m 8) */}
       <button
         type="button"
         disabled={disabled}
@@ -261,13 +311,13 @@ export default function LabelSelector({ label, onChange, disabled, compact }: La
             ? 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700'
             : ''
         }`}
-        title="Bật/tắt nhãn nhanh: Tiêu cực · Dịch vụ · Có · Cao · None (phím 8)"
-        aria-label="Gán nhanh nhãn tiêu cực về thái độ nhân viên"
+        title="Bat/tat nhan nhanh: Tieu cuc · Dich vu · Co · Cao · None (phim 7)"
+        aria-label="GÃ¡n nhanh nhÃ£n tiÃªu cá»±c vá» thÃ¡i Ä‘á»™ nhÃ¢n viÃªn"
         aria-pressed={isNegativeStaffAttitudePreset(label)}
       >
         <Zap className="h-3.5 w-3.5" aria-hidden="true" />
-        <span>{isNegativeStaffAttitudePreset(label) ? 'Bỏ gán nhanh' : 'Thái độ nhân viên'}</span>
-        <kbd className="kbd">8</kbd>
+        <span>{isNegativeStaffAttitudePreset(label) ? 'Bá» gÃ¡n nhanh' : 'ThÃ¡i Ä‘á»™ nhÃ¢n viÃªn'}</span>
+        <kbd className="kbd">7</kbd>
       </button>
 
       {/* Inline badges for quick visual confirmation */}
@@ -277,7 +327,7 @@ export default function LabelSelector({ label, onChange, disabled, compact }: La
             label.sentiment === 'positive' ? 'badge-positive' :
             label.sentiment === 'negative' ? 'badge-negative' : 'badge-neutral'
           }`}>
-            {label.sentiment === 'positive' ? '😊' : label.sentiment === 'negative' ? '😠' : '😐'}{' '}
+            {label.sentiment === 'positive' ? 'ðŸ˜Š' : label.sentiment === 'negative' ? 'ðŸ˜ ' : 'ðŸ˜'}{' '}
             {SENTIMENT_LABELS[label.sentiment]}
           </span>
         )}
@@ -288,8 +338,8 @@ export default function LabelSelector({ label, onChange, disabled, compact }: La
             label.urgency === 'medium' ? 'badge-notable' :
             label.urgency === 'high' ? 'bg-orange-500 text-white' : 'badge-crisis'
           }`}>
-            {label.urgency === 'none' ? '⚪' : label.urgency === 'low' ? '🟢' : label.urgency === 'medium' ? '🟡' :
-             label.urgency === 'high' ? '🟠' : '🔴'}{' '}
+            {label.urgency === 'none' ? 'âšª' : label.urgency === 'low' ? 'ðŸŸ¢' : label.urgency === 'medium' ? 'ðŸŸ¡' :
+             label.urgency === 'high' ? 'ðŸŸ ' : 'ðŸ”´'}{' '}
             {URGENCY_LABELS[label.urgency]}
           </span>
         )}
@@ -310,7 +360,7 @@ export default function LabelSelector({ label, onChange, disabled, compact }: La
             label.relevance ? 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300'
                             : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
           }`}>
-            {label.relevance ? '✅ Liên quan' : '❌ Không liên quan'}
+            {label.relevance ? 'âœ… LiÃªn quan' : 'âŒ KhÃ´ng liÃªn quan'}
           </span>
         )}
       </div>
