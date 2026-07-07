@@ -12,6 +12,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { useAuth } from "@/hooks/useAuth";
+import { filterByBrandScope } from "@/lib/brandScope";
 import { dbData } from "@/lib/firebase";
 
 type Sentiment = "positive" | "negative" | "neutral" | null;
@@ -38,9 +39,10 @@ interface LabelHistoryItem {
 
 interface LabelRequest {
   id: string;
-  status: "pending" | "approved" | "rejected" | "edited";
+  status: "pending" | "approved" | "rejected" | "edited" | "cancelled";
   brand_id?: string;
   brand_name?: string;
+  workspace_id?: string;
   mention_id: string;
   requested_by_name: string;
   requested_by_email?: string;
@@ -72,6 +74,7 @@ interface LabelAuditEntry {
   request_id?: string;
   brand_id?: string;
   brand_name?: string;
+  workspace_id?: string;
   mention_id: string;
   mention_content?: string;
   action: LabelRequest["status"] | "created" | "note_added";
@@ -144,140 +147,40 @@ const INTENT_LABELS: Record<string, { label: string; emoji: string }> = {
   none: { label: "None", emoji: "➖" },
 };
 
-function getDemoRequests(brandName?: string): LabelRequest[] {
-  const now = new Date();
-  return [
-    {
-      id: "demo-comment-request",
-      isDemo: true,
-      status: "pending",
-      brand_name: brandName || "Thương hiệu demo",
-      mention_id: "demo-fb-comment-001",
-      requested_by_name: "Nhân viên xử lý khủng hoảng",
-      requested_by_role: "crisis_employee",
-      reason:
-        "Bình luận này đang bị gắn trung tính, nhưng nội dung có dấu hiệu phàn nàn về dịch vụ và cần xử lý sớm.",
-      old_label: { sentiment: "neutral", topic: "service" },
-      proposed_label: { sentiment: "negative", topic: "service" },
-      mention: {
-        id: "demo-fb-comment-001",
-        parent_id: "demo-fb-post-001",
-        platform: "facebook",
-        content_type: "comment",
-        post_content:
-          "Thương hiệu ra mắt combo mới cho mùa hè, áp dụng tại tất cả cửa hàng trong tuần này.",
-        content: "Mình đợi hơn 30 phút nhưng nhân viên không xử lý đơn, trải nghiệm quá tệ.",
-        comment_content:
-          "Mình đợi hơn 30 phút nhưng nhân viên không xử lý đơn, trải nghiệm quá tệ.",
-        author: "Nguyễn Minh Anh",
-        posted_at: now.toISOString(),
-        url: "https://facebook.com/demo-post",
-      },
-      history: [
-        {
-          action: "created",
-          by_name: "Nhân viên xử lý khủng hoảng",
-          at: now.toISOString(),
-          from: { sentiment: "neutral", topic: "service" },
-          to: { sentiment: "negative", topic: "service" },
-          note: "Đề xuất chuyển sang tiêu cực vì khách hàng phàn nàn trực tiếp.",
-        },
-      ],
-      created_at: now.toISOString(),
-    },
-    {
-      id: "demo-post-request",
-      isDemo: true,
-      status: "pending",
-      brand_name: brandName || "Thương hiệu demo",
-      mention_id: "demo-thread-post-002",
-      requested_by_name: "Nhân viên xử lý tiềm năng",
-      requested_by_role: "lead_employee",
-      reason:
-        "Bài viết có ý định mua hàng rõ ràng, nên chuyển chủ đề sang marketing/deal để team tiềm năng theo dõi.",
-      old_label: { sentiment: "positive", topic: "other" },
-      proposed_label: { sentiment: "positive", topic: "marketing" },
-      mention: {
-        id: "demo-thread-post-002",
-        platform: "thread",
-        content_type: "post",
-        content: "Đang cần đặt đồ ăn cho team 20 người vào trưa mai, bên mình có gói ưu đãi nào không?",
-        post_content:
-          "Đang cần đặt đồ ăn cho team 20 người vào trưa mai, bên mình có gói ưu đãi nào không?",
-        author: "Trần Bảo Long",
-        posted_at: new Date(now.getTime() - 1000 * 60 * 42).toISOString(),
-        url: "https://threads.net/demo-post",
-      },
-      history: [
-        {
-          action: "created",
-          by_name: "Nhân viên xử lý tiềm năng",
-          at: new Date(now.getTime() - 1000 * 60 * 35).toISOString(),
-          from: { sentiment: "positive", topic: "other" },
-          to: { sentiment: "positive", topic: "marketing" },
-          note: "Có dấu hiệu nhu cầu mua hàng số lượng lớn.",
-        },
-      ],
-      created_at: new Date(now.getTime() - 1000 * 60 * 35).toISOString(),
-    },
-    {
-      id: "demo-history-request",
-      isDemo: true,
-      status: "pending",
-      brand_name: brandName || "Thương hiệu demo",
-      mention_id: "demo-gmaps-review-003",
-      requested_by_name: "Nhân viên xử lý khủng hoảng",
-      requested_by_role: "crisis_employee",
-      reason: "Đánh giá 1 sao nhưng hệ thống gắn topic giá, cần sửa sang chất lượng dịch vụ.",
-      old_label: { sentiment: "negative", topic: "price" },
-      proposed_label: { sentiment: "negative", topic: "quality" },
-      mention: {
-        id: "demo-gmaps-review-003",
-        platform: "google_maps",
-        content_type: "comment",
-        post_content: "Đánh giá của khách hàng trên Google Maps về chi nhánh quận.",
-        content: "Đồ uống bị nguội, bàn giao chậm và không ai xin lỗi. 1 sao.",
-        comment_content: "Đồ uống bị nguội, bàn giao chậm và không ai xin lỗi. 1 sao.",
-        author: "Lê Hoàng",
-        posted_at: new Date(now.getTime() - 1000 * 60 * 90).toISOString(),
-        url: "https://maps.google.com/demo-review",
-      },
-      history: [
-        {
-          action: "created",
-          by_name: "Nhân viên xử lý khủng hoảng",
-          at: new Date(now.getTime() - 1000 * 60 * 88).toISOString(),
-          from: { sentiment: "negative", topic: "price" },
-          to: { sentiment: "negative", topic: "quality" },
-          note: "Nội dung liên quan chất lượng sản phẩm và vận hành hơn là giá.",
-        },
-        {
-          action: "note_added",
-          by_name: "Brand Manager demo",
-          at: new Date(now.getTime() - 1000 * 60 * 75).toISOString(),
-          from: { sentiment: "negative", topic: "price" },
-          to: { sentiment: "negative", topic: "quality" },
-          note: "Cần kiểm tra với cửa hàng trước khi duyệt nhãn cuối.",
-        },
-      ],
-      created_at: new Date(now.getTime() - 1000 * 60 * 88).toISOString(),
-    },
-  ];
-}
-
 function normalizeLabel(value: unknown, fallback: LabelValue): LabelValue {
   if (!value || typeof value !== "object") return fallback;
-  const row = value as Partial<LabelValue>;
+  const row = value as Partial<LabelValue> & { topic?: string | string[]; topics?: string[] };
+  const topic = Array.isArray(row.topic)
+    ? row.topic[0]
+    : typeof row.topic === "string"
+      ? row.topic
+      : Array.isArray(row.topics)
+        ? row.topics[0]
+        : fallback.topic;
   return {
     sentiment:
       row.sentiment === "positive" || row.sentiment === "negative" || row.sentiment === "neutral"
         ? row.sentiment
         : fallback.sentiment,
-    topic: typeof row.topic === "string" ? row.topic : fallback.topic,
+    topic: typeof topic === "string" ? topic : fallback.topic,
     relevance: typeof row.relevance === "boolean" ? row.relevance : fallback.relevance,
     urgency: row.urgency || fallback.urgency,
     intent: row.intent || fallback.intent,
   };
+}
+
+function normalizeRequestStatus(value: unknown): LabelRequest["status"] {
+  const status = String(value || "pending").toLowerCase();
+  if (status === "approved" || status === "rejected" || status === "edited" || status === "cancelled") {
+    return status;
+  }
+  return "pending";
+}
+
+function normalizeContentType(value: unknown): LabelRequest["mention"]["content_type"] {
+  const sourceType = String(value || "").toLowerCase();
+  if (sourceType === "comment" || sourceType === "reply") return sourceType;
+  return "post";
 }
 
 function formatDate(value: unknown) {
@@ -315,6 +218,7 @@ function requestToAuditEntries(request: LabelRequest): LabelAuditEntry[] {
         request_id: request.id,
         brand_id: request.brand_id,
         brand_name: request.brand_name,
+        workspace_id: request.workspace_id || request.brand_id || request.brand_name,
         mention_id: request.mention_id,
         mention_content: request.mention.content,
         action: "created",
@@ -337,6 +241,7 @@ function requestToAuditEntries(request: LabelRequest): LabelAuditEntry[] {
     request_id: request.id,
     brand_id: request.brand_id,
     brand_name: request.brand_name,
+    workspace_id: request.workspace_id || request.brand_id || request.brand_name,
     mention_id: request.mention_id,
     mention_content: request.mention.content,
     action: item.action as LabelAuditEntry["action"],
@@ -694,43 +599,56 @@ export default function LabelRequestsPage() {
         const snapshot = await getDocs(query(collection(dbData, "label_change_requests"), limit(100)));
         const rows = snapshot.docs.map((item) => {
           const data = item.data();
-          const oldLabel = normalizeLabel(data.old_label, { sentiment: "neutral", topic: "other" });
-          const proposedLabel = normalizeLabel(data.proposed_label, oldLabel);
+          const oldLabel = normalizeLabel(
+            data.old_label || data.current_labels || data.current_label,
+            { sentiment: "neutral", topic: "other", relevance: null, urgency: null, intent: null },
+          );
+          const proposedLabel = normalizeLabel(
+            data.proposed_label || data.requested_labels || data.requested_label,
+            oldLabel,
+          );
           const mention = (data.mention || {}) as LabelRequest["mention"];
+          const content = String(
+            mention.content ||
+              data.content_preview ||
+              data.mention_content ||
+              data.content ||
+              "",
+          );
+          const contentType = normalizeContentType(mention.content_type || data.source_type);
 
           return {
             id: item.id,
-            status: data.status || "pending",
-            brand_id: data.brand_id,
-            brand_name: data.brand_name,
-            mention_id: data.mention_id || mention.id || item.id,
+            status: normalizeRequestStatus(data.status),
+            brand_id: data.brand_id || data.workspace_id,
+            brand_name: data.brand_name || data.workspace_name,
+            workspace_id: data.workspace_id || data.brand_id || data.brand_name || data.workspace_name,
+            mention_id: data.mention_id || data.source_id || mention.id || item.id,
             requested_by_name: data.requested_by_name || data.requested_by_email || "Nhân viên",
             requested_by_email: data.requested_by_email,
             requested_by_role: data.requested_by_role,
-            reason: data.reason,
+            reason: data.reason || data.reason_note || data.reason_code,
             old_label: oldLabel,
             proposed_label: proposedLabel,
             final_label: data.final_label ? normalizeLabel(data.final_label, proposedLabel) : undefined,
             mention: {
-              id: mention.id || data.mention_id || item.id,
+              id: mention.id || data.mention_id || data.source_id || item.id,
               parent_id: mention.parent_id || null,
-              platform: mention.platform || "unknown",
-              content_type: mention.content_type || "post",
-              content: mention.content || "",
-              post_content: mention.post_content || "",
-              comment_content: mention.comment_content || "",
-              author: mention.author || "",
+              platform: mention.platform || data.platform || data.source || "unknown",
+              content_type: contentType,
+              content,
+              post_content: mention.post_content || (contentType === "post" ? content : ""),
+              comment_content: mention.comment_content || (contentType !== "post" ? content : ""),
+              author: mention.author || data.author || "",
               posted_at: mention.posted_at || mention.created_at || "",
-              url: mention.url || "",
+              url: mention.url || data.source_url || data.url || "",
             },
             history: Array.isArray(data.history) ? data.history : [],
-            created_at: data.created_at,
+            created_at: data.requested_at || data.created_at,
           } satisfies LabelRequest;
         });
 
-        const scopedRows = profile?.brandId
-          ? rows.filter((item) => !item.brand_id || item.brand_id === profile.brandId)
-          : rows;
+        const scopedRows = filterByBrandScope(rows, profile);
 
         let persistedAuditEntries: LabelAuditEntry[] = [];
         try {
@@ -745,6 +663,7 @@ export default function LabelRequestsPage() {
                 request_id: data.request_id,
                 brand_id: data.brand_id,
                 brand_name: data.brand_name,
+                workspace_id: data.workspace_id || data.brand_id || data.brand_name,
                 mention_id: String(data.mention_id || ""),
                 mention_content: data.mention_content,
                 action: data.action || data.status || "edited",
@@ -761,27 +680,25 @@ export default function LabelRequestsPage() {
                 note: data.note,
               } satisfies LabelAuditEntry;
             })
-            .filter((item) => !profile?.brandId || !item.brand_id || item.brand_id === profile.brandId);
+            .filter((item) => filterByBrandScope([item], profile).length > 0);
         } catch (historyError) {
           console.warn("Failed to load label change history:", historyError);
         }
 
         if (active) {
-          const visibleRows = scopedRows.length > 0 ? scopedRows : getDemoRequests(profile?.brandName);
-          setRequests(visibleRows);
-          setSelectedId(visibleRows[0]?.id || null);
+          setRequests(scopedRows);
+          setSelectedId(scopedRows[0]?.id || null);
           setAuditEntries([
             ...persistedAuditEntries,
-            ...visibleRows.flatMap(requestToAuditEntries),
+            ...scopedRows.flatMap(requestToAuditEntries),
           ]);
         }
       } catch (error) {
         console.error("Failed to load label requests:", error);
         if (active) {
-          const demoRows = getDemoRequests(profile?.brandName);
-          setRequests(demoRows);
-          setSelectedId(demoRows[0]?.id || null);
-          setAuditEntries(demoRows.flatMap(requestToAuditEntries));
+          setRequests([]);
+          setSelectedId(null);
+          setAuditEntries([]);
         }
       } finally {
         if (active) setLoading(false);
@@ -806,7 +723,6 @@ export default function LabelRequestsPage() {
   }, [selectedRequest]);
 
   const pendingCount = requests.filter((item) => item.status === "pending").length;
-  const isUsingDemoData = requests.some((item) => item.isDemo);
   const requesterOptions = useMemo(
     () => Array.from(new Set(auditEntries.map((item) => item.requested_by_name).filter(Boolean))).sort(),
     [auditEntries],
@@ -924,6 +840,7 @@ export default function LabelRequestsPage() {
     approved: "Đã duyệt",
     rejected: "Từ chối",
     edited: "Đã sửa & duyệt",
+    cancelled: "Đã hủy",
   };
   const HISTORY_STATUS_LABELS: Record<string, string> = {
     ...STATUS_LABELS,
@@ -958,18 +875,6 @@ export default function LabelRequestsPage() {
           </p>
         </div>
       </div>
-
-      {isUsingDemoData && (
-        <div className="mb-6 flex gap-3 rounded-xl border border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] px-4 py-3 text-sm text-[var(--color-text-primary)]">
-          <span className="material-symbols-outlined shrink-0 text-lg text-[var(--color-warning)]">science</span>
-          <p className="leading-6">
-            <span className="font-bold">Dữ liệu demo:</span> hiện chưa có yêu cầu thật từ nhân viên, nên
-            trang đang hiển thị yêu cầu mẫu để test thao tác duyệt, sửa nhãn, so sánh và xem lịch sử. Các
-            thao tác trên yêu cầu demo chỉ cập nhật giao diện, không ghi lên Firestore.
-          </p>
-        </div>
-      )}
-
       <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
         {/* Request list */}
         <section className="h-fit rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)]">

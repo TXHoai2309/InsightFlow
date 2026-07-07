@@ -988,6 +988,8 @@ export class DashboardService {
     const nowIso = new Date().toISOString();
     const requestData = stripUndefinedFields({
       ...data,
+      brand_id: profile.brandId,
+      brand_name: profile.brandName,
       status: "pending" as const,
       requested_by: profile.uid,
       requested_by_name: profile.displayName || profile.email,
