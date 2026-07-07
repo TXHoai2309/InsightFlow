@@ -275,7 +275,7 @@ export default function CommentItem({
         <LabelSelector label={currentLabel} onChange={onChange} compact />
         {isFocused && (
           <div className="mt-1.5 text-xs text-blue-500 dark:text-blue-400 opacity-70">
-            ↑ Đang focus — 1/2/3 · q-y · a/s · z/x/c/v · 0
+            ↑ Đang focus — 1/2/3 · q-y · a/s · z/x/c/v · 0 · 9
           </div>
         )}
       </>

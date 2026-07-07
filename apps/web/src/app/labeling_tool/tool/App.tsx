@@ -1,7 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Person, Label, Thread, TopicKey, TOPIC_HOTKEYS } from './types';
+import {
+  Person, Label, Thread, TopicKey, TOPIC_HOTKEYS,
+  EMPTY_LABEL, IRRELEVANT_PRESET_LABEL, isIrrelevantPreset,
+  POSITIVE_COLD_PRESET_LABEL, isPositiveColdPreset,
+} from './types';
 import { useData } from './hooks/useData';
 import { useLabeling } from './hooks/useLabeling';
 import ThreadView from './components/ThreadView';
@@ -309,6 +313,25 @@ export default function App() {
       if (key === '1') { next.sentiment = 'positive'; updated = true; }
       else if (key === '2') { next.sentiment = 'negative'; updated = true; }
       else if (key === '3') { next.sentiment = 'neutral'; updated = true; }
+      // Quick presets
+      else if (key === '0') {
+        const toggled = isIrrelevantPreset(lbl) ? EMPTY_LABEL : IRRELEVANT_PRESET_LABEL;
+        next.sentiment = toggled.sentiment;
+        next.topic = [...toggled.topic];
+        next.relevance = toggled.relevance;
+        next.urgency = toggled.urgency;
+        next.intent = toggled.intent;
+        updated = true;
+      }
+      else if (key === '9') {
+        const toggled = isPositiveColdPreset(lbl) ? EMPTY_LABEL : POSITIVE_COLD_PRESET_LABEL;
+        next.sentiment = toggled.sentiment;
+        next.topic = [...toggled.topic];
+        next.relevance = toggled.relevance;
+        next.urgency = toggled.urgency;
+        next.intent = toggled.intent;
+        updated = true;
+      }
       // Topic toggles
       else if (key in TOPIC_HOTKEYS) {
         const topic = TOPIC_HOTKEYS[key] as TopicKey;

@@ -4,6 +4,7 @@ import {
   Label, TopicKey, Intent,
   SENTIMENT_LABELS, TOPIC_LABELS, URGENCY_LABELS, INTENT_LABELS,
   EMPTY_LABEL, IRRELEVANT_PRESET_LABEL, isIrrelevantPreset,
+  POSITIVE_COLD_PRESET_LABEL, isPositiveColdPreset,
 } from '../types';
 
 interface LabelSelectorProps {
@@ -224,6 +225,27 @@ export default function LabelSelector({ label, onChange, disabled, compact }: La
         <Zap className="h-3.5 w-3.5" aria-hidden="true" />
         <span>{isIrrelevantPreset(label) ? 'Bỏ gán nhanh' : 'Không liên quan'}</span>
         <kbd className="kbd">0</kbd>
+      </button>
+
+      {/* Quick-assign button (phím 9) */}
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => onChange({
+          ...(isPositiveColdPreset(label) ? EMPTY_LABEL : POSITIVE_COLD_PRESET_LABEL),
+        })}
+        className={`select-control inline-flex items-center gap-1.5 font-medium transition-colors ${
+          isPositiveColdPreset(label)
+            ? 'bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700'
+            : ''
+        }`}
+        title="Bật/tắt nhãn nhanh: Tích cực · Khác · Có · None · Cold (phím 9)"
+        aria-label="Gán nhanh nhãn tích cực, cold"
+        aria-pressed={isPositiveColdPreset(label)}
+      >
+        <Zap className="h-3.5 w-3.5" aria-hidden="true" />
+        <span>{isPositiveColdPreset(label) ? 'Bỏ gán nhanh' : 'Tích cực, Cold'}</span>
+        <kbd className="kbd">9</kbd>
       </button>
 
       {/* Inline badges for quick visual confirmation */}

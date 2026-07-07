@@ -87,6 +87,26 @@ export function isIrrelevantPreset(label: Label): boolean {
   );
 }
 
+/** Nhãn mặc định cho "Tích cực, Cold" — gán nhanh bằng phím 9 */
+export const POSITIVE_COLD_PRESET_LABEL: Label = {
+  sentiment: 'positive',
+  topic: ['other'],
+  relevance: true,
+  urgency: 'none',
+  intent: 'cold',
+};
+
+export function isPositiveColdPreset(label: Label): boolean {
+  return (
+    label.sentiment === 'positive' &&
+    label.relevance === true &&
+    label.urgency === 'none' &&
+    label.intent === 'cold' &&
+    label.topic.length === 1 &&
+    label.topic[0] === 'other'
+  );
+}
+
 export function isLabelComplete(label: Label | undefined): boolean {
   if (!label) return false;
   return (
