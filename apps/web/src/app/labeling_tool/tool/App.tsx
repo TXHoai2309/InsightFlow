@@ -5,6 +5,7 @@ import {
   Person, Label, Thread, TopicKey, TOPIC_HOTKEYS,
   EMPTY_LABEL, IRRELEVANT_PRESET_LABEL, isIrrelevantPreset,
   POSITIVE_COLD_PRESET_LABEL, isPositiveColdPreset,
+  POSITIVE_NONE_PRESET_LABEL, isPositiveNonePreset,
 } from './types';
 import { useData } from './hooks/useData';
 import { useLabeling } from './hooks/useLabeling';
@@ -170,7 +171,7 @@ export default function App() {
   const labeling = useLabeling(person, filteredThreads, activeSupabaseConfig);
   const {
     currentThreadIndex, labels, threadStates, stats, storageError,
-    getLabel, setLabel, skipThread, unskipThread, completeThread,
+    getLabel, setLabel, setItemSkipped, skipThread, unskipThread, completeThread,
     goNext, goPrev, jumpTo,
     focusedItemId, setFocusedItemId,
     totalThreads,
@@ -301,6 +302,12 @@ export default function App() {
       const itemId = focusedItemId ?? (threadItems[0]?._internal_id);
       if (!itemId) return;
 
+      if (key === 'i') {
+        e.preventDefault();
+        setItemSkipped(itemId, !getLabel(itemId)?.skipped);
+        return;
+      }
+
       const current = getLabel(itemId);
       const lbl: Label = current
         ? { sentiment: current.sentiment, topic: current.topic, relevance: current.relevance, urgency: current.urgency, intent: current.intent ?? null }
@@ -316,6 +323,15 @@ export default function App() {
       // Quick presets
       else if (key === '0') {
         const toggled = isIrrelevantPreset(lbl) ? EMPTY_LABEL : IRRELEVANT_PRESET_LABEL;
+        next.sentiment = toggled.sentiment;
+        next.topic = [...toggled.topic];
+        next.relevance = toggled.relevance;
+        next.urgency = toggled.urgency;
+        next.intent = toggled.intent;
+        updated = true;
+      }
+      else if (key === '8') {
+        const toggled = isPositiveNonePreset(lbl) ? EMPTY_LABEL : POSITIVE_NONE_PRESET_LABEL;
         next.sentiment = toggled.sentiment;
         next.topic = [...toggled.topic];
         next.relevance = toggled.relevance;
@@ -704,6 +720,7 @@ export default function App() {
                   totalThreads={totalThreads}
                   getLabel={getLabel}
                   setLabel={setLabel}
+                  setItemSkipped={setItemSkipped}
                   skipThread={skipThread}
                   unskipThread={unskipThread}
                   completeThread={completeThread}
