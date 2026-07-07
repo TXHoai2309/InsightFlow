@@ -485,7 +485,7 @@ export default function ThreadView({
               />
               {isPostFocused && (
                 <p className="text-xs text-blue-500 dark:text-blue-400 opacity-70 mt-1">
-                  ↑ Đang focus — phím tắt: 1/2/3 · q-y · a/s · z/x/c/v · 0
+                  ↑ Đang focus — phím tắt: 1/2/3 · q-y · a/s · z/x/c/v · 0 · 9
                 </p>
               )}
             </div>
