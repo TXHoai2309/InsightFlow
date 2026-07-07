@@ -6,6 +6,7 @@ import {
   EMPTY_LABEL, IRRELEVANT_PRESET_LABEL, isIrrelevantPreset,
   POSITIVE_COLD_PRESET_LABEL, isPositiveColdPreset,
   NEGATIVE_STAFF_ATTITUDE_PRESET_LABEL, isNegativeStaffAttitudePreset,
+  POSITIVE_NONE_PRESET_LABEL, isPositiveNonePreset,
 } from '../types';
 
 interface LabelSelectorProps {
@@ -13,6 +14,8 @@ interface LabelSelectorProps {
   onChange: (label: Label) => void;
   disabled?: boolean;
   compact?: boolean;
+  skipped?: boolean;
+  onToggleSkip?: () => void;
 }
 
 // ============================================================
@@ -131,7 +134,14 @@ function TopicSelector({
 // ============================================================
 // Main LabelSelector — 5 controls
 // ============================================================
-export default function LabelSelector({ label, onChange, disabled, compact }: LabelSelectorProps) {
+export default function LabelSelector({
+  label,
+  onChange,
+  disabled,
+  compact,
+  skipped,
+  onToggleSkip,
+}: LabelSelectorProps) {
   const update = <K extends keyof Label>(key: K, value: Label[K]) => {
     onChange({ ...label, [key]: value });
   };
@@ -207,6 +217,25 @@ export default function LabelSelector({ label, onChange, disabled, compact }: La
         <option value="none" className="bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-300" title="Không liên quan đến mua hàng/tuyển dụng">⚪ None</option>
       </select>
 
+      {onToggleSkip && (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={onToggleSkip}
+          className={`select-control inline-flex items-center gap-1.5 font-medium transition-colors ${
+            skipped
+              ? 'bg-rose-100 text-rose-700 border-rose-300 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-700'
+              : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+          }`}
+          title={skipped ? "Khôi phục comment để gán nhãn" : "Bỏ qua/Không gán nhãn cho comment này (phím i)"}
+          aria-label="Bỏ qua comment này"
+          aria-pressed={skipped}
+        >
+          <span>{skipped ? '↩️ Khôi phục' : '🚫 Bỏ qua cmt'}</span>
+          <kbd className="kbd">i</kbd>
+        </button>
+      )}
+
       {/* Quick-assign button (phím 0) */}
       <button
         type="button"
@@ -226,6 +255,27 @@ export default function LabelSelector({ label, onChange, disabled, compact }: La
         <Zap className="h-3.5 w-3.5" aria-hidden="true" />
         <span>{isIrrelevantPreset(label) ? 'Bỏ gán nhanh' : 'Không liên quan'}</span>
         <kbd className="kbd">0</kbd>
+      </button>
+
+      {/* Quick-assign button (phím 7) */}
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => onChange({
+          ...(isPositiveNonePreset(label) ? EMPTY_LABEL : POSITIVE_NONE_PRESET_LABEL),
+        })}
+        className={`select-control inline-flex items-center gap-1.5 font-medium transition-colors ${
+          isPositiveNonePreset(label)
+            ? 'bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700'
+            : ''
+        }`}
+        title="Bật/tắt nhãn nhanh: Tích cực · Khác · Có · None · None (phím 7)"
+        aria-label="Gán nhanh nhãn tích cực, none"
+        aria-pressed={isPositiveNonePreset(label)}
+      >
+        <Zap className="h-3.5 w-3.5" aria-hidden="true" />
+        <span>{isPositiveNonePreset(label) ? 'Bỏ gán nhanh' : 'Tích cực, None'}</span>
+        <kbd className="kbd">7</kbd>
       </button>
 
       {/* Quick-assign button (phím 9) */}

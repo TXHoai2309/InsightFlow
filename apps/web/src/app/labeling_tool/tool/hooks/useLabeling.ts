@@ -42,6 +42,7 @@ interface UseLabelingReturn {
   storageError: string | null;
   getLabel: (itemId: string) => DisplayLabel | null;
   setLabel: (itemId: string, label: Label) => void;
+  setItemSkipped: (itemId: string, skipped: boolean) => void;
   skipThread: (thread: Thread) => Promise<void>;
   unskipThread: (thread: Thread) => Promise<void>;
   completeThread: (thread: Thread) => Promise<CompletionResult>;
@@ -240,7 +241,7 @@ export function useLabeling(
         if (!thread._assigned_entity_keys.includes(item._entity_key)) return false;
       }
       const label = labelsRef.current[item._entity_key];
-      return !label || label.skipped || !isLabelComplete(label);
+      return !label || (label.skipped !== true && !isLabelComplete(label));
     });
     if (missing.length > 0) return;
 
@@ -293,6 +294,41 @@ export function useLabeling(
       else pendingWrites.set(item._entity_key, remaining - 1);
     };
     void persistLabel(item, label, false)
+      .then(async () => {
+        releasePendingWrite();
+        const thread = threadsByItemId[itemId];
+        if (thread) await completeThreadWhenReady(thread);
+      })
+      .catch(error => {
+        releasePendingWrite();
+        setStorageError(error instanceof Error ? error.message : String(error));
+      });
+  }, [completeThreadWhenReady, itemsById, persistLabel, threadsByItemId]);
+
+  const setItemSkipped = useCallback((itemId: string, skipped: boolean) => {
+    const item = itemsById[itemId];
+    if (!item) return;
+    setStorageError(null);
+    const pendingWrites = pendingLabelWritesRef.current;
+    pendingWrites.set(item._entity_key, (pendingWrites.get(item._entity_key) ?? 0) + 1);
+    const releasePendingWrite = () => {
+      const remaining = pendingWrites.get(item._entity_key) ?? 0;
+      if (remaining <= 1) pendingWrites.delete(item._entity_key);
+      else pendingWrites.set(item._entity_key, remaining - 1);
+    };
+
+    const existing = labelsRef.current[item._entity_key];
+    const value: Label = existing
+      ? {
+          sentiment: existing.sentiment,
+          topic: existing.topic,
+          relevance: existing.relevance,
+          urgency: existing.urgency,
+          intent: existing.intent,
+        }
+      : EMPTY_LABEL;
+
+    void persistLabel(item, value, skipped)
       .then(async () => {
         releasePendingWrite();
         const thread = threadsByItemId[itemId];
@@ -428,7 +464,7 @@ export function useLabeling(
         if (!thread._assigned_entity_keys.includes(item._entity_key)) return false;
       }
       const label = labelsRef.current[item._entity_key];
-      return !label || label.skipped || !isLabelComplete(label);
+      return !label || (label.skipped !== true && !isLabelComplete(label));
     });
     if (missing.length > 0) {
       return {
@@ -496,6 +532,7 @@ export function useLabeling(
     storageError,
     getLabel,
     setLabel: setLabelForItem,
+    setItemSkipped,
     skipThread,
     unskipThread,
     completeThread,

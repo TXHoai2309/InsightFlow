@@ -165,6 +165,7 @@ interface CommentItemProps {
   isFocused: boolean;
   onFocus: (id: string) => void;
   onChange: (label: Label) => void;
+  onToggleSkip?: () => void;
   isAssigned?: boolean;
 }
 
@@ -175,6 +176,7 @@ export default function CommentItem({
   isFocused,
   onFocus,
   onChange,
+  onToggleSkip,
   isAssigned = true,
 }: CommentItemProps) {
   const isSkipped = label?.skipped === true;
@@ -272,10 +274,16 @@ export default function CommentItem({
 
       {/* Label selectors */}
       <>
-        <LabelSelector label={currentLabel} onChange={onChange} compact />
+        <LabelSelector
+          label={currentLabel}
+          onChange={onChange}
+          compact
+          skipped={isSkipped}
+          onToggleSkip={onToggleSkip}
+        />
         {isFocused && (
           <div className="mt-1.5 text-xs text-blue-500 dark:text-blue-400 opacity-70">
-            ↑ Đang focus — 1/2/3 · q-y · a/s · z/x/c/v · 0 · 9
+            ↑ Đang focus — 1/2/3 · q-y · a/s · z/x/c/v · 0 · 8 · 9 · i
           </div>
         )}
       </>
