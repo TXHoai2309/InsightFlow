@@ -14,12 +14,20 @@ import { useAuth } from "@/hooks/useAuth";
 import { getScopedBrandKey } from "@/lib/brandScope";
 import { useRouter } from "next/navigation";
 import { DashboardService } from "@/lib/services/dashboard";
-import { StatCard } from "./StatCard";
-import { SentimentDonut } from "./SentimentDonut";
+
+// New components
+import { BrandHealthScore } from "./BrandHealthScore";
+import { KeyMetricsRow } from "./KeyMetricsRow";
+import { PriorityActionsTable, PriorityAction } from "./PriorityActionsTable";
+import { StaffPerformanceCard } from "./StaffPerformanceCard";
+import { LeadFunnelCard } from "./LeadFunnelCard";
+
+// Existing components
 import { SentimentTrend } from "./SentimentTrend";
 import { TopSources } from "./TopSources";
 import { TopTopics } from "./TopTopics";
 import { DashboardFilters } from "./DashboardFilters";
+
 import type { DashboardStats, Workspace } from "@/types/dashboard";
 
 interface DashboardProps {
@@ -47,14 +55,14 @@ export function Dashboard({
   } = useDashboardStore();
 
   const { t } = useTranslation();
-
   const [isMounted, setIsMounted] = useState(false);
+  const setFilters = useDashboardStore((state) => state.setFilters);
 
-  // Initialize data
   useEffect(() => {
     setIsMounted(true);
     if (initialStats) setStats(initialStats);
     if (initialWorkspaces.length > 0) setWorkspaces(initialWorkspaces);
+    setFilters({ sentiment: "all", topic: "all" });
   }, []);
 
   const router = useRouter();
@@ -77,72 +85,163 @@ export function Dashboard({
     return correctionRequests.filter((r) => r.status === "pending");
   }, [correctionRequests]);
 
-  // ── Re-calculate tất cả metrics từ filtered mentions ─────────────────────
-  // Hooks phải được gọi trước bất kỳ conditional return nào
-  // mentions/alerts/leads được thêm vào deps để re-calc khi Firestore data load xong
-  const filteredMentions = useMemo(
-    () => getFilteredMentions(),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [filters, mentions],
-  );
+  const overviewMentions = useMemo(() => {
+    const normFilter =
+      filters.workspace_id !== "all"
+        ? filters.workspace_id.toLowerCase().replace(/[\s\-_.]/g, "").trim()
+        : null;
 
-  const filteredAlerts = useMemo(
-    () => getFilteredAlerts(),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [filters, alerts],
-  );
+    const durationMap: Record<string, number> = { "24h": 1, "7d": 7, "30d": 30 };
+    const durationMs = filters.time_range !== "all" ? durationMap[filters.time_range] * 24 * 60 * 60 * 1000 : null;
+    const cutoff = durationMs ? Date.now() - durationMs : null;
 
-  const filteredLeads = useMemo(
-    () => getFilteredLeads(),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [filters, leads],
-  );
+    return mentions.filter((m) => {
+      const b = m.workspace_id ? m.workspace_id.toLowerCase().replace(/[\s\-_.]/g, "").trim() : "";
+      if (normFilter && b !== normFilter) return false;
+      if (filters.platform !== "all" && m.platform !== filters.platform) return false;
+      if (cutoff !== null) {
+        const time = new Date(m.posted_at).getTime();
+        if (!Number.isFinite(time) || time < cutoff || time > Date.now()) return false;
+      }
+      return true;
+    });
+  }, [mentions, filters.workspace_id, filters.time_range, filters.platform]);
 
-  const filteredLeadsForStats = useMemo(
-    () => getFilteredLeadsWithoutUrgency(),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [filters, leads],
-  );
+  const previousOverviewMentions = useMemo(() => {
+    if (filters.time_range === "all") return [];
+    const durationMap: Record<string, number> = { "24h": 1, "7d": 7, "30d": 30 };
+    const durationMs = durationMap[filters.time_range] * 24 * 60 * 60 * 1000;
+    const currentCutoff = Date.now() - durationMs;
+    const previousCutoff = currentCutoff - durationMs;
 
-  // Stats tính lại từ filtered data, hot leads count = tất cả hot leads theo filter Dashboard
+    const normFilter =
+      filters.workspace_id !== "all"
+        ? filters.workspace_id.toLowerCase().replace(/[\s\-_.]/g, "").trim()
+        : null;
+
+    return mentions.filter((m) => {
+      const b = m.workspace_id ? m.workspace_id.toLowerCase().replace(/[\s\-_.]/g, "").trim() : "";
+      if (normFilter && b !== normFilter) return false;
+      if (filters.platform !== "all" && m.platform !== filters.platform) return false;
+      const time = new Date(m.posted_at).getTime();
+      return time >= previousCutoff && time < currentCutoff;
+    });
+  }, [mentions, filters.workspace_id, filters.time_range, filters.platform]);
+
+  const filteredAlerts = useMemo(() => getFilteredAlerts(), [filters, alerts, getFilteredAlerts]);
+  const filteredLeadsForStats = useMemo(() => getFilteredLeadsWithoutUrgency(), [filters, leads, getFilteredLeadsWithoutUrgency]);
+
   const stats = useMemo(
-    () =>
-      DashboardService.calculateStats(
-        filteredMentions,
-        filteredAlerts,
-        filteredLeadsForStats,
-      ),
-    [filteredMentions, filteredAlerts, filteredLeadsForStats],
+    () => DashboardService.calculateStats(overviewMentions, filteredAlerts, filteredLeadsForStats),
+    [overviewMentions, filteredAlerts, filteredLeadsForStats],
   );
 
-  // Top sources tính từ toàn bộ mentions gốc trong firebase (không áp dụng lọc)
-  const topSources = useMemo(
-    () => DashboardService.calculateTopSources(mentions),
-    [mentions],
+  const prevStats = useMemo(
+    () => DashboardService.calculateStats(previousOverviewMentions, [], []),
+    [previousOverviewMentions],
   );
 
-  // Top topics tính lại từ filtered mentions
-  const topTopics = useMemo(
-    () => DashboardService.calculateTopTopics(filteredMentions),
-    [filteredMentions],
-  );
+  const trends = useMemo(() => {
+    const prevTotal = prevStats.total_mentions;
+    const totalTrend = prevTotal === 0 ? 0 : ((stats.total_mentions - prevTotal) / prevTotal) * 100;
+    const sentimentTrend = stats.net_sentiment - prevStats.net_sentiment;
+    const leadsTrend = prevStats.hot_leads_today === 0
+      ? 0
+      : Math.round(((stats.hot_leads_today - prevStats.hot_leads_today) / prevStats.hot_leads_today) * 100);
+    return { total: totalTrend, sentiment: sentimentTrend, leads: leadsTrend };
+  }, [stats, prevStats]);
 
-  // Conditional render (sau tất cả hooks)
+  const topSources = useMemo(() => DashboardService.calculateTopSources(overviewMentions), [overviewMentions]);
+
+  const topTopics = useMemo(() => {
+    const current = DashboardService.calculateTopTopics(overviewMentions);
+    const prev = DashboardService.calculateTopTopics(previousOverviewMentions);
+    return current.map(t => {
+      const prevCount = prev.find(p => p.name === t.name)?.count || 0;
+      const trend = prevCount === 0 ? 0 : Math.round(((t.count - prevCount) / prevCount) * 100);
+      return { ...t, trend };
+    });
+  }, [overviewMentions, previousOverviewMentions]);
+
   if (!isMounted) {
-    return <div className="p-8">Loading...</div>;
+    return <div className="p-8 text-center text-sm">Loading...</div>;
   }
 
-  // ── Derived display values ────────────────────────────────────────────────
-  const sentimentBadge =
-    stats.net_sentiment > 20
-      ? { text: t("dashboard.filters.positive"), color: "bg-green-500/10 text-green-700" }
-      : stats.net_sentiment < -5
-        ? { text: t("dashboard.filters.negative"), color: "bg-red-500/10 text-red-700" }
-        : { text: t("dashboard.filters.neutral"), color: "bg-slate-500/10 text-slate-700" };
+  // Calculate Mock Brand Health Score
+  // Assuming net_sentiment is roughly -100 to 100, we normalize to 0-100
+  // More realistically, brand health usually stays around 50-80
+  const baseHealth = 60 + (stats.net_sentiment / 2);
+  const brandHealthScore = Math.min(100, Math.max(0, Math.round(baseHealth)));
+  const brandHealthTrend = Math.round(trends.sentiment / 2) || 0;
+
+  // Compile Key Metrics
+  const metricsRowData = {
+    mentions: { 
+      value: stats.total_mentions, 
+      trend: `${Math.abs(Math.round(trends.total))}%`, 
+      isPositive: trends.total >= 0 
+    },
+    negativeMentions: { 
+      value: stats.negative_count, 
+      trend: `↑ ${Math.max(0, stats.negative_count - prevStats.negative_count)}` 
+    },
+    aiAlerts: { 
+      value: stats.alerts_today, 
+      high: filteredAlerts.filter(a => a.severity === 'high' || a.severity === 'critical').length 
+    },
+    newLeads: { 
+      value: stats.hot_leads_today, 
+      trend: `+${Math.abs(Math.round(trends.leads))}` 
+    },
+    unprocessedContacts: { 
+      value: leads.filter(l => l.status === 'new').length
+    },
+    monitoredCrises: { 
+      value: filteredAlerts.filter(a => a.severity === 'critical').length 
+    }
+  };
+
+  // Compile Priority Actions
+  const priorityActions: PriorityAction[] = [];
+  if (stats.negative_count > 0) {
+    priorityActions.push({
+      id: "neg-mentions",
+      type: "negative",
+      title: `${stats.negative_count} ${t("dashboard.priorityActions.negMentions", "Bài viết tiêu cực")}`,
+      description: t("dashboard.priorityActions.negDesc", "Cần duyệt và phân công người xử lý ngay"),
+      actionText: t("dashboard.priorityActions.reviewNow", "Xem bài viết"),
+      link: "/mentions?sentiment=negative",
+      urgency: "high"
+    });
+  }
+  const highAlerts = filteredAlerts.filter(a => a.severity === 'high' || a.severity === 'critical');
+  if (highAlerts.length > 0) {
+    priorityActions.push({
+      id: "high-alerts",
+      type: "alert",
+      title: `${highAlerts.length} ${t("dashboard.priorityActions.criticalAlerts", "Cảnh báo khẩn cấp")}`,
+      description: t("dashboard.priorityActions.alertDesc", "AI phát hiện dấu hiệu khủng hoảng"),
+      actionText: t("dashboard.priorityActions.assign", "Duyệt cảnh báo"),
+      link: "/alerts",
+      urgency: "medium"
+    });
+  }
+  const newLeads = leads.filter(l => l.status === 'new');
+  if (newLeads.length > 0) { 
+    priorityActions.push({
+      id: "unassigned-leads",
+      type: "lead",
+      title: `${newLeads.length} ${t("dashboard.priorityActions.leadsUnassigned", "Contact chưa phân công")}`,
+      description: t("dashboard.priorityActions.leadDesc", "Khách hàng tiềm năng đang chờ phản hồi"),
+      actionText: t("dashboard.priorityActions.distribute", "Phân công ngay"),
+      link: "/contacts?assigned_to=unassigned",
+      urgency: "low"
+    });
+  }
+  // Remove mock staff overdue action unless we actually calculate it
 
   return (
-    <div className="space-y-4 md:space-y-6">
-      {/* Global Filters */}
+    <div className="space-y-6 md:space-y-8 max-w-[1600px] mx-auto pb-10">
       <DashboardFilters workspaces={workspaces} />
 
       {isManager && pendingRequests.length > 0 && (
@@ -170,83 +269,78 @@ export function Dashboard({
         </div>
       )}
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-        <StatCard
-          title={t("dashboard.stats.totalMentions")}
-          value={stats.total_mentions.toLocaleString("vi-VN")}
-          icon={
-            <span className="material-symbols-outlined text-primary">
-              analytics
-            </span>
-          }
-          bgColor="bg-primary/10"
-          textColor="text-primary"
-        />
+      {/* 1. Brand Health Score */}
+      <BrandHealthScore 
+        score={brandHealthScore} 
+        trend={brandHealthTrend} 
+        sentiment={{
+          positive: stats.positive_count,
+          neutral: stats.neutral_count,
+          negative: stats.negative_count
+        }}
+      />
 
-        <StatCard
-          title={t("dashboard.stats.sentimentScore")}
-          value={`${stats.net_sentiment}%`}
-          subtitle={sentimentBadge.text}
-          icon={
-            <span className="material-symbols-outlined text-green-600">
-              mood
-            </span>
-          }
-          bgColor="bg-green-500/10"
-          textColor={
-            stats.net_sentiment > 20
-              ? "text-green-600"
-              : stats.net_sentiment < -5
-                ? "text-red-600"
-                : "text-slate-600"
-          }
-        />
+      {/* 2. Key Metrics Today */}
+      <KeyMetricsRow metrics={metricsRowData} />
 
-        <StatCard
-          title={t("dashboard.stats.hotLeads")}
-          value={stats.hot_leads_today}
-          icon={
-            <span className="material-symbols-outlined text-amber-600">
-              shopping_cart
-            </span>
-          }
-          bgColor="bg-amber-500/10"
-          textColor="text-amber-600"
-        />
-      </div>
+      {/* Main Grid for 3, 4, 5, 6 */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        {/* Left Column (8 cols): Priority Actions & Employee Performance */}
+        <div className="lg:col-span-8 space-y-6">
+          {/* 3. Priority Actions */}
+          <PriorityActionsTable actions={priorityActions} />
 
-      {/* Charts Row */}
-      <div className="grid grid-cols-5 gap-6">
-        <div className="col-span-3">
-          {/* SentimentTrend nhận filteredMentions — hiển thị theo posted_at */}
-          <SentimentTrend filteredMentions={filteredMentions} />
+          {/* 5. Employee Performance */}
+          <StaffPerformanceCard 
+            working={14} 
+            completedToday={28} 
+            overdue={3} 
+            avgResponseTime="15m" 
+            successRate={92} 
+          />
         </div>
-        <div className="col-span-2">
-          {/* SentimentDonut dùng counts từ filtered stats */}
-          <SentimentDonut
-            positive={stats.positive_count}
-            neutral={stats.neutral_count}
-            negative={stats.negative_count}
+
+        {/* Right Column (4 cols): Trends & Lead Pipeline */}
+        <div className="lg:col-span-4 space-y-6">
+          {/* 4. Brand Trends */}
+          <div className="bg-white dark:bg-[#1a1b1e] rounded-[16px] border border-[var(--color-border)] shadow-sm p-6">
+            <h3 className="font-bold text-lg text-gray-900 dark:text-white flex items-center mb-4 uppercase tracking-wide">
+              <span className="material-symbols-outlined mr-2 text-primary">trending_up</span>
+              {t("dashboard.trends.title", "Xu hướng thương hiệu")}
+            </h3>
+            <SentimentTrend filteredMentions={overviewMentions} />
+          </div>
+
+          {/* 6. Lead Pipeline */}
+          <LeadFunnelCard 
+            funnelData={{
+              new: leads.length,
+              qualified: leads.filter(l => ['processing', 'completed'].includes(l.status)).length,
+              contacted: leads.filter(l => ['processing', 'completed'].includes(l.status)).length,
+              negotiating: leads.filter(l => ['completed'].includes(l.status)).length,
+              won: leads.filter(l => l.status === 'completed').length
+            }}
           />
         </div>
       </div>
 
-      {/* Sources, Topics, AI Summary */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 md:gap-6">
-        <div className="lg:col-span-3">
+      {/* Bottom Row: Top Sources and Top Topics (7, 8) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* 7. Top Sources */}
+        <div className="lg:col-span-4">
           <TopSources sources={topSources} />
         </div>
-
-        <div className="lg:col-span-2 space-y-4 md:space-y-6">
+        
+        {/* 8. Top Topics */}
+        <div className="lg:col-span-8">
           <TopTopics topics={topTopics} />
         </div>
       </div>
 
-      {/* Load more data indicator */}
       {isLoading && (
-        <div className="text-center py-4 text-[var(--color-text-secondary)]">
-          <p className="text-sm">Đang tải dữ liệu...</p>
+        <div className="text-center py-4 text-gray-500">
+          <p className="text-sm">{t("common.loading", "Đang tải dữ liệu...")}</p>
         </div>
       )}
     </div>

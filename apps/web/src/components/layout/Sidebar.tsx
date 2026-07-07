@@ -25,15 +25,17 @@ interface NavItem {
 const navItems: NavItem[] = [
   { href: "/admin/create-brand-manager", label: "Tao tai khoan brand", icon: "ti-user-plus" },
   { href: "/admin/brand-managers", label: "Danh sach brand", icon: "ti-building-store" },
+  { href: "/labeling_tool", label: "Gan nhan du lieu", icon: "ti-tags" },
   { href: "/dashboard", label: "nav.dashboard", icon: "ti-layout-dashboard" },
-  { href: "/team/create-staff", label: "Tao nhan vien", icon: "ti-user-plus" },
-  { href: "/team/staff", label: "Danh sach nhan vien", icon: "ti-users" },
+  { href: "/team", label: "Quản lý đội ngũ", icon: "ti-users" },
   { href: "/mentions", label: "nav.mentions", icon: "ti-message-circle" },
+  { href: "/label-requests", label: "Duyet yeu cau", icon: "ti-clipboard-check" },
   { href: "/alerts", label: "nav.alerts", icon: "ti-bell" },
   { href: "/leads", label: "nav.leads", icon: "ti-chart-bar" },
   { href: "/reports", label: "nav.reports", icon: "ti-file-analytics" },
   { href: "/settings/brand", label: "nav.brands", icon: "ti-settings" },
 ];
+
 
 interface SidebarProps {
   isOpen: boolean;

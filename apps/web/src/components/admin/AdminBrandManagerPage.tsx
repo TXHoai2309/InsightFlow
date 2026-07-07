@@ -3,9 +3,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useTranslation } from "react-i18next";
-import { collection, getDocs, limit, query } from "firebase/firestore";
+import { collection, doc, getDocs, limit, query, serverTimestamp, setDoc, where } from "firebase/firestore";
 import { EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import { dbData } from "@/lib/firebase";
 import { validateStrongPassword } from "@/lib/passwordPolicy";
 import { buildBrandEmail, getBrandEmailDomain, slugifyBrandDomain, type BrandOption } from "@/lib/brandEmail";
@@ -257,21 +257,33 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
     setActionError("");
 
     try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) {
+      if (!auth.currentUser) {
         throw new Error(t("admin.brandManager.errors.needAdmin"));
       }
 
-      const response = await fetch("/api/admin/brand-managers", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await response.json();
+      const snapshot = await getDocs(query(collection(db, "users"), where("role", "==", "brand_manager")));
+      const managers = snapshot.docs
+        .map((doc) => {
+          const data = doc.data();
+          return {
+            uid: String(data.uid || doc.id),
+            email: String(data.email || ""),
+            displayName: String(data.displayName || ""),
+            role: "brand_manager",
+            brandId: String(data.brandId || ""),
+            brandName: String(data.brandName || ""),
+            companyDomain: String(data.companyDomain || ""),
+            permissions: Array.isArray(data.permissions) ? data.permissions : [],
+            defaultRoute: String(data.defaultRoute || "/dashboard"),
+            disabled: data.disabled === true,
+            createdAt: data.createdAt,
+            updatedAt: data.updatedAt,
+            hasTemporaryPassword: data.temporaryPasswordIssued === true && Boolean(data.temporaryPassword),
+          } as BrandManagerAccount;
+        })
+        .sort((a, b) => a.displayName.localeCompare(b.displayName));
 
-      if (!response.ok) {
-        throw new Error(data.error || "Khong the tai danh sach Brand Manager.");
-      }
-
-      setBrandManagers(data.data || []);
+      setBrandManagers(managers);
     } catch (err: any) {
       setActionError(err.message || "Khong the tai danh sach Brand Manager.");
     } finally {
@@ -406,6 +418,32 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
       );
     } catch (err: any) {
       setActionError(err.message || "Không thể cập nhật trạng thái tài khoản.");
+    }
+  };
+
+  const handleToggleStatusDirect = async (account: BrandManagerAccount) => {
+    setActionError("");
+
+    try {
+      if (!auth.currentUser) throw new Error(t("admin.brandManager.errors.needAdmin"));
+
+      const disabled = !account.disabled;
+      const updatedAccount = { ...account, disabled };
+
+      await setDoc(
+        doc(db, "users", account.uid),
+        {
+          disabled,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      setBrandManagers((current) =>
+        current.map((item) => (item.uid === account.uid ? updatedAccount : item)),
+      );
+    } catch (err: any) {
+      setActionError(err.message || "Khong the cap nhat trang thai tai khoan.");
     }
   };
 
@@ -937,7 +975,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
                           </button>
                           <button
                             type="button"
-                            onClick={() => handleToggleStatus(item)}
+                            onClick={() => handleToggleStatusDirect(item)}
                             className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold transition ${item.disabled
                               ? "bg-emerald-600 text-white hover:bg-emerald-700"
                               : "bg-red-600 text-white hover:bg-red-700"

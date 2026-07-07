@@ -1,59 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getApiBaseUrl } from "@/lib/apiProxy";
-
-function getAuthorization(request: NextRequest) {
-  return request.headers.get("authorization");
-}
+import { verifyBearerToken } from "@/lib/server/auth";
+import { createStaff, listStaff, StaffServiceError } from "@/lib/server/staffService";
 
 export async function GET(request: NextRequest) {
   try {
-    const authorization = getAuthorization(request);
-    if (!authorization) {
-      return NextResponse.json({ error: "Ban can dang nhap bang tai khoan Quan ly thuong hieu." }, { status: 401 });
+    const user = await verifyBearerToken(request.headers.get("authorization"));
+    if (!user) {
+      return NextResponse.json({ error: "Bạn cần đăng nhập bằng tài khoản Quản lý thương hiệu." }, { status: 401 });
     }
 
-    const response = await fetch(`${getApiBaseUrl(request)}/api/staff`, {
-      method: "GET",
-      headers: { Authorization: authorization },
-    });
-    const data = await response.json();
-
-    if (!response.ok) {
-      return NextResponse.json({ error: data.error || "Khong the tai danh sach nhan vien." }, { status: response.status });
-    }
-
-    return NextResponse.json(data, { status: response.status });
+    const data = await listStaff(user);
+    return NextResponse.json({ success: true, data });
   } catch (error: any) {
-    console.error("[API Proxy] load staff error:", error);
-    return NextResponse.json({ error: "Loi may chu. Vui long thu lai sau." }, { status: 500 });
+    if (error instanceof StaffServiceError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    console.error("[Staff API] load error:", error);
+    return NextResponse.json({ error: "Không thể tải danh sách nhân viên. Vui lòng thử lại sau." }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const authorization = getAuthorization(request);
-    if (!authorization) {
-      return NextResponse.json({ error: "Ban can dang nhap bang tai khoan Quan ly thuong hieu." }, { status: 401 });
+    const user = await verifyBearerToken(request.headers.get("authorization"));
+    if (!user) {
+      return NextResponse.json({ error: "Bạn cần đăng nhập bằng tài khoản Quản lý thương hiệu." }, { status: 401 });
     }
 
     const body = await request.json();
-    const response = await fetch(`${getApiBaseUrl(request)}/api/staff`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: authorization,
-      },
-      body: JSON.stringify(body),
-    });
-    const data = await response.json();
-
-    if (!response.ok) {
-      return NextResponse.json({ error: data.error || "Khong the tao tai khoan nhan vien." }, { status: response.status });
-    }
-
-    return NextResponse.json(data, { status: response.status });
+    const result = await createStaff(user, body);
+    return NextResponse.json({ success: true, ...result }, { status: result.created ? 201 : 200 });
   } catch (error: any) {
-    console.error("[API Proxy] create staff error:", error);
-    return NextResponse.json({ error: "Loi may chu. Vui long thu lai sau." }, { status: 500 });
+    if (error instanceof StaffServiceError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    console.error("[Staff API] create error:", error);
+    return NextResponse.json({ error: "Không thể tạo tài khoản nhân viên. Vui lòng thử lại sau." }, { status: 500 });
   }
 }

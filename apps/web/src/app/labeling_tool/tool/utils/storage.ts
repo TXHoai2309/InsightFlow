@@ -1,4 +1,4 @@
-﻿import {
+import {
   Label,
   Person,
   StoredLabel,
@@ -190,13 +190,20 @@ export async function saveThreadState(
   return state;
 }
 
+export async function deleteThreadState(person: Person, threadId: string): Promise<void> {
+  const db = await openDatabase();
+  const transaction = db.transaction(THREAD_STORE, 'readwrite');
+  transaction.objectStore(THREAD_STORE).delete(threadStorageKey(person, threadId));
+  await transactionDone(transaction);
+}
+
 export interface LabelStats {
   totalLabeled: number;
   totalSkipped: number;
   positive: number;
   negative: number;
   neutral: number;
-  crisis: number;
+  urgent: number;
   todayLabeled: number;
   intentHot: number;
   intentWarm: number;
@@ -212,7 +219,7 @@ export function computeStats(labels: Record<string, StoredLabel>): LabelStats {
     positive: 0,
     negative: 0,
     neutral: 0,
-    crisis: 0,
+    urgent: 0,
     todayLabeled: 0,
     intentHot: 0,
     intentWarm: 0,
@@ -229,7 +236,7 @@ export function computeStats(labels: Record<string, StoredLabel>): LabelStats {
     if (entry.sentiment === 'positive') stats.positive++;
     else if (entry.sentiment === 'negative') stats.negative++;
     else if (entry.sentiment === 'neutral') stats.neutral++;
-    if (entry.urgency === 'crisis') stats.crisis++;
+    if (entry.urgency === 'urgent') stats.urgent++;
     if (entry.labeled_at.startsWith(today)) stats.todayLabeled++;
     if (entry.intent === 'hot') stats.intentHot++;
     else if (entry.intent === 'warm') stats.intentWarm++;

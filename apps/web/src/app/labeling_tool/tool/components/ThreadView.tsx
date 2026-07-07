@@ -12,11 +12,13 @@ interface ThreadViewProps {
   getLabel: (itemId: string) => (Label & { skipped?: boolean; needs_review?: boolean }) | null;
   setLabel: (itemId: string, label: Label) => void;
   skipThread: (thread: Thread) => Promise<void>;
+  unskipThread: (thread: Thread) => Promise<void>;
   completeThread: (thread: Thread) => Promise<{ ok: boolean; message?: string }>;
   onNext: () => void;
   onPrev: () => void;
   focusedItemId: string | null;
   setFocusedItemId: (id: string | null) => void;
+  threadState: any;
 }
 
 function HighlightedText({ text, brand }: { text: string; brand: string }) {
@@ -35,8 +37,58 @@ function HighlightedText({ text, brand }: { text: string; brand: string }) {
 function formatTime(iso: string): string {
   if (!iso) return '';
   try {
-    const d = new Date(iso);
+    let d: Date | null = null;
+    const cleanStr = iso.trim();
+
+    // 1. Check HH:mm(:ss) DD/MM/YYYY
+    const hmDmYRegex = /^(?:(\d{1,2}):(\d{2})(?::(\d{2}))?\s+)?(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/;
+    const matchHmDmY = cleanStr.match(hmDmYRegex);
+    if (matchHmDmY) {
+      const hour = matchHmDmY[1] ? parseInt(matchHmDmY[1], 10) : 0;
+      const minute = matchHmDmY[2] ? parseInt(matchHmDmY[2], 10) : 0;
+      const second = matchHmDmY[3] ? parseInt(matchHmDmY[3], 10) : 0;
+      const day = parseInt(matchHmDmY[4], 10);
+      const month = parseInt(matchHmDmY[5], 10) - 1; // 0-indexed
+      const year = parseInt(matchHmDmY[6], 10);
+      d = new Date(year, month, day, hour, minute, second);
+    }
+
+    // 2. Check DD/MM/YYYY HH:mm(:ss)
+    if (!d || isNaN(d.getTime())) {
+      const dmYRegex = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/;
+      const matchDmY = cleanStr.match(dmYRegex);
+      if (matchDmY) {
+        const day = parseInt(matchDmY[1], 10);
+        const month = parseInt(matchDmY[2], 10) - 1;
+        const year = parseInt(matchDmY[3], 10);
+        const hour = matchDmY[4] ? parseInt(matchDmY[4], 10) : 0;
+        const minute = matchDmY[5] ? parseInt(matchDmY[5], 10) : 0;
+        const second = matchDmY[6] ? parseInt(matchDmY[6], 10) : 0;
+        d = new Date(year, month, day, hour, minute, second);
+      }
+    }
+
+    // 3. Check YYYY-MM-DD HH:mm(:ss)
+    if (!d || isNaN(d.getTime())) {
+      const YmdRegex = /^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/;
+      const matchYmd = cleanStr.match(YmdRegex);
+      if (matchYmd) {
+        const year = parseInt(matchYmd[1], 10);
+        const month = parseInt(matchYmd[2], 10) - 1;
+        const day = parseInt(matchYmd[3], 10);
+        const hour = matchYmd[4] ? parseInt(matchYmd[4], 10) : 0;
+        const minute = matchYmd[5] ? parseInt(matchYmd[5], 10) : 0;
+        const second = matchYmd[6] ? parseInt(matchYmd[6], 10) : 0;
+        d = new Date(year, month, day, hour, minute, second);
+      }
+    }
+
+    if (!d || isNaN(d.getTime())) {
+      d = new Date(iso);
+    }
+
     if (isNaN(d.getTime())) return iso;
+
     return d.toLocaleString('vi-VN', {
       year: 'numeric', month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit',
@@ -223,11 +275,13 @@ export default function ThreadView({
   getLabel,
   setLabel,
   skipThread,
+  unskipThread,
   completeThread,
   onNext,
   onPrev,
   focusedItemId,
   setFocusedItemId,
+  threadState,
 }: ThreadViewProps) {
   const { post, comments } = thread;
   const [completionError, setCompletionError] = useState<string | null>(null);
@@ -244,10 +298,18 @@ export default function ThreadView({
   const isPostFocused = focusedItemId === post._internal_id;
   const isPostSkipped = postLabel?.skipped === true;
 
+  const isPostAssigned = true;
+
   // For address-only posts, count doesn't include the synthetic post item
-  const allItems = isAddressOnly
+  const allItems = (isAddressOnly
     ? comments.flatMap(c => [c.comment, ...c.replies])
-    : [post, ...comments.flatMap(c => [c.comment, ...c.replies])];
+    : [post, ...comments.flatMap(c => [c.comment, ...c.replies])]
+  ).filter(item => {
+    if (thread._data_source === 'supabase' && thread._assigned_entity_keys) {
+      return thread._assigned_entity_keys.includes(item._entity_key);
+    }
+    return true;
+  });
 
   const countComplete = allItems.filter(i => {
     const l = getLabel(i._internal_id);
@@ -256,6 +318,8 @@ export default function ThreadView({
   const countReview = allItems.filter(i => getLabel(i._internal_id)?.needs_review === true).length;
   const countSkipped = allItems.filter(i => getLabel(i._internal_id)?.skipped === true).length;
   const countMissing = Math.max(0, allItems.length - countComplete - countReview - countSkipped);
+
+  const isThreadSkipped = threadState?.status === 'skipped' || (allItems.length > 0 && countSkipped === allItems.length);
 
   const handleSkip = useCallback(() => {
     setCompletionError(null);
@@ -357,10 +421,11 @@ export default function ThreadView({
         /* Normal post card */
         <div
           className={`card p-4 border-l-4 transition-all duration-150
-            ${isPostSkipped ? 'border-l-gray-400 opacity-50 item-skipped'
+            ${!isPostAssigned ? 'border-l-gray-200 dark:border-l-surface-600'
+              : isPostSkipped ? 'border-l-gray-400 opacity-50 item-skipped'
               : isPostComplete ? 'border-l-emerald-500 item-complete'
               : 'border-l-orange-400 item-unlabeled'}
-            ${isPostFocused ? 'item-focused' : ''}
+            ${isPostFocused ? 'item-focused z-20 relative' : ''}
           `}
           onMouseEnter={() => setFocusedItemId(post._internal_id)}
           onClick={() => setFocusedItemId(post._internal_id)}
@@ -411,7 +476,7 @@ export default function ThreadView({
           </div>
 
           {/* Post labels */}
-          {!isPostSkipped && (
+          {isPostAssigned && (
             <div className="mt-3 pt-3 border-t border-gray-100 dark:border-surface-600">
               <LabelSelector
                 label={postLabelVal}
@@ -420,7 +485,7 @@ export default function ThreadView({
               />
               {isPostFocused && (
                 <p className="text-xs text-blue-500 dark:text-blue-400 opacity-70 mt-1">
-                  ↑ Đang focus — phím tắt: 1/2/3 · q-y · a/s · z/x/c
+                  ↑ Đang focus — phím tắt: 1/2/3 · q-y · a/s · z/x/c/v · 0 · 9
                 </p>
               )}
             </div>
@@ -446,6 +511,7 @@ export default function ThreadView({
             isFocused={focusedItemId === comment._internal_id}
             onFocus={setFocusedItemId}
             onChange={(l) => setLabel(comment._internal_id, l)}
+            isAssigned={true}
           />
           {replies.map(reply => (
             <CommentItem
@@ -456,6 +522,7 @@ export default function ThreadView({
               isFocused={focusedItemId === reply._internal_id}
               onFocus={setFocusedItemId}
               onChange={(l) => setLabel(reply._internal_id, l)}
+              isAssigned={true}
             />
           ))}
         </div>
@@ -475,9 +542,15 @@ export default function ThreadView({
         </div>
       )}
       <div className="flex items-center justify-between card px-4 py-3 mt-1">
-        <button onClick={handleSkip} className="btn-secondary text-sm gap-2">
-          ⏭ Bỏ qua thread
-        </button>
+        {isThreadSkipped ? (
+          <button onClick={() => void unskipThread(thread)} className="btn-secondary text-sm gap-2 border-emerald-500/50 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/20">
+            ↩️ Khôi phục thread
+          </button>
+        ) : (
+          <button onClick={handleSkip} className="btn-secondary text-sm gap-2">
+            ⏭ Bỏ qua thread
+          </button>
+        )}
         <div className="text-xs text-gray-400 dark:text-gray-500 hidden sm:block">
           Space = Bỏ qua · Enter = Xong → Next
         </div>

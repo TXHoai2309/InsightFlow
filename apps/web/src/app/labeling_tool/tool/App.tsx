@@ -1,7 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Person, Label, Thread, TopicKey, TOPIC_HOTKEYS } from './types';
+import {
+  Person, Label, Thread, TopicKey, TOPIC_HOTKEYS,
+  EMPTY_LABEL, IRRELEVANT_PRESET_LABEL, isIrrelevantPreset,
+  POSITIVE_COLD_PRESET_LABEL, isPositiveColdPreset,
+} from './types';
 import { useData } from './hooks/useData';
 import { useLabeling } from './hooks/useLabeling';
 import ThreadView from './components/ThreadView';
@@ -35,6 +39,7 @@ const KBD_STYLE = `
 const SUPABASE_URL_KEY = 'insightflow_supabase_url';
 const SUPABASE_ANON_KEY = 'insightflow_supabase_anon_key';
 const LABELING_SESSION_KEY = 'insightflow_labeling_session';
+const SUPABASE_CONFIG_PATH = process.env.NEXT_PUBLIC_SUPABASE_CONFIG_PATH || '';
 
 interface LabelingSession {
   platform: PlatformFilter;
@@ -42,6 +47,7 @@ interface LabelingSession {
   limit: number;
   dateFrom: string;
   dateTo: string;
+  brand: string;
   currentThreadId: string | null;
   savedAt: string;
 }
@@ -59,6 +65,7 @@ function loadLabelingSession(): LabelingSession | null {
       limit: Number(parsed.limit) || 20,
       dateFrom: parsed.dateFrom ?? '',
       dateTo: parsed.dateTo ?? '',
+      brand: parsed.brand ?? 'all',
       currentThreadId: parsed.currentThreadId ?? null,
       savedAt: parsed.savedAt ?? new Date().toISOString(),
     };
@@ -97,17 +104,28 @@ export default function App() {
   const [queueDateTo, setQueueDateTo] = useState(
     () => initialSessionRef.current?.dateTo ?? '',
   );
+  const [supabaseBrandQuery, setSupabaseBrandQuery] = useState(
+    () => initialSessionRef.current?.brand ?? 'all',
+  );
   const [pendingCounts, setPendingCounts] = useState<PendingAssignmentCounts | null>(null);
   const [pendingCountsLoading, setPendingCountsLoading] = useState(false);
   const [pendingRestoreThreadId, setPendingRestoreThreadId] = useState<string | null>(
     () => initialSessionRef.current?.currentThreadId ?? null,
   );
   const autoLoadAttemptedRef = useRef(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const handleCancelLoad = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+  }, []);
 
   useEffect(() => {
     if (supabaseUrl.trim() && supabaseAnonKey.trim()) return;
+    if (!SUPABASE_CONFIG_PATH.trim()) return;
     let cancelled = false;
-    fetch('/supabase-config.json', { cache: 'no-store' })
+    fetch(SUPABASE_CONFIG_PATH, { cache: 'no-store' })
       .then(response => response.ok ? response.json() : null)
       .then((config: unknown) => {
         if (cancelled || !config || typeof config !== 'object') return;
@@ -152,7 +170,7 @@ export default function App() {
   const labeling = useLabeling(person, filteredThreads, activeSupabaseConfig);
   const {
     currentThreadIndex, labels, threadStates, stats, storageError,
-    getLabel, setLabel, skipThread, completeThread,
+    getLabel, setLabel, skipThread, unskipThread, completeThread,
     goNext, goPrev, jumpTo,
     focusedItemId, setFocusedItemId,
     totalThreads,
@@ -179,6 +197,7 @@ export default function App() {
       limit: supabaseLimit,
       dateFrom: queueDateFrom,
       dateTo: queueDateTo,
+      brand: supabaseBrandQuery,
       currentThreadId: threadId,
       savedAt: new Date().toISOString(),
     };
@@ -188,6 +207,7 @@ export default function App() {
     platformFilter,
     queueDateFrom,
     queueDateTo,
+    supabaseBrandQuery,
     supabaseAnonKey,
     supabaseLimit,
     supabaseUrl,
@@ -293,6 +313,25 @@ export default function App() {
       if (key === '1') { next.sentiment = 'positive'; updated = true; }
       else if (key === '2') { next.sentiment = 'negative'; updated = true; }
       else if (key === '3') { next.sentiment = 'neutral'; updated = true; }
+      // Quick presets
+      else if (key === '0') {
+        const toggled = isIrrelevantPreset(lbl) ? EMPTY_LABEL : IRRELEVANT_PRESET_LABEL;
+        next.sentiment = toggled.sentiment;
+        next.topic = [...toggled.topic];
+        next.relevance = toggled.relevance;
+        next.urgency = toggled.urgency;
+        next.intent = toggled.intent;
+        updated = true;
+      }
+      else if (key === '9') {
+        const toggled = isPositiveColdPreset(lbl) ? EMPTY_LABEL : POSITIVE_COLD_PRESET_LABEL;
+        next.sentiment = toggled.sentiment;
+        next.topic = [...toggled.topic];
+        next.relevance = toggled.relevance;
+        next.urgency = toggled.urgency;
+        next.intent = toggled.intent;
+        updated = true;
+      }
       // Topic toggles
       else if (key in TOPIC_HOTKEYS) {
         const topic = TOPIC_HOTKEYS[key] as TopicKey;
@@ -305,9 +344,11 @@ export default function App() {
       else if (key === 'a') { next.relevance = true; updated = true; }
       else if (key === 's') { next.relevance = false; updated = true; }
       // Urgency
-      else if (key === 'z') { next.urgency = 'normal'; updated = true; }
-      else if (key === 'x') { next.urgency = 'notable'; updated = true; }
-      else if (key === 'c') { next.urgency = 'crisis'; updated = true; }
+      else if (key === 'z') { next.urgency = 'low'; updated = true; }
+      else if (key === 'x') { next.urgency = 'medium'; updated = true; }
+      else if (key === 'c') { next.urgency = 'high'; updated = true; }
+      else if (key === 'v') { next.urgency = 'urgent'; updated = true; }
+      else if (key === 'd') { next.urgency = 'none'; updated = true; }
       // Intent
       else if (key === 'h') { next.intent = 'hot';  updated = true; }
       else if (key === 'm') { next.intent = 'warm'; updated = true; }
@@ -329,19 +370,34 @@ export default function App() {
   ]);
 
   const handleSupabaseLoad = useCallback(async (restoreThreadId?: string | null) => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     localStorage.setItem(SUPABASE_URL_KEY, supabaseUrl.trim());
     localStorage.setItem(SUPABASE_ANON_KEY, supabaseAnonKey.trim());
     setDataMode('supabase');
     setPendingRestoreThreadId(restoreThreadId ?? currentThread?.post._entity_key ?? null);
     saveLabelingSession(restoreThreadId ?? currentThread?.post._entity_key ?? null);
-    await loadFromSupabase(
-      { url: supabaseUrl.trim(), anonKey: supabaseAnonKey.trim() },
-      platformFilter,
-      supabaseLimit,
-      assignmentView,
-      person,
-      { from: queueDateFrom || undefined, to: queueDateTo || undefined },
-    );
+    
+    try {
+      await loadFromSupabase(
+        { url: supabaseUrl.trim(), anonKey: supabaseAnonKey.trim() },
+        platformFilter,
+        supabaseLimit,
+        assignmentView,
+        person,
+        { from: queueDateFrom || undefined, to: queueDateTo || undefined },
+        supabaseBrandQuery,
+        controller.signal,
+      );
+    } finally {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
+    }
   }, [
     assignmentView,
     currentThread,
@@ -350,6 +406,7 @@ export default function App() {
     platformFilter,
     queueDateFrom,
     queueDateTo,
+    supabaseBrandQuery,
     supabaseAnonKey,
     supabaseLimit,
     supabaseUrl,
@@ -445,6 +502,18 @@ export default function App() {
                   <option value="news">News</option>
                 </select>
 
+                <select
+                  value={supabaseBrandQuery}
+                  onChange={e => setSupabaseBrandQuery(e.target.value)}
+                  className="select-control text-xs w-32"
+                  title="Thương hiệu cần gán nhãn"
+                >
+                  <option value="all">Tất cả Brand</option>
+                  <option value="highlands-coffee">Highlands Coffee</option>
+                  <option value="starbucks">Starbucks</option>
+                  <option value="mixue">Mixue</option>
+                </select>
+
                 <input
                   type="number"
                   min={1}
@@ -491,27 +560,30 @@ export default function App() {
                   </button>
                 )}
 
-                <button
-                  onClick={() => void handleSupabaseLoad()}
-                  disabled={loading || !person || !supabaseUrl.trim() || !supabaseAnonKey.trim()}
-                  className="btn-primary text-xs disabled:opacity-70 inline-flex items-center justify-center gap-2 min-w-[160px]"
-                  title={person
-                    ? 'Tải dữ liệu / Load data'
-                    : 'Chọn người gán nhãn trước khi tải Supabase'}
-                  aria-busy={loading}
-                >
-                  {loading ? (
-                    <>
-                      <span
-                        className="inline-block h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin"
-                        aria-hidden="true"
-                      />
-                      Đang tải / Loading...
-                    </>
-                  ) : (
-                    'Tải data / Load data'
-                  )}
-                </button>
+                {loading ? (
+                  <button
+                    onClick={handleCancelLoad}
+                    className="btn-secondary text-xs inline-flex items-center justify-center gap-2 min-w-[160px] border-red-200 text-red-700 bg-red-50 hover:bg-red-100 dark:border-red-900/30 dark:bg-red-950/20 dark:hover:bg-red-950/30 dark:text-red-400 font-semibold"
+                    title="Hủy quá trình tải dữ liệu"
+                  >
+                    <span
+                      className="inline-block h-4 w-4 rounded-full border-2 border-red-500/40 border-t-red-500 animate-spin"
+                      aria-hidden="true"
+                    />
+                    Hủy tải / Stop
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => void handleSupabaseLoad()}
+                    disabled={!person || !supabaseUrl.trim() || !supabaseAnonKey.trim()}
+                    className="btn-primary text-xs disabled:opacity-70 inline-flex items-center justify-center gap-2 min-w-[160px]"
+                    title={person
+                      ? 'Tải dữ liệu / Load data'
+                      : 'Chọn người gán nhãn trước khi tải Supabase'}
+                  >
+                    Tải data / Load data
+                  </button>
+                )}
 
                 {/* Export */}
                 {person && rawThreads.length > 0 && (
@@ -598,6 +670,13 @@ export default function App() {
               <div className="h-1.5 w-64 max-w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
                 <div className="h-full w-1/3 rounded-full bg-indigo-600 animate-pulse" />
               </div>
+              <button
+                type="button"
+                onClick={handleCancelLoad}
+                className="mt-2 rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 dark:border-red-900/30 dark:bg-red-950/20 dark:hover:bg-red-950/30 dark:text-red-400 px-4 py-2 text-sm font-semibold transition"
+              >
+                Hủy tải / Stop loading
+              </button>
             </div>
           )}
 
@@ -626,11 +705,13 @@ export default function App() {
                   getLabel={getLabel}
                   setLabel={setLabel}
                   skipThread={skipThread}
+                  unskipThread={unskipThread}
                   completeThread={completeThread}
                   onNext={goNext}
                   onPrev={goPrev}
                   focusedItemId={focusedItemId}
                   setFocusedItemId={setFocusedItemId}
+                  threadState={threadStates[currentThread.post._entity_key] ?? null}
                 />
               </div>
 

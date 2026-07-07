@@ -3,6 +3,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { authAdmin, db } from "../services/firebase";
 import { verifyToken } from "../middleware/auth";
 import { validateStrongPassword } from "../utils/passwordPolicy";
+import type { UpdateRequest, UserRecord } from "firebase-admin/auth";
 
 const brandManagerPermissions = ["dashboard", "mentions", "alerts", "leads", "reports", "brand_settings", "staff_management"];
 
@@ -24,6 +25,23 @@ function generateTemporaryPassword() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
   const randomPart = Array.from({ length: 10 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
   return `IF@${randomPart}24`;
+}
+
+function isAuthUserNotFound(error: any) {
+  return (
+    error?.code === "auth/user-not-found" ||
+    error?.errorInfo?.code === "auth/user-not-found" ||
+    String(error?.message || "").includes("auth/user-not-found")
+  );
+}
+
+async function updateAuthUserIfExists(uid: string, payload: UpdateRequest): Promise<UserRecord | null> {
+  try {
+    return await authAdmin.updateUser(uid, payload);
+  } catch (error: any) {
+    if (isAuthUserNotFound(error)) return null;
+    throw error;
+  }
 }
 
 async function ensureAdmin(request: FastifyRequest, reply: FastifyReply) {
@@ -236,16 +254,17 @@ export default async function adminRoutes(fastify: FastifyInstance, options: Fas
       const brandId = managerProfile.brandId || slugifyBrand(brandName);
       const companyDomain = managerProfile.companyDomain || getDomainFromEmail(managerProfile.email || "");
 
-      await authAdmin.updateUser(uid, { displayName: fullName });
-      const userRecord = await authAdmin.getUser(uid);
-      await authAdmin.setCustomUserClaims(uid, {
-        ...(userRecord.customClaims || {}),
-        role: "brand_manager",
-        brandId,
-        brandName,
-        permissions: brandManagerPermissions,
-        defaultRoute: "/dashboard",
-      });
+      const userRecord = await updateAuthUserIfExists(uid, { displayName: fullName });
+      if (userRecord) {
+        await authAdmin.setCustomUserClaims(uid, {
+          ...(userRecord.customClaims || {}),
+          role: "brand_manager",
+          brandId,
+          brandName,
+          permissions: brandManagerPermissions,
+          defaultRoute: "/dashboard",
+        });
+      }
 
       await db.collection("users").doc(uid).set(
         {
@@ -309,7 +328,7 @@ export default async function adminRoutes(fastify: FastifyInstance, options: Fas
         return reply.status(404).send({ success: false, error: "Brand Manager account not found." });
       }
 
-      await authAdmin.updateUser(uid, { disabled: body.disabled });
+      await updateAuthUserIfExists(uid, { disabled: body.disabled });
       await db.collection("users").doc(uid).set(
         {
           disabled: body.disabled,
@@ -402,14 +421,36 @@ export default async function adminRoutes(fastify: FastifyInstance, options: Fas
       }
 
       const temporaryPassword = generateTemporaryPassword();
-      await authAdmin.updateUser(uid, {
+      let userRecord = await updateAuthUserIfExists(uid, {
         password: temporaryPassword,
         disabled: false,
       });
 
-      const userRecord = await authAdmin.getUser(uid);
+      if (!userRecord) {
+        if (!managerProfile.email) {
+          return reply.status(400).send({
+            success: false,
+            error: "Brand Manager account is missing an email and cannot be restored.",
+          });
+        }
+
+        userRecord = await authAdmin.createUser({
+          uid,
+          email: managerProfile.email,
+          password: temporaryPassword,
+          displayName: managerProfile.displayName || undefined,
+          emailVerified: true,
+          disabled: false,
+        });
+      }
+
       await authAdmin.setCustomUserClaims(uid, {
         ...(userRecord.customClaims || {}),
+        role: "brand_manager",
+        brandId: managerProfile.brandId,
+        brandName: managerProfile.brandName,
+        permissions: Array.isArray(managerProfile.permissions) ? managerProfile.permissions : brandManagerPermissions,
+        defaultRoute: managerProfile.defaultRoute || "/dashboard",
         temporaryPasswordIssued: true,
       });
 

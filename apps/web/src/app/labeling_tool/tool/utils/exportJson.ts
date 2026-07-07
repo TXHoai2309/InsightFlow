@@ -1,4 +1,4 @@
-﻿import {
+import {
   ExportPayload,
   ExportItem,
   Person,
@@ -48,7 +48,7 @@ export function buildExport(
   let positive = 0;
   let negative = 0;
   let neutral = 0;
-  let crisis = 0;
+  let urgent = 0;
 
   // Flatten all items in thread order
   const allItems = threads.flatMap(t => [
@@ -67,7 +67,7 @@ export function buildExport(
       if (stored.sentiment === 'positive') positive++;
       else if (stored.sentiment === 'negative') negative++;
       else if (stored.sentiment === 'neutral') neutral++;
-      if (stored.urgency === 'crisis') crisis++;
+      if (stored.urgency === 'urgent') urgent++;
     }
 
     // Destructure out the fields we don't want in the export:
@@ -134,7 +134,7 @@ export function buildExport(
     labeled_by: person,
     total_labeled: totalLabeled,
     total_skipped: totalSkipped,
-    summary: { positive, negative, neutral, crisis },
+    summary: { positive, negative, neutral, urgent },
     items,
     threads: exportedThreads,
   };

@@ -193,17 +193,8 @@ export function SentimentTrend({ filteredMentions }: SentimentTrendProps) {
   const pal = isDark ? PALETTE.dark : PALETTE.light;
 
   return (
-    <div
-      className="rounded-lg p-6 shadow-sm h-full"
-      style={{
-        backgroundColor: "var(--color-bg-surface)",
-        border: "1px solid var(--color-border)",
-      }}
-    >
-      <div className="flex items-center justify-between mb-4">
-        <h4 className="font-bold text-lg" style={{ color: "var(--color-text-primary)" }}>
-          {t("dashboard.sentimentTrend.title")}
-        </h4>
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-end mb-2">
         <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>
           {timeRange === "all"
             ? t("dashboard.sentimentTrend.allTime")

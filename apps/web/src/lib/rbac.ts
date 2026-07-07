@@ -37,7 +37,9 @@ export type BusinessAction =
   | "admin_panel"
   | "admin_user_management"
   | "admin_audit"
-  | "admin_crawler_health";
+  | "admin_crawler_health"
+  | "admin_label_tool"
+  | "label_request_review";
 
 interface RoleConfig {
   label: string;
@@ -63,6 +65,7 @@ const ROLE_BUSINESS_ACTIONS: Record<UserRole, BusinessAction[]> = {
     "admin_audit",
     "admin_crawler_health",
     "review_labels",
+    "admin_label_tool",
   ],
   brand_manager: [
     "view_dashboard",
@@ -76,9 +79,9 @@ const ROLE_BUSINESS_ACTIONS: Record<UserRole, BusinessAction[]> = {
     "manage_staff",
     "manage_brand_settings",
     "create_label_request",
+    "label_request_review",
   ],
   crisis_employee: [
-    "view_dashboard",
     "view_mentions",
     "view_crisis_queue",
     "update_crisis_status",
@@ -86,12 +89,12 @@ const ROLE_BUSINESS_ACTIONS: Record<UserRole, BusinessAction[]> = {
     "create_label_request",
   ],
   lead_employee: [
-    "view_dashboard",
     "view_mentions",
     "view_leads",
     "update_lead_status",
     "update_lead_details",
     "view_reports",
+    "create_label_request",
   ],
 };
 
@@ -102,6 +105,7 @@ export const ROLE_CONFIG: Record<UserRole, RoleConfig> = {
       "admin_panel",
       "admin_user_management",
       "admin_label_review",
+      "admin_label_tool",
       "admin_crawler_health",
       "admin_audit",
     ],
@@ -125,7 +129,6 @@ export const ROLE_CONFIG: Record<UserRole, RoleConfig> = {
   crisis_employee: {
     label: "Nhan vien xu ly khung hoang",
     permissions: [
-      "dashboard",
       "mentions",
       "alerts",
       "reports",
@@ -135,7 +138,7 @@ export const ROLE_CONFIG: Record<UserRole, RoleConfig> = {
   },
   lead_employee: {
     label: "Nhan vien xu ly khach hang tiem nang",
-    permissions: ["dashboard", "mentions", "leads", "reports"],
+    permissions: ["mentions", "leads", "reports"],
     defaultRoute: "/leads",
   },
 };
@@ -147,7 +150,6 @@ const PUBLIC_ROUTES = [
   "/nganh",
   "/ve-chung-toi",
   "/profile",
-  "/labeling_tool",
 ];
 
 const ROUTE_POLICIES: RoutePolicy[] = [
@@ -156,10 +158,12 @@ const ROUTE_POLICIES: RoutePolicy[] = [
     roles: ["admin", "brand_manager", "crisis_employee", "lead_employee"],
   },
   { route: "/admin", roles: ["admin"], permission: "admin_panel" },
+  { route: "/labeling_tool", roles: ["admin"] },
   { route: "/team", roles: ["brand_manager"], permission: "staff_management" },
+  { route: "/label-requests", roles: ["brand_manager"] },
   {
     route: "/dashboard",
-    roles: ["brand_manager", "crisis_employee", "lead_employee"],
+    roles: ["brand_manager"],
     permission: "dashboard",
   },
   {
@@ -292,8 +296,8 @@ export function buildUserRoleProfile(params: {
   const companyDomain = email.includes("@") ? email.split("@")[1] : "";
   const permissions = Array.isArray(params.storedPermissions)
     ? params.storedPermissions.filter(
-        (permission): permission is string => typeof permission === "string",
-      )
+      (permission): permission is string => typeof permission === "string",
+    )
     : ROLE_CONFIG[role].permissions;
 
   return {

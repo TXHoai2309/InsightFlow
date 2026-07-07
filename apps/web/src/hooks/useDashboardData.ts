@@ -28,6 +28,7 @@ export function useDashboard(options: UseDashboardOptions = {}) {
     setMentions,
     setAlerts,
     setLeads,
+    setLabelChangeRequests,
     setTrendData,
     setLoading,
     setError,
@@ -66,6 +67,13 @@ export function useDashboard(options: UseDashboardOptions = {}) {
       setMentions(mentions);
       setAlerts(alerts);
       setLeads(leads);
+      setLabelChangeRequests(
+        filterByBusinessPolicy(
+          rawData.labelChangeRequests,
+          profile,
+          "view_leads",
+        ),
+      );
       setStats(stats);
       setTopSources(topSources);
       setTopTopics(topTopics);

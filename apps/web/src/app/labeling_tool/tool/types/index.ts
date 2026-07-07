@@ -1,10 +1,10 @@
-﻿// ============================================================
+// ============================================================
 // InsightFlow Labeling Tool — Core Types
 // ============================================================
 
 export type Sentiment = 'positive' | 'negative' | 'neutral' | null;
-export type TopicKey = 'quality' | 'price' | 'service' | 'location' | 'promotion' | 'other';
-export type Urgency = 'normal' | 'notable' | 'crisis' | null;
+export type TopicKey = 'quality' | 'price' | 'service' | 'location' | 'promotion' | 'recruitment' | 'other';
+export type Urgency = 'low' | 'medium' | 'high' | 'urgent' | 'none' | null;
 export type Intent = 'hot' | 'warm' | 'cold' | 'none' | null;
 export type Person = 'Person A' | 'Person B' | 'Person C' | 'Person D';
 
@@ -22,6 +22,7 @@ export const TOPIC_LABELS: Record<TopicKey, string> = {
   service: 'Dịch vụ',
   location: 'Địa điểm',
   promotion: 'Khuyến mãi',
+  recruitment: 'Tuyển dụng',
   other: 'Khác',
 };
 
@@ -31,13 +32,16 @@ export const TOPIC_HOTKEYS: Record<string, TopicKey> = {
   e: 'service',
   r: 'location',
   t: 'promotion',
-  y: 'other',
+  y: 'recruitment',
+  u: 'other',
 };
 
 export const URGENCY_LABELS: Record<NonNullable<Urgency>, string> = {
-  normal: 'Bình thường',
-  notable: 'Đáng chú ý',
-  crisis: 'Crisis',
+  low: 'Thấp',
+  medium: 'Trung bình',
+  high: 'Cao',
+  urgent: 'Khẩn cấp',
+  none: 'None',
 };
 
 export const INTENT_LABELS: Record<NonNullable<Intent>, { label: string; emoji: string; tooltip: string }> = {
@@ -62,6 +66,46 @@ export const EMPTY_LABEL: Label = {
   urgency: null,
   intent: null,
 };
+
+/** Nhãn mặc định cho "Không liên quan" — gán nhanh bằng phím 0 */
+export const IRRELEVANT_PRESET_LABEL: Label = {
+  sentiment: 'neutral',
+  topic: ['other'],
+  relevance: false,
+  urgency: 'none',
+  intent: 'none',
+};
+
+export function isIrrelevantPreset(label: Label): boolean {
+  return (
+    label.sentiment === 'neutral' &&
+    label.relevance === false &&
+    label.urgency === 'none' &&
+    label.intent === 'none' &&
+    label.topic.length === 1 &&
+    label.topic[0] === 'other'
+  );
+}
+
+/** Nhãn mặc định cho "Tích cực, Cold" — gán nhanh bằng phím 9 */
+export const POSITIVE_COLD_PRESET_LABEL: Label = {
+  sentiment: 'positive',
+  topic: ['other'],
+  relevance: true,
+  urgency: 'none',
+  intent: 'cold',
+};
+
+export function isPositiveColdPreset(label: Label): boolean {
+  return (
+    label.sentiment === 'positive' &&
+    label.relevance === true &&
+    label.urgency === 'none' &&
+    label.intent === 'cold' &&
+    label.topic.length === 1 &&
+    label.topic[0] === 'other'
+  );
+}
 
 export function isLabelComplete(label: Label | undefined): boolean {
   if (!label) return false;
@@ -194,6 +238,7 @@ export interface Thread {
   }>;
   _assignment_id?: string;
   _assignment_entity_key?: string;
+  _assigned_entity_keys?: string[];
   _data_source?: 'file' | 'supabase';
 }
 
@@ -275,7 +320,7 @@ export interface ExportPayload {
     positive: number;
     negative: number;
     neutral: number;
-    crisis: number;
+    urgent: number;
   };
   items: ExportItem[];
   threads: ExportThreadState[];

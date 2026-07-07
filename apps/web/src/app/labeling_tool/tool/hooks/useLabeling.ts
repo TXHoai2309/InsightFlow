@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   EMPTY_LABEL,
   Item,
@@ -18,11 +18,13 @@ import {
   saveLabel,
   saveProgress,
   saveThreadState,
+  deleteThreadState,
 } from '../utils/storage';
 import {
   saveSupabaseAnnotation,
   SupabaseConfig,
   updateSupabasePostAssignments,
+  resetSupabaseAssignment,
 } from '../utils/supabaseRest';
 
 export type DisplayLabel = StoredLabel & { needs_review: boolean };
@@ -41,6 +43,7 @@ interface UseLabelingReturn {
   getLabel: (itemId: string) => DisplayLabel | null;
   setLabel: (itemId: string, label: Label) => void;
   skipThread: (thread: Thread) => Promise<void>;
+  unskipThread: (thread: Thread) => Promise<void>;
   completeThread: (thread: Thread) => Promise<CompletionResult>;
   goNext: () => void;
   goPrev: () => void;
@@ -232,10 +235,14 @@ export function useLabeling(
     if (thread._data_source === 'supabase' && !supabaseConfig) return;
     const items = threadItems(thread);
     if (items.some(item => pendingLabelWritesRef.current.has(item._entity_key))) return;
-    if (items.some(item => {
+    const missing = items.filter(item => {
+      if (thread._data_source === 'supabase' && thread._assigned_entity_keys) {
+        if (!thread._assigned_entity_keys.includes(item._entity_key)) return false;
+      }
       const label = labelsRef.current[item._entity_key];
       return !label || label.skipped || !isLabelComplete(label);
-    })) return;
+    });
+    if (missing.length > 0) return;
 
     const threadId = thread.post._entity_key;
     const versionToken = threadVersionToken(thread);
@@ -375,10 +382,51 @@ export function useLabeling(
     }
   }, [goNext, persistLabel, person, supabaseConfig]);
 
+  const unskipThread = useCallback(async (thread: Thread) => {
+    if (!person) return;
+    setStorageError(null);
+    try {
+      const items = threadItems(thread);
+      await Promise.all(items.map(async (item) => {
+        const existing = labelsRef.current[item._entity_key];
+        if (existing && existing.skipped) {
+          const value: Label = {
+            sentiment: existing.sentiment,
+            topic: existing.topic,
+            relevance: existing.relevance,
+            urgency: existing.urgency,
+            intent: existing.intent,
+          };
+          await persistLabel(item, value, false);
+        }
+      }));
+
+      // Xóa thread state khỏi IndexedDB
+      await deleteThreadState(person, thread.post._entity_key);
+
+      // Cập nhật local state
+      setThreadStates(previous => {
+        const copy = { ...previous };
+        delete copy[thread.post._entity_key];
+        return copy;
+      });
+
+      // Reset trên Supabase
+      if (supabaseConfig && thread._assignment_id) {
+        await resetSupabaseAssignment(supabaseConfig, thread._assignment_id);
+      }
+    } catch (error) {
+      setStorageError(error instanceof Error ? error.message : String(error));
+    }
+  }, [persistLabel, person, supabaseConfig]);
+
   const completeThread = useCallback(async (thread: Thread): Promise<CompletionResult> => {
     if (!person) return { ok: false, message: 'Chưa chọn người gán nhãn.' };
     const items = threadItems(thread);
     const missing = items.filter(item => {
+      if (thread._data_source === 'supabase' && thread._assigned_entity_keys) {
+        if (!thread._assigned_entity_keys.includes(item._entity_key)) return false;
+      }
       const label = labelsRef.current[item._entity_key];
       return !label || label.skipped || !isLabelComplete(label);
     });
@@ -391,8 +439,15 @@ export function useLabeling(
 
     setStorageError(null);
     try {
-      const reviewed = await Promise.all(items.map(item => {
+      const itemsToPersist = items.filter(item => {
+        if (thread._data_source === 'supabase' && thread._assigned_entity_keys) {
+          return thread._assigned_entity_keys.includes(item._entity_key);
+        }
+        return true;
+      });
+      const reviewed = await Promise.all(itemsToPersist.map(item => {
         const label = labelsRef.current[item._entity_key];
+        if (!label) return null;
         if (label.data_version >= itemVersion(item)) return label;
         return persistLabel(item, {
           sentiment: label.sentiment,
@@ -403,7 +458,9 @@ export function useLabeling(
         }, false);
       }));
       const nextLabels = { ...labelsRef.current };
-      for (const label of reviewed) nextLabels[label.entity_key] = label;
+      for (const label of reviewed) {
+        if (label) nextLabels[label.entity_key] = label;
+      }
       labelsRef.current = nextLabels;
       setLabels(nextLabels);
       const state = await saveThreadState(
@@ -440,6 +497,7 @@ export function useLabeling(
     getLabel,
     setLabel: setLabelForItem,
     skipThread,
+    unskipThread,
     completeThread,
     goNext,
     goPrev,

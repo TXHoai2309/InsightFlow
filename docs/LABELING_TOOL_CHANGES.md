@@ -1,72 +1,79 @@
-﻿# Labeling Tool - Cac Sua Doi Da Thuc Hien
+# Labeling Tool - Các Sửa Đổi Đã Thực Hiện
 
-Tai lieu nay ghi lai cac thay doi chinh cua `labeling_tool` khi tich hop vao InsightFlow.
+Tài liệu này ghi lại các thay đổi chính của `labeling_tool` khi tích hợp vào InsightFlow và quá trình phát triển tính năng, cải tiến giao diện cũng như sửa lỗi.
 
-## Tich Hop Vao InsightFlow
+## Tích Hợp Vào InsightFlow
 
-- Them route rieng `/labeling_tool` de test va demo tool ma khong anh huong cac man hinh chinh.
-- Dong bo giao dien voi layout InsightFlow: sidebar, header, light/dark mode va style control.
-- Bo cac nut/phan khong can thiet trong ban demo rieng nhu chon person va load file local.
-- Doi nut `Supabase` thanh `Tai data / Load data` de dung nghia thao tac hon.
+- Thêm route riêng `/labeling_tool` để test và demo tool mà không ảnh hưởng các màn hình chính.
+- Đồng bộ giao diện với layout InsightFlow: sidebar, header, light/dark mode và style control.
+- Bỏ các nút/phần không cần thiết trong bản demo riêng như chọn person và load file local.
+- Đổi nút `Supabase` thành `Tải data / Load data` để đúng nghĩa thao tác hơn.
 
-## Load Du Lieu Tu Supabase
+## Quản Lý Tải Dữ Liệu & Hiệu Năng
 
-- Them load queue truc tiep tu Supabase theo nen tang.
-- Ho tro cac nen tang: Facebook, Threads, TikTok, YouTube, Google Maps, BeFood, News.
-- Ho tro chon so thread can tai moi lan.
-- Ho tro hai che do:
-  - `Can gan`: load cac assignment `unassigned` va `updated_review`.
-  - `Da gan`: load cac assignment da hoan tat de xem lai/sua nhan.
-- Them loading state ro rang khi dang tai data.
+- **Nút hủy tải dữ liệu (Hủy tải / Stop loading)**: Bổ sung nút bấm cho phép hủy ngay lập tức quá trình tải dữ liệu từ Supabase đang chạy thông qua cơ chế `AbortController`. Giải phóng trình duyệt ngay lập tức khi tải quá chậm hoặc khi load lại trang bị kẹt.
+- **Tối ưu hóa tốc độ tải và bộ lọc**:
+  - Giảm thiểu số lượng request song song lên Supabase.
+  - Sử dụng cơ chế **tải song song lười biếng (lazy parallel loading)**: Chỉ truy vấn bình luận và nhãn của bài viết sau khi bài viết đó đã thỏa mãn các điều kiện lọc nâng cao (lọc theo khoảng ngày và lọc theo thương hiệu).
+  - Tăng tốc độ load danh sách thread rõ rệt khi áp dụng các bộ lọc phân phối dữ liệu lớn.
 
-## Loc Theo Ngay
+## Định Dạng Thời Gian & Sửa Lỗi Ngày Giờ (BeFood)
 
-- Them bo loc ngay `Tu` va `Den`.
-- Voi assignment kieu post, ngay loc dua tren `posts.posted_at`.
-- Voi assignment kieu comment, ngay loc dua tren `comments.posted_at`.
-- Mot post cu van co the hien ra neu trong post do co comment moi thuoc khoang ngay dang loc.
-- Hien tai loc ngay co the cham voi khoang ngay rong vi tool phai quet assignment va doi chieu comment.
+- Cải tiến hàm format thời gian để hỗ trợ thêm định dạng thời gian phi chuẩn từ crawler BeFood: `HH:mm DD/MM/YYYY` (ví dụ: `15:46 12/05/2026`).
+- Sửa triệt để lỗi đảo ngày tháng năm do JavaScript tự động nhận dạng sai định dạng ngày (ví dụ: ngày 12/05/2026 bị hiểu nhầm thành ngày 05/12/2026).
 
-## Gan Nhan Va Sua Nhan
+## Mở Rộng Nhãn Chủ Đề (Topic) & Phím Tắt
 
-- Ghi nhan that vao bang `annotations`.
-- Luu lich su sua nhan vao `annotation_revisions`.
-- Ho tro xem lai cac item da gan va chinh sua nhan.
-- Trang thai gan nhan cua tung item duoc xac dinh dua tren `annotations`, khong chi dua vao `labeling_assignments`.
+- **Chủ đề mới "Tuyển dụng" (Recruitment)**: Thêm chủ đề `'recruitment'` phục vụ cho việc gán nhãn các bài viết tuyển dụng nhân sự của thương hiệu.
+- **Tái phân bổ hotkeys**:
+  - Phím **`y`** $\rightarrow$ Gán cho chủ đề **Tuyển dụng** (mới).
+  - Phím **`u`** $\rightarrow$ Gán cho chủ đề **Khác** (chuyển từ phím `y` sang phím `u`).
+- Khắc phục lỗi chồng lấn giao diện của dropdown chọn chủ đề: Khi mở dropdown chọn chủ đề, container cha sẽ nhận class `z-20 relative` và dropdown panel nhận `z-100` giúp nổi lên trên tất cả các card select và văn bản của các bài viết phía dưới trong DOM.
 
-## Queue Va Trang Thai
+## Cải Tiến Thang Đo Mức Độ (Urgency) & Mức None
 
-- `labeling_assignments` duoc giu vai tro dieu phoi queue/thread.
-- `annotations` la nguon dung de biet item nao da co nhan that.
-- Khi hoan tat mot thread, tool cap nhat cac assignment lien quan cua post sang `completed` hoac `skipped`.
-- Da sua loi trung lap thread khi mot post co nhieu comment assignment.
+- **Nâng cấp lên 4 mức độ theo thang điểm Risk Score và thêm mức None**:
+  - `none` (Không áp dụng - phím tắt **`d`** - icon `⚪`): Dành cho các bài viết tích cực, vì mức độ khẩn cấp rủi ro chỉ áp dụng cho bài tiêu cực hoặc trung tính.
+  - `low` (Thấp - phím tắt **`z`** - icon `🟢`)
+  - `medium` (Trung bình - phím tắt **`x`** - icon `🟡`)
+  - `high` (Cao - phím tắt **`c`** - icon `🟠`)
+  - `urgent` (Khẩn cấp - phím tắt **`v`** - icon `🔴`)
+- Đồng bộ lại nhãn gán nhanh `IRRELEVANT_PRESET_LABEL` (Không liên quan) sử dụng mặc định mức độ khẩn cấp là `none` thay vì `low`.
 
-## Thong Ke Trong Sidebar
+## Giao Diện Màu Sắc Động Trực Quan (Premium UI)
 
-- Bo phan hien thi phim tat trong sidebar.
-- Them card `Hang cho toan bo` theo nen tang dang chon.
-- Card hien:
-  - Post chua gan
-  - Comment chua gan
-  - Post da gan
-  - Comment da gan
-  - Tong con lai
-  - Tong da gan
-  - Thread hoan tat
-- Cac so trong card la thong ke toan bo theo nen tang, khong phu thuoc limit thread dang load.
+- **Màu nền động cho select boxes**: Từng select box (Cảm xúc, Liên quan, Mức độ, Ý định) và nút dropdown Chủ đề sẽ tự động thay đổi màu nền và màu viền tương ứng với giá trị được chọn (Ví dụ: Cảm xúc Tích cực đổi thành nền xanh lá nhạt, Tiêu cực đổi thành nền đỏ nhạt). Giúp người gán nhãn dễ dàng kiểm tra nhanh trạng thái gán nhãn bằng mắt mà không cần đọc chữ.
+- **Emoji màu sắc**: Bổ sung emoji màu sắc trực quan (🟢, 🔴, 🟡, 🔵, ⚪, ✅, ❌) làm tiền tố hiển thị cho từng tùy chọn trong dropdown.
 
-## Import Va Sync Du Lieu
+## Cải Tiến Cơ Chế Bỏ Qua (Skip) & Khôi Phục Thread
 
-- Du lieu crawl duoc import vao SQLite truoc.
-- Pipeline upsert post/comment theo khoa on dinh, khong dung URL lam ID.
-- Du lieu cu duoc giu lai, metric moi duoc cap nhat va ghi vao lich su.
-- Queue gan nhan chi tao/cap nhat cho du lieu moi hoac du lieu can xem lai.
-- Supabase sync day cac bang can thiet tu SQLite len Supabase.
+- **Luôn hiển thị bộ gán nhãn**: Thay vì ẩn đi khi post/comment bị skip, bộ gán nhãn `LabelSelector` và nút gán nhanh **Không liên quan (Phím 0)** vẫn hiển thị để bạn có thể sửa nhãn hoặc unskip trực tiếp.
+- **Nút "Khôi phục thread" (Unskip thread)**:
+  * Khi một thread bị bỏ qua hoàn toàn (hoặc toàn bộ các items trong thread đều có nhãn `skipped: true`), nút **`⏭ Bỏ qua thread`** ở Action Bar dưới cùng sẽ tự động chuyển thành **`↩️ Khôi phục thread`** (nổi bật màu xanh lá).
+  * Khi nhấn, hệ thống sẽ khôi phục trạng thái gán nhãn của tất cả các item trong thread về bình thường, xóa trạng thái skipped trong IndexedDB và reset assignment trên Supabase để cho phép gán nhãn lại từ đầu.
 
-## Luu Y Van Hanh
+## Thống Kê Trong Sidebar
 
-- Khi chi test nhanh, nen de limit nho nhu 5 hoac 10 thread.
-- Khi loc theo ngay, nen chon khoang ngay hep de tranh load cham.
-- Khi can doi chieu nhan, xem bang `annotations`.
-- Khi can doi chieu thread da hoan tat, xem bang `labeling_assignments`.
-- Trong production, nen them cot ngay sap xep/loc truc tiep vao `labeling_assignments` de load nhanh hon.
+- Bỏ phần hiển thị phím tắt trong sidebar để làm gọn UI.
+- Thêm card `Hàng chờ toàn bộ` theo nền tảng đang chọn để theo dõi tiến độ tổng quát:
+  - Post chưa gán / Comment chưa gán
+  - Post đã gán / Comment đã gán
+  - Tổng còn lại / Tổng đã gán / Thread hoàn tất
+- Các số trong card là thống kê toàn bộ trên database, không phụ thuộc vào limit thread đang load.
+
+## Import Và Sync Dữ Liệu
+
+- Dữ liệu crawl được import vào SQLite trước.
+- Pipeline upsert post/comment theo khóa ổn định, không dùng URL làm ID.
+- Dữ liệu cũ được giữ lại, metric mới được cập nhật và ghi vào lịch sử.
+- Queue gán nhãn chỉ tạo/cập nhật cho dữ liệu mới hoặc dữ liệu cần xem lại.
+- Supabase sync đẩy các bảng cần thiết từ SQLite lên Supabase.
+
+## Tối Ưu Gán Nhãn Cho Nguồn Review Nhiều Comments (Google Maps, BeFood)
+
+- **Cơ chế chỉ kiểm tra hoàn thành với items được phân công**:
+  - Đối với Google Maps hoặc BeFood, một thread (địa điểm chi nhánh) có thể có hàng trăm bình luận (reviews) nhưng người dùng chỉ được phân công gán nhãn cho một số lượng nhỏ.
+  - Đã thêm trường `_assigned_entity_keys: string[]` vào Thread để theo dõi các bình luận thực tế được giao trong lô tải về.
+  - Giao diện gán nhãn chỉ hiển thị bộ gán nhãn `LabelSelector` cho những bình luận thực sự nằm trong danh sách được giao, đồng thời ẩn đi ở những bình luận khác (chỉ dùng làm ngữ cảnh đọc hiểu) để giảm thiểu nhiễu UI.
+  - Các bình luận không được giao sẽ hiển thị viền xám nhạt trung tính và tag "Không yêu cầu gán".
+  - Nút bấm **`✅ Xong → Next`** (Enter) và thanh tiến trình chỉ tính toán và yêu cầu hoàn thành các bài viết/bình luận thực tế được giao. Giúp khắc phục triệt để lỗi bị kẹt "Chưa gán đủ nhãn" và giúp đồng bộ trạng thái `'completed'` lên Supabase thành công.

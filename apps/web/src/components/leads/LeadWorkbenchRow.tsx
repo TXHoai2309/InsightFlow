@@ -21,6 +21,7 @@ interface LeadWorkbenchRowProps {
   rank: number;
   nowMs: number;
   selected?: boolean;
+  highlighted?: boolean;
   onSelect: (lead: Lead) => void;
   onStartedAction?: (lead: Lead) => void;
 }
@@ -37,6 +38,7 @@ export function LeadWorkbenchRow({
   rank,
   nowMs,
   selected = false,
+  highlighted = false,
   onSelect,
   onStartedAction,
 }: LeadWorkbenchRowProps) {
@@ -172,12 +174,26 @@ export function LeadWorkbenchRow({
     }
   };
 
+  const handleRowKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.currentTarget !== event.target) return;
+    if (event.key !== "Enter" && event.key !== " ") return;
+
+    event.preventDefault();
+    onSelect(lead);
+  };
+
   return (
-    <button
-      type="button"
+    <div
+      id={`lead-row-${lead.id}`}
+      data-lead-id={lead.id}
+      role="button"
+      tabIndex={0}
       onClick={() => onSelect(lead)}
+      onKeyDown={handleRowKeyDown}
       className={`w-full rounded-xl border bg-[var(--color-bg-surface)] p-3 text-left shadow-sm transition hover:border-[var(--color-brand-border)] hover:shadow-md ${
-        selected
+        highlighted
+          ? "border-[var(--color-brand)] bg-[var(--color-brand-subtle)] ring-4 ring-[var(--color-brand)]/20"
+          : selected
           ? "border-[var(--color-brand)] ring-2 ring-[var(--color-brand)]/10"
           : meta.needsResultCapture
             ? "border-[var(--color-brand)]/60"
@@ -291,6 +307,6 @@ export function LeadWorkbenchRow({
           </span>
         </div>
       </div>
-    </button>
+    </div>
   );
 }

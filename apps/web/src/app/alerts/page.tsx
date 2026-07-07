@@ -933,7 +933,7 @@ export default function AlertsPage() {
 
                         {/* Platform Source Logo */}
                         <div className="flex-shrink-0 scale-90">
-                          <PlatformLogo source={alert.source} />
+                          <PlatformLogo platform={alert.source} size="sm" />
                         </div>
 
                         {/* Dynamic contextual badges */}
@@ -992,9 +992,6 @@ export default function AlertsPage() {
                             onClick={() => {
                               lockAlertForResolution(alert.id, profile);
                               setResolvingAlert(alert);
-                              setNote("");
-                              setImageFile(null);
-                              setImagePreview(null);
                             }}
                             className="w-full py-2 rounded-xl bg-[#0f172a] hover:bg-[#1e293b] dark:bg-slate-800 dark:hover:bg-slate-700 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
                           >

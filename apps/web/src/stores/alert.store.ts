@@ -15,6 +15,12 @@ export interface ResolutionAttempt {
   resolved_by_name?: string;
 }
 
+export interface InternalNote {
+  note: string;
+  author: string;
+  timestamp: string;
+}
+
 export interface AlertData {
   id: string;
   brand: string;
@@ -44,6 +50,7 @@ export interface AlertData {
   comment_content?: string;
   parent_id?: string | null;
   content_type?: string;
+  internal_notes?: InternalNote[];
 }
 
 export interface AlertFilters {
