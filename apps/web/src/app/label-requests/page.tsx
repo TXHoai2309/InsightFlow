@@ -100,6 +100,8 @@ interface HistoryFilters {
   status: "all" | LabelRequest["status"] | "created" | "note_added";
 }
 
+type RequestTimeRange = "today" | "7d" | "30d" | "all";
+
 const TOPIC_OPTIONS = [
   "quality",
   "price",
@@ -202,6 +204,36 @@ function toDateValue(value: unknown): Date | null {
   const maybeTimestamp = value as { toDate?: () => Date };
   const date = typeof maybeTimestamp.toDate === "function" ? maybeTimestamp.toDate() : new Date(String(value));
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getRequestDate(request: LabelRequest): Date | null {
+  return toDateValue(request.created_at || request.history?.[0]?.at);
+}
+
+function isWithinRequestTimeRange(request: LabelRequest, range: RequestTimeRange) {
+  if (range === "all") return true;
+  const date = getRequestDate(request);
+  if (!date) return false;
+
+  const now = new Date();
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+
+  if (range === "today") {
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+    return date >= start && date < end;
+  }
+
+  const days = range === "7d" ? 7 : 30;
+  start.setDate(start.getDate() - (days - 1));
+  return date >= start && date <= now;
+}
+
+function compareRequests(a: LabelRequest, b: LabelRequest) {
+  if (a.status === "pending" && b.status !== "pending") return -1;
+  if (a.status !== "pending" && b.status === "pending") return 1;
+  return (getRequestDate(b)?.getTime() || 0) - (getRequestDate(a)?.getTime() || 0);
 }
 
 function hasLabelTypeChanged(oldLabel: LabelValue, newLabel: LabelValue, labelType: HistoryFilters["labelType"]) {
@@ -581,6 +613,7 @@ export default function LabelRequestsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [mode, setMode] = useState<"detail" | "compare" | "history">("detail");
+  const [requestTimeRange, setRequestTimeRange] = useState<RequestTimeRange>("today");
   const [draftLabel, setDraftLabel] = useState<LabelValue>({ sentiment: "neutral", topic: "other" });
   const [historyFilters, setHistoryFilters] = useState<HistoryFilters>({
     fromDate: "",
@@ -711,9 +744,25 @@ export default function LabelRequestsPage() {
     };
   }, [profile?.brandId]);
 
+  const displayedRequests = useMemo(
+    () => requests.filter((item) => isWithinRequestTimeRange(item, requestTimeRange)).sort(compareRequests),
+    [requests, requestTimeRange],
+  );
+
+  useEffect(() => {
+    if (loading) return;
+    if (displayedRequests.length === 0) {
+      if (selectedId) setSelectedId(null);
+      return;
+    }
+    if (!selectedId || !displayedRequests.some((item) => item.id === selectedId)) {
+      setSelectedId(displayedRequests[0].id);
+    }
+  }, [displayedRequests, loading, selectedId]);
+
   const selectedRequest = useMemo(
-    () => requests.find((item) => item.id === selectedId) || requests[0],
-    [requests, selectedId],
+    () => displayedRequests.find((item) => item.id === selectedId) || displayedRequests[0],
+    [displayedRequests, selectedId],
   );
 
   useEffect(() => {
@@ -883,11 +932,24 @@ export default function LabelRequestsPage() {
               Danh sách yêu cầu
             </h2>
             <p className="text-[11px] text-[var(--color-text-muted)]">
-              {loading ? "Đang tải…" : `${requests.length} yêu cầu`}
+              {loading ? "Đang tải…" : `${displayedRequests.length}/${requests.length} yêu cầu`}
             </p>
+            <label className="mt-3 block">
+              <span className="sr-only">Lọc thời gian</span>
+              <select
+                value={requestTimeRange}
+                onChange={(event) => setRequestTimeRange(event.target.value as RequestTimeRange)}
+                className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2 text-xs font-semibold text-[var(--color-text-primary)] outline-none"
+              >
+                <option value="today">Hôm nay</option>
+                <option value="7d">7 ngày</option>
+                <option value="30d">30 ngày</option>
+                <option value="all">Tất cả</option>
+              </select>
+            </label>
           </div>
           <div className="max-h-[calc(100vh-320px)] overflow-y-auto">
-            {requests.map((item) => {
+            {displayedRequests.map((item) => {
               const tone = sentimentTone(item.old_label.sentiment ?? null);
               const isActive = selectedRequest?.id === item.id;
               return (
@@ -930,7 +992,7 @@ export default function LabelRequestsPage() {
           </div>
         </section>
 
-        {!loading && requests.length === 0 && (
+        {!loading && displayedRequests.length === 0 && (
           <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-10 text-center">
             <span className="material-symbols-outlined text-4xl text-[var(--color-text-muted)]">
               inventory_2
