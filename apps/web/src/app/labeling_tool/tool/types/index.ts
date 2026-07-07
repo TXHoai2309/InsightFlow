@@ -1,5 +1,5 @@
 // ============================================================
-// InsightFlow Labeling Tool â€” Core Types
+// InsightFlow Labeling Tool - Core Types
 // ============================================================
 
 export type Sentiment = 'positive' | 'negative' | 'neutral' | null;
@@ -11,19 +11,19 @@ export type Person = 'Person A' | 'Person B' | 'Person C' | 'Person D';
 export const PERSONS: Person[] = ['Person A', 'Person B', 'Person C', 'Person D'];
 
 export const SENTIMENT_LABELS: Record<NonNullable<Sentiment>, string> = {
-  positive: 'TÃ­ch cá»±c',
-  negative: 'TiÃªu cá»±c',
-  neutral: 'Trung tÃ­nh',
+  positive: 'Tích cực',
+  negative: 'Tiêu cực',
+  neutral: 'Trung tính',
 };
 
 export const TOPIC_LABELS: Record<TopicKey, string> = {
-  quality: 'Cháº¥t lÆ°á»£ng',
-  price: 'GiÃ¡',
-  service: 'Dá»‹ch vá»¥',
-  location: 'Äá»‹a Ä‘iá»ƒm',
-  promotion: 'Khuyáº¿n mÃ£i',
-  recruitment: 'Tuyá»ƒn dá»¥ng',
-  other: 'KhÃ¡c',
+  quality: 'Chất lượng',
+  price: 'Giá',
+  service: 'Dịch vụ',
+  location: 'Địa điểm',
+  promotion: 'Khuyến mãi',
+  recruitment: 'Tuyển dụng',
+  other: 'Khác',
 };
 
 export const TOPIC_HOTKEYS: Record<string, TopicKey> = {
@@ -37,18 +37,18 @@ export const TOPIC_HOTKEYS: Record<string, TopicKey> = {
 };
 
 export const URGENCY_LABELS: Record<NonNullable<Urgency>, string> = {
-  low: 'Tháº¥p',
-  medium: 'Trung bÃ¬nh',
+  low: 'Thấp',
+  medium: 'Trung bình',
   high: 'Cao',
-  urgent: 'Kháº©n cáº¥p',
+  urgent: 'Khẩn cấp',
   none: 'None',
 };
 
 export const INTENT_LABELS: Record<NonNullable<Intent>, { label: string; emoji: string; tooltip: string }> = {
-  hot:  { label: 'Hot',  emoji: 'ðŸ”¥', tooltip: 'Quan tÃ¢m máº¡nh â€” cÃ³ Ã½ Ä‘á»‹nh mua/á»©ng tuyá»ƒn ngay' },
-  warm: { label: 'Warm', emoji: 'ðŸŒ¡ï¸', tooltip: 'Quan tÃ¢m vá»«a â€” Ä‘ang tÃ¬m hiá»ƒu, cÃ¢n nháº¯c' },
-  cold: { label: 'Cold', emoji: 'ðŸ§Š', tooltip: 'Ãt quan tÃ¢m â€” Ä‘á» cáº­p nhÆ°ng khÃ´ng cÃ³ Ã½ Ä‘á»‹nh' },
-  none: { label: 'None', emoji: 'âž–', tooltip: 'KhÃ´ng liÃªn quan Ä‘áº¿n mua hÃ ng/tuyá»ƒn dá»¥ng' },
+  hot:  { label: 'Hot',  emoji: '🔥', tooltip: 'Quan tâm mạnh, có ý định mua/ứng tuyển ngay' },
+  warm: { label: 'Warm', emoji: '🌡️', tooltip: 'Quan tâm vừa, đang tìm hiểu hoặc cân nhắc' },
+  cold: { label: 'Cold', emoji: '🧊', tooltip: 'Ít quan tâm, đề cập nhưng không có ý định' },
+  none: { label: 'None', emoji: '➖', tooltip: 'Không liên quan đến mua hàng/tuyển dụng' },
 };
 
 export interface Label {
@@ -67,7 +67,7 @@ export const EMPTY_LABEL: Label = {
   intent: null,
 };
 
-/** NhÃ£n máº·c Ä‘á»‹nh cho "KhÃ´ng liÃªn quan" â€” gÃ¡n nhanh báº±ng phÃ­m 0 */
+/** Nhãn mặc định cho "Không liên quan" - gán nhanh bằng phím 0 */
 export const IRRELEVANT_PRESET_LABEL: Label = {
   sentiment: 'neutral',
   topic: ['other'],
@@ -87,7 +87,7 @@ export function isIrrelevantPreset(label: Label): boolean {
   );
 }
 
-/** NhÃ£n máº·c Ä‘á»‹nh cho "TÃ­ch cá»±c, Cold" â€” gÃ¡n nhanh báº±ng phÃ­m 9 */
+/** Nhãn mặc định cho "Tích cực, Cold" - gán nhanh bằng phím 9 */
 export const POSITIVE_COLD_PRESET_LABEL: Label = {
   sentiment: 'positive',
   topic: ['other'],
@@ -107,7 +107,7 @@ export function isPositiveColdPreset(label: Label): boolean {
   );
 }
 
-/** Preset for "Negative staff attitude" - quick assign with key 7 */
+/** Nhãn mặc định cho "Tiêu cực về thái độ nhân viên" - gán nhanh bằng phím 8 */
 export const NEGATIVE_STAFF_ATTITUDE_PRESET_LABEL: Label = {
   sentiment: 'negative',
   topic: ['service'],
@@ -127,26 +127,6 @@ export function isNegativeStaffAttitudePreset(label: Label): boolean {
   );
 }
 
-/** Preset for "Positive, None" - quick assign with key 8 */
-export const POSITIVE_NONE_PRESET_LABEL: Label = {
-  sentiment: 'positive',
-  topic: ['other'],
-  relevance: true,
-  urgency: 'none',
-  intent: 'none',
-};
-
-export function isPositiveNonePreset(label: Label): boolean {
-  return (
-    label.sentiment === 'positive' &&
-    label.relevance === true &&
-    label.urgency === 'none' &&
-    label.intent === 'none' &&
-    label.topic.length === 1 &&
-    label.topic[0] === 'other'
-  );
-}
-
 export function isLabelComplete(label: Label | undefined): boolean {
   if (!label) return false;
   return (
@@ -154,22 +134,18 @@ export function isLabelComplete(label: Label | undefined): boolean {
     label.relevance !== null &&
     label.urgency !== null &&
     label.intent !== null
-    // topic can be empty â€” it's valid to have no topic
   );
 }
 
-// -------------------------------------------------------
-// Platform stats â€” unified stats object per source/content type
-// -------------------------------------------------------
 export interface PlatformStats {
   like_count: number;
-  comment_count: number;       // tá»•ng comment tháº­t (cmt_count)
-  comment_crawled: number;     // sá»‘ Ä‘Ã£ cÃ o (crawled_cmt_count)
+  comment_count: number;
+  comment_crawled: number;
   share_count: number | null;
   repost_count: number | null;
   view_count: number | null;
-  star_count: number | null;   // rating 1-5
-  review_count_total: number | null;  // tá»•ng Ä‘Ã¡nh giÃ¡ (BeFood/GMaps)
+  star_count: number | null;
+  review_count_total: number | null;
 }
 
 export const EMPTY_STATS: PlatformStats = {
@@ -183,36 +159,28 @@ export const EMPTY_STATS: PlatformStats = {
   review_count_total: null,
 };
 
-// -------------------------------------------------------
-// Raw item schema â€” supports ALL crawler output schemas.
-// Field names are kept exactly as the crawler produces them.
-// Vietnamese-named fields coexist with English fallbacks.
-// -------------------------------------------------------
 export interface RawItem {
-  // â”€â”€ Post-level crawler fields â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   post_id?: string;
-  tac_gia?: string;             // author (post) â€” Vietnamese
-  nguon_chia?: string;          // source â€” Vietnamese
-  thoi_gian_dang?: string;      // posted_at â€” Vietnamese
-  thoi_gian_cao?: string;       // crawled_at â€” Vietnamese
-  ngon_ngu_bai_viet?: string;   // language
-  text?: string;                // post/comment content
+  tac_gia?: string;
+  nguon_chia?: string;
+  thoi_gian_dang?: string;
+  thoi_gian_cao?: string;
+  ngon_ngu_bai_viet?: string;
+  text?: string;
   brand?: string;
   url?: string;
   contact?: string;
   keywords_match?: string[];
   extra?: Record<string, unknown>;
 
-  // â”€â”€ Comment/reply-level crawler fields â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   comment_id?: string;
-  username?: string;            // author (comment)
-  gio_comment?: string;         // posted_at (comment)
-  gio_cao?: string;             // crawled_at (comment)
+  username?: string;
+  gio_comment?: string;
+  gio_cao?: string;
   parent_comment_id?: string | null;
   replies?: unknown[];
   author_id?: string;
 
-  // â”€â”€ Shared English-name fallbacks (some crawlers use these) â”€â”€
   id?: string;
   source?: string;
   author?: string;
@@ -223,15 +191,14 @@ export interface RawItem {
   parent_id?: string | null;
   content_type?: 'post' | 'comment' | 'reply';
 
-  // â”€â”€ Stats fields (top-level on the raw object) â”€â”€â”€â”€â”€â”€â”€â”€â”€
   like_count?: number;
-  cmt_count?: number;           // tá»•ng sá»‘ comment tháº­t
-  crawled_cmt_count?: number;   // sá»‘ comment Ä‘Ã£ cÃ o Ä‘Æ°á»£c
+  cmt_count?: number;
+  crawled_cmt_count?: number;
   reply_count?: number;
-  star_count?: number;          // sá»‘ sao (GMaps, BeFood)
-  share_count?: number;         // lÆ°á»£t chia sáº»
-  repost_count?: number;        // lÆ°á»£t Ä‘Äƒng láº¡i (Threads)
-  view_count?: number;          // lÆ°á»£t xem
+  star_count?: number;
+  share_count?: number;
+  repost_count?: number;
+  view_count?: number;
   video_id?: string;
   stats_enriched?: boolean;
   platform?: string;
@@ -239,33 +206,24 @@ export interface RawItem {
   _data_version?: number;
   _updated_fields?: string[];
 
-  // â”€â”€ Allow any additional crawler fields â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   [key: string]: unknown;
 }
 
-// -------------------------------------------------------
-// Normalized Item used internally by the tool.
-// Extends RawItem so ALL original crawler fields are preserved.
-// Tool-added fields are prefixed with _ to avoid collisions.
-// -------------------------------------------------------
 export interface Item extends RawItem {
-  // â”€â”€ Identity & tree structure â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  _internal_id: string;                          // unique id used by the tool
-  _entity_key: string;                           // stable database-compatible identity
-  _platform: string;                             // canonical platform slug
-  _content_type: 'post' | 'comment' | 'reply';  // what type of item this is
-  _parent_id: string | null;                     // parent item's _internal_id
-  _source: string;                               // normalized source for filtering
+  _internal_id: string;
+  _entity_key: string;
+  _platform: string;
+  _content_type: 'post' | 'comment' | 'reply';
+  _parent_id: string | null;
+  _source: string;
 
-  // â”€â”€ Pre-computed display helpers (typed string) â”€â”€â”€â”€â”€â”€â”€â”€
-  _author: string;      // tac_gia (post) | username (comment)
-  _posted_at: string;   // thoi_gian_dang (post) | gio_comment (comment)
-  _text: string;        // always item.text
-  _brand: string;       // item.brand normalized
-  _url: string;         // item.url normalized
+  _author: string;
+  _posted_at: string;
+  _text: string;
+  _brand: string;
+  _url: string;
   _is_address_only: boolean;
 
-  // â”€â”€ UI-only computed stats â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   stats: PlatformStats;
   _loaded_label?: StoredLabel;
 }
@@ -282,9 +240,6 @@ export interface Thread {
   _data_source?: 'file' | 'supabase';
 }
 
-// -------------------------------------------------------
-// Storage schema
-// -------------------------------------------------------
 export interface StoredLabel extends Label {
   key: string;
   person: Person;
@@ -312,15 +267,7 @@ export interface StoredThreadState {
   completed_at: string;
 }
 
-// -------------------------------------------------------
-// Export schema â€” Item spread + labels appended
-// ExportItem is the full raw item with labels added.
-// No fields are renamed or removed.
-// -------------------------------------------------------
 export interface ExportItem extends RawItem {
-  // All RawItem fields inherited (crawler data preserved)
-
-  // Tool fields (underscore prefix)
   _internal_id: string;
   _entity_key: string;
   _platform: string;
@@ -328,7 +275,6 @@ export interface ExportItem extends RawItem {
   _parent_id: string | null;
   _source: string;
 
-  // Label fields appended
   labels: {
     sentiment: Sentiment;
     topic: TopicKey[];
