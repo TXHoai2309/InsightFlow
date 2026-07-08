@@ -12,8 +12,11 @@ import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { ROLE_CONFIG } from "@/lib/rbac";
-import { BRAND_MANAGER_TOUR_EVENT } from "@/components/onboarding/BrandManagerOnboarding";
-import { LEAD_EMPLOYEE_TOUR_EVENT } from "@/components/onboarding/LeadEmployeeOnboarding";
+import {
+  BRAND_MANAGER_TOUR_EVENT,
+  CRISIS_EMPLOYEE_TOUR_EVENT,
+  LEAD_EMPLOYEE_TOUR_EVENT,
+} from "@/components/onboarding/events";
 
 interface HeaderProps {
   onMenuToggle: () => void;
@@ -41,6 +44,8 @@ export function Header({ onMenuToggle }: HeaderProps) {
     const eventName =
       role === "lead_employee"
         ? LEAD_EMPLOYEE_TOUR_EVENT
+        : role === "crisis_employee"
+          ? CRISIS_EMPLOYEE_TOUR_EVENT
         : BRAND_MANAGER_TOUR_EVENT;
     window.dispatchEvent(new Event(eventName));
   };
@@ -94,7 +99,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
 
       {/* Right Section */}
       <div className="flex items-center gap-4 md:gap-6">
-        {(role === "brand_manager" || role === "lead_employee") && (
+        {(role === "brand_manager" || role === "crisis_employee" || role === "lead_employee") && (
           <button
             type="button"
             onClick={handleOpenGuide}

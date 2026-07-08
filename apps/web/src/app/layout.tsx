@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { usePathname } from "next/navigation";
+import dynamic from "next/dynamic";
 import { useTranslation, I18nextProvider } from "react-i18next";
 import i18nInstance from "../i18n";
 import "./globals.css";
@@ -10,10 +11,32 @@ import { Header } from "@/components/layout/Header";
 import { MobileNav } from "@/components/layout/MobileNav";
 import Footer from "@/components/home/Footer";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
-import { BrandManagerOnboarding } from "@/components/onboarding/BrandManagerOnboarding";
-import { LeadEmployeeOnboarding } from "@/components/onboarding/LeadEmployeeOnboarding";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
+
+const BrandManagerOnboarding = dynamic(
+  () =>
+    import("@/components/onboarding/BrandManagerOnboarding").then(
+      (mod) => mod.BrandManagerOnboarding,
+    ),
+  { ssr: false },
+);
+
+const CrisisEmployeeOnboarding = dynamic(
+  () =>
+    import("@/components/onboarding/CrisisEmployeeOnboarding").then(
+      (mod) => mod.CrisisEmployeeOnboarding,
+    ),
+  { ssr: false },
+);
+
+const LeadEmployeeOnboarding = dynamic(
+  () =>
+    import("@/components/onboarding/LeadEmployeeOnboarding").then(
+      (mod) => mod.LeadEmployeeOnboarding,
+    ),
+  { ssr: false },
+);
 
 /**
  * Anti-FOUC (Flash of Unstyled Content) Script.
@@ -174,6 +197,7 @@ export default function RootLayout({
                       </main>
                       <MobileNav />
                       <BrandManagerOnboarding />
+                      <CrisisEmployeeOnboarding />
                       <LeadEmployeeOnboarding />
                     </div>
                   </div>

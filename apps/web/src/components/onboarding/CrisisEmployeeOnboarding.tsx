@@ -6,9 +6,9 @@ import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
 import { useAuthStore } from "@/stores/auth.store";
-import { LEAD_EMPLOYEE_TOUR_EVENT } from "@/components/onboarding/events";
+import { CRISIS_EMPLOYEE_TOUR_EVENT } from "@/components/onboarding/events";
 
-const LEAD_EMPLOYEE_ONBOARDING_VERSION = "2026-07-lead-employee-tour-v1";
+const CRISIS_EMPLOYEE_ONBOARDING_VERSION = "2026-07-crisis-employee-tour-v1";
 
 type TourMode = "intro" | "tour";
 
@@ -29,70 +29,86 @@ interface TargetRect {
 
 const tourSteps: TourStep[] = [
   {
-    route: "/leads",
-    selector: '[data-tour="leads-view-tabs"]',
-    title: "Chọn đúng hàng chờ lead",
+    route: "/alerts",
+    selector: '[data-tour="alerts-queue-header"]',
+    title: "Bắt đầu từ hàng chờ khủng hoảng",
     body:
-      "Các nút này chia lead theo trạng thái xử lý: cần ưu tiên, sắp quá hạn, follow-up và cần ghi nhận kết quả.",
-    actionHint: "Bắt đầu từ nhóm ưu tiên, sau đó kiểm tra nhóm Cần ghi nhận để không bỏ sót kết quả liên hệ.",
+      "Đây là màn hình chính của nhân viên xử lý khủng hoảng. Bạn dùng khu vực này để tìm sự vụ, giới hạn theo brand được phân công và nắm nhanh số lượng tình huống khẩn cấp.",
+    actionHint: "Kiểm tra brand trước, sau đó ưu tiên các sự vụ có nhãn khẩn cấp hoặc rủi ro cao.",
   },
   {
-    route: "/leads",
-    selector: '[data-tour="leads-workbench"]',
-    title: "Làm việc trên danh sách lead",
+    route: "/alerts",
+    selector: '[data-tour="alerts-filters"]',
+    title: "Lọc theo mức độ và nguồn",
     body:
-      "Mỗi dòng lead thể hiện nguồn, intent, mức độ ưu tiên và hành động chính. Khi chọn một lead, panel bên cạnh sẽ mở chi tiết xử lý.",
-    actionHint: "Nhận xử lý lead trước, sau đó mở kênh liên hệ phù hợp.",
+      "Bộ lọc giúp thu hẹp danh sách theo mức độ nghiêm trọng, nguồn phát sinh và các sự vụ đang thuộc về bạn.",
+    actionHint: "Khi trực ca, hãy bắt đầu với Khẩn cấp hoặc Cao, rồi bật Của tôi để theo dõi các việc bạn đã nhận.",
   },
   {
-    route: "/leads",
-    selector: '[data-tour="lead-detail-panel"]',
-    title: "Panel xử lý và ghi nhận kết quả",
+    route: "/alerts",
+    selector: '[data-tour="alerts-queue-list"]',
+    title: "Đọc queue theo mức rủi ro",
     body:
-      "Panel này là nơi bạn xem người phụ trách, lý do ưu tiên, kiểm tra nhãn, mở nguồn, liên hệ khách và lưu kết quả sau khi tương tác.",
-    actionHint: "Sau khi bấm liên hệ, hãy quay lại đây để lưu kết quả ngay.",
+      "Mỗi thẻ sự vụ hiển thị điểm rủi ro, tác giả, nền tảng, chủ đề, sắc thái và nội dung cần xử lý. Các thẻ được sắp xếp để bạn nhìn thấy việc quan trọng trước.",
+    actionHint: "Đọc nội dung, kiểm tra nền tảng và chủ đề trước khi nhận xử lý hoặc escalate.",
+  },
+  {
+    route: "/alerts",
+    selector: '[data-tour="alerts-card-actions"]',
+    title: "Nhận xử lý hoặc escalate",
+    body:
+      "Cụm nút này là nơi bạn nhận sự vụ, mở chi tiết hoặc escalate ngay nếu tình huống vượt ngưỡng xử lý thông thường.",
+    actionHint: "Bấm Nhận xử lý để khóa sự vụ theo ca của bạn. Dùng Escalate ngay khi có nguy cơ pháp lý, viral mạnh hoặc ảnh hưởng an toàn.",
+  },
+  {
+    route: "/alerts",
+    selector: '[data-tour="alerts-label-requests"]',
+    title: "Theo dõi yêu cầu sửa nhãn",
+    body:
+      "Nếu nhãn khủng hoảng hoặc mức độ nghiêm trọng chưa đúng, bạn có thể gửi yêu cầu sửa nhãn. Khu vực này giúp xem các request liên quan và trạng thái duyệt.",
+    actionHint: "Chỉ gửi yêu cầu sửa nhãn khi đã kiểm tra ngữ cảnh gốc và có lý do rõ ràng.",
   },
   {
     route: "/mentions",
     selector: '[data-tour="mentions-filters"]',
-    title: "Lọc đề cập để kiểm tra nguồn lead",
+    title: "Kiểm tra nguồn trên Mentions",
     body:
-      "Mentions giúp bạn rà lại bài viết hoặc bình luận gốc. Bộ lọc hỗ trợ thu hẹp theo brand, sắc thái, nền tảng, chủ đề và thời gian.",
-    actionHint: "Dùng bộ lọc khi cần xác minh vì sao một lead được đưa vào hàng chờ.",
+      "Mentions là nơi rà lại bài viết hoặc bình luận gốc theo brand, nền tảng, sắc thái, chủ đề và thời gian.",
+    actionHint: "Khi cần xác minh bằng chứng, lọc về cùng brand và chủ đề rồi mở mention liên quan.",
   },
   {
     route: "/mentions",
     selector: '[data-tour="mentions-table"]',
-    title: "Mở chi tiết đề cập",
+    title: "Đọc ngữ cảnh trước khi phản hồi",
     body:
-      "Bảng này chứa nội dung đề cập, sắc thái và nguồn. Bạn có thể mở chi tiết để đọc ngữ cảnh trước khi liên hệ hoặc yêu cầu sửa nhãn.",
-    actionHint: "Kiểm tra ngữ cảnh gốc trước khi gửi yêu cầu sửa nhãn cho quản lý.",
+      "Bảng mentions chứa nội dung gốc, nguồn, tác giả và nhãn hiện tại. Đây là điểm kiểm chứng trước khi xử lý công khai hoặc ghi nhận kết quả.",
+    actionHint: "Đọc đủ ngữ cảnh trước khi quyết định phản hồi, escalate hoặc đề xuất sửa nhãn.",
   },
   {
     route: "/reports",
     selector: '[data-tour="reports-center"]',
-    title: "Theo dõi kết quả bằng Reports",
+    title: "Xem lại kết quả xử lý",
     body:
-      "Reports giúp bạn xem lại số liệu tổng hợp và báo cáo theo thời gian. Đây là nơi tham khảo kết quả sau các hoạt động xử lý lead.",
-    actionHint: "Dùng báo cáo để nắm xu hướng, không thay thế việc ghi nhận kết quả trên từng lead.",
+      "Reports giúp theo dõi bức tranh tổng hợp sau ca trực: số lượng đề cập, sắc thái, chủ đề nổi bật và dữ liệu dùng cho báo cáo.",
+    actionHint: "Dùng Reports để tổng kết sau xử lý, không thay thế ghi chú xử lý trên từng sự vụ.",
   },
 ];
 
 const introCards = [
   {
-    title: "Tập trung vào lead",
-    icon: "leaderboard",
-    text: "Tour chỉ hướng dẫn các chức năng phục vụ xử lý khách hàng tiềm năng.",
+    title: "Tập trung vào khủng hoảng",
+    icon: "emergency_home",
+    text: "Tour chỉ mở các chức năng phục vụ phát hiện, nhận xử lý và ghi nhận sự vụ rủi ro.",
   },
   {
-    title: "Đúng quy trình chăm sóc",
-    icon: "task_alt",
-    text: "Nhận xử lý, mở liên hệ, ghi nhận kết quả và follow-up đúng hạn.",
+    title: "Ưu tiên theo mức độ",
+    icon: "priority_high",
+    text: "Bạn sẽ đi từ lọc mức độ, đọc queue, nhận xử lý, escalate và kiểm tra nguồn gốc.",
   },
   {
-    title: "Có thể kiểm tra nguồn",
-    icon: "article",
-    text: "Khi nghi ngờ nhãn hoặc ngữ cảnh, bạn quay về Mentions để xem đề cập gốc.",
+    title: "Có thể xem lại",
+    icon: "help",
+    text: "Sau khi hoàn tất, bạn vẫn có thể mở lại bằng nút Hướng dẫn trên thanh trên cùng.",
   },
 ];
 
@@ -142,7 +158,7 @@ function getTooltipStyle(targetRect: TargetRect | null): CSSProperties {
   return { top, left, width };
 }
 
-export function LeadEmployeeOnboarding() {
+export function CrisisEmployeeOnboarding() {
   const router = useRouter();
   const pathname = usePathname();
   const { profile, loading } = useAuth();
@@ -157,11 +173,11 @@ export function LeadEmployeeOnboarding() {
   const pendingRouteRef = useRef<string | null>(null);
 
   const hasCompletedCurrentVersion =
-    profile?.onboarding?.lead_employee?.version === LEAD_EMPLOYEE_ONBOARDING_VERSION;
+    profile?.onboarding?.crisis_employee?.version === CRISIS_EMPLOYEE_ONBOARDING_VERSION;
 
   const shouldShow = useMemo(() => {
     if (loading || dismissed) return false;
-    if (!profile || profile.role !== "lead_employee") return false;
+    if (!profile || profile.role !== "crisis_employee") return false;
     if (profile.temporaryPasswordIssued) return false;
     return manualOpen || !hasCompletedCurrentVersion;
   }, [dismissed, hasCompletedCurrentVersion, loading, manualOpen, profile]);
@@ -180,8 +196,8 @@ export function LeadEmployeeOnboarding() {
       setError("");
     };
 
-    window.addEventListener(LEAD_EMPLOYEE_TOUR_EVENT, openTour);
-    return () => window.removeEventListener(LEAD_EMPLOYEE_TOUR_EVENT, openTour);
+    window.addEventListener(CRISIS_EMPLOYEE_TOUR_EVENT, openTour);
+    return () => window.removeEventListener(CRISIS_EMPLOYEE_TOUR_EVENT, openTour);
   }, []);
 
   useEffect(() => {
@@ -251,10 +267,10 @@ export function LeadEmployeeOnboarding() {
       const completedAt = new Date().toISOString();
       const nextOnboarding = {
         ...(profile.onboarding || {}),
-        lead_employee: {
+        crisis_employee: {
           completedAt,
           lastSeenAt: completedAt,
-          version: LEAD_EMPLOYEE_ONBOARDING_VERSION,
+          version: CRISIS_EMPLOYEE_ONBOARDING_VERSION,
         },
       };
 
@@ -262,10 +278,10 @@ export function LeadEmployeeOnboarding() {
         doc(db, "users", profile.uid),
         {
           onboarding: {
-            lead_employee: {
+            crisis_employee: {
               completedAt,
               lastSeenAt: serverTimestamp(),
-              version: LEAD_EMPLOYEE_ONBOARDING_VERSION,
+              version: CRISIS_EMPLOYEE_ONBOARDING_VERSION,
             },
           },
           updatedAt: serverTimestamp(),
@@ -278,7 +294,7 @@ export function LeadEmployeeOnboarding() {
       setDismissed(true);
       return true;
     } catch (err) {
-      console.error("[LeadEmployeeOnboarding] complete error:", err);
+      console.error("[CrisisEmployeeOnboarding] complete error:", err);
       setError("Chưa thể lưu trạng thái hướng dẫn. Vui lòng thử lại.");
       return false;
     } finally {
@@ -329,15 +345,15 @@ export function LeadEmployeeOnboarding() {
                 Onboarding vai trò
               </p>
               <h2 className="mt-1 text-2xl font-bold text-[var(--color-text-primary)]">
-                Hướng dẫn thao tác cho Nhân viên xử lý lead
+                Hướng dẫn thao tác cho Nhân viên xử lý khủng hoảng
               </h2>
               <p className="mt-2 max-w-[620px] text-sm leading-6 text-[var(--color-text-secondary)]">
-                Tour này tập trung vào quy trình nhận lead, liên hệ khách, ghi nhận kết quả, kiểm tra nguồn và xem báo cáo.
+                Tour này tập trung vào quy trình đọc queue khủng hoảng, nhận xử lý, escalate, kiểm tra nguồn và xem báo cáo theo đúng quyền của bạn.
               </p>
             </div>
-            <span className="inline-flex w-fit items-center gap-2 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] px-3 py-2 text-sm font-bold text-[var(--color-brand)]">
-              <span className="material-symbols-outlined text-base">support_agent</span>
-              {profile.brandName || profile.brandId || "Lead team"}
+            <span className="inline-flex w-fit items-center gap-2 rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-error-subtle)] px-3 py-2 text-sm font-bold text-[var(--color-error)]">
+              <span className="material-symbols-outlined text-base">emergency</span>
+              {profile.brandName || profile.brandId || "Crisis team"}
             </span>
           </div>
 
@@ -416,7 +432,7 @@ export function LeadEmployeeOnboarding() {
       <section
         className="fixed rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-4 shadow-2xl md:p-5"
         style={tooltipStyle}
-        aria-labelledby="lead-employee-tour-title"
+        aria-labelledby="crisis-employee-tour-title"
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -424,7 +440,7 @@ export function LeadEmployeeOnboarding() {
               Bước {currentStep + 1}/{tourSteps.length}
             </p>
             <h2
-              id="lead-employee-tour-title"
+              id="crisis-employee-tour-title"
               className="mt-1 text-lg font-bold text-[var(--color-text-primary)]"
             >
               {step.title}
@@ -455,7 +471,7 @@ export function LeadEmployeeOnboarding() {
 
         {pathname !== step.route && (
           <p className="mt-3 rounded-lg bg-[var(--color-bg-surface-raised)] px-3 py-2 text-sm font-semibold text-[var(--color-text-secondary)]">
-            Đang mở trang {step.route}. Tour sẽ không mở lặp lại nếu trang tải chậm.
+            Đang mở trang {step.route}. Tour sẽ giữ nguyên bước hiện tại nếu trang tải chậm.
           </p>
         )}
 

@@ -6,8 +6,7 @@ import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
 import { useAuthStore } from "@/stores/auth.store";
-
-export const BRAND_MANAGER_TOUR_EVENT = "insightflow:start-brand-manager-tour";
+import { BRAND_MANAGER_TOUR_EVENT } from "@/components/onboarding/events";
 
 const BRAND_MANAGER_ONBOARDING_VERSION = "2026-07-brand-manager-tour-v2";
 

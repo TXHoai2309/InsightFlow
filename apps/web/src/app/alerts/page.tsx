@@ -710,7 +710,7 @@ export default function AlertsPage() {
 
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 space-y-6 bg-[var(--color-bg-base)] text-[var(--color-text-primary)] animate-fade-in">
+    <div data-tour="alerts-page" className="p-4 md:p-6 lg:p-8 space-y-6 bg-[var(--color-bg-base)] text-[var(--color-text-primary)] animate-fade-in">
 
       {/* Redesigned Grid Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
@@ -719,7 +719,7 @@ export default function AlertsPage() {
         <div className="lg:col-span-2 space-y-6">
 
           {/* Header row with search, brand dropdown, and notifications bell */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div data-tour="alerts-queue-header" className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex items-center gap-3">
               <h1 className="text-xl md:text-2.5xl font-black tracking-tight text-[var(--color-text-primary)] uppercase">
                 Danh sách ưu tiên xử lý
@@ -768,7 +768,7 @@ export default function AlertsPage() {
           </div>
 
           {/* Filters, Pills & Dropdowns Row */}
-          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--color-border)]/50 pb-4">
+          <div data-tour="alerts-filters" className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--color-border)]/50 pb-4">
 
             {/* Sort options */}
             <div className="flex items-center gap-2 text-xs">
@@ -844,9 +844,9 @@ export default function AlertsPage() {
           </div>
 
           {/* Alert Queue Cards list */}
-          <div className="space-y-4">
+          <div data-tour="alerts-queue-list" className="space-y-4">
             {isLoading ? (
-              <div className="flex flex-col items-center justify-center p-12 space-y-3">
+              <div data-tour="alerts-card-actions" className="flex flex-col items-center justify-center p-12 space-y-3">
                 <svg className="animate-spin h-8 w-8 text-[var(--color-brand)]" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
@@ -854,7 +854,7 @@ export default function AlertsPage() {
                 <p className="text-xs text-[var(--color-text-secondary)] font-bold">Đang tải dữ liệu cảnh báo...</p>
               </div>
             ) : processedActiveAlerts.length === 0 ? (
-              <div className="glass-card p-12 text-center rounded-2xl border border-[var(--color-border)]/60 flex flex-col items-center justify-center gap-3">
+              <div data-tour="alerts-card-actions" className="glass-card p-12 text-center rounded-2xl border border-[var(--color-border)]/60 flex flex-col items-center justify-center gap-3">
                 <span className="material-symbols-outlined text-slate-300 text-5xl">inbox</span>
                 <p className="text-xs text-[var(--color-text-secondary)] font-bold">Không tìm thấy cảnh báo phù hợp với bộ lọc.</p>
               </div>
@@ -981,7 +981,7 @@ export default function AlertsPage() {
                     </div>
 
                     {/* Right action controls */}
-                    <div className="p-4 md:p-5 flex md:flex-col justify-center items-center gap-2 flex-shrink-0 md:w-40 border-t md:border-t-0 md:border-l border-[var(--color-border)]/50 bg-slate-50/20 dark:bg-slate-800/10">
+                    <div data-tour="alerts-card-actions" className="p-4 md:p-5 flex md:flex-col justify-center items-center gap-2 flex-shrink-0 md:w-40 border-t md:border-t-0 md:border-l border-[var(--color-border)]/50 bg-slate-50/20 dark:bg-slate-800/10">
                       {isResolving ? (
                         <div className="w-full space-y-2 text-center">
                           <div className="flex items-center gap-1.5 justify-center">
@@ -1078,7 +1078,7 @@ export default function AlertsPage() {
           </div>
 
           {/* Accordion list: LABEL CORRECTION REQUESTS */}
-          <div className="glass-card rounded-2xl border border-[var(--color-border)] overflow-hidden shadow-sm bg-white dark:bg-[var(--color-bg-surface-raised)]">
+          <div data-tour="alerts-label-requests" className="glass-card rounded-2xl border border-[var(--color-border)] overflow-hidden shadow-sm bg-white dark:bg-[var(--color-bg-surface-raised)]">
             <button
               onClick={() => setIsRequestsExpanded(!isRequestsExpanded)}
               className="w-full p-4 flex items-center justify-between font-black text-xs md:text-sm uppercase tracking-wider text-[var(--color-text-primary)] hover:bg-slate-50 transition-colors cursor-pointer"
