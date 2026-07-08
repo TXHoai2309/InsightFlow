@@ -5,6 +5,7 @@ import { collection, doc, limit, query, updateDoc, onSnapshot, addDoc } from "fi
 import { isRecordInBrandScope, isSameBrandScope } from "@/lib/brandScope";
 import { normalizeBrandName } from "@/lib/services/dashboard";
 import { canPerformAction, type UserRoleProfile } from "@/lib/rbac";
+import { fetchSupabaseAlerts, updateSupabaseAlertLabel } from "@/lib/supabase";
 
 export interface ResolutionAttempt {
   attempt_number: number;
@@ -29,6 +30,7 @@ export interface AlertData {
   sentiment: string;
   topic: string;
   severity: string;
+  negativity_score: number;
   created_at: string;
   status: string;
   resolved_at?: string;
@@ -51,6 +53,10 @@ export interface AlertData {
   parent_id?: string | null;
   content_type?: string;
   internal_notes?: InternalNote[];
+  post_id?: string;
+  post_like_count?: number;
+  post_comment_count?: number;
+  post_share_count?: number;
 }
 
 export interface AlertFilters {
@@ -154,6 +160,7 @@ function normalizeSource(source: string): string {
   if (normalized.includes("facebook")) return "facebook";
   if (normalized.includes("tiktok")) return "tiktok";
   if (normalized.includes("youtube")) return "youtube";
+  if (normalized.includes("thread")) return "thread";
   if (normalized.includes("google")) return "google_maps";
   if (normalized.includes("bao") || normalized.includes("news")) return "news";
   return normalized || "news";
@@ -178,30 +185,7 @@ function normalizeTopic(topic: unknown): string {
   return validTopics.has(normalized) ? normalized : "other";
 }
 
-function calculateSeverity(data: any): string {
-  const labels = data.labels || {};
-  const urgency = String(labels.urgency || data.urgency || "").toLowerCase();
-  const topic = normalizeTopic(labels.topic || data.topic);
-  const content = String(data.clean_text || data.original_text || "").toLowerCase();
-
-  if (
-    urgency === "critical" ||
-    topic === "legal" ||
-    content.includes("ngộ độc") ||
-    content.includes("tẩy chay") ||
-    content.includes("khủng hoảng")
-  ) {
-    return "critical";
-  }
-
-  if (urgency === "high" || topic === "service" || topic === "quality") {
-    return "high";
-  }
-
-  if (urgency === "low") {
-    return "low";
-  }
-
+function calculateSeverity(_data: any): string {
   return "medium";
 }
 
@@ -266,105 +250,36 @@ export const useAlertStore = create<AlertState>()(
       set({ isLoading: true, error: null });
 
       try {
-        if (!dbSecond) {
-          throw new Error("Firebase data project is not configured.");
-        }
-
-        const q = query(collection(dbSecond, "insightflow_labels"), limit(500));
-
-        activeUnsubscribe = onSnapshot(q, (snapshot) => {
-          const fetchedAlerts: AlertData[] = [];
-          snapshot.docs.forEach((document) => {
-            const data = document.data();
-            const labels = data.labels || {};
-            const sentiment = String(
-              labels.sentiment || data.baseline_sentiment || data.sentiment || "neutral",
-            ).toLowerCase();
-
-
-
-            const text = String(
-              data.clean_text ||
-              data.original_text ||
-              data.text ||
-              data.content ||
-              "",
+        const loadAlerts = async () => {
+          try {
+            const fetched = await fetchSupabaseAlerts();
+            const filtered = fetched.filter((alert) =>
+              isRecordInBrandScope({ brand: alert.brand }, scopedBrandKey)
             );
 
-            const post_content = String(
-              data.post_content ||
-              data.post_text ||
-              data.post_caption ||
-              data.caption ||
-              data.original_post ||
-              ""
-            );
+            const scopedBrands = Array.from(new Set(filtered.map((alert) => alert.brand))).sort();
+            const fallbackBrands = ["Highland Coffee", "Starbucks", "Mixue"].filter((brand) => {
+              return !scopedBrandKey || normalizeBrandName(brand) === scopedBrandKey;
+            });
 
-            const comment_content = String(
-              data.comment_content ||
-              data.comment_text ||
-              data.comment ||
-              data.clean_text ||
-              data.processed_text ||
-              data.text ||
-              data.content ||
-              ""
-            );
+            set({
+              rawAlerts: filtered,
+              alerts: applyFilters(filtered, get().filters),
+              brands: scopedBrands.length ? scopedBrands : fallbackBrands,
+              error: null,
+              isLoading: false,
+            });
+          } catch (error) {
+            const message = error instanceof Error ? error.message : "Lỗi đồng bộ Supabase";
+            set({ error: message, isLoading: false });
+            console.error("[AlertStore] poll error:", message, error);
+          }
+        };
 
-            const alert = {
-              id: String(data.id || document.id),
-              brand: formatBrandName(String(data.brand || "")),
-              source: normalizeSource(String(data.source || "")),
-              text,
-              sentiment,
-              topic: normalizeTopic(labels.topic || data.topic),
-              severity: calculateSeverity(data),
-              created_at: parseDate(
-                data.labeled_at ||
-                data.uploaded_at ||
-                data.posted_at ||
-                data.created_at,
-              ),
-              status: String(data.status || "new"),
-              resolved_at: data.resolved_at ? parseDate(data.resolved_at) : undefined,
-              collectionName: "insightflow_labels",
-              url: String(data.url || ""),
-              reach: Number(data.reach || data.views || 0),
-              likes: Number(data.likes || data.like_count || 0),
-              comments: Number(data.comments || data.comment_count || 0),
-              shares: Number(data.shares || data.share_count || 0),
-              author: String(data.author || data.author_name || "Ẩn danh"),
-              title: text.slice(0, 120),
-              being_resolved_by: data.being_resolved_by || null,
-              being_resolved_at: data.being_resolved_at || null,
-              resolution_history: Array.isArray(data.resolution_history) ? data.resolution_history : undefined,
-              post_content,
-              comment_content,
-              parent_id: data.parent_id ? String(data.parent_id) : null,
-              content_type: data.content_type ? String(data.content_type) : undefined,
-            };
+        await loadAlerts();
 
-            if (!isRecordInBrandScope({ brand: alert.brand }, scopedBrandKey)) return;
-            fetchedAlerts.push(alert);
-          });
-
-          const scopedBrands = Array.from(new Set(fetchedAlerts.map((alert) => alert.brand))).sort();
-          const fallbackBrands = ["Highland Coffee", "Starbucks", "Mixue"].filter((brand) => {
-            return !scopedBrandKey || normalizeBrandName(brand) === scopedBrandKey;
-          });
-
-          set({
-            rawAlerts: fetchedAlerts,
-            alerts: applyFilters(fetchedAlerts, get().filters),
-            brands: scopedBrands.length ? scopedBrands : fallbackBrands,
-            error: null,
-            isLoading: false,
-          });
-        }, (error) => {
-          const message = error instanceof Error ? error.message : "Lỗi đồng bộ realtime";
-          set({ error: message, isLoading: false });
-          console.error("[AlertStore] onSnapshot error:", message, error);
-        });
+        const intervalId = setInterval(loadAlerts, 5000);
+        activeUnsubscribe = () => clearInterval(intervalId);
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Không thể khởi tạo đồng bộ";
@@ -440,33 +355,47 @@ export const useAlertStore = create<AlertState>()(
         };
       });
 
-      if (!dbSecond) return;
-
       try {
-        const documentRef = doc(dbSecond, "insightflow_labels", id);
-
-        const updateData: Record<string, any> = {
-          status: newStatus,
-          resolved_at: resolvedAt,
-          resolved_by: resolvedAt ? profile.uid : null,
-          resolved_by_email: resolvedAt ? profile.email : null,
-          resolved_by_name: resolvedAt ? profile.displayName : null,
-          ...auditFields,
-        };
-
-        if (newStatus === "new") {
-          // Khôi phục: clear resolution history so alert restarts from Lần 1
-          updateData.resolution_history = [];
-          updateData.resolved_by_email = null;
-          updateData.resolved_by_name = null;
-        } else {
-          const targetAlert = get().rawAlerts.find((a) => a.id === id);
-          if (targetAlert && targetAlert.resolution_history && targetAlert.resolution_history.length > 0) {
-            updateData.resolution_history = targetAlert.resolution_history;
+        await updateSupabaseAlertLabel(id, (existingLabel) => {
+          let nextHistory = existingLabel.resolution_history ? [...existingLabel.resolution_history] : [];
+          if (attempt) {
+            nextHistory.push({
+              attempt_number: nextHistory.length + 1,
+              timestamp: new Date().toISOString(),
+              note: attempt.note,
+              resolved_by_email: profile.email ?? undefined,
+              resolved_by_name: profile.displayName ?? undefined,
+              ...(attempt.image_url ? { image_url: attempt.image_url } : {}),
+            });
           }
-        }
 
-        await updateDoc(documentRef, updateData);
+          if (newStatus === "new") {
+            return {
+              ...existingLabel,
+              resolution_status: newStatus,
+              resolution_history: [],
+              resolved_at: null,
+              resolved_by_email: null,
+              resolved_by_name: null,
+              updated_by: profile.uid,
+              updated_by_role: profile.role,
+              updated_at: new Date().toISOString(),
+            };
+          }
+
+          return {
+            ...existingLabel,
+            resolution_status: newStatus,
+            resolution_history: nextHistory,
+            resolved_at: resolvedAt,
+            resolved_by: resolvedAt ? profile.uid : null,
+            resolved_by_email: resolvedAt ? profile.email : null,
+            resolved_by_name: resolvedAt ? profile.displayName : null,
+            updated_by: profile.uid,
+            updated_by_role: profile.role,
+            updated_at: new Date().toISOString(),
+          };
+        });
       } catch (error) {
         console.error("[AlertStore] Failed to persist alert status:", error);
         // Revert local state update
@@ -572,41 +501,36 @@ export const useAlertStore = create<AlertState>()(
       });
 
       if (decision === "approved" && req) {
-        const alertRef = doc(dbSecond, "insightflow_labels", alertId);
-
-        await updateDoc(alertRef, {
+        await updateSupabaseAlertLabel(alertId, (existingLabel) => ({
+          ...existingLabel,
           sentiment: req.new_sentiment,
-          "labels.sentiment": req.new_sentiment,
           severity: req.new_severity,
           urgency: req.new_severity,
-          "labels.urgency": req.new_severity,
-          topic: req.new_topic,
-          "labels.topic": req.new_topic,
-        });
+          topic: [req.new_topic],
+        }));
       }
     },
 
     lockAlertForResolution: async (id, profile) => {
-      if (!dbSecond || !profile) return;
+      if (!profile) return;
       try {
-        const documentRef = doc(dbSecond, "insightflow_labels", id);
-        await updateDoc(documentRef, {
+        await updateSupabaseAlertLabel(id, (existingLabel) => ({
+          ...existingLabel,
           being_resolved_by: profile.email,
           being_resolved_at: new Date().toISOString(),
-        });
+        }));
       } catch (error) {
         console.error("[AlertStore] Failed to lock alert:", error);
       }
     },
 
     unlockAlertForResolution: async (id) => {
-      if (!dbSecond) return;
       try {
-        const documentRef = doc(dbSecond, "insightflow_labels", id);
-        await updateDoc(documentRef, {
+        await updateSupabaseAlertLabel(id, (existingLabel) => ({
+          ...existingLabel,
           being_resolved_by: null,
           being_resolved_at: null,
-        });
+        }));
       } catch (error) {
         console.error("[AlertStore] Failed to unlock alert:", error);
       }

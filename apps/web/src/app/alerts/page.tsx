@@ -9,6 +9,7 @@ import { useDashboard } from "@/hooks/useDashboardData";
 import { dbSecond } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
 import { PlatformLogo } from "@/components/platform/PlatformLogo";
+import { fetchSupabaseAlerts, supabaseRequest } from "@/lib/supabase";
 import {
   getScopedBrandKey,
   hasBusinessBrandScope,
@@ -263,14 +264,8 @@ export default function AlertsPage() {
     });
   }, [rawAlerts, filters.brand]);
 
-  // Generate consistent, stable risk score for each alert
   const getRiskScore = (alert: any) => {
-    const sev = String(alert.severity || "").toLowerCase();
-    const idSum = String(alert.id || "").split("").reduce((acc, c) => acc + c.charCodeAt(0), 0);
-    if (sev === "critical") return 98; // Constant to match screenshot
-    if (sev === "high") return 85; // Constant to match screenshot
-    if (sev === "medium") return 62; // Constant to match screenshot
-    return 15; // Constant to match screenshot
+    return alert.negativity_score ?? 0;
   };
 
   // Filter alerts into active, resolved, and requests
@@ -439,17 +434,17 @@ export default function AlertsPage() {
       setLoadingParent(true);
       const fetchParent = async () => {
         try {
-          const docRef = doc(dbSecond, "insightflow_labels", selectedEvidence.parent_id);
-          const snap = await getDoc(docRef);
-          if (snap.exists()) {
-            const data = snap.data();
-            const text = String(
-              data.clean_text || data.original_text || data.text || data.content || ""
-            );
+          const postResult = await supabaseRequest<any[]>(
+            "posts",
+            `post_id=eq.${encodeURIComponent(selectedEvidence.parent_id)}&limit=1`
+          );
+          const parentPost = postResult?.[0];
+          if (parentPost) {
+            const text = String(parentPost.payload_json?.text || parentPost.text || "");
             setParentText(text);
           }
         } catch (err) {
-          console.error("Failed to fetch parent post from firestore:", err);
+          console.error("Failed to fetch parent post from Supabase:", err);
         } finally {
           setLoadingParent(false);
         }
@@ -809,8 +804,8 @@ export default function AlertsPage() {
                       key={pill.id}
                       onClick={() => setSeverityFilter(pill.id)}
                       className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${isActive
-                          ? pill.activeClass
-                          : "text-slate-600 dark:text-slate-400 hover:text-slate-800"
+                        ? pill.activeClass
+                        : "text-slate-600 dark:text-slate-400 hover:text-slate-800"
                         }`}
                     >
                       {pill.label}
@@ -837,8 +832,8 @@ export default function AlertsPage() {
               <button
                 onClick={() => setShowMineOnly(!showMineOnly)}
                 className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${showMineOnly
-                    ? "bg-[var(--color-brand)]/10 border-[var(--color-brand)] text-[var(--color-brand)] font-black"
-                    : "border-[var(--color-border)] text-[var(--color-text-secondary)] bg-white dark:bg-[var(--color-bg-surface-raised)] hover:bg-slate-50"
+                  ? "bg-[var(--color-brand)]/10 border-[var(--color-brand)] text-[var(--color-brand)] font-black"
+                  : "border-[var(--color-border)] text-[var(--color-text-secondary)] bg-white dark:bg-[var(--color-bg-surface-raised)] hover:bg-slate-50"
                   }`}
               >
                 Của tôi
@@ -907,10 +902,9 @@ export default function AlertsPage() {
                     </div>
 
                     {/* Middle panel showing metadata & text preview */}
-                    <div className="p-5 flex-grow flex flex-col justify-between gap-3 min-w-0">
-                      <div className="flex flex-wrap items-center gap-3 text-xs">
-
-                        {/* Profile pic fallback initials */}
+                    <div className="p-5 flex-grow flex flex-col gap-3 min-w-0">
+                      {/* Row 1: Author info + brand + time */}
+                      <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 border border-[var(--color-border)] flex items-center justify-center overflow-hidden flex-shrink-0">
                           {alert.social_profile_url && alert.social_profile_url !== "#" ? (
                             <img src={alert.social_profile_url} alt={alert.author} className="w-full h-full object-cover" />
@@ -920,49 +914,66 @@ export default function AlertsPage() {
                             </span>
                           )}
                         </div>
-
-                        {/* Author name & relative time */}
-                        <div className="min-w-0">
-                          <p className="font-bold text-[var(--color-text-primary)] truncate max-w-[140px]">
-                            {alert.author || "Ẩn danh"}
-                          </p>
+                        <div className="min-w-0 flex-grow">
+                          <div className="flex items-center gap-2">
+                            <p className="font-bold text-xs text-[var(--color-text-primary)] truncate max-w-[160px]">
+                              {alert.author || "Ẩn danh"}
+                            </p>
+                            <span className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/20 px-1.5 py-0.5 rounded border border-indigo-100 dark:border-indigo-900/30 flex-shrink-0">
+                              {formatBrandName(alert.brand)}
+                            </span>
+                          </div>
                           <p className="text-[9px] text-[var(--color-text-muted)] font-semibold mt-0.5">
                             {getRelativeTime(alert.created_at, t)}
                           </p>
                         </div>
-
-                        {/* Platform Source Logo */}
-                        <div className="flex-shrink-0 scale-90">
-                          <PlatformLogo platform={alert.source} size="sm" />
-                        </div>
-
-                        {/* Dynamic contextual badges */}
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          {alert.reach && alert.reach > 50000 && (
-                            <span className="bg-pink-50 dark:bg-pink-950/20 text-pink-600 text-[9px] font-bold px-2 py-0.5 rounded-lg border border-pink-100 dark:border-pink-900/30">
-                              KOL lớn
-                            </span>
-                          )}
-                          {alert.reach && alert.reach > 10000 && (
-                            <span className="bg-orange-50 dark:bg-orange-950/20 text-orange-600 text-[9px] font-bold px-2 py-0.5 rounded-lg border border-orange-100 dark:border-orange-900/30">
-                              Lan truyền nhanh
-                            </span>
-                          )}
-                          {isResolving && (
-                            <span className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[9px] font-bold px-2 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
-                              Đang xử lý
-                            </span>
-                          )}
-                          {!isResolving && alert.status !== "resolved" && (
-                            <span className="bg-red-50 dark:bg-red-950/20 text-red-600 text-[9px] font-bold px-2 py-0.5 rounded-lg border border-red-100 dark:border-red-900/30">
-                              Chờ xử lý
-                            </span>
-                          )}
-                        </div>
                       </div>
 
-                      {/* Content block */}
-                      <p className="text-xs md:text-sm text-[var(--color-text-secondary)] font-medium leading-relaxed break-words">
+                      {/* Row 2: Platform + topic + sentiment + status badges */}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <PlatformLogo platform={alert.source} size="sm" />
+                          <span className="text-[9px] font-bold text-[var(--color-text-muted)] uppercase">
+                            {alert.source === "google_maps" ? "Google Maps" : alert.source === "thread" ? "Threads" : alert.source.charAt(0).toUpperCase() + alert.source.slice(1)}
+                          </span>
+                        </div>
+                        <span className="text-slate-300 dark:text-slate-600">·</span>
+                        <span className="bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 text-[9px] font-bold px-1.5 py-0.5 rounded border border-blue-100 dark:border-blue-900/30">
+                          {t(`dashboard.topics.${alert.topic}`, { defaultValue: alert.topic })}
+                        </span>
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
+                          alert.sentiment === "negative"
+                            ? "bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border-red-100 dark:border-red-900/30"
+                            : alert.sentiment === "positive"
+                            ? "bg-green-50 dark:bg-green-950/20 text-green-600 dark:text-green-400 border-green-100 dark:border-green-900/30"
+                            : "bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700"
+                        }`}>
+                          {alert.sentiment === "negative" ? "Tiêu cực" : alert.sentiment === "positive" ? "Tích cực" : "Trung lập"}
+                        </span>
+                        {(alert.reach ?? 0) > 50000 && (
+                          <span className="bg-pink-50 dark:bg-pink-950/20 text-pink-600 text-[9px] font-bold px-1.5 py-0.5 rounded border border-pink-100 dark:border-pink-900/30">
+                            KOL lớn
+                          </span>
+                        )}
+                        {(alert.reach ?? 0) > 10000 && (alert.reach ?? 0) <= 50000 && (
+                          <span className="bg-orange-50 dark:bg-orange-950/20 text-orange-600 text-[9px] font-bold px-1.5 py-0.5 rounded border border-orange-100 dark:border-orange-900/30">
+                            Lan truyền nhanh
+                          </span>
+                        )}
+                        {isResolving && (
+                          <span className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[9px] font-bold px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+                            Đang xử lý
+                          </span>
+                        )}
+                        {!isResolving && alert.status !== "resolved" && (
+                          <span className="bg-red-50 dark:bg-red-950/20 text-red-600 text-[9px] font-bold px-1.5 py-0.5 rounded border border-red-100 dark:border-red-900/30">
+                            Chờ xử lý
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Row 3: Content with truncation */}
+                      <p className="text-xs md:text-sm text-[var(--color-text-secondary)] font-medium leading-relaxed break-words line-clamp-3">
                         {alert.text}
                       </p>
                     </div>
@@ -980,7 +991,7 @@ export default function AlertsPage() {
                             </span>
                           </div>
                           <button
-                            onClick={() => router.push(`/alerts/${alert.id}`)}
+                            onClick={() => router.push(`/alerts/${encodeURIComponent(alert.id)}`)}
                             className="w-full py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[var(--color-text-primary)] text-xs font-bold transition-all cursor-pointer border border-[var(--color-border)]"
                           >
                             Chi tiết
@@ -1007,7 +1018,7 @@ export default function AlertsPage() {
                           </button>
 
                           <button
-                            onClick={() => router.push(`/alerts/${alert.id}`)}
+                            onClick={() => router.push(`/alerts/${encodeURIComponent(alert.id)}`)}
                             className="w-full py-1 text-center text-[var(--color-brand)] hover:underline text-xs font-bold cursor-pointer"
                           >
                             Xem chi tiết
@@ -1052,7 +1063,7 @@ export default function AlertsPage() {
                         <p className="text-[var(--color-text-secondary)] truncate mt-1">{alert.text}</p>
                       </div>
                       <button
-                        onClick={() => router.push(`/alerts/${alert.id}`)}
+                        onClick={() => router.push(`/alerts/${encodeURIComponent(alert.id)}`)}
                         className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg font-bold text-slate-700 cursor-pointer flex-shrink-0"
                       >
                         Chi tiết
@@ -1089,7 +1100,7 @@ export default function AlertsPage() {
                       <div className="flex items-center justify-between">
                         <span className="font-bold text-[var(--color-text-primary)]">{req.requester_email}</span>
                         <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${req.status === "pending" ? "bg-amber-50 text-amber-600" :
-                            req.status === "approved" ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"
+                          req.status === "approved" ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"
                           }`}>
                           {req.status === "pending" ? "Đang chờ duyệt" : req.status === "approved" ? "Đã duyệt" : "Đã từ chối"}
                         </span>
@@ -1350,72 +1361,61 @@ function TrendModal({ alert, onClose }: TrendModalProps) {
       let values: number[] = [];
 
       try {
-        if (dbSecond) {
-          // 1. Fetch from the real labeled data collection.
-          const mentionsRef = collection(dbSecond, "insightflow_labels");
-          const snap = await getDocs(mentionsRef);
+        // 1. Fetch from Supabase.
+        const fetched = await fetchSupabaseAlerts();
 
-          if (active) {
-            // 2. Parse and filter docs in-memory
-            const rawDocs = snap.docs.map(doc => {
-              const d = doc.data();
-              const labels = d.labels || {};
-              const firstTopic = Array.isArray(labels.topic) ? labels.topic[0] : labels.topic;
-              return {
-                brand: String(d.brand || d.workspace_id || ""),
-                sentiment: String(labels.sentiment || d.sentiment || ""),
-                topic: String(firstTopic || d.topic || ""),
-                date: new Date(parseDateToISOString(d.labeled_at || d.uploaded_at || d.posted_at || d.created_at))
-              };
-            }).filter((doc) => isRecordInBrandScope({ brand: doc.brand }, scopedBrandKey));
-
-            const targetBrand = alert.brand.toLowerCase().trim();
-            const targetTopic = alert.topic.toLowerCase().trim();
-            const normalizeBrandForTrend = (brand: string) => {
-              const normalized = brand.toLowerCase().replace(/[\s\-_.]/g, "").trim();
-              if (normalized.includes("highland")) return "highlandcoffee";
-              if (normalized.includes("starbuck")) return "starbucks";
-              if (normalized.includes("mixue")) return "mixue";
-              return normalized;
+        if (active) {
+          // 2. Parse and filter docs in-memory
+          const rawDocs = fetched.map(alertItem => {
+            return {
+              brand: alertItem.brand,
+              sentiment: alertItem.sentiment,
+              topic: alertItem.topic,
+              date: new Date(alertItem.created_at)
             };
-            const targetBrandKey = normalizeBrandForTrend(targetBrand);
+          }).filter((doc) => isRecordInBrandScope({ brand: doc.brand }, scopedBrandKey));
 
-            const matches = rawDocs.filter(d => {
-              const brandMatch = normalizeBrandForTrend(d.brand) === targetBrandKey;
-              const topicMatch = d.topic.toLowerCase() === targetTopic;
-              const sentimentMatch = d.sentiment.toLowerCase() === "negative";
-              return brandMatch && topicMatch && sentimentMatch;
+          const targetBrand = alert.brand.toLowerCase().trim();
+          const targetTopic = alert.topic.toLowerCase().trim();
+          const normalizeBrandForTrend = (brand: string) => {
+            const normalized = brand.toLowerCase().replace(/[\s\-_.]/g, "").trim();
+            if (normalized.includes("highland")) return "highlandcoffee";
+            if (normalized.includes("starbuck")) return "starbucks";
+            if (normalized.includes("mixue")) return "mixue";
+            return normalized;
+          };
+          const targetBrandKey = normalizeBrandForTrend(targetBrand);
+
+          const matches = rawDocs.filter(d => {
+            const brandMatch = normalizeBrandForTrend(d.brand) === targetBrandKey;
+            const topicMatch = d.topic.toLowerCase() === targetTopic;
+            const sentimentMatch = d.sentiment.toLowerCase() === "negative";
+            return brandMatch && topicMatch && sentimentMatch;
+          });
+
+          // 3. Aggregate by day for last 7 days
+          const endDate = new Date();
+          for (let i = 6; i >= 0; i--) {
+            const dayDate = new Date(endDate);
+            dayDate.setDate(dayDate.getDate() - i);
+            const dateStr = dayDate.toLocaleDateString(i18n.language === "vi" ? "vi-VN" : "en-US", {
+              day: "2-digit",
+              month: "2-digit",
             });
+            dates.push(dateStr);
 
-            // 3. Aggregate by day for last 7 days
-            const endDate = new Date();
-            for (let i = 6; i >= 0; i--) {
-              const dayDate = new Date(endDate);
-              dayDate.setDate(dayDate.getDate() - i);
-              const dateStr = dayDate.toLocaleDateString(i18n.language === "vi" ? "vi-VN" : "en-US", {
+            const countOnDay = matches.filter(d => {
+              return d.date.toLocaleDateString(i18n.language === "vi" ? "vi-VN" : "en-US", {
                 day: "2-digit",
                 month: "2-digit",
-              });
-              dates.push(dateStr);
+              }) === dateStr;
+            }).length;
 
-              const countOnDay = matches.filter(d => {
-                return d.date.toLocaleDateString(i18n.language === "vi" ? "vi-VN" : "en-US", {
-                  day: "2-digit",
-                  month: "2-digit",
-                }) === dateStr;
-              }).length;
-
-              values.push(countOnDay);
-            }
+            values.push(countOnDay);
           }
-        } else {
-          // Fallback to simulated data
-          const mock = generateTrendData();
-          dates = mock.dates;
-          values = mock.values;
         }
       } catch (err) {
-        console.error("Firestore aggregation failed, falling back:", err);
+        console.error("Supabase aggregation failed, falling back:", err);
         const mock = generateTrendData();
         dates = mock.dates;
         values = mock.values;

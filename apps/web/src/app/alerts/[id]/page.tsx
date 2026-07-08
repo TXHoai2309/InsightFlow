@@ -9,6 +9,7 @@ import { PlatformLogo } from "@/components/platform/PlatformLogo";
 import { dbSecond } from "@/lib/firebase";
 import { doc, onSnapshot, updateDoc, arrayUnion } from "firebase/firestore";
 import { canPerformAction } from "@/lib/rbac";
+import { fetchSingleSupabaseAlert, updateSupabaseAlertLabel } from "@/lib/supabase";
 // Helper function to format brand display names
 function formatBrandName(brand: string): string {
   if (!brand) return "";
@@ -103,7 +104,7 @@ function IncidentReportModal({ item, onClose, triggerToast }: IncidentReportModa
             <span className="material-symbols-outlined">close</span>
           </button>
         </div>
-        
+
         <div className="text-xs space-y-1.5 text-[var(--color-text-secondary)] bg-slate-50 dark:bg-slate-800/40 p-3 rounded-xl border border-[var(--color-border)]/50">
           <p><strong>Thương hiệu:</strong> {brandName}</p>
           <p><strong>Nguồn phát hiện:</strong> {sourceName}</p>
@@ -173,7 +174,10 @@ const getResolverName = (emailOrId: string | null | undefined): string => {
 export default function AlertDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const id = params?.id as string;
+  const id = (() => {
+    const raw = params?.id as string;
+    try { return decodeURIComponent(raw); } catch { return raw; }
+  })();
 
   const { profile } = useAuth();
   const {
@@ -204,14 +208,9 @@ export default function AlertDetailPage() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showReportModal, setShowReportModal] = useState(false);
 
-  // Relative detection metrics mock generator
   const riskScore = useMemo(() => {
-    if (!alert) return 15;
-    const sev = String(alert.severity || "").toLowerCase();
-    if (sev === "critical") return 95;
-    if (sev === "high") return 85;
-    if (sev === "medium") return 62;
-    return 15;
+    if (!alert) return 0;
+    return (alert as any).negativity_score ?? 0;
   }, [alert]);
 
   const triggerToast = (msg: string) => {
@@ -219,74 +218,41 @@ export default function AlertDetailPage() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  // Real-time Firestore doc subscription
+  // Real-time Supabase doc polling
   useEffect(() => {
-    if (!dbSecond || !id) return;
+    if (!id) return;
     setLoading(true);
 
-    const docRef = doc(dbSecond, "insightflow_labels", id);
-    const unsub = onSnapshot(
-      docRef,
-      (docSnap) => {
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          const labels = data.labels || {};
-          const sentiment = String(
-            labels.sentiment || data.baseline_sentiment || data.sentiment || "neutral"
-          ).toLowerCase();
-
-          setAlert({
-            id: docSnap.id,
-            brand: data.brand || "",
-            source: data.source || "",
-            text: data.clean_text || data.original_text || data.text || data.content || "",
-            sentiment: sentiment,
-            topic: data.topic || "",
-            severity: data.severity || "medium",
-            created_at: data.created_at || data.posted_at || data.uploaded_at || new Date().toISOString(),
-            status: data.status || "new",
-            resolved_at: data.resolved_at || undefined,
-            url: data.url || "#",
-            reach: data.reach || 0,
-            likes: data.likes || 0,
-            comments: data.comments || 0,
-            shares: data.shares || 0,
-            author: data.author || "",
-            title: data.title || "",
-            social_profile_url: data.social_profile_url || "#",
-            being_resolved_by: data.being_resolved_by || null,
-            being_resolved_at: data.being_resolved_at || null,
-            resolution_history: Array.isArray(data.resolution_history) ? data.resolution_history : [],
-            post_content: data.post_content || "",
-            comment_content: data.comment_content || "",
-            parent_id: data.parent_id || null,
-            content_type: data.content_type || "",
-            resolved_by_email: data.resolved_by_email || null,
-            resolved_by_name: data.resolved_by_name || null,
-            // Fallback mock comments
-            internal_notes: Array.isArray(data.internal_notes) ? data.internal_notes : []
-          } as any);
-
-          // Sync default values for editing forms
-          setNewSeverity(data.severity || "medium");
+    const loadAlertDetail = async () => {
+      try {
+        let detail = await fetchSingleSupabaseAlert(id);
+        if (!detail) {
+          const storeAlert = useAlertStore.getState().rawAlerts.find(a => a.id === id);
+          if (storeAlert) detail = storeAlert;
+        }
+        if (detail) {
+          setAlert(detail);
+          setNewSeverity(detail.severity || "medium");
         } else {
           setAlert(null);
         }
-        setLoading(false);
-      },
-      (err) => {
-        console.error("Error loading alert document details:", err);
+      } catch (err) {
+        console.error("Error loading alert document details from Supabase:", err);
+      } finally {
         setLoading(false);
       }
-    );
+    };
 
-    return () => unsub();
+    loadAlertDetail();
+
+    const intervalId = setInterval(loadAlertDetail, 5000);
+    return () => clearInterval(intervalId);
   }, [id]);
 
   // Lock status on component mount, unlock on unmount
   useEffect(() => {
     if (!id || !profile) return;
-    
+
     // Automatically trigger lock resolution if it is NOT yet locked
     const triggerLock = async () => {
       try {
@@ -321,17 +287,21 @@ export default function AlertDetailPage() {
 
   // Handler: Add Internal Note
   const handleAddInternalNote = async () => {
-    if (!alert || !internalNoteInput.trim() || !dbSecond) return;
+    if (!alert || !internalNoteInput.trim()) return;
     try {
-      const docRef = doc(dbSecond, "insightflow_labels", alert.id);
       const authorName = profile?.displayName || getResolverName(profile?.email) || "Admin Officer";
       const newNote = {
         note: internalNoteInput.trim(),
         author: authorName,
         timestamp: new Date().toISOString()
       };
-      await updateDoc(docRef, {
-        internal_notes: arrayUnion(newNote)
+      await updateSupabaseAlertLabel(alert.id, (existingLabel) => {
+        const notes = existingLabel.internal_notes ? [...existingLabel.internal_notes] : [];
+        notes.push(newNote);
+        return {
+          ...existingLabel,
+          internal_notes: notes
+        };
       });
       setInternalNoteInput("");
       triggerToast("Đã thêm ghi chú nội bộ!");
@@ -343,16 +313,15 @@ export default function AlertDetailPage() {
 
   // Handler: Save modified severity
   const handleSaveSeverity = async () => {
-    if (!alert || !dbSecond) return;
+    if (!alert) return;
     if (!severityReason.trim()) {
       triggerToast("Vui lòng điền lý do thay đổi mức độ!");
       return;
     }
 
     try {
-      const docRef = doc(dbSecond, "insightflow_labels", alert.id);
       const authorName = profile?.displayName || getResolverName(profile?.email) || "Admin Officer";
-      
+
       // Add custom entry to resolution attempt log
       const nextHistory = alert.resolution_history ? [...alert.resolution_history] : [];
       nextHistory.push({
@@ -363,11 +332,13 @@ export default function AlertDetailPage() {
         resolved_by_name: authorName
       } as any);
 
-      await updateDoc(docRef, {
-        severity: newSeverity,
-        urgency: newSeverity,
-        "labels.urgency": newSeverity,
-        resolution_history: nextHistory
+      await updateSupabaseAlertLabel(alert.id, (existingLabel) => {
+        return {
+          ...existingLabel,
+          severity: newSeverity,
+          urgency: newSeverity,
+          resolution_history: nextHistory
+        };
       });
 
       setEditSeverityMode(false);
@@ -467,7 +438,7 @@ export default function AlertDetailPage() {
 
   return (
     <div className="min-h-screen bg-[var(--color-bg-base)] text-[var(--color-text-primary)] animate-fade-in pb-16">
-      
+
       {/* Dynamic Header Block */}
       <div className="sticky top-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-[var(--color-border)] px-4 md:px-8 py-4 z-30 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-4">
@@ -480,29 +451,27 @@ export default function AlertDetailPage() {
           <div>
             <h1 className="text-lg md:text-xl font-black text-[var(--color-text-primary)] uppercase flex items-center gap-2">
               Vụ việc #{alert.id.slice(-4)}
-              <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold text-white shadow-sm flex items-center gap-1 ${
-                alert.severity === "critical" ? "bg-red-600" :
-                alert.severity === "high" ? "bg-orange-500" :
-                alert.severity === "medium" ? "bg-yellow-500" : "bg-slate-500"
-              }`}>
+              <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold text-white shadow-sm flex items-center gap-1 ${alert.severity === "critical" ? "bg-red-600" :
+                  alert.severity === "high" ? "bg-orange-500" :
+                    alert.severity === "medium" ? "bg-yellow-500" : "bg-slate-500"
+                }`}>
                 {riskScore} - {
                   alert.severity === "critical" ? "Khẩn cấp" :
-                  alert.severity === "high" ? "Rủi ro cao" :
-                  alert.severity === "medium" ? "Trung bình" : "Thấp"
+                    alert.severity === "high" ? "Rủi ro cao" :
+                      alert.severity === "medium" ? "Trung bình" : "Thấp"
                 }
               </span>
             </h1>
             <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs text-[var(--color-text-muted)] font-semibold">
-              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                alert.status === "new" ? "bg-blue-100 text-blue-600 dark:bg-blue-950/20" :
-                alert.status === "resolving" ? "bg-amber-100 text-amber-600 dark:bg-amber-950/20" :
-                alert.status === "resolved" ? "bg-green-100 text-green-600 dark:bg-green-950/20" : "bg-slate-100 text-slate-600"
-              }`}>
+              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${alert.status === "new" ? "bg-blue-100 text-blue-600 dark:bg-blue-950/20" :
+                  alert.status === "resolving" ? "bg-amber-100 text-amber-600 dark:bg-amber-950/20" :
+                    alert.status === "resolved" ? "bg-green-100 text-green-600 dark:bg-green-950/20" : "bg-slate-100 text-slate-600"
+                }`}>
                 {
                   alert.status === "new" ? "Mới phát hiện" :
-                  alert.status === "resolving" ? "Đang xử lý" :
-                  alert.status === "responded" ? "Đã phản hồi" :
-                  alert.status === "resolved" ? "Đã giải quyết" : "Đã đóng"
+                    alert.status === "resolving" ? "Đang xử lý" :
+                      alert.status === "responded" ? "Đã phản hồi" :
+                        alert.status === "resolved" ? "Đã giải quyết" : "Đã đóng"
                 }
               </span>
               <span className="flex items-center gap-1">
@@ -528,7 +497,7 @@ export default function AlertDetailPage() {
           >
             Chia sẻ
           </button>
-          
+
           {!isMine && !isLockedByOthers && (
             <button
               onClick={() => {
@@ -562,10 +531,10 @@ export default function AlertDetailPage() {
       </div>
 
       <div className="px-4 md:px-8 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6 max-w-[1600px] mx-auto">
-        
+
         {/* LEFT COLUMN: 60% Width */}
         <div className="lg:col-span-7 space-y-6">
-          
+
           {/* Original Content Card */}
           <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-[var(--color-border)] flex flex-wrap justify-between items-center bg-slate-50/50 dark:bg-slate-800/10 gap-3">
@@ -649,7 +618,7 @@ export default function AlertDetailPage() {
               </h3>
               <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${sentimentBadge}`}>
                 {alert.sentiment === "negative" ? "Tiêu cực (88%)" :
-                 alert.sentiment === "positive" ? "Tích cực" : "Trung lập"}
+                  alert.sentiment === "positive" ? "Tích cực" : "Trung lập"}
               </span>
             </div>
 
@@ -754,9 +723,9 @@ export default function AlertDetailPage() {
 
         {/* RIGHT COLUMN: 40% Width - Sticky Widget Group */}
         <div className="lg:col-span-5 space-y-6">
-          
+
           <div className="sticky top-[80px] space-y-6 pb-20">
-            
+
             {/* Widget: Severity Label Dropdown */}
             <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl shadow-sm p-6 space-y-4">
               <div className="flex items-center justify-between">
@@ -774,16 +743,15 @@ export default function AlertDetailPage() {
               </div>
 
               {!editSeverityMode ? (
-                <div className={`w-full text-white px-4 py-3 rounded-xl flex items-center gap-2 shadow-sm ${
-                  alert.severity === "critical" ? "bg-red-600" :
-                  alert.severity === "high" ? "bg-orange-500" :
-                  alert.severity === "medium" ? "bg-yellow-500" : "bg-slate-500"
-                }`}>
+                <div className={`w-full text-white px-4 py-3 rounded-xl flex items-center gap-2 shadow-sm ${alert.severity === "critical" ? "bg-red-600" :
+                    alert.severity === "high" ? "bg-orange-500" :
+                      alert.severity === "medium" ? "bg-yellow-500" : "bg-slate-500"
+                  }`}>
                   <span className="material-symbols-outlined text-[18px]">priority_high</span>
                   <span className="font-bold text-xs uppercase tracking-wider">
                     {alert.severity === "critical" ? "Khẩn cấp" :
-                     alert.severity === "high" ? "Rủi ro cao" :
-                     alert.severity === "medium" ? "Trung bình" : "Thấp"}
+                      alert.severity === "high" ? "Rủi ro cao" :
+                        alert.severity === "medium" ? "Trung bình" : "Thấp"}
                   </span>
                 </div>
               ) : (
@@ -798,9 +766,8 @@ export default function AlertDetailPage() {
                       <button
                         key={btn.key}
                         onClick={() => setNewSeverity(btn.key)}
-                        className={`py-2 text-[10px] font-bold rounded border transition-all cursor-pointer ${
-                          newSeverity === btn.key ? btn.activeClass : `${btn.class} bg-white dark:bg-slate-800 hover:bg-slate-50`
-                        }`}
+                        className={`py-2 text-[10px] font-bold rounded border transition-all cursor-pointer ${newSeverity === btn.key ? btn.activeClass : `${btn.class} bg-white dark:bg-slate-800 hover:bg-slate-50`
+                          }`}
                       >
                         {btn.label.toUpperCase()}
                       </button>
@@ -852,8 +819,8 @@ export default function AlertDetailPage() {
                   style={{
                     width:
                       alert.status === "new" ? "0%" :
-                      alert.status === "resolving" ? "33%" :
-                      alert.status === "responded" ? "66%" : "100%"
+                        alert.status === "resolving" ? "33%" :
+                          alert.status === "responded" ? "66%" : "100%"
                   }}
                 ></div>
 
@@ -885,14 +852,12 @@ export default function AlertDetailPage() {
                       }}
                       className={`relative flex flex-col items-center z-10 focus:outline-none ${isMine ? "cursor-pointer" : "cursor-default"}`}
                     >
-                      <div className={`w-4.5 h-4.5 rounded-full border-4 border-[var(--color-bg-surface)] ring-2 transition-all ${
-                        isCurrent ? "bg-indigo-600 ring-indigo-600 scale-110" :
-                        isCompleted ? "bg-indigo-500 ring-indigo-500" : "bg-slate-200 dark:bg-slate-700 ring-slate-200 dark:ring-slate-700"
-                      }`} />
-                      <span className={`text-[10px] mt-2 font-bold transition-colors ${
-                        isCurrent ? "text-indigo-600" :
-                        isCompleted ? "text-[var(--color-text-primary)]" : "text-[var(--color-text-muted)]"
-                      }`}>
+                      <div className={`w-4.5 h-4.5 rounded-full border-4 border-[var(--color-bg-surface)] ring-2 transition-all ${isCurrent ? "bg-indigo-600 ring-indigo-600 scale-110" :
+                          isCompleted ? "bg-indigo-500 ring-indigo-500" : "bg-slate-200 dark:bg-slate-700 ring-slate-200 dark:ring-slate-700"
+                        }`} />
+                      <span className={`text-[10px] mt-2 font-bold transition-colors ${isCurrent ? "text-indigo-600" :
+                          isCompleted ? "text-[var(--color-text-primary)]" : "text-[var(--color-text-muted)]"
+                        }`}>
                         {step.label}
                       </span>
                     </button>
