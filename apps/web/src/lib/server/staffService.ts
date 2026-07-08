@@ -191,13 +191,75 @@ async function ensureBrandManager(user: DecodedIdToken) {
 export async function listStaff(user: DecodedIdToken) {
   const manager = await ensureBrandManager(user);
 
-  const [primarySnapshot, secondarySnapshot] = await Promise.all([
+  const staffByUid = new Map<string, any>();
+
+  try {
+    const brandStaffSnapshot = await db
+      .collection("brands")
+      .doc(manager.brandId)
+      .collection("staff")
+      .get();
+
+    brandStaffSnapshot.docs.forEach((doc) => {
+      const data = doc.data();
+      const uid = String(data.uid || doc.id || "");
+      if (!uid) return;
+      staffByUid.set(uid, {
+        ...data,
+        uid,
+        brandId: data.brandId || manager.brandId,
+        brandName: data.brandName || manager.brandName,
+      });
+    });
+  } catch (error) {
+    console.warn("[StaffService] brand staff subcollection load failed:", error);
+  }
+
+  if (staffByUid.size > 0) {
+    const userDocs = await Promise.all(
+      Array.from(staffByUid.keys()).map(async (uid) => {
+        try {
+          const snapshot = await db.collection("users").doc(uid).get();
+          return snapshot.exists ? { uid, data: snapshot.data() } : null;
+        } catch {
+          return null;
+        }
+      }),
+    );
+
+    userDocs.forEach((entry) => {
+      if (!entry?.data) return;
+      staffByUid.set(entry.uid, {
+        ...staffByUid.get(entry.uid),
+        ...entry.data,
+        uid: entry.uid,
+        brandId: entry.data.brandId || manager.brandId,
+        brandName: entry.data.brandName || manager.brandName,
+      });
+    });
+
+    return Array.from(staffByUid.values())
+      .filter((data) => isStaffAccount(data, manager))
+      .map((data) => serializeStaffAccount(data, manager));
+  }
+
+  const [primaryResult, secondaryResult] = await Promise.allSettled([
     db.collection("users").get(),
     dbData.collection("users").get(),
   ]);
 
+  const primaryDocs = primaryResult.status === "fulfilled" ? primaryResult.value.docs : [];
+  const secondaryDocs = secondaryResult.status === "fulfilled" ? secondaryResult.value.docs : [];
+
+  if (primaryResult.status === "rejected") {
+    console.warn("[StaffService] primary users load failed:", primaryResult.reason);
+  }
+  if (secondaryResult.status === "rejected") {
+    console.warn("[StaffService] secondary users load failed:", secondaryResult.reason);
+  }
+
   const seen = new Set<string>();
-  const merged = [...primarySnapshot.docs, ...secondarySnapshot.docs]
+  const merged = [...primaryDocs, ...secondaryDocs]
     .map((doc) => doc.data())
     .filter((data) => {
       const uid = data.uid as string | undefined;

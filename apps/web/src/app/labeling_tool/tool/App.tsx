@@ -5,6 +5,7 @@ import {
   Person, Label, Thread, TopicKey, TOPIC_HOTKEYS,
   EMPTY_LABEL, IRRELEVANT_PRESET_LABEL, isIrrelevantPreset,
   POSITIVE_COLD_PRESET_LABEL, isPositiveColdPreset,
+  NEGATIVE_STAFF_ATTITUDE_PRESET_LABEL, isNegativeStaffAttitudePreset,
   POSITIVE_NONE_PRESET_LABEL, isPositiveNonePreset,
 } from './types';
 import { useData } from './hooks/useData';
@@ -330,7 +331,7 @@ export default function App() {
         next.intent = toggled.intent;
         updated = true;
       }
-      else if (key === '8') {
+      else if (key === '7') {
         const toggled = isPositiveNonePreset(lbl) ? EMPTY_LABEL : POSITIVE_NONE_PRESET_LABEL;
         next.sentiment = toggled.sentiment;
         next.topic = [...toggled.topic];
@@ -341,6 +342,15 @@ export default function App() {
       }
       else if (key === '9') {
         const toggled = isPositiveColdPreset(lbl) ? EMPTY_LABEL : POSITIVE_COLD_PRESET_LABEL;
+        next.sentiment = toggled.sentiment;
+        next.topic = [...toggled.topic];
+        next.relevance = toggled.relevance;
+        next.urgency = toggled.urgency;
+        next.intent = toggled.intent;
+        updated = true;
+      }
+      else if (key === '8') {
+        const toggled = isNegativeStaffAttitudePreset(lbl) ? EMPTY_LABEL : NEGATIVE_STAFF_ATTITUDE_PRESET_LABEL;
         next.sentiment = toggled.sentiment;
         next.topic = [...toggled.topic];
         next.relevance = toggled.relevance;

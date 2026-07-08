@@ -41,6 +41,41 @@
   - Tự động chuyển đổi chế độ xem thông minh khi không có sự vụ rủi ro cao.
   - Thiết lập cơ chế đồng bộ thời gian thực (Real-time Sync) 100% qua Firestore `onSnapshot` để thẻ sự cố tự động ẩn khỏi hàng chờ các nhân viên khác ngay khi được tiếp nhận.
 
+## [Unreleased] - 2026-07-06
+
+### Added
+
+- **Phan quyen cong cu gan nhan du lieu (`/labeling_tool`)**:
+  - Chuyen trang `labeling_tool` tu public route sang route duoc bao ve trong app shell.
+  - Chi cho phep tai khoan `admin` truy cap cong cu gan nhan du lieu.
+  - Them nut `Gan nhan du lieu` vao sidebar cho Admin.
+
+- **Trang duyet yeu cau gan lai nhan cho Brand Manager (`/label-requests`)**:
+  - Them route moi danh rieng cho `brand_manager` de xem va xu ly yeu cau gan lai nhan.
+  - Them nut `Duyet yeu cau` vao sidebar cho Brand Manager.
+  - Thiet ke giao dien danh sach request va panel chi tiet de Brand Manager xem noi dung bai post, mention/comment lien quan, nhan cu va nhan nhan vien de xuat.
+  - Ho tro thao tac xu ly request: duyet, sua lai nhan roi duyet, hoac tu choi.
+  - Bo sung du lieu demo khi chua co request that de kiem thu giao dien duyet, so sanh nhan va lich su sua nhan.
+
+- **Lich su chinh sua nhan theo thuong hieu**:
+  - Them co che ghi audit khi Brand Manager xu ly request that vao collection `label_change_history`.
+  - Moi ban ghi lich su luu nhan cu, nhan moi, nguoi yeu cau, nguoi xu ly, thoi gian chinh sua, trang thai xu ly, mention lien quan va brand.
+  - Nang cap tab `Lich su sua nhan` trong `/label-requests` de tong hop lich su request cua rieng thuong hieu Brand Manager dang dang nhap.
+  - Them bo loc lich su theo khoang thoi gian, loai nhan, nguoi yeu cau va trang thai xu ly.
+
+### Changed
+
+- **Luong kiem thu request gan lai nhan**:
+  - Tam thoi chua bat chuc nang nhan vien gui request that tu trang Mentions theo pham vi hien tai.
+  - Cac request demo chi cap nhat trang thai tren giao dien, khong ghi vao Firestore.
+  - Request that van duoc xu ly va ghi lich su vao `label_change_history`.
+
+### Verification
+
+- Da chay `npx.cmd tsc --noEmit` thanh cong sau cac thay doi.
+
+---
+
 ## [Unreleased] - 2026-07-03
 
 ### Added

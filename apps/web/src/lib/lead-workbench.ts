@@ -11,6 +11,7 @@ export type LeadWorkbenchView =
   | "follow_up"
   | "waiting"
   | "sales_handoff"
+  | "label_review"
   | "converted";
 
 export type LeadOwnershipStatus =
@@ -63,6 +64,7 @@ export const WORKBENCH_VIEWS: Array<{
   { id: "follow_up", label: "Follow-up" },
   { id: "waiting", label: "Chờ phản hồi" },
   { id: "sales_handoff", label: "Chờ chuyển sales" },
+  { id: "label_review", label: "Chờ duyệt nhãn" },
   { id: "converted", label: "Đã chuyển đổi" },
 ];
 
@@ -76,6 +78,7 @@ export const EMPLOYEE_PRIORITY_WORKBENCH_VIEWS: Array<{
   { id: "need_result", label: "Cần ghi nhận" },
   { id: "waiting", label: "Chờ phản hồi" },
   { id: "sales_handoff", label: "Chờ chuyển sales" },
+  { id: "label_review", label: "Chờ duyệt nhãn" },
 ];
 
 function isLeadEmployee(profile: UserRoleProfile | null | undefined) {
@@ -476,6 +479,7 @@ export function matchesLeadWorkbenchView(
     return lead.status === "processing" && Boolean(lead.contact_attempts) && !meta.needsResultCapture;
   }
   if (view === "sales_handoff") return meta.isSalesHandoff;
+  if (view === "label_review") return lead.label_correction_status === "pending";
   if (view === "converted") return lead.status === "completed";
   return true;
 }

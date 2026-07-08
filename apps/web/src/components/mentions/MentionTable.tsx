@@ -136,6 +136,7 @@ export function MentionTable({ mentions, isLoading, contentMode }: MentionTableP
   return (
     <>
       <div
+        data-tour="mentions-table"
         className="rounded-2xl shadow-sm overflow-hidden"
         style={{
           backgroundColor: "var(--color-bg-surface)",

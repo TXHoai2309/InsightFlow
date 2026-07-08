@@ -29,7 +29,7 @@ const navItems: NavItem[] = [
   { href: "/dashboard", label: "nav.dashboard", icon: "ti-layout-dashboard" },
   { href: "/team", label: "Quản lý đội ngũ", icon: "ti-users" },
   { href: "/mentions", label: "nav.mentions", icon: "ti-message-circle" },
-  { href: "/label-requests", label: "Duyet yeu cau", icon: "ti-clipboard-check" },
+  { href: "/label-requests", label: "Duyệt yêu cầu", icon: "ti-clipboard-check" },
   { href: "/alerts", label: "nav.alerts", icon: "ti-bell" },
   { href: "/leads", label: "nav.leads", icon: "ti-chart-bar" },
   { href: "/reports", label: "nav.reports", icon: "ti-file-analytics" },
@@ -135,6 +135,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
               <Link
                 key={item.href}
                 href={item.href}
+                data-tour={`nav-${item.href.replace(/^\//, "").replace(/\//g, "-") || "home"}`}
                 className="w-full px-4 py-[14px] text-left text-[14px] transition-colors duration-200 flex items-center rounded-r-[10px]"
                 style={
                   isActive

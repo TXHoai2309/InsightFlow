@@ -230,6 +230,56 @@ export function canContinueLeadWorkflow(
   return !isPendingLeadRerouteRequest(request);
 }
 
+export function isLabelRequestForLead(
+  request: LabelChangeRequest,
+  lead: Lead,
+) {
+  return (
+    request.lead_id === lead.id ||
+    request.source_id === lead.id ||
+    request.id === lead.pending_label_request_id ||
+    Boolean(lead.mention_id && request.mention_id === lead.mention_id) ||
+    Boolean(
+      lead.source_mention_id && request.mention_id === lead.source_mention_id,
+    )
+  );
+}
+
+export function isPendingLeadLabelRequest(
+  request: LabelChangeRequest | null | undefined,
+) {
+  return Boolean(
+    request &&
+      request.status === "pending" &&
+      (request.current_queue === "lead" ||
+        request.requested_queue === "lead" ||
+        request.source_type === "lead"),
+  );
+}
+
+export function getLabelRequestStatusLabel(
+  status: LabelChangeRequest["status"],
+) {
+  const labels: Record<LabelChangeRequest["status"], string> = {
+    pending: "Chờ duyệt",
+    approved: "Đã duyệt",
+    rejected: "Từ chối",
+    cancelled: "Đã hủy",
+  };
+
+  return labels[status];
+}
+
+export function getLabelRequestWorkflowLabel(
+  request: LabelChangeRequest | null | undefined,
+) {
+  if (!request) return "";
+  if (request.status !== "pending") return getLabelRequestStatusLabel(request.status);
+  return isPendingLeadRerouteRequest(request)
+    ? "Tạm khóa xử lý"
+    : "Vẫn xử lý được";
+}
+
 export function getPendingRerouteMessage(
   request: LabelChangeRequest | null | undefined,
 ) {

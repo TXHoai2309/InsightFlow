@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useRouter, useSearchParams } from "next/navigation";
 import { EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
@@ -60,6 +60,8 @@ export function TeamManagementPage({ initialTab = "list" }: TeamManagementPagePr
   const { profile, loading: authLoading } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const isLoadingStaffRef = useRef(false);
+  const loadedStaffForUidRef = useRef<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<"list" | "create">(initialTab);
 
@@ -126,6 +128,8 @@ export function TeamManagementPage({ initialTab = "list" }: TeamManagementPagePr
   }, [staffRole]);
 
   const loadStaff = async () => {
+    if (isLoadingStaffRef.current) return;
+    isLoadingStaffRef.current = true;
     setLoadingList(true);
     setListError("");
     try {
@@ -144,14 +148,17 @@ export function TeamManagementPage({ initialTab = "list" }: TeamManagementPagePr
     } catch (err: any) {
       setListError(err.message || t("team.errors.loadFailed"));
     } finally {
+      isLoadingStaffRef.current = false;
       setLoadingList(false);
     }
   };
 
   useEffect(() => {
     if (authLoading || !profile) return;
+    if (loadedStaffForUidRef.current === profile.uid) return;
+    loadedStaffForUidRef.current = profile.uid;
     loadStaff();
-  }, [authLoading, profile]);
+  }, [authLoading, profile?.uid]);
 
   const navigateToTab = (tab: "list" | "create") => {
     setActiveTab(tab);
@@ -283,7 +290,7 @@ export function TeamManagementPage({ initialTab = "list" }: TeamManagementPagePr
   };
 
   return (
-    <div className="max-w-[1440px] mx-auto p-4 md:p-8">
+    <div data-tour="team-management" className="max-w-[1440px] mx-auto p-4 md:p-8">
       <TeamPageHeader onAddClick={handleOpenCreateTab} showAddButton={activeTab !== "create"} />
       <TeamStatsCards staff={staff} />
       <TeamTabs

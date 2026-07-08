@@ -34,6 +34,7 @@ async function resolveProfileFromClaims(firebaseUser: NonNullable<typeof auth.cu
     storedPermissions: claims.permissions,
     storedDefaultRoute: claims.defaultRoute,
     storedTemporaryPasswordIssued: claims.temporaryPasswordIssued,
+    storedOnboarding: claims.onboarding,
   });
 }
 
@@ -66,6 +67,7 @@ async function resolveUserProfile(firebaseUser: NonNullable<typeof auth.currentU
       storedPermissions: storedData.permissions,
       storedDefaultRoute: storedData.defaultRoute,
       storedTemporaryPasswordIssued: storedData.temporaryPasswordIssued,
+      storedOnboarding: storedData.onboarding,
     });
   } else {
     resolvedProfile = await resolveProfileFromClaims(firebaseUser);

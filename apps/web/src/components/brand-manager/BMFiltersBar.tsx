@@ -45,7 +45,7 @@ export function BMFiltersBar({ workspaces }: BMFiltersBarProps) {
   });
 
   return (
-    <div className="bm-filters-bar">
+    <div data-tour="dashboard-filters" className="bm-filters-bar">
       {/* Left: Title + date */}
       <div className="bm-filters-left">
         <div className="flex items-center gap-3">

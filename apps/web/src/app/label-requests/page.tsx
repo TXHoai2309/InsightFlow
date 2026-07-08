@@ -1,18 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import {
-  addDoc,
-  collection,
-  doc,
-  getDocs,
-  limit,
-  query,
-  serverTimestamp,
-  updateDoc,
-} from "firebase/firestore";
 import { useAuth } from "@/hooks/useAuth";
-import { dbData } from "@/lib/firebase";
+import { filterByBrandScope } from "@/lib/brandScope";
+import { auth } from "@/lib/firebase";
 
 type Sentiment = "positive" | "negative" | "neutral" | null;
 type Urgency = "normal" | "notable" | "crisis" | null;
@@ -20,7 +11,7 @@ type Intent = "hot" | "warm" | "cold" | "none" | null;
 
 interface LabelValue {
   sentiment?: Sentiment;
-  topic?: string;
+  topic?: string | string[];
   relevance?: boolean | null;
   urgency?: Urgency;
   intent?: Intent;
@@ -38,9 +29,13 @@ interface LabelHistoryItem {
 
 interface LabelRequest {
   id: string;
-  status: "pending" | "approved" | "rejected" | "edited";
+  status: "pending" | "approved" | "rejected" | "edited" | "cancelled";
   brand_id?: string;
   brand_name?: string;
+  workspace_id?: string;
+  source_type?: "lead" | "mention" | "comment" | "post";
+  source_id?: string;
+  lead_id?: string;
   mention_id: string;
   requested_by_name: string;
   requested_by_email?: string;
@@ -72,6 +67,7 @@ interface LabelAuditEntry {
   request_id?: string;
   brand_id?: string;
   brand_name?: string;
+  workspace_id?: string;
   mention_id: string;
   mention_content?: string;
   action: LabelRequest["status"] | "created" | "note_added";
@@ -97,17 +93,98 @@ interface HistoryFilters {
   status: "all" | LabelRequest["status"] | "created" | "note_added";
 }
 
+type RequestTimeRange = "today" | "7d" | "30d" | "all";
+
+type SupabaseRow = Record<string, any>;
+
+function getSupabaseConfig() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+  if (!url.trim() || !anonKey.trim()) {
+    throw new Error("Missing Supabase config.");
+  }
+  return {
+    url: url.trim().replace(/\/rest\/v1\/?$/, "").replace(/\/$/, ""),
+    anonKey: anonKey.trim(),
+  };
+}
+
+function supabaseEndpoint(table: string, queryString = "") {
+  const config = getSupabaseConfig();
+  return `${config.url}/rest/v1/${table}${queryString ? `?${queryString}` : ""}`;
+}
+
+async function supabaseRequest<T>(
+  table: string,
+  queryString = "",
+  init: RequestInit = {},
+): Promise<T> {
+  const config = getSupabaseConfig();
+  const response = await fetch(supabaseEndpoint(table, queryString), {
+    ...init,
+    headers: {
+      apikey: config.anonKey,
+      Authorization: `Bearer ${config.anonKey}`,
+      ...(init.body ? { "Content-Type": "application/json" } : {}),
+      ...(init.headers || {}),
+    },
+  });
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(`Supabase ${table} ${response.status}: ${message}`);
+  }
+  if (response.status === 204) return undefined as T;
+  const text = await response.text();
+  return text ? (JSON.parse(text) as T) : (undefined as T);
+}
+
+function getMissingSupabaseColumn(error: unknown) {
+  if (!(error instanceof Error)) return null;
+  const columnMissingMatch = error.message.match(/column\s+\w+\.([A-Za-z0-9_]+)\s+does not exist/);
+  if (columnMissingMatch?.[1]) return columnMissingMatch[1];
+
+  const schemaCacheMatch = error.message.match(/Could not find the '([^']+)' column/);
+  return schemaCacheMatch?.[1] || null;
+}
+
+function stripUndefinedFields<T extends Record<string, unknown>>(value: T): T {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, fieldValue]) => fieldValue !== undefined),
+  ) as T;
+}
+
+async function patchSupabaseRow(
+  table: string,
+  queryString: string,
+  payload: Record<string, unknown>,
+) {
+  let nextPayload = { ...payload };
+
+  while (Object.keys(nextPayload).length > 0) {
+    try {
+      await supabaseRequest<void>(table, queryString, {
+        method: "PATCH",
+        body: JSON.stringify(nextPayload),
+        headers: { Prefer: "return=minimal" },
+      });
+      return;
+    } catch (error) {
+      const missingColumn = getMissingSupabaseColumn(error);
+      if (!missingColumn || !(missingColumn in nextPayload)) {
+        throw error;
+      }
+      const { [missingColumn]: _removed, ...remainingPayload } = nextPayload;
+      nextPayload = remainingPayload;
+    }
+  }
+}
+
 const TOPIC_OPTIONS = [
   "quality",
   "price",
   "service",
-  "staff",
-  "delivery",
-  "experience",
-  "legal",
-  "operation",
-  "marketing",
-  "competitor",
+  "location",
+  "promotion",
   "other",
 ];
 
@@ -121,6 +198,8 @@ const TOPIC_LABELS: Record<string, string> = {
   quality: "Chất lượng",
   price: "Giá",
   service: "Dịch vụ",
+  location: "Địa điểm",
+  promotion: "Khuyến mãi",
   staff: "Nhân viên",
   delivery: "Giao hàng",
   experience: "Trải nghiệm",
@@ -144,140 +223,120 @@ const INTENT_LABELS: Record<string, { label: string; emoji: string }> = {
   none: { label: "None", emoji: "➖" },
 };
 
-function getDemoRequests(brandName?: string): LabelRequest[] {
-  const now = new Date();
-  return [
-    {
-      id: "demo-comment-request",
-      isDemo: true,
-      status: "pending",
-      brand_name: brandName || "Thương hiệu demo",
-      mention_id: "demo-fb-comment-001",
-      requested_by_name: "Nhân viên xử lý khủng hoảng",
-      requested_by_role: "crisis_employee",
-      reason:
-        "Bình luận này đang bị gắn trung tính, nhưng nội dung có dấu hiệu phàn nàn về dịch vụ và cần xử lý sớm.",
-      old_label: { sentiment: "neutral", topic: "service" },
-      proposed_label: { sentiment: "negative", topic: "service" },
-      mention: {
-        id: "demo-fb-comment-001",
-        parent_id: "demo-fb-post-001",
-        platform: "facebook",
-        content_type: "comment",
-        post_content:
-          "Thương hiệu ra mắt combo mới cho mùa hè, áp dụng tại tất cả cửa hàng trong tuần này.",
-        content: "Mình đợi hơn 30 phút nhưng nhân viên không xử lý đơn, trải nghiệm quá tệ.",
-        comment_content:
-          "Mình đợi hơn 30 phút nhưng nhân viên không xử lý đơn, trải nghiệm quá tệ.",
-        author: "Nguyễn Minh Anh",
-        posted_at: now.toISOString(),
-        url: "https://facebook.com/demo-post",
-      },
-      history: [
-        {
-          action: "created",
-          by_name: "Nhân viên xử lý khủng hoảng",
-          at: now.toISOString(),
-          from: { sentiment: "neutral", topic: "service" },
-          to: { sentiment: "negative", topic: "service" },
-          note: "Đề xuất chuyển sang tiêu cực vì khách hàng phàn nàn trực tiếp.",
-        },
-      ],
-      created_at: now.toISOString(),
-    },
-    {
-      id: "demo-post-request",
-      isDemo: true,
-      status: "pending",
-      brand_name: brandName || "Thương hiệu demo",
-      mention_id: "demo-thread-post-002",
-      requested_by_name: "Nhân viên xử lý tiềm năng",
-      requested_by_role: "lead_employee",
-      reason:
-        "Bài viết có ý định mua hàng rõ ràng, nên chuyển chủ đề sang marketing/deal để team tiềm năng theo dõi.",
-      old_label: { sentiment: "positive", topic: "other" },
-      proposed_label: { sentiment: "positive", topic: "marketing" },
-      mention: {
-        id: "demo-thread-post-002",
-        platform: "thread",
-        content_type: "post",
-        content: "Đang cần đặt đồ ăn cho team 20 người vào trưa mai, bên mình có gói ưu đãi nào không?",
-        post_content:
-          "Đang cần đặt đồ ăn cho team 20 người vào trưa mai, bên mình có gói ưu đãi nào không?",
-        author: "Trần Bảo Long",
-        posted_at: new Date(now.getTime() - 1000 * 60 * 42).toISOString(),
-        url: "https://threads.net/demo-post",
-      },
-      history: [
-        {
-          action: "created",
-          by_name: "Nhân viên xử lý tiềm năng",
-          at: new Date(now.getTime() - 1000 * 60 * 35).toISOString(),
-          from: { sentiment: "positive", topic: "other" },
-          to: { sentiment: "positive", topic: "marketing" },
-          note: "Có dấu hiệu nhu cầu mua hàng số lượng lớn.",
-        },
-      ],
-      created_at: new Date(now.getTime() - 1000 * 60 * 35).toISOString(),
-    },
-    {
-      id: "demo-history-request",
-      isDemo: true,
-      status: "pending",
-      brand_name: brandName || "Thương hiệu demo",
-      mention_id: "demo-gmaps-review-003",
-      requested_by_name: "Nhân viên xử lý khủng hoảng",
-      requested_by_role: "crisis_employee",
-      reason: "Đánh giá 1 sao nhưng hệ thống gắn topic giá, cần sửa sang chất lượng dịch vụ.",
-      old_label: { sentiment: "negative", topic: "price" },
-      proposed_label: { sentiment: "negative", topic: "quality" },
-      mention: {
-        id: "demo-gmaps-review-003",
-        platform: "google_maps",
-        content_type: "comment",
-        post_content: "Đánh giá của khách hàng trên Google Maps về chi nhánh quận.",
-        content: "Đồ uống bị nguội, bàn giao chậm và không ai xin lỗi. 1 sao.",
-        comment_content: "Đồ uống bị nguội, bàn giao chậm và không ai xin lỗi. 1 sao.",
-        author: "Lê Hoàng",
-        posted_at: new Date(now.getTime() - 1000 * 60 * 90).toISOString(),
-        url: "https://maps.google.com/demo-review",
-      },
-      history: [
-        {
-          action: "created",
-          by_name: "Nhân viên xử lý khủng hoảng",
-          at: new Date(now.getTime() - 1000 * 60 * 88).toISOString(),
-          from: { sentiment: "negative", topic: "price" },
-          to: { sentiment: "negative", topic: "quality" },
-          note: "Nội dung liên quan chất lượng sản phẩm và vận hành hơn là giá.",
-        },
-        {
-          action: "note_added",
-          by_name: "Brand Manager demo",
-          at: new Date(now.getTime() - 1000 * 60 * 75).toISOString(),
-          from: { sentiment: "negative", topic: "price" },
-          to: { sentiment: "negative", topic: "quality" },
-          note: "Cần kiểm tra với cửa hàng trước khi duyệt nhãn cuối.",
-        },
-      ],
-      created_at: new Date(now.getTime() - 1000 * 60 * 88).toISOString(),
-    },
-  ];
+function getLabelTopics(label: LabelValue): string[] {
+  if (Array.isArray(label.topic)) {
+    return label.topic.filter((topic): topic is string => Boolean(topic));
+  }
+  return label.topic ? [label.topic] : [];
+}
+
+function normalizeTopics(
+  topic: unknown,
+  topics: unknown,
+  fallbackTopic: LabelValue["topic"],
+): string | string[] | undefined {
+  const values = [
+    ...(Array.isArray(topic) ? topic : typeof topic === "string" ? [topic] : []),
+    ...(Array.isArray(topics) ? topics : typeof topics === "string" ? [topics] : []),
+  ]
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  if (values.length > 0) return Array.from(new Set(values));
+
+  const fallbackTopics = getLabelTopics({ topic: fallbackTopic });
+  if (fallbackTopics.length > 1) return fallbackTopics;
+  return fallbackTopics[0];
+}
+
+function normalizeUrgencyValue(value: unknown, fallback: Urgency): Urgency {
+  return value === "normal" || value === "notable" || value === "crisis"
+    ? value
+    : fallback ?? null;
+}
+
+function normalizeIntentValue(value: unknown, fallback: Intent): Intent {
+  return value === "hot" || value === "warm" || value === "cold" || value === "none"
+    ? value
+    : fallback ?? null;
 }
 
 function normalizeLabel(value: unknown, fallback: LabelValue): LabelValue {
   if (!value || typeof value !== "object") return fallback;
-  const row = value as Partial<LabelValue>;
+  const row = value as Partial<LabelValue> & { topic?: string | string[]; topics?: string[] };
   return {
     sentiment:
       row.sentiment === "positive" || row.sentiment === "negative" || row.sentiment === "neutral"
         ? row.sentiment
         : fallback.sentiment,
-    topic: typeof row.topic === "string" ? row.topic : fallback.topic,
+    topic: normalizeTopics(row.topic, row.topics, fallback.topic),
     relevance: typeof row.relevance === "boolean" ? row.relevance : fallback.relevance,
-    urgency: row.urgency || fallback.urgency,
-    intent: row.intent || fallback.intent,
+    urgency: normalizeUrgencyValue(row.urgency, fallback.urgency ?? null),
+    intent: normalizeIntentValue(row.intent, fallback.intent ?? null),
   };
+}
+
+function toStoredLabel(label: LabelValue): LabelValue {
+  return {
+    sentiment: label.sentiment ?? null,
+    topic: getLabelTopics(label),
+    relevance: label.relevance ?? null,
+    urgency: label.urgency ?? null,
+    intent: label.intent ?? null,
+  };
+}
+
+function getRequestLeadId(request: LabelRequest) {
+  return (
+    request.lead_id ||
+    (request.source_type === "lead" ? request.source_id : "") ||
+    request.mention_id ||
+    request.mention.id
+  );
+}
+
+function buildLeadReviewPayload(
+  status: LabelRequest["status"],
+  finalLabel: LabelValue,
+  changedAt: string,
+  profile: { uid?: string; role?: string } | null | undefined,
+) {
+  const storedLabel = toStoredLabel(finalLabel);
+  const topics = getLabelTopics(storedLabel);
+  const isApproved = status === "approved" || status === "edited";
+  return stripUndefinedFields({
+    ...(isApproved
+      ? {
+          labels: storedLabel,
+          current_labels: storedLabel,
+          sentiment: storedLabel.sentiment || undefined,
+          topic: topics[0] || undefined,
+          intent: storedLabel.intent || undefined,
+          intent_signals: topics,
+        }
+      : {}),
+    label_correction_status: status === "rejected" ? "rejected" : "approved",
+    pending_label_request_id: null,
+    last_label_corrected_at: changedAt,
+    updated_by: profile?.uid,
+    updated_by_role: profile?.role,
+    updated_at: changedAt,
+  });
+}
+
+function normalizeRequestStatus(value: unknown): LabelRequest["status"] {
+  const status = String(value || "pending").toLowerCase();
+  if (status === "approved" || status === "rejected" || status === "edited" || status === "cancelled") {
+    return status;
+  }
+  return "pending";
+}
+
+function normalizeContentType(value: unknown): LabelRequest["mention"]["content_type"] {
+  const sourceType = String(value || "").toLowerCase();
+  if (sourceType === "comment" || sourceType === "reply") return sourceType;
+  return "post";
 }
 
 function formatDate(value: unknown) {
@@ -301,6 +360,58 @@ function toDateValue(value: unknown): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function getRequestDate(request: LabelRequest): Date | null {
+  return toDateValue(request.created_at || request.history?.[0]?.at);
+}
+
+function isWithinRequestTimeRange(request: LabelRequest, range: RequestTimeRange) {
+  if (range === "all") return true;
+  const date = getRequestDate(request);
+  if (!date) return false;
+
+  const now = new Date();
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+
+  if (range === "today") {
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+    return date >= start && date < end;
+  }
+
+  const days = range === "7d" ? 7 : 30;
+  start.setDate(start.getDate() - (days - 1));
+  return date >= start && date <= now;
+}
+
+function compareRequests(a: LabelRequest, b: LabelRequest) {
+  if (a.status === "pending" && b.status !== "pending") return -1;
+  if (a.status !== "pending" && b.status === "pending") return 1;
+  return (getRequestDate(b)?.getTime() || 0) - (getRequestDate(a)?.getTime() || 0);
+}
+
+function getNextReviewRequestId(
+  allRequests: LabelRequest[],
+  currentId: string,
+  range: RequestTimeRange,
+) {
+  const visibleRequests = allRequests
+    .filter((item) => isWithinRequestTimeRange(item, range))
+    .sort(compareRequests);
+  const nextPending = visibleRequests.find(
+    (item) => item.id !== currentId && item.status === "pending",
+  );
+  if (nextPending) return nextPending.id;
+
+  const currentIndex = visibleRequests.findIndex((item) => item.id === currentId);
+  return (
+    visibleRequests[currentIndex + 1]?.id ||
+    visibleRequests[currentIndex - 1]?.id ||
+    visibleRequests.find((item) => item.id !== currentId)?.id ||
+    currentId
+  );
+}
+
 function hasLabelTypeChanged(oldLabel: LabelValue, newLabel: LabelValue, labelType: HistoryFilters["labelType"]) {
   if (labelType === "all") return true;
   return JSON.stringify(oldLabel[labelType]) !== JSON.stringify(newLabel[labelType]);
@@ -315,6 +426,7 @@ function requestToAuditEntries(request: LabelRequest): LabelAuditEntry[] {
         request_id: request.id,
         brand_id: request.brand_id,
         brand_name: request.brand_name,
+        workspace_id: request.workspace_id || request.brand_id || request.brand_name,
         mention_id: request.mention_id,
         mention_content: request.mention.content,
         action: "created",
@@ -337,6 +449,7 @@ function requestToAuditEntries(request: LabelRequest): LabelAuditEntry[] {
     request_id: request.id,
     brand_id: request.brand_id,
     brand_name: request.brand_name,
+    workspace_id: request.workspace_id || request.brand_id || request.brand_name,
     mention_id: request.mention_id,
     mention_content: request.mention.content,
     action: item.action as LabelAuditEntry["action"],
@@ -401,13 +514,14 @@ function LabelPill({ label, size = "md" }: { label: LabelValue; size?: "sm" | "m
           {SENTIMENT_LABELS[label.sentiment as NonNullable<Sentiment>] || label.sentiment}
         </span>
       )}
-      {label.topic && (
+      {getLabelTopics(label).map((topic) => (
         <span
+          key={topic}
           className={`rounded-full border font-semibold tracking-wide text-[var(--color-text-secondary)] border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] ${padding}`}
         >
-          {TOPIC_LABELS[label.topic] || label.topic}
+          {TOPIC_LABELS[topic] || topic}
         </span>
-      )}
+      ))}
       {label.relevance !== undefined && label.relevance !== null && (
         <span
           className={`rounded-full border font-semibold tracking-wide text-[var(--color-text-secondary)] border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] ${padding}`}
@@ -485,12 +599,14 @@ function BrandLabelHistoryPanel({
   requesterOptions,
   statusLabels,
   onFiltersChange,
+  onOpenRequest,
 }: {
   entries: LabelAuditEntry[];
   filters: HistoryFilters;
   requesterOptions: string[];
   statusLabels: Record<string, string>;
   onFiltersChange: (filters: HistoryFilters) => void;
+  onOpenRequest?: (requestId: string) => void;
 }) {
   return (
     <div className="space-y-5">
@@ -630,9 +746,20 @@ function BrandLabelHistoryPanel({
                       </p>
                     )}
                   </div>
-                  <span className="text-[11px] text-[var(--color-text-muted)]">
-                    {formatDate(item.changed_at)}
-                  </span>
+                  <div className="flex shrink-0 flex-col items-start gap-2 md:items-end">
+                    <span className="text-[11px] text-[var(--color-text-muted)]">
+                      {formatDate(item.changed_at)}
+                    </span>
+                    {item.request_id && onOpenRequest && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenRequest(item.request_id as string)}
+                        className="rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--color-brand)] transition hover:bg-[var(--color-brand-subtle)]"
+                      >
+                        Sửa request này
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <p className="mt-3 line-clamp-2 text-sm text-[var(--color-text-secondary)]">
@@ -675,8 +802,10 @@ export default function LabelRequestsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const [mode, setMode] = useState<"detail" | "compare" | "history">("detail");
-  const [draftLabel, setDraftLabel] = useState<LabelValue>({ sentiment: "neutral", topic: "other" });
+  const [requestTimeRange, setRequestTimeRange] = useState<RequestTimeRange>("today");
+  const [draftLabel, setDraftLabel] = useState<LabelValue>({ sentiment: "neutral", topic: ["other"] });
   const [historyFilters, setHistoryFilters] = useState<HistoryFilters>({
     fromDate: "",
     toDate: "",
@@ -684,6 +813,32 @@ export default function LabelRequestsPage() {
     requester: "all",
     status: "all",
   });
+  const [staffNames, setStaffNames] = useState<string[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    async function loadStaff() {
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) return;
+        const response = await fetch("/api/staff", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!response.ok) return;
+        const data = await response.json();
+        const names = data.data?.map((s: any) => s.displayName || s.email).filter(Boolean) || [];
+        if (active) {
+          setStaffNames(names);
+        }
+      } catch (error) {
+        console.error("Failed to load staff:", error);
+      }
+    }
+    loadStaff();
+    return () => {
+      active = false;
+    };
+  }, [auth.currentUser]);
 
   useEffect(() => {
     let active = true;
@@ -691,60 +846,91 @@ export default function LabelRequestsPage() {
     async function loadRequests() {
       setLoading(true);
       try {
-        const snapshot = await getDocs(query(collection(dbData, "label_change_requests"), limit(100)));
-        const rows = snapshot.docs.map((item) => {
-          const data = item.data();
-          const oldLabel = normalizeLabel(data.old_label, { sentiment: "neutral", topic: "other" });
-          const proposedLabel = normalizeLabel(data.proposed_label, oldLabel);
+        const requestRows = await supabaseRequest<SupabaseRow[]>(
+          "label_change_requests",
+          new URLSearchParams({
+            select: "*",
+            order: "requested_at.desc.nullslast",
+            limit: "200",
+          }).toString(),
+        );
+        const rows = requestRows.map((data) => {
+          const oldLabel = normalizeLabel(
+            data.old_label || data.current_labels || data.current_label,
+            { sentiment: "neutral", topic: "other", relevance: null, urgency: null, intent: null },
+          );
+          const proposedLabel = normalizeLabel(
+            data.proposed_label || data.requested_labels || data.requested_label,
+            oldLabel,
+          );
           const mention = (data.mention || {}) as LabelRequest["mention"];
+          const content = String(
+            mention.content ||
+              data.content_preview ||
+              data.mention_content ||
+              data.content ||
+              "",
+          );
+          const contentType = normalizeContentType(mention.content_type || data.source_type);
 
           return {
-            id: item.id,
-            status: data.status || "pending",
-            brand_id: data.brand_id,
-            brand_name: data.brand_name,
-            mention_id: data.mention_id || mention.id || item.id,
+            id: String(data.id),
+            status: normalizeRequestStatus(data.status),
+            brand_id: data.brand_id || data.workspace_id,
+            brand_name: data.brand_name || data.workspace_name,
+            workspace_id: data.workspace_id || data.brand_id || data.brand_name || data.workspace_name,
+            source_type: ["lead", "mention", "comment", "post"].includes(String(data.source_type || "").toLowerCase())
+              ? (String(data.source_type).toLowerCase() as LabelRequest["source_type"])
+              : undefined,
+            source_id: data.source_id ? String(data.source_id) : undefined,
+            lead_id: data.lead_id ? String(data.lead_id) : undefined,
+            mention_id: data.mention_id || data.source_id || mention.id || data.id,
             requested_by_name: data.requested_by_name || data.requested_by_email || "Nhân viên",
             requested_by_email: data.requested_by_email,
             requested_by_role: data.requested_by_role,
-            reason: data.reason,
+            reason: data.reason || data.reason_note || data.reason_code,
             old_label: oldLabel,
             proposed_label: proposedLabel,
             final_label: data.final_label ? normalizeLabel(data.final_label, proposedLabel) : undefined,
             mention: {
-              id: mention.id || data.mention_id || item.id,
+              id: mention.id || data.mention_id || data.source_id || data.id,
               parent_id: mention.parent_id || null,
-              platform: mention.platform || "unknown",
-              content_type: mention.content_type || "post",
-              content: mention.content || "",
-              post_content: mention.post_content || "",
-              comment_content: mention.comment_content || "",
-              author: mention.author || "",
+              platform: mention.platform || data.platform || data.source || "unknown",
+              content_type: contentType,
+              content,
+              post_content: mention.post_content || (contentType === "post" ? content : ""),
+              comment_content: mention.comment_content || (contentType !== "post" ? content : ""),
+              author: mention.author || data.author || "",
               posted_at: mention.posted_at || mention.created_at || "",
-              url: mention.url || "",
+              url: mention.url || data.source_url || data.url || "",
             },
             history: Array.isArray(data.history) ? data.history : [],
-            created_at: data.created_at,
+            created_at: data.requested_at || data.created_at,
           } satisfies LabelRequest;
         });
 
-        const scopedRows = profile?.brandId
-          ? rows.filter((item) => !item.brand_id || item.brand_id === profile.brandId)
-          : rows;
+        const scopedRows = filterByBrandScope(rows, profile);
 
         let persistedAuditEntries: LabelAuditEntry[] = [];
         try {
-          const historySnapshot = await getDocs(query(collection(dbData, "label_change_history"), limit(300)));
-          persistedAuditEntries = historySnapshot.docs
-            .map((item) => {
-              const data = item.data();
+          const historyRows = await supabaseRequest<SupabaseRow[]>(
+            "label_change_history",
+            new URLSearchParams({
+              select: "*",
+              order: "changed_at.desc.nullslast",
+              limit: "300",
+            }).toString(),
+          );
+          persistedAuditEntries = historyRows
+            .map((data) => {
               const oldLabel = normalizeLabel(data.old_label, { sentiment: "neutral", topic: "other" });
               const newLabel = normalizeLabel(data.new_label, oldLabel);
               return {
-                id: item.id,
+                id: String(data.id),
                 request_id: data.request_id,
                 brand_id: data.brand_id,
                 brand_name: data.brand_name,
+                workspace_id: data.workspace_id || data.brand_id || data.brand_name,
                 mention_id: String(data.mention_id || ""),
                 mention_content: data.mention_content,
                 action: data.action || data.status || "edited",
@@ -761,27 +947,25 @@ export default function LabelRequestsPage() {
                 note: data.note,
               } satisfies LabelAuditEntry;
             })
-            .filter((item) => !profile?.brandId || !item.brand_id || item.brand_id === profile.brandId);
+            .filter((item) => filterByBrandScope([item], profile).length > 0);
         } catch (historyError) {
           console.warn("Failed to load label change history:", historyError);
         }
 
         if (active) {
-          const visibleRows = scopedRows.length > 0 ? scopedRows : getDemoRequests(profile?.brandName);
-          setRequests(visibleRows);
-          setSelectedId(visibleRows[0]?.id || null);
+          setRequests(scopedRows);
+          setSelectedId(scopedRows[0]?.id || null);
           setAuditEntries([
             ...persistedAuditEntries,
-            ...visibleRows.flatMap(requestToAuditEntries),
+            ...scopedRows.flatMap(requestToAuditEntries),
           ]);
         }
       } catch (error) {
         console.error("Failed to load label requests:", error);
         if (active) {
-          const demoRows = getDemoRequests(profile?.brandName);
-          setRequests(demoRows);
-          setSelectedId(demoRows[0]?.id || null);
-          setAuditEntries(demoRows.flatMap(requestToAuditEntries));
+          setRequests([]);
+          setSelectedId(null);
+          setAuditEntries([]);
         }
       } finally {
         if (active) setLoading(false);
@@ -794,22 +978,51 @@ export default function LabelRequestsPage() {
     };
   }, [profile?.brandId]);
 
+  const displayedRequests = useMemo(
+    () => requests.filter((item) => isWithinRequestTimeRange(item, requestTimeRange)).sort(compareRequests),
+    [requests, requestTimeRange],
+  );
+
+  useEffect(() => {
+    if (loading) return;
+    if (displayedRequests.length === 0) {
+      if (selectedId) setSelectedId(null);
+      return;
+    }
+    if (!selectedId || !displayedRequests.some((item) => item.id === selectedId)) {
+      setSelectedId(displayedRequests[0].id);
+    }
+  }, [displayedRequests, loading, selectedId]);
+
   const selectedRequest = useMemo(
-    () => requests.find((item) => item.id === selectedId) || requests[0],
-    [requests, selectedId],
+    () => displayedRequests.find((item) => item.id === selectedId) || displayedRequests[0],
+    [displayedRequests, selectedId],
   );
 
   useEffect(() => {
     if (selectedRequest) {
       setDraftLabel(selectedRequest.final_label || selectedRequest.proposed_label);
+      setSaveError("");
     }
   }, [selectedRequest]);
 
+  const toggleDraftTopic = (topic: string) => {
+    setDraftLabel((current) => {
+      const topics = getLabelTopics(current);
+      const nextTopics = topics.includes(topic)
+        ? topics.filter((item) => item !== topic)
+        : [...topics, topic];
+      return {
+        ...current,
+        topic: nextTopics,
+      };
+    });
+  };
+
   const pendingCount = requests.filter((item) => item.status === "pending").length;
-  const isUsingDemoData = requests.some((item) => item.isDemo);
   const requesterOptions = useMemo(
-    () => Array.from(new Set(auditEntries.map((item) => item.requested_by_name).filter(Boolean))).sort(),
-    [auditEntries],
+    () => Array.from(new Set([...staffNames, ...auditEntries.map((item) => item.requested_by_name).filter(Boolean)])).sort(),
+    [auditEntries, staffNames],
   );
   const filteredAuditEntries = useMemo(() => {
     return auditEntries
@@ -834,7 +1047,9 @@ export default function LabelRequestsPage() {
   const updateRequestStatus = async (status: LabelRequest["status"], finalLabel = draftLabel) => {
     if (!selectedRequest) return;
     setSaving(true);
+    setSaveError("");
     const changedAt = new Date().toISOString();
+    const storedFinalLabel = toStoredLabel(finalLabel);
 
     const nextHistory = [
       ...(selectedRequest.history || []),
@@ -844,7 +1059,7 @@ export default function LabelRequestsPage() {
         by_email: profile?.email,
         at: changedAt,
         from: selectedRequest.old_label,
-        to: finalLabel,
+        to: storedFinalLabel,
       },
     ];
 
@@ -858,7 +1073,7 @@ export default function LabelRequestsPage() {
       action: status,
       status,
       old_label: selectedRequest.old_label,
-      new_label: finalLabel,
+      new_label: storedFinalLabel,
       requested_by_name: selectedRequest.requested_by_name,
       requested_by_email: selectedRequest.requested_by_email,
       requested_by_role: selectedRequest.requested_by_role,
@@ -872,48 +1087,85 @@ export default function LabelRequestsPage() {
 
     try {
       if (!selectedRequest.isDemo) {
-        await updateDoc(doc(dbData, "label_change_requests", selectedRequest.id), {
-          status,
-          final_label: finalLabel,
-          reviewed_by_uid: profile?.uid || "",
-          reviewed_by_name: profile?.displayName || profile?.email || "",
-          reviewed_at: serverTimestamp(),
-          history: nextHistory,
-          updated_at: serverTimestamp(),
-        });
-        await addDoc(collection(dbData, "label_change_history"), {
-          request_id: selectedRequest.id,
-          brand_id: selectedRequest.brand_id || profile?.brandId || "",
-          brand_name: selectedRequest.brand_name || profile?.brandName || "",
-          mention_id: selectedRequest.mention_id,
-          mention_content: selectedRequest.mention.content,
-          action: status,
-          status,
-          old_label: selectedRequest.old_label,
-          new_label: finalLabel,
-          requested_by_name: selectedRequest.requested_by_name,
-          requested_by_email: selectedRequest.requested_by_email || "",
-          requested_by_role: selectedRequest.requested_by_role || "",
-          reviewed_by_uid: profile?.uid || "",
-          reviewed_by_name: profile?.displayName || profile?.email || "",
-          reviewed_by_email: profile?.email || "",
-          note: selectedRequest.reason || "",
-          source: "brand_manager_review",
-          changed_at: serverTimestamp(),
-          created_at: serverTimestamp(),
+        const isApproved = status === "approved" || status === "edited";
+        await patchSupabaseRow(
+          "label_change_requests",
+          `id=eq.${encodeURIComponent(selectedRequest.id)}`,
+          stripUndefinedFields({
+            status,
+            requested_labels: isApproved ? storedFinalLabel : selectedRequest.proposed_label,
+            reviewed_by: profile?.uid || "",
+            reviewed_by_name: profile?.displayName || profile?.email || "",
+            reviewed_at: changedAt,
+            updated_at: changedAt,
+          }),
+        );
+
+        const leadId = getRequestLeadId(selectedRequest);
+        if (leadId) {
+          await patchSupabaseRow(
+            "leads",
+            `id=eq.${encodeURIComponent(leadId)}`,
+            buildLeadReviewPayload(status, storedFinalLabel, changedAt, profile),
+          );
+        }
+
+        await supabaseRequest<void>(
+          "label_change_history",
+          "",
+          {
+            method: "POST",
+            body: JSON.stringify([{
+              request_id: selectedRequest.id,
+              brand_id: selectedRequest.brand_id || profile?.brandId || "",
+              brand_name: selectedRequest.brand_name || profile?.brandName || "",
+              workspace_id:
+                selectedRequest.workspace_id ||
+                selectedRequest.brand_id ||
+                profile?.brandId ||
+                "",
+              mention_id: selectedRequest.mention_id,
+              mention_content: selectedRequest.mention.content,
+              action: status,
+              status,
+              old_label: selectedRequest.old_label,
+              new_label: storedFinalLabel,
+              requested_by_name: selectedRequest.requested_by_name,
+              requested_by_email: selectedRequest.requested_by_email || "",
+              requested_by_role: selectedRequest.requested_by_role || "",
+              reviewed_by_uid: profile?.uid || "",
+              reviewed_by_name: profile?.displayName || profile?.email || "",
+              reviewed_by_email: profile?.email || "",
+              note: selectedRequest.reason || "",
+              source: "brand_manager_review",
+              changed_at: changedAt,
+              created_at: changedAt,
+            }]),
+            headers: { Prefer: "return=minimal" },
+          },
+        ).catch((historyError) => {
+          console.warn("Failed to write label change history:", historyError);
         });
       }
 
-      setRequests((current) =>
-        current.map((item) =>
-          item.id === selectedRequest.id
-            ? { ...item, status, final_label: finalLabel, history: nextHistory }
-            : item,
-        ),
+      const nextRequests = requests.map((item) =>
+        item.id === selectedRequest.id
+          ? {
+              ...item,
+              status,
+              proposed_label: status === "approved" || status === "edited" ? storedFinalLabel : item.proposed_label,
+              final_label: storedFinalLabel,
+              history: nextHistory,
+            }
+          : item,
       );
+      setRequests(nextRequests);
       setAuditEntries((current) => [nextAuditEntry, ...current]);
+      setSelectedId(getNextReviewRequestId(nextRequests, selectedRequest.id, requestTimeRange));
+      setMode("detail");
     } catch (error) {
       console.error("Failed to update label request:", error);
+      setSaveError("Không thể duyệt request. Vui lòng kiểm tra quyền Supabase hoặc schema bảng leads/label_change_requests.");
     } finally {
       setSaving(false);
     }
@@ -924,6 +1176,7 @@ export default function LabelRequestsPage() {
     approved: "Đã duyệt",
     rejected: "Từ chối",
     edited: "Đã sửa & duyệt",
+    cancelled: "Đã hủy",
   };
   const HISTORY_STATUS_LABELS: Record<string, string> = {
     ...STATUS_LABELS,
@@ -932,7 +1185,7 @@ export default function LabelRequestsPage() {
   };
 
   return (
-    <div className="p-4 md:p-8">
+    <div data-tour="label-requests-review" className="p-4 md:p-8">
       
 
       {/* Header */}
@@ -958,31 +1211,32 @@ export default function LabelRequestsPage() {
           </p>
         </div>
       </div>
-
-      {isUsingDemoData && (
-        <div className="mb-6 flex gap-3 rounded-xl border border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] px-4 py-3 text-sm text-[var(--color-text-primary)]">
-          <span className="material-symbols-outlined shrink-0 text-lg text-[var(--color-warning)]">science</span>
-          <p className="leading-6">
-            <span className="font-bold">Dữ liệu demo:</span> hiện chưa có yêu cầu thật từ nhân viên, nên
-            trang đang hiển thị yêu cầu mẫu để test thao tác duyệt, sửa nhãn, so sánh và xem lịch sử. Các
-            thao tác trên yêu cầu demo chỉ cập nhật giao diện, không ghi lên Firestore.
-          </p>
-        </div>
-      )}
-
       <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
         {/* Request list */}
-        <section className="h-fit rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)]">
+        <section data-tour="label-request-list" className="h-fit rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)]">
           <div className="border-b border-[var(--color-border)] px-4 py-3.5">
             <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">
               Danh sách yêu cầu
             </h2>
             <p className="text-[11px] text-[var(--color-text-muted)]">
-              {loading ? "Đang tải…" : `${requests.length} yêu cầu`}
+              {loading ? "Đang tải…" : `${displayedRequests.length}/${requests.length} yêu cầu`}
             </p>
+            <label className="mt-3 block">
+              <span className="sr-only">Lọc thời gian</span>
+              <select
+                value={requestTimeRange}
+                onChange={(event) => setRequestTimeRange(event.target.value as RequestTimeRange)}
+                className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2 text-xs font-semibold text-[var(--color-text-primary)] outline-none"
+              >
+                <option value="today">Hôm nay</option>
+                <option value="7d">7 ngày</option>
+                <option value="30d">30 ngày</option>
+                <option value="all">Tất cả</option>
+              </select>
+            </label>
           </div>
           <div className="max-h-[calc(100vh-320px)] overflow-y-auto">
-            {requests.map((item) => {
+            {displayedRequests.map((item) => {
               const tone = sentimentTone(item.old_label.sentiment ?? null);
               const isActive = selectedRequest?.id === item.id;
               return (
@@ -1025,7 +1279,7 @@ export default function LabelRequestsPage() {
           </div>
         </section>
 
-        {!loading && requests.length === 0 && (
+        {!loading && displayedRequests.length === 0 && (
           <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-10 text-center">
             <span className="material-symbols-outlined text-4xl text-[var(--color-text-muted)]">
               inventory_2
@@ -1143,23 +1397,31 @@ export default function LabelRequestsPage() {
                           </select>
                         </label>
 
-                        <label className="block space-y-2">
+                        <div className="space-y-2">
                           <span className="text-xs font-semibold text-[var(--color-text-secondary)]">Chủ đề</span>
-                          <select
-                            value={draftLabel.topic || ""}
-                            onChange={(event) =>
-                              setDraftLabel((current) => ({ ...current, topic: event.target.value }))
-                            }
-                            className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none"
-                          >
-                            <option value="">-- Chủ đề --</option>
-                            {TOPIC_OPTIONS.map((topic) => (
-                              <option key={topic} value={topic}>
-                                {TOPIC_LABELS[topic] || topic}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                          <div className="flex flex-wrap gap-2">
+                            {TOPIC_OPTIONS.map((topic) => {
+                              const selected = getLabelTopics(draftLabel).includes(topic);
+                              return (
+                                <button
+                                  key={topic}
+                                  type="button"
+                                  onClick={() => toggleDraftTopic(topic)}
+                                  className={`rounded-full border px-3 py-1.5 text-xs font-bold transition ${
+                                    selected
+                                      ? "border-[var(--color-brand)] bg-[var(--color-brand-subtle)] text-[var(--color-brand)]"
+                                      : "border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)] hover:border-[var(--color-brand-border)]"
+                                  }`}
+                                >
+                                  {TOPIC_LABELS[topic] || topic}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <p className="text-[11px] text-[var(--color-text-muted)]">
+                            Có thể chọn nhiều chủ đề cho cùng một request.
+                          </p>
+                        </div>
                         
                         <label className="block space-y-2">
                           <span className="text-xs font-semibold text-[var(--color-text-secondary)]">Liên quan</span>
@@ -1222,21 +1484,18 @@ export default function LabelRequestsPage() {
                     </div>
 
                     <div className="flex flex-col gap-2">
-                      <button
-                        type="button"
-                        disabled={saving || selectedRequest.status !== "pending"}
-                        onClick={() => updateRequestStatus("approved", selectedRequest.proposed_label)}
-                        className="rounded-lg bg-[var(--color-success)] px-4 py-3 text-sm font-bold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        Duyệt yêu cầu
-                      </button>
+                      {saveError && (
+                        <p className="rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-error-subtle)] px-3 py-2 text-xs font-semibold text-[var(--color-error)]">
+                          {saveError}
+                        </p>
+                      )}
                       <button
                         type="button"
                         disabled={saving}
-                        onClick={() => updateRequestStatus("edited", draftLabel)}
-                        className="rounded-lg bg-[var(--color-brand)] px-4 py-3 text-sm font-bold text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+                        onClick={() => updateRequestStatus("approved", draftLabel)}
+                        className="rounded-lg bg-[var(--color-success)] px-4 py-3 text-sm font-bold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        Sửa lại nhãn và duyệt
+                        {selectedRequest.status === "pending" ? "Duyệt yêu cầu" : "Lưu chỉnh sửa nhãn"}
                       </button>
                       <button
                         type="button"
@@ -1272,6 +1531,11 @@ export default function LabelRequestsPage() {
                     requesterOptions={requesterOptions}
                     statusLabels={HISTORY_STATUS_LABELS}
                     onFiltersChange={setHistoryFilters}
+                    onOpenRequest={(requestId) => {
+                      setRequestTimeRange("all");
+                      setSelectedId(requestId);
+                      setMode("detail");
+                    }}
                   />
                   <div className="hidden">
                     <p className="mb-4 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-text-muted)]">

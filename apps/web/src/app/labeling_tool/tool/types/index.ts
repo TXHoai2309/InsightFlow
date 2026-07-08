@@ -107,7 +107,27 @@ export function isPositiveColdPreset(label: Label): boolean {
   );
 }
 
-/** Nhãn mặc định cho "Tích cực, None" — gán nhanh bằng phím 8 */
+/** Nhãn mặc định cho "Tiêu cực về thái độ nhân viên" — gán nhanh bằng phím 8 */
+export const NEGATIVE_STAFF_ATTITUDE_PRESET_LABEL: Label = {
+  sentiment: 'negative',
+  topic: ['service'],
+  relevance: true,
+  urgency: 'high',
+  intent: 'none',
+};
+
+export function isNegativeStaffAttitudePreset(label: Label): boolean {
+  return (
+    label.sentiment === 'negative' &&
+    label.relevance === true &&
+    label.urgency === 'high' &&
+    label.intent === 'none' &&
+    label.topic.length === 1 &&
+    label.topic[0] === 'service'
+  );
+}
+
+/** Nhãn mặc định cho "Tích cực, None" — gán nhanh bằng phím 7 */
 export const POSITIVE_NONE_PRESET_LABEL: Label = {
   sentiment: 'positive',
   topic: ['other'],
