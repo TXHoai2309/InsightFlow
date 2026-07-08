@@ -178,7 +178,7 @@ export const useDashboardStore = create<DashboardState>()(
           throw new Error("Lead is outside the user's brand scope.");
         }
 
-        await DashboardService.updateLeadStatus(id, status, profile);
+        await DashboardService.updateLeadStatus(id, status, profile, currentLead);
         set((state) => ({
           leads: state.leads.map((l) => (l.id === id ? { ...l, status } : l)),
         }));
@@ -201,7 +201,7 @@ export const useDashboardStore = create<DashboardState>()(
           throw new Error("Lead is outside the user's brand scope.");
         }
 
-        await DashboardService.updateLeadDetails(id, data, profile);
+        await DashboardService.updateLeadDetails(id, data, profile, currentLead);
         set((state) => ({
           leads: state.leads.map((l) => (l.id === id ? { ...l, ...data } : l)),
         }));
