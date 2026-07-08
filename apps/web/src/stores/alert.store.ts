@@ -58,6 +58,9 @@ export interface AlertData {
   post_like_count?: number;
   post_comment_count?: number;
   post_share_count?: number;
+  relevance?: boolean | null;
+  urgency?: string | null;
+  intent?: string | null;
 }
 
 export interface AlertFilters {
@@ -80,6 +83,12 @@ export interface CorrectionRequest {
   new_severity: string;
   original_topic: string;
   new_topic: string;
+  original_relevance: boolean | null;
+  new_relevance: boolean | null;
+  original_urgency: string | null;
+  new_urgency: string | null;
+  original_intent: string | null;
+  new_intent: string | null;
   reason: string;
   resolved_by?: string;
   resolved_at?: string;
@@ -449,6 +458,12 @@ export const useAlertStore = create<AlertState>()(
               new_severity: data.new_severity,
               original_topic: data.original_topic,
               new_topic: data.new_topic,
+              original_relevance: data.original_relevance !== undefined ? data.original_relevance : null,
+              new_relevance: data.new_relevance !== undefined ? data.new_relevance : null,
+              original_urgency: data.original_urgency || null,
+              new_urgency: data.new_urgency || null,
+              original_intent: data.original_intent || null,
+              new_intent: data.new_intent || null,
               reason: data.reason,
               resolved_by: data.resolved_by,
               resolved_at: data.resolved_at,
@@ -506,8 +521,10 @@ export const useAlertStore = create<AlertState>()(
           ...existingLabel,
           sentiment: req.new_sentiment,
           severity: req.new_severity,
-          urgency: req.new_severity,
+          urgency: req.new_urgency ?? req.new_severity,
           topic: [req.new_topic],
+          relevance: req.new_relevance,
+          intent: req.new_intent,
         }));
       }
     },

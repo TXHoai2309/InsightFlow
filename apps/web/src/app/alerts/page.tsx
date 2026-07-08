@@ -168,6 +168,7 @@ export default function AlertsPage() {
   const [searchText, setSearchText] = useState("");
   const [severityFilter, setSeverityFilter] = useState<string>("all");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
+  const [contentTypeFilter, setContentTypeFilter] = useState<string>("all");
   const [showMineOnly, setShowMineOnly] = useState(false);
   const [sortBy, setSortBy] = useState<"risk" | "newest" | "reach">("risk");
   const [isResolvedExpanded, setIsResolvedExpanded] = useState(false);
@@ -299,6 +300,11 @@ export default function AlertsPage() {
       result = result.filter(a => a.source.toLowerCase() === sourceFilter.toLowerCase());
     }
 
+    // New: Content Type filter (comment/post)
+    if (contentTypeFilter !== "all") {
+      result = result.filter(a => String(a.content_type || "").toLowerCase() === contentTypeFilter.toLowerCase());
+    }
+
     // 4. Mine only filter
     if (showMineOnly && profile?.email) {
       result = result.filter(a => a.being_resolved_by === profile.email);
@@ -317,7 +323,7 @@ export default function AlertsPage() {
     });
 
     return result;
-  }, [activeAlerts, searchText, severityFilter, sourceFilter, showMineOnly, sortBy, profile]);
+  }, [activeAlerts, searchText, severityFilter, sourceFilter, contentTypeFilter, showMineOnly, sortBy, profile]);
 
   // Helper: map email/uid to display name for resolvers
   const getResolverName = (emailOrId: string | null | undefined): string => {
@@ -828,6 +834,17 @@ export default function AlertsPage() {
                 <option value="befood">BeFood</option>
                 <option value="thread">Threads</option>
                 <option value="news">Báo chí</option>
+              </select>
+
+              {/* Content Type Dropdown (Comment / Post) */}
+              <select
+                value={contentTypeFilter}
+                onChange={(e) => setContentTypeFilter(e.target.value)}
+                className="border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 pl-3 pr-8 bg-white dark:bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] focus:outline-none cursor-pointer"
+              >
+                <option value="all">Loại (Tất cả)</option>
+                <option value="post">Bài viết (Post)</option>
+                <option value="comment">Bình luận (Comment)</option>
               </select>
 
               {/* Mine Only Toggle */}

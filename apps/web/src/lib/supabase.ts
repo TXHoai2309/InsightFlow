@@ -330,6 +330,9 @@ export async function fetchSupabaseAlerts(): Promise<AlertData[]> {
         post_like_count: postLikes,
         post_comment_count: postComments,
         post_share_count: postShares,
+        relevance: typeof labelObj.relevance === "boolean" ? labelObj.relevance : null,
+        urgency: labelObj.urgency || null,
+        intent: labelObj.intent || null,
       };
 
       alerts.push(alert);
@@ -450,6 +453,9 @@ export async function fetchSingleSupabaseAlert(entityKey: string): Promise<Alert
     post_like_count: singlePostLikes,
     post_comment_count: singlePostComments,
     post_share_count: singlePostShares,
+    relevance: typeof labelObj.relevance === "boolean" ? labelObj.relevance : null,
+    urgency: labelObj.urgency || null,
+    intent: labelObj.intent || null,
   };
 }
 
