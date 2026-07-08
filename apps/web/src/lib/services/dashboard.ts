@@ -115,19 +115,19 @@ export function formatBrandDisplayName(raw: string): string {
 
 // ─── Platform display info (dùng cho TopSources và DashboardFilters) ─────────
 export const PLATFORM_META: Record<Platform, { label: string; color: string; icon?: string }> =
-  {
-    facebook: { label: "Facebook", color: "var(--color-platform-facebook)", icon: "ti-brand-facebook" },
-    tiktok: { label: "TikTok", color: "var(--color-platform-tiktok)", icon: "ti-brand-tiktok" },
-    youtube: { label: "YouTube", color: "var(--color-platform-youtube)", icon: "ti-brand-youtube" },
-    thread: { label: "Threads", color: "var(--color-platform-thread)", icon: "ti-brand-threads" },
-    be: { label: "Be / BeFood", color: "var(--color-platform-be)", icon: "ti-car" },
-    google_maps: {
-      label: "Google Maps",
-      color: "var(--color-platform-google-maps)",
-      icon: "ti-map-pin"
-    },
-    news: { label: "Báo điện tử", color: "var(--color-platform-news)", icon: "ti-world" },
-  };
+{
+  facebook: { label: "Facebook", color: "var(--color-platform-facebook)", icon: "ti-brand-facebook" },
+  tiktok: { label: "TikTok", color: "var(--color-platform-tiktok)", icon: "ti-brand-tiktok" },
+  youtube: { label: "YouTube", color: "var(--color-platform-youtube)", icon: "ti-brand-youtube" },
+  thread: { label: "Threads", color: "var(--color-platform-thread)", icon: "ti-brand-threads" },
+  be: { label: "Be / BeFood", color: "var(--color-platform-be)", icon: "ti-car" },
+  google_maps: {
+    label: "Google Maps",
+    color: "var(--color-platform-google-maps)",
+    icon: "ti-map-pin"
+  },
+  news: { label: "Báo điện tử", color: "var(--color-platform-news)", icon: "ti-world" },
+};
 
 // ─── Topic whitelist ─────────────────────────────────────────────────────────
 type TopicType = Mention["topic"];
@@ -481,10 +481,10 @@ function buildEntityKeys(platform: string, postId: string, commentId?: string | 
   return platforms.flatMap((item) =>
     commentId
       ? [
-          `${item}:${postId}:${commentId}`,
-          `${item}:comment:${postId}:${commentId}`,
-          `${item}:${postId}:comment:${commentId}`,
-        ]
+        `${item}:${postId}:${commentId}`,
+        `${item}:comment:${postId}:${commentId}`,
+        `${item}:${postId}:comment:${commentId}`,
+      ]
       : [`${item}:${postId}`, `${item}:post:${postId}`],
   );
 }
@@ -957,13 +957,13 @@ export class DashboardService {
                 topic: Array.isArray(d.intent_signals) ? d.intent_signals : [],
               },
               {
-              sentiment: labels.sentiment ?? d.sentiment,
-              relevance:
-                typeof labels.relevance === "boolean"
-                  ? labels.relevance
-                  : true,
-              urgency: labels.urgency,
-              intent,
+                sentiment: labels.sentiment ?? d.sentiment,
+                relevance:
+                  typeof labels.relevance === "boolean"
+                    ? labels.relevance
+                    : true,
+                urgency: labels.urgency,
+                intent,
               },
             ),
             intent_signals: d.intent_signals || [],
