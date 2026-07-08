@@ -221,7 +221,7 @@ export function BrandManagerDashboard({
   }
 
   return (
-    <div className="max-w-[1600px] mx-auto space-y-6 pb-12">
+    <div data-tour="dashboard-overview" className="max-w-[1600px] mx-auto space-y-6 pb-12">
       {/* ── 1. Sticky Filter Bar ───────────────────────────────── */}
       <BMFiltersBar workspaces={workspaces} />
 

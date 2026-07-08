@@ -59,6 +59,7 @@ export default function LoginForm() {
           storedPermissions: claims.permissions,
           storedDefaultRoute: claims.defaultRoute,
           storedTemporaryPasswordIssued: claims.temporaryPasswordIssued,
+          storedOnboarding: claims.onboarding,
         });
 
         setUser(credential.user);
@@ -86,6 +87,7 @@ export default function LoginForm() {
         storedPermissions: userData.permissions,
         storedDefaultRoute: userData.defaultRoute,
         storedTemporaryPasswordIssued: userData.temporaryPasswordIssued,
+        storedOnboarding: userData.onboarding,
       });
 
       setUser(credential.user);

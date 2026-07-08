@@ -1759,7 +1759,7 @@ export default function ReportsPage() {
   ];
 
   return (
-    <div className="p-4 md:p-8 mx-auto space-y-5 md:space-y-8">
+    <div data-tour="reports-center" className="p-4 md:p-8 mx-auto space-y-5 md:space-y-8">
       {previewReport && (
         <ReportPreviewModal
           report={previewReport}
@@ -1803,6 +1803,7 @@ export default function ReportsPage() {
             setActiveTab("custom");
             setCustomReportGenerated(false);
           }}
+          data-tour="reports-create-custom"
           className="flex items-center justify-center gap-2 bg-primary text-white px-5 py-3 rounded-xl font-bold text-sm hover:bg-primary/90 active:scale-95 transition-all shadow-sm w-full sm:w-auto"
         >
           <span className="material-symbols-outlined text-xl">add_chart</span>

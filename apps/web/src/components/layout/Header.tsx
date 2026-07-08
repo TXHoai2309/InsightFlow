@@ -12,6 +12,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { ROLE_CONFIG } from "@/lib/rbac";
+import { BRAND_MANAGER_TOUR_EVENT } from "@/components/onboarding/BrandManagerOnboarding";
+import { LEAD_EMPLOYEE_TOUR_EVENT } from "@/components/onboarding/LeadEmployeeOnboarding";
 
 interface HeaderProps {
   onMenuToggle: () => void;
@@ -35,6 +37,13 @@ export function Header({ onMenuToggle }: HeaderProps) {
   const roleLabel = role === "brand_manager" ? "Quản lý thương hiệu" : (role ? ROLE_CONFIG[role].label : t("header.guest"));
   const initials = role === "brand_manager" ? "HM" : getInitials(user?.displayName || userName);
   const isDark = theme === "dark";
+  const handleOpenGuide = () => {
+    const eventName =
+      role === "lead_employee"
+        ? LEAD_EMPLOYEE_TOUR_EVENT
+        : BRAND_MANAGER_TOUR_EVENT;
+    window.dispatchEvent(new Event(eventName));
+  };
 
   return (
     <header
@@ -85,6 +94,17 @@ export function Header({ onMenuToggle }: HeaderProps) {
 
       {/* Right Section */}
       <div className="flex items-center gap-4 md:gap-6">
+        {(role === "brand_manager" || role === "lead_employee") && (
+          <button
+            type="button"
+            onClick={handleOpenGuide}
+            className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] px-2 py-2 text-[13px] font-bold text-[var(--color-text-secondary)] transition hover:border-[var(--color-brand-border)] hover:bg-[var(--color-brand-subtle)] hover:text-[var(--color-brand)] md:px-3"
+            title="Mở hướng dẫn thao tác"
+          >
+            <span className="material-symbols-outlined text-[18px]">help</span>
+            <span className="hidden md:inline">Hướng dẫn</span>
+          </button>
+        )}
         
         {/* Notifications */}
         <div className="relative">

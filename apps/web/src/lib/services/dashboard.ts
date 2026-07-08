@@ -167,6 +167,29 @@ function mapIntent(raw: unknown): Lead["intent"] {
   ) as Lead["intent"];
 }
 
+function inferLeadIntent(...values: unknown[]): Lead["intent"] {
+  for (const value of values) {
+    const directIntent = mapIntent(value);
+    if (directIntent !== "none") return directIntent;
+
+    const normalized = String(value || "")
+      .toLowerCase()
+      .trim();
+    if (!normalized) continue;
+    if (normalized.includes("lead_hot") || normalized.includes("hot_lead")) {
+      return "hot";
+    }
+    if (normalized.includes("lead_warm") || normalized.includes("warm_lead")) {
+      return "warm";
+    }
+    if (normalized.includes("lead_cold") || normalized.includes("cold_lead")) {
+      return "cold";
+    }
+  }
+
+  return "none";
+}
+
 function mapLeadStatus(raw: unknown): Lead["status"] {
   const status = String(raw || "")
     .toLowerCase()
@@ -412,15 +435,37 @@ async function upsertSupabaseLead(
   id: string,
   payload: Record<string, unknown>,
 ) {
-  await supabaseWrite(
-    config,
-    "leads",
-    "POST",
-    [stripUndefinedFields({ id, ...payload })],
-    "on_conflict=id",
-    false,
-    "resolution=merge-duplicates,return=minimal",
-  );
+  try {
+    await supabaseWrite(
+      config,
+      "leads",
+      "POST",
+      [stripUndefinedFields({ id, ...payload })],
+      "on_conflict=id",
+      false,
+      "resolution=merge-duplicates,return=minimal",
+    );
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      (error.message.includes("PGRST205") ||
+        error.message.includes("public.leads"))
+    ) {
+      throw new Error(
+        "Supabase table public.leads chua ton tai. Hay chay database/supabase_leads_workflow.sql trong Supabase SQL Editor roi reload app.",
+      );
+    }
+    if (
+      error instanceof Error &&
+      (error.message.includes('"code":"42501"') ||
+        error.message.toLowerCase().includes("row-level security"))
+    ) {
+      throw new Error(
+        "Supabase RLS dang chan ghi public.leads. Hay chay lai database/supabase_leads_workflow.sql trong Supabase SQL Editor de tao policy insert/update.",
+      );
+    }
+    throw error;
+  }
 }
 
 function isSupabaseStatementTimeout(error: unknown) {
@@ -431,10 +476,20 @@ function isSupabaseStatementTimeout(error: unknown) {
   );
 }
 
+function isSupabaseRecoverableReadError(error: unknown, table: string) {
+  return (
+    isSupabaseStatementTimeout(error) ||
+    (error instanceof Error && error.message.includes(`Supabase ${table} 500`))
+  );
+}
+
 function getMissingSupabaseColumn(error: unknown) {
   if (!(error instanceof Error)) return null;
-  const match = error.message.match(/column\s+\w+\.([A-Za-z0-9_]+)\s+does not exist/);
-  return match?.[1] || null;
+  const columnMissingMatch = error.message.match(/column\s+\w+\.([A-Za-z0-9_]+)\s+does not exist/);
+  if (columnMissingMatch?.[1]) return columnMissingMatch[1];
+
+  const schemaCacheMatch = error.message.match(/Could not find the '([^']+)' column/);
+  return schemaCacheMatch?.[1] || null;
 }
 
 async function loadSupabaseRows<T extends SupabaseRow>(
@@ -443,7 +498,7 @@ async function loadSupabaseRows<T extends SupabaseRow>(
   params: Record<string, string>,
   maxRows = 10000,
 ): Promise<T[]> {
-  const pageSize = 1000;
+  const pageSize = 100;
   const rows: T[] = [];
   let offset = 0;
 
@@ -511,22 +566,29 @@ async function loadSupabaseRowsByPostIds<T extends SupabaseRow>(
   postIds: string[],
   params: Record<string, string>,
   maxRows = 10000,
+  batchSize = 5,
+  tolerateBatchErrors = false,
 ): Promise<T[]> {
   const rows: T[] = [];
   const uniquePostIds = Array.from(new Set(postIds.filter(Boolean)));
 
-  for (const batch of chunkValues(uniquePostIds, 50)) {
+  for (const batch of chunkValues(uniquePostIds, batchSize)) {
     if (rows.length >= maxRows) break;
-    const batchRows = await loadSupabaseRows<T>(
-      config,
-      table,
-      {
-        ...params,
-        post_id: `in.(${batch.join(",")})`,
-      },
-      maxRows - rows.length,
-    );
-    rows.push(...batchRows);
+    try {
+      const batchRows = await loadSupabaseRows<T>(
+        config,
+        table,
+        {
+          ...params,
+          post_id: `in.(${batch.join(",")})`,
+        },
+        maxRows - rows.length,
+      );
+      rows.push(...batchRows);
+    } catch (error) {
+      if (!tolerateBatchErrors) throw error;
+      console.warn(`[DashboardService] Skipping Supabase ${table} batch:`, error);
+    }
   }
 
   return rows;
@@ -540,24 +602,31 @@ async function loadSupabaseRowsByPostIdsWithSelectFallback<T extends SupabaseRow
   params: Record<string, string>,
   maxRows = 10000,
   requiredColumns: string[] = [],
+  batchSize = 5,
+  tolerateBatchErrors = false,
 ): Promise<T[]> {
   const rows: T[] = [];
   const uniquePostIds = Array.from(new Set(postIds.filter(Boolean)));
 
-  for (const batch of chunkValues(uniquePostIds, 50)) {
+  for (const batch of chunkValues(uniquePostIds, batchSize)) {
     if (rows.length >= maxRows) break;
-    const batchRows = await loadSupabaseRowsWithSelectFallback<T>(
-      config,
-      table,
-      columns,
-      {
-        ...params,
-        post_id: `in.(${batch.join(",")})`,
-      },
-      maxRows - rows.length,
-      requiredColumns,
-    );
-    rows.push(...batchRows);
+    try {
+      const batchRows = await loadSupabaseRowsWithSelectFallback<T>(
+        config,
+        table,
+        columns,
+        {
+          ...params,
+          post_id: `in.(${batch.join(",")})`,
+        },
+        maxRows - rows.length,
+        requiredColumns,
+      );
+      rows.push(...batchRows);
+    } catch (error) {
+      if (!tolerateBatchErrors) throw error;
+      console.warn(`[DashboardService] Skipping Supabase ${table} batch:`, error);
+    }
   }
 
   return rows;
@@ -619,13 +688,38 @@ function getSupabaseLabel(
   fallback: Partial<ClassificationLabel>,
 ): ClassificationLabel {
   const payload = readPayload(row);
-  const rowLabels = row.labels && typeof row.labels === "object" ? (row.labels as SupabaseRow) : {};
+  const payloadLabels =
+    payload.labels && typeof payload.labels === "object"
+      ? (payload.labels as SupabaseRow)
+      : {};
+  const rowLabels = {
+    ...payloadLabels,
+    ...(row.labels && typeof row.labels === "object" ? (row.labels as SupabaseRow) : {}),
+  };
   const annotationLabel = parseAnnotationLabel(annotation);
+  const inferredIntent = inferLeadIntent(
+    annotationLabel.intent,
+    rowLabels.intent,
+    row.intent,
+    row.lead_intent,
+    row.intent_type,
+    row.current_label,
+    row.label,
+    payload.intent,
+    payload.lead_intent,
+    payload.intent_type,
+    payload.current_label,
+    payload.label,
+  );
 
   return normalizeClassificationLabel(
     {
       ...rowLabels,
       ...annotationLabel,
+      intent:
+        annotationLabel.intent ??
+        rowLabels.intent ??
+        (inferredIntent !== "none" ? inferredIntent : undefined),
       sentiment:
         annotationLabel.sentiment ??
         rowLabels.sentiment ??
@@ -740,7 +834,7 @@ function supabaseCommentToMention(
 
 async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
   const config = getSupabaseConfig();
-  const maxPosts = opts.maxMentions || 500;
+  const maxPosts = opts.maxMentions || 200;
   const postColumns = [
     "post_id",
     "platform",
@@ -774,19 +868,36 @@ async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
       "posts",
       postColumns,
       { order: "posted_at.desc.nullslast" },
-      maxPosts,
+      Math.min(maxPosts, 100),
       ["post_id"],
     );
   } catch (error) {
-    if (!isSupabaseStatementTimeout(error)) throw error;
-    postRows = await loadSupabaseRowsWithSelectFallback(
-      config,
-      "posts",
-      postColumns,
-      {},
-      Math.min(maxPosts, 200),
-      ["post_id"],
-    );
+    if (!isSupabaseRecoverableReadError(error, "posts")) throw error;
+    console.warn("[DashboardService] Supabase posts sorted fetch failed, retrying without order:", error);
+    try {
+      postRows = await loadSupabaseRowsWithSelectFallback(
+        config,
+        "posts",
+        postColumns,
+        {},
+        Math.min(maxPosts, 100),
+        ["post_id"],
+      );
+    } catch (fallbackError) {
+      if (!isSupabaseRecoverableReadError(fallbackError, "posts")) throw fallbackError;
+      console.warn("[DashboardService] Supabase posts fallback fetch failed, retrying minimal columns:", fallbackError);
+      postRows = await loadSupabaseRowsWithSelectFallback(
+        config,
+        "posts",
+        ["post_id", "platform", "brand", "brand_slug", "posted_at", "payload_json"],
+        {},
+        50,
+        ["post_id"],
+      ).catch((minimalError) => {
+        console.warn("[DashboardService] Supabase posts minimal fetch failed, continuing without posts:", minimalError);
+        return [] as SupabaseRow[];
+      });
+    }
   }
   const postIds = postRows
     .map((row) => String(row.post_id || row.id || "").trim())
@@ -799,15 +910,34 @@ async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
       postIds,
       commentColumns,
       {},
-      10000,
+      500,
       ["post_id", "comment_id"],
-    ),
+      5,
+      true,
+    ).catch((err) => {
+      if (isSupabaseStatementTimeout(err)) {
+        return loadSupabaseRowsByPostIdsWithSelectFallback(
+          config,
+          "comments",
+          postIds.slice(0, 100),
+          commentColumns,
+          {},
+          500,
+          ["post_id", "comment_id"],
+          3,
+          true,
+        ).catch(() => [] as SupabaseRow[]);
+      }
+      throw err;
+    }),
     loadSupabaseRowsByPostIds(
       config,
       "annotations",
       postIds,
       { select: "entity_key,platform,post_id,comment_id,label,status,updated_at" },
-      10000,
+      2000,
+      5,
+      true,
     ).catch(() => [] as SupabaseRow[]),
   ]);
 
@@ -1217,92 +1347,128 @@ export class DashboardService {
         // Table chưa tồn tại — bỏ qua
       }
 
-      if (leads.length === 0) {
-        const derivedLeadById = new Map<string, Lead>();
-        mentions.forEach((m) => {
-          const labels = m.labels;
-          const intent = mapIntent(labels?.intent);
-          if (intent === "none" || derivedLeadById.has(m.id)) return;
+      const persistedLeads = leads;
+      const leadById = new Map<string, Lead>();
 
-          derivedLeadById.set(m.id, {
-            id: m.id,
-            mention_id: m.id,
-            source_mention_id: m.id,
-            parent_id: m.parent_id,
-            content_type: m.content_type,
-            post_id: m.parent_id || m.id,
-            workspace_id: m.workspace_id,
-            platform: m.platform,
-            author: m.author,
-            content: m.content,
-            intent,
-            current_label: undefined,
-            labels,
-            intent_signals: Array.isArray(labels?.topic) ? labels.topic : (labels?.topic ? [labels.topic] : []),
-            status: "new",
-            created_at: m.created_at,
-            url: m.url,
-            source_url: m.url,
-            label_correction_status: undefined,
-            pending_label_request_id: undefined,
-            last_label_corrected_at: undefined,
-            phone: undefined,
-            email: undefined,
-            zalo_id: undefined,
-            messenger_id: undefined,
-            social_profile_url: undefined,
-            owner_id: undefined,
-            owner_name: undefined,
-            owner_email: undefined,
-            assigned_at: undefined,
-            assigned_by: undefined,
-            claimed_at: undefined,
-            first_contacted_at: undefined,
-            contact_attempts: 0,
-            last_contact_at: undefined,
-            pending_result: false,
-            last_action_at: undefined,
-            last_action_type: undefined,
-            last_contact_channel: undefined,
-            result_type: undefined,
-            result_recorded_at: undefined,
-            follow_up_at: undefined,
-            closed_at: undefined,
-            sales_status: undefined,
-            sales_owner_id: undefined,
-            sales_owner_name: undefined,
-            sales_transferred_at: undefined,
-            crm_deal_id: undefined,
-            notes: undefined,
-            posted_at: m.posted_at,
-          });
+      mentions.forEach((m) => {
+        const labels = m.labels;
+        const intent = mapIntent(labels?.intent);
+        if (intent === "none" || leadById.has(m.id)) return;
+
+        leadById.set(m.id, {
+          id: m.id,
+          mention_id: m.id,
+          source_mention_id: m.id,
+          parent_id: m.parent_id,
+          content_type: m.content_type,
+          post_id: m.parent_id || m.id,
+          workspace_id: m.workspace_id,
+          platform: m.platform,
+          author: m.author,
+          content: m.content,
+          intent,
+          current_label: undefined,
+          labels,
+          intent_signals: Array.isArray(labels?.topic) ? labels.topic : (labels?.topic ? [labels.topic] : []),
+          status: "new",
+          created_at: m.created_at,
+          url: m.url,
+          source_url: m.url,
+          label_correction_status: undefined,
+          pending_label_request_id: undefined,
+          last_label_corrected_at: undefined,
+          phone: undefined,
+          email: undefined,
+          zalo_id: undefined,
+          messenger_id: undefined,
+          social_profile_url: undefined,
+          owner_id: undefined,
+          owner_name: undefined,
+          owner_email: undefined,
+          assigned_at: undefined,
+          assigned_by: undefined,
+          claimed_at: undefined,
+          first_contacted_at: undefined,
+          contact_attempts: 0,
+          last_contact_at: undefined,
+          pending_result: false,
+          last_action_at: undefined,
+          last_action_type: undefined,
+          last_contact_channel: undefined,
+          result_type: undefined,
+          result_recorded_at: undefined,
+          follow_up_at: undefined,
+          closed_at: undefined,
+          sales_status: undefined,
+          sales_owner_id: undefined,
+          sales_owner_name: undefined,
+          sales_transferred_at: undefined,
+          crm_deal_id: undefined,
+          notes: undefined,
+          posted_at: m.posted_at,
         });
-        leads = Array.from(derivedLeadById.values());
-        leads.sort(
-          (a, b) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-        );
-      }
+      });
+
+      persistedLeads.forEach((storedLead) => {
+        const mergeKey = [
+          storedLead.id,
+          storedLead.mention_id,
+          storedLead.source_mention_id,
+        ].find((key): key is string => Boolean(key && leadById.has(key)));
+        const baseLead = mergeKey ? leadById.get(mergeKey) : undefined;
+
+        leadById.set(mergeKey || storedLead.id, {
+          ...(baseLead || storedLead),
+          ...storedLead,
+          id: baseLead?.id || storedLead.id,
+          mention_id: storedLead.mention_id || baseLead?.mention_id,
+          source_mention_id:
+            storedLead.source_mention_id || baseLead?.source_mention_id,
+          post_id: storedLead.post_id || baseLead?.post_id,
+          workspace_id: storedLead.workspace_id || baseLead?.workspace_id || "",
+          platform: storedLead.platform || baseLead?.platform || "news",
+          author: storedLead.author || baseLead?.author,
+          content: storedLead.content || baseLead?.content || "",
+          labels: storedLead.labels || baseLead?.labels,
+          intent_signals:
+            storedLead.intent_signals.length > 0
+              ? storedLead.intent_signals
+              : baseLead?.intent_signals || [],
+          created_at: storedLead.created_at || baseLead?.created_at || new Date().toISOString(),
+          posted_at: storedLead.posted_at || baseLead?.posted_at,
+          url: storedLead.url || baseLead?.url,
+          source_url: storedLead.source_url || baseLead?.source_url,
+        });
+      });
+
+      leads = Array.from(leadById.values());
+      leads.sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      );
 
       let labelChangeRequests: LabelChangeRequest[] = [];
       try {
-        const requestsSnap = await getDocs(
-          query(collection(dbData, COLLECTION_NAMES.labelChangeRequests), limit(500)),
+        const sbConfig = getSupabaseConfig();
+        const requestRows = await loadSupabaseRows<Record<string, unknown>>(
+          sbConfig,
+          "label_change_requests",
+          { order: "requested_at.desc.nullslast" },
+          500,
         );
-        labelChangeRequests = requestsSnap.docs.map((doc) => {
-          const d = doc.data();
+        labelChangeRequests = requestRows.map((d) => {
           const legacyCurrentLabel = mapLabelValue(d.current_label);
           const legacyRequestedLabel = mapLabelValue(d.requested_label);
           const currentLabels = normalizeClassificationLabel(
-            d.current_labels,
+            d.current_labels as Record<string, unknown> | null | undefined,
             legacyLabelToClassificationLabel(legacyCurrentLabel),
           );
           const requestedLabels = normalizeClassificationLabel(
-            d.requested_labels,
+            d.requested_labels as Record<string, unknown> | null | undefined,
             legacyLabelToClassificationLabel(legacyRequestedLabel),
           );
           return {
-            id: doc.id,
+            id: String(d.id || ""),
             source_type: ["lead", "mention", "comment", "post"].includes(
               String(d.source_type || "").toLowerCase(),
             )
@@ -1312,7 +1478,7 @@ export class DashboardService {
             lead_id: normalizeOptionalText(d.lead_id),
             mention_id: normalizeOptionalText(d.mention_id),
             workspace_id: String(d.workspace_id || d.brand || ""),
-            platform: mapSourceToPlatform(d.source || d.platform || ""),
+            platform: mapSourceToPlatform(String(d.source || d.platform || "")),
             author: normalizeOptionalText(d.author),
             content_preview: normalizeText(d.content_preview || ""),
             source_url: normalizeOptionalUrl(d.source_url, d.url),
@@ -1470,6 +1636,7 @@ export class DashboardService {
       status: "pending" as const,
       requested_by: profile.uid,
       requested_by_name: profile.displayName || profile.email,
+      requested_by_email: profile.email,
       requested_by_role: profile.role,
       requested_at: nowIso,
       created_at: nowIso,
@@ -1479,9 +1646,42 @@ export class DashboardService {
     });
 
     const config = getSupabaseConfig();
-    const insertedRows = await supabaseWrite<Array<{ id: string }>>(
-      config, "label_change_requests", "POST", requestData, "",
-    );
+    let requestPayload: Record<string, unknown> = { ...requestData };
+    let insertedRows: Array<{ id: string }> | undefined;
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      try {
+        insertedRows = await supabaseWrite<Array<{ id: string }>>(
+          config,
+          "label_change_requests",
+          "POST",
+          [requestPayload],
+          "",
+        );
+        break;
+      } catch (error) {
+        const missingColumn = getMissingSupabaseColumn(error);
+        if (
+          !missingColumn ||
+          !(missingColumn in requestPayload) ||
+          ![
+            "requested_by_email",
+            "reviewed_by_uid",
+            "reviewed_by_email",
+            "final_label",
+            "history",
+          ].includes(missingColumn)
+        ) {
+          throw error;
+        }
+        const { [missingColumn]: _removed, ...nextPayload } = requestPayload;
+        requestPayload = nextPayload;
+      }
+    }
+
+    if (!insertedRows) {
+      throw new Error("Could not create label change request in Supabase.");
+    }
     const newId = insertedRows?.[0]?.id || crypto.randomUUID();
 
     const request: LabelChangeRequest = {

@@ -32,7 +32,7 @@ export default function MentionsPage() {
   }, [contentMode, filteredMentions]);
 
   return (
-    <div className="p-4 md:p-8">
+    <div data-tour="mentions-page" className="p-4 md:p-8">
       {/* Header Section */}
       <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
@@ -58,7 +58,7 @@ export default function MentionsPage() {
       </div>
 
       {/* Filters Bar */}
-      <div className="mb-6">
+      <div data-tour="mentions-filters" className="mb-6">
         <MentionFilters
           workspaces={workspaces}
           filters={filters}

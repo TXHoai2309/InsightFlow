@@ -182,6 +182,15 @@ export function LeadDetailPanel({
     [lead, nowMs],
   );
 
+  useEffect(() => {
+    if (!lead || !meta?.needsResultCapture || activeTab === "action") return;
+    if (onTabChange) {
+      onTabChange("action");
+      return;
+    }
+    setInternalActiveTab("action");
+  }, [activeTab, lead?.id, meta?.needsResultCapture, onTabChange]);
+
   const mentionById = useMemo(
     () => new Map(mentions.map((item) => [item.id, item])),
     [mentions],
@@ -233,7 +242,7 @@ export function LeadDetailPanel({
 
   if (!lead || !meta) {
     return (
-      <aside className="sticky top-[88px] hidden h-[calc(100vh-104px)] min-h-0 shrink-0 flex-col rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 text-sm text-[var(--color-text-secondary)] xl:flex">
+      <aside data-tour="lead-detail-panel" className="sticky top-[88px] hidden h-[calc(100vh-104px)] min-h-0 shrink-0 flex-col rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 text-sm text-[var(--color-text-secondary)] xl:flex">
         Chọn một lead để xem thao tác xử lý.
       </aside>
     );
@@ -594,7 +603,7 @@ export function LeadDetailPanel({
   ];
 
   return (
-    <aside className="sticky top-[88px] hidden h-[calc(100vh-104px)] min-h-0 shrink-0 flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm xl:flex">
+    <aside data-tour="lead-detail-panel" className="flex max-h-[calc(100vh-104px)] min-h-0 shrink-0 flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm xl:sticky xl:top-[88px] xl:h-[calc(100vh-104px)]">
       <div className="shrink-0 border-b border-[var(--color-border)] p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">

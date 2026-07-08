@@ -401,7 +401,7 @@ export default function AlertsPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 space-y-5 md:space-y-8">
+    <div data-tour="alerts-queue" className="p-4 md:p-8 space-y-5 md:space-y-8">
 
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -414,6 +414,7 @@ export default function AlertsPage() {
         <button
           onClick={() => fetchAlerts(scopedBrandKey)}
           disabled={isLoading}
+          data-tour="alerts-refresh"
           className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-[var(--color-brand)]/10 border border-[var(--color-brand)]/20 text-[var(--color-brand)] text-xs font-bold hover:bg-[var(--color-brand)]/15 transition-all flex items-center justify-center gap-1.5 active:scale-95"
         >
           <span className={`material-symbols-outlined text-sm ${isLoading ? 'animate-spin' : ''}`}>sync</span>

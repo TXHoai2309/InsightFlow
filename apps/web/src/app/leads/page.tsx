@@ -57,6 +57,7 @@ export default function LeadsPage() {
   const [detailTab, setDetailTab] = useState<LeadDetailPanelTab>("action");
   const [highlightedLeadId, setHighlightedLeadId] = useState<string | null>(null);
   const [restoreNotice, setRestoreNotice] = useState("");
+  const [optimisticLeadsById, setOptimisticLeadsById] = useState<Record<string, Lead>>({});
   const hasRestoredReturnContext = useRef(false);
   const skipNextPageReset = useRef(false);
   const pendingRestoreLeadId = useRef<string | null>(null);
@@ -98,10 +99,25 @@ export default function LeadsPage() {
     return () => clearInterval(interval);
   }, []);
 
-  const baseLeads = useMemo(
-    () => getFilteredLeadsWithoutUrgency(),
-    [getFilteredLeadsWithoutUrgency, filters, leads],
-  );
+  const rememberOptimisticLead = useCallback((lead: Lead) => {
+    setOptimisticLeadsById((current) => {
+      const existing = current[lead.id];
+      return {
+        ...current,
+        [lead.id]: existing ? { ...existing, ...lead } : lead,
+      };
+    });
+  }, []);
+
+  const baseLeads = useMemo(() => {
+    const filteredLeads = getFilteredLeadsWithoutUrgency();
+    if (Object.keys(optimisticLeadsById).length === 0) return filteredLeads;
+
+    return filteredLeads.map((lead) => {
+      const optimisticLead = optimisticLeadsById[lead.id];
+      return optimisticLead ? { ...lead, ...optimisticLead } : lead;
+    });
+  }, [getFilteredLeadsWithoutUrgency, filters, leads, optimisticLeadsById]);
 
   const workbenchViews = useMemo(
     () => getLeadWorkbenchViews(profile),
@@ -399,14 +415,33 @@ export default function LeadsPage() {
   }, [sortedLeads, currentTime, profile]);
 
   const handleStartedAction = (lead: Lead) => {
+    rememberOptimisticLead(lead);
     setSelectedLeadId(lead.id);
+    setDetailTab("action");
     const meta = getLeadWorkbenchMeta(lead, currentTime);
+    if (meta.needsResultCapture) {
+      skipNextPageReset.current = true;
+      window.setTimeout(() => {
+        document
+          .getElementById(LEAD_DETAIL_PANEL_SCROLL_ID)
+          ?.scrollIntoView({ block: "start", behavior: "smooth" });
+      }, 80);
+    }
     setActiveView(
       meta.needsResultCapture ? "need_result" : getDefaultLeadWorkbenchView(profile),
     );
   };
 
   const handleAfterResult = () => {
+    if (selectedLeadId) {
+      setOptimisticLeadsById((current) => {
+        if (!current[selectedLeadId]) return current;
+        const next = { ...current };
+        delete next[selectedLeadId];
+        return next;
+      });
+    }
+
     const remainingNeedResult = sortedLeads.filter(
       (lead) =>
         lead.id !== selectedLeadId &&
@@ -456,7 +491,7 @@ export default function LeadsPage() {
   }
 
   return (
-    <div className="grid min-h-full gap-3 p-3 xl:grid-cols-[minmax(0,1fr)_420px] 2xl:gap-4">
+    <div data-tour="leads-workbench" className="grid min-h-full gap-3 p-3 xl:grid-cols-[minmax(0,1fr)_420px] 2xl:gap-4">
       <main className="min-w-0 space-y-3">
         <LeadStats
           leads={brandPlatformFilteredLeads}
@@ -533,7 +568,7 @@ export default function LeadsPage() {
 
         <section className="space-y-3">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex flex-wrap gap-2">
+            <div data-tour="leads-view-tabs" className="flex flex-wrap gap-2">
               {workbenchViews.map((view) => (
                 <button
                   key={view.id}
@@ -610,7 +645,9 @@ export default function LeadsPage() {
                   labelRequest={pendingLabelRequestByLeadId.get(lead.id)}
                   onSelect={(nextLead: Lead) => {
                     clearPendingRestore(true);
+                    rememberOptimisticLead(nextLead);
                     setSelectedLeadId(nextLead.id);
+                    setDetailTab("action");
                     setRestoreNotice("");
                   }}
                   onStartedAction={handleStartedAction}
