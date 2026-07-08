@@ -6,10 +6,7 @@ import {
   EMPTY_LABEL, IRRELEVANT_PRESET_LABEL, isIrrelevantPreset,
   POSITIVE_COLD_PRESET_LABEL, isPositiveColdPreset,
   NEGATIVE_STAFF_ATTITUDE_PRESET_LABEL, isNegativeStaffAttitudePreset,
-<<<<<<< HEAD
   POSITIVE_NONE_PRESET_LABEL, isPositiveNonePreset,
-=======
->>>>>>> d96fc356d714a0743c9123d999470b983d1992ca
 } from '../types';
 
 interface LabelSelectorProps {
