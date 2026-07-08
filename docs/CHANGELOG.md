@@ -10,6 +10,36 @@
 > - Các commit merge vẫn được giữ lại để phản ánh đúng dòng phát triển giữa các nhánh.
 >   Tất cả các thay đổi đáng chú ý đối với dự án này sẽ được ghi lại trong file này.
 >   Định dạng dựa trên [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) và dự án này tuân thủ [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased] - 2026-07-08
+
+### Added
+
+- **Onboarding theo vai trò người dùng**:
+  - Thêm onboarding cho `Quản lý thương hiệu` để hướng dẫn nhanh các nghiệp vụ chính: xem dashboard, quản lý đội ngũ, duyệt yêu cầu sửa nhãn, theo dõi cảnh báo, xem lead và tạo báo cáo.
+  - Thêm onboarding cho `Nhân viên xử lý khách hàng tiềm năng` để hướng dẫn quy trình xử lý lead: chọn nhóm lead, nhận xử lý, xem panel chi tiết, liên hệ khách hàng, ghi nhận kết quả và theo dõi báo cáo liên quan.
+  - Thêm onboarding cho `Nhân viên xử lý khủng hoảng` để hướng dẫn quy trình xử lý sự vụ: xem hàng chờ cảnh báo, lọc mức độ ưu tiên, nhận xử lý sự vụ, thao tác liên hệ, gửi yêu cầu sửa nhãn và theo dõi báo cáo.
+  - Thêm nút `Hướng dẫn` trên header để người dùng có thể mở lại onboarding theo đúng vai trò hiện tại.
+  - Thêm event riêng cho từng tour onboarding:
+    - `insightflow:start-brand-manager-tour`
+    - `insightflow:start-lead-employee-tour`
+    - `insightflow:start-crisis-employee-tour`
+
+### Changed
+
+- **Cải thiện trải nghiệm onboarding**:
+  - Tách các onboarding component theo từng vai trò để tránh người dùng nhìn thấy hướng dẫn không thuộc quyền hạn của mình.
+  - Load động các component onboarding trong app layout để giảm ảnh hưởng đến render chính của ứng dụng.
+  - Lưu trạng thái hoàn thành onboarding theo từng vai trò và theo version riêng, giúp hệ thống có thể hiển thị lại hướng dẫn khi nội dung tour được cập nhật.
+  - Bổ sung các `data-tour` marker trên những vùng thao tác chính của các trang nghiệp vụ như Dashboard, Team, Duyệt yêu cầu, Cảnh báo, Leads, Mentions và Reports.
+
+### Fixed
+
+- **Ổn định luồng onboarding**:
+  - Giảm tình trạng nháy/giật khi tour điều hướng qua các trang khác nhau.
+  - Tách event onboarding dùng chung ra file riêng để tránh trùng logic giữa Header và các component tour.
+  - Gỡ merge conflict còn sót trong `Sidebar.tsx` và `LabelSelector.tsx` khiến Next.js không compile được.
+
 ## [Unreleased] - 2026-07-06
 
 ### Added
