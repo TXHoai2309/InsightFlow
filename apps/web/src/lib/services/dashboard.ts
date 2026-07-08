@@ -1023,101 +1023,61 @@ export class DashboardService {
 
       if (leads.length === 0) {
         const derivedLeads: Lead[] = [];
-        mentionsSnap.docs.forEach((doc) => {
-          const d = doc.data();
-          const labels = d.labels || {};
-          const intent = mapIntent(labels.intent);
+        mentions.forEach((m) => {
+          const intent = mapIntent(m.labels.intent);
           if (intent === "none") return;
 
           derivedLeads.push({
-            id: String(d.id || doc.id),
-            mention_id: String(d.id || doc.id),
-            source_mention_id: String(d.id || doc.id),
-            parent_id: d.parent_id ? String(d.parent_id) : null,
-            content_type: ["post", "comment", "reply"].includes(
-              String(d.content_type || "").toLowerCase(),
-            )
-              ? (String(d.content_type).toLowerCase() as Lead["content_type"])
-              : undefined,
-            post_id: normalizeOptionalText(d.post_id || d.postId),
-            workspace_id: String(d.brand || d.workspace_id || ""),
-            platform: mapSourceToPlatform(d.source || d.platform || ""),
-            author: normalizeText(d.author || "Khách hàng").trim(),
-            content: String(d.clean_text || d.content || d.original_text || ""),
+            id: m.id,
+            mention_id: m.id,
+            source_mention_id: m.id,
+            parent_id: m.parent_id,
+            content_type: m.content_type,
+            post_id: m.parent_id || m.id,
+            workspace_id: m.workspace_id,
+            platform: m.platform,
+            author: m.author,
+            content: m.content,
             intent,
-            current_label: d.current_label
-              ? mapLabelValue(d.current_label)
-              : undefined,
-            labels: normalizeClassificationLabel(labels, {
-              sentiment: labels.sentiment ?? d.baseline_sentiment ?? d.sentiment,
-              topic: [],
-              relevance:
-                typeof labels.relevance === "boolean"
-                  ? labels.relevance
-                  : true,
-              urgency: labels.urgency,
-              intent,
-            }),
-            intent_signals: Array.isArray(labels.topic) ? labels.topic : [],
-            status: mapLeadStatus(d.status),
-            created_at: parseDate(
-              d.labeled_at || d.uploaded_at || d.created_at || d.posted_at,
-            ),
-            url: normalizeOptionalUrl(d.url, d.post_url, d.source_url),
-            source_url: normalizeOptionalUrl(d.source_url, d.post_url, d.url),
-            label_correction_status: mapLabelCorrectionStatus(
-              d.label_correction_status,
-            ),
-            pending_label_request_id: normalizeOptionalText(
-              d.pending_label_request_id,
-            ),
-            last_label_corrected_at: d.last_label_corrected_at
-              ? parseDate(d.last_label_corrected_at)
-              : undefined,
-            phone: normalizeOptionalText(d.phone),
-            email: normalizeOptionalText(d.email),
-            zalo_id: normalizeOptionalText(d.zalo_id),
-            messenger_id: normalizeOptionalText(d.messenger_id),
-            social_profile_url: normalizeOptionalUrl(
-              d.social_profile_url,
-              d.contact,
-              d.profile_url,
-            ),
-            owner_id: normalizeOptionalText(d.owner_id),
-            owner_name: normalizeOptionalText(d.owner_name),
-            owner_email: normalizeOptionalText(d.owner_email),
-            assigned_at: d.assigned_at ? parseDate(d.assigned_at) : undefined,
-            assigned_by: normalizeOptionalText(d.assigned_by),
-            claimed_at: d.claimed_at ? parseDate(d.claimed_at) : undefined,
-            first_contacted_at: d.first_contacted_at
-              ? parseDate(d.first_contacted_at)
-              : undefined,
-            contact_attempts:
-              typeof d.contact_attempts === "number" ? d.contact_attempts : 0,
-            last_contact_at: d.last_contact_at
-              ? parseDate(d.last_contact_at)
-              : undefined,
-            pending_result: d.pending_result === true,
-            last_action_at: d.last_action_at
-              ? parseDate(d.last_action_at)
-              : undefined,
-            last_action_type: normalizeOptionalText(d.last_action_type) as Lead["last_action_type"],
-            last_contact_channel: normalizeOptionalText(d.last_contact_channel),
-            result_type: normalizeOptionalText(d.result_type) as Lead["result_type"],
-            result_recorded_at: d.result_recorded_at
-              ? parseDate(d.result_recorded_at)
-              : undefined,
-            follow_up_at: d.follow_up_at ? parseDate(d.follow_up_at) : undefined,
-            closed_at: d.closed_at ? parseDate(d.closed_at) : undefined,
-            sales_status: normalizeOptionalText(d.sales_status) as Lead["sales_status"],
-            sales_owner_id: normalizeOptionalText(d.sales_owner_id),
-            sales_owner_name: normalizeOptionalText(d.sales_owner_name),
-            sales_transferred_at: d.sales_transferred_at
-              ? parseDate(d.sales_transferred_at)
-              : undefined,
-            crm_deal_id: normalizeOptionalText(d.crm_deal_id),
-            notes: d.notes ? String(d.notes) : undefined,
-            posted_at: d.posted_at ? parseDate(d.posted_at) : undefined,
+            current_label: undefined,
+            labels: m.labels,
+            intent_signals: Array.isArray(m.labels.topic) ? m.labels.topic : (m.labels.topic ? [m.labels.topic] : []),
+            status: "new",
+            created_at: m.created_at,
+            url: m.url,
+            source_url: m.url,
+            label_correction_status: undefined,
+            pending_label_request_id: undefined,
+            last_label_corrected_at: undefined,
+            phone: undefined,
+            email: undefined,
+            zalo_id: undefined,
+            messenger_id: undefined,
+            social_profile_url: undefined,
+            owner_id: undefined,
+            owner_name: undefined,
+            owner_email: undefined,
+            assigned_at: undefined,
+            assigned_by: undefined,
+            claimed_at: undefined,
+            first_contacted_at: undefined,
+            contact_attempts: 0,
+            last_contact_at: undefined,
+            pending_result: false,
+            last_action_at: undefined,
+            last_action_type: undefined,
+            last_contact_channel: undefined,
+            result_type: undefined,
+            result_recorded_at: undefined,
+            follow_up_at: undefined,
+            closed_at: undefined,
+            sales_status: undefined,
+            sales_owner_id: undefined,
+            sales_owner_name: undefined,
+            sales_transferred_at: undefined,
+            crm_deal_id: undefined,
+            notes: undefined,
+            posted_at: m.posted_at,
           });
         });
         leads = derivedLeads;

@@ -13,7 +13,7 @@ import {
 } from "firebase/firestore";
 import { useAuth } from "@/hooks/useAuth";
 import { filterByBrandScope } from "@/lib/brandScope";
-import { dbData } from "@/lib/firebase";
+import { auth, dbData } from "@/lib/firebase";
 
 type Sentiment = "positive" | "negative" | "neutral" | null;
 type Urgency = "normal" | "notable" | "crisis" | null;
@@ -622,6 +622,32 @@ export default function LabelRequestsPage() {
     requester: "all",
     status: "all",
   });
+  const [staffNames, setStaffNames] = useState<string[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    async function loadStaff() {
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) return;
+        const response = await fetch("/api/staff", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!response.ok) return;
+        const data = await response.json();
+        const names = data.data?.map((s: any) => s.displayName || s.email).filter(Boolean) || [];
+        if (active) {
+          setStaffNames(names);
+        }
+      } catch (error) {
+        console.error("Failed to load staff:", error);
+      }
+    }
+    loadStaff();
+    return () => {
+      active = false;
+    };
+  }, [auth.currentUser]);
 
   useEffect(() => {
     let active = true;
@@ -773,8 +799,8 @@ export default function LabelRequestsPage() {
 
   const pendingCount = requests.filter((item) => item.status === "pending").length;
   const requesterOptions = useMemo(
-    () => Array.from(new Set(auditEntries.map((item) => item.requested_by_name).filter(Boolean))).sort(),
-    [auditEntries],
+    () => Array.from(new Set([...staffNames, ...auditEntries.map((item) => item.requested_by_name).filter(Boolean)])).sort(),
+    [auditEntries, staffNames],
   );
   const filteredAuditEntries = useMemo(() => {
     return auditEntries
