@@ -7,6 +7,33 @@ import { normalizeBrandName } from "@/lib/services/dashboard";
 import { canPerformAction, type UserRoleProfile } from "@/lib/rbac";
 import { fetchSupabaseAlerts, updateSupabaseAlertLabel } from "@/lib/supabase";
 
+function getResolverName(emailOrId: string | null | undefined): string {
+  if (!emailOrId) return "";
+  if (!emailOrId.includes("@")) return emailOrId;
+  const e = emailOrId.toLowerCase();
+  if (e.includes("crisis")) return "Nguyen Van Crisis";
+  if (e.includes("lead")) return "Tran Thi Lead";
+  if (e.includes("admin")) return "InsightFlow Admin";
+  if (e.includes("manager")) {
+    if (e.includes("highland")) return "Highlands Brand Manager";
+    if (e.includes("starbuck")) return "Starbucks Brand Manager";
+    if (e.includes("mixue")) return "Mixue Brand Manager";
+    return "Brand Manager";
+  }
+  const local = emailOrId.split("@")[0];
+  return local.split(/[._-]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}
+
+function normalizeBrandId(brand: string): string {
+  if (!brand) return "other";
+  let b = brand.toLowerCase().trim();
+  if (b.includes("mixue")) return "mixue";
+  if (b.includes("starbuck")) return "starbucks";
+  if (b.includes("highland")) return "highland-coffee";
+
+  return b.replace(/[^a-z0-9]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+}
+
 export interface ResolutionAttempt {
   attempt_number: number;
   timestamp: string;
@@ -430,15 +457,15 @@ export const useAlertStore = create<AlertState>()(
       try {
         if (!dbSecond) throw new Error("Firebase data project is not configured.");
 
-        const q = query(collection(dbSecond, "insightflow_correction_requests"), limit(500));
+        const q = query(collection(dbSecond, "label_change_requests"), limit(500));
 
         onSnapshot(q, (snapshot) => {
           const requests: CorrectionRequest[] = [];
           snapshot.docs.forEach((docSnap) => {
             const data = docSnap.data();
-            let recordBrand = data.brand;
+            let recordBrand = data.brand_name || data.brand;
             if (!recordBrand) {
-              const email = String(data.requester_email || "").toLowerCase();
+              const email = String(data.requested_by_email || data.requester_email || "").toLowerCase();
               if (email.includes("highland")) recordBrand = "Highland Coffee";
               else if (email.includes("starbuck")) recordBrand = "Starbucks";
               else if (email.includes("mixue")) recordBrand = "Mixue";
@@ -446,28 +473,28 @@ export const useAlertStore = create<AlertState>()(
 
             const req = {
               id: docSnap.id,
-              alert_id: data.alert_id,
+              alert_id: data.mention_id || data.alert_id,
               brand: recordBrand || "",
-              requester_uid: data.requester_uid,
-              requester_email: data.requester_email,
+              requester_uid: data.requested_by_uid || data.requester_uid || "",
+              requester_email: data.requested_by_email || data.requester_email || "",
               created_at: data.created_at,
               status: data.status,
-              original_sentiment: data.original_sentiment,
-              new_sentiment: data.new_sentiment,
-              original_severity: data.original_severity,
-              new_severity: data.new_severity,
-              original_topic: data.original_topic,
-              new_topic: data.new_topic,
-              original_relevance: data.original_relevance !== undefined ? data.original_relevance : null,
-              new_relevance: data.new_relevance !== undefined ? data.new_relevance : null,
-              original_urgency: data.original_urgency || null,
-              new_urgency: data.new_urgency || null,
-              original_intent: data.original_intent || null,
-              new_intent: data.new_intent || null,
+              original_sentiment: data.old_label?.sentiment || data.original_sentiment || "neutral",
+              new_sentiment: data.proposed_label?.sentiment || data.new_sentiment || "neutral",
+              original_severity: data.old_label?.urgency || data.original_severity || "medium",
+              new_severity: data.proposed_label?.urgency || data.new_severity || "medium",
+              original_topic: data.old_label?.topic || data.original_topic || "other",
+              new_topic: data.proposed_label?.topic || data.new_topic || "other",
+              original_relevance: data.old_label?.relevance !== undefined ? data.old_label.relevance : (data.original_relevance !== undefined ? data.original_relevance : null),
+              new_relevance: data.proposed_label?.relevance !== undefined ? data.proposed_label.relevance : (data.new_relevance !== undefined ? data.new_relevance : null),
+              original_urgency: data.old_label?.urgency || data.original_urgency || "medium",
+              new_urgency: data.proposed_label?.urgency || data.new_urgency || "medium",
+              original_intent: data.old_label?.intent || data.original_intent || "none",
+              new_intent: data.proposed_label?.intent || data.new_intent || "none",
               reason: data.reason,
-              resolved_by: data.resolved_by,
-              resolved_at: data.resolved_at,
-              alert_text: data.alert_text,
+              resolved_by: data.reviewed_by_uid || data.resolved_by || "",
+              resolved_at: data.reviewed_at || data.resolved_at || "",
+              alert_text: data.mention?.content || data.alert_text || "",
             } as CorrectionRequest;
 
             if (!isRecordInBrandScope({ brand: req.brand }, scopedBrandKey)) return;
@@ -487,16 +514,73 @@ export const useAlertStore = create<AlertState>()(
       }
     },
 
-    createCorrectionRequest: async (requestData) => {
+    createCorrectionRequest: async (requestData: any) => {
       if (!dbSecond) throw new Error("Firebase data project is not configured.");
 
+      const alert = requestData.alert_full;
+      const cleanBrandId = normalizeBrandId(requestData.brand || "");
+
       const newDoc = {
-        ...requestData,
-        created_at: new Date().toISOString(),
         status: "pending" as const,
+        brand_id: cleanBrandId,
+        brand_name: requestData.brand || "",
+        mention_id: requestData.alert_id,
+        requested_by_name: getResolverName(requestData.requester_email || ""),
+        requested_by_email: requestData.requester_email || "",
+        requested_by_role: "crisis_employee",
+        reason: requestData.reason || "",
+        old_label: {
+          sentiment: requestData.original_sentiment || "neutral",
+          topic: requestData.original_topic || "other",
+          relevance: requestData.original_relevance,
+          urgency: requestData.original_urgency || "normal",
+          intent: requestData.original_intent || "none",
+        },
+        proposed_label: {
+          sentiment: requestData.new_sentiment || "neutral",
+          topic: requestData.new_topic || "other",
+          relevance: requestData.new_relevance,
+          urgency: requestData.new_urgency || "normal",
+          intent: requestData.new_intent || "none",
+        },
+        mention: {
+          id: requestData.alert_id,
+          parent_id: alert?.parent_id || null,
+          platform: alert?.source || "unknown",
+          content_type: alert?.content_type || "post",
+          content: alert?.text || "",
+          post_content: alert?.post_content || "",
+          comment_content: alert?.comment_content || "",
+          author: alert?.author || "Không rõ tác giả",
+          posted_at: alert?.created_at || new Date().toISOString(),
+          url: alert?.url || "",
+        },
+        history: [
+          {
+            action: "created",
+            by_name: getResolverName(requestData.requester_email || ""),
+            at: new Date().toISOString(),
+            from: {
+              sentiment: requestData.original_sentiment || "neutral",
+              topic: requestData.original_topic || "other",
+              relevance: requestData.original_relevance,
+              urgency: requestData.original_urgency || "normal",
+              intent: requestData.original_intent || "none",
+            },
+            to: {
+              sentiment: requestData.new_sentiment || "neutral",
+              topic: requestData.new_topic || "other",
+              relevance: requestData.new_relevance,
+              urgency: requestData.new_urgency || "normal",
+              intent: requestData.new_intent || "none",
+            },
+            note: requestData.reason || "",
+          }
+        ],
+        created_at: new Date().toISOString(),
       };
 
-      await addDoc(collection(dbSecond, "insightflow_correction_requests"), newDoc);
+      await addDoc(collection(dbSecond, "label_change_requests"), newDoc);
     },
 
     resolveCorrectionRequest: async (requestId, alertId, decision, profile) => {
@@ -504,16 +588,77 @@ export const useAlertStore = create<AlertState>()(
       if (!profile) throw new Error("User is not authenticated.");
 
       // Read correction data synchronously BEFORE any await.
-      // Firestore SDK may call the onSnapshot callback before await resolves,
-      // replacing correctionRequests in the store. Reading first avoids the race condition.
       const req = get().correctionRequests.find((r) => r.id === requestId);
 
-      const requestRef = doc(dbSecond, "insightflow_correction_requests", requestId);
+      const requestRef = doc(dbSecond, "label_change_requests", requestId);
+
+      const changedAt = new Date().toISOString();
+      const nextHistory = [
+        {
+          action: decision,
+          by_name: profile.displayName || profile.email || "Brand Manager",
+          by_email: profile.email,
+          at: changedAt,
+          from: {
+            sentiment: req?.original_sentiment,
+            topic: req?.original_topic,
+            relevance: req?.original_relevance,
+            urgency: req?.original_urgency,
+            intent: req?.original_intent,
+          },
+          to: {
+            sentiment: req?.new_sentiment,
+            topic: req?.new_topic,
+            relevance: req?.new_relevance,
+            urgency: req?.new_urgency,
+            intent: req?.new_intent,
+          },
+        }
+      ];
 
       await updateDoc(requestRef, {
         status: decision,
-        resolved_by: profile.uid,
-        resolved_at: new Date().toISOString(),
+        reviewed_by_uid: profile.uid,
+        reviewed_by_name: profile.displayName || profile.email || "",
+        reviewed_by_email: profile.email || "",
+        reviewed_at: changedAt,
+        history: nextHistory,
+        updated_at: changedAt,
+      });
+
+      // Also create history audit entry
+      await addDoc(collection(dbSecond, "label_change_history"), {
+        request_id: requestId,
+        brand_id: normalizeBrandId(req?.brand || ""),
+        brand_name: req?.brand || "",
+        mention_id: alertId,
+        mention_content: req?.alert_text || "",
+        action: decision,
+        status: decision,
+        old_label: {
+          sentiment: req?.original_sentiment,
+          topic: req?.original_topic,
+          relevance: req?.original_relevance,
+          urgency: req?.original_urgency,
+          intent: req?.original_intent,
+        },
+        new_label: {
+          sentiment: req?.new_sentiment,
+          topic: req?.new_topic,
+          relevance: req?.new_relevance,
+          urgency: req?.new_urgency,
+          intent: req?.new_intent,
+        },
+        requested_by_name: getResolverName(req?.requester_email || ""),
+        requested_by_email: req?.requester_email || "",
+        requested_by_role: "crisis_employee",
+        reviewed_by_uid: profile.uid,
+        reviewed_by_name: profile.displayName || profile.email || "",
+        reviewed_by_email: profile.email || "",
+        note: req?.reason || "",
+        source: "brand_manager_review",
+        changed_at: changedAt,
+        created_at: changedAt,
       });
 
       if (decision === "approved" && req) {

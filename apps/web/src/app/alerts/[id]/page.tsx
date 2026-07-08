@@ -480,6 +480,7 @@ export default function AlertDetailPage() {
         new_intent: correctionIntent || "none",
         reason: correctionReason.trim(),
         alert_text: alert.text || "",
+        alert_full: alert,
       };
 
       await createCorrectionRequest(payload);
