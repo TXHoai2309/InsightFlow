@@ -390,6 +390,61 @@ async function supabaseRequest<T>(config: SupabaseConfig, table: string, request
   return (await response.json()) as T;
 }
 
+async function supabaseWrite<T = unknown>(
+  config: SupabaseConfig,
+  table: string,
+  method: "POST" | "PATCH" | "DELETE",
+  body: Record<string, unknown> | Record<string, unknown>[],
+  queryParams = "",
+  returnRows = true,
+  prefer?: string,
+): Promise<T> {
+  const url = supabaseEndpoint(config, table, queryParams);
+  const headers: Record<string, string> = {
+    apikey: config.anonKey,
+    Authorization: `Bearer ${config.anonKey}`,
+    "Content-Type": "application/json",
+  };
+  headers["Prefer"] = prefer || (returnRows ? "return=representation" : "return=minimal");
+  const response = await fetch(url, { method, headers, body: JSON.stringify(body) });
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(`Supabase ${table} ${method} ${response.status}: ${message}`);
+  }
+  if (!returnRows) return undefined as T;
+  return (await response.json()) as T;
+}
+
+async function upsertSupabaseLead(
+  config: SupabaseConfig,
+  id: string,
+  payload: Record<string, unknown>,
+) {
+  await supabaseWrite(
+    config,
+    "leads",
+    "POST",
+    [stripUndefinedFields({ id, ...payload })],
+    "on_conflict=id",
+    false,
+    "resolution=merge-duplicates,return=minimal",
+  );
+}
+
+function isSupabaseStatementTimeout(error: unknown) {
+  return (
+    error instanceof Error &&
+    (error.message.includes('"code":"57014"') ||
+      error.message.toLowerCase().includes("statement timeout"))
+  );
+}
+
+function getMissingSupabaseColumn(error: unknown) {
+  if (!(error instanceof Error)) return null;
+  const match = error.message.match(/column\s+\w+\.([A-Za-z0-9_]+)\s+does not exist/);
+  return match?.[1] || null;
+}
+
 async function loadSupabaseRows<T extends SupabaseRow>(
   config: SupabaseConfig,
   table: string,
@@ -413,6 +468,41 @@ async function loadSupabaseRows<T extends SupabaseRow>(
   }
 
   return rows;
+}
+
+async function loadSupabaseRowsWithSelectFallback<T extends SupabaseRow>(
+  config: SupabaseConfig,
+  table: string,
+  columns: string[],
+  params: Record<string, string>,
+  maxRows = 10000,
+  requiredColumns: string[] = [],
+): Promise<T[]> {
+  const required = new Set(requiredColumns);
+  let selectColumns = [...columns];
+
+  while (selectColumns.length > 0) {
+    try {
+      return await loadSupabaseRows<T>(
+        config,
+        table,
+        { ...params, select: selectColumns.join(",") },
+        maxRows,
+      );
+    } catch (error) {
+      const missingColumn = getMissingSupabaseColumn(error);
+      if (
+        !missingColumn ||
+        !selectColumns.includes(missingColumn) ||
+        required.has(missingColumn)
+      ) {
+        throw error;
+      }
+      selectColumns = selectColumns.filter((column) => column !== missingColumn);
+    }
+  }
+
+  return [];
 }
 
 function chunkValues<T>(values: T[], size: number): T[][] {
@@ -443,6 +533,37 @@ async function loadSupabaseRowsByPostIds<T extends SupabaseRow>(
         post_id: `in.(${batch.join(",")})`,
       },
       maxRows - rows.length,
+    );
+    rows.push(...batchRows);
+  }
+
+  return rows;
+}
+
+async function loadSupabaseRowsByPostIdsWithSelectFallback<T extends SupabaseRow>(
+  config: SupabaseConfig,
+  table: string,
+  postIds: string[],
+  columns: string[],
+  params: Record<string, string>,
+  maxRows = 10000,
+  requiredColumns: string[] = [],
+): Promise<T[]> {
+  const rows: T[] = [];
+  const uniquePostIds = Array.from(new Set(postIds.filter(Boolean)));
+
+  for (const batch of chunkValues(uniquePostIds, 50)) {
+    if (rows.length >= maxRows) break;
+    const batchRows = await loadSupabaseRowsWithSelectFallback<T>(
+      config,
+      table,
+      columns,
+      {
+        ...params,
+        post_id: `in.(${batch.join(",")})`,
+      },
+      maxRows - rows.length,
+      requiredColumns,
     );
     rows.push(...batchRows);
   }
@@ -628,23 +749,66 @@ function supabaseCommentToMention(
 async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
   const config = getSupabaseConfig();
   const maxPosts = opts.maxMentions || 500;
-  const postRows = await loadSupabaseRows(
-    config,
-    "posts",
-    { select: "*", order: "posted_at.desc" },
-    maxPosts,
-  );
+  const postColumns = [
+    "post_id",
+    "platform",
+    "source",
+    "brand",
+    "brand_slug",
+    "author",
+    "contact",
+    "language",
+    "posted_at",
+    "url",
+    "payload_json",
+  ];
+  const commentColumns = [
+    "comment_id",
+    "post_id",
+    "parent_comment_id",
+    "platform",
+    "username",
+    "contact",
+    "text",
+    "posted_at",
+    "url",
+    "payload_json",
+  ];
+
+  let postRows: SupabaseRow[];
+  try {
+    postRows = await loadSupabaseRowsWithSelectFallback(
+      config,
+      "posts",
+      postColumns,
+      { order: "posted_at.desc.nullslast" },
+      maxPosts,
+      ["post_id"],
+    );
+  } catch (error) {
+    if (!isSupabaseStatementTimeout(error)) throw error;
+    postRows = await loadSupabaseRowsWithSelectFallback(
+      config,
+      "posts",
+      postColumns,
+      {},
+      Math.min(maxPosts, 200),
+      ["post_id"],
+    );
+  }
   const postIds = postRows
     .map((row) => String(row.post_id || row.id || "").trim())
     .filter(Boolean);
 
   const [commentRows, annotationRows] = await Promise.all([
-    loadSupabaseRowsByPostIds(
+    loadSupabaseRowsByPostIdsWithSelectFallback(
       config,
       "comments",
       postIds,
-      { select: "*" },
+      commentColumns,
+      {},
       10000,
+      ["post_id", "comment_id"],
     ),
     loadSupabaseRowsByPostIds(
       config,
@@ -720,6 +884,33 @@ function uniqueRecordsById<T extends { id: string }>(records: T[]): T[] {
     seen.add(record.id);
     return true;
   });
+}
+
+function getProfileDisplayName(profile: UserRoleProfile) {
+  return profile.displayName || profile.email || "Nhan vien xu ly";
+}
+
+function buildLeadWorkflowPayload(
+  lead: Lead | undefined,
+  data: Partial<Lead>,
+  profile: UserRoleProfile,
+  auditFields: Record<string, unknown>,
+) {
+  const mergedLead = { ...(lead || {}), ...data };
+  const ownerId = data.owner_id || lead?.owner_id || profile.uid;
+  const ownerEmail = data.owner_email || lead?.owner_email || profile.email;
+  const ownerName = data.owner_name || lead?.owner_name || getProfileDisplayName(profile);
+  const cleanLead = stripUndefinedFields({
+    ...mergedLead,
+    ...data,
+    firebase_uid: ownerId,
+    owner_id: ownerId,
+    owner_email: ownerEmail,
+    owner_name: ownerName,
+    ...auditFields,
+  });
+  const { id: _id, ...payload } = cleanLead;
+  return payload;
 }
 
 // ─── Fetch options ────────────────────────────────────────────────────────────
@@ -923,57 +1114,60 @@ export class DashboardService {
         // Collection chưa tồn tại — bỏ qua
       }
 
-      // ── Leads ─────────────────────────────────────────────────────────────
+      // ── Leads (Supabase) ────────────────────────────────────────────────
       let leads: Lead[] = [];
       try {
-        const leadsSnap = await getDocs(
-          query(collection(dbData, COLLECTION_NAMES.leads), limit(200)),
+        const sbConfig = getSupabaseConfig();
+        const leadsRows = await loadSupabaseRows<Record<string, unknown>>(
+          sbConfig,
+          "leads",
+          { order: "created_at.desc.nullslast", limit: "200" },
+          200,
         );
-        leads = leadsSnap.docs.map((doc) => {
-          const d = doc.data();
-          const labels = d.labels || {};
-          const intent = mapIntent(d.intent || labels.intent);
+        leads = leadsRows.map((d) => {
+          const labels = (d.labels as Record<string, unknown>) || {};
+          const intent = mapIntent((d.intent as string) || (labels.intent as string));
           return {
-            id: doc.id,
-            mention_id: normalizeOptionalText(d.mention_id || d.mentionId || d.source_mention_id),
-            source_mention_id: normalizeOptionalText(d.source_mention_id || d.sourceMentionId),
+            id: String(d.id),
+            mention_id: normalizeOptionalText(d.mention_id || d.source_mention_id),
+            source_mention_id: normalizeOptionalText(d.source_mention_id),
             parent_id: d.parent_id ? String(d.parent_id) : null,
             content_type: ["post", "comment", "reply"].includes(
               String(d.content_type || "").toLowerCase(),
             )
               ? (String(d.content_type).toLowerCase() as Lead["content_type"])
               : undefined,
-            post_id: normalizeOptionalText(d.post_id || d.postId),
+            post_id: normalizeOptionalText(d.post_id),
             workspace_id: String(d.workspace_id || d.brand || ""),
-            platform: mapSourceToPlatform(d.source || d.platform || ""),
-            author: normalizeText(d.author || "Khách hàng").trim(),
+            platform: mapSourceToPlatform(String(d.source || d.platform || "")),
+            author: normalizeText(String(d.author || "Khách hàng")).trim(),
             content: String(d.content || d.text || ""),
             intent,
             current_label: d.current_label
-              ? mapLabelValue(d.current_label)
+              ? mapLabelValue(d.current_label as string)
               : undefined,
             labels: normalizeClassificationLabel(
-              d.labels || d.current_labels || {
+              (d.labels || d.current_labels || {
                 topic: Array.isArray(d.intent_signals) ? d.intent_signals : [],
-              },
+              }) as Partial<ClassificationLabel>,
               {
-                sentiment: labels.sentiment ?? d.sentiment,
+                sentiment: (labels.sentiment ?? d.sentiment) as ClassificationLabel["sentiment"],
                 relevance:
                   typeof labels.relevance === "boolean"
                     ? labels.relevance
                     : true,
-                urgency: labels.urgency,
+                urgency: labels.urgency as ClassificationLabel["urgency"],
                 intent,
               },
             ),
-            intent_signals: d.intent_signals || [],
-            status: d.status || "new",
+            intent_signals: (d.intent_signals as string[]) || [],
+            status: (d.status as Lead["status"]) || "new",
             created_at: parseDate(d.created_at),
             expiry_at: d.expiry_at ? parseDate(d.expiry_at) : undefined,
             url: normalizeOptionalUrl(d.url, d.post_url, d.source_url),
             source_url: normalizeOptionalUrl(d.source_url, d.post_url, d.url),
             label_correction_status: mapLabelCorrectionStatus(
-              d.label_correction_status,
+              d.label_correction_status as string | undefined,
             ),
             pending_label_request_id: normalizeOptionalText(
               d.pending_label_request_id,
@@ -990,7 +1184,7 @@ export class DashboardService {
               d.contact,
               d.profile_url,
             ),
-            owner_id: normalizeOptionalText(d.owner_id),
+            owner_id: normalizeOptionalText(d.owner_id || d.firebase_uid),
             owner_name: normalizeOptionalText(d.owner_name),
             owner_email: normalizeOptionalText(d.owner_email),
             assigned_at: d.assigned_at ? parseDate(d.assigned_at) : undefined,
@@ -1027,12 +1221,8 @@ export class DashboardService {
             posted_at: d.posted_at ? parseDate(d.posted_at) : undefined,
           };
         });
-        leads.sort(
-          (a, b) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-        );
       } catch {
-        // Collection chưa tồn tại — bỏ qua
+        // Table chưa tồn tại — bỏ qua
       }
 
       if (leads.length === 0) {
@@ -1205,7 +1395,7 @@ export class DashboardService {
   }
 
   /**
-   * Cập nhật trạng thái của lead trên Firestore
+   * Cập nhật trạng thái của lead trên Supabase
    */
   static async updateLeadStatus(
     id: string,
@@ -1223,30 +1413,21 @@ export class DashboardService {
       updated_at: new Date().toISOString(),
     };
 
+    const config = getSupabaseConfig();
     try {
-      const leadRef = doc(dbData, COLLECTION_NAMES.leads, id);
-      await updateDoc(leadRef, { status, ...auditFields });
+      await upsertSupabaseLead(
+        config,
+        id,
+        buildLeadWorkflowPayload(lead, { status }, profile, auditFields),
+      );
     } catch (error) {
-      if (lead) {
-        const leadRef = doc(dbData, COLLECTION_NAMES.leads, id);
-        const cleanLead = stripUndefinedFields({ ...lead, status, ...auditFields });
-        const { id: _id, ...leadData } = cleanLead;
-        await setDoc(leadRef, leadData, { merge: true });
-        return;
-      }
-
-      try {
-        const labelRef = doc(dbData, COLLECTION_NAMES.mentions, id);
-        await updateDoc(labelRef, { status, ...auditFields });
-      } catch (fallbackError) {
-        console.error("[DashboardService] updateLeadStatus error:", error);
-        throw fallbackError;
-      }
+      console.error("[DashboardService] updateLeadStatus error:", error);
+      throw error;
     }
   }
 
   /**
-   * Cập nhật các thông tin chi tiết nhật ký chăm sóc của lead trên Firestore
+   * Cập nhật các thông tin chi tiết nhật ký chăm sóc của lead trên Supabase
    */
   static async updateLeadDetails(
     id: string,
@@ -1268,29 +1449,16 @@ export class DashboardService {
       updated_at: new Date().toISOString(),
     };
 
+    const config = getSupabaseConfig();
     try {
-      const leadRef = doc(dbData, COLLECTION_NAMES.leads, id);
-      const cleanData = { ...data };
-      delete cleanData.id;
-      await updateDoc(leadRef, { ...cleanData, ...auditFields });
+      await upsertSupabaseLead(
+        config,
+        id,
+        buildLeadWorkflowPayload(lead, data, profile, auditFields),
+      );
     } catch (error) {
-      if (lead) {
-        const leadRef = doc(dbData, COLLECTION_NAMES.leads, id);
-        const cleanLead = stripUndefinedFields({ ...lead, ...data, ...auditFields });
-        const { id: _id, ...leadData } = cleanLead;
-        await setDoc(leadRef, leadData, { merge: true });
-        return;
-      }
-
-      try {
-        const labelRef = doc(dbData, COLLECTION_NAMES.mentions, id);
-        const cleanData = { ...data };
-        delete cleanData.id;
-        await updateDoc(labelRef, { ...cleanData, ...auditFields });
-      } catch (fallbackError) {
-        console.error("[DashboardService] updateLeadDetails error:", error);
-        throw fallbackError;
-      }
+      console.error("[DashboardService] updateLeadDetails error:", error);
+      throw error;
     }
   }
 
@@ -1328,19 +1496,20 @@ export class DashboardService {
       updated_by_role: profile.role,
     });
 
-    const requestRef = await addDoc(
-      collection(dbData, COLLECTION_NAMES.labelChangeRequests),
-      requestData,
+    const config = getSupabaseConfig();
+    const insertedRows = await supabaseWrite<Array<{ id: string }>>(
+      config, "label_change_requests", "POST", requestData, "",
     );
+    const newId = insertedRows?.[0]?.id || crypto.randomUUID();
 
     const request: LabelChangeRequest = {
-      id: requestRef.id,
+      id: newId,
       ...requestData,
     };
 
     const correctionData = stripUndefinedFields({
       label_correction_status: "pending",
-      pending_label_request_id: requestRef.id,
+      pending_label_request_id: newId,
       label_correction_requested_at: nowIso,
       label_correction_requested_by: profile.uid,
       updated_by: profile.uid,
@@ -1348,18 +1517,11 @@ export class DashboardService {
       updated_at: nowIso,
     });
 
+    const leadId = data.lead_id || data.source_id;
     try {
-      await updateDoc(
-        doc(dbData, COLLECTION_NAMES.leads, data.lead_id || data.source_id),
-        correctionData,
-      );
+      await supabaseWrite(config, "leads", "PATCH", correctionData, `id=eq.${encodeURIComponent(leadId)}`, false);
     } catch {
-      if (data.mention_id || data.source_id) {
-        await updateDoc(
-          doc(dbData, COLLECTION_NAMES.mentions, data.mention_id || data.source_id),
-          correctionData,
-        );
-      }
+      // Lead row may not exist yet — ignore
     }
 
     return request;
