@@ -43,7 +43,11 @@ function getRelativeTime(isoString: string, t: any): string {
     const diffHours = Math.floor(diffMins / 60);
     if (diffHours < 24) return t("mentions.table.hoursAgo", { count: diffHours });
     const diffDays = Math.floor(diffHours / 24);
-    return t("mentions.table.daysAgo", { count: diffDays });
+    if (diffDays < 30) return t("mentions.table.daysAgo", { count: diffDays });
+    const diffMonths = Math.floor(diffDays / 30);
+    if (diffMonths < 12) return t("mentions.table.monthsAgo", { count: diffMonths });
+    const diffYears = Math.floor(diffMonths / 12);
+    return t("mentions.table.yearsAgo", { count: diffYears });
   } catch (e) {
     return t("mentions.table.justNow");
   }

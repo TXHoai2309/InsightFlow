@@ -1010,6 +1010,7 @@
   "mentions.table.loading": "Đang tải đề cập...",
   "mentions.table.minutesAgo": "{{count}} phút trước",
   "mentions.table.monthsAgo": "{{count}} tháng trước",
+  "mentions.table.yearsAgo": "{{count}} năm trước",
   "mentions.table.noData": "Không tìm thấy đề cập nào khớp với bộ lọc.",
   "mentions.table.paginationInfo": "Hiển thị {{start}}–{{end}} trên tổng số {{total}} đề cập",
   "mentions.table.platform": "Nền tảng",

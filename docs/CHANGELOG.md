@@ -973,3 +973,25 @@ File changelog trong repo nên giữ chi tiết commit như trên để truy v�
 ### Notes
 
 - Hien tai loc ngay van co the cham neu khoang ngay rong, vi tool phai doi chieu assignment voi post/comment. Huong toi uu tiep theo la them cot `sort_date` vao `labeling_assignments` de Supabase loc truc tiep.
+
+---
+
+## [Unreleased] - 2026-07-08
+
+### Added
+
+- Hỗ trợ đầy đủ 5 trường nhãn chỉnh sửa sắc thái, mức độ, chủ đề, độ liên quan và ý định mua hàng (Sentiment, Severity/Urgency, Topic, Relevance, Intent) lấy từ công cụ gán nhãn gốc `LabelSelector.tsx`.
+- Thêm bộ lọc nhanh loại nội dung **Bài viết (Post)** và **Bình luận (Comment)** trong hàng chờ ưu tiên xử lý ở trang Alerts.
+- Tích hợp và đồng bộ hai chiều thời gian thực (real-time sync) giữa trang chi tiết vụ việc (`/alerts/[id]`) và trang duyệt gán nhãn chung (`/label-requests`) bằng cách lưu trữ chung trong collection Firestore `label_change_requests` và lịch sử ở `label_change_history`.
+
+### Changed
+
+- Gộp gọn các chức năng (Form gửi yêu cầu sửa nhãn của nhân viên, Danh sách chờ duyệt của quản lý và Lịch sử xử lý nhãn) vào **một widget duy nhất dạng Tab** ở sidebar trang chi tiết vụ việc để tối ưu diện tích hiển thị.
+- Ẩn phân mục Accordion danh sách yêu cầu sửa nhãn dưới chân trang hàng chờ `/alerts` đối với Nhân viên trực (`crisis_employee`), chỉ hiển thị với vai trò Quản lý (`brand_manager` / `admin`).
+- Tăng chu kỳ tự động tải lại dữ liệu cảnh báo từ Supabase (polling interval) từ **60 giây lên 30 phút** ở cả trang hàng chờ cảnh báo và trang chi tiết cảnh báo để giảm tải request.
+
+### Fixed
+
+- Khắc phục lỗi trùng lặp/ghi đè thuộc tính khi load/cập nhật thông tin rủi ro nhờ mapping chính xác các trường dữ liệu Supabase annotations và Firestore.
+- Sửa lỗi hiển thị sai thời gian tương đối của các vụ việc rủi ro bằng cách ánh xạ đúng trường thời gian đăng bài gốc (`posted_at`) thay vì ngày cập nhật nhãn kiểm duyệt (`updated_at`).
+- Bổ sung logic tính toán và hiển thị thời gian tương đối theo **tháng** (`X tháng trước`) hoặc **năm** (`X năm trước`) khi khoảng cách số ngày đăng bài quá lớn.

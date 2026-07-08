@@ -36,7 +36,11 @@ function getRelativeTime(isoString: string | undefined): string {
     const diffHours = Math.floor(diffMins / 60);
     if (diffHours < 24) return `${diffHours} giờ trước`;
     const diffDays = Math.floor(diffHours / 24);
-    return `${diffDays} ngày trước`;
+    if (diffDays < 30) return `${diffDays} ngày trước`;
+    const diffMonths = Math.floor(diffDays / 30);
+    if (diffMonths < 12) return `${diffMonths} tháng trước`;
+    const diffYears = Math.floor(diffMonths / 12);
+    return `${diffYears} năm trước`;
   } catch (e) {
     return "Vừa xong";
   }
@@ -334,7 +338,7 @@ export default function AlertDetailPage() {
 
     loadAlertDetail();
 
-    const intervalId = setInterval(loadAlertDetail, 60000);
+    const intervalId = setInterval(loadAlertDetail, 1800000); // 30 minutes
     return () => clearInterval(intervalId);
   }, [id]);
 

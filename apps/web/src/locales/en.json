@@ -1009,6 +1009,7 @@
   "mentions.table.loading": "Loading mentions...",
   "mentions.table.minutesAgo": "{{count}} minutes ago",
   "mentions.table.monthsAgo": "{{count}} months ago",
+  "mentions.table.yearsAgo": "{{count}} years ago",
   "mentions.table.noData": "No mentions found matching the filters.",
   "mentions.table.paginationInfo": "Showing {{start}}-{{end}} of {{total}} mentions",
   "mentions.table.platform": "Platform",
