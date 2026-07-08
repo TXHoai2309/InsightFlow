@@ -23,6 +23,8 @@ export interface SupabaseDateRange {
 }
 
 export interface PendingAssignmentCounts {
+  totalPosts: number;
+  totalComments: number;
   posts: number;
   comments: number;
   labeledPosts: number;
@@ -178,12 +180,13 @@ export async function loadPendingAssignmentCounts(
     : platform === 'befood'
       ? 'in.(be,befood)'
       : `eq.${platform}`;
-  const entityBase = {
-    select: 'platform',
+
+  const assignmentBase = {
+    select: 'assignment_id',
     platform: platformFilter,
-    crawl_status: 'eq.active',
     limit: '1',
   };
+
   const annotationBase = {
     select: 'annotation_id',
     platform: platformFilter,
@@ -191,31 +194,68 @@ export async function loadPendingAssignmentCounts(
     status: 'in.(completed,skipped)',
     limit: '1',
   };
-  const assignmentBase = {
-    select: 'assignment_id',
-    platform: platformFilter,
-    entity_type: 'eq.post',
-    status: 'in.(completed,skipped)',
-    limit: '1',
-  };
-  const [allPosts, allComments, handledPosts, handledComments, completedThreads] = await Promise.all([
-    requestExactCount(config, 'posts', new URLSearchParams(entityBase).toString()).catch(() => 0),
-    requestExactCount(config, 'comments', new URLSearchParams(entityBase).toString()).catch(() => 0),
+
+  const [
+    unassignedPosts,
+    unassignedComments,
+    completedThreads,
+    labeledPosts,
+    labeledComments,
+  ] = await Promise.all([
+    // Post chưa gán (unassigned/updated_review trong labeling_assignments)
+    requestExactCount(config, 'labeling_assignments', new URLSearchParams({
+      ...assignmentBase,
+      entity_type: 'eq.post',
+      status: 'in.(unassigned,updated_review)',
+    }).toString()).catch(() => 0),
+    // Comment chưa gán (unassigned/updated_review trong labeling_assignments)
+    requestExactCount(config, 'labeling_assignments', new URLSearchParams({
+      ...assignmentBase,
+      entity_type: 'eq.comment',
+      status: 'in.(unassigned,updated_review)',
+    }).toString()).catch(() => 0),
+    // Thread hoàn tất (completed/skipped post assignments)
+    requestExactCount(config, 'labeling_assignments', new URLSearchParams({
+      ...assignmentBase,
+      entity_type: 'eq.post',
+      status: 'in.(completed,skipped)',
+    }).toString()).catch(() => 0),
+    // Post đã gán (từ annotations lọc theo assignee)
     requestExactCount(config, 'annotations', new URLSearchParams({
       ...annotationBase,
       entity_type: 'eq.post',
     }).toString()).catch(() => 0),
+    // Comment đã gán (từ annotations lọc theo assignee)
     requestExactCount(config, 'annotations', new URLSearchParams({
       ...annotationBase,
       entity_type: 'eq.comment',
     }).toString()).catch(() => 0),
-    requestExactCount(config, 'labeling_assignments', new URLSearchParams(assignmentBase).toString()).catch(() => 0),
   ]);
+
+  // Query total posts (small table, fast lookup)
+  const totalPosts = await requestExactCount(config, 'posts', new URLSearchParams({
+    select: 'post_id',
+    platform: platformFilter,
+    limit: '1',
+  }).toString()).catch(() => 0);
+
+  // Query total comments (skip for large tables to avoid 4s statement timeout)
+  let totalComments = 0;
+  if (platform !== 'google_maps' && platform !== 'tiktok' && platform !== 'facebook') {
+    totalComments = await requestExactCount(config, 'comments', new URLSearchParams({
+      select: 'comment_id',
+      platform: platformFilter,
+      limit: '1',
+    }).toString()).catch(() => 0);
+  }
+
   return {
-    posts: Math.max(allPosts - handledPosts, 0),
-    comments: Math.max(allComments - handledComments, 0),
-    labeledPosts: handledPosts,
-    labeledComments: handledComments,
+    totalPosts: totalPosts || (unassignedPosts + completedThreads),
+    totalComments: totalComments || (unassignedComments + labeledComments),
+    posts: unassignedPosts,
+    comments: unassignedComments,
+    labeledPosts,
+    labeledComments,
     completedThreads,
   };
 }

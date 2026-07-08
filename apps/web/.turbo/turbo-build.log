@@ -19,7 +19,17 @@ Import trace for requested module:
  ✓ Compiled successfully
    Linting and checking validity of types ...
    Collecting page data ...
-PageNotFoundError: Cannot find module for page: /api/debug-firestore
+PageNotFoundError: Cannot find module for page: /api/auth/complete-first-password-change
+    at getPagePath (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\server\require.js:94:15)
+    at requirePage (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\server\require.js:99:22)
+    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\server\load-components.js:103:84
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async loadComponentsImpl (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\server\load-components.js:103:26)
+    at async D:\Thuc_Tap\InsightFlow\node_modules\next\dist\build\utils.js:1116:32
+    at async Span.traceAsyncFn (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\trace\trace.js:154:20) {
+  code: 'ENOENT'
+}
+PageNotFoundError: Cannot find module for page: /api/admin/brand-managers/[uid]/reset-temporary-password
     at getPagePath (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\server\require.js:94:15)
     at requirePage (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\server\require.js:99:22)
     at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\server\load-components.js:103:84
@@ -31,7 +41,7 @@ PageNotFoundError: Cannot find module for page: /api/debug-firestore
 }
 
 > Build error occurred
-Error: Failed to collect page data for /api/debug-firestore
+Error: Failed to collect page data for /api/auth/complete-first-password-change
     at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\build\utils.js:1269:15
     at process.processTicksAndRejections (node:internal/process/task_queues:105:5) {
   type: 'Error'
