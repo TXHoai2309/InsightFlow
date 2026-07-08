@@ -141,6 +141,7 @@ function getFormattedSourceUrl(url: string, text: string): string {
 export default function AlertsPage() {
   const router = useRouter();
   const { profile, loading: authLoading } = useAuth();
+  const isManager = profile?.role === "admin" || profile?.role === "brand_manager";
   const scopedBrandKey = getScopedBrandKey(profile);
   const canViewCrisisQueue = canPerformAction(profile, "view_crisis_queue");
   const canUpdateCrisisStatus =
@@ -1095,58 +1096,60 @@ export default function AlertsPage() {
           </div>
 
           {/* Accordion list: LABEL CORRECTION REQUESTS */}
-          <div className="glass-card rounded-2xl border border-[var(--color-border)] overflow-hidden shadow-sm bg-white dark:bg-[var(--color-bg-surface-raised)]">
-            <button
-              onClick={() => setIsRequestsExpanded(!isRequestsExpanded)}
-              className="w-full p-4 flex items-center justify-between font-black text-xs md:text-sm uppercase tracking-wider text-[var(--color-text-primary)] hover:bg-slate-50 transition-colors cursor-pointer"
-            >
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-blue-500">edit_document</span>
-                <span>Yêu cầu sửa nhãn ({correctionRequests.filter(r => r.status === "pending").length})</span>
-              </div>
-              <span className="material-symbols-outlined transition-transform duration-300" style={{ transform: isRequestsExpanded ? "rotate(180deg)" : "rotate(0deg)" }}>
-                expand_more
-              </span>
-            </button>
+          {isManager && (
+            <div className="glass-card rounded-2xl border border-[var(--color-border)] overflow-hidden shadow-sm bg-white dark:bg-[var(--color-bg-surface-raised)]">
+              <button
+                onClick={() => setIsRequestsExpanded(!isRequestsExpanded)}
+                className="w-full p-4 flex items-center justify-between font-black text-xs md:text-sm uppercase tracking-wider text-[var(--color-text-primary)] hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-blue-500">edit_document</span>
+                  <span>Yêu cầu sửa nhãn ({correctionRequests.filter(r => r.status === "pending").length})</span>
+                </div>
+                <span className="material-symbols-outlined transition-transform duration-300" style={{ transform: isRequestsExpanded ? "rotate(180deg)" : "rotate(0deg)" }}>
+                  expand_more
+                </span>
+              </button>
 
-            {isRequestsExpanded && (
-              <div className="p-4 border-t border-[var(--color-border)]/50 space-y-3 bg-slate-50/20">
-                {correctionRequests.length === 0 ? (
-                  <p className="text-xs text-[var(--color-text-muted)] italic text-center py-4">Không có yêu cầu sửa nhãn nào.</p>
-                ) : (
-                  correctionRequests.map(req => (
-                    <div key={req.id} className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-[var(--color-border)] text-xs space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-[var(--color-text-primary)]">{req.requester_email}</span>
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${req.status === "pending" ? "bg-amber-50 text-amber-600" :
-                          req.status === "approved" ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"
-                          }`}>
-                          {req.status === "pending" ? "Đang chờ duyệt" : req.status === "approved" ? "Đã duyệt" : "Đã từ chối"}
-                        </span>
-                      </div>
-                      <p className="text-[var(--color-text-secondary)] italic">"{req.reason}"</p>
-                      {req.status === "pending" && (
-                        <div className="flex justify-end gap-2 pt-1 border-t border-slate-100">
-                          <button
-                            onClick={() => resolveCorrectionRequest(req.id, req.alert_id, "rejected", profile)}
-                            className="px-2.5 py-1 text-[10px] bg-red-50 text-red-600 hover:bg-red-100 rounded font-bold cursor-pointer"
-                          >
-                            Từ chối
-                          </button>
-                          <button
-                            onClick={() => resolveCorrectionRequest(req.id, req.alert_id, "approved", profile)}
-                            className="px-2.5 py-1 text-[10px] bg-green-600 text-white hover:bg-green-700 rounded font-bold cursor-pointer"
-                          >
-                            Phê duyệt
-                          </button>
+              {isRequestsExpanded && (
+                <div className="p-4 border-t border-[var(--color-border)]/50 space-y-3 bg-slate-50/20">
+                  {correctionRequests.length === 0 ? (
+                    <p className="text-xs text-[var(--color-text-muted)] italic text-center py-4">Không có yêu cầu sửa nhãn nào.</p>
+                  ) : (
+                    correctionRequests.map(req => (
+                      <div key={req.id} className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-[var(--color-border)] text-xs space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-[var(--color-text-primary)]">{req.requester_email}</span>
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${req.status === "pending" ? "bg-amber-50 text-amber-600" :
+                            req.status === "approved" ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"
+                            }`}>
+                            {req.status === "pending" ? "Đang chờ duyệt" : req.status === "approved" ? "Đã duyệt" : "Đã từ chối"}
+                          </span>
                         </div>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
+                        <p className="text-[var(--color-text-secondary)] italic">"{req.reason}"</p>
+                        {req.status === "pending" && (
+                          <div className="flex justify-end gap-2 pt-1 border-t border-slate-100">
+                            <button
+                              onClick={() => resolveCorrectionRequest(req.id, req.alert_id, "rejected", profile)}
+                              className="px-2.5 py-1 text-[10px] bg-red-50 text-red-600 hover:bg-red-100 rounded font-bold cursor-pointer"
+                            >
+                              Từ chối
+                            </button>
+                            <button
+                              onClick={() => resolveCorrectionRequest(req.id, req.alert_id, "approved", profile)}
+                              className="px-2.5 py-1 text-[10px] bg-green-600 text-white hover:bg-green-700 rounded font-bold cursor-pointer"
+                            >
+                              Phê duyệt
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
         </div>
 
