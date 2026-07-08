@@ -29,9 +29,15 @@ const navItems: NavItem[] = [
   { href: "/dashboard", label: "nav.dashboard", icon: "ti-layout-dashboard" },
   { href: "/team", label: "Quản lý đội ngũ", icon: "ti-users" },
   { href: "/mentions", label: "nav.mentions", icon: "ti-message-circle" },
+<<<<<<< HEAD
   { href: "/label-requests", label: "Duyệt yêu cầu", icon: "ti-clipboard-check" },
   { href: "/alerts", label: "nav.alerts", icon: "ti-bell" },
   { href: "/leads", label: "nav.leads", icon: "ti-chart-bar" },
+=======
+  { href: "/label-requests", label: "Duyet yeu cau", icon: "ti-clipboard-check" },
+  { href: "/alerts", label: "Cảnh báo", icon: "ti-bell" },
+  { href: "/leads", label: "Khách hàng", icon: "ti-chart-bar" },
+>>>>>>> d96fc356d714a0743c9123d999470b983d1992ca
   { href: "/reports", label: "nav.reports", icon: "ti-file-analytics" },
   { href: "/settings/brand", label: "nav.brands", icon: "ti-settings" },
 ];

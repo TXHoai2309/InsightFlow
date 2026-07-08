@@ -9,6 +9,10 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useDashboardStore } from "@/stores/dashboard.store";
+import { useAlertStore } from "@/stores/alert.store";
+import { useAuth } from "@/hooks/useAuth";
+import { getScopedBrandKey } from "@/lib/brandScope";
+import { useRouter } from "next/navigation";
 import { DashboardService } from "@/lib/services/dashboard";
 
 // New components
@@ -60,6 +64,26 @@ export function Dashboard({
     if (initialWorkspaces.length > 0) setWorkspaces(initialWorkspaces);
     setFilters({ sentiment: "all", topic: "all" });
   }, []);
+
+  const router = useRouter();
+  const { profile } = useAuth();
+  const scopedBrandKey = getScopedBrandKey(profile);
+  const isManager = profile?.role === "brand_manager" || profile?.role === "admin";
+
+  const {
+    correctionRequests,
+    fetchCorrectionRequests,
+  } = useAlertStore();
+
+  useEffect(() => {
+    if (isMounted && isManager) {
+      fetchCorrectionRequests(scopedBrandKey);
+    }
+  }, [isMounted, isManager, scopedBrandKey, fetchCorrectionRequests]);
+
+  const pendingRequests = useMemo(() => {
+    return correctionRequests.filter((r) => r.status === "pending");
+  }, [correctionRequests]);
 
   const overviewMentions = useMemo(() => {
     const normFilter =
@@ -219,6 +243,31 @@ export function Dashboard({
   return (
     <div className="space-y-6 md:space-y-8 max-w-[1600px] mx-auto pb-10">
       <DashboardFilters workspaces={workspaces} />
+
+      {isManager && pendingRequests.length > 0 && (
+        <div className="bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/30 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 animate-pulse shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-600 flex-shrink-0">
+              <span className="material-symbols-outlined text-xl">edit_document</span>
+            </div>
+            <div>
+              <p className="text-sm font-black text-[var(--color-text-primary)]">
+                Yêu cầu duyệt sửa nhãn AI đang chờ xử lý
+              </p>
+              <p className="text-xs text-[var(--color-text-secondary)] font-medium">
+                Có {pendingRequests.length} đề xuất sửa đổi nhãn từ nhân viên xử lý khủng hoảng cần bạn phê duyệt.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => router.push("/alerts?tab=requests")}
+            className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-sm transition-all active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer flex-shrink-0"
+          >
+            <span className="material-symbols-outlined text-sm">assignment_turned_in</span>
+            Duyệt yêu cầu ngay
+          </button>
+        </div>
+      )}
 
       {/* 1. Brand Health Score */}
       <BrandHealthScore 

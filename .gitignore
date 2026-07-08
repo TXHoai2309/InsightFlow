@@ -2,6 +2,9 @@
 node_modules/
 jspm_packages/
 
+# Label cache
+.label_cache/
+
 # Build outputs
 .next/
 out/
