@@ -46,6 +46,7 @@ import {
   inferQueueFromLabels,
   normalizeClassificationLabel,
 } from "@/lib/label-change";
+import { filterByBrandScope } from "@/lib/brandScope";
 
 // ─── Collection names ────────────────────────────────────────────────────────
 export const COLLECTION_NAMES = {
@@ -1011,7 +1012,7 @@ export class DashboardService {
    * Fetch raw data from Firestore.
    * Mapping field names Firestore → internal types happens here.
    */
-  static async fetchRawData(opts: FetchOptions = {}): Promise<{
+  static async fetchRawData(opts: FetchOptions = {}, profile?: UserRoleProfile | null): Promise<{
     workspaces: Workspace[];
     mentions: Mention[];
     alerts: Alert[];
@@ -1302,6 +1303,7 @@ export class DashboardService {
           derivedLeadById.set(m.id, {
             ...baseLead,
             labels: mergedLabels,
+            intent: (mergedLabels?.intent as any) || "none",
             status: (d.status as Lead["status"]) ?? baseLead.status,
             expiry_at: d.expiry_at ? parseDate(d.expiry_at) : undefined,
             label_correction_status: mapLabelCorrectionStatus(d.label_correction_status as string | undefined),
@@ -1349,90 +1351,9 @@ export class DashboardService {
 
       let labelChangeRequests: LabelChangeRequest[] = [];
       try {
-        const requestsSnap = await getDocs(
-          query(collection(dbData, COLLECTION_NAMES.labelChangeRequests), limit(500)),
-        );
-        labelChangeRequests = requestsSnap.docs.map((doc) => {
-          const d = doc.data();
-          const legacyCurrentLabel = mapLabelValue(d.current_label);
-          const legacyRequestedLabel = mapLabelValue(d.requested_label);
-          const currentLabels = normalizeClassificationLabel(
-            d.current_labels,
-            legacyLabelToClassificationLabel(legacyCurrentLabel),
-          );
-          const requestedLabels = normalizeClassificationLabel(
-            d.requested_labels,
-            legacyLabelToClassificationLabel(legacyRequestedLabel),
-          );
-          return {
-            id: doc.id,
-            source_type: ["lead", "mention", "comment", "post"].includes(
-              String(d.source_type || "").toLowerCase(),
-            )
-              ? (String(d.source_type).toLowerCase() as LabelChangeRequest["source_type"])
-              : "lead",
-            source_id: String(d.source_id || ""),
-            lead_id: normalizeOptionalText(d.lead_id),
-            mention_id: normalizeOptionalText(d.mention_id),
-            workspace_id: String(d.workspace_id || d.brand || ""),
-            platform: mapSourceToPlatform(d.source || d.platform || ""),
-            author: normalizeOptionalText(d.author),
-            content_preview: normalizeText(d.content_preview || ""),
-            source_url: normalizeOptionalUrl(d.source_url, d.url),
-            current_labels: currentLabels,
-            requested_labels: requestedLabels,
-            changed_fields: mapChangedLabelFields(
-              d.changed_fields,
-              currentLabels,
-              requestedLabels,
-            ),
-            current_queue:
-              d.current_queue !== undefined
-                ? mapLabelQueue(d.current_queue)
-                : inferQueueFromLabels(currentLabels),
-            requested_queue:
-              d.requested_queue !== undefined
-                ? mapLabelQueue(d.requested_queue)
-                : inferQueueFromLabels(requestedLabels),
-            current_label: d.current_label ? legacyCurrentLabel : undefined,
-            requested_label: d.requested_label ? legacyRequestedLabel : undefined,
-            reason_code: String(d.reason_code || "other"),
-            reason_note: String(d.reason_note || ""),
-            evidence_checked: d.evidence_checked === true,
-            status: ["pending", "approved", "rejected", "cancelled"].includes(
-              String(d.status || "").toLowerCase(),
-            )
-              ? (String(d.status).toLowerCase() as LabelChangeRequest["status"])
-              : "pending",
-            requested_by: String(d.requested_by || ""),
-            requested_by_name: String(d.requested_by_name || ""),
-            requested_by_role: String(d.requested_by_role || ""),
-            requested_at: parseDate(d.requested_at || d.created_at),
-            updated_at: d.updated_at ? parseDate(d.updated_at) : undefined,
-            updated_by: normalizeOptionalText(d.updated_by),
-            updated_by_name: normalizeOptionalText(d.updated_by_name),
-            updated_by_role: normalizeOptionalText(d.updated_by_role),
-            reviewed_by: normalizeOptionalText(d.reviewed_by),
-            reviewed_by_name: normalizeOptionalText(d.reviewed_by_name),
-            reviewed_at: d.reviewed_at ? parseDate(d.reviewed_at) : undefined,
-            review_note: normalizeOptionalText(d.review_note),
-            cancelled_at: d.cancelled_at ? parseDate(d.cancelled_at) : undefined,
-            cancelled_by: normalizeOptionalText(d.cancelled_by),
-            cancelled_by_name: normalizeOptionalText(d.cancelled_by_name),
-            cancel_reason: normalizeOptionalText(d.cancel_reason),
-            applied_at: d.applied_at ? parseDate(d.applied_at) : undefined,
-            audit_log_id: normalizeOptionalText(d.audit_log_id),
-            revision_count:
-              typeof d.revision_count === "number" ? d.revision_count : undefined,
-          };
-        });
-        labelChangeRequests.sort(
-          (a, b) =>
-            new Date(b.requested_at).getTime() -
-            new Date(a.requested_at).getTime(),
-        );
-      } catch {
-        // Collection chua ton tai - bo qua
+        labelChangeRequests = await DashboardService.fetchLabelChangeRequestsFromSupabase(profile);
+      } catch (error) {
+        console.error("Failed to load label requests for fetchRawData:", error);
       }
 
       return {
@@ -1519,6 +1440,103 @@ export class DashboardService {
 
   // ── Stats aggregation ─────────────────────────────────────────────────────
 
+  static async fetchLabelChangeRequestsFromSupabase(
+    profile?: UserRoleProfile | null,
+  ): Promise<LabelChangeRequest[]> {
+    const config = getSupabaseConfig();
+    try {
+      const rows = await loadSupabaseRows<SupabaseRow>(
+        config,
+        "label_change_requests",
+        {},
+        500,
+      );
+      const mapped = rows.map((d) => {
+        const legacyCurrentLabel = mapLabelValue(d.current_label);
+        const legacyRequestedLabel = mapLabelValue(d.requested_label);
+        const currentLabels = normalizeClassificationLabel(
+          d.current_labels as any,
+          legacyLabelToClassificationLabel(legacyCurrentLabel),
+        );
+        const requestedLabels = normalizeClassificationLabel(
+          d.requested_labels as any,
+          legacyLabelToClassificationLabel(legacyRequestedLabel),
+        );
+        return {
+          id: String(d.id),
+          source_type: ["lead", "mention", "comment", "post"].includes(
+            String(d.source_type || "").toLowerCase(),
+          )
+            ? (String(d.source_type).toLowerCase() as LabelChangeRequest["source_type"])
+            : "lead",
+          source_id: String(d.source_id || ""),
+          lead_id: normalizeOptionalText(d.lead_id),
+          mention_id: normalizeOptionalText(d.mention_id),
+          workspace_id: String(d.workspace_id || d.brand || ""),
+          platform: mapSourceToPlatform(String(d.source || d.platform || "")),
+          author: normalizeOptionalText(d.author),
+          content_preview: normalizeText(d.content_preview || ""),
+          source_url: normalizeOptionalUrl(d.source_url, d.url),
+          current_labels: currentLabels,
+          requested_labels: requestedLabels,
+          changed_fields: mapChangedLabelFields(
+            d.changed_fields,
+            currentLabels,
+            requestedLabels,
+          ),
+          current_queue:
+            d.current_queue !== undefined
+              ? mapLabelQueue(d.current_queue)
+              : inferQueueFromLabels(currentLabels),
+          requested_queue:
+            d.requested_queue !== undefined
+              ? mapLabelQueue(d.requested_queue)
+              : inferQueueFromLabels(requestedLabels),
+          current_label: d.current_label ? legacyCurrentLabel : undefined,
+          requested_label: d.requested_label ? legacyRequestedLabel : undefined,
+          reason_code: String(d.reason_code || "other"),
+          reason_note: String(d.reason_note || ""),
+          evidence_checked: d.evidence_checked === true,
+          status: ["pending", "approved", "rejected", "cancelled"].includes(
+            String(d.status || "").toLowerCase(),
+          )
+            ? (String(d.status).toLowerCase() as LabelChangeRequest["status"])
+            : "pending",
+          requested_by: String(d.requested_by || ""),
+          requested_by_name: String(d.requested_by_name || ""),
+          requested_by_role: String(d.requested_by_role || ""),
+          requested_at: parseDate(d.requested_at || d.created_at),
+          updated_at: d.updated_at ? parseDate(d.updated_at) : undefined,
+          updated_by: normalizeOptionalText(d.updated_by),
+          updated_by_name: normalizeOptionalText(d.updated_by_name),
+          updated_by_role: normalizeOptionalText(d.updated_by_role),
+          reviewed_by: normalizeOptionalText(d.reviewed_by),
+          reviewed_by_name: normalizeOptionalText(d.reviewed_by_name),
+          reviewed_at: d.reviewed_at ? parseDate(d.reviewed_at) : undefined,
+          review_note: normalizeOptionalText(d.review_note),
+          cancelled_at: d.cancelled_at ? parseDate(d.cancelled_at) : undefined,
+          cancelled_by: normalizeOptionalText(d.cancelled_by),
+          cancelled_by_name: normalizeOptionalText(d.cancelled_by_name),
+          cancel_reason: normalizeOptionalText(d.cancel_reason),
+          applied_at: d.applied_at ? parseDate(d.applied_at) : undefined,
+          audit_log_id: normalizeOptionalText(d.audit_log_id),
+          revision_count:
+            typeof d.revision_count === "number" ? d.revision_count : undefined,
+        } satisfies LabelChangeRequest;
+      });
+
+      const scoped = filterByBrandScope(mapped, profile);
+      return scoped.sort(
+        (a, b) =>
+          new Date(b.requested_at).getTime() -
+          new Date(a.requested_at).getTime(),
+      );
+    } catch (error) {
+      console.error("Failed to fetch label requests from Supabase:", error);
+      return [];
+    }
+  }
+
   static async createLabelChangeRequest(
     data: Omit<
       LabelChangeRequest,
@@ -1551,15 +1569,19 @@ export class DashboardService {
       updated_by_role: profile.role,
     });
 
-    const docRef = await addDoc(
-      collection(dbData, COLLECTION_NAMES.labelChangeRequests),
+    const config = getSupabaseConfig();
+    const insertedRows = await supabaseWrite<any[]>(
+      config,
+      "label_change_requests",
+      "POST",
       requestData,
     );
-    const newId = docRef.id;
+    const inserted = insertedRows[0] || { id: "" };
+    const newId = inserted.id || "";
 
     const request: LabelChangeRequest = {
-      id: newId,
       ...requestData,
+      id: newId,
     };
 
     const correctionData = stripUndefinedFields({
@@ -1631,9 +1653,14 @@ export class DashboardService {
       revision_count: updatedRequest.revision_count,
     });
 
-    await updateDoc(
-      doc(dbData, COLLECTION_NAMES.labelChangeRequests, request.id),
+    const config = getSupabaseConfig();
+    await supabaseWrite(
+      config,
+      "label_change_requests",
+      "PATCH",
       updateData,
+      `id=eq.${encodeURIComponent(request.id)}`,
+      false,
     );
 
     await addDoc(
@@ -1712,51 +1739,36 @@ export class DashboardService {
       updated_by_role: profile.role,
     });
 
-    await updateDoc(
-      doc(dbData, COLLECTION_NAMES.labelChangeRequests, request.id),
+    const config = getSupabaseConfig();
+    await supabaseWrite(
+      config,
+      "label_change_requests",
+      "PATCH",
       cancelData,
+      `id=eq.${encodeURIComponent(request.id)}`,
+      false,
     );
-
-    const correctionClearData = {
-      label_correction_status: "none",
-      pending_label_request_id: deleteField(),
-      label_correction_requested_at: deleteField(),
-      label_correction_requested_by: deleteField(),
-      updated_by: profile.uid,
-      updated_by_role: profile.role,
-      updated_at: nowIso,
-    };
-
-    const clearPendingPointer = async (
-      collectionName: "leads" | "insightflow_labels",
-      targetId?: string,
-    ) => {
-      if (!targetId) return false;
-      const targetRef = doc(dbData, collectionName, targetId);
-      const snapshot = await getDoc(targetRef);
-      if (!snapshot.exists()) return false;
-      if (snapshot.data().pending_label_request_id !== request.id) return false;
-      await updateDoc(targetRef, correctionClearData);
-      return true;
-    };
 
     const leadTargetId = request.lead_id || request.source_id;
     try {
-      const clearedLead = await clearPendingPointer(
-        COLLECTION_NAMES.leads,
-        leadTargetId,
+      await supabaseWrite(
+        config,
+        "leads",
+        "PATCH",
+        {
+          label_correction_status: "none",
+          pending_label_request_id: null,
+          label_correction_requested_at: null,
+          label_correction_requested_by: null,
+          updated_by: profile.uid,
+          updated_by_role: profile.role,
+          updated_at: nowIso,
+        },
+        `id=eq.${encodeURIComponent(leadTargetId)}`,
+        false,
       );
-      if (!clearedLead) {
-        await clearPendingPointer(
-          COLLECTION_NAMES.mentions,
-          request.mention_id || request.source_id,
-        );
-      }
     } catch {
-      await clearPendingPointer(
-        COLLECTION_NAMES.mentions,
-        request.mention_id || request.source_id,
-      );
+      // ignore
     }
 
     await addDoc(
@@ -1809,21 +1821,24 @@ export class DashboardService {
     const nowIso = new Date().toISOString();
     const normalizedLabel = normalizeClassificationLabel(finalLabel);
 
-    await updateDoc(
-      doc(dbData, COLLECTION_NAMES.labelChangeRequests, requestId),
+    const config = getSupabaseConfig();
+    await supabaseWrite(
+      config,
+      "label_change_requests",
+      "PATCH",
       stripUndefinedFields({
         status,
         final_label: finalLabel,
-        reviewed_by_uid: reviewer.uid,
+        reviewed_by: reviewer.uid,
         reviewed_by_name: reviewer.displayName || reviewer.email || "",
         reviewed_at: nowIso,
         applied_at: nowIso,
         updated_at: nowIso,
         history: nextHistory,
       }),
+      `id=eq.${encodeURIComponent(requestId)}`,
+      false,
     );
-
-    const config = getSupabaseConfig();
 
     const isComment = mentionData.contentType === "comment" || mentionData.contentType === "reply";
     const postId = isComment ? (mentionData.parentId || "") : mentionData.mentionId;
@@ -1876,6 +1891,77 @@ export class DashboardService {
         old_label: oldLabel,
         new_label: finalLabel,
       }),
+    );
+  }
+
+  static async fetchLabelChangeRequests(workspaceId?: string): Promise<{
+    requests: Record<string, unknown>[];
+    history: Record<string, unknown>[];
+  }> {
+    const config = getSupabaseConfig();
+    const requestsQuery = workspaceId
+      ? `workspace_id=eq.${encodeURIComponent(workspaceId)}&order=created_at.desc&limit=200`
+      : `order=created_at.desc&limit=200`;
+    const historyQuery = workspaceId
+      ? `workspace_id=eq.${encodeURIComponent(workspaceId)}&order=created_at.desc&limit=400`
+      : `order=created_at.desc&limit=400`;
+
+    const [requests, history] = await Promise.all([
+      supabaseRequest<Record<string, unknown>[]>(config, "label_change_requests", requestsQuery),
+      supabaseRequest<Record<string, unknown>[]>(config, "label_change_history", historyQuery).catch(() => [] as Record<string, unknown>[]),
+    ]);
+
+    return { requests: requests ?? [], history: history ?? [] };
+  }
+
+  static async rejectLabelChangeRequest(
+    requestId: string,
+    status: "rejected" | "cancelled",
+    reviewer: { uid: string; displayName?: string; email?: string },
+    extra?: { reason?: string; finalLabel?: Record<string, unknown>; oldLabel?: Record<string, unknown>; mentionId?: string; nextHistory?: unknown[] },
+  ): Promise<void> {
+    const nowIso = new Date().toISOString();
+    const config = getSupabaseConfig();
+
+    await supabaseWrite(
+      config,
+      "label_change_requests",
+      "PATCH",
+      stripUndefinedFields({
+        status,
+        reviewed_by: reviewer.uid,
+        reviewed_by_name: reviewer.displayName || reviewer.email || "",
+        reviewed_at: nowIso,
+        updated_at: nowIso,
+        history: extra?.nextHistory,
+        cancel_reason: extra?.reason,
+      }),
+      `id=eq.${encodeURIComponent(requestId)}`,
+      false,
+    );
+
+    await supabaseWrite(
+      config,
+      "label_change_history",
+      "POST",
+      [stripUndefinedFields({
+        request_id: requestId,
+        action: status,
+        status,
+        mention_id: extra?.mentionId,
+        old_label: extra?.oldLabel,
+        new_label: extra?.finalLabel,
+        reviewed_by_uid: reviewer.uid,
+        reviewed_by_name: reviewer.displayName || reviewer.email || "",
+        reviewed_by_email: reviewer.email || "",
+        note: extra?.reason,
+        source: "brand_manager_review",
+        changed_at: nowIso,
+        created_at: nowIso,
+      })],
+      "",
+      false,
+      "return=minimal",
     );
   }
 

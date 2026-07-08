@@ -1,19 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import {
-  addDoc,
-  collection,
-  doc,
-  getDocs,
-  limit,
-  query,
-  serverTimestamp,
-  updateDoc,
-} from "firebase/firestore";
 import { useAuth } from "@/hooks/useAuth";
 import { filterByBrandScope } from "@/lib/brandScope";
-import { auth, dbData } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
 import { DashboardService } from "@/lib/services/dashboard";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { normalizeClassificationLabel } from "@/lib/label-change";
@@ -670,101 +660,122 @@ export default function LabelRequestsPage() {
     async function loadRequests() {
       setLoading(true);
       try {
-        const snapshot = await getDocs(query(collection(dbData, "label_change_requests"), limit(100)));
-        const rows = snapshot.docs.map((item) => {
-          const data = item.data();
-          const oldLabel = normalizeLabel(
+        const { requests: rawRequests, history: rawHistory } =
+          await DashboardService.fetchLabelChangeRequests(profile?.brandId || undefined);
+
+        const mapLabelField = (raw: unknown, fallback: LabelValue): LabelValue => {
+          if (!raw || typeof raw !== "object") return fallback;
+          const r = raw as Record<string, unknown>;
+          return {
+            sentiment: (r.sentiment as Sentiment) ?? fallback.sentiment ?? null,
+            topic: (r.topic as string) ?? fallback.topic ?? "other",
+            relevance: r.relevance !== undefined ? (r.relevance as boolean | null) : (fallback.relevance ?? null),
+            urgency: (r.urgency as Urgency) ?? fallback.urgency ?? null,
+            intent: (r.intent as Intent) ?? fallback.intent ?? null,
+          };
+        };
+
+        const rows: LabelRequest[] = rawRequests.map((data) => {
+          const id = String(data.id || "");
+          const fallbackLabel: LabelValue = { sentiment: "neutral", topic: "other", relevance: null, urgency: null, intent: null };
+          const oldLabel = mapLabelField(
             data.old_label || data.current_labels || data.current_label,
-            { sentiment: "neutral", topic: "other", relevance: null, urgency: null, intent: null },
+            fallbackLabel,
           );
-          const proposedLabel = normalizeLabel(
+          const proposedLabel = mapLabelField(
             data.proposed_label || data.requested_labels || data.requested_label,
             oldLabel,
           );
-          const mention = (data.mention || {}) as LabelRequest["mention"];
+          const mentionRaw = (data.mention ?? {}) as Record<string, unknown>;
           const content = String(
-            mention.content ||
+            mentionRaw.content ||
               data.content_preview ||
               data.mention_content ||
               data.content ||
               "",
           );
-          const contentType = normalizeContentType(mention.content_type || data.source_type);
+          const contentType = normalizeContentType(mentionRaw.content_type || data.source_type);
 
           return {
-            id: item.id,
+            id,
             status: normalizeRequestStatus(data.status),
-            brand_id: data.brand_id || data.workspace_id,
-            brand_name: data.brand_name || data.workspace_name || data.workspace_id,
-            workspace_id: data.workspace_id || data.brand_id || data.brand_name || data.workspace_name,
-            mention_id: data.mention_id || data.source_id || mention.id || item.id,
-            requested_by_name: data.requested_by_name || data.requested_by_email || "Nhân viên",
-            requested_by_email: data.requested_by_email,
-            requested_by_role: data.requested_by_role,
-            reason: data.reason || data.reason_note || data.reason_code,
+            brand_id: String(data.brand_id || data.workspace_id || ""),
+            brand_name: String(data.brand_name || data.workspace_name || data.workspace_id || ""),
+            workspace_id: String(data.workspace_id || data.brand_id || data.brand_name || data.workspace_name || ""),
+            mention_id: String(data.mention_id || data.source_id || mentionRaw.id || id),
+            requested_by_name: String(data.requested_by_name || data.requested_by_email || "Nhân viên"),
+            requested_by_email: data.requested_by_email ? String(data.requested_by_email) : undefined,
+            requested_by_role: data.requested_by_role ? String(data.requested_by_role) : undefined,
+            reason: data.reason || data.reason_note || data.reason_code
+              ? String(data.reason || data.reason_note || data.reason_code)
+              : undefined,
             old_label: oldLabel,
             proposed_label: proposedLabel,
-            final_label: data.final_label ? normalizeLabel(data.final_label, proposedLabel) : undefined,
+            final_label: data.final_label ? mapLabelField(data.final_label, proposedLabel) : undefined,
             mention: {
-              id: mention.id || data.mention_id || data.source_id || item.id,
-              parent_id: mention.parent_id || null,
-              platform: mention.platform || data.platform || data.source || "unknown",
+              id: String(mentionRaw.id || data.mention_id || data.source_id || id),
+              parent_id: (mentionRaw.parent_id as string) || null,
+              platform: String(mentionRaw.platform || data.platform || data.source || "unknown"),
               content_type: contentType,
               content,
-              post_content: mention.post_content || (contentType === "post" ? content : ""),
-              comment_content: mention.comment_content || (contentType !== "post" ? content : ""),
-              author: mention.author || data.author || "",
-              posted_at: mention.posted_at || mention.created_at || "",
-              url: mention.url || data.source_url || data.url || "",
+              post_content: String(mentionRaw.post_content || (contentType === "post" ? content : "")),
+              comment_content: String(mentionRaw.comment_content || (contentType !== "post" ? content : "")),
+              author: String(mentionRaw.author || data.author || ""),
+              posted_at: String(mentionRaw.posted_at || mentionRaw.created_at || ""),
+              url: String(mentionRaw.url || data.source_url || data.url || ""),
             },
             history: Array.isArray(data.history) ? data.history : [],
             created_at: data.requested_at || data.created_at,
-          } satisfies LabelRequest;
+          };
         });
 
         const scopedRows = filterByBrandScope(rows, profile);
 
-        let persistedAuditEntries: LabelAuditEntry[] = [];
-        try {
-          const historySnapshot = await getDocs(query(collection(dbData, "label_change_history"), limit(300)));
-          persistedAuditEntries = historySnapshot.docs
-            .map((item) => {
-              const data = item.data();
-              const oldLabel = normalizeLabel(data.old_label || data.current_labels, { sentiment: "neutral", topic: "other" });
-              const newLabel = normalizeLabel(
-                data.new_label || data.requested_labels || data.previous_requested_labels,
-                oldLabel,
-              );
-              return {
-                id: item.id,
-                request_id: data.request_id,
-                brand_id: data.brand_id || data.workspace_id,
-                brand_name: data.brand_name || data.workspace_id,
-                workspace_id: data.workspace_id || data.brand_id || data.brand_name,
-                mention_id: String(data.mention_id || ""),
-                mention_content: data.mention_content || data.content_preview,
-                action: data.action || data.status || "edited",
-                status: normalizeRequestStatus(data.status || data.action),
-                old_label: oldLabel,
-                new_label: newLabel,
-                requested_by_name:
-                  data.requested_by_name ||
-                  data.changed_by_name ||
-                  data.requested_by_email ||
-                  "Nhân viên",
-                requested_by_email: data.requested_by_email,
-                requested_by_role: data.requested_by_role,
-                reviewed_by_name: data.reviewed_by_name || data.changed_by_name,
-                reviewed_by_email: data.reviewed_by_email,
-                changed_at: data.changed_at || data.created_at,
-                source: data.source || "label_change_history",
-                note: data.note || data.reason_note || data.cancel_reason,
-              } satisfies LabelAuditEntry;
-            })
-            .filter((item) => filterByBrandScope([item], profile).length > 0);
-        } catch (historyError) {
-          console.warn("Failed to load label change history:", historyError);
-        }
+        const persistedAuditEntries: LabelAuditEntry[] = rawHistory.map((data) => {
+          const fallbackLabel: LabelValue = { sentiment: "neutral", topic: "other" };
+          const mapLbl = (raw: unknown) => {
+            if (!raw || typeof raw !== "object") return fallbackLabel;
+            const r = raw as Record<string, unknown>;
+            return {
+              sentiment: (r.sentiment as Sentiment) ?? fallbackLabel.sentiment,
+              topic: (r.topic as string) ?? fallbackLabel.topic,
+              relevance: r.relevance !== undefined ? (r.relevance as boolean | null) : null,
+              urgency: (r.urgency as Urgency) ?? null,
+              intent: (r.intent as Intent) ?? null,
+            };
+          };
+          const oldLbl = mapLbl(data.old_label || data.current_labels);
+          const newLbl = mapLbl(data.new_label || data.requested_labels);
+          return {
+            id: String(data.id || `${data.request_id}-${data.action}-${data.created_at}`),
+            request_id: String(data.request_id || ""),
+            brand_id: String(data.brand_id || data.workspace_id || ""),
+            brand_name: String(data.brand_name || data.workspace_id || ""),
+            workspace_id: String(data.workspace_id || data.brand_id || data.brand_name || ""),
+            mention_id: String(data.mention_id || ""),
+            mention_content: data.mention_content || data.content_preview
+              ? String(data.mention_content || data.content_preview)
+              : undefined,
+            action: (data.action || data.status || "edited") as LabelAuditEntry["action"],
+            status: normalizeRequestStatus(data.status || data.action),
+            old_label: oldLbl,
+            new_label: newLbl,
+            requested_by_name: String(
+              data.requested_by_name || data.changed_by_name || data.requested_by_email || "Nhân viên",
+            ),
+            requested_by_email: data.requested_by_email ? String(data.requested_by_email) : undefined,
+            requested_by_role: data.requested_by_role ? String(data.requested_by_role) : undefined,
+            reviewed_by_name: data.reviewed_by_name || data.changed_by_name
+              ? String(data.reviewed_by_name || data.changed_by_name)
+              : undefined,
+            reviewed_by_email: data.reviewed_by_email ? String(data.reviewed_by_email) : undefined,
+            changed_at: data.changed_at || data.created_at,
+            source: String(data.source || "label_change_history"),
+            note: data.note || data.reason_note || data.cancel_reason
+              ? String(data.note || data.reason_note || data.cancel_reason)
+              : undefined,
+          } satisfies LabelAuditEntry;
+        }).filter((item) => filterByBrandScope([item], profile).length > 0);
 
         if (active) {
           setRequests(scopedRows);
@@ -913,36 +924,23 @@ export default function LabelRequestsPage() {
             nextHistory,
           );
         } else {
-          await updateDoc(doc(dbData, "label_change_requests", selectedRequest.id), {
-            status,
-            final_label: finalLabel,
-            reviewed_by_uid: profile?.uid || "",
-            reviewed_by_name: profile?.displayName || profile?.email || "",
-            reviewed_at: serverTimestamp(),
-            history: nextHistory,
-            updated_at: serverTimestamp(),
-          });
-          await addDoc(collection(dbData, "label_change_history"), {
-            request_id: selectedRequest.id,
-            brand_id: selectedRequest.brand_id || profile?.brandId || "",
-            brand_name: selectedRequest.brand_name || profile?.brandName || "",
-            mention_id: selectedRequest.mention_id,
-            mention_content: selectedRequest.mention.content,
-            action: status,
-            status,
-            old_label: selectedRequest.old_label,
-            new_label: finalLabel,
-            requested_by_name: selectedRequest.requested_by_name,
-            requested_by_email: selectedRequest.requested_by_email || "",
-            requested_by_role: selectedRequest.requested_by_role || "",
-            reviewed_by_uid: profile?.uid || "",
-            reviewed_by_name: profile?.displayName || profile?.email || "",
-            reviewed_by_email: profile?.email || "",
-            note: selectedRequest.reason || "",
-            source: "brand_manager_review",
-            changed_at: serverTimestamp(),
-            created_at: serverTimestamp(),
-          });
+          // reject / cancel — uses Supabase
+          await DashboardService.rejectLabelChangeRequest(
+            selectedRequest.id,
+            status as "rejected" | "cancelled",
+            {
+              uid: profile?.uid || "",
+              displayName: profile?.displayName,
+              email: profile?.email,
+            },
+            {
+              reason: selectedRequest.reason,
+              finalLabel: finalLabel as Record<string, unknown>,
+              oldLabel: selectedRequest.old_label as Record<string, unknown>,
+              mentionId: selectedRequest.mention_id,
+              nextHistory,
+            },
+          );
 
           useDashboardStore.getState().setLabelChangeRequests(
             useDashboardStore.getState().labelChangeRequests.map((req: any) =>

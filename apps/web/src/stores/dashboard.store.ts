@@ -378,6 +378,7 @@ export const useDashboardStore = create<DashboardState>()(
               return {
                 ...lead,
                 labels: normLabel,
+                intent: (normLabel.intent as any) || "none",
                 label_correction_status: "approved" as const,
                 pending_label_request_id: undefined,
                 last_label_corrected_at: new Date().toISOString(),
