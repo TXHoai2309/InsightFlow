@@ -54,6 +54,7 @@ export interface AlertData {
   content_type?: string;
   internal_notes?: InternalNote[];
   post_id?: string;
+  post_url?: string;
   post_like_count?: number;
   post_comment_count?: number;
   post_share_count?: number;
@@ -278,7 +279,7 @@ export const useAlertStore = create<AlertState>()(
 
         await loadAlerts();
 
-        const intervalId = setInterval(loadAlerts, 5000);
+        const intervalId = setInterval(loadAlerts, 60000);
         activeUnsubscribe = () => clearInterval(intervalId);
       } catch (error) {
         const message =

@@ -825,6 +825,8 @@ export default function AlertsPage() {
                 <option value="tiktok">TikTok</option>
                 <option value="youtube">YouTube</option>
                 <option value="google_maps">Google Maps</option>
+                <option value="befood">BeFood</option>
+                <option value="thread">Threads</option>
                 <option value="news">Báo chí</option>
               </select>
 
@@ -934,7 +936,7 @@ export default function AlertsPage() {
                         <div className="flex items-center gap-1 flex-shrink-0">
                           <PlatformLogo platform={alert.source} size="sm" />
                           <span className="text-[9px] font-bold text-[var(--color-text-muted)] uppercase">
-                            {alert.source === "google_maps" ? "Google Maps" : alert.source === "thread" ? "Threads" : alert.source.charAt(0).toUpperCase() + alert.source.slice(1)}
+                            {alert.source === "google_maps" ? "Google Maps" : alert.source === "thread" ? "Threads" : alert.source === "befood" ? "BeFood" : alert.source.charAt(0).toUpperCase() + alert.source.slice(1)}
                           </span>
                         </div>
                         <span className="text-slate-300 dark:text-slate-600">·</span>

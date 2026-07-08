@@ -9,7 +9,7 @@ import { PlatformLogo } from "@/components/platform/PlatformLogo";
 import { dbSecond } from "@/lib/firebase";
 import { doc, onSnapshot, updateDoc, arrayUnion } from "firebase/firestore";
 import { canPerformAction } from "@/lib/rbac";
-import { fetchSingleSupabaseAlert, updateSupabaseAlertLabel } from "@/lib/supabase";
+import { fetchSingleSupabaseAlert, updateSupabaseAlertLabel, fetchCommentsForPost, type PostComment } from "@/lib/supabase";
 // Helper function to format brand display names
 function formatBrandName(brand: string): string {
   if (!brand) return "";
@@ -190,6 +190,10 @@ export default function AlertDetailPage() {
   const [alert, setAlert] = useState<AlertData | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Post comments state (for post-type alerts)
+  const [postComments, setPostComments] = useState<PostComment[]>([]);
+  const [loadingComments, setLoadingComments] = useState(false);
+
   // Note text input states
   const [timelineNote, setTimelineNote] = useState("");
   const [internalNoteInput, setInternalNoteInput] = useState("");
@@ -245,9 +249,19 @@ export default function AlertDetailPage() {
 
     loadAlertDetail();
 
-    const intervalId = setInterval(loadAlertDetail, 5000);
+    const intervalId = setInterval(loadAlertDetail, 60000);
     return () => clearInterval(intervalId);
   }, [id]);
+
+  // Fetch comments when alert is a post
+  useEffect(() => {
+    if (!alert || alert.content_type !== "post" || !alert.post_id) return;
+    setLoadingComments(true);
+    fetchCommentsForPost(alert.post_id)
+      .then(setPostComments)
+      .catch(() => setPostComments([]))
+      .finally(() => setLoadingComments(false));
+  }, [alert?.post_id, alert?.content_type]);
 
   // Lock status on component mount, unlock on unmount
   useEffect(() => {
@@ -535,14 +549,58 @@ export default function AlertDetailPage() {
         {/* LEFT COLUMN: 60% Width */}
         <div className="lg:col-span-7 space-y-6">
 
-          {/* Original Content Card */}
+          {/* Original Post Card (shown when alert is a comment) */}
+          {alert.content_type === "comment" && alert.post_content && alert.post_content !== alert.text && (
+            <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl shadow-sm overflow-hidden">
+              <div className="px-5 py-3 border-b border-[var(--color-border)] flex items-center justify-between bg-indigo-50/50 dark:bg-indigo-950/10">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-indigo-600 text-base">article</span>
+                  <h3 className="font-black text-xs text-indigo-700 dark:text-indigo-400 uppercase">Bài viết gốc</h3>
+                </div>
+                {alert.post_url && alert.post_url !== "#" && alert.post_url.trim() !== "" && (
+                  <a
+                    href={alert.post_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-indigo-600 hover:underline text-[11px] font-bold flex items-center gap-1"
+                  >
+                    Truy cập bài viết
+                    <span className="material-symbols-outlined text-[10px]">open_in_new</span>
+                  </a>
+                )}
+              </div>
+              <div className="p-5">
+                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/20 border border-[var(--color-border)]/60 text-xs md:text-sm text-[var(--color-text-primary)] leading-relaxed font-medium whitespace-pre-line">
+                  {alert.post_content}
+                </div>
+                {(alert.post_like_count || alert.post_comment_count || alert.post_share_count) ? (
+                  <div className="flex items-center gap-5 mt-4 text-[11px] text-[var(--color-text-muted)] font-bold">
+                    <div className="flex items-center gap-1">
+                      <span className="material-symbols-outlined text-slate-400 text-sm">thumb_up</span>
+                      <span>{(alert.post_like_count || 0).toLocaleString("vi-VN")}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="material-symbols-outlined text-slate-400 text-sm">chat_bubble</span>
+                      <span>{(alert.post_comment_count || 0).toLocaleString("vi-VN")}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="material-symbols-outlined text-slate-400 text-sm">share</span>
+                      <span>{(alert.post_share_count || 0).toLocaleString("vi-VN")}</span>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          )}
+
+          {/* Alert Content Card */}
           <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-[var(--color-border)] flex flex-wrap justify-between items-center bg-slate-50/50 dark:bg-slate-800/10 gap-3">
               <div className="flex items-center gap-3">
                 <PlatformLogo platform={alert.source} size="sm" />
                 <div>
                   <h3 className="font-black text-xs text-[var(--color-text-primary)] uppercase">
-                    Nguồn: {alert.source ? String(alert.source).toUpperCase() : "Không rõ"}
+                    {alert.content_type === "comment" ? "Bình luận cảnh báo" : "Bài viết cảnh báo"} — {alert.source ? String(alert.source).toUpperCase() : "Không rõ"}
                   </h3>
                   <a
                     href={alert.url !== "#" ? alert.url : undefined}
@@ -550,7 +608,7 @@ export default function AlertDetailPage() {
                     rel="noreferrer"
                     className="text-indigo-600 hover:underline text-[11px] font-bold flex items-center gap-1 mt-0.5"
                   >
-                    Xem bài viết gốc
+                    Xem trên nền tảng gốc
                     <span className="material-symbols-outlined text-[10px]">open_in_new</span>
                   </a>
                 </div>
@@ -609,6 +667,85 @@ export default function AlertDetailPage() {
               </div>
             </div>
           </div>
+
+          {/* Comments Section (shown when alert is a post) */}
+          {alert.content_type === "post" && (
+            <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-[var(--color-border)] flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/10">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-blue-500 text-base">forum</span>
+                  <h3 className="font-black text-xs text-[var(--color-text-primary)] uppercase">
+                    Bình luận ({postComments.length})
+                  </h3>
+                </div>
+              </div>
+
+              <div className="p-5">
+                {loadingComments ? (
+                  <div className="flex items-center justify-center py-8 gap-2">
+                    <svg className="animate-spin h-5 w-5 text-[var(--color-brand)]" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                    </svg>
+                    <span className="text-xs text-[var(--color-text-secondary)] font-bold">Đang tải bình luận...</span>
+                  </div>
+                ) : postComments.length === 0 ? (
+                  <div className="text-center py-8">
+                    <span className="material-symbols-outlined text-slate-300 text-4xl">chat_bubble_outline</span>
+                    <p className="text-xs text-[var(--color-text-muted)] font-bold mt-2">Chưa có bình luận nào.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4 max-h-[500px] overflow-y-auto pr-1">
+                    {postComments.map((cmt) => (
+                      <div
+                        key={cmt.comment_id}
+                        className={`p-4 rounded-xl border border-[var(--color-border)]/60 text-xs ${
+                          cmt.comment_level > 0
+                            ? "ml-6 bg-slate-50/50 dark:bg-slate-800/10"
+                            : "bg-white dark:bg-[var(--color-bg-surface-raised)]"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center flex-shrink-0">
+                              <span className="text-[9px] font-bold text-slate-500">
+                                {cmt.username.substring(0, 2).toUpperCase()}
+                              </span>
+                            </div>
+                            <span className="font-bold text-[var(--color-text-primary)]">
+                              {cmt.username}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 text-[10px] text-[var(--color-text-muted)]">
+                            {cmt.like_count > 0 && (
+                              <span className="flex items-center gap-0.5">
+                                <span className="material-symbols-outlined text-[10px]">thumb_up</span>
+                                {cmt.like_count}
+                              </span>
+                            )}
+                            <span>{getRelativeTime(cmt.posted_at)}</span>
+                          </div>
+                        </div>
+                        <p className="text-[var(--color-text-secondary)] leading-relaxed whitespace-pre-line">
+                          {cmt.text}
+                        </p>
+                        {cmt.url && (
+                          <a
+                            href={cmt.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-indigo-500 hover:underline text-[10px] font-bold mt-2 inline-flex items-center gap-0.5"
+                          >
+                            Xem gốc <span className="material-symbols-outlined text-[10px]">open_in_new</span>
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Risk Analysis Card */}
           <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl shadow-sm p-6 space-y-5">

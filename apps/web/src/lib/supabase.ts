@@ -83,6 +83,8 @@ function normalizeSource(source: string): string {
   if (normalized.includes("tiktok")) return "tiktok";
   if (normalized.includes("youtube")) return "youtube";
   if (normalized.includes("google")) return "google_maps";
+  if (normalized.includes("befood") || normalized.includes("be")) return "befood";
+  if (normalized.includes("thread")) return "thread";
   if (normalized.includes("bao") || normalized.includes("news")) return "news";
   return normalized || "news";
 }
@@ -204,13 +206,22 @@ async function batchFetch<T>(
 }
 
 export async function fetchSupabaseAlerts(): Promise<AlertData[]> {
-  // Fetch up to 500 completed annotations
-  const annotations = await supabaseRequest<SupabaseAnnotationRow[]>(
-    "annotations",
-    "status=eq.completed&order=updated_at.desc&limit=500"
+  const PLATFORMS = ["google_maps", "facebook", "befood", "tiktok", "threads", "news_html"];
+  const PER_PLATFORM = 100;
+  const negFilter = encodeURIComponent('"sentiment":"negative"');
+
+  const platformBatches = await Promise.all(
+    PLATFORMS.map((p) =>
+      supabaseRequest<SupabaseAnnotationRow[]>(
+        "annotations",
+        `status=eq.completed&platform=eq.${p}&label=like.*${negFilter}*&order=updated_at.desc&limit=${PER_PLATFORM}`
+      ).catch(() => [] as SupabaseAnnotationRow[])
+    )
   );
 
-  if (!annotations || annotations.length === 0) {
+  const annotations = platformBatches.flat();
+
+  if (annotations.length === 0) {
     return [];
   }
 
@@ -314,6 +325,11 @@ export async function fetchSupabaseAlerts(): Promise<AlertData[]> {
         parent_id,
         content_type: anno.entity_type,
         internal_notes: Array.isArray(labelObj.internal_notes) ? labelObj.internal_notes : undefined,
+        post_id: anno.post_id,
+        post_url: String(post?.url || postPayload.url || ""),
+        post_like_count: postLikes,
+        post_comment_count: postComments,
+        post_share_count: postShares,
       };
 
       alerts.push(alert);
@@ -429,6 +445,11 @@ export async function fetchSingleSupabaseAlert(entityKey: string): Promise<Alert
     parent_id,
     content_type: anno.entity_type,
     internal_notes: Array.isArray(labelObj.internal_notes) ? labelObj.internal_notes : undefined,
+    post_id: anno.post_id,
+    post_url: String(post?.url || postPayload.url || ""),
+    post_like_count: singlePostLikes,
+    post_comment_count: singlePostComments,
+    post_share_count: singlePostShares,
   };
 }
 
