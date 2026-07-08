@@ -19,6 +19,7 @@ import {
   DocumentData,
   doc,
   updateDoc,
+  setDoc,
   addDoc,
 } from "firebase/firestore";
 import type {
@@ -709,6 +710,15 @@ function parseDate(field: unknown): string {
   return s.includes("+") || s.endsWith("Z") ? s : s + "Z";
 }
 
+function uniqueRecordsById<T extends { id: string }>(records: T[]): T[] {
+  const seen = new Set<string>();
+  return records.filter((record) => {
+    if (!record.id || seen.has(record.id)) return false;
+    seen.add(record.id);
+    return true;
+  });
+}
+
 // ─── Fetch options ────────────────────────────────────────────────────────────
 export interface FetchOptions {
   /** Pagination cursor */
@@ -735,7 +745,7 @@ export class DashboardService {
       // ── Mentions ──────────────────────────────────────────────────────────
       // NOTE: No orderBy — avoids Firestore index requirement.
       // We sort in-memory after fetching.
-      const mentions = await fetchSupabaseMentions(opts);
+      let mentions = await fetchSupabaseMentions(opts);
       /*
       const legacyFirestoreMentionMapper = (doc: QueryDocumentSnapshot<DocumentData>) => {
         const d = doc.data();
@@ -834,6 +844,7 @@ export class DashboardService {
         (a, b) =>
           new Date(b.posted_at).getTime() - new Date(a.posted_at).getTime(),
       );
+      mentions = uniqueRecordsById(mentions);
 
       const lastMentionDoc = undefined;
       const mentionsSnap = { docs: [] as QueryDocumentSnapshot<DocumentData>[] };
@@ -1022,12 +1033,13 @@ export class DashboardService {
       }
 
       if (leads.length === 0) {
-        const derivedLeads: Lead[] = [];
+        const derivedLeadById = new Map<string, Lead>();
         mentions.forEach((m) => {
-          const intent = mapIntent(m.labels.intent);
-          if (intent === "none") return;
+          const labels = m.labels;
+          const intent = mapIntent(labels?.intent);
+          if (intent === "none" || derivedLeadById.has(m.id)) return;
 
-          derivedLeads.push({
+          derivedLeadById.set(m.id, {
             id: m.id,
             mention_id: m.id,
             source_mention_id: m.id,
@@ -1040,8 +1052,8 @@ export class DashboardService {
             content: m.content,
             intent,
             current_label: undefined,
-            labels: m.labels,
-            intent_signals: Array.isArray(m.labels.topic) ? m.labels.topic : (m.labels.topic ? [m.labels.topic] : []),
+            labels,
+            intent_signals: Array.isArray(labels?.topic) ? labels.topic : (labels?.topic ? [labels.topic] : []),
             status: "new",
             created_at: m.created_at,
             url: m.url,
@@ -1080,7 +1092,7 @@ export class DashboardService {
             posted_at: m.posted_at,
           });
         });
-        leads = derivedLeads;
+        leads = Array.from(derivedLeadById.values());
         leads.sort(
           (a, b) =>
             new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
@@ -1186,6 +1198,7 @@ export class DashboardService {
     id: string,
     status: Lead["status"],
     profile: UserRoleProfile | null | undefined,
+    lead?: Lead,
   ): Promise<void> {
     if (!profile || !canPerformAction(profile, "update_lead_status")) {
       throw new Error("User is not allowed to update lead status.");
@@ -1201,6 +1214,14 @@ export class DashboardService {
       const leadRef = doc(dbData, COLLECTION_NAMES.leads, id);
       await updateDoc(leadRef, { status, ...auditFields });
     } catch (error) {
+      if (lead) {
+        const leadRef = doc(dbData, COLLECTION_NAMES.leads, id);
+        const cleanLead = stripUndefinedFields({ ...lead, status, ...auditFields });
+        const { id: _id, ...leadData } = cleanLead;
+        await setDoc(leadRef, leadData, { merge: true });
+        return;
+      }
+
       try {
         const labelRef = doc(dbData, COLLECTION_NAMES.mentions, id);
         await updateDoc(labelRef, { status, ...auditFields });
@@ -1218,6 +1239,7 @@ export class DashboardService {
     id: string,
     data: Partial<Lead>,
     profile: UserRoleProfile | null | undefined,
+    lead?: Lead,
   ): Promise<void> {
     if (!profile || !canPerformAction(profile, "update_lead_details")) {
       throw new Error("User is not allowed to update lead details.");
@@ -1239,6 +1261,14 @@ export class DashboardService {
       delete cleanData.id;
       await updateDoc(leadRef, { ...cleanData, ...auditFields });
     } catch (error) {
+      if (lead) {
+        const leadRef = doc(dbData, COLLECTION_NAMES.leads, id);
+        const cleanLead = stripUndefinedFields({ ...lead, ...data, ...auditFields });
+        const { id: _id, ...leadData } = cleanLead;
+        await setDoc(leadRef, leadData, { merge: true });
+        return;
+      }
+
       try {
         const labelRef = doc(dbData, COLLECTION_NAMES.mentions, id);
         const cleanData = { ...data };
