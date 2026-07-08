@@ -351,6 +351,334 @@ function stripUndefinedFields<T extends Record<string, unknown>>(value: T): T {
   ) as T;
 }
 
+type SupabaseRow = Record<string, unknown>;
+
+interface SupabaseConfig {
+  url: string;
+  anonKey: string;
+}
+
+function getSupabaseConfig(): SupabaseConfig {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+  if (!url.trim() || !anonKey.trim()) {
+    throw new Error("Thiếu NEXT_PUBLIC_SUPABASE_URL hoặc NEXT_PUBLIC_SUPABASE_ANON_KEY để tải mentions từ Supabase.");
+  }
+  return { url: url.trim(), anonKey: anonKey.trim() };
+}
+
+function normalizeSupabaseUrl(url: string) {
+  return url.trim().replace(/\/rest\/v1\/?$/, "").replace(/\/$/, "");
+}
+
+function supabaseEndpoint(config: SupabaseConfig, table: string, requestQuery = "") {
+  return `${normalizeSupabaseUrl(config.url)}/rest/v1/${table}${requestQuery ? `?${requestQuery}` : ""}`;
+}
+
+async function supabaseRequest<T>(config: SupabaseConfig, table: string, requestQuery: string): Promise<T> {
+  const response = await fetch(supabaseEndpoint(config, table, requestQuery), {
+    headers: {
+      apikey: config.anonKey,
+      Authorization: `Bearer ${config.anonKey}`,
+    },
+  });
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(`Supabase ${table} ${response.status}: ${message}`);
+  }
+  return (await response.json()) as T;
+}
+
+async function loadSupabaseRows<T extends SupabaseRow>(
+  config: SupabaseConfig,
+  table: string,
+  params: Record<string, string>,
+  maxRows = 10000,
+): Promise<T[]> {
+  const pageSize = 1000;
+  const rows: T[] = [];
+  let offset = 0;
+
+  while (rows.length < maxRows) {
+    const requestParams = new URLSearchParams({
+      ...params,
+      limit: String(Math.min(pageSize, maxRows - rows.length)),
+      offset: String(offset),
+    });
+    const page = await supabaseRequest<T[]>(config, table, requestParams.toString());
+    rows.push(...page);
+    if (page.length < pageSize) break;
+    offset += page.length;
+  }
+
+  return rows;
+}
+
+function chunkValues<T>(values: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < values.length; index += size) {
+    chunks.push(values.slice(index, index + size));
+  }
+  return chunks;
+}
+
+async function loadSupabaseRowsByPostIds<T extends SupabaseRow>(
+  config: SupabaseConfig,
+  table: string,
+  postIds: string[],
+  params: Record<string, string>,
+  maxRows = 10000,
+): Promise<T[]> {
+  const rows: T[] = [];
+  const uniquePostIds = Array.from(new Set(postIds.filter(Boolean)));
+
+  for (const batch of chunkValues(uniquePostIds, 50)) {
+    if (rows.length >= maxRows) break;
+    const batchRows = await loadSupabaseRows<T>(
+      config,
+      table,
+      {
+        ...params,
+        post_id: `in.(${batch.join(",")})`,
+      },
+      maxRows - rows.length,
+    );
+    rows.push(...batchRows);
+  }
+
+  return rows;
+}
+
+function readPayload(row: SupabaseRow): SupabaseRow {
+  return row.payload_json && typeof row.payload_json === "object"
+    ? (row.payload_json as SupabaseRow)
+    : {};
+}
+
+function readFirstText(...values: unknown[]): string {
+  return normalizeText(values.find((value) => String(value || "").trim()) || "").trim();
+}
+
+function parseAnnotationLabel(row: SupabaseRow | undefined): Partial<ClassificationLabel> {
+  if (!row) return {};
+  const raw = row.label;
+  if (!raw) return {};
+  try {
+    if (typeof raw === "string") {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? (parsed as Partial<ClassificationLabel>) : {};
+    }
+    return raw && typeof raw === "object" ? (raw as Partial<ClassificationLabel>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function buildEntityKeys(platform: string, postId: string, commentId?: string | null) {
+  const normalizedPlatform = platform === "befood" ? "be" : platform;
+  const platforms = Array.from(new Set([platform, normalizedPlatform].filter(Boolean)));
+  return platforms.flatMap((item) =>
+    commentId
+      ? [
+          `${item}:${postId}:${commentId}`,
+          `${item}:comment:${postId}:${commentId}`,
+          `${item}:${postId}:comment:${commentId}`,
+        ]
+      : [`${item}:${postId}`, `${item}:post:${postId}`],
+  );
+}
+
+function findAnnotation(
+  annotationByKey: Map<string, SupabaseRow>,
+  platform: string,
+  postId: string,
+  commentId?: string | null,
+) {
+  return buildEntityKeys(platform, postId, commentId)
+    .map((key) => annotationByKey.get(key))
+    .find(Boolean);
+}
+
+function getSupabaseLabel(
+  row: SupabaseRow,
+  annotation: SupabaseRow | undefined,
+  fallback: Partial<ClassificationLabel>,
+): ClassificationLabel {
+  const payload = readPayload(row);
+  const rowLabels = row.labels && typeof row.labels === "object" ? (row.labels as SupabaseRow) : {};
+  const annotationLabel = parseAnnotationLabel(annotation);
+
+  return normalizeClassificationLabel(
+    {
+      ...rowLabels,
+      ...annotationLabel,
+      sentiment:
+        annotationLabel.sentiment ??
+        rowLabels.sentiment ??
+        row.baseline_sentiment ??
+        row.sentiment ??
+        payload.baseline_sentiment ??
+        payload.sentiment,
+      topic:
+        annotationLabel.topic ??
+        rowLabels.topic ??
+        row.baseline_topic ??
+        row.topic ??
+        payload.baseline_topic ??
+        payload.topic,
+    },
+    fallback,
+  );
+}
+
+function supabasePostToMention(row: SupabaseRow, annotationByKey: Map<string, SupabaseRow>): Mention {
+  const payload = readPayload(row);
+  const platform = String(row.platform || row.source || payload.platform || payload.source || "");
+  const postId = String(row.post_id || row.id || payload.post_id || "");
+  const annotation = findAnnotation(annotationByKey, platform, postId);
+  const postContent = readFirstText(
+    row.text,
+    payload.text,
+    payload.content,
+    payload.clean_text,
+    payload.processed_text,
+    payload.caption,
+    payload.title,
+  );
+  const label = getSupabaseLabel(row, annotation, {
+    sentiment: mapSentiment(row.baseline_sentiment ?? row.sentiment ?? payload.sentiment),
+    topic: [],
+    relevance: true,
+  });
+
+  return {
+    id: postId,
+    parent_id: null,
+    workspace_id: String(row.brand || row.brand_slug || payload.brand || payload.workspace_id || ""),
+    platform: mapSourceToPlatform(platform),
+    content: postContent,
+    post_content: postContent,
+    content_type: "post",
+    original_content: postContent,
+    author: readFirstText(row.author, payload.author, payload.tac_gia) || "N/A",
+    sentiment: label.sentiment || mapSentiment(row.baseline_sentiment ?? row.sentiment ?? payload.sentiment),
+    topic: mapTopic(label.topic?.[0] ?? row.baseline_topic ?? row.topic ?? payload.topic),
+    credibility_score:
+      typeof row.baseline_confidence === "number"
+        ? Math.round(row.baseline_confidence * 100)
+        : 100,
+    created_at: parseDate(row.updated_at || row.created_at || row.crawled_at || row.posted_at),
+    posted_at: parseDate(row.posted_at || payload.thoi_gian_dang || payload.posted_at || row.created_at),
+    url: normalizeOptionalUrl(row.url, row.post_url, row.source_url, payload.url),
+    labels: label,
+  };
+}
+
+function supabaseCommentToMention(
+  row: SupabaseRow,
+  postById: Map<string, Mention>,
+  annotationByKey: Map<string, SupabaseRow>,
+): Mention {
+  const payload = readPayload(row);
+  const platform = String(row.platform || payload.platform || "");
+  const postId = String(row.post_id || payload.post_id || "");
+  const commentId = String(row.comment_id || row.id || payload.comment_id || "");
+  const parentCommentId = normalizeOptionalText(row.parent_comment_id || payload.parent_comment_id);
+  const post = postById.get(postId);
+  const annotation = findAnnotation(annotationByKey, platform, postId, commentId);
+  const commentContent = readFirstText(
+    row.text,
+    payload.text,
+    payload.comment,
+    payload.clean_text,
+    payload.processed_text,
+    payload.content,
+  );
+  const label = getSupabaseLabel(row, annotation, {
+    sentiment: mapSentiment(row.baseline_sentiment ?? row.sentiment ?? payload.sentiment),
+    topic: [],
+    relevance: true,
+  });
+
+  return {
+    id: commentId,
+    parent_id: parentCommentId || postId || null,
+    workspace_id: String(row.brand || payload.brand || post?.workspace_id || ""),
+    platform: mapSourceToPlatform(platform),
+    content: commentContent,
+    post_content: post?.post_content,
+    comment_content: commentContent,
+    content_type: parentCommentId ? "reply" : "comment",
+    original_content: commentContent,
+    author: readFirstText(row.username, row.author, payload.username, payload.author) || "N/A",
+    sentiment: label.sentiment || mapSentiment(row.baseline_sentiment ?? row.sentiment ?? payload.sentiment),
+    topic: mapTopic(label.topic?.[0] ?? row.baseline_topic ?? row.topic ?? payload.topic),
+    credibility_score:
+      typeof row.baseline_confidence === "number"
+        ? Math.round(row.baseline_confidence * 100)
+        : 100,
+    created_at: parseDate(row.updated_at || row.created_at || row.crawled_at || row.posted_at),
+    posted_at: parseDate(row.posted_at || payload.gio_comment || payload.posted_at || row.created_at),
+    url: normalizeOptionalUrl(row.url, post?.url, payload.url),
+    labels: label,
+  };
+}
+
+async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
+  const config = getSupabaseConfig();
+  const maxPosts = opts.maxMentions || 500;
+  const postRows = await loadSupabaseRows(
+    config,
+    "posts",
+    { select: "*", order: "posted_at.desc" },
+    maxPosts,
+  );
+  const postIds = postRows
+    .map((row) => String(row.post_id || row.id || "").trim())
+    .filter(Boolean);
+
+  const [commentRows, annotationRows] = await Promise.all([
+    loadSupabaseRowsByPostIds(
+      config,
+      "comments",
+      postIds,
+      { select: "*" },
+      10000,
+    ),
+    loadSupabaseRowsByPostIds(
+      config,
+      "annotations",
+      postIds,
+      { select: "entity_key,platform,post_id,comment_id,label,status,updated_at" },
+      10000,
+    ).catch(() => [] as SupabaseRow[]),
+  ]);
+
+  const annotationByKey = new Map<string, SupabaseRow>();
+  for (const row of annotationRows) {
+    const entityKey = String(row.entity_key || "");
+    if (entityKey && !annotationByKey.has(entityKey)) annotationByKey.set(entityKey, row);
+    const platform = String(row.platform || "");
+    const postId = String(row.post_id || "");
+    const commentId = normalizeOptionalText(row.comment_id);
+    for (const key of buildEntityKeys(platform, postId, commentId)) {
+      if (key && !annotationByKey.has(key)) annotationByKey.set(key, row);
+    }
+  }
+
+  const posts = postRows
+    .filter((row) => String(row.post_id || row.id || "").trim())
+    .map((row) => supabasePostToMention(row, annotationByKey));
+  const postById = new Map(posts.map((post) => [post.id, post]));
+  const comments = commentRows
+    .filter((row) => String(row.comment_id || row.id || "").trim())
+    .map((row) => supabaseCommentToMention(row, postById, annotationByKey));
+
+  return [...posts, ...comments].sort(
+    (a, b) => new Date(b.posted_at).getTime() - new Date(a.posted_at).getTime(),
+  );
+}
+
 // ─── Date parser ─────────────────────────────────────────────────────────────
 function parseDate(field: unknown): string {
   if (!field) return new Date().toISOString();
@@ -410,15 +738,9 @@ export class DashboardService {
       // ── Mentions ──────────────────────────────────────────────────────────
       // NOTE: No orderBy — avoids Firestore index requirement.
       // We sort in-memory after fetching.
-      const constraints: Parameters<typeof query>[1][] = [];
-      if (opts.maxMentions) constraints.push(limit(opts.maxMentions));
-      if (opts.after) constraints.push(startAfter(opts.after));
-
-      const mentionsSnap = await getDocs(
-        query(collection(dbData, COLLECTION_NAMES.mentions), ...constraints),
-      );
-
-      const mentions: Mention[] = mentionsSnap.docs.map((doc) => {
+      const mentions = await fetchSupabaseMentions(opts);
+      /*
+      const legacyFirestoreMentionMapper = (doc: QueryDocumentSnapshot<DocumentData>) => {
         const d = doc.data();
         const labels = d.labels || {};
         const postContent = normalizeOptionalText(
@@ -507,7 +829,8 @@ export class DashboardService {
             },
           ),
         };
-      });
+      };
+      */
 
       // Sort in-memory: newest posted_at first
       mentions.sort(
@@ -515,7 +838,8 @@ export class DashboardService {
           new Date(b.posted_at).getTime() - new Date(a.posted_at).getTime(),
       );
 
-      const lastMentionDoc = mentionsSnap.docs.at(-1);
+      const lastMentionDoc = undefined;
+      const mentionsSnap = { docs: [] as QueryDocumentSnapshot<DocumentData>[] };
 
       // ── Workspaces (derived từ brands trong mentions) ─────────────────────
       // Seed với 3 target brands để đảm bảo luôn hiển thị
@@ -1001,6 +1325,8 @@ export class DashboardService {
     const nowIso = new Date().toISOString();
     const requestData = stripUndefinedFields({
       ...data,
+      brand_id: profile.brandId,
+      brand_name: profile.brandName,
       status: "pending" as const,
       requested_by: profile.uid,
       requested_by_name: profile.displayName || profile.email,
