@@ -832,9 +832,31 @@ function supabaseCommentToMention(
   };
 }
 
+async function loadSupabaseRowsByIds<T extends SupabaseRow>(
+  config: SupabaseConfig,
+  table: string,
+  idField: string,
+  ids: string[],
+  columns: string[],
+): Promise<T[]> {
+  if (!ids || ids.length === 0) return [];
+  const unique = Array.from(new Set(ids.filter(Boolean)));
+  const pageSize = 100;
+  const promises: Promise<T[]>[] = [];
+
+  for (let i = 0; i < unique.length; i += pageSize) {
+    const chunk = unique.slice(i, i + pageSize);
+    const query = `${idField}=in.(${chunk.map(encodeURIComponent).join(",")})&select=${columns.join(",")}`;
+    promises.push(supabaseRequest<T[]>(config, table, query));
+  }
+
+  const results = await Promise.all(promises);
+  return results.flat();
+}
+
 async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
   const config = getSupabaseConfig();
-  const maxPosts = opts.maxMentions || 200;
+  const maxMentions = opts.maxMentions || 2000;
   const postColumns = [
     "post_id",
     "platform",
@@ -861,84 +883,40 @@ async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
     "payload_json",
   ];
 
-  let postRows: SupabaseRow[];
+  let annotationRows: SupabaseRow[] = [];
   try {
-    postRows = await loadSupabaseRowsWithSelectFallback(
-      config,
-      "posts",
-      postColumns,
-      { order: "posted_at.desc.nullslast" },
-      Math.min(maxPosts, 100),
-      ["post_id"],
-    );
-  } catch (error) {
-    if (!isSupabaseRecoverableReadError(error, "posts")) throw error;
-    console.warn("[DashboardService] Supabase posts sorted fetch failed, retrying without order:", error);
-    try {
-      postRows = await loadSupabaseRowsWithSelectFallback(
-        config,
-        "posts",
-        postColumns,
-        {},
-        Math.min(maxPosts, 100),
-        ["post_id"],
-      );
-    } catch (fallbackError) {
-      if (!isSupabaseRecoverableReadError(fallbackError, "posts")) throw fallbackError;
-      console.warn("[DashboardService] Supabase posts fallback fetch failed, retrying minimal columns:", fallbackError);
-      postRows = await loadSupabaseRowsWithSelectFallback(
-        config,
-        "posts",
-        ["post_id", "platform", "brand", "brand_slug", "posted_at", "payload_json"],
-        {},
-        50,
-        ["post_id"],
-      ).catch((minimalError) => {
-        console.warn("[DashboardService] Supabase posts minimal fetch failed, continuing without posts:", minimalError);
-        return [] as SupabaseRow[];
-      });
-    }
-  }
-  const postIds = postRows
-    .map((row) => String(row.post_id || row.id || "").trim())
-    .filter(Boolean);
-
-  const [commentRows, annotationRows] = await Promise.all([
-    loadSupabaseRowsByPostIdsWithSelectFallback(
-      config,
-      "comments",
-      postIds,
-      commentColumns,
-      {},
-      500,
-      ["post_id", "comment_id"],
-      5,
-      true,
-    ).catch((err) => {
-      if (isSupabaseStatementTimeout(err)) {
-        return loadSupabaseRowsByPostIdsWithSelectFallback(
-          config,
-          "comments",
-          postIds.slice(0, 100),
-          commentColumns,
-          {},
-          500,
-          ["post_id", "comment_id"],
-          3,
-          true,
-        ).catch(() => [] as SupabaseRow[]);
-      }
-      throw err;
-    }),
-    loadSupabaseRowsByPostIds(
+    annotationRows = await loadSupabaseRows<SupabaseRow>(
       config,
       "annotations",
-      postIds,
-      { select: "entity_key,platform,post_id,comment_id,label,status,updated_at" },
-      2000,
-      5,
-      true,
-    ).catch(() => [] as SupabaseRow[]),
+      { status: "eq.completed", order: "updated_at.desc.nullslast" },
+      maxMentions,
+    );
+  } catch (error) {
+    console.error("[DashboardService] Failed to fetch annotations:", error);
+    return [];
+  }
+
+  const postIds = Array.from(
+    new Set(annotationRows.map((row) => String(row.post_id || "").trim())),
+  ).filter(Boolean);
+
+  const commentIds = Array.from(
+    new Set(
+      annotationRows
+        .filter((row) => row.entity_type === "comment")
+        .map((row) => String(row.comment_id || "").trim()),
+    ),
+  ).filter(Boolean);
+
+  const [postRows, commentRows] = await Promise.all([
+    loadSupabaseRowsByIds<SupabaseRow>(config, "posts", "post_id", postIds, postColumns).catch((err) => {
+      console.warn("[DashboardService] Failed to fetch post details:", err);
+      return [] as SupabaseRow[];
+    }),
+    loadSupabaseRowsByIds<SupabaseRow>(config, "comments", "comment_id", commentIds, commentColumns).catch((err) => {
+      console.warn("[DashboardService] Failed to fetch comment details:", err);
+      return [] as SupabaseRow[];
+    }),
   ]);
 
   const annotationByKey = new Map<string, SupabaseRow>();
