@@ -484,8 +484,26 @@ export function matchesLeadWorkbenchView(
   return true;
 }
 
-export function sortLeadsForWorkbench(leads: Lead[], nowMs = Date.now()) {
+function getLeadOwnerSortRank(
+  lead: Lead,
+  profile: UserRoleProfile | null | undefined,
+) {
+  const ownership = getLeadOwnershipMeta(lead, profile);
+  if (ownership.status === "assigned_to_me") return 0;
+  if (ownership.status === "unassigned") return 1;
+  return 2;
+}
+
+export function sortLeadsForWorkbench(
+  leads: Lead[],
+  nowMs = Date.now(),
+  profile?: UserRoleProfile | null,
+) {
   return [...leads].sort((a, b) => {
+    const ownerRankDiff =
+      getLeadOwnerSortRank(a, profile) - getLeadOwnerSortRank(b, profile);
+    if (ownerRankDiff !== 0) return ownerRankDiff;
+
     const aMeta = getLeadWorkbenchMeta(a, nowMs);
     const bMeta = getLeadWorkbenchMeta(b, nowMs);
 

@@ -39,9 +39,11 @@ export const TOPIC_LABELS: Record<LabelTopic, string> = {
 };
 
 export const URGENCY_LABELS: Record<LabelUrgency, string> = {
-  normal: "Bình thường",
-  notable: "Đáng chú ý",
-  crisis: "Crisis",
+  none: "None",
+  low: "Thấp",
+  medium: "Trung bình",
+  high: "Cao",
+  urgent: "Khẩn cấp",
 };
 
 export const INTENT_LABELS: Record<LabelIntent, string> = {
@@ -86,10 +88,17 @@ const VALID_SENTIMENTS = new Set<LabelSentiment>([
 ]);
 const VALID_TOPICS = new Set<LabelTopic>(LABEL_TOPICS);
 const VALID_URGENCIES = new Set<LabelUrgency>([
-  "normal",
-  "notable",
-  "crisis",
+  "none",
+  "low",
+  "medium",
+  "high",
+  "urgent",
 ]);
+const LEGACY_URGENCY_MAP: Record<string, LabelUrgency> = {
+  normal: "low",
+  notable: "medium",
+  crisis: "urgent",
+};
 const VALID_INTENTS = new Set<LabelIntent>(["hot", "warm", "cold", "none"]);
 
 function normalizeString(value: unknown) {
@@ -122,8 +131,9 @@ export function normalizeLabelTopic(value: unknown): LabelTopic | null {
 
 export function normalizeLabelUrgency(value: unknown): LabelUrgency | null {
   const normalized = normalizeString(value);
-  return VALID_URGENCIES.has(normalized as LabelUrgency)
-    ? (normalized as LabelUrgency)
+  const mapped = LEGACY_URGENCY_MAP[normalized] || normalized;
+  return VALID_URGENCIES.has(mapped as LabelUrgency)
+    ? (mapped as LabelUrgency)
     : null;
 }
 
@@ -197,15 +207,16 @@ export function inferQueueFromLabels(label: ClassificationLabel): LabelQueue {
   if (!isClassificationLabelComplete(label)) return "review";
   if (label.relevance === false) return "none";
   if (
-    label.urgency === "crisis" ||
-    (label.sentiment === "negative" && label.urgency === "notable")
+    label.urgency === "urgent" ||
+    (label.sentiment === "negative" &&
+      (label.urgency === "high" || label.urgency === "medium"))
   ) {
     return "crisis";
   }
   if (label.intent === "hot" || label.intent === "warm" || label.intent === "cold") {
     return "lead";
   }
-  if (label.urgency === "notable") return "monitoring";
+  if (label.urgency === "medium" || label.urgency === "high") return "monitoring";
   return "none";
 }
 
@@ -303,7 +314,7 @@ export function getLeadCurrentLabels(
     sentiment: mention?.labels?.sentiment || mention?.sentiment || "neutral",
     topic: mention?.labels?.topic || (mentionTopic ? [mentionTopic] : []),
     relevance: mention?.labels?.relevance ?? true,
-    urgency: mention?.labels?.urgency || "normal",
+    urgency: mention?.labels?.urgency || "low",
     intent: lead.labels?.intent || lead.intent,
   });
 }

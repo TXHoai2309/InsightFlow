@@ -246,7 +246,7 @@ export function LeadDetailPanel({
 
   if (!lead || !meta) {
     return (
-      <aside className="sticky top-[88px] hidden h-[calc(100vh-104px)] min-h-0 shrink-0 flex-col rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 text-sm text-[var(--color-text-secondary)] xl:flex">
+      <aside className="sticky top-0 hidden h-[calc(100dvh-16px)] min-h-0 shrink-0 flex-col rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-bg-surface)] p-4 text-sm text-[var(--color-text-secondary)] xl:flex">
         Chọn một lead để xem thao tác xử lý.
       </aside>
     );
@@ -698,16 +698,16 @@ export function LeadDetailPanel({
   ];
 
   return (
-    <aside className="sticky top-[88px] hidden h-[calc(100vh-104px)] min-h-0 shrink-0 flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm xl:flex">
-      <div className="shrink-0 border-b border-[var(--color-border)] p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-base font-bold text-[var(--color-brand)]">
+    <aside className="sticky top-0 hidden h-[calc(100dvh-16px)] min-h-0 shrink-0 flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm xl:flex">
+      <div className="shrink-0 border-b border-[var(--color-border)] p-3">
+        <div className="flex items-start justify-between gap-2.5">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-sm font-bold text-[var(--color-brand)]">
               {(lead.author || "KH").slice(0, 2).toUpperCase()}
             </div>
             <div className="min-w-0">
               <div className="flex min-w-0 items-center gap-2">
-                <h3 className="truncate text-lg font-bold text-[var(--color-text-primary)]">
+                <h3 className="truncate text-base font-bold text-[var(--color-text-primary)]">
                   {lead.author || "Khách hàng"}
                 </h3>
                 <span className="shrink-0 rounded-md border border-[#FFB4B4] bg-[#FFE5E5] px-2 py-0.5 text-xs font-bold uppercase text-[#D92D20]">
@@ -729,13 +729,13 @@ export function LeadDetailPanel({
           </button>
         </div>
 
-        <div className="mt-4 grid grid-cols-4 gap-1">
+        <div className="mt-3 grid grid-cols-4 gap-1">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               type="button"
               onClick={() => handleTabChange(tab.id)}
-              className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
+              className={`rounded-lg px-2 py-1.5 text-xs font-semibold transition ${
                 activeTab === tab.id
                   ? "bg-[var(--color-brand-subtle)] text-[var(--color-brand)]"
                   : "text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)]"
@@ -749,22 +749,22 @@ export function LeadDetailPanel({
 
       <div
         id={LEAD_DETAIL_PANEL_SCROLL_ID}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3"
       >
         {activeTab === "action" && (
-          <div className="space-y-4">
-            <section className="rounded-xl border border-[var(--color-border)] p-4">
-              <div className="flex items-start justify-between gap-3">
+          <div className="space-y-2">
+            <section className="rounded-xl border border-[var(--color-border)] p-2.5">
+              <div className="flex items-center justify-between gap-2">
                 <div>
-                  <p className="text-sm font-bold text-[var(--color-text-primary)]">
+                  <p className="text-[13px] font-bold text-[var(--color-text-primary)]">
                     Người phụ trách
                   </p>
-                  <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+                  <p className="mt-0.5 truncate text-sm text-[var(--color-text-secondary)]">
                     {ownership.ownerName}
                   </p>
                 </div>
                 <span
-                  className={`rounded-full border px-3 py-1 text-xs font-bold ${
+                  className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-bold ${
                     ownership.status === "assigned_to_me"
                       ? "border-[var(--color-success)]/30 bg-[var(--color-success-subtle)] text-[var(--color-success)]"
                       : ownership.status === "unassigned"
@@ -780,7 +780,7 @@ export function LeadDetailPanel({
                   type="button"
                   onClick={handleClaim}
                   disabled={!canClaimLead}
-                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-3 py-1.5 text-sm font-bold text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <span className="material-symbols-outlined text-base">
                     person_add
@@ -791,19 +791,19 @@ export function LeadDetailPanel({
             </section>
 
             {isLeadWorkflowBlocked && (
-              <section className="rounded-xl border border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] p-4">
-                <div className="flex items-start gap-3">
-                  <span className="material-symbols-outlined text-[var(--color-warning)]">
+              <section className="rounded-xl border border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] p-2.5">
+                <div className="flex items-start gap-2">
+                  <span className="material-symbols-outlined text-base text-[var(--color-warning)]">
                     lock_clock
                   </span>
                   <div>
-                    <p className="text-sm font-bold text-[var(--color-text-primary)]">
+                    <p className="text-[13px] font-bold text-[var(--color-text-primary)]">
                       Tạm khóa xử lý lead
                     </p>
-                    <p className="mt-1 text-sm leading-6 text-[var(--color-text-secondary)]">
+                    <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--color-text-secondary)]">
                       {leadWorkflowBlockMessage}
                     </p>
-                    <p className="mt-1 text-xs font-semibold text-[var(--color-text-secondary)]">
+                    <p className="mt-1 line-clamp-1 text-xs font-semibold text-[var(--color-text-secondary)]">
                       Bạn vẫn có thể xem chi tiết đề cập, mở bài gốc và theo dõi lịch sử duyệt nhãn.
                     </p>
                   </div>
@@ -812,16 +812,16 @@ export function LeadDetailPanel({
             )}
 
             {pendingLabelRequestKeepsLeadQueue && (
-              <section className="rounded-xl border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)]/30 p-4">
-                <div className="flex items-start gap-3">
-                  <span className="material-symbols-outlined text-[var(--color-brand)]">
+              <section className="rounded-xl border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)]/30 p-2.5">
+                <div className="flex items-start gap-2">
+                  <span className="material-symbols-outlined text-base text-[var(--color-brand)]">
                     pending_actions
                   </span>
                   <div>
-                    <p className="text-sm font-bold text-[var(--color-text-primary)]">
+                    <p className="text-[13px] font-bold text-[var(--color-text-primary)]">
                       Có yêu cầu sửa nhãn chờ duyệt
                     </p>
-                    <p className="mt-1 text-sm leading-6 text-[var(--color-text-secondary)]">
+                    <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--color-text-secondary)]">
                       Request này vẫn giữ item trong queue tiềm năng, nên bạn có thể tiếp tục chăm sóc và ghi nhận kết quả.
                     </p>
                   </div>
@@ -830,16 +830,16 @@ export function LeadDetailPanel({
             )}
 
             {meta.needsResultCapture && (
-              <section className="rounded-xl border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)]/40 p-4">
-                <div className="flex items-start gap-3">
-                  <span className="material-symbols-outlined text-[var(--color-brand)]">
+              <section className="rounded-xl border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)]/40 p-2.5">
+                <div className="flex items-start gap-2">
+                  <span className="material-symbols-outlined text-base text-[var(--color-brand)]">
                     assignment_turned_in
                   </span>
                   <div>
-                    <p className="text-sm font-bold text-[var(--color-text-primary)]">
+                    <p className="text-[13px] font-bold text-[var(--color-text-primary)]">
                       Đang chờ ghi nhận kết quả
                     </p>
-                    <p className="mt-1 text-sm leading-6 text-[var(--color-text-secondary)]">
+                    <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--color-text-secondary)]">
                       Bạn đã mở nguồn/liên hệ với khách này. Hãy chọn kết quả bên dưới để hệ thống chuyển lead sang đúng nhóm.
                     </p>
                   </div>
@@ -847,53 +847,53 @@ export function LeadDetailPanel({
               </section>
             )}
 
-            <section className="rounded-xl border border-[var(--color-border)] p-4">
-              <p className="text-sm font-bold text-[var(--color-text-primary)]">
+            <section className="rounded-xl border border-[var(--color-border)] p-2.5">
+              <p className="text-[13px] font-bold text-[var(--color-text-primary)]">
                 Lý do ưu tiên
               </p>
-              <p className="mt-2 text-sm leading-6 text-[var(--color-text-secondary)]">
+              <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--color-text-secondary)]">
                 {priorityText}
               </p>
             </section>
 
-            <section className="rounded-xl border border-[var(--color-border)] p-4">
-              <div className="flex items-start justify-between gap-3">
+            <section className="rounded-xl border border-[var(--color-border)] p-2.5">
+              <div className="flex items-start justify-between gap-2">
                 <div>
-                  <p className="text-sm font-bold text-[var(--color-text-primary)]">
+                  <p className="text-[13px] font-bold text-[var(--color-text-primary)]">
                     Kiểm tra nhãn
                   </p>
-                  <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
+                  <p className="mt-0.5 line-clamp-1 text-xs text-[var(--color-text-secondary)]">
                     Gửi yêu cầu cho quản lý khi phát hiện sai nhãn hoặc sai queue.
                   </p>
                 </div>
                 {pendingLabelRequest ? (
-                  <span className="rounded-full border border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] px-3 py-1 text-xs font-bold text-[var(--color-warning)]">
+                  <span className="shrink-0 rounded-full border border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] px-2.5 py-1 text-xs font-bold text-[var(--color-warning)]">
                     Chờ duyệt
                   </span>
                 ) : (
-                  <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-1 text-xs font-bold text-[var(--color-text-secondary)]">
+                  <span className="shrink-0 rounded-full border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-2.5 py-1 text-xs font-bold text-[var(--color-text-secondary)]">
                     {canRequestLabelChange ? "Có thể yêu cầu" : "Cần nhận xử lý"}
                   </span>
                 )}
               </div>
 
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <div className="rounded-lg bg-[var(--color-bg-surface-raised)] p-3">
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <div className="min-w-0 rounded-lg bg-[var(--color-bg-surface-raised)] p-2">
                   <p className="text-[11px] font-bold uppercase text-[var(--color-text-muted)]">
                     Nhãn hiện tại
                   </p>
-                  <p className="mt-1 text-sm font-bold text-[var(--color-text-primary)]">
+                  <p className="mt-1 line-clamp-3 text-xs font-bold leading-5 text-[var(--color-text-primary)]">
                     {formatClassificationLabelSummary(currentLabels)}
                   </p>
                   <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
                     Queue: {getQueueLabel(currentQueue)}
                   </p>
                 </div>
-                <div className="rounded-lg bg-[var(--color-bg-surface-raised)] p-3">
+                <div className="min-w-0 rounded-lg bg-[var(--color-bg-surface-raised)] p-2">
                   <p className="text-[11px] font-bold uppercase text-[var(--color-text-muted)]">
                     Nếu duyệt
                   </p>
-                  <p className="mt-1 text-sm font-bold text-[var(--color-text-primary)]">
+                  <p className="mt-1 line-clamp-3 text-xs font-bold leading-5 text-[var(--color-text-primary)]">
                     {formatClassificationLabelSummary(labelRequestPreview)}
                   </p>
                   <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
@@ -903,13 +903,16 @@ export function LeadDetailPanel({
               </div>
 
               {pendingLabelRequest && (
-                <div className="mt-3 rounded-lg bg-[var(--color-warning-subtle)] p-3 text-sm text-[var(--color-text-primary)]">
-                  <p>
+                <details className="mt-2 rounded-lg bg-[var(--color-warning-subtle)] p-2.5 text-xs text-[var(--color-text-primary)]">
+                  <summary className="cursor-pointer font-bold text-[var(--color-text-primary)]">
+                    Chi tiết yêu cầu chờ duyệt
+                  </summary>
+                  <p className="mt-2 line-clamp-3 leading-5">
                     {isLeadWorkflowBlocked
                       ? leadWorkflowBlockMessage
                       : `Yêu cầu sửa thành ${formatClassificationLabelSummary(pendingLabelRequest.requested_labels)} đang chờ quản lý duyệt. Lead vẫn có thể được xử lý vì queue không đổi khỏi tiềm năng.`}
                   </p>
-                  <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                  <dl className="mt-2 grid grid-cols-2 gap-2 text-xs">
                     <div>
                       <dt className="font-bold text-[var(--color-text-muted)]">
                         Trạng thái
@@ -944,11 +947,11 @@ export function LeadDetailPanel({
                     </div>
                   </dl>
                   {canRevisePendingLabelRequest && (
-                    <div className="mt-3 grid grid-cols-2 gap-2">
+                    <div className="mt-2 grid grid-cols-2 gap-2">
                       <button
                         type="button"
                         onClick={openEditLabelRequestForm}
-                        className="rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-brand-subtle)]"
+                        className="rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-bg-surface)] px-2 py-1.5 text-xs font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-brand-subtle)]"
                       >
                         Chỉnh sửa yêu cầu
                       </button>
@@ -960,13 +963,13 @@ export function LeadDetailPanel({
                           setLabelRequestError("");
                           setLabelRequestMessage("");
                         }}
-                        className="rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-bg-surface)] px-3 py-2 text-sm font-bold text-[var(--color-error)] transition hover:bg-[var(--color-error-subtle)]"
+                        className="rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-bg-surface)] px-2 py-1.5 text-xs font-bold text-[var(--color-error)] transition hover:bg-[var(--color-error-subtle)]"
                       >
                         Gỡ yêu cầu
                       </button>
                     </div>
                   )}
-                </div>
+                </details>
               )}
 
               {showCancelLabelRequest && pendingLabelRequest && canRevisePendingLabelRequest && (
@@ -1225,16 +1228,21 @@ export function LeadDetailPanel({
               )}
             </section>
 
-            <section className="rounded-xl border border-[var(--color-border)] p-4">
+            <details className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-2.5">
+              <summary className="cursor-pointer text-[13px] font-bold text-[var(--color-text-primary)]">
+                Thông tin & thao tác bổ sung
+              </summary>
+              <div className="mt-2 space-y-2">
+            <section className="rounded-xl border border-[var(--color-border)] p-2.5">
               <p className="text-sm font-bold text-[var(--color-text-primary)]">
                 Nội dung gần nhất
               </p>
-              <p className="mt-2 rounded-lg bg-[var(--color-bg-surface-raised)] p-3 text-sm leading-6 text-[var(--color-text-primary)]">
+              <p className="mt-2 line-clamp-3 rounded-lg bg-[var(--color-bg-surface-raised)] p-2.5 text-xs leading-5 text-[var(--color-text-primary)]">
                 {lead.content}
               </p>
             </section>
 
-            <section className="rounded-xl border border-[var(--color-border)] p-4">
+            <section className="rounded-xl border border-[var(--color-border)] p-2.5">
               <p className="text-sm font-bold text-[var(--color-text-primary)]">
                 Nguồn lead
               </p>
@@ -1275,7 +1283,7 @@ export function LeadDetailPanel({
               )}
             </section>
 
-            <section className="rounded-xl border border-[var(--color-border)] p-4">
+            <section className="rounded-xl border border-[var(--color-border)] p-2.5">
               <p className="text-sm font-bold text-[var(--color-text-primary)]">
                 Kênh liên hệ
               </p>
@@ -1307,7 +1315,7 @@ export function LeadDetailPanel({
               )}
             </section>
 
-            <section className="rounded-xl border border-[var(--color-border)] p-4">
+            <section className="rounded-xl border border-[var(--color-border)] p-2.5">
               <p className="text-sm font-bold text-[var(--color-text-primary)]">
                 Trạng thái hiện tại
               </p>
@@ -1316,7 +1324,7 @@ export function LeadDetailPanel({
               </div>
             </section>
 
-            <section className="rounded-xl border border-[var(--color-brand-border)] p-4">
+            <section className="rounded-xl border border-[var(--color-brand-border)] p-2.5">
               <p className="text-sm font-bold text-[var(--color-text-primary)]">
                 Ghi nhận kết quả nhanh
               </p>
@@ -1392,40 +1400,42 @@ export function LeadDetailPanel({
                 type="button"
                 disabled={!selectedResult || isSaving || !canRecordResult}
                 onClick={handleSaveResult}
-                className="mt-3 w-full rounded-lg bg-[var(--color-brand)] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+                className="mt-3 w-full rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isSaving ? "Đang lưu..." : "Lưu kết quả"}
               </button>
             </section>
+              </div>
+            </details>
           </div>
         )}
 
         {activeTab === "profile" && (
-          <div className="space-y-4">
-            <section className="rounded-xl border border-[var(--color-border)] p-4">
+          <div className="space-y-3">
+            <section className="rounded-xl border border-[var(--color-border)] p-3">
               <p className="text-sm font-bold text-[var(--color-text-primary)]">
                 Thông tin cơ bản
               </p>
               <dl className="mt-3 space-y-3 text-sm">
-                <div className="flex justify-between gap-4">
+                <div className="flex justify-between gap-3">
                   <dt className="text-[var(--color-text-secondary)]">Tên</dt>
                   <dd className="font-semibold text-[var(--color-text-primary)]">
                     {lead.author || "Khách hàng"}
                   </dd>
                 </div>
-                <div className="flex justify-between gap-4">
+                <div className="flex justify-between gap-3">
                   <dt className="text-[var(--color-text-secondary)]">Kênh</dt>
                   <dd className="font-semibold text-[var(--color-text-primary)]">
                     {platformMeta?.label || lead.platform}
                   </dd>
                 </div>
-                <div className="flex justify-between gap-4">
+                <div className="flex justify-between gap-3">
                   <dt className="text-[var(--color-text-secondary)]">Liên hệ</dt>
                   <dd className="text-right font-semibold text-[var(--color-text-primary)]">
                     {lead.phone || lead.email || lead.social_profile_url || "Chưa có"}
                   </dd>
                 </div>
-                <div className="flex justify-between gap-4">
+                <div className="flex justify-between gap-3">
                   <dt className="text-[var(--color-text-secondary)]">Score</dt>
                   <dd className="font-bold text-[var(--color-brand)]">
                     {meta.priorityScore}/100
@@ -1437,12 +1447,12 @@ export function LeadDetailPanel({
         )}
 
         {activeTab === "history" && (
-          <div className="space-y-4">
-            <section className="rounded-xl border border-[var(--color-border)] p-4">
+          <div className="space-y-3">
+            <section className="rounded-xl border border-[var(--color-border)] p-3">
               <p className="text-sm font-bold text-[var(--color-text-primary)]">
                 Timeline tương tác
               </p>
-              <div className="mt-4 space-y-4 border-l border-[var(--color-border)] pl-4">
+              <div className="mt-3 space-y-3 border-l border-[var(--color-border)] pl-3">
                 <div>
                   <p className="text-xs text-[var(--color-text-muted)]">
                     {new Date(lead.created_at).toLocaleString("vi-VN")}
@@ -1467,7 +1477,7 @@ export function LeadDetailPanel({
               </div>
             </section>
 
-            <section className="rounded-xl border border-[var(--color-border)] p-4">
+            <section className="rounded-xl border border-[var(--color-border)] p-3">
               <p className="text-sm font-bold text-[var(--color-text-primary)]">
                 Activity log xử lý
               </p>
@@ -1479,8 +1489,8 @@ export function LeadDetailPanel({
         )}
 
         {activeTab === "suggestion" && (
-          <div className="space-y-4">
-            <section className="rounded-xl border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)]/30 p-4">
+          <div className="space-y-3">
+            <section className="rounded-xl border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)]/30 p-3">
               <p className="text-sm font-bold text-[var(--color-brand)]">
                 Gợi ý hành động tiếp theo
               </p>
@@ -1488,7 +1498,7 @@ export function LeadDetailPanel({
                 {meta.nextActionLabel} vì {priorityText.toLowerCase()}.
               </p>
             </section>
-            <section className="rounded-xl border border-[var(--color-border)] p-4">
+            <section className="rounded-xl border border-[var(--color-border)] p-3">
               <p className="text-sm font-bold text-[var(--color-text-primary)]">
                 Gợi ý nội dung phản hồi
               </p>
@@ -1496,7 +1506,7 @@ export function LeadDetailPanel({
                 Chào anh/chị {lead.author || ""}, em thấy mình đang quan tâm đến thông tin sản phẩm/dịch vụ. Em có thể hỗ trợ tư vấn nhanh theo nhu cầu của mình ngay tại đây ạ.
               </p>
             </section>
-            <section className="rounded-xl border border-[var(--color-border)] p-4">
+            <section className="rounded-xl border border-[var(--color-border)] p-3">
               <p className="text-sm font-bold text-[var(--color-text-primary)]">
                 Căn cứ đưa ra gợi ý
               </p>

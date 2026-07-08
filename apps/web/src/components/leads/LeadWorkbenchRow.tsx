@@ -212,7 +212,7 @@ export function LeadWorkbenchRow({
       tabIndex={0}
       onClick={() => onSelect(lead)}
       onKeyDown={handleRowKeyDown}
-      className={`w-full rounded-xl border bg-[var(--color-bg-surface)] p-3 text-left shadow-sm transition hover:border-[var(--color-brand-border)] hover:shadow-md ${
+      className={`w-full overflow-hidden rounded-xl border bg-[var(--color-bg-surface)] px-[1%] py-2 text-left shadow-sm transition hover:border-[var(--color-brand-border)] hover:shadow-md ${
         highlighted
           ? "border-[var(--color-brand)] bg-[var(--color-brand-subtle)] ring-4 ring-[var(--color-brand)]/20"
           : selected
@@ -224,10 +224,10 @@ export function LeadWorkbenchRow({
               : "border-[var(--color-border)]"
       }`}
     >
-      <div className="grid gap-3 xl:grid-cols-[34px_52px_minmax(220px,1fr)_116px_126px_138px] xl:items-center">
-        <div className="flex xl:block">
+      <div className="grid gap-2 xl:grid-cols-[4%_6%_41%_11%_16%_18%_4%] xl:items-center xl:gap-0">
+        <div className="flex min-w-0 xl:block">
           <span
-            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold ${
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold ${
               rank === 1
                 ? "bg-[var(--color-error)] text-white"
                 : "bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]"
@@ -237,34 +237,34 @@ export function LeadWorkbenchRow({
           </span>
         </div>
 
-        <div className="flex items-center">
-          <div className="relative h-12 w-12 shrink-0">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-sm font-bold text-[var(--color-brand)]">
+        <div className="flex min-w-0 items-center justify-center">
+          <div className="relative h-10 w-10 shrink-0">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-sm font-bold text-[var(--color-brand)]">
               {(lead.author || "KH").slice(0, 2).toUpperCase()}
             </div>
-            <span className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm">
+            <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm">
               <PlatformLogo platform={lead.platform} size="xs" />
             </span>
           </div>
         </div>
 
-        <div className="min-w-0 space-y-1.5">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+        <div className="min-w-0 space-y-0.5 px-2">
+          <div className="flex min-w-0 items-center gap-x-1.5 overflow-hidden">
             <span className="max-w-full truncate font-bold text-[var(--color-text-primary)]">
               {lead.author || "Khách hàng"}
             </span>
             <span className="text-xs text-[var(--color-text-secondary)]">
               {platformMeta?.label || lead.platform}
             </span>
-            <span className="max-w-[160px] truncate text-xs text-[var(--color-text-muted)]">
+            <span className="hidden max-w-[24%] truncate text-xs text-[var(--color-text-muted)] min-[1500px]:inline">
               {normalizeBrandName(lead.workspace_id)}
             </span>
-            <span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${ownerChipClass}`}>
+              <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[11px] font-bold ${ownerChipClass}`}>
               {ownership.label}
             </span>
             {labelRequest && (
               <span
-                className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${
+                className={`min-w-0 truncate rounded-full border px-1.5 py-0.5 text-[11px] font-bold ${
                   isLeadWorkflowBlocked
                     ? "border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] text-[var(--color-warning)]"
                     : labelRequest.status === "pending"
@@ -276,15 +276,15 @@ export function LeadWorkbenchRow({
               </span>
             )}
           </div>
-          <div className="flex min-w-0 items-center gap-2">
+          <div className="flex min-w-0 items-center gap-1.5">
             <span className="shrink-0 text-xs font-bold text-[var(--color-error)]">
               Lý do ưu tiên:
             </span>
-            <span className="truncate text-sm font-medium text-[var(--color-text-primary)]">
+            <span className="truncate text-[13px] font-medium text-[var(--color-text-primary)]">
               {leadReason}
             </span>
           </div>
-          <p className="truncate text-sm text-[var(--color-text-secondary)]">
+          <p className="truncate text-[13px] leading-5 text-[var(--color-text-secondary)]">
             {lead.content}
           </p>
           {labelRequest && (
@@ -300,16 +300,16 @@ export function LeadWorkbenchRow({
           )}
         </div>
 
-        <div className="flex min-w-0 items-center gap-3">
+        <div className="flex min-w-0 items-center justify-center gap-2 px-1">
           <span
-            className={`rounded-lg border px-3 py-1 text-xs font-bold uppercase ${
+            className={`min-w-0 rounded-lg border px-2 py-1 text-xs font-bold uppercase ${
               INTENT_STYLE[lead.intent]
             }`}
           >
             {lead.intent === "none" ? "N/A" : lead.intent}
           </span>
           <div className="min-w-0">
-            <p className="text-2xl font-bold tabular-nums text-[var(--color-error)]">
+            <p className="text-[20px] font-bold leading-none tabular-nums text-[var(--color-error)]">
               {meta.priorityScore}
             </p>
             <p className="text-[10px] font-semibold text-[var(--color-text-muted)]">
@@ -318,9 +318,9 @@ export function LeadWorkbenchRow({
           </div>
         </div>
 
-        <div className="min-w-0">
+        <div className="min-w-0 px-1">
           <p
-            className={`truncate text-sm font-bold ${
+            className={`truncate text-[13px] font-bold leading-5 ${
               meta.isOverdue || meta.isUrgent
                 ? "text-[var(--color-error)]"
                 : "text-[var(--color-text-secondary)]"
@@ -333,16 +333,19 @@ export function LeadWorkbenchRow({
           </p>
         </div>
 
-        <div className="flex items-center gap-2 xl:justify-end">
+        <div className="flex min-w-0 items-center justify-end px-1">
           <button
             type="button"
             onClick={handlePrimaryAction}
             disabled={isOpening}
-            className="inline-flex min-w-[124px] max-w-[150px] items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold leading-tight text-white shadow-sm transition hover:bg-[var(--color-brand-hover)] disabled:opacity-60"
+            className="inline-flex w-full min-w-0 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-2 py-2 text-[13px] font-bold leading-tight text-white shadow-sm transition hover:bg-[var(--color-brand-hover)] disabled:opacity-60"
           >
             <span className="material-symbols-outlined text-base">{ctaIcon}</span>
-            <span className="line-clamp-2">{isOpening ? "Đang xử lý..." : ctaLabel}</span>
+            <span className="line-clamp-2 min-w-0">{isOpening ? "Đang xử lý..." : ctaLabel}</span>
           </button>
+        </div>
+
+        <div className="flex min-w-0 items-center justify-end">
           <span className="material-symbols-outlined text-[var(--color-text-muted)]">
             more_vert
           </span>

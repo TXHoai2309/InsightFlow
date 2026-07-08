@@ -15,7 +15,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { dbData } from "@/lib/firebase";
 
 type Sentiment = "positive" | "negative" | "neutral" | null;
-type Urgency = "normal" | "notable" | "crisis" | null;
+type Urgency = "none" | "low" | "medium" | "high" | "urgent" | null;
 type Intent = "hot" | "warm" | "cold" | "none" | null;
 
 interface LabelValue {
@@ -132,9 +132,11 @@ const TOPIC_LABELS: Record<string, string> = {
 };
 
 const URGENCY_LABELS: Record<string, string> = {
-  normal: "Bình thường",
-  notable: "Đáng chú ý",
-  crisis: "🚨 Crisis",
+  none: "None",
+  low: "Thấp",
+  medium: "Trung bình",
+  high: "Cao",
+  urgent: "Khẩn cấp",
 };
 
 const INTENT_LABELS: Record<string, { label: string; emoji: string }> = {
@@ -268,6 +270,14 @@ function getDemoRequests(brandName?: string): LabelRequest[] {
 function normalizeLabel(value: unknown, fallback: LabelValue): LabelValue {
   if (!value || typeof value !== "object") return fallback;
   const row = value as Partial<LabelValue>;
+  const legacyUrgencyMap: Record<string, NonNullable<Urgency>> = {
+    normal: "low",
+    notable: "medium",
+    crisis: "urgent",
+  };
+  const rawUrgency = typeof row.urgency === "string" ? row.urgency : "";
+  const normalizedUrgency =
+    rawUrgency in legacyUrgencyMap ? legacyUrgencyMap[rawUrgency] : row.urgency;
   return {
     sentiment:
       row.sentiment === "positive" || row.sentiment === "negative" || row.sentiment === "neutral"
@@ -279,7 +289,7 @@ function normalizeLabel(value: unknown, fallback: LabelValue): LabelValue {
         ? row.topic
         : fallback.topic,
     relevance: typeof row.relevance === "boolean" ? row.relevance : fallback.relevance,
-    urgency: row.urgency || fallback.urgency,
+    urgency: normalizedUrgency || fallback.urgency,
     intent: row.intent || fallback.intent,
   };
 }

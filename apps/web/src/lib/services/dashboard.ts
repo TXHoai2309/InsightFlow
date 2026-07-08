@@ -224,7 +224,7 @@ function legacyLabelToClassificationLabel(label: LabelValue): ClassificationLabe
       sentiment: "positive",
       topic: [],
       relevance: true,
-      urgency: "normal",
+      urgency: "low",
       intent: "hot",
     };
   }
@@ -233,7 +233,7 @@ function legacyLabelToClassificationLabel(label: LabelValue): ClassificationLabe
       sentiment: "positive",
       topic: [],
       relevance: true,
-      urgency: "normal",
+      urgency: "low",
       intent: "warm",
     };
   }
@@ -242,7 +242,7 @@ function legacyLabelToClassificationLabel(label: LabelValue): ClassificationLabe
       sentiment: "neutral",
       topic: [],
       relevance: true,
-      urgency: "normal",
+      urgency: "low",
       intent: "cold",
     };
   }
@@ -251,7 +251,7 @@ function legacyLabelToClassificationLabel(label: LabelValue): ClassificationLabe
       sentiment: "negative",
       topic: ["service"],
       relevance: true,
-      urgency: "crisis",
+      urgency: "urgent",
       intent: "none",
     };
   }
@@ -260,7 +260,7 @@ function legacyLabelToClassificationLabel(label: LabelValue): ClassificationLabe
       sentiment: "negative",
       topic: ["other"],
       relevance: true,
-      urgency: "crisis",
+      urgency: "urgent",
       intent: "none",
     };
   }
@@ -269,7 +269,7 @@ function legacyLabelToClassificationLabel(label: LabelValue): ClassificationLabe
       sentiment: "neutral",
       topic: [],
       relevance: true,
-      urgency: "notable",
+      urgency: "medium",
       intent: "none",
     };
   }
@@ -277,7 +277,7 @@ function legacyLabelToClassificationLabel(label: LabelValue): ClassificationLabe
     sentiment: "neutral",
     topic: [],
     relevance: false,
-    urgency: "normal",
+    urgency: "low",
     intent: "none",
   };
 }

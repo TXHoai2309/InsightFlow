@@ -66,7 +66,7 @@ export type LabelTopic =
   | "location"
   | "promotion"
   | "other";
-export type LabelUrgency = "normal" | "notable" | "crisis";
+export type LabelUrgency = "none" | "low" | "medium" | "high" | "urgent";
 export type LabelIntent = "hot" | "warm" | "cold" | "none";
 
 export interface ClassificationLabel {
