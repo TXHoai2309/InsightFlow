@@ -107,19 +107,19 @@ export function formatBrandDisplayName(raw: string): string {
 
 // ─── Platform display info (dùng cho TopSources và DashboardFilters) ─────────
 export const PLATFORM_META: Record<Platform, { label: string; color: string; icon?: string }> =
-  {
-    facebook: { label: "Facebook", color: "var(--color-platform-facebook)", icon: "ti-brand-facebook" },
-    tiktok: { label: "TikTok", color: "var(--color-platform-tiktok)", icon: "ti-brand-tiktok" },
-    youtube: { label: "YouTube", color: "var(--color-platform-youtube)", icon: "ti-brand-youtube" },
-    thread: { label: "Threads", color: "var(--color-platform-thread)", icon: "ti-brand-threads" },
-    be: { label: "Be / BeFood", color: "var(--color-platform-be)", icon: "ti-car" },
-    google_maps: {
-      label: "Google Maps",
-      color: "var(--color-platform-google-maps)",
-      icon: "ti-map-pin"
-    },
-    news: { label: "Báo điện tử", color: "var(--color-platform-news)", icon: "ti-world" },
-  };
+{
+  facebook: { label: "Facebook", color: "var(--color-platform-facebook)", icon: "ti-brand-facebook" },
+  tiktok: { label: "TikTok", color: "var(--color-platform-tiktok)", icon: "ti-brand-tiktok" },
+  youtube: { label: "YouTube", color: "var(--color-platform-youtube)", icon: "ti-brand-youtube" },
+  thread: { label: "Threads", color: "var(--color-platform-thread)", icon: "ti-brand-threads" },
+  be: { label: "Be / BeFood", color: "var(--color-platform-be)", icon: "ti-car" },
+  google_maps: {
+    label: "Google Maps",
+    color: "var(--color-platform-google-maps)",
+    icon: "ti-map-pin"
+  },
+  news: { label: "Báo điện tử", color: "var(--color-platform-news)", icon: "ti-world" },
+};
 
 // ─── Topic whitelist ─────────────────────────────────────────────────────────
 type TopicType = Mention["topic"];
@@ -663,10 +663,10 @@ function buildEntityKeys(platform: string, postId: string, commentId?: string | 
   return platforms.flatMap((item) =>
     commentId
       ? [
-          `${item}:${postId}:${commentId}`,
-          `${item}:comment:${postId}:${commentId}`,
-          `${item}:${postId}:comment:${commentId}`,
-        ]
+        `${item}:${postId}:${commentId}`,
+        `${item}:comment:${postId}:${commentId}`,
+        `${item}:${postId}:comment:${commentId}`,
+      ]
       : [`${item}:${postId}`, `${item}:post:${postId}`],
   );
 }
@@ -1043,6 +1043,34 @@ export interface FetchOptions {
   maxMentions?: number;
 }
 
+// ─── Supabase Fetch Helper ───────────────────────────────────────────────────
+async function supabaseFetch<T = any>(table: string, queryStr: string = "", method = "GET", body?: any): Promise<T | null> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) return null;
+
+  const endpoint = `${url}/rest/v1/${table}${queryStr ? "?" + queryStr : ""}`;
+  const res = await fetch(endpoint, {
+    method,
+    headers: {
+      "apikey": key,
+      "Authorization": `Bearer ${key}`,
+      "Content-Type": "application/json",
+      "Prefer": method === "POST" || method === "PATCH" ? "return=minimal" : "return=representation"
+    },
+    body: body ? JSON.stringify(body) : undefined
+  });
+
+  if (!res.ok) {
+    if (res.status === 404 || res.status === 406) return null; // Table not found
+    console.warn(`Supabase fetch failed for ${table}:`, await res.text());
+    return null;
+  }
+
+  if (res.status === 204) return null; // No content
+  return res.json();
+}
+
 // ─── Main service ─────────────────────────────────────────────────────────────
 export class DashboardService {
   /**
@@ -1136,20 +1164,112 @@ export class DashboardService {
           ),
           posted_at: parseDate(postedAtRaw),
           url: String(d.url || d.post_url || d.source_url || ""),
+      const limitCount = opts.maxMentions || 500;
+      
+      // 1. Fetch raw annotations (limit to maxMentions to get a good dataset)
+      const [annotationsData, leadsData, requestsData] = await Promise.all([
+        supabaseFetch<any[]>("annotations", `limit=${limitCount}&order=created_at.desc`),
+        supabaseFetch<any[]>("leads", `limit=200&order=created_at.desc`),
+        supabaseFetch<any[]>("label_change_requests", `limit=100&order=requested_at.desc`)
+      ]);
+
+      const rawAnnotations = annotationsData || [];
+      const rawLeads = leadsData || [];
+      const rawRequests = requestsData || [];
+
+      // 2. Extract IDs to fetch posts and comments
+      const postIds = Array.from(new Set(rawAnnotations.filter(a => a.entity_type === 'post').map(a => a.post_id)));
+      const commentIds = Array.from(new Set(rawAnnotations.filter(a => a.entity_type === 'comment').map(a => a.comment_id)));
+
+      // Helper to fetch in chunks to avoid URL length limits
+      const fetchInChunks = async (table: string, idField: string, ids: string[]) => {
+        if (!ids || ids.length === 0) return [];
+        const unique = Array.from(new Set(ids.filter(Boolean)));
+        const results: any[] = [];
+        for (let i = 0; i < unique.length; i += 50) {
+           const chunk = unique.slice(i, i + 50);
+           const query = `${idField}=in.(${encodeURIComponent(chunk.join(','))})`;
+           const data = await supabaseFetch<any[]>(table, query);
+           if (data) results.push(...data);
+        }
+        return results;
+      };
+
+      // 3. Fetch corresponding posts and comments
+      const [postsData, commentsData] = await Promise.all([
+        fetchInChunks("posts", "post_id", postIds),
+        fetchInChunks("comments", "comment_id", commentIds)
+      ]);
+
+      const postsMap = new Map();
+      postsData.forEach(p => postsMap.set(p.post_id, p));
+
+      const commentsMap = new Map();
+      commentsData.forEach(c => commentsMap.set(c.comment_id, c));
+
+      // ── Mentions (Only from annotations) ──────────────────────────────────────────────────────────
+      const mentions: Mention[] = [];
+
+      rawAnnotations.forEach(a => {
+        const isPost = a.entity_type === 'post';
+        const row = isPost ? postsMap.get(a.post_id) : commentsMap.get(a.comment_id);
+        if (!row) return; // If content is missing, we skip
+
+        let labelObj: Partial<ClassificationLabel> = {};
+        if (a.label) {
+          try {
+             const parsed = typeof a.label === 'string' ? JSON.parse(a.label) : a.label;
+             labelObj = parsed;
+          } catch (e) {}
+        }
+
+        const payload = row.payload_json || {};
+        const id = isPost ? row.post_id : row.comment_id;
+        const parentId = isPost ? null : row.parent_comment_id || row.post_id;
+        let brand = row.brand || row.brand_slug || payload.brand || "";
+        
+        let mappedWorkspaceId = String(brand);
+        const lowerBrand = mappedWorkspaceId.toLowerCase();
+        if (lowerBrand.includes("highland")) {
+           mappedWorkspaceId = "highland-coffee";
+        } else if (lowerBrand.includes("starbuck")) {
+           mappedWorkspaceId = "starbucks";
+        } else if (lowerBrand.includes("mixue")) {
+           mappedWorkspaceId = "mixue";
+        }
+
+        const content = isPost ? payload.text || row.text || "" : row.text || payload.text || "";
+        const author = isPost ? row.author || payload.author : row.username || payload.username;
+        const url = row.url || payload.url;
+        
+        const postedAt = parseDate(row.posted_at || payload.posted_at || payload.thoi_gian_dang || payload.gio_comment || row.created_at);
+        const createdAt = parseDate(row.created_at || row.posted_at);
+
+        mentions.push({
+          id: String(id),
+          parent_id: parentId ? String(parentId) : null,
+          workspace_id: mappedWorkspaceId,
+          platform: mapSourceToPlatform(row.platform || payload.platform || ""),
+          content: normalizeText(content),
+          post_content: isPost ? normalizeText(content) : undefined,
+          comment_content: !isPost ? normalizeText(content) : undefined,
+          content_type: isPost ? "post" : "comment" as any,
+          original_content: normalizeText(content),
+          author: normalizeText(author || "N/A").trim(),
+          sentiment: mapSentiment(labelObj.sentiment),
+          topic: mapTopic(labelObj.topic),
+          credibility_score: 100,
+          created_at: createdAt,
+          posted_at: postedAt,
+          url: String(url || ""),
           labels: normalizeClassificationLabel(
+            { topic: labelObj.topic },
             {
-              ...labels,
-              topic: labels.topic ?? d.baseline_topic ?? d.topic,
-            },
-            {
-            sentiment: mapSentiment(
-              labels.sentiment ?? d.baseline_sentiment ?? d.sentiment,
-            ),
-            relevance:
-              typeof labels.relevance === "boolean" ? labels.relevance : true,
-            urgency: labels.urgency,
-            intent: labels.intent,
-            },
+              sentiment: mapSentiment(labelObj.sentiment),
+              relevance: typeof labelObj.relevance === "boolean" ? labelObj.relevance : true,
+              urgency: labelObj.urgency as any,
+              intent: labelObj.intent as any,
+            }
           ),
         };
       };
@@ -1174,7 +1294,6 @@ export class DashboardService {
       };
       const brandMap = new Map<string, Workspace>();
 
-      // Pre-seed 3 target brands
       Object.entries(TARGET_BRAND_MAP).forEach(([id, name]) => {
         brandMap.set(normalizeBrandName(name), {
           id,
@@ -1187,7 +1306,6 @@ export class DashboardService {
         });
       });
 
-      // Add brands found in data
       mentions.forEach((m) => {
         if (!m.workspace_id) return;
         const displayName = formatBrandDisplayName(m.workspace_id);
@@ -1205,35 +1323,37 @@ export class DashboardService {
         }
       });
       const workspaces = Array.from(brandMap.values()).sort((a, b) =>
-        a.brand_name.localeCompare(b.brand_name),
+        a.brand_name.localeCompare(b.brand_name)
       );
 
-      // ── Alerts ────────────────────────────────────────────────────────────
-      let alerts: Alert[] = [];
-      try {
-        const alertsSnap = await getDocs(
-          query(collection(dbData, COLLECTION_NAMES.alerts), limit(200)),
-        );
-        alerts = alertsSnap.docs.map((doc) => {
-          const d = doc.data();
-          return {
-            id: doc.id,
-            workspace_id: String(d.workspace_id || d.brand || ""),
-            severity: d.severity || "medium",
-            signal_type: d.signal_type || "mention_spike",
-            message: String(d.message || ""),
-            spike_multiplier: d.spike_multiplier,
-            affected_mentions_count: d.affected_mentions_count,
-            created_at: parseDate(d.created_at),
-            status: d.status || "new",
-          };
+      // ── Alerts (Bảng không tồn tại trên Supabase, sinh tự động từ mention tiêu cực) ────────────────
+      const alerts: Alert[] = [];
+      const negativeMentions = mentions.filter((m) => m.sentiment === "negative");
+      if (negativeMentions.length > 0) {
+        alerts.push({
+          id: "generated-alert-spike-1",
+          workspace_id: negativeMentions[0].workspace_id || "highland-coffee",
+          severity: negativeMentions.length > 10 ? "critical" : negativeMentions.length > 5 ? "high" : "medium",
+          signal_type: "mention_spike",
+          message: `Phát hiện ${negativeMentions.length} bình luận/bài đăng tiêu cực gần đây.`,
+          affected_mentions_count: negativeMentions.length,
+          created_at: negativeMentions[0].created_at || new Date().toISOString(),
+          status: "new",
         });
-        alerts.sort(
-          (a, b) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-        );
-      } catch {
-        // Collection chưa tồn tại — bỏ qua
+      }
+
+      const legalMentions = mentions.filter((m) => m.topic === "legal" || m.topic === "operation");
+      if (legalMentions.length > 0) {
+        alerts.push({
+          id: "generated-alert-sensitive-1",
+          workspace_id: legalMentions[0].workspace_id || "highland-coffee",
+          severity: "critical",
+          signal_type: "sensitive_topic",
+          message: `Cảnh báo rủi ro về dịch vụ/pháp lý từ ${legalMentions.length} bài đăng.`,
+          affected_mentions_count: legalMentions.length,
+          created_at: legalMentions[0].created_at || new Date().toISOString(),
+          status: "new",
+        });
       }
 
       // ── Leads (Supabase) ────────────────────────────────────────────────
@@ -1534,7 +1654,6 @@ export class DashboardService {
         alerts,
         leads,
         labelChangeRequests,
-        lastMentionDoc,
       };
     } catch (error) {
       console.error("[DashboardService] fetchRawData error:", error);
@@ -1542,9 +1661,6 @@ export class DashboardService {
     }
   }
 
-  /**
-   * Cập nhật trạng thái của lead trên Firestore
-   */
   static async updateLeadStatus(
     id: string,
     status: Lead["status"],
@@ -1554,7 +1670,6 @@ export class DashboardService {
     if (!profile || !canPerformAction(profile, "update_lead_status")) {
       throw new Error("User is not allowed to update lead status.");
     }
-
     const auditFields = {
       updated_by: profile.uid,
       updated_by_role: profile.role,
@@ -1586,11 +1701,6 @@ export class DashboardService {
     if (!profile || !canPerformAction(profile, "update_lead_details")) {
       throw new Error("User is not allowed to update lead details.");
     }
-
-    if (data.status && !canPerformAction(profile, "update_lead_status")) {
-      throw new Error("User is not allowed to update lead status.");
-    }
-
     const auditFields = {
       updated_by: profile.uid,
       updated_by_role: profile.role,
@@ -1610,24 +1720,13 @@ export class DashboardService {
     }
   }
 
-  // ── Stats aggregation ─────────────────────────────────────────────────────
-
   static async createLabelChangeRequest(
-    data: Omit<
-      LabelChangeRequest,
-      | "id"
-      | "status"
-      | "requested_by"
-      | "requested_by_name"
-      | "requested_by_role"
-      | "requested_at"
-    >,
+    data: Omit<LabelChangeRequest, "id" | "status" | "requested_by" | "requested_by_name" | "requested_by_role" | "requested_at">,
     profile: UserRoleProfile | null | undefined,
   ): Promise<LabelChangeRequest> {
     if (!profile || !canPerformAction(profile, "create_label_request")) {
       throw new Error("User is not allowed to create label change requests.");
     }
-
     const nowIso = new Date().toISOString();
     const requestData = stripUndefinedFields({
       ...data,
@@ -1644,69 +1743,33 @@ export class DashboardService {
       updated_by: profile.uid,
       updated_by_role: profile.role,
     });
+    const res = await supabaseFetch("label_change_requests", "", "POST", [requestData]);
+    return { ...requestData, id: (res && res[0]?.id) || String(Date.now()) } as LabelChangeRequest;
+  }
 
-    const config = getSupabaseConfig();
-    let requestPayload: Record<string, unknown> = { ...requestData };
-    let insertedRows: Array<{ id: string }> | undefined;
+  static async fetchLabelChangeRequests(opts: { limit?: number; status?: LabelChangeRequest["status"] } = {}): Promise<LabelChangeRequest[]> {
+    const rawRequests = await supabaseFetch<any[]>("label_change_requests", `limit=${opts.limit || 50}${opts.status ? `&status=eq.${opts.status}` : ""}&order=requested_at.desc`);
+    return (rawRequests || []).map((d: any) => d as any);
+  }
 
-    for (let attempt = 0; attempt < 5; attempt += 1) {
-      try {
-        insertedRows = await supabaseWrite<Array<{ id: string }>>(
-          config,
-          "label_change_requests",
-          "POST",
-          [requestPayload],
-          "",
-        );
-        break;
-      } catch (error) {
-        const missingColumn = getMissingSupabaseColumn(error);
-        if (
-          !missingColumn ||
-          !(missingColumn in requestPayload) ||
-          ![
-            "requested_by_email",
-            "reviewed_by_uid",
-            "reviewed_by_email",
-            "final_label",
-            "history",
-          ].includes(missingColumn)
-        ) {
-          throw error;
-        }
-        const { [missingColumn]: _removed, ...nextPayload } = requestPayload;
-        requestPayload = nextPayload;
-      }
+  static async updateLabelChangeRequestStatus(id: string, status: "approved" | "rejected", profile: UserRoleProfile | null | undefined, reviewNote?: string): Promise<void> {
+    if (!profile || !canPerformAction(profile, "label_request_review")) {
+      throw new Error("User is not allowed to review label change requests.");
     }
-
-    if (!insertedRows) {
-      throw new Error("Could not create label change request in Supabase.");
-    }
-    const newId = insertedRows?.[0]?.id || crypto.randomUUID();
-
-    const request: LabelChangeRequest = {
-      id: newId,
-      ...requestData,
-    };
-
-    const correctionData = stripUndefinedFields({
-      label_correction_status: "pending",
-      pending_label_request_id: newId,
-      label_correction_requested_at: nowIso,
-      label_correction_requested_by: profile.uid,
-      updated_by: profile.uid,
-      updated_by_role: profile.role,
-      updated_at: nowIso,
+    await supabaseFetch("label_change_requests", `id=eq.${id}`, "PATCH", {
+      status,
+      reviewed_by: profile.uid,
+      reviewed_by_name: profile.displayName || profile.email,
+      reviewed_at: new Date().toISOString(),
+      review_note: reviewNote,
     });
+  }
 
-    const leadId = data.lead_id || data.source_id;
-    try {
-      await supabaseWrite(config, "leads", "PATCH", correctionData, `id=eq.${encodeURIComponent(leadId)}`, false);
-    } catch {
-      // Lead row may not exist yet — ignore
+  static async deleteLead(id: string, profile: UserRoleProfile | null | undefined): Promise<void> {
+    if (!profile || !canPerformAction(profile, "update_lead_details")) {
+      throw new Error("User is not allowed to delete lead.");
     }
-
-    return request;
+    await supabaseFetch("leads", `id=eq.${id}`, "DELETE");
   }
 
   static calculateStats(

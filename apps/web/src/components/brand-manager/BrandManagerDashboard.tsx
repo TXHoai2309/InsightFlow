@@ -36,6 +36,7 @@ export function BrandManagerDashboard({
     leads,
     workspaces,
     filters,
+    isLoading,
     setWorkspaces,
     setFilters,
   } = useDashboardStore();
@@ -209,7 +210,7 @@ export function BrandManagerDashboard({
   );
   const unprocessedContacts = filteredLeads.filter((l) => l.status === "new").length;
 
-  if (!isMounted) {
+  if (!isMounted || isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="flex flex-col items-center gap-3">

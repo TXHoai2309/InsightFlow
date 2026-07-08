@@ -102,24 +102,7 @@ export function BMFiltersBar({ workspaces }: BMFiltersBarProps) {
           <span className="material-symbols-outlined bm-select-chevron">expand_more</span>
         </div>
 
-        {/* Workspace select */}
-        {workspaces.length > 0 && (
-          <div className="bm-select-wrap">
-            <span className="material-symbols-outlined bm-select-icon">business</span>
-            <select
-              id="bm-workspace-filter"
-              value={filters.workspace_id}
-              onChange={(e) => handle("workspace_id", e.target.value)}
-              className="bm-select"
-            >
-              <option value="all">{t("dashboard.filters.allBrands")}</option>
-              {workspaces.map((ws) => (
-                <option key={ws.id} value={ws.id}>{ws.brand_name}</option>
-              ))}
-            </select>
-            <span className="material-symbols-outlined bm-select-chevron">expand_more</span>
-          </div>
-        )}
+
       </div>
 
       <style>{`
