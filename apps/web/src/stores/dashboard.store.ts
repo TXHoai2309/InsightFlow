@@ -8,6 +8,7 @@ import { subscribeWithSelector } from "zustand/middleware";
 import { normalizeBrandName, DashboardService } from "@/lib/services/dashboard";
 import { canPerformAction, type UserRoleProfile } from "@/lib/rbac";
 import { isSameBrandScope } from "@/lib/brandScope";
+import { normalizeClassificationLabel } from "@/lib/label-change";
 import type {
   DashboardStats,
   DashboardFilters,
@@ -97,6 +98,12 @@ interface DashboardState {
     cancelReason: string,
     profile: UserRoleProfile | null | undefined,
   ) => Promise<LabelChangeRequest>;
+  approveLabelChangeRequestInStore: (
+    requestId: string,
+    finalLabel: Record<string, unknown>,
+    status: "approved" | "edited",
+    nextHistory: any[],
+  ) => void;
 
   // ── Computed (client-side filtering) ─────────────────────────────────────
   getFilteredMentions: () => Mention[];
@@ -341,6 +348,45 @@ export const useDashboardStore = create<DashboardState>()(
         console.error("[DashboardStore] cancelLabelChangeRequest error:", error);
         throw error;
       }
+    },
+
+    approveLabelChangeRequestInStore: (requestId, finalLabel, status, nextHistory) => {
+      set((state) => {
+        const request = state.labelChangeRequests.find((r) => r.id === requestId);
+        const normLabel = normalizeClassificationLabel(finalLabel);
+        const nextStatus = status === "edited" ? "approved" : status;
+
+        return {
+          labelChangeRequests: state.labelChangeRequests.map((r) =>
+            r.id === requestId
+              ? {
+                  ...r,
+                  status: nextStatus as any,
+                  history: nextHistory,
+                  applied_at: new Date().toISOString(),
+                }
+              : r
+          ),
+          leads: state.leads.map((lead) => {
+            const isMatch =
+              request &&
+              (lead.id === request.lead_id ||
+                lead.id === request.source_id ||
+                (lead.mention_id && lead.mention_id === request.mention_id) ||
+                (lead.source_mention_id && lead.source_mention_id === request.mention_id));
+            if (isMatch) {
+              return {
+                ...lead,
+                labels: normLabel,
+                label_correction_status: "approved" as const,
+                pending_label_request_id: undefined,
+                last_label_corrected_at: new Date().toISOString(),
+              };
+            }
+            return lead;
+          }),
+        };
+      });
     },
 
     getFilteredMentions: () => {

@@ -14,6 +14,9 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { filterByBrandScope } from "@/lib/brandScope";
 import { auth, dbData } from "@/lib/firebase";
+import { DashboardService } from "@/lib/services/dashboard";
+import { useDashboardStore } from "@/stores/dashboard.store";
+import { normalizeClassificationLabel } from "@/lib/label-change";
 
 type Sentiment = "positive" | "negative" | "neutral" | null;
 type Urgency = "none" | "low" | "medium" | "high" | "urgent" | null;
@@ -882,36 +885,86 @@ export default function LabelRequestsPage() {
 
     try {
       if (!selectedRequest.isDemo) {
-        await updateDoc(doc(dbData, "label_change_requests", selectedRequest.id), {
-          status,
-          final_label: finalLabel,
-          reviewed_by_uid: profile?.uid || "",
-          reviewed_by_name: profile?.displayName || profile?.email || "",
-          reviewed_at: serverTimestamp(),
-          history: nextHistory,
-          updated_at: serverTimestamp(),
-        });
-        await addDoc(collection(dbData, "label_change_history"), {
-          request_id: selectedRequest.id,
-          brand_id: selectedRequest.brand_id || profile?.brandId || "",
-          brand_name: selectedRequest.brand_name || profile?.brandName || "",
-          mention_id: selectedRequest.mention_id,
-          mention_content: selectedRequest.mention.content,
-          action: status,
-          status,
-          old_label: selectedRequest.old_label,
-          new_label: finalLabel,
-          requested_by_name: selectedRequest.requested_by_name,
-          requested_by_email: selectedRequest.requested_by_email || "",
-          requested_by_role: selectedRequest.requested_by_role || "",
-          reviewed_by_uid: profile?.uid || "",
-          reviewed_by_name: profile?.displayName || profile?.email || "",
-          reviewed_by_email: profile?.email || "",
-          note: selectedRequest.reason || "",
-          source: "brand_manager_review",
-          changed_at: serverTimestamp(),
-          created_at: serverTimestamp(),
-        });
+        if (status === "approved" || status === "edited") {
+          await DashboardService.approveLabelChangeRequest(
+            selectedRequest.id,
+            status === "edited" ? status : "approved",
+            finalLabel as Record<string, unknown>,
+            {
+              mentionId: selectedRequest.mention_id,
+              platform: selectedRequest.mention.platform,
+              contentType: selectedRequest.mention.content_type,
+              parentId: selectedRequest.mention.parent_id,
+            },
+            selectedRequest.mention_id,
+            {
+              uid: profile?.uid || "",
+              displayName: profile?.displayName,
+              email: profile?.email,
+            },
+            selectedRequest.old_label as Record<string, unknown>,
+            nextHistory,
+          );
+
+          useDashboardStore.getState().approveLabelChangeRequestInStore(
+            selectedRequest.id,
+            finalLabel as Record<string, unknown>,
+            status,
+            nextHistory,
+          );
+        } else {
+          await updateDoc(doc(dbData, "label_change_requests", selectedRequest.id), {
+            status,
+            final_label: finalLabel,
+            reviewed_by_uid: profile?.uid || "",
+            reviewed_by_name: profile?.displayName || profile?.email || "",
+            reviewed_at: serverTimestamp(),
+            history: nextHistory,
+            updated_at: serverTimestamp(),
+          });
+          await addDoc(collection(dbData, "label_change_history"), {
+            request_id: selectedRequest.id,
+            brand_id: selectedRequest.brand_id || profile?.brandId || "",
+            brand_name: selectedRequest.brand_name || profile?.brandName || "",
+            mention_id: selectedRequest.mention_id,
+            mention_content: selectedRequest.mention.content,
+            action: status,
+            status,
+            old_label: selectedRequest.old_label,
+            new_label: finalLabel,
+            requested_by_name: selectedRequest.requested_by_name,
+            requested_by_email: selectedRequest.requested_by_email || "",
+            requested_by_role: selectedRequest.requested_by_role || "",
+            reviewed_by_uid: profile?.uid || "",
+            reviewed_by_name: profile?.displayName || profile?.email || "",
+            reviewed_by_email: profile?.email || "",
+            note: selectedRequest.reason || "",
+            source: "brand_manager_review",
+            changed_at: serverTimestamp(),
+            created_at: serverTimestamp(),
+          });
+
+          useDashboardStore.getState().setLabelChangeRequests(
+            useDashboardStore.getState().labelChangeRequests.map((req: any) =>
+              req.id === selectedRequest.id
+                ? { ...req, status: status as any, history: nextHistory }
+                : req
+            )
+          );
+          useDashboardStore.getState().setLeads(
+            useDashboardStore.getState().leads.map((lead: any) =>
+              lead.id === selectedRequest.id ||
+              lead.id === selectedRequest.mention_id ||
+              lead.pending_label_request_id === selectedRequest.id
+                ? {
+                    ...lead,
+                    label_correction_status: "none",
+                    pending_label_request_id: undefined,
+                  }
+                : lead
+            )
+          );
+        }
       }
 
       setRequests((current) =>
