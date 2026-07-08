@@ -389,6 +389,34 @@ export interface FetchOptions {
   maxMentions?: number;
 }
 
+// ─── Supabase Fetch Helper ───────────────────────────────────────────────────
+async function supabaseFetch<T = any>(table: string, queryStr: string = "", method = "GET", body?: any): Promise<T | null> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) return null;
+
+  const endpoint = `${url}/rest/v1/${table}${queryStr ? "?" + queryStr : ""}`;
+  const res = await fetch(endpoint, {
+    method,
+    headers: {
+      "apikey": key,
+      "Authorization": `Bearer ${key}`,
+      "Content-Type": "application/json",
+      "Prefer": method === "POST" || method === "PATCH" ? "return=minimal" : "return=representation"
+    },
+    body: body ? JSON.stringify(body) : undefined
+  });
+
+  if (!res.ok) {
+    if (res.status === 404 || res.status === 406) return null; // Table not found
+    console.warn(`Supabase fetch failed for ${table}:`, await res.text());
+    return null;
+  }
+  
+  if (res.status === 204) return null; // No content
+  return res.json();
+}
+
 // ─── Main service ─────────────────────────────────────────────────────────────
 export class DashboardService {
   /**
@@ -404,118 +432,119 @@ export class DashboardService {
     lastMentionDoc?: QueryDocumentSnapshot<DocumentData>;
   }> {
     try {
-      // ── Mentions ──────────────────────────────────────────────────────────
-      // NOTE: No orderBy — avoids Firestore index requirement.
-      // We sort in-memory after fetching.
-      const constraints: Parameters<typeof query>[1][] = [];
-      if (opts.maxMentions) constraints.push(limit(opts.maxMentions));
-      if (opts.after) constraints.push(startAfter(opts.after));
+      const limitCount = opts.maxMentions || 500;
+      
+      // 1. Fetch raw annotations (limit to maxMentions to get a good dataset)
+      const [annotationsData, leadsData, requestsData] = await Promise.all([
+        supabaseFetch<any[]>("annotations", `limit=${limitCount}&order=created_at.desc`),
+        supabaseFetch<any[]>("leads", `limit=200&order=created_at.desc`),
+        supabaseFetch<any[]>("label_change_requests", `limit=100&order=requested_at.desc`)
+      ]);
 
-      const mentionsSnap = await getDocs(
-        query(collection(dbData, COLLECTION_NAMES.mentions), ...constraints),
-      );
+      const rawAnnotations = annotationsData || [];
+      const rawLeads = leadsData || [];
+      const rawRequests = requestsData || [];
 
-      const mentions: Mention[] = mentionsSnap.docs.map((doc) => {
-        const d = doc.data();
-        const labels = d.labels || {};
-        const postContent = normalizeOptionalText(
-          normalizeText(
-            d.post_content ||
-              d.post_text ||
-              d.post_caption ||
-              d.caption ||
-              d.title ||
-              d.original_post ||
-              "",
-          ),
-        );
-        const commentContent = normalizeOptionalText(
-          normalizeText(
-            d.comment_content ||
-              d.comment_text ||
-              d.comment ||
-              d.clean_text ||
-              d.processed_text ||
-              d.text ||
-              d.content ||
-              "",
-          ),
-        );
-        // posted_at = ngày đăng bài thật (post_date → created_at nguồn → fallback crawled_at)
-        const postedAtRaw =
-          d.post_date ??
-          d.posted_at ??
-          d.created_at ??
-          d.crawled_at ??
-          d.uploaded_at;
-        const rawBrand = String(d.brand || d.workspace_id || "");
-        return {
-          id: String(d.id || doc.id),
-          parent_id: d.parent_id ? String(d.parent_id) : null,
-          workspace_id: rawBrand,
-          platform: mapSourceToPlatform(d.source || ""),
-          content: commentContent || postContent || "",
-          post_content: postContent,
-          comment_content: commentContent,
-          content_type: ["post", "comment", "reply"].includes(
-            String(d.content_type || "").toLowerCase(),
-          )
-            ? (String(d.content_type).toLowerCase() as Mention["content_type"])
-            : undefined,
-          original_content: normalizeText(
-            d.original_text ||
-              d.clean_text ||
-              d.processed_text ||
-              d.text ||
-              d.content ||
-              "",
-          ),
-          author: normalizeText(d.author || d.author_name || "N/A").trim(),
-          sentiment: mapSentiment(
-            labels.sentiment ?? d.baseline_sentiment ?? d.sentiment,
-          ),
-          topic: mapTopic(labels.topic ?? d.baseline_topic ?? d.topic),
-          credibility_score:
-            typeof d.baseline_confidence === "number"
-              ? Math.round(d.baseline_confidence * 100)
-              : 100,
-          created_at: parseDate(
-            d.uploaded_at ||
-              d.labeled_at ||
-              d.crawled_at ||
-              d.analyzed_at ||
-              d.created_at,
-          ),
-          posted_at: parseDate(postedAtRaw),
-          url: String(d.url || d.post_url || d.source_url || ""),
+      // 2. Extract IDs to fetch posts and comments
+      const postIds = Array.from(new Set(rawAnnotations.filter(a => a.entity_type === 'post').map(a => a.post_id)));
+      const commentIds = Array.from(new Set(rawAnnotations.filter(a => a.entity_type === 'comment').map(a => a.comment_id)));
+
+      // Helper to fetch in chunks to avoid URL length limits
+      const fetchInChunks = async (table: string, idField: string, ids: string[]) => {
+        if (!ids || ids.length === 0) return [];
+        const unique = Array.from(new Set(ids.filter(Boolean)));
+        const results: any[] = [];
+        for (let i = 0; i < unique.length; i += 50) {
+           const chunk = unique.slice(i, i + 50);
+           const query = `${idField}=in.(${encodeURIComponent(chunk.join(','))})`;
+           const data = await supabaseFetch<any[]>(table, query);
+           if (data) results.push(...data);
+        }
+        return results;
+      };
+
+      // 3. Fetch corresponding posts and comments
+      const [postsData, commentsData] = await Promise.all([
+        fetchInChunks("posts", "post_id", postIds),
+        fetchInChunks("comments", "comment_id", commentIds)
+      ]);
+
+      const postsMap = new Map();
+      postsData.forEach(p => postsMap.set(p.post_id, p));
+
+      const commentsMap = new Map();
+      commentsData.forEach(c => commentsMap.set(c.comment_id, c));
+
+      // ── Mentions (Only from annotations) ──────────────────────────────────────────────────────────
+      const mentions: Mention[] = [];
+
+      rawAnnotations.forEach(a => {
+        const isPost = a.entity_type === 'post';
+        const row = isPost ? postsMap.get(a.post_id) : commentsMap.get(a.comment_id);
+        if (!row) return; // If content is missing, we skip
+
+        let labelObj: Partial<ClassificationLabel> = {};
+        if (a.label) {
+          try {
+             const parsed = typeof a.label === 'string' ? JSON.parse(a.label) : a.label;
+             labelObj = parsed;
+          } catch (e) {}
+        }
+
+        const payload = row.payload_json || {};
+        const id = isPost ? row.post_id : row.comment_id;
+        const parentId = isPost ? null : row.parent_comment_id || row.post_id;
+        let brand = row.brand || row.brand_slug || payload.brand || "";
+        
+        let mappedWorkspaceId = String(brand);
+        const lowerBrand = mappedWorkspaceId.toLowerCase();
+        if (lowerBrand.includes("highland")) {
+           mappedWorkspaceId = "highland-coffee";
+        } else if (lowerBrand.includes("starbuck")) {
+           mappedWorkspaceId = "starbucks";
+        } else if (lowerBrand.includes("mixue")) {
+           mappedWorkspaceId = "mixue";
+        }
+
+        const content = isPost ? payload.text || row.text || "" : row.text || payload.text || "";
+        const author = isPost ? row.author || payload.author : row.username || payload.username;
+        const url = row.url || payload.url;
+        
+        const postedAt = parseDate(row.posted_at || payload.posted_at || payload.thoi_gian_dang || payload.gio_comment || row.created_at);
+        const createdAt = parseDate(row.created_at || row.posted_at);
+
+        mentions.push({
+          id: String(id),
+          parent_id: parentId ? String(parentId) : null,
+          workspace_id: mappedWorkspaceId,
+          platform: mapSourceToPlatform(row.platform || payload.platform || ""),
+          content: normalizeText(content),
+          post_content: isPost ? normalizeText(content) : undefined,
+          comment_content: !isPost ? normalizeText(content) : undefined,
+          content_type: isPost ? "post" : "comment" as any,
+          original_content: normalizeText(content),
+          author: normalizeText(author || "N/A").trim(),
+          sentiment: mapSentiment(labelObj.sentiment),
+          topic: mapTopic(labelObj.topic),
+          credibility_score: 100,
+          created_at: createdAt,
+          posted_at: postedAt,
+          url: String(url || ""),
           labels: normalizeClassificationLabel(
+            { topic: labelObj.topic },
             {
-              ...labels,
-              topic: labels.topic ?? d.baseline_topic ?? d.topic,
-            },
-            {
-            sentiment: mapSentiment(
-              labels.sentiment ?? d.baseline_sentiment ?? d.sentiment,
-            ),
-            relevance:
-              typeof labels.relevance === "boolean" ? labels.relevance : true,
-            urgency: labels.urgency,
-            intent: labels.intent,
-            },
+              sentiment: mapSentiment(labelObj.sentiment),
+              relevance: typeof labelObj.relevance === "boolean" ? labelObj.relevance : true,
+              urgency: labelObj.urgency as any,
+              intent: labelObj.intent as any,
+            }
           ),
-        };
+        });
       });
 
-      // Sort in-memory: newest posted_at first
-      mentions.sort(
-        (a, b) =>
-          new Date(b.posted_at).getTime() - new Date(a.posted_at).getTime(),
-      );
+      mentions.sort((a, b) => new Date(b.posted_at).getTime() - new Date(a.posted_at).getTime());
 
-      const lastMentionDoc = mentionsSnap.docs.at(-1);
-
-      // ── Workspaces (derived từ brands trong mentions) ─────────────────────
-      // Seed với 3 target brands để đảm bảo luôn hiển thị
+      // ── Workspaces ────────────────────────────────────────────────────────
       const TARGET_BRAND_MAP: Record<string, string> = {
         "highland-coffee": "Highland Coffee",
         starbucks: "Starbucks",
@@ -523,7 +552,6 @@ export class DashboardService {
       };
       const brandMap = new Map<string, Workspace>();
 
-      // Pre-seed 3 target brands
       Object.entries(TARGET_BRAND_MAP).forEach(([id, name]) => {
         brandMap.set(normalizeBrandName(name), {
           id,
@@ -536,7 +564,6 @@ export class DashboardService {
         });
       });
 
-      // Add brands found in data
       mentions.forEach((m) => {
         if (!m.workspace_id) return;
         const displayName = formatBrandDisplayName(m.workspace_id);
@@ -554,332 +581,162 @@ export class DashboardService {
         }
       });
       const workspaces = Array.from(brandMap.values()).sort((a, b) =>
-        a.brand_name.localeCompare(b.brand_name),
+        a.brand_name.localeCompare(b.brand_name)
       );
 
-      // ── Alerts ────────────────────────────────────────────────────────────
-      let alerts: Alert[] = [];
-      try {
-        const alertsSnap = await getDocs(
-          query(collection(dbData, COLLECTION_NAMES.alerts), limit(200)),
-        );
-        alerts = alertsSnap.docs.map((doc) => {
-          const d = doc.data();
-          return {
-            id: doc.id,
-            workspace_id: String(d.workspace_id || d.brand || ""),
-            severity: d.severity || "medium",
-            signal_type: d.signal_type || "mention_spike",
-            message: String(d.message || ""),
-            spike_multiplier: d.spike_multiplier,
-            affected_mentions_count: d.affected_mentions_count,
-            created_at: parseDate(d.created_at),
-            status: d.status || "new",
-          };
+      // ── Alerts (Bảng không tồn tại trên Supabase, sinh tự động từ mention tiêu cực) ────────────────
+      const alerts: Alert[] = [];
+      const negativeMentions = mentions.filter((m) => m.sentiment === "negative");
+      if (negativeMentions.length > 0) {
+        alerts.push({
+          id: "generated-alert-spike-1",
+          workspace_id: negativeMentions[0].workspace_id || "highland-coffee",
+          severity: negativeMentions.length > 10 ? "critical" : negativeMentions.length > 5 ? "high" : "medium",
+          signal_type: "mention_spike",
+          message: `Phát hiện ${negativeMentions.length} bình luận/bài đăng tiêu cực gần đây.`,
+          affected_mentions_count: negativeMentions.length,
+          created_at: negativeMentions[0].created_at || new Date().toISOString(),
+          status: "new",
         });
-        alerts.sort(
-          (a, b) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-        );
-      } catch {
-        // Collection chưa tồn tại — bỏ qua
+      }
+
+      const legalMentions = mentions.filter((m) => m.topic === "legal" || m.topic === "operation");
+      if (legalMentions.length > 0) {
+        alerts.push({
+          id: "generated-alert-sensitive-1",
+          workspace_id: legalMentions[0].workspace_id || "highland-coffee",
+          severity: "critical",
+          signal_type: "sensitive_topic",
+          message: `Cảnh báo rủi ro về dịch vụ/pháp lý từ ${legalMentions.length} bài đăng.`,
+          affected_mentions_count: legalMentions.length,
+          created_at: legalMentions[0].created_at || new Date().toISOString(),
+          status: "new",
+        });
       }
 
       // ── Leads ─────────────────────────────────────────────────────────────
-      let leads: Lead[] = [];
-      try {
-        const leadsSnap = await getDocs(
-          query(collection(dbData, COLLECTION_NAMES.leads), limit(200)),
-        );
-        leads = leadsSnap.docs.map((doc) => {
-          const d = doc.data();
-          const labels = d.labels || {};
-          const intent = mapIntent(d.intent || labels.intent);
-          return {
-            id: doc.id,
-            mention_id: normalizeOptionalText(d.mention_id || d.mentionId || d.source_mention_id),
-            source_mention_id: normalizeOptionalText(d.source_mention_id || d.sourceMentionId),
-            parent_id: d.parent_id ? String(d.parent_id) : null,
-            content_type: ["post", "comment", "reply"].includes(
-              String(d.content_type || "").toLowerCase(),
-            )
-              ? (String(d.content_type).toLowerCase() as Lead["content_type"])
-              : undefined,
-            post_id: normalizeOptionalText(d.post_id || d.postId),
-            workspace_id: String(d.workspace_id || d.brand || ""),
-            platform: mapSourceToPlatform(d.source || d.platform || ""),
-            author: normalizeText(d.author || "Khách hàng").trim(),
-            content: String(d.content || d.text || ""),
-            intent,
-            current_label: d.current_label
-              ? mapLabelValue(d.current_label)
-              : undefined,
-            labels: normalizeClassificationLabel(
-              d.labels || d.current_labels || {
-                topic: Array.isArray(d.intent_signals) ? d.intent_signals : [],
-              },
-              {
+      const leads: Lead[] = rawLeads.map((d: any) => {
+        const labels = d.labels || {};
+        const intent = mapIntent(d.intent || labels.intent);
+        
+        let leadWorkspaceId = String(d.workspace_id || d.brand || "");
+        const lowerBrand = leadWorkspaceId.toLowerCase();
+        if (lowerBrand.includes("highland")) leadWorkspaceId = "highland-coffee";
+        else if (lowerBrand.includes("starbuck")) leadWorkspaceId = "starbucks";
+        else if (lowerBrand.includes("mixue")) leadWorkspaceId = "mixue";
+
+        return {
+          id: d.id,
+          mention_id: normalizeOptionalText(d.mention_id || d.source_mention_id),
+          source_mention_id: normalizeOptionalText(d.source_mention_id),
+          parent_id: d.parent_id ? String(d.parent_id) : null,
+          content_type: ["post", "comment", "reply"].includes(String(d.content_type || "").toLowerCase())
+            ? (String(d.content_type).toLowerCase() as Lead["content_type"])
+            : undefined,
+          post_id: normalizeOptionalText(d.post_id),
+          workspace_id: leadWorkspaceId,
+          platform: mapSourceToPlatform(d.source || d.platform || ""),
+          author: normalizeText(d.author || "Khách hàng").trim(),
+          content: String(d.content || d.text || ""),
+          intent,
+          current_label: d.current_label ? mapLabelValue(d.current_label) : undefined,
+          labels: normalizeClassificationLabel(
+            d.labels || d.current_labels || { topic: Array.isArray(d.intent_signals) ? d.intent_signals : [] },
+            {
               sentiment: labels.sentiment ?? d.sentiment,
-              relevance:
-                typeof labels.relevance === "boolean"
-                  ? labels.relevance
-                  : true,
+              relevance: typeof labels.relevance === "boolean" ? labels.relevance : true,
               urgency: labels.urgency,
               intent,
-              },
-            ),
-            intent_signals: d.intent_signals || [],
-            status: d.status || "new",
-            created_at: parseDate(d.created_at),
-            expiry_at: d.expiry_at ? parseDate(d.expiry_at) : undefined,
-            url: normalizeOptionalUrl(d.url, d.post_url, d.source_url),
-            source_url: normalizeOptionalUrl(d.source_url, d.post_url, d.url),
-            label_correction_status: mapLabelCorrectionStatus(
-              d.label_correction_status,
-            ),
-            pending_label_request_id: normalizeOptionalText(
-              d.pending_label_request_id,
-            ),
-            last_label_corrected_at: d.last_label_corrected_at
-              ? parseDate(d.last_label_corrected_at)
-              : undefined,
-            phone: normalizeOptionalText(d.phone),
-            email: normalizeOptionalText(d.email),
-            zalo_id: normalizeOptionalText(d.zalo_id),
-            messenger_id: normalizeOptionalText(d.messenger_id),
-            social_profile_url: normalizeOptionalUrl(
-              d.social_profile_url,
-              d.contact,
-              d.profile_url,
-            ),
-            owner_id: normalizeOptionalText(d.owner_id),
-            owner_name: normalizeOptionalText(d.owner_name),
-            owner_email: normalizeOptionalText(d.owner_email),
-            assigned_at: d.assigned_at ? parseDate(d.assigned_at) : undefined,
-            assigned_by: normalizeOptionalText(d.assigned_by),
-            claimed_at: d.claimed_at ? parseDate(d.claimed_at) : undefined,
-            first_contacted_at: d.first_contacted_at
-              ? parseDate(d.first_contacted_at)
-              : undefined,
-            contact_attempts:
-              typeof d.contact_attempts === "number" ? d.contact_attempts : 0,
-            last_contact_at: d.last_contact_at
-              ? parseDate(d.last_contact_at)
-              : undefined,
-            pending_result: d.pending_result === true,
-            last_action_at: d.last_action_at
-              ? parseDate(d.last_action_at)
-              : undefined,
-            last_action_type: normalizeOptionalText(d.last_action_type) as Lead["last_action_type"],
-            last_contact_channel: normalizeOptionalText(d.last_contact_channel),
-            result_type: normalizeOptionalText(d.result_type) as Lead["result_type"],
-            result_recorded_at: d.result_recorded_at
-              ? parseDate(d.result_recorded_at)
-              : undefined,
-            follow_up_at: d.follow_up_at ? parseDate(d.follow_up_at) : undefined,
-            closed_at: d.closed_at ? parseDate(d.closed_at) : undefined,
-            sales_status: normalizeOptionalText(d.sales_status) as Lead["sales_status"],
-            sales_owner_id: normalizeOptionalText(d.sales_owner_id),
-            sales_owner_name: normalizeOptionalText(d.sales_owner_name),
-            sales_transferred_at: d.sales_transferred_at
-              ? parseDate(d.sales_transferred_at)
-              : undefined,
-            crm_deal_id: normalizeOptionalText(d.crm_deal_id),
-            notes: d.notes ? String(d.notes) : undefined,
-            posted_at: d.posted_at ? parseDate(d.posted_at) : undefined,
-          };
-        });
-        leads.sort(
-          (a, b) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-        );
-      } catch {
-        // Collection chưa tồn tại — bỏ qua
-      }
+            }
+          ),
+          intent_signals: d.intent_signals || [],
+          statusLabel: "new",
+          status: d.status || "new",
+          created_at: parseDate(d.created_at),
+          expiry_at: d.expiry_at ? parseDate(d.expiry_at) : undefined,
+          url: normalizeOptionalUrl(d.url, d.post_url, d.source_url),
+          source_url: normalizeOptionalUrl(d.source_url, d.post_url, d.url),
+          label_correction_status: mapLabelCorrectionStatus(d.label_correction_status),
+          pending_label_request_id: normalizeOptionalText(d.pending_label_request_id),
+          last_label_corrected_at: d.last_label_corrected_at ? parseDate(d.last_label_corrected_at) : undefined,
+          phone: normalizeOptionalText(d.phone),
+          email: normalizeOptionalText(d.email),
+          zalo_id: normalizeOptionalText(d.zalo_id),
+          messenger_id: normalizeOptionalText(d.messenger_id),
+          social_profile_url: normalizeOptionalUrl(d.social_profile_url, d.contact, d.profile_url),
+          owner_id: normalizeOptionalText(d.owner_id),
+          owner_name: normalizeOptionalText(d.owner_name),
+          owner_email: normalizeOptionalText(d.owner_email),
+          assigned_at: d.assigned_at ? parseDate(d.assigned_at) : undefined,
+          assigned_by: normalizeOptionalText(d.assigned_by),
+          claimed_at: d.claimed_at ? parseDate(d.claimed_at) : undefined,
+          first_contacted_at: d.first_contacted_at ? parseDate(d.first_contacted_at) : undefined,
+          contact_attempts: typeof d.contact_attempts === "number" ? d.contact_attempts : 0,
+          last_contact_at: d.last_contact_at ? parseDate(d.last_contact_at) : undefined,
+          pending_result: d.pending_result === true,
+          last_action_at: d.last_action_at ? parseDate(d.last_action_at) : undefined,
+          last_action_type: normalizeOptionalText(d.last_action_type) as Lead["last_action_type"],
+          last_contact_channel: normalizeOptionalText(d.last_contact_channel),
+          result_type: normalizeOptionalText(d.result_type) as Lead["result_type"],
+          result_recorded_at: d.result_recorded_at ? parseDate(d.result_recorded_at) : undefined,
+          follow_up_at: d.follow_up_at ? parseDate(d.follow_up_at) : undefined,
+          closed_at: d.closed_at ? parseDate(d.closed_at) : undefined,
+          sales_status: normalizeOptionalText(d.sales_status) as Lead["sales_status"],
+          sales_owner_id: normalizeOptionalText(d.sales_owner_id),
+          sales_owner_name: normalizeOptionalText(d.sales_owner_name),
+          sales_transferred_at: d.sales_transferred_at ? parseDate(d.sales_transferred_at) : undefined,
+          crm_deal_id: normalizeOptionalText(d.crm_deal_id),
+          notes: d.notes ? String(d.notes) : undefined,
+          posted_at: d.posted_at ? parseDate(d.posted_at) : undefined,
+        };
+      });
+      leads.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-      if (leads.length === 0) {
-        const derivedLeads: Lead[] = [];
-        mentionsSnap.docs.forEach((doc) => {
-          const d = doc.data();
-          const labels = d.labels || {};
-          const intent = mapIntent(labels.intent);
-          if (intent === "none") return;
-
-          derivedLeads.push({
-            id: String(d.id || doc.id),
-            mention_id: String(d.id || doc.id),
-            source_mention_id: String(d.id || doc.id),
-            parent_id: d.parent_id ? String(d.parent_id) : null,
-            content_type: ["post", "comment", "reply"].includes(
-              String(d.content_type || "").toLowerCase(),
-            )
-              ? (String(d.content_type).toLowerCase() as Lead["content_type"])
-              : undefined,
-            post_id: normalizeOptionalText(d.post_id || d.postId),
-            workspace_id: String(d.brand || d.workspace_id || ""),
-            platform: mapSourceToPlatform(d.source || d.platform || ""),
-            author: normalizeText(d.author || "Khách hàng").trim(),
-            content: String(d.clean_text || d.content || d.original_text || ""),
-            intent,
-            current_label: d.current_label
-              ? mapLabelValue(d.current_label)
-              : undefined,
-            labels: normalizeClassificationLabel(labels, {
-              sentiment: labels.sentiment ?? d.baseline_sentiment ?? d.sentiment,
-              topic: [],
-              relevance:
-                typeof labels.relevance === "boolean"
-                  ? labels.relevance
-                  : true,
-              urgency: labels.urgency,
-              intent,
-            }),
-            intent_signals: Array.isArray(labels.topic) ? labels.topic : [],
-            status: mapLeadStatus(d.status),
-            created_at: parseDate(
-              d.labeled_at || d.uploaded_at || d.created_at || d.posted_at,
-            ),
-            url: normalizeOptionalUrl(d.url, d.post_url, d.source_url),
-            source_url: normalizeOptionalUrl(d.source_url, d.post_url, d.url),
-            label_correction_status: mapLabelCorrectionStatus(
-              d.label_correction_status,
-            ),
-            pending_label_request_id: normalizeOptionalText(
-              d.pending_label_request_id,
-            ),
-            last_label_corrected_at: d.last_label_corrected_at
-              ? parseDate(d.last_label_corrected_at)
-              : undefined,
-            phone: normalizeOptionalText(d.phone),
-            email: normalizeOptionalText(d.email),
-            zalo_id: normalizeOptionalText(d.zalo_id),
-            messenger_id: normalizeOptionalText(d.messenger_id),
-            social_profile_url: normalizeOptionalUrl(
-              d.social_profile_url,
-              d.contact,
-              d.profile_url,
-            ),
-            owner_id: normalizeOptionalText(d.owner_id),
-            owner_name: normalizeOptionalText(d.owner_name),
-            owner_email: normalizeOptionalText(d.owner_email),
-            assigned_at: d.assigned_at ? parseDate(d.assigned_at) : undefined,
-            assigned_by: normalizeOptionalText(d.assigned_by),
-            claimed_at: d.claimed_at ? parseDate(d.claimed_at) : undefined,
-            first_contacted_at: d.first_contacted_at
-              ? parseDate(d.first_contacted_at)
-              : undefined,
-            contact_attempts:
-              typeof d.contact_attempts === "number" ? d.contact_attempts : 0,
-            last_contact_at: d.last_contact_at
-              ? parseDate(d.last_contact_at)
-              : undefined,
-            pending_result: d.pending_result === true,
-            last_action_at: d.last_action_at
-              ? parseDate(d.last_action_at)
-              : undefined,
-            last_action_type: normalizeOptionalText(d.last_action_type) as Lead["last_action_type"],
-            last_contact_channel: normalizeOptionalText(d.last_contact_channel),
-            result_type: normalizeOptionalText(d.result_type) as Lead["result_type"],
-            result_recorded_at: d.result_recorded_at
-              ? parseDate(d.result_recorded_at)
-              : undefined,
-            follow_up_at: d.follow_up_at ? parseDate(d.follow_up_at) : undefined,
-            closed_at: d.closed_at ? parseDate(d.closed_at) : undefined,
-            sales_status: normalizeOptionalText(d.sales_status) as Lead["sales_status"],
-            sales_owner_id: normalizeOptionalText(d.sales_owner_id),
-            sales_owner_name: normalizeOptionalText(d.sales_owner_name),
-            sales_transferred_at: d.sales_transferred_at
-              ? parseDate(d.sales_transferred_at)
-              : undefined,
-            crm_deal_id: normalizeOptionalText(d.crm_deal_id),
-            notes: d.notes ? String(d.notes) : undefined,
-            posted_at: d.posted_at ? parseDate(d.posted_at) : undefined,
-          });
-        });
-        leads = derivedLeads;
-        leads.sort(
-          (a, b) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-        );
-      }
-
-      let labelChangeRequests: LabelChangeRequest[] = [];
-      try {
-        const requestsSnap = await getDocs(
-          query(collection(dbData, COLLECTION_NAMES.labelChangeRequests), limit(500)),
-        );
-        labelChangeRequests = requestsSnap.docs.map((doc) => {
-          const d = doc.data();
-          const legacyCurrentLabel = mapLabelValue(d.current_label);
-          const legacyRequestedLabel = mapLabelValue(d.requested_label);
-          const currentLabels = normalizeClassificationLabel(
-            d.current_labels,
-            legacyLabelToClassificationLabel(legacyCurrentLabel),
-          );
-          const requestedLabels = normalizeClassificationLabel(
-            d.requested_labels,
-            legacyLabelToClassificationLabel(legacyRequestedLabel),
-          );
-          return {
-            id: doc.id,
-            source_type: ["lead", "mention", "comment", "post"].includes(
-              String(d.source_type || "").toLowerCase(),
-            )
-              ? (String(d.source_type).toLowerCase() as LabelChangeRequest["source_type"])
-              : "lead",
-            source_id: String(d.source_id || ""),
-            lead_id: normalizeOptionalText(d.lead_id),
-            mention_id: normalizeOptionalText(d.mention_id),
-            workspace_id: String(d.workspace_id || d.brand || ""),
-            platform: mapSourceToPlatform(d.source || d.platform || ""),
-            author: normalizeOptionalText(d.author),
-            content_preview: normalizeText(d.content_preview || ""),
-            source_url: normalizeOptionalUrl(d.source_url, d.url),
-            current_labels: currentLabels,
-            requested_labels: requestedLabels,
-            changed_fields: mapChangedLabelFields(
-              d.changed_fields,
-              currentLabels,
-              requestedLabels,
-            ),
-            current_queue:
-              d.current_queue !== undefined
-                ? mapLabelQueue(d.current_queue)
-                : inferQueueFromLabels(currentLabels),
-            requested_queue:
-              d.requested_queue !== undefined
-                ? mapLabelQueue(d.requested_queue)
-                : inferQueueFromLabels(requestedLabels),
-            current_label: d.current_label ? legacyCurrentLabel : undefined,
-            requested_label: d.requested_label ? legacyRequestedLabel : undefined,
-            reason_code: String(d.reason_code || "other"),
-            reason_note: String(d.reason_note || ""),
-            evidence_checked: d.evidence_checked === true,
-            status: ["pending", "approved", "rejected", "cancelled"].includes(
-              String(d.status || "").toLowerCase(),
-            )
-              ? (String(d.status).toLowerCase() as LabelChangeRequest["status"])
-              : "pending",
-            requested_by: String(d.requested_by || ""),
-            requested_by_name: String(d.requested_by_name || ""),
-            requested_by_role: String(d.requested_by_role || ""),
-            requested_at: parseDate(d.requested_at || d.created_at),
-            reviewed_by: normalizeOptionalText(d.reviewed_by),
-            reviewed_by_name: normalizeOptionalText(d.reviewed_by_name),
-            reviewed_at: d.reviewed_at ? parseDate(d.reviewed_at) : undefined,
-            review_note: normalizeOptionalText(d.review_note),
-            applied_at: d.applied_at ? parseDate(d.applied_at) : undefined,
-            audit_log_id: normalizeOptionalText(d.audit_log_id),
-          };
-        });
-        labelChangeRequests.sort(
-          (a, b) =>
-            new Date(b.requested_at).getTime() -
-            new Date(a.requested_at).getTime(),
-        );
-      } catch {
-        // Collection chua ton tai - bo qua
-      }
+      // ── Label Change Requests ─────────────────────────────────────────────
+      const labelChangeRequests: LabelChangeRequest[] = rawRequests.map((d: any) => {
+        const legacyCurrentLabel = mapLabelValue(d.current_label);
+        const legacyRequestedLabel = mapLabelValue(d.requested_label);
+        const currentLabels = normalizeClassificationLabel(d.current_labels, legacyLabelToClassificationLabel(legacyCurrentLabel));
+        const requestedLabels = normalizeClassificationLabel(d.requested_labels, legacyLabelToClassificationLabel(legacyRequestedLabel));
+        return {
+          id: d.id || d.request_id,
+          source_type: ["lead", "mention", "comment", "post"].includes(String(d.source_type || "").toLowerCase())
+            ? (String(d.source_type).toLowerCase() as LabelChangeRequest["source_type"])
+            : "lead",
+          source_id: String(d.source_id || ""),
+          lead_id: normalizeOptionalText(d.lead_id),
+          mention_id: normalizeOptionalText(d.mention_id),
+          workspace_id: String(d.workspace_id || d.brand || ""),
+          platform: mapSourceToPlatform(d.source || d.platform || ""),
+          author: normalizeOptionalText(d.author),
+          content_preview: normalizeText(d.content_preview || ""),
+          source_url: normalizeOptionalUrl(d.source_url, d.url),
+          current_labels: currentLabels,
+          requested_labels: requestedLabels,
+          changed_fields: mapChangedLabelFields(d.changed_fields, currentLabels, requestedLabels),
+          current_queue: d.current_queue !== undefined ? mapLabelQueue(d.current_queue) : inferQueueFromLabels(currentLabels),
+          requested_queue: d.requested_queue !== undefined ? mapLabelQueue(d.requested_queue) : inferQueueFromLabels(requestedLabels),
+          current_label: d.current_label ? legacyCurrentLabel : undefined,
+          requested_label: d.requested_label ? legacyRequestedLabel : undefined,
+          reason_code: String(d.reason_code || "other"),
+          reason_note: String(d.reason_note || ""),
+          evidence_checked: d.evidence_checked === true,
+          status: ["pending", "approved", "rejected", "cancelled"].includes(String(d.status || "").toLowerCase())
+            ? (String(d.status).toLowerCase() as LabelChangeRequest["status"])
+            : "pending",
+          requested_by: String(d.requested_by || ""),
+          requested_by_name: String(d.requested_by_name || ""),
+          requested_by_role: String(d.requested_by_role || ""),
+          requested_at: parseDate(d.requested_at || d.created_at),
+          reviewed_by: normalizeOptionalText(d.reviewed_by),
+          reviewed_by_name: normalizeOptionalText(d.reviewed_by_name),
+          reviewed_at: d.reviewed_at ? parseDate(d.reviewed_at) : undefined,
+          review_note: normalizeOptionalText(d.review_note),
+          applied_at: d.applied_at ? parseDate(d.applied_at) : undefined,
+          audit_log_id: normalizeOptionalText(d.audit_log_id),
+        };
+      });
+      labelChangeRequests.sort((a, b) => new Date(b.requested_at).getTime() - new Date(a.requested_at).getTime());
 
       return {
         workspaces,
@@ -887,7 +744,6 @@ export class DashboardService {
         alerts,
         leads,
         labelChangeRequests,
-        lastMentionDoc,
       };
     } catch (error) {
       console.error("[DashboardService] fetchRawData error:", error);
@@ -895,9 +751,6 @@ export class DashboardService {
     }
   }
 
-  /**
-   * Cập nhật trạng thái của lead trên Firestore
-   */
   static async updateLeadStatus(
     id: string,
     status: Lead["status"],
@@ -906,30 +759,14 @@ export class DashboardService {
     if (!profile || !canPerformAction(profile, "update_lead_status")) {
       throw new Error("User is not allowed to update lead status.");
     }
-
     const auditFields = {
       updated_by: profile.uid,
       updated_by_role: profile.role,
       updated_at: new Date().toISOString(),
     };
-
-    try {
-      const leadRef = doc(dbData, COLLECTION_NAMES.leads, id);
-      await updateDoc(leadRef, { status, ...auditFields });
-    } catch (error) {
-      try {
-        const labelRef = doc(dbData, COLLECTION_NAMES.mentions, id);
-        await updateDoc(labelRef, { status, ...auditFields });
-      } catch (fallbackError) {
-        console.error("[DashboardService] updateLeadStatus error:", error);
-        throw fallbackError;
-      }
-    }
+    await supabaseFetch("leads", `id=eq.${id}`, "PATCH", { status, ...auditFields });
   }
 
-  /**
-   * Cập nhật các thông tin chi tiết nhật ký chăm sóc của lead trên Firestore
-   */
   static async updateLeadDetails(
     id: string,
     data: Partial<Lead>,
@@ -938,53 +775,23 @@ export class DashboardService {
     if (!profile || !canPerformAction(profile, "update_lead_details")) {
       throw new Error("User is not allowed to update lead details.");
     }
-
-    if (data.status && !canPerformAction(profile, "update_lead_status")) {
-      throw new Error("User is not allowed to update lead status.");
-    }
-
     const auditFields = {
       updated_by: profile.uid,
       updated_by_role: profile.role,
       updated_at: new Date().toISOString(),
     };
-
-    try {
-      const leadRef = doc(dbData, COLLECTION_NAMES.leads, id);
-      const cleanData = { ...data };
-      delete cleanData.id;
-      await updateDoc(leadRef, { ...cleanData, ...auditFields });
-    } catch (error) {
-      try {
-        const labelRef = doc(dbData, COLLECTION_NAMES.mentions, id);
-        const cleanData = { ...data };
-        delete cleanData.id;
-        await updateDoc(labelRef, { ...cleanData, ...auditFields });
-      } catch (fallbackError) {
-        console.error("[DashboardService] updateLeadDetails error:", error);
-        throw fallbackError;
-      }
-    }
+    const cleanData = { ...data };
+    delete cleanData.id;
+    await supabaseFetch("leads", `id=eq.${id}`, "PATCH", { ...cleanData, ...auditFields });
   }
 
-  // ── Stats aggregation ─────────────────────────────────────────────────────
-
   static async createLabelChangeRequest(
-    data: Omit<
-      LabelChangeRequest,
-      | "id"
-      | "status"
-      | "requested_by"
-      | "requested_by_name"
-      | "requested_by_role"
-      | "requested_at"
-    >,
+    data: Omit<LabelChangeRequest, "id" | "status" | "requested_by" | "requested_by_name" | "requested_by_role" | "requested_at">,
     profile: UserRoleProfile | null | undefined,
   ): Promise<LabelChangeRequest> {
     if (!profile || !canPerformAction(profile, "create_label_request")) {
       throw new Error("User is not allowed to create label change requests.");
     }
-
     const nowIso = new Date().toISOString();
     const requestData = stripUndefinedFields({
       ...data,
@@ -998,42 +805,33 @@ export class DashboardService {
       updated_by: profile.uid,
       updated_by_role: profile.role,
     });
+    const res = await supabaseFetch("label_change_requests", "", "POST", [requestData]);
+    return { ...requestData, id: (res && res[0]?.id) || String(Date.now()) } as LabelChangeRequest;
+  }
 
-    const requestRef = await addDoc(
-      collection(dbData, COLLECTION_NAMES.labelChangeRequests),
-      requestData,
-    );
+  static async fetchLabelChangeRequests(opts: { limit?: number; status?: LabelChangeRequest["status"] } = {}): Promise<LabelChangeRequest[]> {
+    const rawRequests = await supabaseFetch<any[]>("label_change_requests", `limit=${opts.limit || 50}${opts.status ? `&status=eq.${opts.status}` : ""}&order=requested_at.desc`);
+    return (rawRequests || []).map((d: any) => d as any);
+  }
 
-    const request: LabelChangeRequest = {
-      id: requestRef.id,
-      ...requestData,
-    };
-
-    const correctionData = stripUndefinedFields({
-      label_correction_status: "pending",
-      pending_label_request_id: requestRef.id,
-      label_correction_requested_at: nowIso,
-      label_correction_requested_by: profile.uid,
-      updated_by: profile.uid,
-      updated_by_role: profile.role,
-      updated_at: nowIso,
-    });
-
-    try {
-      await updateDoc(
-        doc(dbData, COLLECTION_NAMES.leads, data.lead_id || data.source_id),
-        correctionData,
-      );
-    } catch {
-      if (data.mention_id || data.source_id) {
-        await updateDoc(
-          doc(dbData, COLLECTION_NAMES.mentions, data.mention_id || data.source_id),
-          correctionData,
-        );
-      }
+  static async updateLabelChangeRequestStatus(id: string, status: "approved" | "rejected", profile: UserRoleProfile | null | undefined, reviewNote?: string): Promise<void> {
+    if (!profile || !canPerformAction(profile, "label_request_review")) {
+      throw new Error("User is not allowed to review label change requests.");
     }
+    await supabaseFetch("label_change_requests", `id=eq.${id}`, "PATCH", {
+      status,
+      reviewed_by: profile.uid,
+      reviewed_by_name: profile.displayName || profile.email,
+      reviewed_at: new Date().toISOString(),
+      review_note: reviewNote,
+    });
+  }
 
-    return request;
+  static async deleteLead(id: string, profile: UserRoleProfile | null | undefined): Promise<void> {
+    if (!profile || !canPerformAction(profile, "update_lead_details")) {
+      throw new Error("User is not allowed to delete lead.");
+    }
+    await supabaseFetch("leads", `id=eq.${id}`, "DELETE");
   }
 
   static calculateStats(

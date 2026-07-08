@@ -204,58 +204,115 @@ export const useAlertStore = create<AlertState>()(
       set({ isLoading: true, error: null });
 
       try {
-        if (!dbSecond) {
-          throw new Error("Firebase data project is not configured.");
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://sftfkwswszkugnjqfafm.supabase.co";
+        const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "sb_publishable_YvABq5BgqJmfJXcf-SvYjA_B-UbiTV_";
+
+        if (!supabaseUrl || !supabaseKey) {
+          throw new Error("Missing Supabase configuration");
         }
 
-        const snapshot = await getDocs(
-          query(collection(dbSecond, "insightflow_labels"), limit(500)),
-        );
+        const fetchSupa = async (endpoint: string) => {
+          const res = await fetch(`${supabaseUrl}/rest/v1/${endpoint}`, {
+            headers: {
+              apikey: supabaseKey,
+              Authorization: `Bearer ${supabaseKey}`,
+              "Content-Profile": "public",
+            },
+          });
+          if (!res.ok) throw new Error(`Supabase fetch error: ${res.statusText}`);
+          return res.json();
+        };
+
+        // Fetch annotations
+        const annotations = await fetchSupa("annotations?select=*&limit=1000");
+        
+        // Extract IDs
+        const postIds = new Set<string>();
+        const commentIds = new Set<string>();
+        annotations.forEach((a: any) => {
+          if (a.entity_type === "post") postIds.add(a.post_id);
+          else if (a.entity_type === "comment") commentIds.add(a.comment_id);
+        });
+
+        // Fetch posts & comments in chunks to avoid URL too long
+        const fetchInChunks = async (ids: string[], table: string, idField: string) => {
+          const results: any[] = [];
+          const chunkSize = 50;
+          for (let i = 0; i < ids.length; i += chunkSize) {
+            const chunk = ids.slice(i, i + chunkSize);
+            const inQuery = `in.(${chunk.join(",")})`;
+            const data = await fetchSupa(`${table}?select=*&${idField}=${inQuery}`);
+            results.push(...data);
+          }
+          return results;
+        };
+
+        const [posts, comments] = await Promise.all([
+          fetchInChunks(Array.from(postIds), "posts", "post_id"),
+          fetchInChunks(Array.from(commentIds), "comments", "comment_id"),
+        ]);
+
+        const postsMap = new Map(posts.map((p: any) => [p.post_id, p]));
+        const commentsMap = new Map(comments.map((c: any) => [c.comment_id, c]));
 
         const fetchedAlerts: AlertData[] = [];
-        snapshot.docs.forEach((document) => {
-          const data = document.data();
-          const labels = data.labels || {};
-          const sentiment = String(
-            labels.sentiment || data.baseline_sentiment || data.sentiment || "neutral",
-          ).toLowerCase();
 
-          if (sentiment !== "negative") return;
+        annotations.forEach((a: any) => {
+          const isPost = a.entity_type === "post";
+          const row = isPost ? postsMap.get(a.post_id) : commentsMap.get(a.comment_id);
+          if (!row) return;
+
+          let labelObj: any = {};
+          if (a.label) {
+            try {
+              labelObj = typeof a.label === "string" ? JSON.parse(a.label) : a.label;
+            } catch (e) {}
+          }
+
+          const sentiment = String(labelObj.sentiment || "neutral").toLowerCase();
+          if (sentiment !== "negative") return; // Only negative mentions become alerts
+
+          const payload = row.payload_json || {};
+          let rawBrand = row.brand || row.brand_slug || payload.brand || "";
+          
+          let brandId = normalizeBrandKey(String(rawBrand));
 
           const text = String(
-            data.clean_text ||
-              data.original_text ||
-              data.text ||
-              data.content ||
-              "",
+            payload.text || row.text || row.content || ""
           );
 
-          const alert = {
-            id: String(data.id || document.id),
-            brand: formatBrandName(String(data.brand || "")),
-            source: normalizeSource(String(data.source || "")),
+          const alertData = {
+            brand: formatBrandName(String(rawBrand)),
+            source: normalizeSource(String(row.platform || payload.platform || "")),
             text,
             sentiment,
-            topic: normalizeTopic(labels.topic || data.topic),
-            severity: calculateSeverity(data),
-            created_at: parseDate(
-              data.labeled_at ||
-                data.uploaded_at ||
-                data.posted_at ||
-                data.created_at,
-            ),
-            status: String(data.status || "new"),
-            resolved_at: data.resolved_at ? parseDate(data.resolved_at) : undefined,
-            collectionName: "insightflow_labels",
-            url: String(data.url || ""),
-            reach: Number(data.reach || data.views || 0),
-            likes: Number(data.likes || data.like_count || 0),
-            comments: Number(data.comments || data.comment_count || 0),
-            shares: Number(data.shares || data.share_count || 0),
-            author: String(data.author || data.author_name || "Ẩn danh"),
+            topic: normalizeTopic(labelObj.topic),
+            // Map labels and content to calculate severity
+            labels: labelObj,
+            clean_text: text,
+            urgency: labelObj.urgency
+          };
+
+          const alert = {
+            id: String(isPost ? row.post_id : row.comment_id),
+            brand: formatBrandName(brandId),
+            source: alertData.source,
+            text,
+            sentiment,
+            topic: alertData.topic,
+            severity: calculateSeverity(alertData),
+            created_at: parseDate(row.posted_at || payload.posted_at || row.created_at),
+            status: String(a.status || "new"),
+            resolved_at: a.resolved_at ? parseDate(a.resolved_at) : undefined,
+            url: String(row.url || payload.url || ""),
+            reach: Number(row.view_count || payload.view_count || 0),
+            likes: Number(row.like_count || payload.like_count || 0),
+            comments: Number(row.reply_count || payload.reply_count || row.comment_count || 0),
+            shares: Number(row.share_count || payload.share_count || 0),
+            author: String(row.author || payload.author || row.username || payload.username || "Ẩn danh"),
             title: text.slice(0, 120),
-            social_profile_url: String(data.social_profile_url || data.contact || data.profile_url || ""),
-            resolution_history: Array.isArray(data.resolution_history) ? data.resolution_history : [],
+            social_profile_url: String(row.contact || payload.contact || ""),
+            resolution_history: [],
           };
 
           if (!isRecordInBrandScope({ brand: alert.brand }, scopedBrandKey)) return;
@@ -264,7 +321,7 @@ export const useAlertStore = create<AlertState>()(
 
         const scopedBrands = Array.from(new Set(fetchedAlerts.map((alert) => alert.brand))).sort();
         const fallbackBrands = ["Highland Coffee", "Starbucks", "Mixue"].filter((brand) => {
-          return !scopedBrandKey || normalizeBrandName(brand) === scopedBrandKey;
+          return !scopedBrandKey || normalizeBrandKey(brand) === scopedBrandKey;
         });
 
         set({

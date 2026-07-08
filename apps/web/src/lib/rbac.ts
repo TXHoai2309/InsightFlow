@@ -177,7 +177,17 @@ const ROUTE_POLICIES: RoutePolicy[] = [
     permission: "alerts",
   },
   {
+    route: "/crisis-monitoring",
+    roles: ["brand_manager", "crisis_employee"],
+    permission: "alerts",
+  },
+  {
     route: "/leads",
+    roles: ["brand_manager", "lead_employee"],
+    permission: "leads",
+  },
+  {
+    route: "/lead-monitoring",
     roles: ["brand_manager", "lead_employee"],
     permission: "leads",
   },

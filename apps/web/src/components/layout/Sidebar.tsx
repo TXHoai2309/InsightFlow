@@ -30,8 +30,8 @@ const navItems: NavItem[] = [
   { href: "/team", label: "Quản lý đội ngũ", icon: "ti-users" },
   { href: "/mentions", label: "nav.mentions", icon: "ti-message-circle" },
   { href: "/label-requests", label: "Duyet yeu cau", icon: "ti-clipboard-check" },
-  { href: "/alerts", label: "nav.alerts", icon: "ti-bell" },
-  { href: "/leads", label: "nav.leads", icon: "ti-chart-bar" },
+  { href: "/alerts", label: "Cảnh báo", icon: "ti-bell" },
+  { href: "/leads", label: "Khách hàng", icon: "ti-chart-bar" },
   { href: "/reports", label: "nav.reports", icon: "ti-file-analytics" },
   { href: "/settings/brand", label: "nav.brands", icon: "ti-settings" },
 ];
