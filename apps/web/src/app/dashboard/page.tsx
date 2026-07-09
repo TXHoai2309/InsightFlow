@@ -18,8 +18,6 @@ export default function BrandManagerPage() {
   useDashboard({
     autoFetch: true,
     refetchInterval: 1800000, // Làm mới mỗi 30 phút
-    dataWindowDays: 30,
-    maxMentions: 400,
     maxLeads: 200,
     initialFetchDelayMs: 500,
   });

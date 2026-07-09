@@ -31,9 +31,9 @@ export function useDashboard(options: UseDashboardOptions = {}) {
   const {
     autoFetch = true,
     refetchInterval = 1800000, // 30 minutes default
-    dataWindowDays = 30,
+    dataWindowDays,
     maxLeads,
-    maxMentions = 700,
+    maxMentions,
     includeMentions,
     excludePlatforms = DEFAULT_EXCLUDED_PLATFORMS,
     initialFetchDelayMs = 0,
