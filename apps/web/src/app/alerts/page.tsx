@@ -145,6 +145,55 @@ function getFormattedSourceUrl(url: string, text: string): string {
   return getUrlWithTextFragment(url, text);
 }
 
+interface MonitoringCountdownProps {
+  alert: any;
+}
+function MonitoringCountdown({ alert }: MonitoringCountdownProps) {
+  const [text, setText] = useState("");
+  const [hasActivity, setHasActivity] = useState(false);
+
+  useEffect(() => {
+    const update = () => {
+      const startedAt = alert.monitoring_started_at ? new Date(alert.monitoring_started_at).getTime() : new Date(alert.created_at).getTime();
+      const durationMs = (alert.monitoring_duration_hours ?? 72) * 60 * 60 * 1000;
+      const now = Date.now();
+      const diff = startedAt + durationMs - now;
+
+      const initialComments = alert.monitoring_initial_comments ?? 0;
+      const initialLikes = alert.monitoring_initial_likes ?? 0;
+      const currentComments = alert.comments ?? 0;
+      const currentLikes = alert.likes ?? 0;
+
+      const act = currentComments > initialComments || currentLikes > (initialLikes + 5);
+      setHasActivity(act);
+
+      if (act) {
+        setText("⚠️ Có tương tác mới");
+      } else if (diff <= 0) {
+        setText("Hết giờ theo dõi");
+      } else {
+        const hours = Math.floor(diff / (3600 * 1000));
+        const mins = Math.floor((diff % (3600 * 1000)) / (60 * 1000));
+        setText(`Theo dõi: ${hours}h ${mins}m còn lại`);
+      }
+    };
+    update();
+    const interval = setInterval(update, 30000);
+    return () => clearInterval(interval);
+  }, [alert]);
+
+  return (
+    <span className={`text-[10px] font-bold px-2 py-0.5 rounded border flex items-center gap-1 ${
+      hasActivity
+        ? "bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900/30 animate-pulse font-black"
+        : "bg-cyan-50 dark:bg-cyan-950/20 text-cyan-600 dark:text-cyan-400 border-cyan-200 dark:border-cyan-900/30"
+    }`}>
+      <span className="material-symbols-outlined text-[12px]">{hasActivity ? "warning" : "visibility"}</span>
+      {text}
+    </span>
+  );
+}
+
 /**
  * Alerts Page — Fully Mobile Responsive
 
@@ -352,7 +401,7 @@ export default function AlertsPage() {
       if (
         a.being_resolved_by &&
         a.being_resolved_by !== profile?.email &&
-        (a.status.toLowerCase() === "resolving" || a.status.toLowerCase() === "pending_approval")
+        (a.status.toLowerCase() === "resolving" || a.status.toLowerCase() === "pending_approval" || a.status.toLowerCase() === "monitoring")
       ) {
         return false;
       }
@@ -1320,10 +1369,13 @@ export default function AlertsPage() {
                             Cho duyet phuong an
                           </span>
                         )}
-                        {!isResolving && !isPendingApproval && alert.status !== "resolved" && (
+                        {!isResolving && !isPendingApproval && alert.status !== "monitoring" && alert.status !== "resolved" && (
                           <span className="bg-red-50 dark:bg-red-950/20 text-red-600 text-[9px] font-bold px-1.5 py-0.5 rounded border border-red-100 dark:border-red-900/30">
                             {t("alerts.page.statusPending")}
                           </span>
+                        )}
+                        {alert.status === "monitoring" && (
+                          <MonitoringCountdown alert={alert} />
                         )}
                       </div>
 
@@ -1335,7 +1387,7 @@ export default function AlertsPage() {
 
                     {/* Right action controls */}
                     <div className="p-4 md:p-5 flex md:flex-col justify-center items-center gap-2 flex-shrink-0 md:w-40 border-t md:border-t-0 md:border-l border-[var(--color-border)]/50 bg-slate-50/20 dark:bg-slate-800/10">
-                      {isResolving || isPendingApproval ? (
+                      {isResolving || isPendingApproval || alert.status === "monitoring" ? (
                         <div className="w-full space-y-2 text-center">
                           <div className="flex items-center gap-1.5 justify-center">
                             <div className="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center overflow-hidden">
@@ -1641,8 +1693,8 @@ export default function AlertsPage() {
             // KHÔNG unlock khi đóng modal — task vẫn được gán cho người nhận
             setResolvingAlert(null);
           }}
-          onSave={async (id, note, imageUrl, targetStatus = "resolving") => {
-            await updateAlertStatus(id, targetStatus, profile, { note, image_url: imageUrl }, resolvingAlert.brand);
+          onSave={async (id, note, imageUrl, targetStatus = "resolving", monitoringDurationHours) => {
+            await updateAlertStatus(id, targetStatus, profile, { note, image_url: imageUrl, monitoring_duration_hours: monitoringDurationHours }, resolvingAlert.brand);
             // Chỉ unlock khi đã resolved hoàn toàn
             if (targetStatus === "resolved") {
               unlockAlertForResolution(id);
@@ -2049,12 +2101,13 @@ function TrendModal({ alert, onClose }: TrendModalProps) {
 interface ResolutionModalProps {
   alert: any;
   onClose: () => void;
-  onSave: (id: string, note: string, imageUrl?: string, targetStatus?: string) => Promise<void>;
+  onSave: (id: string, note: string, imageUrl?: string, targetStatus?: string, monitoringDurationHours?: number) => Promise<void>;
 }
 
 function ResolutionModal({ alert, onClose, onSave }: ResolutionModalProps) {
   const { t } = useTranslation();
   const [note, setNote] = useState("");
+  const [duration, setDuration] = useState("72");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -2138,7 +2191,18 @@ function ResolutionModal({ alert, onClose, onSave }: ResolutionModalProps) {
     setError(null);
 
     try {
-      await onSave(alert.id, note.trim(), imagePreview || undefined, targetStatus);
+      let finalStatus: string = targetStatus;
+      let finalDuration: number | undefined = undefined;
+
+      if (targetStatus === "resolved") {
+        const parsedDuration = parseFloat(duration);
+        if (parsedDuration > 0) {
+          finalStatus = "monitoring";
+          finalDuration = parsedDuration;
+        }
+      }
+
+      await onSave(alert.id, note.trim(), imagePreview || undefined, finalStatus, finalDuration);
       onClose();
     } catch (err: any) {
       setError(t("alerts.resolution.errorSaveFailed", { defaultValue: "Không thể lưu bằng chứng giải quyết. Vui lòng thử lại." }));
@@ -2299,6 +2363,25 @@ function ResolutionModal({ alert, onClose, onSave }: ResolutionModalProps) {
                 </button>
               </div>
             )}
+          </div>
+
+          {/* Monitoring Duration Select */}
+          <div className="space-y-1.5 mt-3">
+            <label className="text-xs font-bold text-[var(--color-text-primary)]">
+              Thời gian theo dõi thêm sau khi giải quyết
+            </label>
+            <select
+              value={duration}
+              onChange={(e) => setDuration(e.target.value)}
+              className="w-full bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] rounded-xl text-xs py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 text-[var(--color-text-primary)] font-medium select-app"
+            >
+              <option value="72">72 giờ (Khuyên dùng)</option>
+              <option value="24">24 giờ</option>
+              <option value="1">1 giờ</option>
+              <option value="0.166">10 phút</option>
+              <option value="0.033">2 phút (Để test nhanh)</option>
+              <option value="0">Đóng ngay (Không theo dõi)</option>
+            </select>
           </div>
 
           {error && (

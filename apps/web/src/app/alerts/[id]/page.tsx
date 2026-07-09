@@ -168,6 +168,101 @@ function IncidentReportModal({ item, onClose, triggerToast }: IncidentReportModa
   );
 }
 
+// ── Monitoring Transition Modal ──
+interface MonitoringTransitionModalProps {
+  onClose: () => void;
+  onConfirm: (note: string, durationHours: number) => Promise<void>;
+}
+
+function MonitoringTransitionModal({ onClose, onConfirm }: MonitoringTransitionModalProps) {
+  const [note, setNote] = useState("Đã hoàn tất các bước xử lý theo SOP. Chuyển sang trạng thái theo dõi thêm.");
+  const [duration, setDuration] = useState("72");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleConfirm = async () => {
+    if (!note.trim()) {
+      setError("Vui lòng nhập ghi chú hoàn tất.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await onConfirm(note.trim(), parseFloat(duration));
+      onClose();
+    } catch (e: any) {
+      setError("Lỗi: " + (e.message || "Không thể chuyển trạng thái."));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white dark:bg-slate-900 border border-[var(--color-border)] rounded-2xl shadow-xl max-w-md w-full p-6 z-10 space-y-4 text-xs">
+        <div className="flex justify-between items-center pb-2 border-b border-[var(--color-border)]">
+          <h3 className="text-sm font-bold text-[var(--color-text-primary)]">
+            Hoàn tất xử lý &amp; Bắt đầu theo dõi
+          </h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+            <span className="material-symbols-outlined text-sm">close</span>
+          </button>
+        </div>
+
+        <div className="space-y-2">
+          <label className="font-bold text-[var(--color-text-secondary)] uppercase text-[10px]">
+            Ghi chú xử lý / Bằng chứng
+          </label>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={3}
+            className="w-full p-2.5 border border-[var(--color-border)] rounded-xl bg-white dark:bg-slate-800 focus:ring-2 focus:ring-purple-500/20 text-[var(--color-text-primary)] focus:outline-none"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label className="font-bold text-[var(--color-text-secondary)] uppercase text-[10px]">
+            Thời gian theo dõi thêm
+          </label>
+          <select
+            value={duration}
+            onChange={(e) => setDuration(e.target.value)}
+            className="w-full p-2.5 border border-[var(--color-border)] rounded-xl bg-white dark:bg-slate-800 focus:ring-2 focus:ring-purple-500/20 text-[var(--color-text-primary)] focus:outline-none"
+          >
+            <option value="72">72 giờ (Khuyên dùng)</option>
+            <option value="24">24 giờ</option>
+            <option value="1">1 giờ</option>
+            <option value="0.166">10 phút</option>
+            <option value="0.033">2 phút (Để test nhanh)</option>
+            <option value="0">Đóng ngay (Không theo dõi)</option>
+          </select>
+        </div>
+
+        {error && <p className="text-red-500 font-bold">{error}</p>}
+
+        <div className="flex gap-3 pt-2">
+          <button
+            onClick={onClose}
+            disabled={busy}
+            className="flex-1 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-[var(--color-text-primary)] border border-[var(--color-border)] transition-all font-bold cursor-pointer"
+          >
+            Hủy
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={busy}
+            className="flex-1 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold transition-all shadow-sm cursor-pointer"
+          >
+            {busy ? "Đang xử lý..." : "Xác nhận"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Helper: map email/uid to display name for resolvers
 const getResolverName = (emailOrId: string | null | undefined): string => {
   if (!emailOrId) return "";
@@ -251,7 +346,10 @@ export default function AlertDetailPage() {
   // Note text input states
   const [timelineNote, setTimelineNote] = useState("");
   const [internalNoteInput, setInternalNoteInput] = useState("");
-
+  const [showMonitoringModal, setShowMonitoringModal] = useState(false);
+  const [timeLeftStr, setTimeLeftStr] = useState<string>("");
+  const [newActivityDetails, setNewActivityDetails] = useState<{ comments: number; likes: number; shares: number } | null>(null);
+ 
   // Edit severity mode states
   const [editSeverityMode, setEditSeverityMode] = useState(false);
   const [newSeverity, setNewSeverity] = useState("");
@@ -290,6 +388,56 @@ export default function AlertDetailPage() {
       setCorrectionRelevance(alert.relevance !== undefined ? alert.relevance : null);
       setCorrectionIntent(alert.intent || "none");
     }
+  }, [alert]);
+
+  useEffect(() => {
+    if (!alert || alert.status !== "monitoring") {
+      setTimeLeftStr("");
+      setNewActivityDetails(null);
+      return;
+    }
+
+    const timer = setInterval(() => {
+      const startedAt = alert.monitoring_started_at ? new Date(alert.monitoring_started_at).getTime() : new Date(alert.created_at).getTime();
+      const durationMs = (alert.monitoring_duration_hours ?? 72) * 60 * 60 * 1000;
+      const now = Date.now();
+      const diff = startedAt + durationMs - now;
+
+      // Check if new activity has occurred
+      const initialComments = alert.monitoring_initial_comments ?? 0;
+      const initialLikes = alert.monitoring_initial_likes ?? 0;
+      const initialShares = alert.monitoring_initial_shares ?? 0;
+      
+      const currentComments = alert.comments ?? 0;
+      const currentLikes = alert.likes ?? 0;
+      const currentShares = alert.shares ?? 0;
+
+      const deltaComments = currentComments - initialComments;
+      const deltaLikes = currentLikes - initialLikes;
+      const deltaShares = currentShares - initialShares;
+
+      if (deltaComments > 0 || deltaLikes > 5 || deltaShares > 0) {
+        setNewActivityDetails({
+          comments: Math.max(0, deltaComments),
+          likes: Math.max(0, deltaLikes),
+          shares: Math.max(0, deltaShares),
+        });
+      } else {
+        setNewActivityDetails(null);
+      }
+
+      if (diff <= 0) {
+        setTimeLeftStr("Hết thời gian theo dõi");
+        clearInterval(timer);
+      } else {
+        const hours = Math.floor(diff / (3600 * 1000));
+        const mins = Math.floor((diff % (3600 * 1000)) / (60 * 1000));
+        const secs = Math.floor((diff % (60 * 1000)) / 1000);
+        setTimeLeftStr(`${hours} giờ ${mins} phút ${secs} giây`);
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
   }, [alert]);
 
   useEffect(() => {
@@ -721,14 +869,16 @@ export default function AlertDetailPage() {
                   alert.status === "resolving" ? "bg-amber-100 text-amber-600 dark:bg-amber-950/20" :
                     alert.status === "pending_approval" ? "bg-orange-100 text-orange-700 dark:bg-orange-950/20 animate-pulse" :
                       alert.status === "responded" ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/20" :
-                        alert.status === "resolved" ? "bg-green-100 text-green-600 dark:bg-green-950/20" : "bg-slate-100 text-slate-600"
+                        alert.status === "monitoring" ? "bg-cyan-100 text-cyan-700 dark:bg-cyan-950/20 border border-cyan-200 dark:border-cyan-800" :
+                          alert.status === "resolved" ? "bg-green-100 text-green-600 dark:bg-green-950/20" : "bg-slate-100 text-slate-600"
                 }`}>
                 {
                   alert.status === "new" ? "Mới phát hiện" :
                     alert.status === "resolving" ? "Đang xử lý" :
                       alert.status === "pending_approval" ? "Chờ duyệt phương án" :
                         alert.status === "responded" ? "Đã phản hồi" :
-                          alert.status === "resolved" ? "Đã đóng" : "Đã đóng"
+                          alert.status === "monitoring" ? "Theo dõi thêm" :
+                            alert.status === "resolved" ? "Đã đóng" : "Đã đóng"
                 }
               </span>
               <span className="flex items-center gap-1">
@@ -779,21 +929,31 @@ export default function AlertDetailPage() {
             </button>
           )}
 
-          {isMine && alert.status !== "resolved" && (
+          {isMine && alert.status !== "resolved" && alert.status !== "monitoring" && (
+            <button
+              onClick={() => setShowMonitoringModal(true)}
+              className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all cursor-pointer"
+            >
+              Hoàn tất xử lý
+            </button>
+          )}
+
+          {isMine && alert.status === "monitoring" && (
             <button
               onClick={async () => {
                 try {
                   await updateAlertStatus(alert.id, "resolved", profile, {
-                    note: "Đã xác nhận xử lý thành công và đóng vụ việc."
-                  });
-                  triggerToast("Vụ việc đã được xử lý xong!");
+                    note: "Đã xác nhận đóng hẳn vụ việc sau thời gian theo dõi."
+                  }, alert.brand);
+                  setAlert({ ...alert, status: "resolved" });
+                  triggerToast("Vụ việc đã được đóng hẳn!");
                 } catch (e) {
-                  triggerToast("Lỗi xử lý. Vui lòng thử lại!");
+                  triggerToast("Lỗi đóng vụ việc. Vui lòng thử lại!");
                 }
               }}
-              className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all cursor-pointer"
+              className="px-5 py-2 bg-green-700 hover:bg-green-800 text-white font-bold text-xs rounded-xl shadow-sm transition-all cursor-pointer"
             >
-              Hoàn tất xử lý
+              Đóng hẳn vụ việc
             </button>
           )}
         </div>
@@ -803,6 +963,61 @@ export default function AlertDetailPage() {
 
         {/* LEFT COLUMN: 60% Width */}
         <div className="lg:col-span-7 space-y-6">
+
+          {/* Widget: Real-time Monitoring Countdown & Activity Alert */}
+          {alert.status === "monitoring" && (
+            <div className="bg-gradient-to-br from-cyan-50 to-indigo-50 dark:from-slate-900 dark:to-slate-800 border border-cyan-200 dark:border-cyan-800 rounded-2xl p-5 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-cyan-600 dark:text-cyan-400 animate-pulse text-lg">visibility</span>
+                  <span className="font-bold text-xs text-[var(--color-text-primary)] uppercase tracking-wider">
+                    Giai đoạn theo dõi khủng hoảng
+                  </span>
+                </div>
+                <span className="bg-cyan-100 text-cyan-700 dark:bg-cyan-950 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                  Real-time Countdown
+                </span>
+              </div>
+
+              <div className="bg-white dark:bg-slate-900 border border-[var(--color-border)] rounded-xl p-4 text-center space-y-1">
+                <p className="text-[10px] text-[var(--color-text-muted)] font-semibold uppercase">Thời gian theo dõi còn lại</p>
+                <p className="text-lg md:text-xl font-black text-cyan-600 dark:text-cyan-400 font-mono tracking-tight">
+                  {timeLeftStr || "Đang tính toán..."}
+                </p>
+              </div>
+
+              {/* Activity / Abnormality alert banner */}
+              {newActivityDetails ? (
+                <div className="p-4 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 rounded-xl space-y-2 animate-pulse">
+                  <div className="flex items-center gap-2 text-red-700 dark:text-red-400 font-bold text-xs">
+                    <span className="material-symbols-outlined text-sm">warning</span>
+                    <span>CẢNH BÁO HOẠT ĐỘNG BẤT THƯỜNG</span>
+                  </div>
+                  <p className="text-[11px] text-[var(--color-text-secondary)] leading-relaxed">
+                    Hệ thống ghi nhận có tương tác mới phát sinh so với thời điểm bắt đầu theo dõi:
+                  </p>
+                  <div className="flex gap-4 text-[10px] font-bold text-red-600 dark:text-red-400 pt-1">
+                    {newActivityDetails.likes > 0 && (
+                      <span>+ {newActivityDetails.likes} Likes (Ngưỡng an toàn: &le; 5)</span>
+                    )}
+                    {newActivityDetails.comments > 0 && (
+                      <span>+ {newActivityDetails.comments} Comments</span>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900/30 rounded-xl flex items-start gap-2.5">
+                  <span className="material-symbols-outlined text-green-600 dark:text-green-400 text-sm mt-0.5">verified_user</span>
+                  <div className="space-y-0.5">
+                    <p className="text-green-700 dark:text-green-400 font-bold text-xs">Trạng thái an toàn</p>
+                    <p className="text-[11px] text-[var(--color-text-secondary)] leading-normal">
+                      Chưa phát hiện hành vi tương tác đột biến nào. Hệ thống sẽ tự động đóng vụ việc khi hết thời gian.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Original Post Card (shown when alert is a comment) */}
           {alert.content_type === "comment" && alert.post_content && alert.post_content !== alert.text && (
@@ -1323,23 +1538,10 @@ export default function AlertDetailPage() {
                   {!isManager && (
                     <button
                       disabled={escalationBusy}
-                      onClick={async () => {
-                        try {
-                          setEscalationBusy(true);
-                          await updateAlertStatus(alert.id, "resolved", profile, {
-                            note: "Da dang phan hoi da duoc duyet va hoan tat vu viec.",
-                          }, alert.brand);
-                          setAlert({ ...alert, status: "resolved" });
-                          triggerToast("Da hoan tat vu viec.");
-                        } catch (e) {
-                          triggerToast("Khong the hoan tat vu viec.");
-                        } finally {
-                          setEscalationBusy(false);
-                        }
-                      }}
+                      onClick={() => setShowMonitoringModal(true)}
                       className="w-full py-3 rounded-xl bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-xs font-bold cursor-pointer"
                     >
-                      Dang phan hoi & hoan tat
+                      Đăng phản hồi &amp; Hoàn tất
                     </button>
                   )}
                 </div>
@@ -1360,9 +1562,10 @@ export default function AlertDetailPage() {
                   style={{
                     width:
                       alert.status === "new" ? "0%" :
-                        alert.status === "resolving" ? "25%" :
-                          alert.status === "pending_approval" ? "50%" :
-                            alert.status === "responded" ? "75%" : "100%"
+                        alert.status === "resolving" ? "20%" :
+                          alert.status === "pending_approval" ? "40%" :
+                            alert.status === "responded" ? "60%" :
+                              alert.status === "monitoring" ? "80%" : "100%"
                   }}
                 ></div>
 
@@ -1370,11 +1573,12 @@ export default function AlertDetailPage() {
                 {[
                   { key: "new", label: "Mới" },
                   { key: "resolving", label: "Đang xử lý" },
-                  { key: "pending_approval", label: "Cho duyet" },
+                  { key: "pending_approval", label: "Chờ duyệt" },
                   { key: "responded", label: "Đã phản hồi" },
+                  { key: "monitoring", label: "Theo dõi" },
                   { key: "resolved", label: "Đã đóng" }
                 ].map((step, index) => {
-                  const statuses = ["new", "resolving", "pending_approval", "responded", "resolved"];
+                  const statuses = ["new", "resolving", "pending_approval", "responded", "monitoring", "resolved"];
                   const currentIdx = statuses.indexOf(alert.status);
                   const isCompleted = index <= currentIdx;
                   const isCurrent = alert.status === step.key;
@@ -1384,10 +1588,15 @@ export default function AlertDetailPage() {
                       key={step.key}
                       disabled={!isMine}
                       onClick={async () => {
+                        if (step.key === "monitoring" || step.key === "resolved") {
+                          setShowMonitoringModal(true);
+                          return;
+                        }
                         try {
                           await updateAlertStatus(alert.id, step.key, profile, {
                             note: `Thay đổi trạng thái xử lý thành: ${step.label}`
                           }, alert.brand);
+                          setAlert({ ...alert, status: step.key });
                           triggerToast(`Chuyển trạng thái thành ${step.label}!`);
                         } catch (e) {
                           triggerToast("Không thể thay đổi trạng thái.");
@@ -1844,6 +2053,34 @@ export default function AlertDetailPage() {
           item={alert}
           onClose={() => setShowReportModal(false)}
           triggerToast={triggerToast}
+        />
+      )}
+      {showMonitoringModal && alert && (
+        <MonitoringTransitionModal
+          onClose={() => setShowMonitoringModal(false)}
+          onConfirm={async (note, durationHours) => {
+            const finalStatus = durationHours > 0 ? "monitoring" : "resolved";
+            await updateAlertStatus(
+              alert.id,
+              finalStatus,
+              profile,
+              {
+                note,
+                monitoring_duration_hours: durationHours > 0 ? durationHours : undefined
+              },
+              alert.brand
+            );
+            setAlert({
+              ...alert,
+              status: finalStatus,
+              monitoring_started_at: durationHours > 0 ? new Date().toISOString() : undefined,
+              monitoring_duration_hours: durationHours > 0 ? durationHours : undefined,
+              monitoring_initial_comments: alert.comments || 0,
+              monitoring_initial_likes: alert.likes || 0,
+              monitoring_initial_shares: alert.shares || 0,
+            });
+            triggerToast(durationHours > 0 ? "Vụ việc đã được chuyển sang theo dõi thêm!" : "Đã hoàn tất và đóng vụ việc!");
+          }}
         />
       )}
 

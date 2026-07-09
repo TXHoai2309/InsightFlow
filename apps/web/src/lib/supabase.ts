@@ -364,6 +364,11 @@ export async function fetchSupabaseAlerts(): Promise<AlertData[]> {
         urgency: labelObj.urgency || null,
         intent: labelObj.intent || null,
         escalation: labelObj.escalation ?? null,
+        monitoring_started_at: labelObj.monitoring_started_at || undefined,
+        monitoring_duration_hours: labelObj.monitoring_duration_hours || undefined,
+        monitoring_initial_comments: labelObj.monitoring_initial_comments || undefined,
+        monitoring_initial_likes: labelObj.monitoring_initial_likes || undefined,
+        monitoring_initial_shares: labelObj.monitoring_initial_shares || undefined,
       };
 
       alerts.push(alert);
@@ -497,6 +502,11 @@ export async function fetchSingleSupabaseAlert(entityKey: string): Promise<Alert
     urgency: labelObj.urgency || null,
     intent: labelObj.intent || null,
     escalation: labelObj.escalation ?? null,
+    monitoring_started_at: labelObj.monitoring_started_at || undefined,
+    monitoring_duration_hours: labelObj.monitoring_duration_hours || undefined,
+    monitoring_initial_comments: labelObj.monitoring_initial_comments || undefined,
+    monitoring_initial_likes: labelObj.monitoring_initial_likes || undefined,
+    monitoring_initial_shares: labelObj.monitoring_initial_shares || undefined,
   };
 }
 

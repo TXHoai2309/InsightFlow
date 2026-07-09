@@ -105,6 +105,11 @@ export interface AlertData {
   urgency?: string | null;
   intent?: string | null;
   escalation?: EscalationData | null;
+  monitoring_started_at?: string;
+  monitoring_duration_hours?: number;
+  monitoring_initial_comments?: number;
+  monitoring_initial_likes?: number;
+  monitoring_initial_shares?: number;
 }
 
 export interface AlertFilters {
@@ -154,7 +159,12 @@ interface AlertState {
     id: string,
     newStatus: string,
     profile: UserRoleProfile | null | undefined,
-    attempt?: { note: string; image_url?: string; escalation?: EscalationData | null },
+    attempt?: {
+      note: string;
+      image_url?: string;
+      escalation?: EscalationData | null;
+      monitoring_duration_hours?: number;
+    },
     brandFallback?: string
   ) => Promise<void>;
   fetchCorrectionRequests: (scopedBrandKey?: string | null) => Promise<void>;
@@ -336,6 +346,51 @@ export const useAlertStore = create<AlertState>()(
             return fetchedAlert;
           });
 
+          // Auto-closure check
+          const monitoringAlerts = merged.filter(a => a.status === "monitoring");
+          if (monitoringAlerts.length > 0) {
+            monitoringAlerts.forEach((alert) => {
+              const startedAt = alert.monitoring_started_at ? new Date(alert.monitoring_started_at).getTime() : new Date(alert.created_at).getTime();
+              const durationMs = (alert.monitoring_duration_hours ?? 72) * 60 * 60 * 1000;
+              const now = Date.now();
+              if (now - startedAt >= durationMs) {
+                const initialComments = alert.monitoring_initial_comments ?? 0;
+                const initialLikes = alert.monitoring_initial_likes ?? 0;
+                const initialShares = alert.monitoring_initial_shares ?? 0;
+
+                const currentComments = alert.comments ?? 0;
+                const currentLikes = alert.likes ?? 0;
+                const currentShares = alert.shares ?? 0;
+
+                const hasNewActivity = currentComments > initialComments || currentLikes > (initialLikes + 5) || currentShares > initialShares;
+
+                if (!hasNewActivity) {
+                  console.log(`[AlertStore] Auto-closing alert ${alert.id}`);
+                  updateSupabaseAlertLabel(alert.id, (existingLabel) => {
+                    return {
+                      ...existingLabel,
+                      resolution_status: "resolved",
+                      resolved_at: new Date().toISOString(),
+                      resolved_by_email: "system@insightflow.ai",
+                      resolved_by_name: "Hệ thống tự động",
+                      resolution_history: [
+                        ...(existingLabel.resolution_history || []),
+                        {
+                          attempt_number: (existingLabel.resolution_history?.length || 0) + 1,
+                          timestamp: new Date().toISOString(),
+                          note: "Hệ thống tự động đóng vụ việc sau thời gian theo dõi không phát sinh hoạt động bất thường.",
+                          resolved_by_email: "system@insightflow.ai",
+                          resolved_by_name: "Hệ thống tự động"
+                        }
+                      ],
+                      updated_at: new Date().toISOString()
+                    };
+                  }).catch(err => console.error("[AlertStore] Auto-close failed:", err));
+                }
+              }
+            });
+          }
+
           set({
             rawAlerts: merged,
             alerts: applyFilters(merged, get().filters),
@@ -481,6 +536,13 @@ export const useAlertStore = create<AlertState>()(
                 being_resolved_by: null,
                 being_resolved_at: null,
               } : {}),
+              ...(newStatus === "monitoring" ? {
+                monitoring_started_at: new Date().toISOString(),
+                monitoring_duration_hours: attempt?.monitoring_duration_hours ?? 72,
+                monitoring_initial_comments: alert.comments || 0,
+                monitoring_initial_likes: alert.likes || 0,
+                monitoring_initial_shares: alert.shares || 0,
+              } : {}),
             };
           }
           return alert;
@@ -521,7 +583,7 @@ export const useAlertStore = create<AlertState>()(
             };
           }
 
-          return {
+          const updateObj: any = {
             ...existingLabel,
             resolution_status: newStatus,
             resolution_history: nextHistory,
@@ -534,6 +596,16 @@ export const useAlertStore = create<AlertState>()(
             updated_by_role: profile.role,
             updated_at: new Date().toISOString(),
           };
+
+          if (newStatus === "monitoring") {
+            updateObj.monitoring_started_at = new Date().toISOString();
+            updateObj.monitoring_duration_hours = attempt?.monitoring_duration_hours ?? 72;
+            updateObj.monitoring_initial_comments = currentAlert?.comments || 0;
+            updateObj.monitoring_initial_likes = currentAlert?.likes || 0;
+            updateObj.monitoring_initial_shares = currentAlert?.shares || 0;
+          }
+
+          return updateObj;
         });
       } catch (error) {
         console.error("[AlertStore] Failed to persist alert status:", error);
