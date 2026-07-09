@@ -218,6 +218,7 @@ function applyFilters(rawAlerts: AlertData[], filters: AlertFilters): AlertData[
 let activeUnsubscribe: (() => void) | null = null;
 const ALERT_REVIEW_WINDOW_DAYS = 30;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const ALERT_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
 
 export function getAlertReviewSinceIso(days = ALERT_REVIEW_WINDOW_DAYS): string {
   return new Date(Date.now() - days * MS_PER_DAY).toISOString();
@@ -291,7 +292,7 @@ export const useAlertStore = create<AlertState>()(
 
         await loadAlerts();
 
-        const intervalId = setInterval(loadAlerts, 60000);
+        const intervalId = setInterval(loadAlerts, ALERT_REFRESH_INTERVAL_MS);
         activeUnsubscribe = () => clearInterval(intervalId);
       } catch (error) {
         const message =

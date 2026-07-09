@@ -190,19 +190,63 @@ interface SupabaseCommentRow {
   payload_json: Record<string, any> | null;
 }
 
+const ALERT_POST_SELECT = [
+  "platform",
+  "post_id",
+  "url",
+  "source",
+  "brand_slug",
+  "brand",
+  "author",
+  "contact",
+  "language",
+  "posted_at",
+  "like_count",
+  "comment_count",
+  "share_count",
+  "view_count",
+  "reply_count",
+  "star_count",
+  "payload_json",
+].join(",");
+
+const ALERT_COMMENT_SELECT = [
+  "platform",
+  "post_id",
+  "comment_id",
+  "parent_comment_id",
+  "url",
+  "username",
+  "contact",
+  "text",
+  "posted_at",
+  "like_count",
+  "reply_count",
+  "star_count",
+  "comment_level",
+  "payload_json",
+].join(",");
+
+const ALERT_BATCH_SELECT: Record<string, string> = {
+  posts: ALERT_POST_SELECT,
+  comments: ALERT_COMMENT_SELECT,
+};
+
 // Fetch rows in batches to avoid URL length limits on in.(...) queries
 async function batchFetch<T>(
   table: string,
   column: string,
   ids: string[],
-  batchSize = 40
+  batchSize = 10
 ): Promise<T[]> {
   if (ids.length === 0) return [];
   const results: T[] = [];
+  const select = ALERT_BATCH_SELECT[table];
   for (let i = 0; i < ids.length; i += batchSize) {
     const batch = ids.slice(i, i + batchSize);
     const inClause = batch.map((id) => `"${id.replace(/"/g, '\\"')}"`).join(",");
-    const rows = await supabaseRequest<T[]>(table, `${column}=in.(${inClause})`).catch((err) => {
+    const query = `${select ? `select=${select}&` : ""}${column}=in.(${inClause})`;
+    const rows = await supabaseRequest<T[]>(table, query).catch((err) => {
       console.error(`Failed to fetch batch from ${table}:`, err);
       return [] as T[];
     });
@@ -244,10 +288,8 @@ export async function fetchSupabaseAlerts(options: {
   ) as string[];
 
   // Fetch posts and comments in batches to avoid URL length limits
-  const [postsList, commentsList] = await Promise.all([
-    batchFetch<SupabasePostRow>("posts", "post_id", postIds),
-    batchFetch<SupabaseCommentRow>("comments", "comment_id", commentIds),
-  ]);
+  const postsList = await batchFetch<SupabasePostRow>("posts", "post_id", postIds);
+  const commentsList = await batchFetch<SupabaseCommentRow>("comments", "comment_id", commentIds);
 
   const postMap = new Map<string, SupabasePostRow>();
   postsList.forEach((p) => postMap.set(p.post_id, p));
