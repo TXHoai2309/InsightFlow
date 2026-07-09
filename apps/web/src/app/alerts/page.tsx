@@ -191,6 +191,7 @@ export default function AlertsPage() {
   const [customStartDate, setCustomStartDate] = useState<string>("");
   const [customEndDate, setCustomEndDate] = useState<string>("");
   const [showDatePopover, setShowDatePopover] = useState(false);
+  const [activeTrending, setActiveTrending] = useState<{ name: string; matchIds: string[] } | null>(null);
 
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
@@ -425,10 +426,10 @@ export default function AlertsPage() {
           const authorName = h.resolved_by_name
             || getResolverName(h.resolved_by_email)
             || getResolverName(a.being_resolved_by)
-            || "Nhân viên trực";
+            || t("alerts.page.dutyStaff");
           list.push({
             author: authorName,
-            action: `đã ghi nhận xử lý vụ việc #${a.id.slice(-4)}`,
+            action: t("alerts.page.loggedResolution", { id: a.id.slice(-4) }),
             timestamp: h.timestamp,
             id: a.id
           });
@@ -438,10 +439,10 @@ export default function AlertsPage() {
         const resolverName = a.resolved_by_name
           || getResolverName(a.resolved_by_email)
           || getResolverName(a.being_resolved_by)
-          || "Thành viên";
+          || t("alerts.page.member");
         list.push({
           author: resolverName,
-          action: `đã xử lý xong vụ việc #${a.id.slice(-4)}`,
+          action: t("alerts.page.completedResolution", { id: a.id.slice(-4) }),
           timestamp: a.resolved_at,
           id: a.id
         });
@@ -454,7 +455,7 @@ export default function AlertsPage() {
     }
 
     return list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 5);
-  }, [brandFilteredAlerts]);
+  }, [brandFilteredAlerts, t]);
 
   // Shift Performance resolved ratio calculation
   const shiftPerformance = useMemo(() => {
@@ -464,14 +465,190 @@ export default function AlertsPage() {
     return Math.round((resolved / total) * 100);
   }, [brandFilteredAlerts]);
 
-  // Trending now tags
+  // Trending now — 3-source approach for meaningful insight:
+  // 1. Predefined crisis keyword matching (highest signal)
+  // 2. Bigrams (2-word phrases) from alert text
+  // 3. Topic field aggregation as fallback labels
   const trendingTags = useMemo(() => {
-    return [
-      { name: "#TẩyChay", pct: "+150% đề cập trong 1h", bg: "bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-900/30" },
-      { name: "#Scandal", pct: "+85% đề cập trong 1h", bg: "bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-900/30" },
-      { name: "#TinGiả", pct: "+40% đề cập trong 1h", bg: "bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900/30" }
+    const now = Date.now();
+    const ONE_HOUR = 60 * 60 * 1000;
+
+    // --- Source 1: Crisis keyword dictionary ---
+    const CRISIS_KEYWORDS: { term: string; variants: string[] }[] = [
+      { term: "Ngộ độc", variants: ["ngộ độc", "ngo doc", "food poison"] },
+      { term: "Tẩy chay", variants: ["tẩy chay", "tay chay", "boycott", "không mua"] },
+      { term: "Hoàn tiền", variants: ["hoàn tiền", "hoan tien", "refund", "trả tiền"] },
+      { term: "Chất lượng", variants: ["chất lượng", "chat luong", "quality", "tệ", "kém"] },
+      { term: "Vệ sinh", variants: ["vệ sinh", "ve sinh", "mất vệ sinh", "bẩn"] },
+      { term: "Phục vụ", variants: ["phục vụ", "phuc vu", "thái độ", "nhân viên"] },
+      { term: "Giá cả", variants: ["giá cả", "gia ca", "đắt", "mắc", "giá cao"] },
+      { term: "Giao hàng", variants: ["giao hàng", "giao hang", "ship", "thiếu hàng"] },
+      { term: "Sai/Thiếu món", variants: ["sai món", "thiếu món", "thieu mon", "sai mon", "không có"] },
+      { term: "Scandal", variants: ["scandal", "bê bối", "be boi", "lùm xùm"] },
+      { term: "Khiếu nại", variants: ["khiếu nại", "khieu nai", "phàn nàn", "than phiền"] },
+      { term: "An toàn", variants: ["an toàn", "an toan", "mất an toàn", "nguy hiểm"] },
     ];
-  }, []);
+
+    // Normalize text for matching
+    const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d");
+
+    const keywordRecent: Record<string, number> = {};
+    const keywordPrev: Record<string, number> = {};
+    const keywordAll: Record<string, number> = {};
+
+    // --- Source 2: Bigram extraction ---
+    const STOP_WORDS = new Set(["và", "là", "của", "có", "không", "được", "trong", "với", "cho", "này", "đó", "thì", "mà", "hay", "hoặc", "bị", "khi", "đã", "sẽ", "tôi", "bạn", "anh", "chị", "họ", "các", "những", "rất", "vẫn", "cũng", "nên", "vì", "như", "đến", "từ", "về", "theo", "nhưng", "nếu", "một", "lại", "vào", "ra", "lên", "xuống", "sao", "thế"]);
+    const bigramRecent: Record<string, number> = {};
+    const bigramPrev: Record<string, number> = {};
+    const bigramAll: Record<string, number> = {};
+
+    // --- Source 3: Topic labels ---
+    const TOPIC_LABELS: Record<string, string> = {
+      quality: t("alerts.page.topicQuality"),
+      service: t("alerts.page.topicService"),
+      price: t("alerts.page.topicPrice"),
+      staff: t("alerts.page.topicStaff"),
+      delivery: t("alerts.page.topicDelivery"),
+      experience: t("alerts.page.topicExperience"),
+      legal: t("alerts.page.topicLegal"),
+      operation: t("alerts.page.topicOperation"),
+      competitor: t("alerts.page.topicCompetitor"),
+      other: t("alerts.page.topicOther"),
+    };
+    const topicRecent: Record<string, number> = {};
+    const topicPrev: Record<string, number> = {};
+    const topicAll: Record<string, number> = {};
+
+    rawAlerts.forEach(a => {
+      const text = (a.text || "") + " " + (a.comment_content || "") + " " + (a.post_content || "");
+      const alertTime = a.created_at ? new Date(a.created_at).getTime() : NaN;
+      const diffMs = isNaN(alertTime) ? Infinity : now - alertTime;
+
+      const inRecent = diffMs <= ONE_HOUR;
+      const inPrev = diffMs > ONE_HOUR && diffMs <= 2 * ONE_HOUR;
+
+      const bump = (rec: Record<string, number>, k: string) => { rec[k] = (rec[k] || 0) + 1; };
+
+      // Source 1: crisis keyword matching
+      const normText = norm(text);
+      CRISIS_KEYWORDS.forEach(({ term, variants }) => {
+        if (variants.some(v => normText.includes(norm(v)))) {
+          bump(keywordAll, term);
+          if (inRecent) bump(keywordRecent, term);
+          else if (inPrev) bump(keywordPrev, term);
+        }
+      });
+
+      // Source 2: bigrams
+      const words = text.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter(w => w.length >= 2 && !STOP_WORDS.has(w));
+      for (let i = 0; i < words.length - 1; i++) {
+        const bg = `${words[i]} ${words[i + 1]}`;
+        if (bg.length >= 6) {
+          bump(bigramAll, bg);
+          if (inRecent) bump(bigramRecent, bg);
+          else if (inPrev) bump(bigramPrev, bg);
+        }
+      }
+
+      // Source 3: topic
+      if (a.topic && a.topic !== "other") {
+        const label = TOPIC_LABELS[a.topic] || a.topic;
+        bump(topicAll, label);
+        if (inRecent) bump(topicRecent, label);
+        else if (inPrev) bump(topicPrev, label);
+      }
+    });
+
+    // Score function: % spike relative to prev period
+    const score = (cnt: number, prev: number) =>
+      prev === 0 ? cnt * 100 : Math.round(((cnt - prev) / prev) * 100);
+
+    const TAG_COLORS = [
+      "bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-900/30",
+      "bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-900/30",
+      "bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900/30",
+      "bg-green-50 dark:bg-green-950/20 text-green-600 dark:text-green-400 border border-green-100 dark:border-green-900/30",
+      "bg-purple-50 dark:bg-purple-950/20 text-purple-600 dark:text-purple-400 border border-purple-100 dark:border-purple-900/30",
+    ];
+
+    const hasRecentData = Object.keys(keywordRecent).length > 0 || Object.keys(topicRecent).length > 0;
+
+    // Build matchIds map: term → list of alert IDs that matched
+    const keywordMatchIds: Record<string, string[]> = {};
+    const topicMatchIds: Record<string, string[]> = {};
+
+    rawAlerts.forEach(a => {
+      const text = (a.text || "") + " " + (a.comment_content || "") + " " + (a.post_content || "");
+      const normText = norm(text);
+      CRISIS_KEYWORDS.forEach(({ term, variants }) => {
+        if (variants.some(v => normText.includes(norm(v)))) {
+          if (!keywordMatchIds[term]) keywordMatchIds[term] = [];
+          keywordMatchIds[term].push(a.id);
+        }
+      });
+      if (a.topic && a.topic !== "other") {
+        const label = TOPIC_LABELS[a.topic] || a.topic;
+        if (!topicMatchIds[label]) topicMatchIds[label] = [];
+        topicMatchIds[label].push(a.id);
+      }
+    });
+
+    if (hasRecentData) {
+      const candidates: { label: string; cnt: number; pct: number; matchIds: string[] }[] = [];
+
+      Object.entries(keywordRecent).forEach(([term, cnt]) => {
+        candidates.push({
+          label: `#${term.replace(/\s/g, "")}`,
+          cnt,
+          pct: score(cnt, keywordPrev[term] || 0),
+          matchIds: keywordMatchIds[term] || [],
+        });
+      });
+      Object.entries(topicRecent).forEach(([label, cnt]) => {
+        if (!candidates.find(c => c.label.includes(label))) {
+          candidates.push({
+            label: `#${label.replace(/\s/g, "")}`,
+            cnt,
+            pct: score(cnt, topicPrev[label] || 0),
+            matchIds: topicMatchIds[label] || [],
+          });
+        }
+      });
+
+      return candidates
+        .sort((a, b) => b.pct - a.pct || b.cnt - a.cnt)
+        .slice(0, 5)
+        .map(({ label, cnt, pct, matchIds }, i) => ({
+          name: label,
+          pct: pct > 0 ? `+${pct}% ${t("alerts.page.mentionsIn1h")}` : t("alerts.page.timesIn1h", { count: cnt }),
+          bg: TAG_COLORS[i % TAG_COLORS.length],
+          matchIds,
+        }));
+    }
+
+    // Fallback: no recent data → rank by topic + crisis keyword overall frequency
+    const fallback: { label: string; cnt: number; matchIds: string[] }[] = [];
+    Object.entries(keywordAll).forEach(([term, cnt]) =>
+      fallback.push({ label: `#${term.replace(/\s/g, "")}`, cnt, matchIds: keywordMatchIds[term] || [] })
+    );
+    Object.entries(topicAll).forEach(([label, cnt]) => {
+      if (!fallback.find(f => f.label.includes(label))) {
+        fallback.push({ label: `#${label.replace(/\s/g, "")}`, cnt, matchIds: topicMatchIds[label] || [] });
+      }
+    });
+
+    return fallback
+      .sort((a, b) => b.cnt - a.cnt)
+      .slice(0, 5)
+      .map(({ label, cnt, matchIds }, i) => ({
+        name: label,
+        pct: t("alerts.page.timesMentioned", { count: cnt }),
+        bg: TAG_COLORS[i % TAG_COLORS.length],
+        matchIds,
+      }));
+  }, [rawAlerts, t]);
+
+
 
   // Cleanup lock on component unmount
   useEffect(() => {
@@ -553,7 +730,7 @@ export default function AlertsPage() {
         id: a.id,
         brand: a.brand,
         platform: a.source || matchingLead?.platform || "tiktok",
-        author: a.author || matchingLead?.author || "Ẩn danh",
+        author: a.author || matchingLead?.author || t("alerts.page.anonymous"),
         content: a.text || matchingLead?.content || "",
         severity: a.severity,
         created_at: a.created_at,
@@ -636,9 +813,9 @@ export default function AlertsPage() {
     return (
       <div className="p-4 md:p-8">
         <div className="glass-card p-8 rounded-xl border border-[var(--color-border)]">
-          <h1 className="text-xl font-bold text-[var(--color-text-primary)]">Không có quyền truy cập</h1>
+          <h1 className="text-xl font-bold text-[var(--color-text-primary)]">{t("alerts.page.noAccess")}</h1>
           <p className="text-sm text-[var(--color-text-secondary)] mt-2">
-            Vai trò hiện tại không được phép truy cập hàng đợi xử lý khủng hoảng.
+            {t("alerts.page.noAccessDesc")}
           </p>
         </div>
       </div>
@@ -649,9 +826,9 @@ export default function AlertsPage() {
     return (
       <div className="p-4 md:p-8">
         <div className="glass-card p-8 rounded-xl border border-[var(--color-border)]">
-          <h1 className="text-xl font-bold text-[var(--color-text-primary)]">Chưa được gán thương hiệu</h1>
+          <h1 className="text-xl font-bold text-[var(--color-text-primary)]">{t("alerts.page.noBrand")}</h1>
           <p className="text-sm text-[var(--color-text-secondary)] mt-2">
-            Tài khoản cần được gán brandId hoặc brandName trước khi xử lý cảnh báo.
+            {t("alerts.page.noBrandDesc")}
           </p>
         </div>
       </div>
@@ -800,12 +977,12 @@ export default function AlertsPage() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex items-center gap-3">
               <h1 className="text-xl md:text-2.5xl font-black tracking-tight text-[var(--color-text-primary)] uppercase">
-                Danh sách ưu tiên xử lý
+                {t("alerts.page.title")}
               </h1>
               {activeAlerts.filter(a => a.severity.toLowerCase() === "critical").length > 0 && (
                 <span className="bg-red-100 dark:bg-red-950/20 text-red-600 dark:text-red-400 text-[10px] px-2.5 py-1 rounded-full font-black animate-pulse flex items-center gap-1 border border-red-200 dark:border-red-900/30">
                   <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping"></span>
-                  {activeAlerts.filter(a => a.severity.toLowerCase() === "critical").length} vụ việc khẩn cấp
+                  {t("alerts.page.criticalCount", { count: activeAlerts.filter(a => a.severity.toLowerCase() === "critical").length })}
                 </span>
               )}
             </div>
@@ -816,7 +993,7 @@ export default function AlertsPage() {
                 <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">search</span>
                 <input
                   type="text"
-                  placeholder="Tìm kiếm vụ việc..."
+                  placeholder={t("alerts.page.searchPlaceholder")}
                   value={searchText}
                   onChange={(e) => setSearchText(e.target.value)}
                   className="pl-8 pr-3 py-1.5 w-full sm:w-60 border border-[var(--color-border)] rounded-xl text-xs bg-[var(--color-bg-surface-raised)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 text-[var(--color-text-primary)] font-medium"
@@ -829,7 +1006,7 @@ export default function AlertsPage() {
                 onChange={(e) => setFilters({ brand: e.target.value })}
                 className="select-app border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 pl-3 pr-8 bg-white dark:bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] focus:outline-none cursor-pointer"
               >
-                <option value="all">Tất cả Brand</option>
+                <option value="all">{t("alerts.page.allBrands")}</option>
                 {brands.map(b => (
                   <option key={b} value={b}>{b}</option>
                 ))}
@@ -845,15 +1022,15 @@ export default function AlertsPage() {
                   }}
                   className="select-app border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 pl-3 pr-8 bg-white dark:bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] focus:outline-none cursor-pointer"
                 >
-                  <option value="all">Tất cả thời gian</option>
-                  <option value="7d">7 ngày qua</option>
-                  <option value="30d">30 ngày qua</option>
-                  <option value="this_month">Tháng này</option>
-                  <option value="last_month">Tháng trước</option>
+                  <option value="all">{t("alerts.page.allTime")}</option>
+                  <option value="7d">{t("alerts.page.last7d")}</option>
+                  <option value="30d">{t("alerts.page.last30d")}</option>
+                  <option value="this_month">{t("alerts.page.thisMonth")}</option>
+                  <option value="last_month">{t("alerts.page.lastMonth")}</option>
                   <option value="custom">
                     {customStartDate && customEndDate
                       ? `${customStartDate.split("-").reverse().join("/")} – ${customEndDate.split("-").reverse().join("/")}`
-                      : "Tự chọn ngày"}
+                      : t("alerts.page.customDate")}
                   </option>
                 </select>
 
@@ -863,9 +1040,9 @@ export default function AlertsPage() {
                     className="absolute right-0 top-full mt-1.5 z-50 bg-white dark:bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] rounded-2xl shadow-xl p-3 flex flex-col gap-2 min-w-[240px]"
                     style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.12)" }}
                   >
-                    <p className="text-[10px] font-black uppercase tracking-wider text-[var(--color-text-muted)] mb-0.5">Chọn khoảng thời gian</p>
+                    <p className="text-[10px] font-black uppercase tracking-wider text-[var(--color-text-muted)] mb-0.5">{t("alerts.page.selectDateRange")}</p>
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase">Từ ngày</label>
+                      <label className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase">{t("alerts.page.fromDate")}</label>
                       <input
                         type="date"
                         value={customStartDate}
@@ -875,7 +1052,7 @@ export default function AlertsPage() {
                       />
                     </div>
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase">Đến ngày</label>
+                      <label className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase">{t("alerts.page.toDate")}</label>
                       <input
                         type="date"
                         value={customEndDate}
@@ -888,7 +1065,7 @@ export default function AlertsPage() {
                       onClick={() => setShowDatePopover(false)}
                       className="mt-1 w-full py-1.5 rounded-xl bg-[var(--color-brand)] text-white text-xs font-bold hover:opacity-90 transition-opacity"
                     >
-                      Áp dụng
+                      {t("alerts.page.apply")}
                     </button>
                   </div>
                 )}
@@ -903,16 +1080,16 @@ export default function AlertsPage() {
             {/* Sort options */}
             <div className="flex items-center gap-2 text-xs">
               <span className="text-[var(--color-text-muted)] font-bold uppercase tracking-wider">
-                SẮP XẾP THEO
+                {t("alerts.page.sortBy")}
               </span>
               <select
                 value={sortBy}
                 onChange={(e: any) => setSortBy(e.target.value)}
                 className="bg-transparent border-0 font-black text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer text-xs"
               >
-                <option value="risk">Mức độ rủi ro</option>
-                <option value="newest">Mới nhất</option>
-                <option value="reach">Lượt tiếp cận</option>
+                <option value="risk">{t("alerts.page.sortRisk")}</option>
+                <option value="newest">{t("alerts.page.sortNewest")}</option>
+                <option value="reach">{t("alerts.page.sortReach")}</option>
               </select>
             </div>
 
@@ -922,11 +1099,11 @@ export default function AlertsPage() {
               {/* Filter Pills based on Severity */}
               <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/40 p-1 rounded-xl">
                 {[
-                  { id: "all", label: "Tất cả", activeClass: "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm" },
-                  { id: "critical", label: "Khẩn cấp", activeClass: "bg-red-600 text-white shadow-sm" },
-                  { id: "high", label: "Cao", activeClass: "bg-orange-500 text-white shadow-sm" },
-                  { id: "medium", label: "Trung bình", activeClass: "bg-yellow-500 text-white shadow-sm" },
-                  { id: "low", label: "Thấp", activeClass: "bg-slate-500 text-white shadow-sm" }
+                  { id: "all", label: t("alerts.page.severityAll"), activeClass: "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm" },
+                  { id: "critical", label: t("alerts.page.severityCritical"), activeClass: "bg-red-600 text-white shadow-sm" },
+                  { id: "high", label: t("alerts.page.severityHigh"), activeClass: "bg-orange-500 text-white shadow-sm" },
+                  { id: "medium", label: t("alerts.page.severityMedium"), activeClass: "bg-yellow-500 text-white shadow-sm" },
+                  { id: "low", label: t("alerts.page.severityLow"), activeClass: "bg-slate-500 text-white shadow-sm" }
                 ].map(pill => {
                   const isActive = severityFilter === pill.id;
                   return (
@@ -950,14 +1127,14 @@ export default function AlertsPage() {
                 onChange={(e) => setSourceFilter(e.target.value)}
                 className="border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 pl-3 pr-8 bg-white dark:bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] focus:outline-none cursor-pointer"
               >
-                <option value="all">Nguồn (Tất cả)</option>
-                <option value="facebook">Facebook</option>
-                <option value="tiktok">TikTok</option>
-                <option value="youtube">YouTube</option>
-                <option value="google_maps">Google Maps</option>
-                <option value="befood">BeFood</option>
-                <option value="thread">Threads</option>
-                <option value="news">Báo chí</option>
+                <option value="all">{t("alerts.page.sourceAll")}</option>
+                <option value="facebook">{t("alerts.page.sourceFacebook")}</option>
+                <option value="tiktok">{t("alerts.page.sourceTiktok")}</option>
+                <option value="youtube">{t("alerts.page.sourceYoutube")}</option>
+                <option value="google_maps">{t("alerts.page.sourceGoogleMaps")}</option>
+                <option value="befood">{t("alerts.page.sourceBefood")}</option>
+                <option value="thread">{t("alerts.page.sourceThreads")}</option>
+                <option value="news">{t("alerts.page.sourceNews")}</option>
               </select>
 
               {/* Content Type Dropdown (Comment / Post) */}
@@ -966,9 +1143,9 @@ export default function AlertsPage() {
                 onChange={(e) => setContentTypeFilter(e.target.value)}
                 className="border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 pl-3 pr-8 bg-white dark:bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] focus:outline-none cursor-pointer"
               >
-                <option value="all">Loại (Tất cả)</option>
-                <option value="post">Bài viết (Post)</option>
-                <option value="comment">Bình luận (Comment)</option>
+                <option value="all">{t("alerts.page.contentTypeAll")}</option>
+                <option value="post">{t("alerts.page.contentTypePost")}</option>
+                <option value="comment">{t("alerts.page.contentTypeComment")}</option>
               </select>
 
               {/* Mine Only Toggle */}
@@ -979,8 +1156,8 @@ export default function AlertsPage() {
                   : "border-[var(--color-border)] text-[var(--color-text-secondary)] bg-white dark:bg-[var(--color-bg-surface-raised)] hover:bg-slate-50"
                   }`}
               >
-                Của tôi
-              </button>
+                {t("alerts.page.mineOnly")}
+</button>
             </div>
           </div>
 
@@ -992,12 +1169,12 @@ export default function AlertsPage() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                 </svg>
-                <p className="text-xs text-[var(--color-text-secondary)] font-bold">Đang tải dữ liệu cảnh báo...</p>
+                <p className="text-xs text-[var(--color-text-secondary)] font-bold">{t("alerts.page.loading")}</p>
               </div>
             ) : processedActiveAlerts.length === 0 ? (
               <div className="glass-card p-12 text-center rounded-2xl border border-[var(--color-border)]/60 flex flex-col items-center justify-center gap-3">
                 <span className="material-symbols-outlined text-slate-300 text-5xl">inbox</span>
-                <p className="text-xs text-[var(--color-text-secondary)] font-bold">Không tìm thấy cảnh báo phù hợp với bộ lọc.</p>
+                <p className="text-xs text-[var(--color-text-secondary)] font-bold">{t("alerts.page.emptyFilter")}</p>
               </div>
             ) : (
               processedActiveAlerts.map(alert => {
@@ -1036,9 +1213,9 @@ export default function AlertsPage() {
                           {riskScore}
                         </span>
                         <span className="text-[9px] font-black text-[var(--color-text-muted)] uppercase tracking-wider mt-1">
-                          {alert.severity.toLowerCase() === "critical" ? "KHẨN CẤP" :
-                            alert.severity.toLowerCase() === "high" ? "RỦI RO CAO" :
-                              alert.severity.toLowerCase() === "medium" ? "TRUNG BÌNH" : "RỦI RO THẤP"}
+                          {alert.severity.toLowerCase() === "critical" ? t("alerts.page.riskCritical") :
+                            alert.severity.toLowerCase() === "high" ? t("alerts.page.riskHigh") :
+                              alert.severity.toLowerCase() === "medium" ? t("alerts.page.riskMedium") : t("alerts.page.riskLow")}
                         </span>
                       </div>
                       <div className={`w-2 h-2 rounded-full ${dotClass} animate-pulse md:mt-2`}></div>
@@ -1060,7 +1237,7 @@ export default function AlertsPage() {
                         <div className="min-w-0 flex-grow">
                           <div className="flex items-center gap-2">
                             <p className="font-bold text-xs text-[var(--color-text-primary)] truncate max-w-[160px]">
-                              {alert.author || "Ẩn danh"}
+                              {alert.author || t("alerts.page.anonymous")}
                             </p>
                             <span className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/20 px-1.5 py-0.5 rounded border border-indigo-100 dark:border-indigo-900/30 flex-shrink-0">
                               {formatBrandName(alert.brand)}
@@ -1091,26 +1268,26 @@ export default function AlertsPage() {
                               ? "bg-green-50 dark:bg-green-950/20 text-green-600 dark:text-green-400 border-green-100 dark:border-green-900/30"
                               : "bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700"
                           }`}>
-                          {alert.sentiment === "negative" ? "Tiêu cực" : alert.sentiment === "positive" ? "Tích cực" : "Trung lập"}
+                          {alert.sentiment === "negative" ? t("alerts.page.sentimentNegative") : alert.sentiment === "positive" ? t("alerts.page.sentimentPositive") : t("alerts.page.sentimentNeutral")}
                         </span>
                         {(alert.reach ?? 0) > 50000 && (
                           <span className="bg-pink-50 dark:bg-pink-950/20 text-pink-600 text-[9px] font-bold px-1.5 py-0.5 rounded border border-pink-100 dark:border-pink-900/30">
-                            KOL lớn
+                            {t("alerts.page.bigKol")}
                           </span>
                         )}
                         {(alert.reach ?? 0) > 10000 && (alert.reach ?? 0) <= 50000 && (
                           <span className="bg-orange-50 dark:bg-orange-950/20 text-orange-600 text-[9px] font-bold px-1.5 py-0.5 rounded border border-orange-100 dark:border-orange-900/30">
-                            Lan truyền nhanh
+                            {t("alerts.page.fastSpread")}
                           </span>
                         )}
                         {isResolving && (
                           <span className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[9px] font-bold px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
-                            Đang xử lý
+                            {t("alerts.page.statusResolving")}
                           </span>
                         )}
                         {!isResolving && alert.status !== "resolved" && (
                           <span className="bg-red-50 dark:bg-red-950/20 text-red-600 text-[9px] font-bold px-1.5 py-0.5 rounded border border-red-100 dark:border-red-900/30">
-                            Chờ xử lý
+                            {t("alerts.page.statusPending")}
                           </span>
                         )}
                       </div>
@@ -1130,14 +1307,14 @@ export default function AlertsPage() {
                               <span className="material-symbols-outlined text-[10px] text-slate-500">person</span>
                             </div>
                             <span className="text-[10px] text-[var(--color-text-secondary)] font-bold truncate max-w-[120px]">
-                              {getResolverName(alert.being_resolved_by) || "Thành viên"}
+                              {getResolverName(alert.being_resolved_by) || t("alerts.page.member")}
                             </span>
                           </div>
                           <button
                             onClick={() => router.push(`/alerts/${encodeURIComponent(alert.id)}`)}
                             className="w-full py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[var(--color-text-primary)] text-xs font-bold transition-all cursor-pointer border border-[var(--color-border)]"
                           >
-                            Chi tiết
+                            {t("alerts.page.details")}
                           </button>
                         </div>
                       ) : (
@@ -1149,7 +1326,7 @@ export default function AlertsPage() {
                             }}
                             className="w-full py-2 rounded-xl bg-[#0f172a] hover:bg-[#1e293b] dark:bg-slate-800 dark:hover:bg-slate-700 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
                           >
-                            Nhận xử lý
+                            {t("alerts.page.acceptTask")}
                           </button>
 
                           <button
@@ -1157,14 +1334,14 @@ export default function AlertsPage() {
                             className="w-full py-2 rounded-xl bg-white hover:bg-red-50 text-red-600 border border-red-200 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1"
                           >
                             <span className="material-symbols-outlined text-sm">priority_high</span>
-                            Escalate ngay
+                            {t("alerts.page.escalateNow")}
                           </button>
 
                           <button
                             onClick={() => router.push(`/alerts/${encodeURIComponent(alert.id)}`)}
                             className="w-full py-1 text-center text-[var(--color-brand)] hover:underline text-xs font-bold cursor-pointer"
                           >
-                            Xem chi tiết
+                            {t("alerts.page.viewDetails")}
                           </button>
                         </div>
                       )}
@@ -1183,7 +1360,7 @@ export default function AlertsPage() {
             >
               <div className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-green-500">check_circle</span>
-                <span>Đã xử lý gần đây ({resolvedAlerts.length})</span>
+                <span>{t("alerts.page.recentlyResolved")} ({resolvedAlerts.length})</span>
               </div>
               <span className="material-symbols-outlined transition-transform duration-300" style={{ transform: isResolvedExpanded ? "rotate(180deg)" : "rotate(0deg)" }}>
                 expand_more
@@ -1193,15 +1370,15 @@ export default function AlertsPage() {
             {isResolvedExpanded && (
               <div className="p-4 border-t border-[var(--color-border)]/50 space-y-3 bg-slate-50/20">
                 {resolvedAlerts.length === 0 ? (
-                  <p className="text-xs text-[var(--color-text-muted)] italic text-center py-4">Không có vụ việc nào đã giải quyết.</p>
+                  <p className="text-xs text-[var(--color-text-muted)] italic text-center py-4">{t("alerts.page.noResolved")}</p>
                 ) : (
                   resolvedAlerts.map(alert => (
                     <div key={alert.id} className="flex items-center justify-between gap-4 p-3 bg-white dark:bg-slate-800 rounded-xl border border-[var(--color-border)] text-xs">
                       <div className="min-w-0 flex-grow">
                         <div className="flex items-center gap-2">
-                          <span className="font-bold text-[var(--color-text-primary)]">@{alert.author || "Ẩn danh"}</span>
+                          <span className="font-bold text-[var(--color-text-primary)]">@{alert.author || t("alerts.page.anonymous")}</span>
                           <span className="text-[10px] text-[var(--color-text-muted)]">({formatBrandName(alert.brand)})</span>
-                          <span className="text-[10px] bg-green-50 text-green-600 font-bold px-1.5 py-0.5 rounded">Giải quyết xong</span>
+                          <span className="text-[10px] bg-green-50 text-green-600 font-bold px-1.5 py-0.5 rounded">{t("alerts.page.resolvedBadge")}</span>
                         </div>
                         <p className="text-[var(--color-text-secondary)] truncate mt-1">{alert.text}</p>
                       </div>
@@ -1209,7 +1386,7 @@ export default function AlertsPage() {
                         onClick={() => router.push(`/alerts/${encodeURIComponent(alert.id)}`)}
                         className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg font-bold text-slate-700 cursor-pointer flex-shrink-0"
                       >
-                        Chi tiết
+                        {t("alerts.page.details")}
                       </button>
                     </div>
                   ))
@@ -1227,7 +1404,7 @@ export default function AlertsPage() {
               >
                 <div className="flex items-center gap-2">
                   <span className="material-symbols-outlined text-blue-500">edit_document</span>
-                  <span>Yêu cầu sửa nhãn ({correctionRequests.filter(r => r.status === "pending").length})</span>
+                  <span>{t("alerts.page.correctionRequests")} ({correctionRequests.filter(r => r.status === "pending").length})</span>
                 </div>
                 <span className="material-symbols-outlined transition-transform duration-300" style={{ transform: isRequestsExpanded ? "rotate(180deg)" : "rotate(0deg)" }}>
                   expand_more
@@ -1237,7 +1414,7 @@ export default function AlertsPage() {
               {isRequestsExpanded && (
                 <div className="p-4 border-t border-[var(--color-border)]/50 space-y-3 bg-slate-50/20">
                   {correctionRequests.length === 0 ? (
-                    <p className="text-xs text-[var(--color-text-muted)] italic text-center py-4">Không có yêu cầu sửa nhãn nào.</p>
+                    <p className="text-xs text-[var(--color-text-muted)] italic text-center py-4">{t("alerts.page.noCorrections")}</p>
                   ) : (
                     correctionRequests.map(req => (
                       <div key={req.id} className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-[var(--color-border)] text-xs space-y-2">
@@ -1246,7 +1423,7 @@ export default function AlertsPage() {
                           <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${req.status === "pending" ? "bg-amber-50 text-amber-600" :
                             req.status === "approved" ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"
                             }`}>
-                            {req.status === "pending" ? "Đang chờ duyệt" : req.status === "approved" ? "Đã duyệt" : "Đã từ chối"}
+                            {req.status === "pending" ? t("alerts.page.correctionPending") : req.status === "approved" ? t("alerts.page.correctionApproved") : t("alerts.page.correctionRejected")}
                           </span>
                         </div>
                         <p className="text-[var(--color-text-secondary)] italic">"{req.reason}"</p>
@@ -1256,13 +1433,13 @@ export default function AlertsPage() {
                               onClick={() => resolveCorrectionRequest(req.id, req.alert_id, "rejected", profile)}
                               className="px-2.5 py-1 text-[10px] bg-red-50 text-red-600 hover:bg-red-100 rounded font-bold cursor-pointer"
                             >
-                              Từ chối
+                              {t("alerts.page.reject")}
                             </button>
                             <button
                               onClick={() => resolveCorrectionRequest(req.id, req.alert_id, "approved", profile)}
                               className="px-2.5 py-1 text-[10px] bg-green-600 text-white hover:bg-green-700 rounded font-bold cursor-pointer"
                             >
-                              Phê duyệt
+                              {t("alerts.page.approve")}
                             </button>
                           </div>
                         )}
@@ -1283,15 +1460,68 @@ export default function AlertsPage() {
           <div className="glass-card rounded-2xl p-5 md:p-6 bg-white dark:bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] shadow-sm space-y-4">
             <h3 className="text-xs md:text-sm font-black text-[var(--color-text-primary)] uppercase tracking-wider flex items-center gap-1.5">
               <span className="material-symbols-outlined text-orange-500 text-lg">trending_up</span>
-              Đang nóng (Trending Now)
+              {t("alerts.page.trendingTitle")}
             </h3>
             <div className="space-y-3 pt-1">
+              {trendingTags.length === 0 && (
+                <p className="text-xs text-[var(--color-text-muted)] italic">{t("alerts.page.noTrending")}</p>
+              )}
               {trendingTags.map((tag, i) => (
-                <div key={i} className={`p-3 rounded-xl flex items-center justify-between ${tag.bg}`}>
-                  <span className="text-xs font-black">{tag.name}</span>
+                <button
+                  key={i}
+                  onClick={() => setActiveTrending(activeTrending?.name === tag.name ? null : { name: tag.name, matchIds: tag.matchIds })}
+                  className={`w-full p-3 rounded-xl flex items-center justify-between transition-all cursor-pointer hover:scale-[1.02] hover:shadow-md active:scale-[0.99] text-left ${
+                    activeTrending?.name === tag.name
+                      ? `${tag.bg} ring-2 ring-current ring-offset-1`
+                      : tag.bg
+                  }`}
+                >
+                  <span className="text-xs font-black flex items-center gap-1">
+                    {activeTrending?.name === tag.name && (
+                      <span className="material-symbols-outlined text-[14px]">filter_alt</span>
+                    )}
+                    {tag.name}
+                  </span>
                   <span className="text-[10px] font-black">{tag.pct}</span>
-                </div>
+                </button>
               ))}
+
+              {/* Related alerts panel */}
+              {activeTrending && (() => {
+                const related = rawAlerts.filter(a => activeTrending.matchIds.includes(a.id)).slice(0, 5);
+                return (
+                  <div className="mt-2 border-t border-[var(--color-border)] pt-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-[var(--color-text-muted)]">
+                        {t("alerts.page.relatedPosts", { count: related.length, tag: activeTrending.name })}
+                      </span>
+                      <button onClick={() => setActiveTrending(null)} className="material-symbols-outlined text-base text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer">close</button>
+                    </div>
+                    {related.length === 0 && (
+                      <p className="text-xs text-[var(--color-text-muted)] italic">{t("alerts.page.noRelatedPosts")}</p>
+                    )}
+                    {related.map((a) => (
+                      <a
+                        key={a.id}
+                        href={`/alerts/${a.id}`}
+                        className="block p-2.5 rounded-xl bg-[var(--color-bg-base)] border border-[var(--color-border)] hover:border-[var(--color-brand)]/50 hover:shadow-sm transition-all group"
+                      >
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${
+                            a.severity?.toLowerCase() === "critical" ? "bg-red-100 text-red-600" :
+                            a.severity?.toLowerCase() === "high" ? "bg-orange-100 text-orange-600" :
+                            "bg-slate-100 text-slate-500"
+                          }`}>{a.severity?.toUpperCase()}</span>
+                          <span className="text-[10px] text-[var(--color-text-muted)] font-semibold">{formatBrandName(a.brand)}</span>
+                        </div>
+                        <p className="text-xs text-[var(--color-text-primary)] line-clamp-2 leading-snug group-hover:text-[var(--color-brand)] transition-colors">
+                          {a.text || a.comment_content || t("alerts.page.noContent")}
+                        </p>
+                      </a>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
           </div>
 
@@ -1299,7 +1529,7 @@ export default function AlertsPage() {
           <div className="glass-card rounded-2xl p-5 md:p-6 bg-white dark:bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] shadow-sm space-y-4">
             <h3 className="text-xs md:text-sm font-black text-[var(--color-text-primary)] uppercase tracking-wider flex items-center gap-1.5">
               <span className="material-symbols-outlined text-blue-500 text-lg">group</span>
-              Hoạt động đội ngũ
+              {t("alerts.page.teamActivity")}
             </h3>
             <div className="space-y-4 pt-1">
               {teamActivities.map((act, i) => (
@@ -1324,10 +1554,10 @@ export default function AlertsPage() {
           <div className="glass-card rounded-2xl p-5 md:p-6 bg-slate-900 text-white border border-slate-800 shadow-xl space-y-4 relative overflow-hidden group">
             <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-white/5 rounded-full blur-xl group-hover:scale-110 transition-transform"></div>
             <div className="space-y-1">
-              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Hiệu suất trực</span>
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{t("alerts.page.shiftPerformance")}</span>
               <div className="flex items-baseline gap-1.5">
                 <span className="text-3xl font-black text-white">{shiftPerformance}%</span>
-                <span className="text-[10px] font-bold text-green-400">Đã xử lý</span>
+                <span className="text-[10px] font-bold text-green-400">{t("alerts.page.processed")}</span>
               </div>
             </div>
             <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
@@ -2196,7 +2426,7 @@ function IncidentReportModal({ item, onClose, triggerToast }: IncidentReportModa
       source: sourceName,
       severity: severityText,
       created_at: dateStr,
-      reporter: item.author || "Ẩn danh",
+      reporter: item.author || t("alerts.page.anonymous"),
       description: item.text || item.content || "",
       impact_assessment: impactAssessment,
       recommended_sop_actions: sopActions,
@@ -2266,7 +2496,7 @@ function IncidentReportModal({ item, onClose, triggerToast }: IncidentReportModa
             </div>
             <div>
               <p className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider font-bold">{t("alerts.report.author")}</p>
-              <p className="text-xs font-bold text-[var(--color-text-primary)]">@{item.author || "Ẩn danh"}</p>
+              <p className="text-xs font-bold text-[var(--color-text-primary)]">@{item.author || t("alerts.page.anonymous")}</p>
             </div>
             <div className="col-span-2">
               <p className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider font-bold">{t("alerts.report.time")}</p>
@@ -2383,7 +2613,7 @@ function CorrectionRequestModal({ item, onClose, triggerToast, createCorrectionR
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reason.trim()) {
-      triggerToast("Vui lòng nhập lý do chỉnh sửa!");
+      triggerToast(t("alerts.correction.reasonRequired"));
       return;
     }
     setSubmitting(true);
@@ -2402,11 +2632,11 @@ function CorrectionRequestModal({ item, onClose, triggerToast, createCorrectionR
         reason: reason.trim(),
         alert_text: item.text || item.content || "",
       });
-      triggerToast("Gửi yêu cầu chỉnh sửa thành công!");
+      triggerToast(t("alerts.correction.success"));
       onClose();
     } catch (err) {
       console.error(err);
-      triggerToast("Gửi yêu cầu thất bại. Vui lòng thử lại!");
+      triggerToast(t("alerts.correction.error"));
     } finally {
       setSubmitting(false);
     }
@@ -2426,7 +2656,7 @@ function CorrectionRequestModal({ item, onClose, triggerToast, createCorrectionR
         <div className="p-4 md:p-6 border-b border-[var(--color-border)] flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-[var(--color-brand)] text-xl">edit_square</span>
-            <h3 className="font-bold text-base md:text-lg">Yêu cầu Sửa nhãn AI</h3>
+            <h3 className="font-bold text-base md:text-lg">{t("alerts.correction.title")}</h3>
           </div>
           <button
             type="button"
@@ -2446,51 +2676,51 @@ function CorrectionRequestModal({ item, onClose, triggerToast, createCorrectionR
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {/* Sentiment */}
             <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">Sắc thái mới</label>
+              <label className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">{t("alerts.correction.sentimentLabel")}</label>
               <select
                 value={sentiment}
                 onChange={(e) => setSentiment(e.target.value)}
                 className="w-full bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] rounded-xl text-xs py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 font-medium text-[var(--color-text-primary)] select-app"
               >
-                <option value="positive">Tích cực</option>
-                <option value="neutral">Trung tính</option>
-                <option value="negative">Tiêu cực</option>
+                <option value="positive">{t("alerts.correction.sentimentPositive")}</option>
+                <option value="neutral">{t("alerts.correction.sentimentNeutral")}</option>
+                <option value="negative">{t("alerts.correction.sentimentNegative")}</option>
               </select>
             </div>
 
             {/* Severity */}
             <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">Độ nghiêm trọng</label>
+              <label className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">{t("alerts.correction.severityLabel")}</label>
               <select
                 value={severity}
                 onChange={(e) => setSeverity(e.target.value)}
                 className="w-full bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] rounded-xl text-xs py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 font-medium text-[var(--color-text-primary)] select-app"
               >
-                <option value="low">Thấp</option>
-                <option value="medium">Trung bình</option>
-                <option value="high">Cao</option>
-                <option value="critical">Khẩn cấp</option>
+                <option value="low">{t("alerts.correction.severityLow")}</option>
+                <option value="medium">{t("alerts.correction.severityMedium")}</option>
+                <option value="high">{t("alerts.correction.severityHigh")}</option>
+                <option value="critical">{t("alerts.correction.severityCritical")}</option>
               </select>
             </div>
 
             {/* Topic */}
             <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">Chủ đề mới</label>
+              <label className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">{t("alerts.correction.topicLabel")}</label>
               <select
                 value={topic}
                 onChange={(e) => setTopic(e.target.value)}
                 className="w-full bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] rounded-xl text-xs py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 font-medium text-[var(--color-text-primary)] select-app"
               >
-                <option value="quality">Chất lượng</option>
-                <option value="price">Giá cả</option>
-                <option value="service">Dịch vụ</option>
-                <option value="staff">Nhân viên</option>
-                <option value="delivery">Giao hàng</option>
-                <option value="experience">Trải nghiệm</option>
-                <option value="legal">Pháp lý</option>
-                <option value="operation">Vận hành</option>
-                <option value="competitor">Đối thủ</option>
-                <option value="other">Khác</option>
+                <option value="quality">{t("alerts.correction.topicQuality")}</option>
+                <option value="price">{t("alerts.correction.topicPrice")}</option>
+                <option value="service">{t("alerts.correction.topicService")}</option>
+                <option value="staff">{t("alerts.correction.topicStaff")}</option>
+                <option value="delivery">{t("alerts.correction.topicDelivery")}</option>
+                <option value="experience">{t("alerts.correction.topicExperience")}</option>
+                <option value="legal">{t("alerts.correction.topicLegal")}</option>
+                <option value="operation">{t("alerts.correction.topicOperation")}</option>
+                <option value="competitor">{t("alerts.correction.topicCompetitor")}</option>
+                <option value="other">{t("alerts.correction.topicOther")}</option>
               </select>
             </div>
           </div>
@@ -2499,12 +2729,12 @@ function CorrectionRequestModal({ item, onClose, triggerToast, createCorrectionR
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-[var(--color-text-primary)] flex items-center gap-1">
               <span className="material-symbols-outlined text-[14px] text-[var(--color-error)]">rate_review</span>
-              Lý do đề xuất sửa nhãn
+              {t("alerts.correction.reasonLabel")}
             </label>
             <textarea
               rows={3}
               required
-              placeholder="Nhập lý do chi tiết..."
+              placeholder={t("alerts.correction.reasonPlaceholder")}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               className="w-full bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] rounded-xl text-xs py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 text-[var(--color-text-primary)]"
@@ -2519,14 +2749,14 @@ function CorrectionRequestModal({ item, onClose, triggerToast, createCorrectionR
             onClick={onClose}
             className="px-4 py-2.5 rounded-xl text-xs font-bold text-[var(--color-text-secondary)] bg-[var(--color-bg-surface-raised)] hover:bg-[var(--color-bg-surface-high)] border border-[var(--color-border)] transition-all cursor-pointer"
           >
-            Đóng
+            {t("alerts.correction.close")}
           </button>
           <button
             type="submit"
             disabled={submitting}
             className="px-4 py-2.5 rounded-xl text-xs font-bold bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand-hover)] active:scale-95 transition-all shadow-sm flex items-center gap-1 cursor-pointer"
           >
-            {submitting ? "Đang gửi..." : "Gửi yêu cầu"}
+            {submitting ? t("alerts.correction.submitting") : t("alerts.correction.submit")}
           </button>
         </div>
       </form>
@@ -2553,10 +2783,10 @@ function CorrectionRequestsList({ requests, resolveCorrectionRequest, isLoadingR
     setResolvingId(requestId);
     try {
       await resolveCorrectionRequest(requestId, alertId, decision, profile);
-      triggerToast(decision === "approved" ? "Đã duyệt và cập nhật nhãn thành công!" : "Đã từ chối yêu cầu chỉnh sửa.");
+      triggerToast(decision === "approved" ? t("alerts.correctionList.approvedToast") : t("alerts.correctionList.rejectedToast"));
     } catch (err) {
       console.error(err);
-      triggerToast("Thao tác thất bại. Vui lòng thử lại!");
+      triggerToast(t("alerts.correctionList.errorToast"));
     } finally {
       setResolvingId(null);
     }
@@ -2578,7 +2808,7 @@ function CorrectionRequestsList({ requests, resolveCorrectionRequest, isLoadingR
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
         </svg>
         <p className="text-sm font-medium animate-pulse text-[var(--color-text-secondary)]">
-          Đang tải danh sách yêu cầu...
+          {t("alerts.correctionList.loading")}
         </p>
       </div>
     );
@@ -2599,7 +2829,7 @@ function CorrectionRequestsList({ requests, resolveCorrectionRequest, isLoadingR
             }`}
         >
           <span className="material-symbols-outlined text-[15px]">pending_actions</span>
-          Chờ duyệt ({pendingCount})
+          {t("alerts.correctionList.pendingTab")} ({pendingCount})
         </button>
 
         <button
@@ -2610,7 +2840,7 @@ function CorrectionRequestsList({ requests, resolveCorrectionRequest, isLoadingR
             }`}
         >
           <span className="material-symbols-outlined text-[15px]">history</span>
-          Lịch sử đã xử lý ({resolvedCount})
+          {t("alerts.correctionList.resolvedTab")} ({resolvedCount})
         </button>
       </div>
 
@@ -2618,12 +2848,12 @@ function CorrectionRequestsList({ requests, resolveCorrectionRequest, isLoadingR
         <div className="flex flex-col items-center justify-center p-12 space-y-3 glass-card rounded-2xl">
           <span className="material-symbols-outlined text-[var(--color-text-secondary)] text-4xl">folder_off</span>
           <p className="text-sm font-bold text-[var(--color-text-primary)]">
-            {subFilter === "pending" ? "Không có yêu cầu chờ duyệt" : "Lịch sử xử lý trống"}
+            {subFilter === "pending" ? t("alerts.correctionList.emptyPending") : t("alerts.correctionList.emptyResolved")}
           </p>
           <p className="text-xs text-[var(--color-text-secondary)] text-center">
             {subFilter === "pending"
-              ? "Mọi đề xuất điều chỉnh nhãn AI từ nhân sự khủng hoảng sẽ được liệt kê tại đây."
-              : "Danh sách lịch sử các yêu cầu đã được duyệt hoặc từ chối chỉnh sửa."}
+              ? t("alerts.correctionList.emptyPendingDesc")
+              : t("alerts.correctionList.emptyResolvedDesc")}
           </p>
         </div>
       ) : (
@@ -2638,10 +2868,10 @@ function CorrectionRequestsList({ requests, resolveCorrectionRequest, isLoadingR
 
           const statusLabel =
             req.status === "approved"
-              ? "Đã duyệt"
+              ? t("alerts.correctionList.approved")
               : req.status === "rejected"
-                ? "Đã từ chối"
-                : "Đang chờ duyệt";
+                ? t("alerts.correctionList.rejected")
+                : t("alerts.correctionList.pending");
 
           return (
             <div
@@ -2656,7 +2886,7 @@ function CorrectionRequestsList({ requests, resolveCorrectionRequest, isLoadingR
                     <span className="text-[10px] text-[var(--color-text-secondary)]">({req.requester_email})</span>
                   </div>
                   <p className="text-[10px] text-[var(--color-text-secondary)] font-medium">
-                    Yêu cầu gửi lúc: {dateText}
+                    {t("alerts.correctionList.sentAt", { date: dateText })}
                   </p>
                 </div>
                 <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider border ${statusColors}`}>
@@ -2666,7 +2896,7 @@ function CorrectionRequestsList({ requests, resolveCorrectionRequest, isLoadingR
 
               {/* Alert context */}
               <div className="space-y-1">
-                <span className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">Nội dung bài viết/bình luận</span>
+                <span className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">{t("alerts.correctionList.contentLabel")}</span>
                 <div className="p-3 bg-[var(--color-bg-surface-raised)] rounded-xl border border-[var(--color-border)] text-xs text-[var(--color-text-secondary)] italic">
                   "{req.alert_text}"
                 </div>
@@ -2676,7 +2906,7 @@ function CorrectionRequestsList({ requests, resolveCorrectionRequest, isLoadingR
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-[var(--color-bg-surface-raised)]/50 p-4 rounded-xl border border-[var(--color-border)]">
                 {/* Sentiment */}
                 <div>
-                  <p className="text-[9px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">Sắc thái</p>
+                  <p className="text-[9px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">{t("alerts.correctionList.sentiment")}</p>
                   <div className="flex items-center gap-1.5 mt-1 text-xs font-bold">
                     <span className="text-red-500 font-bold uppercase">{req.original_sentiment}</span>
                     <span className="material-symbols-outlined text-[12px] text-[var(--color-text-secondary)]">arrow_forward</span>
@@ -2686,7 +2916,7 @@ function CorrectionRequestsList({ requests, resolveCorrectionRequest, isLoadingR
 
                 {/* Severity */}
                 <div>
-                  <p className="text-[9px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">Độ nghiêm trọng</p>
+                  <p className="text-[9px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">{t("alerts.correctionList.severity")}</p>
                   <div className="flex items-center gap-1.5 mt-1 text-xs font-bold">
                     <span className="text-amber-600 font-bold uppercase">{req.original_severity}</span>
                     <span className="material-symbols-outlined text-[12px] text-[var(--color-text-secondary)]">arrow_forward</span>
@@ -2696,7 +2926,7 @@ function CorrectionRequestsList({ requests, resolveCorrectionRequest, isLoadingR
 
                 {/* Topic */}
                 <div>
-                  <p className="text-[9px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">Chủ đề</p>
+                  <p className="text-[9px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">{t("alerts.correctionList.topic")}</p>
                   <div className="flex items-center gap-1.5 mt-1 text-xs font-bold">
                     <span className="text-[var(--color-text-secondary)] font-bold uppercase">{req.original_topic}</span>
                     <span className="material-symbols-outlined text-[12px] text-[var(--color-text-secondary)]">arrow_forward</span>
@@ -2707,7 +2937,7 @@ function CorrectionRequestsList({ requests, resolveCorrectionRequest, isLoadingR
 
               {/* Reason */}
               <div className="space-y-1">
-                <span className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">Lý do đề xuất</span>
+                <span className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">{t("alerts.correctionList.reason")}</span>
                 <p className="text-xs text-[var(--color-text-primary)] font-medium bg-[var(--color-bg-surface-raised)]/30 p-2.5 rounded-lg border border-[var(--color-border)]/50">
                   {req.reason}
                 </p>
@@ -2722,25 +2952,25 @@ function CorrectionRequestsList({ requests, resolveCorrectionRequest, isLoadingR
                       onClick={() => handleResolve(req.id, req.alert_id, "rejected")}
                       className="px-4 py-2 rounded-xl text-xs font-bold border border-red-500/30 text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
                     >
-                      {resolvingId === req.id ? "Đang xử lý..." : "Từ chối"}
+                      {resolvingId === req.id ? t("alerts.correctionList.processing") : t("alerts.correctionList.rejectBtn")}
                     </button>
                     <button
                       disabled={resolvingId !== null}
                       onClick={() => handleResolve(req.id, req.alert_id, "approved")}
                       className="px-4 py-2 rounded-xl text-xs font-bold bg-green-600 text-white hover:bg-green-700 active:scale-95 transition-all shadow-sm cursor-pointer"
                     >
-                      {resolvingId === req.id ? "Đang xử lý..." : "Phê duyệt"}
+                      {resolvingId === req.id ? t("alerts.correctionList.processing") : t("alerts.correctionList.approveBtn")}
                     </button>
                   </div>
                 ) : (
                   <p className="text-[10px] text-amber-600 font-bold text-right italic">
-                    Đang chờ cấp quản lý duyệt...
+                    {t("alerts.correctionList.waitingApproval")}
                   </p>
                 )
               ) : (
                 <div className="pt-2 border-t border-[var(--color-border)]/50 flex items-center justify-between text-[10px] text-[var(--color-text-secondary)] font-medium">
-                  <span>Người duyệt: UID {req.resolved_by?.slice(0, 8)}...</span>
-                  <span>Thời gian: {req.resolved_at ? new Date(req.resolved_at).toLocaleString("vi-VN") : ""}</span>
+                  <span>{t("alerts.correctionList.reviewer", { uid: req.resolved_by?.slice(0, 8) })}</span>
+                  <span>{t("alerts.correctionList.resolvedTime", { time: req.resolved_at ? new Date(req.resolved_at).toLocaleString("vi-VN") : "" })}</span>
                 </div>
               )}
             </div>
