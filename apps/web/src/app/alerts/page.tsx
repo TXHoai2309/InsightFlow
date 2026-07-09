@@ -34,9 +34,17 @@ import {
 // Helper function to calculate relative time
 function getRelativeTime(isoString: string, t: any): string {
   try {
+    if (!isoString) return t("mentions.table.unknownTimeDesc") || "Không rõ";
     const date = new Date(isoString);
+    if (isNaN(date.getTime())) return t("mentions.table.unknownTimeDesc") || "Không rõ";
+
+    // Format: dd/mm/yyyy for fallback display
+    const formatted = `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`;
+
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
+    if (diffMs < 0) return formatted; // future date → show actual date
+
     const diffMins = Math.floor(diffMs / 60000);
     if (diffMins < 1) return t("mentions.table.justNow");
     if (diffMins < 60) return t("mentions.table.minutesAgo", { count: diffMins });
@@ -46,10 +54,11 @@ function getRelativeTime(isoString: string, t: any): string {
     if (diffDays < 30) return t("mentions.table.daysAgo", { count: diffDays });
     const diffMonths = Math.floor(diffDays / 30);
     if (diffMonths < 12) return t("mentions.table.monthsAgo", { count: diffMonths });
-    const diffYears = Math.floor(diffMonths / 12);
-    return t("mentions.table.yearsAgo", { count: diffYears });
+
+    // Older than 1 year → show actual date instead of "X năm trước"
+    return formatted;
   } catch (e) {
-    return t("mentions.table.justNow");
+    return t("mentions.table.unknownTimeDesc") || "Không rõ";
   }
 }
 
@@ -178,6 +187,10 @@ export default function AlertsPage() {
   const [sortBy, setSortBy] = useState<"risk" | "newest" | "reach">("risk");
   const [isResolvedExpanded, setIsResolvedExpanded] = useState(false);
   const [isRequestsExpanded, setIsRequestsExpanded] = useState(false);
+  const [timeFilter, setTimeFilter] = useState<string>("all");
+  const [customStartDate, setCustomStartDate] = useState<string>("");
+  const [customEndDate, setCustomEndDate] = useState<string>("");
+  const [showDatePopover, setShowDatePopover] = useState(false);
 
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
@@ -252,23 +265,77 @@ export default function AlertsPage() {
   } = useAlertStore();
   // Filter alerts by currently selected brand filter for dashboard overview calculations
   const brandFilteredAlerts = useMemo(() => {
-    if (!filters.brand || filters.brand === "all") return rawAlerts;
-    const normalize = (b: string) => String(b || "").toLowerCase().replace(/[\s\-_.]/g, "").trim();
-    const targetKey = normalize(filters.brand);
-    return rawAlerts.filter(a => {
-      let aKey = normalize(a.brand);
-      if (aKey.includes("highland")) aKey = "highlandcoffee";
-      if (aKey.includes("starbuck")) aKey = "starbucks";
-      if (aKey.includes("mixue")) aKey = "mixue";
+    let result = rawAlerts;
 
-      let tKey = targetKey;
-      if (tKey.includes("highland")) tKey = "highlandcoffee";
-      if (tKey.includes("starbuck")) tKey = "starbucks";
-      if (tKey.includes("mixue")) tKey = "mixue";
+    if (filters.brand && filters.brand !== "all") {
+      const normalize = (b: string) => String(b || "").toLowerCase().replace(/[\s\-_.]/g, "").trim();
+      const targetKey = normalize(filters.brand);
+      result = result.filter(a => {
+        let aKey = normalize(a.brand);
+        if (aKey.includes("highland")) aKey = "highlandcoffee";
+        if (aKey.includes("starbuck")) aKey = "starbucks";
+        if (aKey.includes("mixue")) aKey = "mixue";
 
-      return aKey === tKey;
+        let tKey = targetKey;
+        if (tKey.includes("highland")) tKey = "highlandcoffee";
+        if (tKey.includes("starbuck")) tKey = "starbucks";
+        if (tKey.includes("mixue")) tKey = "mixue";
+
+        return aKey === tKey;
+      });
+    }
+
+    if (timeFilter !== "all") {
+      const now = new Date();
+      let startDate: Date | null = null;
+      let endDate: Date | null = null;
+
+      if (timeFilter === "custom") {
+        if (customStartDate) startDate = new Date(customStartDate + "T00:00:00");
+        if (customEndDate) endDate = new Date(customEndDate + "T23:59:59");
+      } else if (timeFilter === "7d") {
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      } else if (timeFilter === "30d") {
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      } else if (timeFilter === "this_month") {
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      } else if (timeFilter === "last_month") {
+        startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        endDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      } else if (/^\d{4}-\d{2}$/.test(timeFilter)) {
+        const [year, month] = timeFilter.split("-").map(Number);
+        startDate = new Date(year, month - 1, 1);
+        endDate = new Date(year, month, 1);
+      }
+
+      if (startDate || endDate) {
+        result = result.filter(a => {
+          const alertDate = new Date(a.created_at);
+          // Exclude alerts with invalid/missing date when filtering by time
+          if (!a.created_at || isNaN(alertDate.getTime())) return false;
+          if (startDate && alertDate < startDate) return false;
+          if (endDate && alertDate > endDate) return false;
+          return true;
+        });
+      }
+    }
+
+    return result;
+  }, [rawAlerts, filters.brand, timeFilter, customStartDate, customEndDate]);
+
+  const availableMonths = useMemo(() => {
+    const monthSet = new Set<string>();
+    rawAlerts.forEach(a => {
+      try {
+        const d = new Date(a.created_at);
+        if (!isNaN(d.getTime())) {
+          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+          monthSet.add(key);
+        }
+      } catch { }
     });
-  }, [rawAlerts, filters.brand]);
+    return Array.from(monthSet).sort().reverse();
+  }, [rawAlerts]);
 
   const getRiskScore = (alert: any) => {
     return alert.negativity_score ?? 0;
@@ -743,11 +810,10 @@ export default function AlertsPage() {
               )}
             </div>
 
-            <div className="flex items-center gap-3 self-end sm:self-auto w-full sm:w-auto">
+            <div className="flex items-center gap-2 self-end sm:self-auto w-full sm:w-auto">
+              {/* Search */}
               <div className="relative flex-grow sm:flex-grow-0">
-                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">
-                  search
-                </span>
+                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">search</span>
                 <input
                   type="text"
                   placeholder="Tìm kiếm vụ việc..."
@@ -757,7 +823,7 @@ export default function AlertsPage() {
                 />
               </div>
 
-              {/* Brand Selector to scope database counts */}
+              {/* Brand Selector */}
               <select
                 value={filters.brand}
                 onChange={(e) => setFilters({ brand: e.target.value })}
@@ -769,14 +835,67 @@ export default function AlertsPage() {
                 ))}
               </select>
 
-              <button className="relative p-2 rounded-xl border border-[var(--color-border)] hover:bg-[var(--color-bg-surface-raised)] text-slate-500 hover:text-slate-800 transition-all flex items-center justify-center cursor-pointer">
-                <span className="material-symbols-outlined text-base">notifications</span>
-                {activeAlerts.filter(a => a.severity.toLowerCase() === "critical").length > 0 && (
-                  <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-red-500"></span>
+              {/* Time Range — with floating date popover for custom */}
+              <div className="relative">
+                <select
+                  value={timeFilter}
+                  onChange={(e) => {
+                    setTimeFilter(e.target.value);
+                    setShowDatePopover(e.target.value === "custom");
+                  }}
+                  className="select-app border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 pl-3 pr-8 bg-white dark:bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] focus:outline-none cursor-pointer"
+                >
+                  <option value="all">Tất cả thời gian</option>
+                  <option value="7d">7 ngày qua</option>
+                  <option value="30d">30 ngày qua</option>
+                  <option value="this_month">Tháng này</option>
+                  <option value="last_month">Tháng trước</option>
+                  <option value="custom">
+                    {customStartDate && customEndDate
+                      ? `${customStartDate.split("-").reverse().join("/")} – ${customEndDate.split("-").reverse().join("/")}`
+                      : "Tự chọn ngày"}
+                  </option>
+                </select>
+
+                {/* Floating date picker popover */}
+                {timeFilter === "custom" && showDatePopover && (
+                  <div
+                    className="absolute right-0 top-full mt-1.5 z-50 bg-white dark:bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] rounded-2xl shadow-xl p-3 flex flex-col gap-2 min-w-[240px]"
+                    style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.12)" }}
+                  >
+                    <p className="text-[10px] font-black uppercase tracking-wider text-[var(--color-text-muted)] mb-0.5">Chọn khoảng thời gian</p>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase">Từ ngày</label>
+                      <input
+                        type="date"
+                        value={customStartDate}
+                        onChange={(e) => setCustomStartDate(e.target.value)}
+                        className="border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 px-2 bg-[var(--color-bg-base)] dark:bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] focus:outline-none w-full"
+                        style={{ colorScheme: "light dark" }}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase">Đến ngày</label>
+                      <input
+                        type="date"
+                        value={customEndDate}
+                        onChange={(e) => setCustomEndDate(e.target.value)}
+                        className="border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 px-2 bg-[var(--color-bg-base)] dark:bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] focus:outline-none w-full"
+                        style={{ colorScheme: "light dark" }}
+                      />
+                    </div>
+                    <button
+                      onClick={() => setShowDatePopover(false)}
+                      className="mt-1 w-full py-1.5 rounded-xl bg-[var(--color-brand)] text-white text-xs font-bold hover:opacity-90 transition-opacity"
+                    >
+                      Áp dụng
+                    </button>
+                  </div>
                 )}
-              </button>
+              </div>
             </div>
           </div>
+
 
           {/* Filters, Pills & Dropdowns Row */}
           <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--color-border)]/50 pb-4">
@@ -959,19 +1078,19 @@ export default function AlertsPage() {
                           <PlatformLogo platform={alert.source} size="sm" />
                           <span className="text-[9px] font-bold text-[var(--color-text-muted)] uppercase">
                             {alert.source === "google_maps" ? "Google Maps" : alert.source === "thread" ? "Threads" : alert.source === "befood" ? "BeFood" : alert.source.charAt(0).toUpperCase() + alert.source.slice(1)}
+                            {alert.content_type && ` · ${alert.content_type.toUpperCase()}`}
                           </span>
                         </div>
                         <span className="text-slate-300 dark:text-slate-600">·</span>
                         <span className="bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 text-[9px] font-bold px-1.5 py-0.5 rounded border border-blue-100 dark:border-blue-900/30">
                           {t(`dashboard.topics.${alert.topic}`, { defaultValue: alert.topic })}
                         </span>
-                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
-                          alert.sentiment === "negative"
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${alert.sentiment === "negative"
                             ? "bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border-red-100 dark:border-red-900/30"
                             : alert.sentiment === "positive"
-                            ? "bg-green-50 dark:bg-green-950/20 text-green-600 dark:text-green-400 border-green-100 dark:border-green-900/30"
-                            : "bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700"
-                        }`}>
+                              ? "bg-green-50 dark:bg-green-950/20 text-green-600 dark:text-green-400 border-green-100 dark:border-green-900/30"
+                              : "bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700"
+                          }`}>
                           {alert.sentiment === "negative" ? "Tiêu cực" : alert.sentiment === "positive" ? "Tích cực" : "Trung lập"}
                         </span>
                         {(alert.reach ?? 0) > 50000 && (

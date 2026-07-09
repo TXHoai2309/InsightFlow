@@ -983,6 +983,7 @@ File changelog trong repo nên giữ chi tiết commit như trên để truy v�
 - Hỗ trợ đầy đủ 5 trường nhãn chỉnh sửa sắc thái, mức độ, chủ đề, độ liên quan và ý định mua hàng (Sentiment, Severity/Urgency, Topic, Relevance, Intent) lấy từ công cụ gán nhãn gốc `LabelSelector.tsx`.
 - Thêm bộ lọc nhanh loại nội dung **Bài viết (Post)** và **Bình luận (Comment)** trong hàng chờ ưu tiên xử lý ở trang Alerts.
 - Tích hợp và đồng bộ hai chiều thời gian thực (real-time sync) giữa trang chi tiết vụ việc (`/alerts/[id]`) và trang duyệt gán nhãn chung (`/label-requests`) bằng cách lưu trữ chung trong collection Firestore `label_change_requests` và lịch sử ở `label_change_history`.
+- Giới hạn dữ liệu nhãn cảnh báo tải về từ Supabase chỉ hiển thị các bản ghi có thời điểm đăng bài viết/bình luận gốc (`posted_at`) trong **3 tháng gần đây nhất** để đảm bảo hiệu suất và tập trung hoàn toàn vào các sự vụ mới phát sinh.
 
 ### Changed
 
@@ -995,3 +996,4 @@ File changelog trong repo nên giữ chi tiết commit như trên để truy v�
 - Khắc phục lỗi trùng lặp/ghi đè thuộc tính khi load/cập nhật thông tin rủi ro nhờ mapping chính xác các trường dữ liệu Supabase annotations và Firestore.
 - Sửa lỗi hiển thị sai thời gian tương đối của các vụ việc rủi ro bằng cách ánh xạ đúng trường thời gian đăng bài gốc (`posted_at`) thay vì ngày cập nhật nhãn kiểm duyệt (`updated_at`).
 - Bổ sung logic tính toán và hiển thị thời gian tương đối theo **tháng** (`X tháng trước`) hoặc **năm** (`X năm trước`) khi khoảng cách số ngày đăng bài quá lớn.
+- Bổ sung ánh xạ trường `content_type` từ Supabase annotations và hiển thị nhãn loại nội dung tương ứng (`POST` / `COMMENT`) trực tiếp trên mỗi thẻ cảnh báo để người dùng dễ nhận diện khi sử dụng bộ lọc.

@@ -25,11 +25,20 @@ function formatBrandName(brand: string): string {
 
 // Inline helper for calculating relative time
 function getRelativeTime(isoString: string | undefined): string {
-  if (!isoString) return "Vừa xong";
+  if (!isoString) return "Không rõ";
   try {
     const date = new Date(isoString);
+    if (isNaN(date.getTime())) return "Không rõ";
+
+    // Format helper: dd/mm/yyyy
+    const formatted = `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`;
+
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
+
+    // Future date → show formatted date
+    if (diffMs < 0) return formatted;
+
     const diffMins = Math.floor(diffMs / 60000);
     if (diffMins < 1) return "Vừa xong";
     if (diffMins < 60) return `${diffMins} phút trước`;
@@ -39,10 +48,11 @@ function getRelativeTime(isoString: string | undefined): string {
     if (diffDays < 30) return `${diffDays} ngày trước`;
     const diffMonths = Math.floor(diffDays / 30);
     if (diffMonths < 12) return `${diffMonths} tháng trước`;
-    const diffYears = Math.floor(diffMonths / 12);
-    return `${diffYears} năm trước`;
+
+    // Older than a year → show formatted date
+    return formatted;
   } catch (e) {
-    return "Vừa xong";
+    return "Không rõ";
   }
 }
 

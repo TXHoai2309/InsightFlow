@@ -210,11 +210,15 @@ export async function fetchSupabaseAlerts(): Promise<AlertData[]> {
   const PER_PLATFORM = 100;
   const negFilter = encodeURIComponent('"sentiment":"negative"');
 
+  const threeMonthsAgo = new Date();
+  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+  const threeMonthsAgoISO = threeMonthsAgo.toISOString();
+
   const platformBatches = await Promise.all(
     PLATFORMS.map((p) =>
       supabaseRequest<SupabaseAnnotationRow[]>(
         "annotations",
-        `status=eq.completed&platform=eq.${p}&label=like.*${negFilter}*&order=updated_at.desc&limit=${PER_PLATFORM}`
+        `status=eq.completed&platform=eq.${p}&label=like.*${negFilter}*&updated_at=gte.${threeMonthsAgoISO}&order=updated_at.desc&limit=${PER_PLATFORM}`
       ).catch(() => [] as SupabaseAnnotationRow[])
     )
   );
@@ -291,6 +295,16 @@ export async function fetchSupabaseAlerts(): Promise<AlertData[]> {
       const post_content = String(post?.payload_json?.text || post?.url || "");
       const comment_content = anno.entity_type === "comment" ? text : "";
 
+      const postedAtStr = comment?.posted_at || commentPayload.posted_at || post?.posted_at || postPayload.posted_at || anno.updated_at;
+      if (postedAtStr) {
+        const postedDate = new Date(postedAtStr);
+        const limitDate = new Date();
+        limitDate.setMonth(limitDate.getMonth() - 3);
+        if (postedDate.getTime() < limitDate.getTime()) {
+          continue; // Skip if the original post/comment was published more than 3 months ago
+        }
+      }
+
       const alert: AlertData = {
         id: anno.entity_key, // Use entity_key as ID
         brand,
@@ -300,7 +314,7 @@ export async function fetchSupabaseAlerts(): Promise<AlertData[]> {
         topic,
         severity,
         negativity_score,
-        created_at: parseDate(comment?.posted_at || commentPayload.posted_at || post?.posted_at || postPayload.posted_at || anno.updated_at),
+        created_at: parseDate(postedAtStr),
         status: String(labelObj.resolution_status || "new"),
         resolved_at: labelObj.resolved_at ? parseDate(labelObj.resolved_at) : undefined,
         collectionName: "annotations",
