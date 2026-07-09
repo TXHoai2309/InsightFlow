@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { useAlertStore, type AlertData, type EscalationData } from "@/stores/alert.store";
@@ -10,6 +10,7 @@ import { dbSecond } from "@/lib/firebase";
 import { doc, onSnapshot, updateDoc, arrayUnion, collection, addDoc } from "firebase/firestore";
 import { canPerformAction } from "@/lib/rbac";
 import { fetchSingleSupabaseAlert, updateSupabaseAlertLabel, fetchCommentsForPost, type PostComment } from "@/lib/supabase";
+import { supabaseClient } from "@/lib/supabaseClient";
 // Helper function to format brand display names
 function formatBrandName(brand: string): string {
   if (!brand) return "";
@@ -241,6 +242,7 @@ export default function AlertDetailPage() {
 
   const [alert, setAlert] = useState<AlertData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Post comments state (for post-type alerts)
   const [postComments, setPostComments] = useState<PostComment[]>([]);
@@ -441,36 +443,70 @@ export default function AlertDetailPage() {
     }
   };
 
-  // Real-time Supabase doc polling
+  const loadAlertDetail = useCallback(async (showGlobalLoading = false) => {
+    if (!id) return;
+    if (showGlobalLoading) {
+      setLoading(true);
+    } else {
+      setRefreshing(true);
+    }
+    try {
+      let detail = await fetchSingleSupabaseAlert(id);
+      if (!detail) {
+        const storeAlert = useAlertStore.getState().rawAlerts.find(a => a.id === id);
+        if (storeAlert) detail = storeAlert;
+      }
+      if (detail) {
+        setAlert(detail);
+        setNewSeverity(detail.severity || "medium");
+      } else {
+        setAlert(null);
+      }
+    } catch (err) {
+      console.error("Error loading alert document details from Supabase:", err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [id]);
+
+  // Real-time detail sync: Supabase Realtime (push) + manual refresh
   useEffect(() => {
     if (!id) return;
-    setLoading(true);
 
-    const loadAlertDetail = async () => {
+    // Initial load with global loading state
+    loadAlertDetail(true);
+
+    const cleanupFns: (() => void)[] = [];
+
+    // Strategy 1: Supabase Realtime — push updates when this specific annotation changes
+    if (supabaseClient) {
       try {
-        let detail = await fetchSingleSupabaseAlert(id);
-        if (!detail) {
-          const storeAlert = useAlertStore.getState().rawAlerts.find(a => a.id === id);
-          if (storeAlert) detail = storeAlert;
-        }
-        if (detail) {
-          setAlert(detail);
-          setNewSeverity(detail.severity || "medium");
-        } else {
-          setAlert(null);
-        }
+        const channelName = `alert-detail-${id.replace(/[^a-zA-Z0-9]/g, "-")}`;
+        const channel = supabaseClient
+          .channel(channelName)
+          .on(
+            "postgres_changes",
+            { event: "UPDATE", schema: "public", table: "annotations" },
+            () => {
+              // Any annotation update — reload this detail
+              loadAlertDetail(false);
+            }
+          )
+          .subscribe();
+
+        cleanupFns.push(() => { if (supabaseClient) supabaseClient.removeChannel(channel); });
       } catch (err) {
-        console.error("Error loading alert document details from Supabase:", err);
-      } finally {
-        setLoading(false);
+        console.warn("[AlertDetail] Realtime subscription failed:", err);
       }
-    };
+    }
 
-    loadAlertDetail();
+    // Strategy 2: Fallback polling is disabled to reduce server load.
+    // Relying on manual "Làm mới" button and realtime push instead.
 
-    const intervalId = setInterval(loadAlertDetail, 3000); // 3 seconds for active sync
-    return () => clearInterval(intervalId);
-  }, [id]);
+    return () => cleanupFns.forEach((fn) => fn());
+  }, [id, loadAlertDetail]);
+
 
   // Fetch comments when alert is a post
   useEffect(() => {
@@ -482,26 +518,9 @@ export default function AlertDetailPage() {
       .finally(() => setLoadingComments(false));
   }, [alert?.post_id, alert?.content_type]);
 
-  // Lock status on component mount, unlock on unmount
-  useEffect(() => {
-    if (!id || !profile) return;
-
-    // Automatically trigger lock resolution if it is NOT yet locked
-    const triggerLock = async () => {
-      try {
-        await lockAlertForResolution(id, profile);
-      } catch (e) {
-        console.error("Failed to auto-lock alert document on detail load:", e);
-      }
-    };
-    triggerLock();
-
-    return () => {
-      unlockAlertForResolution(id).catch((err) =>
-        console.error("Failed to unlock alert on unmount:", err)
-      );
-    };
-  }, [id, profile]);
+  // NOTE: Detail page does NOT auto-lock on mount.
+  // Locking only happens when the Crisis Officer clicks "Nhận xử lý" on the list page.
+  // This prevents Brand Managers or observers from accidentally overwriting the lock.
 
   // Handler: direct note submit on processing history timeline
   const handleAddTimelineNote = async () => {
@@ -726,6 +745,18 @@ export default function AlertDetailPage() {
         </div>
 
         <div className="flex gap-2 self-end sm:self-auto">
+           <button
+            onClick={() => {
+              loadAlertDetail(false);
+              triggerToast("Đã làm mới dữ liệu!");
+            }}
+            disabled={refreshing}
+            className="flex items-center gap-1 px-4 py-2 border border-[var(--color-border)] text-[var(--color-text-secondary)] font-bold text-xs rounded-xl hover:bg-[var(--color-bg-surface-raised)] transition-all cursor-pointer disabled:opacity-50"
+          >
+            <span className={`material-symbols-outlined text-sm ${refreshing ? 'animate-spin' : ''}`}>refresh</span>
+            Làm mới
+          </button>
+
           <button
             onClick={() => {
               navigator.clipboard.writeText(window.location.href);

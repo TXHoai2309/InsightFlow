@@ -343,9 +343,22 @@ export default function AlertsPage() {
   };
 
   // Filter alerts into active, resolved, and requests
+  // Tasks being handled by OTHERS are hidden from the shared list
+  // They only appear in the "Mine Only" view of the assigned person
   const activeAlerts = useMemo(() => {
-    return brandFilteredAlerts.filter(a => a.status.toLowerCase() !== "resolved");
-  }, [brandFilteredAlerts]);
+    return brandFilteredAlerts.filter(a => {
+      if (a.status.toLowerCase() === "resolved") return false;
+      // Hide from shared list if someone ELSE already claimed this task
+      if (
+        a.being_resolved_by &&
+        a.being_resolved_by !== profile?.email &&
+        (a.status.toLowerCase() === "resolving" || a.status.toLowerCase() === "pending_approval")
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [brandFilteredAlerts, profile?.email]);
 
   const resolvedAlerts = useMemo(() => {
     return brandFilteredAlerts.filter(a => a.status.toLowerCase() === "resolved");
@@ -650,14 +663,8 @@ export default function AlertsPage() {
 
 
 
-  // Cleanup lock on component unmount
-  useEffect(() => {
-    return () => {
-      if (resolvingAlert?.id) {
-        unlockAlertForResolution(resolvingAlert.id);
-      }
-    };
-  }, [resolvingAlert?.id, unlockAlertForResolution]);
+  // NOTE: No auto-unlock on unmount — tasks stay claimed by the assigned officer
+  // Unlock only happens when status changes to "resolved"
 
   // Resolve parent post/comment text for Evidence Detail Modal
   useEffect(() => {
@@ -1157,7 +1164,25 @@ export default function AlertsPage() {
                   }`}
               >
                 {t("alerts.page.mineOnly")}
-</button>
+              </button>
+
+              {/* Reload Button */}
+              <button
+                onClick={async () => {
+                  try {
+                    await fetchAlerts(scopedBrandKey);
+                    await fetchCorrectionRequests(scopedBrandKey);
+                    triggerToast("Đã làm mới dữ liệu!");
+                  } catch (e) {
+                    triggerToast("Lỗi làm mới dữ liệu!");
+                  }
+                }}
+                disabled={isLoading || isLoadingRequests}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold border border-[var(--color-border)] text-[var(--color-text-secondary)] bg-white dark:bg-[var(--color-bg-surface-raised)] hover:bg-slate-50 transition-all cursor-pointer disabled:opacity-50"
+              >
+                <span className={`material-symbols-outlined text-sm ${(isLoading || isLoadingRequests) ? 'animate-spin' : ''}`}>refresh</span>
+                Làm mới
+              </button>
             </div>
           </div>
 
@@ -1330,9 +1355,16 @@ export default function AlertsPage() {
                       ) : (
                         <div className="w-full space-y-2">
                           <button
-                            onClick={() => {
-                              lockAlertForResolution(alert.id, profile);
-                              setResolvingAlert(alert);
+                            onClick={async () => {
+                              try {
+                                // Nhận task: set status=resolving + lock người nhận ngay lập tức
+                                // Task sẽ biến khỏi danh sách chung, chỉ hiện trong "Của tôi"
+                                await updateAlertStatus(alert.id, "resolving", profile, { note: "Đã tiếp nhận xử lý" }, alert.brand);
+                                await lockAlertForResolution(alert.id, profile);
+                                triggerToast("✅ Đã tiếp nhận vụ việc. Vào mục 'Của tôi' để xem.");
+                              } catch (err: any) {
+                                triggerToast("❌ " + (err?.message || "Không thể tiếp nhận vụ việc."));
+                              }
                             }}
                             className="w-full py-2 rounded-xl bg-[#0f172a] hover:bg-[#1e293b] dark:bg-slate-800 dark:hover:bg-slate-700 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
                           >
@@ -1584,12 +1616,16 @@ export default function AlertsPage() {
         <ResolutionModal
           alert={resolvingAlert}
           onClose={() => {
-            unlockAlertForResolution(resolvingAlert.id);
+            // KHÔNG unlock khi đóng modal — task vẫn được gán cho người nhận
             setResolvingAlert(null);
           }}
           onSave={async (id, note, imageUrl, targetStatus = "resolving") => {
-            await updateAlertStatus(id, targetStatus, profile, { note, image_url: imageUrl });
-            unlockAlertForResolution(id);
+            await updateAlertStatus(id, targetStatus, profile, { note, image_url: imageUrl }, resolvingAlert.brand);
+            // Chỉ unlock khi đã resolved hoàn toàn
+            if (targetStatus === "resolved") {
+              unlockAlertForResolution(id);
+            }
+            setResolvingAlert(null);
           }}
         />
       )}

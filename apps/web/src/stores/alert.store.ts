@@ -6,6 +6,7 @@ import { isRecordInBrandScope, isSameBrandScope, getScopedBrandKey } from "@/lib
 import { normalizeBrandName } from "@/lib/services/dashboard";
 import { canPerformAction, type UserRoleProfile } from "@/lib/rbac";
 import { fetchSupabaseAlerts, updateSupabaseAlertLabel } from "@/lib/supabase";
+import { supabaseClient } from "@/lib/supabaseClient";
 
 function getResolverName(emailOrId: string | null | undefined): string {
   if (!emailOrId) return "";
@@ -166,6 +167,7 @@ interface AlertState {
   ) => Promise<void>;
   lockAlertForResolution: (id: string, profile: UserRoleProfile | null | undefined) => Promise<void>;
   unlockAlertForResolution: (id: string) => Promise<void>;
+  recentLocks: Record<string, { email: string | null; timestamp: number }>;
 }
 
 function parseDate(field: unknown): string {
@@ -279,6 +281,7 @@ export const useAlertStore = create<AlertState>()(
     error: null,
     correctionRequests: [],
     isLoadingRequests: false,
+    recentLocks: {},
     filters: {
       brand: "all",
       status: "all",
@@ -296,6 +299,7 @@ export const useAlertStore = create<AlertState>()(
     },
 
     fetchAlerts: async (scopedBrandKey = null) => {
+      // Clean up any existing subscription/interval
       if (activeUnsubscribe) {
         activeUnsubscribe();
         activeUnsubscribe = null;
@@ -303,37 +307,88 @@ export const useAlertStore = create<AlertState>()(
 
       set({ isLoading: true, error: null });
 
+      // Core function: fetch full alert list from Supabase REST
+      const loadAlerts = async () => {
+        try {
+          const fetched = await fetchSupabaseAlerts();
+          const filtered = fetched.filter((alert) =>
+            isRecordInBrandScope({ brand: alert.brand }, scopedBrandKey)
+          );
+
+          const scopedBrands = Array.from(new Set(filtered.map((alert) => alert.brand))).sort();
+          const fallbackBrands = ["Highland Coffee", "Starbucks", "Mixue"].filter((brand) => {
+            return !scopedBrandKey || normalizeBrandName(brand) === scopedBrandKey;
+          });
+
+          // Merge with recent lock cache to avoid race condition overwrites
+          const recentLocks = get().recentLocks || {};
+          const merged = filtered.map((fetchedAlert) => {
+            const recent = recentLocks[fetchedAlert.id];
+            if (recent && Date.now() - recent.timestamp < 15000) {
+              return {
+                ...fetchedAlert,
+                being_resolved_by: recent.email,
+                being_resolved_at: recent.email
+                  ? fetchedAlert.being_resolved_at || new Date(recent.timestamp).toISOString()
+                  : null,
+              };
+            }
+            return fetchedAlert;
+          });
+
+          set({
+            rawAlerts: merged,
+            alerts: applyFilters(merged, get().filters),
+            brands: scopedBrands.length ? scopedBrands : fallbackBrands,
+            error: null,
+            isLoading: false,
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Lỗi đồng bộ Supabase";
+          set({ error: message, isLoading: false });
+          console.error("[AlertStore] loadAlerts error:", message, error);
+        }
+      };
+
       try {
-        const loadAlerts = async () => {
-          try {
-            const fetched = await fetchSupabaseAlerts();
-            const filtered = fetched.filter((alert) =>
-              isRecordInBrandScope({ brand: alert.brand }, scopedBrandKey)
-            );
-
-            const scopedBrands = Array.from(new Set(filtered.map((alert) => alert.brand))).sort();
-            const fallbackBrands = ["Highland Coffee", "Starbucks", "Mixue"].filter((brand) => {
-              return !scopedBrandKey || normalizeBrandName(brand) === scopedBrandKey;
-            });
-
-            set({
-              rawAlerts: filtered,
-              alerts: applyFilters(filtered, get().filters),
-              brands: scopedBrands.length ? scopedBrands : fallbackBrands,
-              error: null,
-              isLoading: false,
-            });
-          } catch (error) {
-            const message = error instanceof Error ? error.message : "Lỗi đồng bộ Supabase";
-            set({ error: message, isLoading: false });
-            console.error("[AlertStore] poll error:", message, error);
-          }
-        };
-
+        // Initial load
         await loadAlerts();
 
-        const intervalId = setInterval(loadAlerts, 4000); // 4 seconds for list sync
-        activeUnsubscribe = () => clearInterval(intervalId);
+        const cleanupFns: (() => void)[] = [];
+
+        // ===== STRATEGY 1: Supabase Realtime subscription =====
+        // Listens for ANY UPDATE on the annotations table and triggers a full reload.
+        // This gives sub-second updates to ALL connected clients simultaneously.
+        if (supabaseClient) {
+          try {
+            const channel = supabaseClient
+              .channel("alert-annotations-global")
+              .on(
+                "postgres_changes",
+                { event: "UPDATE", schema: "public", table: "annotations" },
+                () => {
+                  // Push notification received — reload full list
+                  loadAlerts();
+                }
+              )
+              .subscribe((status) => {
+                console.log("[AlertStore] Realtime subscription status:", status);
+              });
+
+            cleanupFns.push(() => { if (supabaseClient) supabaseClient.removeChannel(channel); });
+
+            console.log("[AlertStore] ✅ Supabase Realtime active — instant cross-client sync enabled");
+          } catch (realtimeErr) {
+            console.warn("[AlertStore] Realtime init failed, falling back to polling:", realtimeErr);
+          }
+        }
+
+        // ===== STRATEGY 2: Fallback polling (8s) =====
+        // Disabled to reduce server load. Relying on Realtime sync & Manual Refresh.
+        // const intervalId = setInterval(loadAlerts, 8000);
+        // cleanupFns.push(() => clearInterval(intervalId));
+
+        activeUnsubscribe = () => cleanupFns.forEach((fn) => fn());
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Không thể khởi tạo đồng bộ";
@@ -415,6 +470,17 @@ export const useAlertStore = create<AlertState>()(
               resolved_by_email: resolvedAt ? profile.email : null,
               resolved_by_name: resolvedAt ? profile.displayName : null,
               escalation: attempt?.escalation !== undefined ? attempt.escalation : alert.escalation,
+              // When claiming a task, set being_resolved_by immediately in local state
+              // so the filter hides it from other officers instantly
+              ...(newStatus === "resolving" ? {
+                being_resolved_by: profile.email,
+                being_resolved_at: new Date().toISOString(),
+              } : {}),
+              // When resolved, clear the lock
+              ...(newStatus === "resolved" ? {
+                being_resolved_by: null,
+                being_resolved_at: null,
+              } : {}),
             };
           }
           return alert;
@@ -712,11 +778,36 @@ export const useAlertStore = create<AlertState>()(
 
     lockAlertForResolution: async (id, profile) => {
       if (!profile) return;
+      const now = new Date().toISOString();
+      
+      // Update local state immediately
+      set((state) => {
+        const nextRawAlerts = state.rawAlerts.map((alert) => {
+          if (alert.id === id) {
+            return {
+              ...alert,
+              being_resolved_by: profile.email,
+              being_resolved_at: now,
+            };
+          }
+          return alert;
+        });
+
+        const nextRecentLocks = { ...state.recentLocks };
+        nextRecentLocks[id] = { email: profile.email, timestamp: Date.now() };
+
+        return {
+          rawAlerts: nextRawAlerts,
+          alerts: applyFilters(nextRawAlerts, state.filters),
+          recentLocks: nextRecentLocks,
+        };
+      });
+
       try {
         await updateSupabaseAlertLabel(id, (existingLabel) => ({
           ...existingLabel,
           being_resolved_by: profile.email,
-          being_resolved_at: new Date().toISOString(),
+          being_resolved_at: now,
         }));
       } catch (error) {
         console.error("[AlertStore] Failed to lock alert:", error);
@@ -724,6 +815,29 @@ export const useAlertStore = create<AlertState>()(
     },
 
     unlockAlertForResolution: async (id) => {
+      // Update local state immediately
+      set((state) => {
+        const nextRawAlerts = state.rawAlerts.map((alert) => {
+          if (alert.id === id) {
+            return {
+              ...alert,
+              being_resolved_by: null,
+              being_resolved_at: null,
+            };
+          }
+          return alert;
+        });
+
+        const nextRecentLocks = { ...state.recentLocks };
+        nextRecentLocks[id] = { email: null, timestamp: Date.now() };
+
+        return {
+          rawAlerts: nextRawAlerts,
+          alerts: applyFilters(nextRawAlerts, state.filters),
+          recentLocks: nextRecentLocks,
+        };
+      });
+
       try {
         await updateSupabaseAlertLabel(id, (existingLabel) => ({
           ...existingLabel,
