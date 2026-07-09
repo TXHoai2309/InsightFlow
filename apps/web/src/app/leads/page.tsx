@@ -51,6 +51,7 @@ export default function LeadsPage() {
   const { profile, loading: authLoading } = useAuth();
   const [activeView, setActiveView] = useState<LeadWorkbenchView>("priority");
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [currentTime, setCurrentTime] = useState(Date.now());
@@ -438,6 +439,7 @@ export default function LeadsPage() {
     rememberOptimisticLead(lead);
     setSelectedLeadId(lead.id);
     setDetailTab("action");
+    setIsPanelCollapsed(false);
     const meta = getLeadWorkbenchMeta(lead, currentTime);
     if (meta.needsResultCapture) {
       skipNextPageReset.current = true;
@@ -512,7 +514,11 @@ export default function LeadsPage() {
 
   return (
     <div
-      className="grid min-h-full max-w-[100vw] gap-[clamp(6px,0.55vw,10px)] overflow-hidden p-[clamp(6px,0.6vw,12px)] xl:grid-cols-[minmax(0,var(--lead-main-ratio))_minmax(0,var(--lead-detail-ratio))]"
+      className={`grid min-h-full max-w-[100vw] gap-[clamp(6px,0.55vw,10px)] overflow-hidden p-[clamp(6px,0.6vw,12px)] ${
+        selectedLead && !isPanelCollapsed
+          ? "xl:grid-cols-[minmax(0,var(--lead-main-ratio))_minmax(0,var(--lead-detail-ratio))]"
+          : "grid-cols-1"
+      }`}
       style={
         {
           "--lead-main-ratio": "72fr",
@@ -630,6 +636,16 @@ export default function LeadsPage() {
               <span className="material-symbols-outlined text-base">tune</span>
               Bộ lọc
             </button>
+            {selectedLead && isPanelCollapsed && (
+              <button
+                type="button"
+                onClick={() => setIsPanelCollapsed(false)}
+                className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] px-2.5 py-1.5 text-sm font-semibold text-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)]/80"
+              >
+                <span className="material-symbols-outlined text-base">dock_to_left</span>
+                Xem chi tiết
+              </button>
+            )}
           </div>
 
           {showFilters && (
@@ -686,6 +702,7 @@ export default function LeadsPage() {
                     setSelectedLeadId(nextLead.id);
                     setDetailTab("action");
                     setRestoreNotice("");
+                    setIsPanelCollapsed(false);
                   }}
                   onStartedAction={handleStartedAction}
                 />
@@ -724,23 +741,27 @@ export default function LeadsPage() {
         </section>
       </main>
 
-      <LeadDetailPanel
-        lead={selectedLead}
-        mentions={mentions}
-        nowMs={currentTime}
-        onClose={() => setSelectedLeadId(null)}
-        onAfterResult={handleAfterResult}
-        onStartedAction={handleStartedAction}
-        returnContext={{
-          view: activeView,
-          page: currentPage,
-          selectedLeadId,
-          filters,
-          listScrollTop: getLeadListScrollTop(),
-        }}
-        activeTab={detailTab}
-        onTabChange={setDetailTab}
-      />
+      {selectedLead && !isPanelCollapsed && (
+        <LeadDetailPanel
+          lead={selectedLead}
+          mentions={mentions}
+          nowMs={currentTime}
+          onClose={() => setSelectedLeadId(null)}
+          onAfterResult={handleAfterResult}
+          onStartedAction={handleStartedAction}
+          returnContext={{
+            view: activeView,
+            page: currentPage,
+            selectedLeadId,
+            filters,
+            listScrollTop: getLeadListScrollTop(),
+          }}
+          activeTab={detailTab}
+          onTabChange={setDetailTab}
+          isCollapsed={isPanelCollapsed}
+          onCollapseToggle={() => setIsPanelCollapsed(true)}
+        />
+      )}
     </div>
   );
 }

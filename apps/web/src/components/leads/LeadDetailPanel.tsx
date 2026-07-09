@@ -72,6 +72,8 @@ interface LeadDetailPanelProps {
   };
   activeTab?: LeadDetailPanelTab;
   onTabChange?: (tab: LeadDetailPanelTab) => void;
+  isCollapsed?: boolean;
+  onCollapseToggle?: () => void;
 }
 
 type PanelTab = LeadDetailPanelTab;
@@ -153,6 +155,8 @@ export function LeadDetailPanel({
   returnContext,
   activeTab: activeTabProp,
   onTabChange,
+  isCollapsed,
+  onCollapseToggle,
 }: LeadDetailPanelProps) {
   const { profile } = useAuth();
   const {
@@ -721,14 +725,29 @@ export function LeadDetailPanel({
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full p-1 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-raised)]"
-            aria-label="Đóng chi tiết lead"
-          >
-            <span className="material-symbols-outlined">close</span>
-          </button>
+          <div className="flex items-center gap-1">
+            {onCollapseToggle && (
+              <button
+                type="button"
+                onClick={onCollapseToggle}
+                className="rounded-full p-1 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-raised)]"
+                title="Thu gọn panel"
+                aria-label="Thu gọn panel"
+              >
+                <span className="material-symbols-outlined text-[18px]">
+                  dock_to_right
+                </span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-full p-1 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-raised)]"
+              aria-label="Đóng chi tiết lead"
+            >
+              <span className="material-symbols-outlined">close</span>
+            </button>
+          </div>
         </div>
 
         <div className="mt-3 grid grid-cols-4 gap-1">
