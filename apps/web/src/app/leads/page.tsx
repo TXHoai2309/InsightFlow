@@ -602,20 +602,26 @@ export default function LeadsPage() {
 
         <section className="space-y-[clamp(6px,0.55vw,10px)]">
           <div className="flex flex-col gap-2 min-[1500px]:flex-row min-[1500px]:items-center min-[1500px]:justify-between">
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-2">
               {workbenchViews.map((view) => (
                 <button
                   key={view.id}
                   type="button"
                   onClick={() => setActiveView(view.id)}
-                  className={`rounded-lg border px-2.5 py-1.5 text-sm font-semibold leading-tight transition ${
+                  className={`inline-flex items-center rounded-xl border px-3.5 py-2 text-sm font-bold tracking-tight transition-all duration-200 ${
                     activeView === view.id
-                      ? "border-[var(--color-brand)] bg-[var(--color-brand)] text-white shadow-sm"
-                      : "border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)]"
+                      ? "border-[var(--color-brand)] bg-[var(--color-brand)] text-white shadow-md shadow-[var(--color-brand)]/10"
+                      : "border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-strong)] dark:bg-slate-900/40"
                   }`}
                 >
-                  {view.label}
-                  <span className="ml-2 opacity-80">{viewCounts[view.id]}</span>
+                  <span>{view.label}</span>
+                  <span className={`ml-2 px-2 py-0.5 rounded-full text-[11px] font-extrabold transition-all duration-200 ${
+                    activeView === view.id
+                      ? "bg-white/20 text-white"
+                      : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+                  }`}>
+                    {viewCounts[view.id]}
+                  </span>
                 </button>
               ))}
             </div>

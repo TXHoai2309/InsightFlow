@@ -73,7 +73,7 @@ function normalizeBrandKey(brand: string): string {
 function extractBrandFromKey(key: string | null | undefined): string | null {
   if (!key) return null;
   const lower = key.toLowerCase();
-  if (lower.includes("highland")) return "Highland Coffee";
+  if (lower.includes("highland")) return "Highlands Coffee";
   if (lower.includes("starbuck")) return "Starbucks";
   if (lower.includes("mixue")) return "Mixue";
   return null;
@@ -81,7 +81,7 @@ function extractBrandFromKey(key: string | null | undefined): string | null {
 
 function formatBrandName(brand: string): string {
   const key = normalizeBrandKey(brand);
-  if (key === "highlandcoffee") return "Highland Coffee";
+  if (key === "highlandcoffee") return "Highlands Coffee";
   if (key === "starbucks") return "Starbucks";
   if (key === "mixue") return "Mixue";
   return brand || "Unknown";

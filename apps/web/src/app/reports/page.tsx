@@ -427,7 +427,7 @@ function formatBrandName(brand: string): string {
   if (!brand) return "";
   const lower = brand.toLowerCase().trim();
   if (lower === "mixue") return "Mixue";
-  if (lower.includes("highland")) return "Highland Coffee";
+  if (lower.includes("highland")) return "Highlands Coffee";
   if (lower.includes("starbuck")) return "Starbucks";
 
   return brand
@@ -1293,7 +1293,7 @@ function LegacyReportsPage() {
         setLoading(true);
         const rawData = await DashboardService.fetchRawData();
         const supabaseMentions = filterByBusinessPolicy(rawData.mentions, profile, "view_mentions");
-        const brandOrder = ["Highland Coffee", "Starbucks", "Mixue"];
+        const brandOrder = ["Highlands Coffee", "Starbucks", "Mixue"];
         const brandSet = new Set<string>(brandOrder);
         const data: Mention[] = supabaseMentions
           .map((mention) => ({

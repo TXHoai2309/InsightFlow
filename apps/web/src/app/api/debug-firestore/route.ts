@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { dbSecond, db } from "@/lib/firebase";
+export const dynamic = "force-dynamic";
 import { collection, getDocs, query, limit } from "firebase/firestore";
 
 export async function GET() {

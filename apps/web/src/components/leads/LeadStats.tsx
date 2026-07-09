@@ -138,33 +138,35 @@ export function LeadStats({ leads, isLoading, profile, onSelectView }: LeadStats
   }
 
   return (
-    <div className="grid gap-[clamp(6px,0.55vw,10px)] md:grid-cols-3">
+    <div className="grid gap-3 md:grid-cols-3">
       {cards.map((card) => (
         <button
           key={card.title}
           type="button"
           onClick={() => onSelectView?.(card.view)}
-          className="group grid min-h-[66px] grid-cols-[34px_minmax(0,1fr)_auto] items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-2.5 py-2 text-left shadow-sm transition hover:border-[var(--color-brand-border)] hover:shadow-md"
+          className="group relative overflow-hidden flex min-h-[76px] items-center justify-between gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-4 text-left shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-[var(--color-brand-border)] hover:shadow-md dark:bg-slate-900/40"
         >
-          <span
-            className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg"
-            style={{ backgroundColor: card.bg, color: card.color }}
-          >
-            <span className="material-symbols-outlined text-[20px]">{card.icon}</span>
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-[13px] font-semibold text-[var(--color-text-primary)]">
-              {card.title}
-            </p>
-            <p className="truncate text-xs text-[var(--color-text-secondary)]">
-              {card.sub}
-            </p>
+          <div className="flex items-center gap-3 min-w-0">
+            <span
+              className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-xl shadow-sm transition-transform duration-300 group-hover:scale-105"
+              style={{ backgroundColor: card.bg, color: card.color }}
+            >
+              <span className="material-symbols-outlined text-[22px]">{card.icon}</span>
+            </span>
+            <div className="min-w-0">
+              <p className="text-[14px] font-bold tracking-tight text-[var(--color-text-primary)]">
+                {card.title}
+              </p>
+              <p className="truncate text-xs text-[var(--color-text-secondary)] mt-0.5">
+                {card.sub}
+              </p>
+            </div>
           </div>
-          <div className="flex shrink-0 items-center gap-1">
-            <span className="text-[clamp(24px,1.75vw,30px)] font-bold leading-none tabular-nums" style={{ color: card.color }}>
+          <div className="flex shrink-0 items-center gap-1.5 pl-2">
+            <span className="text-3xl font-extrabold leading-none tabular-nums" style={{ color: card.color }}>
               {card.value}
             </span>
-            <span className="material-symbols-outlined text-[var(--color-text-muted)] transition group-hover:translate-x-0.5">
+            <span className="material-symbols-outlined text-[var(--color-text-muted)] transition-transform duration-300 group-hover:translate-x-0.5">
               chevron_right
             </span>
           </div>

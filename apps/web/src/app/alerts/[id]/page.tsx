@@ -18,7 +18,7 @@ function formatBrandName(brand: string): string {
   const lower = brand.toLowerCase();
   if (lower === "mixue") return "Mixue";
   if (lower.includes("starbuck")) return "Starbucks";
-  if (lower.includes("highland")) return "Highland Coffee";
+  if (lower.includes("highland")) return "Highlands Coffee";
   return brand
     .split(/[-_\s]+/)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())

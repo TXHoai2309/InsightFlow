@@ -107,7 +107,7 @@ export function normalizeBrandName(name: string): string {
 export function formatBrandDisplayName(raw: string): string {
   if (!raw) return "";
   const b = raw.toLowerCase().trim();
-  if (b.includes("highland")) return "Highland Coffee";
+  if (b.includes("highland")) return "Highlands Coffee";
   if (b.includes("starbuck")) return "Starbucks";
   if (b.includes("mixue")) return "Mixue";
   // fallback: capitalize words
@@ -968,8 +968,8 @@ async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
       let searchTerm = brandKey;
       let displayBrandName = brandKey;
       if (brandKey.includes("highland")) {
-        searchTerm = "highlandcoffee";
-        displayBrandName = "Highland Coffee";
+        searchTerm = "highlands-coffee";
+        displayBrandName = "Highlands Coffee";
       } else if (brandKey.includes("starbuck")) {
         searchTerm = "starbucks";
         displayBrandName = "Starbucks";
@@ -1291,7 +1291,7 @@ export class DashboardService {
       // ── Workspaces (derived từ brands trong mentions) ─────────────────────
       // Seed với 3 target brands để đảm bảo luôn hiển thị
       const TARGET_BRAND_MAP: Record<string, string> = {
-        "highland-coffee": "Highland Coffee",
+        "highland-coffee": "Highlands Coffee",
         starbucks: "Starbucks",
         mixue: "Mixue",
       };
