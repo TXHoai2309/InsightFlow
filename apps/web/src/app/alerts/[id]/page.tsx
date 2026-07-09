@@ -1,15 +1,16 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
-import { useAlertStore, type AlertData } from "@/stores/alert.store";
+import { useAlertStore, type AlertData, type EscalationData } from "@/stores/alert.store";
 import { useAuth } from "@/hooks/useAuth";
 import { PlatformLogo } from "@/components/platform/PlatformLogo";
 import { dbSecond } from "@/lib/firebase";
-import { doc, onSnapshot, updateDoc, arrayUnion } from "firebase/firestore";
+import { doc, onSnapshot, updateDoc, arrayUnion, collection, addDoc } from "firebase/firestore";
 import { canPerformAction } from "@/lib/rbac";
 import { fetchSingleSupabaseAlert, updateSupabaseAlertLabel, fetchCommentsForPost, type PostComment } from "@/lib/supabase";
+import { supabaseClient } from "@/lib/supabaseClient";
 // Helper function to format brand display names
 function formatBrandName(brand: string): string {
   if (!brand) return "";
@@ -25,20 +26,34 @@ function formatBrandName(brand: string): string {
 
 // Inline helper for calculating relative time
 function getRelativeTime(isoString: string | undefined): string {
-  if (!isoString) return "Vừa xong";
+  if (!isoString) return "Không rõ";
   try {
     const date = new Date(isoString);
+    if (isNaN(date.getTime())) return "Không rõ";
+
+    // Format helper: dd/mm/yyyy
+    const formatted = `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`;
+
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
+
+    // Future date → show formatted date
+    if (diffMs < 0) return formatted;
+
     const diffMins = Math.floor(diffMs / 60000);
     if (diffMins < 1) return "Vừa xong";
     if (diffMins < 60) return `${diffMins} phút trước`;
     const diffHours = Math.floor(diffMins / 60);
     if (diffHours < 24) return `${diffHours} giờ trước`;
     const diffDays = Math.floor(diffHours / 24);
-    return `${diffDays} ngày trước`;
+    if (diffDays < 30) return `${diffDays} ngày trước`;
+    const diffMonths = Math.floor(diffDays / 30);
+    if (diffMonths < 12) return `${diffMonths} tháng trước`;
+
+    // Older than a year → show formatted date
+    return formatted;
   } catch (e) {
-    return "Vừa xong";
+    return "Không rõ";
   }
 }
 
@@ -153,6 +168,101 @@ function IncidentReportModal({ item, onClose, triggerToast }: IncidentReportModa
   );
 }
 
+// ── Monitoring Transition Modal ──
+interface MonitoringTransitionModalProps {
+  onClose: () => void;
+  onConfirm: (note: string, durationHours: number) => Promise<void>;
+}
+
+function MonitoringTransitionModal({ onClose, onConfirm }: MonitoringTransitionModalProps) {
+  const [note, setNote] = useState("Đã hoàn tất các bước xử lý theo SOP. Chuyển sang trạng thái theo dõi thêm.");
+  const [duration, setDuration] = useState("72");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleConfirm = async () => {
+    if (!note.trim()) {
+      setError("Vui lòng nhập ghi chú hoàn tất.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await onConfirm(note.trim(), parseFloat(duration));
+      onClose();
+    } catch (e: any) {
+      setError("Lỗi: " + (e.message || "Không thể chuyển trạng thái."));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white dark:bg-slate-900 border border-[var(--color-border)] rounded-2xl shadow-xl max-w-md w-full p-6 z-10 space-y-4 text-xs">
+        <div className="flex justify-between items-center pb-2 border-b border-[var(--color-border)]">
+          <h3 className="text-sm font-bold text-[var(--color-text-primary)]">
+            Hoàn tất xử lý &amp; Bắt đầu theo dõi
+          </h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+            <span className="material-symbols-outlined text-sm">close</span>
+          </button>
+        </div>
+
+        <div className="space-y-2">
+          <label className="font-bold text-[var(--color-text-secondary)] uppercase text-[10px]">
+            Ghi chú xử lý / Bằng chứng
+          </label>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={3}
+            className="w-full p-2.5 border border-[var(--color-border)] rounded-xl bg-white dark:bg-slate-800 focus:ring-2 focus:ring-purple-500/20 text-[var(--color-text-primary)] focus:outline-none"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label className="font-bold text-[var(--color-text-secondary)] uppercase text-[10px]">
+            Thời gian theo dõi thêm
+          </label>
+          <select
+            value={duration}
+            onChange={(e) => setDuration(e.target.value)}
+            className="w-full p-2.5 border border-[var(--color-border)] rounded-xl bg-white dark:bg-slate-800 focus:ring-2 focus:ring-purple-500/20 text-[var(--color-text-primary)] focus:outline-none"
+          >
+            <option value="72">72 giờ (Khuyên dùng)</option>
+            <option value="24">24 giờ</option>
+            <option value="1">1 giờ</option>
+            <option value="0.166">10 phút</option>
+            <option value="0.033">2 phút (Để test nhanh)</option>
+            <option value="0">Đóng ngay (Không theo dõi)</option>
+          </select>
+        </div>
+
+        {error && <p className="text-red-500 font-bold">{error}</p>}
+
+        <div className="flex gap-3 pt-2">
+          <button
+            onClick={onClose}
+            disabled={busy}
+            className="flex-1 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-[var(--color-text-primary)] border border-[var(--color-border)] transition-all font-bold cursor-pointer"
+          >
+            Hủy
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={busy}
+            className="flex-1 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold transition-all shadow-sm cursor-pointer"
+          >
+            {busy ? "Đang xử lý..." : "Xác nhận"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Helper: map email/uid to display name for resolvers
 const getResolverName = (emailOrId: string | null | undefined): string => {
   if (!emailOrId) return "";
@@ -171,6 +281,40 @@ const getResolverName = (emailOrId: string | null | undefined): string => {
   return local.split(/[._-]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
 };
 
+const getSentimentLabel = (val: string) => {
+  if (val === "positive" || val === "tích cực") return "Tích cực";
+  if (val === "negative" || val === "tiêu cực") return "Tiêu cực";
+  return "Trung lập";
+};
+
+const getSeverityLabel = (val: string) => {
+  if (val === "low") return "Thấp";
+  if (val === "medium") return "Trung bình";
+  if (val === "high") return "Cao";
+  if (val === "critical") return "Khẩn cấp";
+  return val || "Trung bình";
+};
+
+const getTopicLabel = (val: string) => {
+  const map: Record<string, string> = {
+    quality: "Chất lượng",
+    price: "Giá cả",
+    service: "Dịch vụ",
+    staff: "Nhân viên",
+    delivery: "Giao hàng",
+    experience: "Trải nghiệm",
+    legal: "Pháp lý",
+    operation: "Vận hành",
+    competitor: "Đối thủ",
+    other: "Khác",
+    "chất lượng dịch vụ": "Dịch vụ",
+    "chất lượng sản phẩm": "Chất lượng",
+    "truyền thông & pr": "Truyền thông & PR",
+    "pháp lý": "Pháp lý",
+  };
+  return map[String(val).toLowerCase()] || val || "Khác";
+};
+
 export default function AlertDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -180,15 +324,20 @@ export default function AlertDetailPage() {
   })();
 
   const { profile } = useAuth();
+  const isManager = profile?.role === "admin" || profile?.role === "brand_manager";
   const {
     updateAlertStatus,
     lockAlertForResolution,
     unlockAlertForResolution,
     createCorrectionRequest,
+    fetchCorrectionRequests,
+    correctionRequests,
+    resolveCorrectionRequest,
   } = useAlertStore();
 
   const [alert, setAlert] = useState<AlertData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Post comments state (for post-type alerts)
   const [postComments, setPostComments] = useState<PostComment[]>([]);
@@ -197,6 +346,9 @@ export default function AlertDetailPage() {
   // Note text input states
   const [timelineNote, setTimelineNote] = useState("");
   const [internalNoteInput, setInternalNoteInput] = useState("");
+  const [showMonitoringModal, setShowMonitoringModal] = useState(false);
+  const [timeLeftStr, setTimeLeftStr] = useState<string>("");
+  const [newActivityDetails, setNewActivityDetails] = useState<{ comments: number; likes: number; shares: number } | null>(null);
 
   // Edit severity mode states
   const [editSeverityMode, setEditSeverityMode] = useState(false);
@@ -204,13 +356,116 @@ export default function AlertDetailPage() {
   const [severityReason, setSeverityReason] = useState("");
 
   // Correction request states
-  const [correctionField, setCorrectionField] = useState<"sentiment" | "severity" | "topic">("sentiment");
-  const [correctionNewValue, setCorrectionNewValue] = useState("");
+  const [correctionSentiment, setCorrectionSentiment] = useState("neutral");
+  const [correctionSeverity, setCorrectionSeverity] = useState("medium");
+  const [correctionTopic, setCorrectionTopic] = useState("other");
+  const [correctionRelevance, setCorrectionRelevance] = useState<boolean | null>(null);
+  const [correctionIntent, setCorrectionIntent] = useState<string | null>("none");
   const [correctionReason, setCorrectionReason] = useState("");
+
+  // Tab state inside Merged Label Card
+  const [labelTab, setLabelTab] = useState<"edit" | "pending" | "history">("edit");
+
+  useEffect(() => {
+    if (isManager) {
+      setLabelTab("pending");
+    } else {
+      setLabelTab("edit");
+    }
+  }, [isManager]);
+
+  const lastAlertIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (alert && alert.id !== lastAlertIdRef.current) {
+      lastAlertIdRef.current = alert.id;
+      setCorrectionSentiment(alert.sentiment || "neutral");
+      setCorrectionSeverity(alert.severity || alert.urgency || "medium");
+      const currentTopic = Array.isArray(alert.topic)
+        ? alert.topic[0]
+        : (alert.topic || "other");
+      setCorrectionTopic(currentTopic);
+      setCorrectionRelevance(alert.relevance !== undefined ? alert.relevance : null);
+      setCorrectionIntent(alert.intent || "none");
+    }
+  }, [alert]);
+
+  useEffect(() => {
+    if (!alert || alert.status !== "monitoring") {
+      setTimeLeftStr("");
+      setNewActivityDetails(null);
+      return;
+    }
+
+    const timer = setInterval(() => {
+      const startedAt = alert.monitoring_started_at ? new Date(alert.monitoring_started_at).getTime() : new Date(alert.created_at).getTime();
+      const durationMs = (alert.monitoring_duration_hours ?? 72) * 60 * 60 * 1000;
+      const now = Date.now();
+      const diff = startedAt + durationMs - now;
+
+      // Check if new activity has occurred
+      const initialComments = alert.monitoring_initial_comments ?? 0;
+      const initialLikes = alert.monitoring_initial_likes ?? 0;
+      const initialShares = alert.monitoring_initial_shares ?? 0;
+
+      const currentComments = alert.comments ?? 0;
+      const currentLikes = alert.likes ?? 0;
+      const currentShares = alert.shares ?? 0;
+
+      const deltaComments = currentComments - initialComments;
+      const deltaLikes = currentLikes - initialLikes;
+      const deltaShares = currentShares - initialShares;
+
+      if (deltaComments > 0 || deltaLikes > 5 || deltaShares > 0) {
+        setNewActivityDetails({
+          comments: Math.max(0, deltaComments),
+          likes: Math.max(0, deltaLikes),
+          shares: Math.max(0, deltaShares),
+        });
+      } else {
+        setNewActivityDetails(null);
+      }
+
+      if (diff <= 0) {
+        setTimeLeftStr("Hết thời gian theo dõi");
+        clearInterval(timer);
+      } else {
+        const hours = Math.floor(diff / (3600 * 1000));
+        const mins = Math.floor((diff % (3600 * 1000)) / (60 * 1000));
+        const secs = Math.floor((diff % (60 * 1000)) / 1000);
+        setTimeLeftStr(`${hours} giờ ${mins} phút ${secs} giây`);
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [alert]);
+
+  useEffect(() => {
+    fetchCorrectionRequests();
+  }, [fetchCorrectionRequests]);
+
+  const alertCorrectionRequests = useMemo(() => {
+    if (!alert) return [];
+    return correctionRequests.filter(req => req.alert_id === alert.id);
+  }, [correctionRequests, alert]);
+
+  const pendingRequests = useMemo(() => {
+    return alertCorrectionRequests.filter(req => req.status === "pending");
+  }, [alertCorrectionRequests]);
+
+  const historyRequests = useMemo(() => {
+    return alertCorrectionRequests.filter(req => req.status !== "pending");
+  }, [alertCorrectionRequests]);
 
   // Toast status states
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [draftResponse, setDraftResponse] = useState("");
+  const [proposedCompensation, setProposedCompensation] = useState("");
+  const [approvalResponse, setApprovalResponse] = useState("");
+  const [approvalCompensation, setApprovalCompensation] = useState("");
+  const [approvalNote, setApprovalNote] = useState("");
+  const [escalationBusy, setEscalationBusy] = useState(false);
 
   const riskScore = useMemo(() => {
     if (!alert) return 0;
@@ -222,36 +477,184 @@ export default function AlertDetailPage() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  // Real-time Supabase doc polling
   useEffect(() => {
-    if (!id) return;
-    setLoading(true);
+    if (!alert?.escalation) return;
+    setDraftResponse(alert.escalation.draft_response || "");
+    setProposedCompensation(alert.escalation.compensation || "");
+    setApprovalResponse(alert.escalation.approved_response || alert.escalation.draft_response || "");
+    setApprovalCompensation(alert.escalation.compensation_approved || alert.escalation.compensation || "");
+    setApprovalNote(alert.escalation.approval_note || "");
+  }, [alert?.id, alert?.escalation]);
 
-    const loadAlertDetail = async () => {
-      try {
-        let detail = await fetchSingleSupabaseAlert(id);
-        if (!detail) {
-          const storeAlert = useAlertStore.getState().rawAlerts.find(a => a.id === id);
-          if (storeAlert) detail = storeAlert;
-        }
-        if (detail) {
-          setAlert(detail);
-          setNewSeverity(detail.severity || "medium");
-        } else {
-          setAlert(null);
-        }
-      } catch (err) {
-        console.error("Error loading alert document details from Supabase:", err);
-      } finally {
-        setLoading(false);
-      }
+  const createEscalationNotification = async (payload: {
+    title: string;
+    message: string;
+    recipient_role: "brand_manager" | "crisis_employee";
+    recipient_email?: string | null;
+  }) => {
+    if (!dbSecond || !alert) return;
+
+    await addDoc(collection(dbSecond, "notifications"), {
+      title: payload.title,
+      message: payload.message,
+      type: "escalation",
+      alert_id: alert.id,
+      brand: alert.brand,
+      created_at: new Date().toISOString(),
+      read: false,
+      recipient_role: payload.recipient_role,
+      recipient_email: payload.recipient_email || null,
+      sender_email: profile?.email || "",
+    });
+  };
+
+  const handleSubmitEscalation = async () => {
+    if (!alert || !draftResponse.trim() || !proposedCompensation.trim()) {
+      triggerToast("Vui lòng nhập dự thảo phản hồi và mức đền bù đề xuất.");
+      return;
+    }
+
+    const escalation: EscalationData = {
+      draft_response: draftResponse.trim(),
+      compensation: proposedCompensation.trim(),
+      submitted_by_email: profile?.email || "unknown",
+      submitted_by_name: profile?.displayName || getResolverName(profile?.email) || "Crisis Officer",
+      submitted_at: new Date().toISOString(),
+      status: "pending",
+      approved_by_email: null,
+      approved_by_name: null,
+      approved_at: null,
+      approved_response: null,
+      compensation_approved: null,
+      approval_note: "",
     };
 
-    loadAlertDetail();
+    setEscalationBusy(true);
+    try {
+      await updateAlertStatus(alert.id, "pending_approval", profile, {
+        note: "Đã gửi phương án phản hồi và đền bù lên Brand Manager duyệt.",
+        escalation,
+      }, alert.brand);
+      await createEscalationNotification({
+        title: `Yêu cầu duyệt phương án: Vụ việc #${alert.id.slice(-4)}`,
+        message: `${escalation.submitted_by_name} đã gửi phương án phản hồi cho ${formatBrandName(alert.brand)}.`,
+        recipient_role: "brand_manager",
+      });
+      setAlert({ ...alert, status: "pending_approval", escalation });
+      triggerToast("Đã gửi phương án lên Brand Manager duyệt.");
+    } catch (e) {
+      console.error(e);
+      triggerToast("Không thể gửi duyệt phương án: " + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setEscalationBusy(false);
+    }
+  };
 
-    const intervalId = setInterval(loadAlertDetail, 1800000);
-    return () => clearInterval(intervalId);
+  const handleResolveEscalation = async (decision: "approved" | "rejected") => {
+    if (!alert?.escalation) return;
+
+    const nextStatus = decision === "approved" ? "responded" : "resolving";
+    const escalation: EscalationData = {
+      ...alert.escalation,
+      status: decision,
+      approved_by_email: profile?.email || null,
+      approved_by_name: profile?.displayName || getResolverName(profile?.email) || null,
+      approved_at: new Date().toISOString(),
+      approved_response: approvalResponse.trim() || alert.escalation.draft_response,
+      compensation_approved: approvalCompensation.trim() || alert.escalation.compensation,
+      approval_note: approvalNote.trim(),
+    };
+
+    setEscalationBusy(true);
+    try {
+      await updateAlertStatus(alert.id, nextStatus, profile, {
+        note: decision === "approved"
+          ? "Brand Manager đã phê duyệt phương án phản hồi."
+          : `Brand Manager yêu cầu chỉnh sửa phương án.${approvalNote.trim() ? ` Ghi chú: ${approvalNote.trim()}` : ""}`,
+        escalation,
+      }, alert.brand);
+      await createEscalationNotification({
+        title: decision === "approved" ? `Phương án đã được duyệt: #${alert.id.slice(-4)}` : `Cần chỉnh sửa phương án: #${alert.id.slice(-4)}`,
+        message: decision === "approved"
+          ? "Brand Manager đã duyệt phương án phản hồi và mức đền bù."
+          : "Brand Manager yêu cầu chỉnh sửa phương án phản hồi.",
+        recipient_role: "crisis_employee",
+        recipient_email: alert.escalation.submitted_by_email,
+      });
+      setAlert({ ...alert, status: nextStatus, escalation });
+      triggerToast(decision === "approved" ? "Đã phê duyệt phương án." : "Đã gửi yêu cầu chỉnh sửa.");
+    } catch (e) {
+      console.error(e);
+      triggerToast("Không thể xử lý phê duyệt: " + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setEscalationBusy(false);
+    }
+  };
+
+  const loadAlertDetail = useCallback(async (showGlobalLoading = false) => {
+    if (!id) return;
+    if (showGlobalLoading) {
+      setLoading(true);
+    } else {
+      setRefreshing(true);
+    }
+    try {
+      let detail = await fetchSingleSupabaseAlert(id);
+      if (!detail) {
+        const storeAlert = useAlertStore.getState().rawAlerts.find(a => a.id === id);
+        if (storeAlert) detail = storeAlert;
+      }
+      if (detail) {
+        setAlert(detail);
+        setNewSeverity(detail.severity || "medium");
+      } else {
+        setAlert(null);
+      }
+    } catch (err) {
+      console.error("Error loading alert document details from Supabase:", err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, [id]);
+
+  // Real-time detail sync: Supabase Realtime (push) + manual refresh
+  useEffect(() => {
+    if (!id) return;
+
+    // Initial load with global loading state
+    loadAlertDetail(true);
+
+    const cleanupFns: (() => void)[] = [];
+
+    // Strategy 1: Supabase Realtime — push updates when this specific annotation changes
+    if (supabaseClient) {
+      try {
+        const channelName = `alert-detail-${id.replace(/[^a-zA-Z0-9]/g, "-")}`;
+        const channel = supabaseClient
+          .channel(channelName)
+          .on(
+            "postgres_changes",
+            { event: "UPDATE", schema: "public", table: "annotations" },
+            () => {
+              // Any annotation update — reload this detail
+              loadAlertDetail(false);
+            }
+          )
+          .subscribe();
+
+        cleanupFns.push(() => { if (supabaseClient) supabaseClient.removeChannel(channel); });
+      } catch (err) {
+        console.warn("[AlertDetail] Realtime subscription failed:", err);
+      }
+    }
+
+    // Strategy 2: Fallback polling is disabled to reduce server load.
+    // Relying on manual "Làm mới" button and realtime push instead.
+
+    return () => cleanupFns.forEach((fn) => fn());
+  }, [id, loadAlertDetail]);
+
 
   // Fetch comments when alert is a post
   useEffect(() => {
@@ -263,26 +666,9 @@ export default function AlertDetailPage() {
       .finally(() => setLoadingComments(false));
   }, [alert?.post_id, alert?.content_type]);
 
-  // Lock status on component mount, unlock on unmount
-  useEffect(() => {
-    if (!id || !profile) return;
-
-    // Automatically trigger lock resolution if it is NOT yet locked
-    const triggerLock = async () => {
-      try {
-        await lockAlertForResolution(id, profile);
-      } catch (e) {
-        console.error("Failed to auto-lock alert document on detail load:", e);
-      }
-    };
-    triggerLock();
-
-    return () => {
-      unlockAlertForResolution(id).catch((err) =>
-        console.error("Failed to unlock alert on unmount:", err)
-      );
-    };
-  }, [id, profile]);
+  // NOTE: Detail page does NOT auto-lock on mount.
+  // Locking only happens when the Crisis Officer clicks "Nhận xử lý" on the list page.
+  // This prevents Brand Managers or observers from accidentally overwriting the lock.
 
   // Handler: direct note submit on processing history timeline
   const handleAddTimelineNote = async () => {
@@ -372,32 +758,34 @@ export default function AlertDetailPage() {
     }
 
     try {
+      const currentTopic = Array.isArray(alert.topic)
+        ? alert.topic[0]
+        : (alert.topic || "other");
+
       const payload: any = {
         alert_id: alert.id,
         brand: alert.brand,
         requester_uid: profile?.uid || "unknown",
         requester_email: profile?.email || "unknown",
         original_sentiment: alert.sentiment || "neutral",
-        new_sentiment: alert.sentiment || "neutral",
+        new_sentiment: correctionSentiment || "neutral",
         original_severity: alert.severity || "medium",
-        new_severity: alert.severity || "medium",
-        original_topic: alert.topic || "other",
-        new_topic: alert.topic || "other",
+        new_severity: correctionSeverity || "medium",
+        original_topic: currentTopic,
+        new_topic: correctionTopic || "other",
+        original_relevance: alert.relevance !== undefined ? alert.relevance : null,
+        new_relevance: correctionRelevance,
+        original_urgency: alert.urgency || alert.severity || "medium",
+        new_urgency: correctionSeverity || "medium",
+        original_intent: alert.intent || "none",
+        new_intent: correctionIntent || "none",
         reason: correctionReason.trim(),
         alert_text: alert.text || "",
+        alert_full: alert,
       };
-
-      if (correctionField === "sentiment") {
-        payload.new_sentiment = correctionNewValue || "neutral";
-      } else if (correctionField === "severity") {
-        payload.new_severity = correctionNewValue || "medium";
-      } else if (correctionField === "topic") {
-        payload.new_topic = correctionNewValue || "other";
-      }
 
       await createCorrectionRequest(payload);
       setCorrectionReason("");
-      setCorrectionNewValue("");
       triggerToast("Gửi yêu cầu chỉnh sửa thành công!");
     } catch (e) {
       console.error(e);
@@ -408,6 +796,7 @@ export default function AlertDetailPage() {
   // Handle template selection
   const selectTemplateText = (text: string) => {
     setTimelineNote(text);
+    setDraftResponse(text);
   };
 
   if (loading) {
@@ -440,7 +829,6 @@ export default function AlertDetailPage() {
 
   const isLockedByOthers = alert.being_resolved_by && alert.being_resolved_by !== profile?.email;
   const isMine = alert.being_resolved_by === profile?.email;
-  const isManager = profile?.role === "admin" || profile?.role === "brand_manager";
 
   // Sentiment Color Mapping
   let sentimentBadge = "bg-slate-50 text-slate-600 border-slate-100";
@@ -466,8 +854,8 @@ export default function AlertDetailPage() {
             <h1 className="text-lg md:text-xl font-black text-[var(--color-text-primary)] uppercase flex items-center gap-2">
               Vụ việc #{alert.id.slice(-4)}
               <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold text-white shadow-sm flex items-center gap-1 ${alert.severity === "critical" ? "bg-red-600" :
-                  alert.severity === "high" ? "bg-orange-500" :
-                    alert.severity === "medium" ? "bg-yellow-500" : "bg-slate-500"
+                alert.severity === "high" ? "bg-orange-500" :
+                  alert.severity === "medium" ? "bg-yellow-500" : "bg-slate-500"
                 }`}>
                 {riskScore} - {
                   alert.severity === "critical" ? "Khẩn cấp" :
@@ -478,14 +866,19 @@ export default function AlertDetailPage() {
             </h1>
             <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs text-[var(--color-text-muted)] font-semibold">
               <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${alert.status === "new" ? "bg-blue-100 text-blue-600 dark:bg-blue-950/20" :
-                  alert.status === "resolving" ? "bg-amber-100 text-amber-600 dark:bg-amber-950/20" :
-                    alert.status === "resolved" ? "bg-green-100 text-green-600 dark:bg-green-950/20" : "bg-slate-100 text-slate-600"
+                alert.status === "resolving" ? "bg-amber-100 text-amber-600 dark:bg-amber-950/20" :
+                  alert.status === "pending_approval" ? "bg-orange-100 text-orange-700 dark:bg-orange-950/20 animate-pulse" :
+                    alert.status === "responded" ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/20" :
+                      alert.status === "monitoring" ? "bg-cyan-100 text-cyan-700 dark:bg-cyan-950/20 border border-cyan-200 dark:border-cyan-800" :
+                        alert.status === "resolved" ? "bg-green-100 text-green-600 dark:bg-green-950/20" : "bg-slate-100 text-slate-600"
                 }`}>
                 {
                   alert.status === "new" ? "Mới phát hiện" :
                     alert.status === "resolving" ? "Đang xử lý" :
-                      alert.status === "responded" ? "Đã phản hồi" :
-                        alert.status === "resolved" ? "Đã giải quyết" : "Đã đóng"
+                      alert.status === "pending_approval" ? "Chờ duyệt phương án" :
+                        alert.status === "responded" ? "Đã phản hồi" :
+                          alert.status === "monitoring" ? "Theo dõi thêm" :
+                            alert.status === "resolved" ? "Đã đóng" : "Đã đóng"
                 }
               </span>
               <span className="flex items-center gap-1">
@@ -502,6 +895,18 @@ export default function AlertDetailPage() {
         </div>
 
         <div className="flex gap-2 self-end sm:self-auto">
+          <button
+            onClick={() => {
+              loadAlertDetail(false);
+              triggerToast("Đã làm mới dữ liệu!");
+            }}
+            disabled={refreshing}
+            className="flex items-center gap-1 px-4 py-2 border border-[var(--color-border)] text-[var(--color-text-secondary)] font-bold text-xs rounded-xl hover:bg-[var(--color-bg-surface-raised)] transition-all cursor-pointer disabled:opacity-50"
+          >
+            <span className={`material-symbols-outlined text-sm ${refreshing ? 'animate-spin' : ''}`}>refresh</span>
+            Làm mới
+          </button>
+
           <button
             onClick={() => {
               navigator.clipboard.writeText(window.location.href);
@@ -524,21 +929,31 @@ export default function AlertDetailPage() {
             </button>
           )}
 
-          {isMine && alert.status !== "resolved" && (
+          {isMine && alert.status !== "resolved" && alert.status !== "monitoring" && (
+            <button
+              onClick={() => setShowMonitoringModal(true)}
+              className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all cursor-pointer"
+            >
+              Hoàn tất xử lý
+            </button>
+          )}
+
+          {isMine && alert.status === "monitoring" && (
             <button
               onClick={async () => {
                 try {
                   await updateAlertStatus(alert.id, "resolved", profile, {
-                    note: "Đã xác nhận xử lý thành công và đóng vụ việc."
-                  });
-                  triggerToast("Vụ việc đã được xử lý xong!");
+                    note: "Đã xác nhận đóng hẳn vụ việc sau thời gian theo dõi."
+                  }, alert.brand);
+                  setAlert({ ...alert, status: "resolved" });
+                  triggerToast("Vụ việc đã được đóng hẳn!");
                 } catch (e) {
-                  triggerToast("Lỗi xử lý. Vui lòng thử lại!");
+                  triggerToast("Lỗi đóng vụ việc. Vui lòng thử lại!");
                 }
               }}
-              className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all cursor-pointer"
+              className="px-5 py-2 bg-green-700 hover:bg-green-800 text-white font-bold text-xs rounded-xl shadow-sm transition-all cursor-pointer"
             >
-              Hoàn tất xử lý
+              Đóng hẳn vụ việc
             </button>
           )}
         </div>
@@ -548,6 +963,61 @@ export default function AlertDetailPage() {
 
         {/* LEFT COLUMN: 60% Width */}
         <div className="lg:col-span-7 space-y-6">
+
+          {/* Widget: Real-time Monitoring Countdown & Activity Alert */}
+          {alert.status === "monitoring" && (
+            <div className="bg-gradient-to-br from-cyan-50 to-indigo-50 dark:from-slate-900 dark:to-slate-800 border border-cyan-200 dark:border-cyan-800 rounded-2xl p-5 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-cyan-600 dark:text-cyan-400 animate-pulse text-lg">visibility</span>
+                  <span className="font-bold text-xs text-[var(--color-text-primary)] uppercase tracking-wider">
+                    Giai đoạn theo dõi khủng hoảng
+                  </span>
+                </div>
+                <span className="bg-cyan-100 text-cyan-700 dark:bg-cyan-950 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                  Real-time Countdown
+                </span>
+              </div>
+
+              <div className="bg-white dark:bg-slate-900 border border-[var(--color-border)] rounded-xl p-4 text-center space-y-1">
+                <p className="text-[10px] text-[var(--color-text-muted)] font-semibold uppercase">Thời gian theo dõi còn lại</p>
+                <p className="text-lg md:text-xl font-black text-cyan-600 dark:text-cyan-400 font-mono tracking-tight">
+                  {timeLeftStr || "Đang tính toán..."}
+                </p>
+              </div>
+
+              {/* Activity / Abnormality alert banner */}
+              {newActivityDetails ? (
+                <div className="p-4 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 rounded-xl space-y-2 animate-pulse">
+                  <div className="flex items-center gap-2 text-red-700 dark:text-red-400 font-bold text-xs">
+                    <span className="material-symbols-outlined text-sm">warning</span>
+                    <span>CẢNH BÁO HOẠT ĐỘNG BẤT THƯỜNG</span>
+                  </div>
+                  <p className="text-[11px] text-[var(--color-text-secondary)] leading-relaxed">
+                    Hệ thống ghi nhận có tương tác mới phát sinh so với thời điểm bắt đầu theo dõi:
+                  </p>
+                  <div className="flex gap-4 text-[10px] font-bold text-red-600 dark:text-red-400 pt-1">
+                    {newActivityDetails.likes > 0 && (
+                      <span>+ {newActivityDetails.likes} Likes (Ngưỡng an toàn: &le; 5)</span>
+                    )}
+                    {newActivityDetails.comments > 0 && (
+                      <span>+ {newActivityDetails.comments} Comments</span>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900/30 rounded-xl flex items-start gap-2.5">
+                  <span className="material-symbols-outlined text-green-600 dark:text-green-400 text-sm mt-0.5">verified_user</span>
+                  <div className="space-y-0.5">
+                    <p className="text-green-700 dark:text-green-400 font-bold text-xs">Trạng thái an toàn</p>
+                    <p className="text-[11px] text-[var(--color-text-secondary)] leading-normal">
+                      Chưa phát hiện hành vi tương tác đột biến nào. Hệ thống sẽ tự động đóng vụ việc khi hết thời gian.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Original Post Card (shown when alert is a comment) */}
           {alert.content_type === "comment" && alert.post_content && alert.post_content !== alert.text && (
@@ -699,11 +1169,10 @@ export default function AlertDetailPage() {
                     {postComments.map((cmt) => (
                       <div
                         key={cmt.comment_id}
-                        className={`p-4 rounded-xl border border-[var(--color-border)]/60 text-xs ${
-                          cmt.comment_level > 0
+                        className={`p-4 rounded-xl border border-[var(--color-border)]/60 text-xs ${cmt.comment_level > 0
                             ? "ml-6 bg-slate-50/50 dark:bg-slate-800/10"
                             : "bg-white dark:bg-[var(--color-bg-surface-raised)]"
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2">
@@ -881,8 +1350,8 @@ export default function AlertDetailPage() {
 
               {!editSeverityMode ? (
                 <div className={`w-full text-white px-4 py-3 rounded-xl flex items-center gap-2 shadow-sm ${alert.severity === "critical" ? "bg-red-600" :
-                    alert.severity === "high" ? "bg-orange-500" :
-                      alert.severity === "medium" ? "bg-yellow-500" : "bg-slate-500"
+                  alert.severity === "high" ? "bg-orange-500" :
+                    alert.severity === "medium" ? "bg-yellow-500" : "bg-slate-500"
                   }`}>
                   <span className="material-symbols-outlined text-[18px]">priority_high</span>
                   <span className="font-bold text-xs uppercase tracking-wider">
@@ -942,6 +1411,141 @@ export default function AlertDetailPage() {
               )}
             </div>
 
+            {/* Widget: Crisis Escalation Approval */}
+            <div className="bg-[var(--color-bg-surface)] border border-orange-200/70 dark:border-orange-900/30 rounded-2xl shadow-sm p-6 space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-orange-600 uppercase tracking-wider">
+                    Crisis Escalation & Approval
+                  </label>
+                  <p className="text-[11px] text-[var(--color-text-secondary)] mt-1">
+                    De xuat phuong an phan hoi va den bu cho vu viec nghiem trong.
+                  </p>
+                </div>
+                <span className={`px-2 py-1 rounded-full text-[10px] font-black ${alert.escalation?.status === "approved"
+                    ? "bg-green-100 text-green-700"
+                    : alert.escalation?.status === "rejected"
+                      ? "bg-red-100 text-red-700"
+                      : alert.status === "pending_approval"
+                        ? "bg-orange-100 text-orange-700 animate-pulse"
+                        : "bg-slate-100 text-slate-600"
+                  }`}>
+                  {alert.escalation?.status === "approved"
+                    ? "APPROVED"
+                    : alert.escalation?.status === "rejected"
+                      ? "NEEDS REVISION"
+                      : alert.status === "pending_approval"
+                        ? "PENDING"
+                        : "DRAFT"}
+                </span>
+              </div>
+
+              {!isManager && alert.status === "resolving" && (
+                <div className="space-y-3">
+                  {alert.escalation?.status === "rejected" && alert.escalation.approval_note && (
+                    <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 text-xs text-red-700 dark:text-red-300">
+                      <strong>Ghi chu tu Brand Manager:</strong> {alert.escalation.approval_note}
+                    </div>
+                  )}
+                  <textarea
+                    value={draftResponse}
+                    onChange={(e) => setDraftResponse(e.target.value)}
+                    placeholder="Nhap du thao phan hoi cong khai..."
+                    className="w-full text-xs p-3 border border-[var(--color-border)] rounded-xl bg-[var(--color-bg-surface-raised)] focus:outline-none focus:ring-2 focus:ring-orange-500/20 text-[var(--color-text-primary)] h-28 resize-none"
+                  />
+                  <input
+                    value={proposedCompensation}
+                    onChange={(e) => setProposedCompensation(e.target.value)}
+                    placeholder="Muc den bu de xuat, vi du: Voucher Highlands 200,000 VND"
+                    className="w-full text-xs p-3 border border-[var(--color-border)] rounded-xl bg-[var(--color-bg-surface-raised)] focus:outline-none focus:ring-2 focus:ring-orange-500/20 text-[var(--color-text-primary)]"
+                  />
+                  <button
+                    disabled={escalationBusy}
+                    onClick={handleSubmitEscalation}
+                    className="w-full py-3 bg-orange-600 hover:bg-orange-700 disabled:opacity-60 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-sm">outgoing_mail</span>
+                    Gui duyet phuong an
+                  </button>
+                </div>
+              )}
+
+              {!isManager && alert.status === "pending_approval" && (
+                <div className="p-4 rounded-xl bg-orange-50 dark:bg-orange-950/20 border border-orange-100 dark:border-orange-900/30 text-xs text-orange-700 dark:text-orange-300 font-bold flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-orange-500 animate-ping" />
+                  Dang cho Brand Manager duyet phuong an.
+                </div>
+              )}
+
+              {isManager && alert.status === "pending_approval" && alert.escalation && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-[var(--color-border)]">
+                      <p className="font-black text-[10px] uppercase text-[var(--color-text-muted)] mb-1">Du thao de xuat</p>
+                      <p className="whitespace-pre-wrap text-[var(--color-text-primary)]">{alert.escalation.draft_response}</p>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-[var(--color-border)]">
+                      <p className="font-black text-[10px] uppercase text-[var(--color-text-muted)] mb-1">Den bu de xuat</p>
+                      <p className="text-[var(--color-text-primary)]">{alert.escalation.compensation}</p>
+                    </div>
+                  </div>
+                  <textarea
+                    value={approvalResponse}
+                    onChange={(e) => setApprovalResponse(e.target.value)}
+                    className="w-full text-xs p-3 border border-[var(--color-border)] rounded-xl bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] h-24 resize-none"
+                    placeholder="Noi dung phat ngon duyet..."
+                  />
+                  <input
+                    value={approvalCompensation}
+                    onChange={(e) => setApprovalCompensation(e.target.value)}
+                    className="w-full text-xs p-3 border border-[var(--color-border)] rounded-xl bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)]"
+                    placeholder="Muc den bu duyet..."
+                  />
+                  <textarea
+                    value={approvalNote}
+                    onChange={(e) => setApprovalNote(e.target.value)}
+                    className="w-full text-xs p-3 border border-[var(--color-border)] rounded-xl bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] h-16 resize-none"
+                    placeholder="Ghi chu phan hoi neu can..."
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      disabled={escalationBusy}
+                      onClick={() => handleResolveEscalation("rejected")}
+                      className="flex-1 py-3 rounded-xl bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-xs font-bold cursor-pointer"
+                    >
+                      Yeu cau chinh sua
+                    </button>
+                    <button
+                      disabled={escalationBusy}
+                      onClick={() => handleResolveEscalation("approved")}
+                      className="flex-1 py-3 rounded-xl bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-xs font-bold cursor-pointer"
+                    >
+                      Dong y phe duyet
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {alert.status === "responded" && alert.escalation?.status === "approved" && (
+                <div className="space-y-3">
+                  <div className="p-3 rounded-xl bg-green-50 dark:bg-green-950/20 border border-green-100 dark:border-green-900/30 text-xs">
+                    <p className="font-black text-green-700 dark:text-green-300 mb-1">Phuong an da duoc duyet</p>
+                    <p className="whitespace-pre-wrap text-[var(--color-text-primary)]">{alert.escalation.approved_response}</p>
+                    <p className="mt-2 font-bold text-[var(--color-text-primary)]">Den bu: {alert.escalation.compensation_approved}</p>
+                  </div>
+                  {!isManager && (
+                    <button
+                      disabled={escalationBusy}
+                      onClick={() => setShowMonitoringModal(true)}
+                      className="w-full py-3 rounded-xl bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-xs font-bold cursor-pointer"
+                    >
+                      Đăng phản hồi &amp; Hoàn tất
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* Widget: Status Stepper */}
             <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl shadow-sm p-6 space-y-4">
               <label className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider">
@@ -956,8 +1560,10 @@ export default function AlertDetailPage() {
                   style={{
                     width:
                       alert.status === "new" ? "0%" :
-                        alert.status === "resolving" ? "33%" :
-                          alert.status === "responded" ? "66%" : "100%"
+                        alert.status === "resolving" ? "20%" :
+                          alert.status === "pending_approval" ? "40%" :
+                            alert.status === "responded" ? "60%" :
+                              alert.status === "monitoring" ? "80%" : "100%"
                   }}
                 ></div>
 
@@ -965,10 +1571,12 @@ export default function AlertDetailPage() {
                 {[
                   { key: "new", label: "Mới" },
                   { key: "resolving", label: "Đang xử lý" },
+                  { key: "pending_approval", label: "Chờ duyệt" },
                   { key: "responded", label: "Đã phản hồi" },
-                  { key: "closed", label: "Đã đóng" }
+                  { key: "monitoring", label: "Theo dõi" },
+                  { key: "resolved", label: "Đã đóng" }
                 ].map((step, index) => {
-                  const statuses = ["new", "resolving", "responded", "closed"];
+                  const statuses = ["new", "resolving", "pending_approval", "responded", "monitoring", "resolved"];
                   const currentIdx = statuses.indexOf(alert.status);
                   const isCompleted = index <= currentIdx;
                   const isCurrent = alert.status === step.key;
@@ -978,10 +1586,15 @@ export default function AlertDetailPage() {
                       key={step.key}
                       disabled={!isMine}
                       onClick={async () => {
+                        if (step.key === "monitoring" || step.key === "resolved") {
+                          setShowMonitoringModal(true);
+                          return;
+                        }
                         try {
                           await updateAlertStatus(alert.id, step.key, profile, {
                             note: `Thay đổi trạng thái xử lý thành: ${step.label}`
-                          });
+                          }, alert.brand);
+                          setAlert({ ...alert, status: step.key });
                           triggerToast(`Chuyển trạng thái thành ${step.label}!`);
                         } catch (e) {
                           triggerToast("Không thể thay đổi trạng thái.");
@@ -990,10 +1603,10 @@ export default function AlertDetailPage() {
                       className={`relative flex flex-col items-center z-10 focus:outline-none ${isMine ? "cursor-pointer" : "cursor-default"}`}
                     >
                       <div className={`w-4.5 h-4.5 rounded-full border-4 border-[var(--color-bg-surface)] ring-2 transition-all ${isCurrent ? "bg-indigo-600 ring-indigo-600 scale-110" :
-                          isCompleted ? "bg-indigo-500 ring-indigo-500" : "bg-slate-200 dark:bg-slate-700 ring-slate-200 dark:ring-slate-700"
+                        isCompleted ? "bg-indigo-500 ring-indigo-500" : "bg-slate-200 dark:bg-slate-700 ring-slate-200 dark:ring-slate-700"
                         }`} />
                       <span className={`text-[10px] mt-2 font-bold transition-colors ${isCurrent ? "text-indigo-600" :
-                          isCompleted ? "text-[var(--color-text-primary)]" : "text-[var(--color-text-muted)]"
+                        isCompleted ? "text-[var(--color-text-primary)]" : "text-[var(--color-text-muted)]"
                         }`}>
                         {step.label}
                       </span>
@@ -1003,78 +1616,344 @@ export default function AlertDetailPage() {
               </div>
             </div>
 
-            {/* Widget: Request Edit Form */}
-            {!isManager && (
-              <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl shadow-sm p-6 space-y-4">
-                <h4 className="font-bold text-xs text-[var(--color-text-primary)] flex items-center gap-2 uppercase tracking-wider">
-                  <span className="material-symbols-outlined text-base">edit_note</span>
-                  Gửi yêu cầu sửa nhãn
+            {/* Widget: Merged Label Management Widget (Gộp trong 1 form có Tab) */}
+            <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl shadow-sm p-6 space-y-4">
+
+              {/* Header with Tabs */}
+              <div className="border-b border-[var(--color-border)] pb-2">
+                <h4 className="font-bold text-xs text-[var(--color-text-primary)] flex items-center gap-2 uppercase tracking-wider mb-3">
+                  <span className="material-symbols-outlined text-base text-indigo-600">sell</span>
+                  Quản lý &amp; Sửa nhãn vụ việc
                 </h4>
 
-                <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-xl border border-[var(--color-border)]/50 space-y-3">
-                  <div className="flex gap-2">
-                    <select
-                      value={correctionField}
-                      onChange={(e: any) => {
-                        setCorrectionField(e.target.value);
-                        setCorrectionNewValue("");
-                      }}
-                      className="flex-1 text-xs p-1.5 border border-[var(--color-border)] rounded-lg bg-white dark:bg-slate-800 text-[var(--color-text-primary)] font-bold focus:outline-none"
+                {/* Tab buttons */}
+                <div className="flex gap-2 text-xs font-bold">
+                  {!isManager && (
+                    <button
+                      onClick={() => setLabelTab("edit")}
+                      className={`pb-2 px-1 border-b-2 transition-all cursor-pointer ${labelTab === "edit"
+                          ? "border-indigo-600 text-indigo-600"
+                          : "border-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+                        }`}
                     >
-                      <option value="sentiment">Sắc thái</option>
-                      <option value="severity">Mức độ rủi ro</option>
-                      <option value="topic">Chủ đề</option>
-                    </select>
-
-                    <select
-                      value={correctionNewValue}
-                      onChange={(e) => setCorrectionNewValue(e.target.value)}
-                      className="flex-1 text-xs p-1.5 border border-[var(--color-border)] rounded-lg bg-white dark:bg-slate-800 text-[var(--color-text-primary)] font-bold focus:outline-none"
-                    >
-                      <option value="">Chọn giá trị mới</option>
-                      {correctionField === "sentiment" && (
-                        <>
-                          <option value="tiêu cực">Tiêu cực</option>
-                          <option value="trung lập">Trung lập</option>
-                          <option value="tích cực">Tích cực</option>
-                        </>
-                      )}
-                      {correctionField === "severity" && (
-                        <>
-                          <option value="low">Thấp</option>
-                          <option value="medium">Trung bình</option>
-                          <option value="high">Cao</option>
-                          <option value="critical">Khẩn cấp</option>
-                        </>
-                      )}
-                      {correctionField === "topic" && (
-                        <>
-                          <option value="chất lượng dịch vụ">Chất lượng dịch vụ</option>
-                          <option value="chất lượng sản phẩm">Chất lượng sản phẩm</option>
-                          <option value="truyền thông & PR">Truyền thông &amp; PR</option>
-                          <option value="pháp lý">Pháp lý</option>
-                          <option value="other">Chủ đề khác</option>
-                        </>
-                      )}
-                    </select>
-                  </div>
-
-                  <textarea
-                    value={correctionReason}
-                    onChange={(e) => setCorrectionReason(e.target.value)}
-                    placeholder="Lý do gửi yêu cầu điều chỉnh..."
-                    className="w-full text-xs p-2 border border-[var(--color-border)] rounded-xl bg-white dark:bg-slate-800 focus:ring-2 focus:ring-purple-500/20 text-[var(--color-text-primary)] h-16"
-                  />
-
+                      Sửa nhãn
+                    </button>
+                  )}
                   <button
-                    onClick={handleSendCorrectionRequest}
-                    className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm active:scale-95 transition-all cursor-pointer"
+                    onClick={() => setLabelTab("pending")}
+                    className={`pb-2 px-1 border-b-2 transition-all cursor-pointer flex items-center gap-1 ${labelTab === "pending"
+                        ? "border-indigo-600 text-indigo-600"
+                        : "border-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+                      }`}
                   >
-                    Gửi yêu cầu sửa
+                    Chờ duyệt
+                    <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-black ${labelTab === "pending" ? "bg-indigo-100 text-indigo-600" : "bg-slate-100 dark:bg-slate-800 text-slate-500"
+                      }`}>
+                      {pendingRequests.length}
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => setLabelTab("history")}
+                    className={`pb-2 px-1 border-b-2 transition-all cursor-pointer flex items-center gap-1 ${labelTab === "history"
+                        ? "border-indigo-600 text-indigo-600"
+                        : "border-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+                      }`}
+                  >
+                    Lịch sử
+                    <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-black ${labelTab === "history" ? "bg-indigo-100 text-indigo-600" : "bg-slate-100 dark:bg-slate-800 text-slate-500"
+                      }`}>
+                      {historyRequests.length}
+                    </span>
                   </button>
                 </div>
               </div>
-            )}
+
+              {/* Tab contents */}
+
+              {/* Tab 1: Sửa nhãn (Edit Form) */}
+              {!isManager && labelTab === "edit" && (
+                <div className="space-y-4 animate-fade-in">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-50 dark:bg-slate-800/40 p-4 rounded-xl border border-[var(--color-border)]/50">
+
+                    {/* Sentiment */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">1. Cảm xúc (Sentiment)</label>
+                      <select
+                        value={correctionSentiment}
+                        onChange={(e) => setCorrectionSentiment(e.target.value)}
+                        className="w-full text-xs p-2 border border-[var(--color-border)] rounded-lg bg-white dark:bg-slate-800 text-[var(--color-text-primary)] font-bold focus:outline-none"
+                      >
+                        <option value="positive">🟢 Tích cực</option>
+                        <option value="neutral">🟡 Trung tính</option>
+                        <option value="negative">🔴 Tiêu cực</option>
+                      </select>
+                    </div>
+
+                    {/* Severity / Urgency */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">2. Mức độ (Urgency)</label>
+                      <select
+                        value={correctionSeverity}
+                        onChange={(e) => setCorrectionSeverity(e.target.value)}
+                        className="w-full text-xs p-2 border border-[var(--color-border)] rounded-lg bg-white dark:bg-slate-800 text-[var(--color-text-primary)] font-bold focus:outline-none"
+                      >
+                        <option value="none">⚪ None</option>
+                        <option value="low">🟢 Thấp</option>
+                        <option value="medium">🟡 Trung bình</option>
+                        <option value="high">🟠 Cao</option>
+                        <option value="critical">🔴 Khẩn cấp</option>
+                      </select>
+                    </div>
+
+                    {/* Topic */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">3. Chủ đề (Topic)</label>
+                      <select
+                        value={correctionTopic}
+                        onChange={(e) => setCorrectionTopic(e.target.value)}
+                        className="w-full text-xs p-2 border border-[var(--color-border)] rounded-lg bg-white dark:bg-slate-800 text-[var(--color-text-primary)] font-bold focus:outline-none"
+                      >
+                        <option value="quality">Chất lượng</option>
+                        <option value="price">Giá cả</option>
+                        <option value="service">Dịch vụ</option>
+                        <option value="location">Vị trí</option>
+                        <option value="promotion">Khuyến mãi</option>
+                        <option value="recruitment">Tuyển dụng</option>
+                        <option value="other">Khác</option>
+                      </select>
+                    </div>
+
+                    {/* Relevance */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">4. Liên quan (Relevance)</label>
+                      <select
+                        value={correctionRelevance === null ? "" : correctionRelevance ? "yes" : "no"}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setCorrectionRelevance(val === "" ? null : val === "yes");
+                        }}
+                        className="w-full text-xs p-2 border border-[var(--color-border)] rounded-lg bg-white dark:bg-slate-800 text-[var(--color-text-primary)] font-bold focus:outline-none"
+                      >
+                        <option value="">-- Chọn --</option>
+                        <option value="yes">🔵 Có</option>
+                        <option value="no">⚪ Không</option>
+                      </select>
+                    </div>
+
+                    {/* Intent */}
+                    <div className="col-span-1 md:col-span-2 space-y-1">
+                      <label className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">5. Ý định mua hàng (Intent)</label>
+                      <select
+                        value={correctionIntent || ""}
+                        onChange={(e) => setCorrectionIntent(e.target.value || null)}
+                        className="w-full text-xs p-2 border border-[var(--color-border)] rounded-lg bg-white dark:bg-slate-800 text-[var(--color-text-primary)] font-bold focus:outline-none"
+                      >
+                        <option value="">-- Chọn --</option>
+                        <option value="hot">🔴 Hot</option>
+                        <option value="warm">🟡 Warm</option>
+                        <option value="cold">🔵 Cold</option>
+                        <option value="none">⚪ None</option>
+                      </select>
+                    </div>
+
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">Lý do gửi yêu cầu điều chỉnh</label>
+                    <textarea
+                      value={correctionReason}
+                      onChange={(e) => setCorrectionReason(e.target.value)}
+                      placeholder="Nhập lý do chi tiết để gửi lên quản lý..."
+                      className="w-full text-xs p-2.5 border border-[var(--color-border)] rounded-xl bg-white dark:bg-slate-800 focus:ring-2 focus:ring-purple-500/20 text-[var(--color-text-primary)] h-16 resize-none"
+                    />
+                  </div>
+
+                  <button
+                    onClick={handleSendCorrectionRequest}
+                    className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <span className="material-symbols-outlined text-sm">send</span> Gửi yêu cầu sửa nhãn
+                  </button>
+                </div>
+              )}
+
+              {/* Tab 2: Chờ xử lý (Pending) */}
+              {labelTab === "pending" && (
+                <div className="space-y-3 animate-fade-in">
+                  {pendingRequests.length === 0 ? (
+                    <p className="text-[11px] text-[var(--color-text-muted)] italic text-center py-6">
+                      Không có yêu cầu nào đang chờ duyệt.
+                    </p>
+                  ) : (
+                    <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
+                      {pendingRequests.map((req) => {
+                        const sentimentChanged = req.original_sentiment !== req.new_sentiment;
+                        const severityChanged = req.original_severity !== req.new_severity;
+                        const topicChanged = req.original_topic !== req.new_topic;
+                        const relevanceChanged = req.original_relevance !== req.new_relevance;
+                        const intentChanged = req.original_intent !== req.new_intent;
+
+                        return (
+                          <div
+                            key={req.id}
+                            className="p-3 bg-slate-50 dark:bg-slate-800/40 border border-[var(--color-border)]/50 rounded-xl space-y-2.5"
+                          >
+                            <div className="flex justify-between items-center text-[10px] text-[var(--color-text-muted)]">
+                              <span className="font-bold text-[var(--color-text-primary)]">
+                                Gửi bởi: {getResolverName(req.requester_email)}
+                              </span>
+                              <span>{getRelativeTime(req.created_at)}</span>
+                            </div>
+
+                            <div className="text-[10px] space-y-1 bg-white dark:bg-slate-900 p-2 rounded-lg border border-[var(--color-border)]/50">
+                              {/* Sentiment */}
+                              <div className="flex justify-between">
+                                <span className="text-[var(--color-text-muted)]">Cảm xúc:</span>
+                                <span>
+                                  {getSentimentLabel(req.original_sentiment)} ➔ <strong className={sentimentChanged ? "text-indigo-600 dark:text-indigo-400" : ""}>{getSentimentLabel(req.new_sentiment)}</strong>
+                                </span>
+                              </div>
+                              {/* Severity / Urgency */}
+                              <div className="flex justify-between">
+                                <span className="text-[var(--color-text-muted)]">Mức độ:</span>
+                                <span>
+                                  {getSeverityLabel(req.original_severity)} ➔ <strong className={severityChanged ? "text-indigo-600 dark:text-indigo-400" : ""}>{getSeverityLabel(req.new_severity)}</strong>
+                                </span>
+                              </div>
+                              {/* Topic */}
+                              <div className="flex justify-between">
+                                <span className="text-[var(--color-text-muted)]">Chủ đề:</span>
+                                <span>
+                                  {getTopicLabel(req.original_topic)} ➔ <strong className={topicChanged ? "text-indigo-600 dark:text-indigo-400" : ""}>{getTopicLabel(req.new_topic)}</strong>
+                                </span>
+                              </div>
+                              {/* Relevance */}
+                              <div className="flex justify-between">
+                                <span className="text-[var(--color-text-muted)]">Liên quan:</span>
+                                <span>
+                                  {req.original_relevance === null ? "Chưa rõ" : req.original_relevance ? "Có" : "Không"} ➔ <strong className={relevanceChanged ? "text-indigo-600 dark:text-indigo-400" : ""}>{req.new_relevance === null ? "Chưa rõ" : req.new_relevance ? "Có" : "Không"}</strong>
+                                </span>
+                              </div>
+                              {/* Intent */}
+                              <div className="flex justify-between">
+                                <span className="text-[var(--color-text-muted)]">Ý định:</span>
+                                <span>
+                                  {req.original_intent || "None"} ➔ <strong className={intentChanged ? "text-indigo-600 dark:text-indigo-400" : ""}>{req.new_intent || "None"}</strong>
+                                </span>
+                              </div>
+                            </div>
+
+                            {req.reason && (
+                              <p className="text-[10px] text-[var(--color-text-secondary)] italic bg-amber-500/5 p-2 rounded border border-amber-500/10">
+                                <strong>Lý do:</strong> {req.reason}
+                              </p>
+                            )}
+
+                            {isManager ? (
+                              <div className="flex gap-2 pt-1">
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      await resolveCorrectionRequest(req.id, alert.id, "approved", profile);
+                                      triggerToast("Đã duyệt yêu cầu sửa nhãn!");
+                                    } catch (err) {
+                                      triggerToast("Duyệt thất bại. Vui lòng thử lại!");
+                                    }
+                                  }}
+                                  className="flex-1 py-1 bg-green-600 hover:bg-green-700 text-white font-bold text-[10px] rounded-lg cursor-pointer flex items-center justify-center gap-0.5"
+                                >
+                                  <span className="material-symbols-outlined text-[12px]">check</span> Duyệt
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      await resolveCorrectionRequest(req.id, alert.id, "rejected", profile);
+                                      triggerToast("Đã từ chối yêu cầu sửa nhãn!");
+                                    } catch (err) {
+                                      triggerToast("Từ chối thất bại. Vui lòng thử lại!");
+                                    }
+                                  }}
+                                  className="flex-1 py-1 bg-red-600 hover:bg-red-700 text-white font-bold text-[10px] rounded-lg cursor-pointer flex items-center justify-center gap-0.5"
+                                >
+                                  <span className="material-symbols-outlined text-[12px]">close</span> Từ chối
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="text-[10px] py-1 bg-amber-100/50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 rounded-lg text-center font-bold border border-amber-200/50">
+                                Đang chờ quản lý duyệt
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tab 3: Lịch sử xử lý nhãn (History) */}
+              {labelTab === "history" && (
+                <div className="space-y-3 animate-fade-in">
+                  {historyRequests.length === 0 ? (
+                    <p className="text-[11px] text-[var(--color-text-muted)] italic text-center py-6">
+                      Chưa có lịch sử điều chỉnh nhãn.
+                    </p>
+                  ) : (
+                    <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
+                      {historyRequests.map((req) => {
+                        const isApproved = req.status === "approved";
+
+                        return (
+                          <div
+                            key={req.id}
+                            className={`p-3 border rounded-xl space-y-2 transition-all ${isApproved
+                                ? "bg-green-50/50 dark:bg-green-950/5 border-green-200/50"
+                                : "bg-red-50/50 dark:bg-red-950/5 border-red-200/50"
+                              }`}
+                          >
+                            <div className="flex justify-between items-center text-[10px] text-[var(--color-text-muted)]">
+                              <span className="font-bold text-[var(--color-text-primary)]">
+                                Gửi bởi: {getResolverName(req.requester_email)}
+                              </span>
+                              <span>{getRelativeTime(req.created_at)}</span>
+                            </div>
+
+                            <div className="text-[10px] space-y-0.5 bg-white/60 dark:bg-slate-900/60 p-2 rounded-lg border border-[var(--color-border)]/40">
+                              <div>Cảm xúc: {getSentimentLabel(req.original_sentiment)} ➔ <strong>{getSentimentLabel(req.new_sentiment)}</strong></div>
+                              <div>Mức độ: {getSeverityLabel(req.original_severity)} ➔ <strong>{getSeverityLabel(req.new_severity)}</strong></div>
+                              <div>Chủ đề: {getTopicLabel(req.original_topic)} ➔ <strong>{getTopicLabel(req.new_topic)}</strong></div>
+                              <div>Liên quan: {req.original_relevance === null ? "Chưa rõ" : req.original_relevance ? "Có" : "Không"} ➔ <strong>{req.new_relevance === null ? "Chưa rõ" : req.new_relevance ? "Có" : "Không"}</strong></div>
+                              <div>Ý định: {req.original_intent || "None"} ➔ <strong>{req.new_intent || "None"}</strong></div>
+                            </div>
+
+                            {req.reason && (
+                              <p className="text-[10px] text-[var(--color-text-secondary)] italic border-l-2 border-slate-300 dark:border-slate-700 pl-1.5">
+                                Lý do: {req.reason}
+                              </p>
+                            )}
+
+                            <div className="flex items-center justify-between text-[9px] pt-1.5 border-t border-[var(--color-border)]/40">
+                              <span className={`font-bold px-2 py-0.5 rounded-full ${isApproved
+                                  ? "bg-green-100 text-green-700 dark:bg-green-950/20 dark:text-green-400"
+                                  : "bg-red-100 text-red-700 dark:bg-red-950/20 dark:text-red-400"
+                                }`}>
+                                {isApproved ? "Đã duyệt" : "Đã từ chối"}
+                              </span>
+                              {req.resolved_by && (
+                                <span className="text-[9px] text-[var(--color-text-muted)] italic">
+                                  Duyệt bởi Ban quản lý
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+            </div>
 
             {/* Widget: Internal Notes */}
             <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl shadow-sm p-6 space-y-4">
@@ -1165,6 +2044,34 @@ export default function AlertDetailPage() {
           item={alert}
           onClose={() => setShowReportModal(false)}
           triggerToast={triggerToast}
+        />
+      )}
+      {showMonitoringModal && alert && (
+        <MonitoringTransitionModal
+          onClose={() => setShowMonitoringModal(false)}
+          onConfirm={async (note, durationHours) => {
+            const finalStatus = durationHours > 0 ? "monitoring" : "resolved";
+            await updateAlertStatus(
+              alert.id,
+              finalStatus,
+              profile,
+              {
+                note,
+                monitoring_duration_hours: durationHours > 0 ? durationHours : undefined
+              },
+              alert.brand
+            );
+            setAlert({
+              ...alert,
+              status: finalStatus,
+              monitoring_started_at: durationHours > 0 ? new Date().toISOString() : undefined,
+              monitoring_duration_hours: durationHours > 0 ? durationHours : undefined,
+              monitoring_initial_comments: alert.comments || 0,
+              monitoring_initial_likes: alert.likes || 0,
+              monitoring_initial_shares: alert.shares || 0,
+            });
+            triggerToast(durationHours > 0 ? "Vụ việc đã được chuyển sang theo dõi thêm!" : "Đã hoàn tất và đóng vụ việc!");
+          }}
         />
       )}
 

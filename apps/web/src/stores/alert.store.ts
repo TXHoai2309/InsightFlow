@@ -2,10 +2,38 @@ import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 import { dbSecond } from "@/lib/firebase";
 import { collection, doc, limit, query, updateDoc, onSnapshot, addDoc } from "firebase/firestore";
-import { isRecordInBrandScope, isSameBrandScope } from "@/lib/brandScope";
+import { isRecordInBrandScope, isSameBrandScope, getScopedBrandKey } from "@/lib/brandScope";
 import { normalizeBrandName } from "@/lib/services/dashboard";
 import { canPerformAction, type UserRoleProfile } from "@/lib/rbac";
 import { fetchSupabaseAlerts, updateSupabaseAlertLabel } from "@/lib/supabase";
+import { supabaseClient } from "@/lib/supabaseClient";
+
+function getResolverName(emailOrId: string | null | undefined): string {
+  if (!emailOrId) return "";
+  if (!emailOrId.includes("@")) return emailOrId;
+  const e = emailOrId.toLowerCase();
+  if (e.includes("crisis")) return "Nguyen Van Crisis";
+  if (e.includes("lead")) return "Tran Thi Lead";
+  if (e.includes("admin")) return "InsightFlow Admin";
+  if (e.includes("manager")) {
+    if (e.includes("highland")) return "Highlands Brand Manager";
+    if (e.includes("starbuck")) return "Starbucks Brand Manager";
+    if (e.includes("mixue")) return "Mixue Brand Manager";
+    return "Brand Manager";
+  }
+  const local = emailOrId.split("@")[0];
+  return local.split(/[._-]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}
+
+function normalizeBrandId(brand: string): string {
+  if (!brand) return "other";
+  let b = brand.toLowerCase().trim();
+  if (b.includes("mixue")) return "mixue";
+  if (b.includes("starbuck")) return "starbucks";
+  if (b.includes("highland")) return "highland-coffee";
+
+  return b.replace(/[^a-z0-9]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+}
 
 export interface ResolutionAttempt {
   attempt_number: number;
@@ -20,6 +48,21 @@ export interface InternalNote {
   note: string;
   author: string;
   timestamp: string;
+}
+
+export interface EscalationData {
+  draft_response: string;
+  compensation: string;
+  submitted_by_email: string;
+  submitted_by_name: string;
+  submitted_at: string;
+  status: "pending" | "approved" | "rejected";
+  approved_by_email?: string | null;
+  approved_by_name?: string | null;
+  approved_at?: string | null;
+  approved_response?: string | null;
+  compensation_approved?: string | null;
+  approval_note?: string;
 }
 
 export interface AlertData {
@@ -58,6 +101,15 @@ export interface AlertData {
   post_like_count?: number;
   post_comment_count?: number;
   post_share_count?: number;
+  relevance?: boolean | null;
+  urgency?: string | null;
+  intent?: string | null;
+  escalation?: EscalationData | null;
+  monitoring_started_at?: string;
+  monitoring_duration_hours?: number;
+  monitoring_initial_comments?: number;
+  monitoring_initial_likes?: number;
+  monitoring_initial_shares?: number;
 }
 
 export interface AlertFilters {
@@ -80,6 +132,12 @@ export interface CorrectionRequest {
   new_severity: string;
   original_topic: string;
   new_topic: string;
+  original_relevance: boolean | null;
+  new_relevance: boolean | null;
+  original_urgency: string | null;
+  new_urgency: string | null;
+  original_intent: string | null;
+  new_intent: string | null;
   reason: string;
   resolved_by?: string;
   resolved_at?: string;
@@ -101,7 +159,13 @@ interface AlertState {
     id: string,
     newStatus: string,
     profile: UserRoleProfile | null | undefined,
-    attempt?: { note: string; image_url?: string }
+    attempt?: {
+      note: string;
+      image_url?: string;
+      escalation?: EscalationData | null;
+      monitoring_duration_hours?: number;
+    },
+    brandFallback?: string
   ) => Promise<void>;
   fetchCorrectionRequests: (scopedBrandKey?: string | null) => Promise<void>;
   createCorrectionRequest: (requestData: Omit<CorrectionRequest, "id" | "created_at" | "status">) => Promise<void>;
@@ -113,6 +177,7 @@ interface AlertState {
   ) => Promise<void>;
   lockAlertForResolution: (id: string, profile: UserRoleProfile | null | undefined) => Promise<void>;
   unlockAlertForResolution: (id: string) => Promise<void>;
+  recentLocks: Record<string, { email: string | null; timestamp: number }>;
 }
 
 function parseDate(field: unknown): string {
@@ -226,6 +291,7 @@ export const useAlertStore = create<AlertState>()(
     error: null,
     correctionRequests: [],
     isLoadingRequests: false,
+    recentLocks: {},
     filters: {
       brand: "all",
       status: "all",
@@ -243,6 +309,7 @@ export const useAlertStore = create<AlertState>()(
     },
 
     fetchAlerts: async (scopedBrandKey = null) => {
+      // Clean up any existing subscription/interval
       if (activeUnsubscribe) {
         activeUnsubscribe();
         activeUnsubscribe = null;
@@ -250,37 +317,133 @@ export const useAlertStore = create<AlertState>()(
 
       set({ isLoading: true, error: null });
 
-      try {
-        const loadAlerts = async () => {
-          try {
-            const fetched = await fetchSupabaseAlerts();
-            const filtered = fetched.filter((alert) =>
-              isRecordInBrandScope({ brand: alert.brand }, scopedBrandKey)
-            );
+      // Core function: fetch full alert list from Supabase REST
+      const loadAlerts = async () => {
+        try {
+          const fetched = await fetchSupabaseAlerts();
+          const filtered = fetched.filter((alert) =>
+            isRecordInBrandScope({ brand: alert.brand }, scopedBrandKey)
+          );
 
-            const scopedBrands = Array.from(new Set(filtered.map((alert) => alert.brand))).sort();
-            const fallbackBrands = ["Highland Coffee", "Starbucks", "Mixue"].filter((brand) => {
-              return !scopedBrandKey || normalizeBrandName(brand) === scopedBrandKey;
-            });
+          const scopedBrands = Array.from(new Set(filtered.map((alert) => alert.brand))).sort();
+          const fallbackBrands = ["Highland Coffee", "Starbucks", "Mixue"].filter((brand) => {
+            return !scopedBrandKey || normalizeBrandName(brand) === scopedBrandKey;
+          });
 
-            set({
-              rawAlerts: filtered,
-              alerts: applyFilters(filtered, get().filters),
-              brands: scopedBrands.length ? scopedBrands : fallbackBrands,
-              error: null,
-              isLoading: false,
+          // Merge with recent lock cache to avoid race condition overwrites
+          const recentLocks = get().recentLocks || {};
+          const merged = filtered.map((fetchedAlert) => {
+            const recent = recentLocks[fetchedAlert.id];
+            if (recent && Date.now() - recent.timestamp < 15000) {
+              return {
+                ...fetchedAlert,
+                being_resolved_by: recent.email,
+                being_resolved_at: recent.email
+                  ? fetchedAlert.being_resolved_at || new Date(recent.timestamp).toISOString()
+                  : null,
+              };
+            }
+            return fetchedAlert;
+          });
+
+          // Auto-closure check
+          const monitoringAlerts = merged.filter(a => a.status === "monitoring");
+          if (monitoringAlerts.length > 0) {
+            monitoringAlerts.forEach((alert) => {
+              const startedAt = alert.monitoring_started_at ? new Date(alert.monitoring_started_at).getTime() : new Date(alert.created_at).getTime();
+              const durationMs = (alert.monitoring_duration_hours ?? 72) * 60 * 60 * 1000;
+              const now = Date.now();
+              if (now - startedAt >= durationMs) {
+                const initialComments = alert.monitoring_initial_comments ?? 0;
+                const initialLikes = alert.monitoring_initial_likes ?? 0;
+                const initialShares = alert.monitoring_initial_shares ?? 0;
+
+                const currentComments = alert.comments ?? 0;
+                const currentLikes = alert.likes ?? 0;
+                const currentShares = alert.shares ?? 0;
+
+                const hasNewActivity = currentComments > initialComments || currentLikes > (initialLikes + 5) || currentShares > initialShares;
+
+                if (!hasNewActivity) {
+                  console.log(`[AlertStore] Auto-closing alert ${alert.id}`);
+                  updateSupabaseAlertLabel(alert.id, (existingLabel) => {
+                    return {
+                      ...existingLabel,
+                      resolution_status: "resolved",
+                      resolved_at: new Date().toISOString(),
+                      resolved_by_email: "system@insightflow.ai",
+                      resolved_by_name: "Hệ thống tự động",
+                      resolution_history: [
+                        ...(existingLabel.resolution_history || []),
+                        {
+                          attempt_number: (existingLabel.resolution_history?.length || 0) + 1,
+                          timestamp: new Date().toISOString(),
+                          note: "Hệ thống tự động đóng vụ việc sau thời gian theo dõi không phát sinh hoạt động bất thường.",
+                          resolved_by_email: "system@insightflow.ai",
+                          resolved_by_name: "Hệ thống tự động"
+                        }
+                      ],
+                      updated_at: new Date().toISOString()
+                    };
+                  }).catch(err => console.error("[AlertStore] Auto-close failed:", err));
+                }
+              }
             });
-          } catch (error) {
-            const message = error instanceof Error ? error.message : "Lỗi đồng bộ Supabase";
-            set({ error: message, isLoading: false });
-            console.error("[AlertStore] poll error:", message, error);
           }
-        };
 
+          set({
+            rawAlerts: merged,
+            alerts: applyFilters(merged, get().filters),
+            brands: scopedBrands.length ? scopedBrands : fallbackBrands,
+            error: null,
+            isLoading: false,
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Lỗi đồng bộ Supabase";
+          set({ error: message, isLoading: false });
+          console.error("[AlertStore] loadAlerts error:", message, error);
+        }
+      };
+
+      try {
+        // Initial load
         await loadAlerts();
 
-        const intervalId = setInterval(loadAlerts, 1800000);
-        activeUnsubscribe = () => clearInterval(intervalId);
+        const cleanupFns: (() => void)[] = [];
+
+        // ===== STRATEGY 1: Supabase Realtime subscription =====
+        // Listens for ANY UPDATE on the annotations table and triggers a full reload.
+        // This gives sub-second updates to ALL connected clients simultaneously.
+        if (supabaseClient) {
+          try {
+            const channel = supabaseClient
+              .channel("alert-annotations-global")
+              .on(
+                "postgres_changes",
+                { event: "UPDATE", schema: "public", table: "annotations" },
+                () => {
+                  // Push notification received — reload full list
+                  loadAlerts();
+                }
+              )
+              .subscribe((status) => {
+                console.log("[AlertStore] Realtime subscription status:", status);
+              });
+
+            cleanupFns.push(() => { if (supabaseClient) supabaseClient.removeChannel(channel); });
+
+            console.log("[AlertStore] ✅ Supabase Realtime active — instant cross-client sync enabled");
+          } catch (realtimeErr) {
+            console.warn("[AlertStore] Realtime init failed, falling back to polling:", realtimeErr);
+          }
+        }
+
+        // ===== STRATEGY 2: Fallback polling (8s) =====
+        // Disabled to reduce server load. Relying on Realtime sync & Manual Refresh.
+        // const intervalId = setInterval(loadAlerts, 8000);
+        // cleanupFns.push(() => clearInterval(intervalId));
+
+        activeUnsubscribe = () => cleanupFns.forEach((fn) => fn());
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Không thể khởi tạo đồng bộ";
@@ -289,7 +452,7 @@ export const useAlertStore = create<AlertState>()(
       }
     },
 
-    updateAlertStatus: async (id, newStatus, profile, attempt) => {
+    updateAlertStatus: async (id, newStatus, profile, attempt, brandFallback) => {
       console.log("[AlertStore] updateAlertStatus called:", { id, newStatus, profileEmail: profile?.email, profileRole: profile?.role });
       const currentAlert = get().rawAlerts.find((alert) => alert.id === id);
       console.log("[AlertStore] currentAlert found:", currentAlert);
@@ -298,9 +461,24 @@ export const useAlertStore = create<AlertState>()(
         console.error("[AlertStore] Permission check failed:", { profileExists: !!profile, hasPermission: profile ? canPerformAction(profile, "update_crisis_status") : false });
         throw new Error("User is not allowed to update crisis status.");
       }
-      if (!currentAlert || !isSameBrandScope(profile, { brand: currentAlert.brand })) {
-        console.error("[AlertStore] Brand scope check failed:", { alertExists: !!currentAlert, sameScope: currentAlert ? isSameBrandScope(profile, { brand: currentAlert.brand }) : false });
-        throw new Error("Alert is outside the user's brand scope.");
+
+      const resolvedBrand = currentAlert?.brand || brandFallback;
+
+      console.log("[AlertStore] Brand scope check diagnostic:", {
+        profileEmail: profile?.email,
+        profileRole: profile?.role,
+        profileBrandName: profile?.brandName,
+        profileBrandId: profile?.brandId,
+        scopedBrandKey: getScopedBrandKey(profile),
+        currentAlertBrand: currentAlert?.brand,
+        brandFallback,
+        resolvedBrand,
+        currentAlertNormalized: resolvedBrand ? normalizeBrandName(resolvedBrand) : null,
+      });
+
+      if (!resolvedBrand || !isSameBrandScope(profile, { brand: resolvedBrand })) {
+        console.error("[AlertStore] Brand scope check failed:", { resolvedBrand, sameScope: resolvedBrand ? isSameBrandScope(profile, { brand: resolvedBrand }) : false });
+        throw new Error(`Alert is outside the user's brand scope. Profile: [Name: ${profile?.brandName}, ID: ${profile?.brandId}], Alert Brand: [${resolvedBrand}]`);
       }
 
       const resolvedAt =
@@ -323,6 +501,7 @@ export const useAlertStore = create<AlertState>()(
                 resolved_at: undefined,
                 resolved_by_email: null,
                 resolved_by_name: null,
+                escalation: null,
               };
             }
 
@@ -345,6 +524,25 @@ export const useAlertStore = create<AlertState>()(
               resolved_at: resolvedAt || undefined,
               resolved_by_email: resolvedAt ? profile.email : null,
               resolved_by_name: resolvedAt ? profile.displayName : null,
+              escalation: attempt?.escalation !== undefined ? attempt.escalation : alert.escalation,
+              // When claiming a task, set being_resolved_by immediately in local state
+              // so the filter hides it from other officers instantly
+              ...(newStatus === "resolving" ? {
+                being_resolved_by: profile.email,
+                being_resolved_at: new Date().toISOString(),
+              } : {}),
+              // When resolved, clear the lock
+              ...(newStatus === "resolved" ? {
+                being_resolved_by: null,
+                being_resolved_at: null,
+              } : {}),
+              ...(newStatus === "monitoring" ? {
+                monitoring_started_at: new Date().toISOString(),
+                monitoring_duration_hours: attempt?.monitoring_duration_hours ?? 72,
+                monitoring_initial_comments: alert.comments || 0,
+                monitoring_initial_likes: alert.likes || 0,
+                monitoring_initial_shares: alert.shares || 0,
+              } : {}),
             };
           }
           return alert;
@@ -381,10 +579,11 @@ export const useAlertStore = create<AlertState>()(
               updated_by: profile.uid,
               updated_by_role: profile.role,
               updated_at: new Date().toISOString(),
+              escalation: null,
             };
           }
 
-          return {
+          const updateObj: any = {
             ...existingLabel,
             resolution_status: newStatus,
             resolution_history: nextHistory,
@@ -392,17 +591,28 @@ export const useAlertStore = create<AlertState>()(
             resolved_by: resolvedAt ? profile.uid : null,
             resolved_by_email: resolvedAt ? profile.email : null,
             resolved_by_name: resolvedAt ? profile.displayName : null,
+            escalation: attempt?.escalation !== undefined ? attempt.escalation : existingLabel.escalation ?? null,
             updated_by: profile.uid,
             updated_by_role: profile.role,
             updated_at: new Date().toISOString(),
           };
+
+          if (newStatus === "monitoring") {
+            updateObj.monitoring_started_at = new Date().toISOString();
+            updateObj.monitoring_duration_hours = attempt?.monitoring_duration_hours ?? 72;
+            updateObj.monitoring_initial_comments = currentAlert?.comments || 0;
+            updateObj.monitoring_initial_likes = currentAlert?.likes || 0;
+            updateObj.monitoring_initial_shares = currentAlert?.shares || 0;
+          }
+
+          return updateObj;
         });
       } catch (error) {
         console.error("[AlertStore] Failed to persist alert status:", error);
         // Revert local state update
         set((state) => {
           const nextRawAlerts = state.rawAlerts.map((alert) => {
-            if (alert.id === id) {
+            if (alert.id === id && currentAlert) {
               return currentAlert;
             }
             return alert;
@@ -421,15 +631,15 @@ export const useAlertStore = create<AlertState>()(
       try {
         if (!dbSecond) throw new Error("Firebase data project is not configured.");
 
-        const q = query(collection(dbSecond, "insightflow_correction_requests"), limit(500));
+        const q = query(collection(dbSecond, "label_change_requests"), limit(500));
 
         onSnapshot(q, (snapshot) => {
           const requests: CorrectionRequest[] = [];
           snapshot.docs.forEach((docSnap) => {
             const data = docSnap.data();
-            let recordBrand = data.brand;
+            let recordBrand = data.brand_name || data.brand;
             if (!recordBrand) {
-              const email = String(data.requester_email || "").toLowerCase();
+              const email = String(data.requested_by_email || data.requester_email || "").toLowerCase();
               if (email.includes("highland")) recordBrand = "Highland Coffee";
               else if (email.includes("starbuck")) recordBrand = "Starbucks";
               else if (email.includes("mixue")) recordBrand = "Mixue";
@@ -437,22 +647,28 @@ export const useAlertStore = create<AlertState>()(
 
             const req = {
               id: docSnap.id,
-              alert_id: data.alert_id,
+              alert_id: data.mention_id || data.alert_id,
               brand: recordBrand || "",
-              requester_uid: data.requester_uid,
-              requester_email: data.requester_email,
+              requester_uid: data.requested_by_uid || data.requester_uid || "",
+              requester_email: data.requested_by_email || data.requester_email || "",
               created_at: data.created_at,
               status: data.status,
-              original_sentiment: data.original_sentiment,
-              new_sentiment: data.new_sentiment,
-              original_severity: data.original_severity,
-              new_severity: data.new_severity,
-              original_topic: data.original_topic,
-              new_topic: data.new_topic,
+              original_sentiment: data.old_label?.sentiment || data.original_sentiment || "neutral",
+              new_sentiment: data.proposed_label?.sentiment || data.new_sentiment || "neutral",
+              original_severity: data.old_label?.urgency || data.original_severity || "medium",
+              new_severity: data.proposed_label?.urgency || data.new_severity || "medium",
+              original_topic: data.old_label?.topic || data.original_topic || "other",
+              new_topic: data.proposed_label?.topic || data.new_topic || "other",
+              original_relevance: data.old_label?.relevance !== undefined ? data.old_label.relevance : (data.original_relevance !== undefined ? data.original_relevance : null),
+              new_relevance: data.proposed_label?.relevance !== undefined ? data.proposed_label.relevance : (data.new_relevance !== undefined ? data.new_relevance : null),
+              original_urgency: data.old_label?.urgency || data.original_urgency || "medium",
+              new_urgency: data.proposed_label?.urgency || data.new_urgency || "medium",
+              original_intent: data.old_label?.intent || data.original_intent || "none",
+              new_intent: data.proposed_label?.intent || data.new_intent || "none",
               reason: data.reason,
-              resolved_by: data.resolved_by,
-              resolved_at: data.resolved_at,
-              alert_text: data.alert_text,
+              resolved_by: data.reviewed_by_uid || data.resolved_by || "",
+              resolved_at: data.reviewed_at || data.resolved_at || "",
+              alert_text: data.mention?.content || data.alert_text || "",
             } as CorrectionRequest;
 
             if (!isRecordInBrandScope({ brand: req.brand }, scopedBrandKey)) return;
@@ -472,16 +688,73 @@ export const useAlertStore = create<AlertState>()(
       }
     },
 
-    createCorrectionRequest: async (requestData) => {
+    createCorrectionRequest: async (requestData: any) => {
       if (!dbSecond) throw new Error("Firebase data project is not configured.");
 
+      const alert = requestData.alert_full;
+      const cleanBrandId = normalizeBrandId(requestData.brand || "");
+
       const newDoc = {
-        ...requestData,
-        created_at: new Date().toISOString(),
         status: "pending" as const,
+        brand_id: cleanBrandId,
+        brand_name: requestData.brand || "",
+        mention_id: requestData.alert_id,
+        requested_by_name: getResolverName(requestData.requester_email || ""),
+        requested_by_email: requestData.requester_email || "",
+        requested_by_role: "crisis_employee",
+        reason: requestData.reason || "",
+        old_label: {
+          sentiment: requestData.original_sentiment || "neutral",
+          topic: requestData.original_topic || "other",
+          relevance: requestData.original_relevance,
+          urgency: requestData.original_urgency || "normal",
+          intent: requestData.original_intent || "none",
+        },
+        proposed_label: {
+          sentiment: requestData.new_sentiment || "neutral",
+          topic: requestData.new_topic || "other",
+          relevance: requestData.new_relevance,
+          urgency: requestData.new_urgency || "normal",
+          intent: requestData.new_intent || "none",
+        },
+        mention: {
+          id: requestData.alert_id,
+          parent_id: alert?.parent_id || null,
+          platform: alert?.source || "unknown",
+          content_type: alert?.content_type || "post",
+          content: alert?.text || "",
+          post_content: alert?.post_content || "",
+          comment_content: alert?.comment_content || "",
+          author: alert?.author || "Không rõ tác giả",
+          posted_at: alert?.created_at || new Date().toISOString(),
+          url: alert?.url || "",
+        },
+        history: [
+          {
+            action: "created",
+            by_name: getResolverName(requestData.requester_email || ""),
+            at: new Date().toISOString(),
+            from: {
+              sentiment: requestData.original_sentiment || "neutral",
+              topic: requestData.original_topic || "other",
+              relevance: requestData.original_relevance,
+              urgency: requestData.original_urgency || "normal",
+              intent: requestData.original_intent || "none",
+            },
+            to: {
+              sentiment: requestData.new_sentiment || "neutral",
+              topic: requestData.new_topic || "other",
+              relevance: requestData.new_relevance,
+              urgency: requestData.new_urgency || "normal",
+              intent: requestData.new_intent || "none",
+            },
+            note: requestData.reason || "",
+          }
+        ],
+        created_at: new Date().toISOString(),
       };
 
-      await addDoc(collection(dbSecond, "insightflow_correction_requests"), newDoc);
+      await addDoc(collection(dbSecond, "label_change_requests"), newDoc);
     },
 
     resolveCorrectionRequest: async (requestId, alertId, decision, profile) => {
@@ -489,16 +762,77 @@ export const useAlertStore = create<AlertState>()(
       if (!profile) throw new Error("User is not authenticated.");
 
       // Read correction data synchronously BEFORE any await.
-      // Firestore SDK may call the onSnapshot callback before await resolves,
-      // replacing correctionRequests in the store. Reading first avoids the race condition.
       const req = get().correctionRequests.find((r) => r.id === requestId);
 
-      const requestRef = doc(dbSecond, "insightflow_correction_requests", requestId);
+      const requestRef = doc(dbSecond, "label_change_requests", requestId);
+
+      const changedAt = new Date().toISOString();
+      const nextHistory = [
+        {
+          action: decision,
+          by_name: profile.displayName || profile.email || "Brand Manager",
+          by_email: profile.email,
+          at: changedAt,
+          from: {
+            sentiment: req?.original_sentiment,
+            topic: req?.original_topic,
+            relevance: req?.original_relevance,
+            urgency: req?.original_urgency,
+            intent: req?.original_intent,
+          },
+          to: {
+            sentiment: req?.new_sentiment,
+            topic: req?.new_topic,
+            relevance: req?.new_relevance,
+            urgency: req?.new_urgency,
+            intent: req?.new_intent,
+          },
+        }
+      ];
 
       await updateDoc(requestRef, {
         status: decision,
-        resolved_by: profile.uid,
-        resolved_at: new Date().toISOString(),
+        reviewed_by_uid: profile.uid,
+        reviewed_by_name: profile.displayName || profile.email || "",
+        reviewed_by_email: profile.email || "",
+        reviewed_at: changedAt,
+        history: nextHistory,
+        updated_at: changedAt,
+      });
+
+      // Also create history audit entry
+      await addDoc(collection(dbSecond, "label_change_history"), {
+        request_id: requestId,
+        brand_id: normalizeBrandId(req?.brand || ""),
+        brand_name: req?.brand || "",
+        mention_id: alertId,
+        mention_content: req?.alert_text || "",
+        action: decision,
+        status: decision,
+        old_label: {
+          sentiment: req?.original_sentiment,
+          topic: req?.original_topic,
+          relevance: req?.original_relevance,
+          urgency: req?.original_urgency,
+          intent: req?.original_intent,
+        },
+        new_label: {
+          sentiment: req?.new_sentiment,
+          topic: req?.new_topic,
+          relevance: req?.new_relevance,
+          urgency: req?.new_urgency,
+          intent: req?.new_intent,
+        },
+        requested_by_name: getResolverName(req?.requester_email || ""),
+        requested_by_email: req?.requester_email || "",
+        requested_by_role: "crisis_employee",
+        reviewed_by_uid: profile.uid,
+        reviewed_by_name: profile.displayName || profile.email || "",
+        reviewed_by_email: profile.email || "",
+        note: req?.reason || "",
+        source: "brand_manager_review",
+        changed_at: changedAt,
+        created_at: changedAt,
       });
 
       if (decision === "approved" && req) {
@@ -506,19 +840,46 @@ export const useAlertStore = create<AlertState>()(
           ...existingLabel,
           sentiment: req.new_sentiment,
           severity: req.new_severity,
-          urgency: req.new_severity,
+          urgency: req.new_urgency ?? req.new_severity,
           topic: [req.new_topic],
+          relevance: req.new_relevance,
+          intent: req.new_intent,
         }));
       }
     },
 
     lockAlertForResolution: async (id, profile) => {
       if (!profile) return;
+      const now = new Date().toISOString();
+
+      // Update local state immediately
+      set((state) => {
+        const nextRawAlerts = state.rawAlerts.map((alert) => {
+          if (alert.id === id) {
+            return {
+              ...alert,
+              being_resolved_by: profile.email,
+              being_resolved_at: now,
+            };
+          }
+          return alert;
+        });
+
+        const nextRecentLocks = { ...state.recentLocks };
+        nextRecentLocks[id] = { email: profile.email, timestamp: Date.now() };
+
+        return {
+          rawAlerts: nextRawAlerts,
+          alerts: applyFilters(nextRawAlerts, state.filters),
+          recentLocks: nextRecentLocks,
+        };
+      });
+
       try {
         await updateSupabaseAlertLabel(id, (existingLabel) => ({
           ...existingLabel,
           being_resolved_by: profile.email,
-          being_resolved_at: new Date().toISOString(),
+          being_resolved_at: now,
         }));
       } catch (error) {
         console.error("[AlertStore] Failed to lock alert:", error);
@@ -526,6 +887,29 @@ export const useAlertStore = create<AlertState>()(
     },
 
     unlockAlertForResolution: async (id) => {
+      // Update local state immediately
+      set((state) => {
+        const nextRawAlerts = state.rawAlerts.map((alert) => {
+          if (alert.id === id) {
+            return {
+              ...alert,
+              being_resolved_by: null,
+              being_resolved_at: null,
+            };
+          }
+          return alert;
+        });
+
+        const nextRecentLocks = { ...state.recentLocks };
+        nextRecentLocks[id] = { email: null, timestamp: Date.now() };
+
+        return {
+          rawAlerts: nextRawAlerts,
+          alerts: applyFilters(nextRawAlerts, state.filters),
+          recentLocks: nextRecentLocks,
+        };
+      });
+
       try {
         await updateSupabaseAlertLabel(id, (existingLabel) => ({
           ...existingLabel,

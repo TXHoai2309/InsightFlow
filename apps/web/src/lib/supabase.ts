@@ -64,6 +64,15 @@ function normalizeBrandKey(brand: string): string {
   return normalized;
 }
 
+function extractBrandFromKey(key: string | null | undefined): string | null {
+  if (!key) return null;
+  const lower = key.toLowerCase();
+  if (lower.includes("highland")) return "Highland Coffee";
+  if (lower.includes("starbuck")) return "Starbucks";
+  if (lower.includes("mixue")) return "Mixue";
+  return null;
+}
+
 function formatBrandName(brand: string): string {
   const key = normalizeBrandKey(brand);
   if (key === "highlandcoffee") return "Highland Coffee";
@@ -210,11 +219,15 @@ export async function fetchSupabaseAlerts(): Promise<AlertData[]> {
   const PER_PLATFORM = 100;
   const negFilter = encodeURIComponent('"sentiment":"negative"');
 
+  const threeMonthsAgo = new Date();
+  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+  const threeMonthsAgoISO = threeMonthsAgo.toISOString();
+
   const platformBatches = await Promise.all(
     PLATFORMS.map((p) =>
       supabaseRequest<SupabaseAnnotationRow[]>(
         "annotations",
-        `status=eq.completed&platform=eq.${p}&label=like.*${negFilter}*&order=updated_at.desc&limit=${PER_PLATFORM}`
+        `status=eq.completed&platform=eq.${p}&label=like.*${negFilter}*&updated_at=gte.${threeMonthsAgoISO}&order=updated_at.desc&limit=${PER_PLATFORM}`
       ).catch(() => [] as SupabaseAnnotationRow[])
     )
   );
@@ -255,7 +268,14 @@ export async function fetchSupabaseAlerts(): Promise<AlertData[]> {
       const commentPayload = comment?.payload_json || {};
 
       const brand = formatBrandName(
-        String(post?.brand || postPayload.brand || anno.platform || "")
+        String(
+          post?.brand ||
+          postPayload.brand ||
+          extractBrandFromKey(anno.post_id) ||
+          extractBrandFromKey(anno.entity_key) ||
+          anno.platform ||
+          ""
+        )
       );
       const source = normalizeSource(
         String(post?.source || postPayload.source || anno.platform || "")
@@ -291,6 +311,16 @@ export async function fetchSupabaseAlerts(): Promise<AlertData[]> {
       const post_content = String(post?.payload_json?.text || post?.url || "");
       const comment_content = anno.entity_type === "comment" ? text : "";
 
+      const postedAtStr = comment?.posted_at || commentPayload.posted_at || post?.posted_at || postPayload.posted_at || anno.updated_at;
+      if (postedAtStr) {
+        const postedDate = new Date(postedAtStr);
+        const limitDate = new Date();
+        limitDate.setMonth(limitDate.getMonth() - 3);
+        if (postedDate.getTime() < limitDate.getTime()) {
+          continue; // Skip if the original post/comment was published more than 3 months ago
+        }
+      }
+
       const alert: AlertData = {
         id: anno.entity_key, // Use entity_key as ID
         brand,
@@ -300,7 +330,7 @@ export async function fetchSupabaseAlerts(): Promise<AlertData[]> {
         topic,
         severity,
         negativity_score,
-        created_at: parseDate(anno.updated_at),
+        created_at: parseDate(postedAtStr),
         status: String(labelObj.resolution_status || "new"),
         resolved_at: labelObj.resolved_at ? parseDate(labelObj.resolved_at) : undefined,
         collectionName: "annotations",
@@ -330,6 +360,15 @@ export async function fetchSupabaseAlerts(): Promise<AlertData[]> {
         post_like_count: postLikes,
         post_comment_count: postComments,
         post_share_count: postShares,
+        relevance: typeof labelObj.relevance === "boolean" ? labelObj.relevance : null,
+        urgency: labelObj.urgency || null,
+        intent: labelObj.intent || null,
+        escalation: labelObj.escalation ?? null,
+        monitoring_started_at: labelObj.monitoring_started_at || undefined,
+        monitoring_duration_hours: labelObj.monitoring_duration_hours || undefined,
+        monitoring_initial_comments: labelObj.monitoring_initial_comments || undefined,
+        monitoring_initial_likes: labelObj.monitoring_initial_likes || undefined,
+        monitoring_initial_shares: labelObj.monitoring_initial_shares || undefined,
       };
 
       alerts.push(alert);
@@ -381,7 +420,16 @@ export async function fetchSingleSupabaseAlert(entityKey: string): Promise<Alert
   const postPayload = post?.payload_json || {};
   const commentPayload = comment?.payload_json || {};
 
-  const brand = formatBrandName(String(post?.brand || postPayload.brand || anno.platform || ""));
+  const brand = formatBrandName(
+    String(
+      post?.brand ||
+      postPayload.brand ||
+      extractBrandFromKey(anno.post_id) ||
+      extractBrandFromKey(anno.entity_key) ||
+      anno.platform ||
+      ""
+    )
+  );
   const source = normalizeSource(String(post?.source || postPayload.source || anno.platform || ""));
 
   let text = "";
@@ -420,7 +468,7 @@ export async function fetchSingleSupabaseAlert(entityKey: string): Promise<Alert
     topic,
     severity,
     negativity_score,
-    created_at: parseDate(anno.updated_at),
+    created_at: parseDate(comment?.posted_at || commentPayload.posted_at || post?.posted_at || postPayload.posted_at || anno.updated_at),
     status: String(labelObj.resolution_status || "new"),
     resolved_at: labelObj.resolved_at ? parseDate(labelObj.resolved_at) : undefined,
     collectionName: "annotations",
@@ -450,6 +498,15 @@ export async function fetchSingleSupabaseAlert(entityKey: string): Promise<Alert
     post_like_count: singlePostLikes,
     post_comment_count: singlePostComments,
     post_share_count: singlePostShares,
+    relevance: typeof labelObj.relevance === "boolean" ? labelObj.relevance : null,
+    urgency: labelObj.urgency || null,
+    intent: labelObj.intent || null,
+    escalation: labelObj.escalation ?? null,
+    monitoring_started_at: labelObj.monitoring_started_at || undefined,
+    monitoring_duration_hours: labelObj.monitoring_duration_hours || undefined,
+    monitoring_initial_comments: labelObj.monitoring_initial_comments || undefined,
+    monitoring_initial_likes: labelObj.monitoring_initial_likes || undefined,
+    monitoring_initial_shares: labelObj.monitoring_initial_shares || undefined,
   };
 }
 
