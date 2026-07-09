@@ -11,6 +11,30 @@
 >   Tất cả các thay đổi đáng chú ý đối với dự án này sẽ được ghi lại trong file này.
 >   Định dạng dựa trên [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) và dự án này tuân thủ [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-07-09
+
+### Added
+
+- **Báo cáo PDF cho Brand Manager**:
+  - Thêm chức năng xuất báo cáo PDF tổng hợp dữ liệu theo tuần để quản lý thương hiệu có thể xem nhanh tình hình đề cập, cảnh báo, lead và các chỉ số vận hành chính.
+  - Tối ưu bố cục PDF để hạn chế lỗi font tiếng Việt và tránh tình trạng chữ bị đè khi nội dung dài.
+
+### Changed
+
+- **Tái cấu trúc báo cáo Excel**:
+  - Sắp xếp lại file Excel xuất ra theo góc nhìn quản lý thương hiệu, tập trung vào số liệu tổng quan, xu hướng, phân bổ nền tảng/chủ đề, hiệu suất xử lý và các mục cần ưu tiên.
+  - Bổ sung các phần dữ liệu và biểu đồ trực quan để báo cáo dễ đọc hơn, không chỉ dừng ở danh sách mention thô.
+- **Tối ưu cơ chế tải dữ liệu nghiệp vụ**:
+  - Điều chỉnh trang Mention, Khách hàng tiềm năng và Report chỉ tự động gửi request định kỳ mỗi 30 phút.
+  - Thêm nút làm mới/reset thủ công để người dùng chủ động tải lại dữ liệu khi cần, giảm tải cho database Supabase.
+
+### Fixed
+
+- **Sửa luồng gửi và duyệt request sửa nhãn**:
+  - Khắc phục lỗi gửi yêu cầu sửa nhãn từ trang Khách hàng tiềm năng không ghi được dữ liệu vào bảng `label_change_requests`.
+  - Đồng bộ lại luồng sửa nhãn ở trang Cảnh báo để nhất quán với trải nghiệm sửa nhãn ở trang Khách hàng tiềm năng.
+  - Giới hạn dữ liệu cảnh báo và lead cần duyệt trong phạm vi 1 tháng gần nhất để tránh tải và duyệt toàn bộ dữ liệu cũ.
+
 ## [Unreleased] - 2026-07-08
 
 ### Added
