@@ -759,6 +759,14 @@ function supabasePostToMention(row: SupabaseRow, annotationByKey: Map<string, Su
     relevance: true,
   });
 
+  let locationName = readFirstText(row.author, payload.author, payload.tac_gia) || "N/A";
+  if ((locationName === "N/A" || locationName === "") && postContent) {
+    const parts = postContent.split(/[\n\ue0c8]/);
+    if (parts[0]) locationName = parts[0].trim();
+  }
+  const ratingRaw = payload.star_count ?? payload.rating ?? payload.star ?? payload.rating_star;
+  const starCount = ratingRaw !== undefined && ratingRaw !== null ? Number(ratingRaw) : null;
+
   return {
     id: postId,
     parent_id: null,
@@ -779,6 +787,8 @@ function supabasePostToMention(row: SupabaseRow, annotationByKey: Map<string, Su
     posted_at: parseDate(row.posted_at || payload.thoi_gian_dang || payload.posted_at || row.created_at),
     url: normalizeOptionalUrl(row.url, row.post_url, row.source_url, payload.url),
     labels: label,
+    star_count: starCount,
+    location_name: locationName,
   };
 }
 
@@ -808,6 +818,10 @@ function supabaseCommentToMention(
     relevance: true,
   });
 
+  const ratingRaw = payload.star_count ?? payload.rating ?? payload.star ?? payload.rating_star;
+  const starCount = ratingRaw !== undefined && ratingRaw !== null ? Number(ratingRaw) : null;
+  const locationName = post ? post.location_name : null;
+
   return {
     id: commentId,
     parent_id: parentCommentId || postId || null,
@@ -829,6 +843,8 @@ function supabaseCommentToMention(
     posted_at: parseDate(row.posted_at || payload.gio_comment || payload.posted_at || row.created_at),
     url: normalizeOptionalUrl(row.url, post?.url, payload.url),
     labels: label,
+    star_count: starCount,
+    location_name: locationName,
   };
 }
 
@@ -838,25 +854,47 @@ async function loadSupabaseRowsByIds<T extends SupabaseRow>(
   idField: string,
   ids: string[],
   columns: string[],
+  extraParams: Record<string, string> = {},
+  maxRows = 10000,
 ): Promise<T[]> {
   if (!ids || ids.length === 0) return [];
   const unique = Array.from(new Set(ids.filter(Boolean)));
   const pageSize = 100;
   const promises: Promise<T[]>[] = [];
 
+  const isAnnotationTable = table === "annotations";
   for (let i = 0; i < unique.length; i += pageSize) {
+    if (isAnnotationTable && i >= 1000) break; // Limit to top 1000 IDs to avoid excessive parallel queries
     const chunk = unique.slice(i, i + pageSize);
-    const query = `${idField}=in.(${chunk.map(encodeURIComponent).join(",")})&select=${columns.join(",")}`;
-    promises.push(supabaseRequest<T[]>(config, table, query));
+    const formattedIds = chunk.map((id) => `"${id.replace(/"/g, '\\"')}"`);
+    const requestParams = new URLSearchParams({
+      ...extraParams,
+      [idField]: `in.(${formattedIds.join(",")})`,
+      select: columns.join(","),
+      limit: String(maxRows), // Fetch up to maxRows to ensure complete candidate list
+    });
+    promises.push(supabaseRequest<T[]>(config, table, requestParams.toString()));
   }
 
   const results = await Promise.all(promises);
-  return results.flat();
+  let finalResults = results.flat();
+
+  // If order is updated_at desc, sort in JS to ensure true top results across chunks
+  if (extraParams.order && extraParams.order.includes("updated_at.desc")) {
+    finalResults.sort((a, b) => {
+      const aTime = a.updated_at ? new Date(a.updated_at as string).getTime() : 0;
+      const bTime = b.updated_at ? new Date(b.updated_at as string).getTime() : 0;
+      return bTime - aTime;
+    });
+  }
+
+  return finalResults.slice(0, maxRows);
 }
 
 async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
   const config = getSupabaseConfig();
-  const maxMentions = opts.maxMentions || 2000;
+  const maxMentions = opts.maxMentions || 30000;
+  const brandKey = opts.brandKey ? opts.brandKey.toLowerCase().replace(/[\s\-_.]/g, "").trim() : "";
   const postColumns = [
     "post_id",
     "platform",
@@ -867,33 +905,111 @@ async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
     "contact",
     "language",
     "posted_at",
+    "created_at",
     "url",
     "payload_json",
   ];
   const commentColumns = [
     "comment_id",
     "post_id",
-    "parent_comment_id",
     "platform",
     "username",
     "contact",
     "text",
     "posted_at",
+    "created_at",
     "url",
     "payload_json",
   ];
+  const annotationColumns = [
+    "annotation_id",
+    "entity_key",
+    "platform",
+    "entity_type",
+    "post_id",
+    "comment_id",
+    "assignee",
+    "label",
+    "status",
+    "updated_at",
+    "created_at",
+  ];
 
   let annotationRows: SupabaseRow[] = [];
-  try {
-    annotationRows = await loadSupabaseRows<SupabaseRow>(
-      config,
-      "annotations",
-      { status: "eq.completed", order: "updated_at.desc.nullslast" },
-      maxMentions,
-    );
-  } catch (error) {
-    console.error("[DashboardService] Failed to fetch annotations:", error);
-    return [];
+  
+  if (brandKey) {
+    // ── Brand-First Strategy ──────────────────────────────────────────
+    // 1. Fetch posts matching the brand key
+    let postIds: string[] = [];
+    try {
+      let searchTerm = brandKey;
+      if (brandKey.includes("highland")) {
+        searchTerm = "highland";
+      } else if (brandKey.includes("starbuck")) {
+        searchTerm = "starbuck";
+      } else if (brandKey.includes("mixue")) {
+        searchTerm = "mixue";
+      }
+      const query = new URLSearchParams({
+        or: `(brand_slug.ilike.*${searchTerm}*,brand.ilike.*${searchTerm}*)`,
+        select: "post_id",
+        order: "posted_at.desc.nullslast",
+        limit: "1000",
+      });
+      const brandPosts = await supabaseRequest<SupabaseRow[]>(config, "posts", query.toString());
+      postIds = brandPosts.map((p) => String(p.post_id || "").trim()).filter(Boolean);
+    } catch (err) {
+      console.error("[DashboardService] Failed to fetch brand posts:", err);
+    }
+
+    if (postIds.length === 0) return [];
+
+    // 2. Fetch completed annotations corresponding to these post IDs per platform
+    try {
+      const platforms = ["facebook", "tiktok", "youtube", "thread", "be", "google_maps", "news"];
+      const perPlatformLimit = Math.max(500, Math.floor(maxMentions / platforms.length));
+      const promises = platforms.map((p) =>
+        loadSupabaseRowsByIds<SupabaseRow>(
+          config,
+          "annotations",
+          "post_id",
+          postIds,
+          annotationColumns,
+          { platform: p === "be" ? "in.(be,befood)" : (p === "thread" ? "in.(thread,threads)" : `eq.${p}`), status: "eq.completed", order: "updated_at.desc.nullslast" },
+          perPlatformLimit,
+        ).catch((err) => {
+          console.warn(`[DashboardService] Failed to fetch annotations for platform ${p}:`, err);
+          return [] as SupabaseRow[];
+        })
+      );
+      const results = await Promise.all(promises);
+      annotationRows = results.flat();
+    } catch (error) {
+      console.error("[DashboardService] Failed to fetch annotations for brand:", error);
+      return [];
+    }
+  } else {
+    // ── Global Strategy (Fallback) ───────────────────────────────────
+    try {
+      const platforms = ["facebook", "tiktok", "youtube", "thread", "be", "google_maps", "news"];
+      const perPlatformLimit = Math.max(500, Math.floor(maxMentions / platforms.length));
+      const promises = platforms.map((p) =>
+        loadSupabaseRows<SupabaseRow>(
+          config,
+          "annotations",
+          { platform: p === "be" ? "in.(be,befood)" : (p === "thread" ? "in.(thread,threads)" : `eq.${p}`), status: "eq.completed", order: "updated_at.desc.nullslast" },
+          perPlatformLimit,
+        ).catch((err) => {
+          console.warn(`[DashboardService] Failed to fetch annotations for platform ${p}:`, err);
+          return [] as SupabaseRow[];
+        })
+      );
+      const results = await Promise.all(promises);
+      annotationRows = results.flat();
+    } catch (error) {
+      console.error("[DashboardService] Failed to fetch annotations:", error);
+      return [];
+    }
   }
 
   const postIds = Array.from(
@@ -946,13 +1062,13 @@ async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
 
 // ─── Date parser ─────────────────────────────────────────────────────────────
 function parseDate(field: unknown): string {
-  if (!field) return new Date().toISOString();
+  if (!field) return "1970-01-01T00:00:00Z";
   if (typeof (field as any).toDate === "function") {
     return (field as any).toDate().toISOString();
   }
   if (field instanceof Date) return field.toISOString();
   const s = String(field).trim();
-  if (!s) return new Date().toISOString();
+  if (!s) return "1970-01-01T00:00:00Z";
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return `${s}T00:00:00Z`;
 
   // Thử parse định dạng Việt Nam thông dụng như "HH:mm DD/MM/YYYY" hoặc "DD/MM/YYYY"
@@ -1019,6 +1135,7 @@ export interface FetchOptions {
   after?: QueryDocumentSnapshot<DocumentData>;
   /** Set a max limit (default: no limit — fetches ALL records) */
   maxMentions?: number;
+  brandKey?: string;
 }
 
 // ─── Supabase Fetch Helper ───────────────────────────────────────────────────

@@ -116,7 +116,7 @@ interface AlertState {
 }
 
 function parseDate(field: unknown): string {
-  if (!field) return new Date().toISOString();
+  if (!field) return "1970-01-01T00:00:00Z";
   if (typeof (field as any).toDate === "function") {
     return (field as any).toDate().toISOString();
   }
@@ -126,7 +126,7 @@ function parseDate(field: unknown): string {
   }
 
   const value = String(field).trim();
-  if (!value) return new Date().toISOString();
+  if (!value) return "1970-01-01T00:00:00Z";
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return `${value}T00:00:00Z`;
   return value.includes("+") || value.endsWith("Z") ? value : `${value}Z`;
 }
