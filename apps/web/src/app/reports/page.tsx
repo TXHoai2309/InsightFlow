@@ -1081,6 +1081,7 @@ export default function ReportsPage() {
   const [mentions, setMentions] = useState<Mention[]>([]);
   const [brands, setBrands] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshTick, setRefreshTick] = useState(0);
 
   const [generatingPdfId, setGeneratingPdfId] = useState<string | null>(null);
   const [previewReport, setPreviewReport] = useState<DailyReport | null>(null);
@@ -1272,7 +1273,13 @@ export default function ReportsPage() {
       try {
         if (authLoading) return;
         setLoading(true);
-        const rawData = await DashboardService.fetchRawData();
+        const reportSince = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+        const rawData = await DashboardService.fetchRawData({
+          since: reportSince,
+          maxMentions: 700,
+          includeMentions: true,
+          excludePlatforms: ["news"],
+        });
         const supabaseMentions = filterByBusinessPolicy(rawData.mentions, profile, "view_mentions");
         const brandOrder = ["Highland Coffee", "Starbucks", "Mixue"];
         const brandSet = new Set<string>(brandOrder);
@@ -1325,7 +1332,9 @@ export default function ReportsPage() {
       }
     }
     fetchData();
-  }, [authLoading, profile, scopedBrandKey]);
+    const interval = window.setInterval(fetchData, 30 * 60 * 1000);
+    return () => window.clearInterval(interval);
+  }, [authLoading, profile, scopedBrandKey, refreshTick]);
 
   // Generate Reports List directly from required date range
   const reportsList = useMemo(() => {
@@ -1864,6 +1873,16 @@ export default function ReportsPage() {
             {t("reports.header.desc", { defaultValue: "Quản lý và tải xuống các báo cáo phân tích định kỳ từ AI." })}
           </p>
         </div>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+        <button
+          type="button"
+          onClick={() => setRefreshTick((value) => value + 1)}
+          disabled={loading}
+          className="flex items-center justify-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-5 py-3 text-sm font-bold text-[var(--color-text-primary)] shadow-sm transition-all hover:bg-[var(--color-bg-surface-raised)] disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <span className="material-symbols-outlined text-xl">refresh</span>
+          Làm mới
+        </button>
         <button
           onClick={() => {
             setActiveTab("custom");
@@ -1878,6 +1897,7 @@ export default function ReportsPage() {
       </div>
 
       {/* ── Stats Cards ── */}
+      </div>
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-5">
         <div className="glass-card p-4 md:p-6 rounded-xl relative overflow-hidden group">
           <p className="text-[10px] md:text-xs text-[var(--color-text-muted)] uppercase tracking-wider font-bold mb-2">

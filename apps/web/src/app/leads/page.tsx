@@ -74,10 +74,16 @@ export default function LeadsPage() {
     if (clearHighlight) setHighlightedLeadId(null);
   }, []);
 
-  useDashboard({ autoFetch: true, refetchInterval: 60000 });
+  const { refetch } = useDashboard({
+    autoFetch: true,
+    refetchInterval: 30 * 60 * 1000,
+    dataWindowDays: 30,
+    maxLeads: 500,
+    maxMentions: 1500,
+    includeMentions: false,
+  });
 
   const {
-    getFilteredLeadsWithoutUrgency,
     workspaces,
     filters,
     leads,
@@ -91,11 +97,27 @@ export default function LeadsPage() {
   useEffect(() => {
     if (!profile || profile.role === "admin" || workspaces.length === 0) return;
     if (filters.workspace_id !== "all") return;
-    setFilters({ workspace_id: workspaces[0].id });
-  }, [filters.workspace_id, profile, setFilters, workspaces]);
+    const profileBrandKey = normalizeBrandName(profile.brandName || profile.brandId || "");
+    const scopedWorkspace = workspaces.find(
+      (workspace) =>
+        normalizeBrandName(workspace.id) === profileBrandKey ||
+        normalizeBrandName(workspace.brand_name) === profileBrandKey,
+    );
+    setFilters({
+      workspace_id:
+        scopedWorkspace?.id || profile.brandId || profile.brandName || "all",
+    });
+  }, [
+    filters.workspace_id,
+    profile,
+    profile?.brandId,
+    profile?.brandName,
+    setFilters,
+    workspaces,
+  ]);
 
   useEffect(() => {
-    const interval = setInterval(() => setCurrentTime(Date.now()), 1000);
+    const interval = setInterval(() => setCurrentTime(Date.now()), 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -110,14 +132,25 @@ export default function LeadsPage() {
   }, []);
 
   const baseLeads = useMemo(() => {
-    const filteredLeads = getFilteredLeadsWithoutUrgency();
+    const normFilter =
+      filters.workspace_id !== "all" ? normalizeBrandName(filters.workspace_id) : null;
+    const filteredLeads = leads.filter((lead) => {
+      if (normFilter && normalizeBrandName(lead.workspace_id) !== normFilter) return false;
+      if (filters.platform !== "all" && lead.platform !== filters.platform) return false;
+      return true;
+    });
     if (Object.keys(optimisticLeadsById).length === 0) return filteredLeads;
 
     return filteredLeads.map((lead) => {
       const optimisticLead = optimisticLeadsById[lead.id];
       return optimisticLead ? { ...lead, ...optimisticLead } : lead;
     });
-  }, [getFilteredLeadsWithoutUrgency, filters, leads, optimisticLeadsById]);
+  }, [
+    filters.workspace_id,
+    filters.platform,
+    leads,
+    optimisticLeadsById,
+  ]);
 
   const workbenchViews = useMemo(
     () => getLeadWorkbenchViews(profile),
@@ -585,6 +618,15 @@ export default function LeadsPage() {
                 </button>
               ))}
             </div>
+            <button
+              type="button"
+              onClick={refetch}
+              disabled={isLoading}
+              className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-4 py-2 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <span className="material-symbols-outlined text-base">refresh</span>
+              Làm mới
+            </button>
             <button
               type="button"
               onClick={() => setShowFilters((value) => !value)}

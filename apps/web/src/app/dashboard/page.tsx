@@ -12,7 +12,12 @@ import { useDashboard } from "@/hooks/useDashboardData";
 export default function BrandManagerPage() {
   useDashboard({
     autoFetch: true,
-    refetchInterval: 60000, // Làm mới mỗi 60 giây
+    refetchInterval: 30 * 60 * 1000,
+    dataWindowDays: 30,
+    maxMentions: 400,
+    maxLeads: 200,
+    excludePlatforms: ["news"],
+    initialFetchDelayMs: 500,
   });
 
   return (
@@ -21,3 +26,4 @@ export default function BrandManagerPage() {
     </>
   );
 }
+

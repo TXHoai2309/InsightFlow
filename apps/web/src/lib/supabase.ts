@@ -52,6 +52,12 @@ function parseDate(field: unknown): string {
   return value.includes("+") || value.endsWith("Z") ? value : `${value}Z`;
 }
 
+function toIsoDate(value: string | Date | undefined): string | null {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+}
+
 function normalizeBrandKey(brand: string): string {
   const normalized = String(brand || "")
     .toLowerCase()
@@ -205,16 +211,22 @@ async function batchFetch<T>(
   return results;
 }
 
-export async function fetchSupabaseAlerts(): Promise<AlertData[]> {
+export async function fetchSupabaseAlerts(options: {
+  since?: string | Date;
+  perPlatform?: number;
+} = {}): Promise<AlertData[]> {
   const PLATFORMS = ["google_maps", "facebook", "befood", "tiktok", "threads", "news_html"];
-  const PER_PLATFORM = 100;
+  const PER_PLATFORM = options.perPlatform ?? 100;
   const negFilter = encodeURIComponent('"sentiment":"negative"');
+  const sinceIso = toIsoDate(options.since);
+  const sinceQuery = sinceIso ? `&updated_at=gte.${encodeURIComponent(sinceIso)}` : "";
+  const sinceTime = sinceIso ? new Date(sinceIso).getTime() : null;
 
   const platformBatches = await Promise.all(
     PLATFORMS.map((p) =>
       supabaseRequest<SupabaseAnnotationRow[]>(
         "annotations",
-        `status=eq.completed&platform=eq.${p}&label=like.*${negFilter}*&order=updated_at.desc&limit=${PER_PLATFORM}`
+        `status=eq.completed&platform=eq.${p}&label=like.*${negFilter}*${sinceQuery}&order=updated_at.desc&limit=${PER_PLATFORM}`
       ).catch(() => [] as SupabaseAnnotationRow[])
     )
   );
@@ -338,7 +350,12 @@ export async function fetchSupabaseAlerts(): Promise<AlertData[]> {
     }
   }
 
-  return alerts.filter((a) => a.sentiment === "negative");
+  return alerts.filter((a) => {
+    if (a.sentiment !== "negative") return false;
+    if (sinceTime === null) return true;
+    const createdTime = new Date(a.created_at).getTime();
+    return Number.isFinite(createdTime) && createdTime >= sinceTime;
+  });
 }
 
 export async function fetchSingleSupabaseAlert(entityKey: string): Promise<AlertData | null> {

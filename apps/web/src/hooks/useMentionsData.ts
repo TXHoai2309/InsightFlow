@@ -11,6 +11,9 @@ interface UseMentionsOptions {
   refetchInterval?: number;
 }
 
+const MENTION_FETCH_WINDOW_DAYS = 30;
+const MENTION_FETCH_LIMIT = 700;
+
 export function useMentionsData(options: UseMentionsOptions = {}) {
   const { autoFetch = true, refetchInterval = 60000 } = options;
   const { profile, loading: authLoading } = useAuth();
@@ -29,8 +32,15 @@ export function useMentionsData(options: UseMentionsOptions = {}) {
   const fetchMentions = async () => {
     setLoading(true);
     try {
+      const since = new Date(
+        Date.now() - MENTION_FETCH_WINDOW_DAYS * 24 * 60 * 60 * 1000,
+      ).toISOString();
       const rawData =
-        await DashboardService.fetchRawData({ maxMentions: 1000 });
+        await DashboardService.fetchRawData({
+          since,
+          maxMentions: MENTION_FETCH_LIMIT,
+          excludePlatforms: ["news"],
+        });
       const mentions = filterByBusinessPolicy(rawData.mentions, profile, "view_mentions");
       const workspaces = filterByBusinessPolicy(
         rawData.workspaces.map((workspace) => ({

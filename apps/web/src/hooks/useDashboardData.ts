@@ -14,10 +14,28 @@ import { useAuth } from "@/hooks/useAuth";
 interface UseDashboardOptions {
   autoFetch?: boolean;
   refetchInterval?: number;
+  dataWindowDays?: number;
+  maxLeads?: number;
+  maxMentions?: number;
+  includeMentions?: boolean;
+  excludePlatforms?: string[];
+  initialFetchDelayMs?: number;
 }
 
+const DEFAULT_EXCLUDED_PLATFORMS = ["news"];
+
 export function useDashboard(options: UseDashboardOptions = {}) {
-  const { autoFetch = true, refetchInterval = 60000 } = options;
+  const {
+    autoFetch = true,
+    refetchInterval = 60000,
+    dataWindowDays = 30,
+    maxLeads,
+    maxMentions = 700,
+    includeMentions,
+    excludePlatforms = DEFAULT_EXCLUDED_PLATFORMS,
+    initialFetchDelayMs = 0,
+  } = options;
+  const excludePlatformsKey = excludePlatforms.join("|");
   const { profile, loading: authLoading } = useAuth();
 
   const {
@@ -43,8 +61,18 @@ export function useDashboard(options: UseDashboardOptions = {}) {
 
       // 1. Fetch raw data từ Firestore (lọc theo brand nếu có)
       const brandKey = getScopedBrandKey(profile) || undefined;
+      const since = dataWindowDays
+        ? new Date(Date.now() - dataWindowDays * 24 * 60 * 60 * 1000).toISOString()
+        : undefined;
       const rawData =
-        await DashboardService.fetchRawData({ brandKey });
+        await DashboardService.fetchRawData({
+          brandKey,
+          since,
+          maxLeads,
+          maxMentions,
+          includeMentions,
+          excludePlatforms,
+        });
       const workspaces = filterByBusinessPolicy(
         rawData.workspaces.map((workspace) => ({
           ...workspace,
@@ -95,11 +123,34 @@ export function useDashboard(options: UseDashboardOptions = {}) {
 
   useEffect(() => {
     if (!autoFetch || authLoading) return;
-    fetchDashboardData();
-    setIsInitialized(true);
-    const interval = setInterval(fetchDashboardData, refetchInterval);
-    return () => clearInterval(interval);
-  }, [autoFetch, refetchInterval, authLoading, profile?.brandId, profile?.brandName, profile?.role]);
+    let disposed = false;
+    let interval: ReturnType<typeof setInterval> | undefined;
+    const timeout = setTimeout(() => {
+      if (disposed) return;
+      fetchDashboardData();
+      setIsInitialized(true);
+      interval = setInterval(fetchDashboardData, refetchInterval);
+    }, initialFetchDelayMs);
+
+    return () => {
+      disposed = true;
+      clearTimeout(timeout);
+      if (interval) clearInterval(interval);
+    };
+  }, [
+    autoFetch,
+    refetchInterval,
+    authLoading,
+    profile?.brandId,
+    profile?.brandName,
+    profile?.role,
+    dataWindowDays,
+    maxLeads,
+    maxMentions,
+    includeMentions,
+    excludePlatformsKey,
+    initialFetchDelayMs,
+  ]);
 
   // Re-tính trend data khi time_range filter thay đổi
   useEffect(() => {

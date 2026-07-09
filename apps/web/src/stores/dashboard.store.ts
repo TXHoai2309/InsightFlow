@@ -334,7 +334,7 @@ export const useDashboardStore = create<DashboardState>()(
           return false;
         if (filters.platform !== "all" && l.platform !== filters.platform)
           return false;
-        return isDateInFilterRange(l.created_at, filters);
+        return isDateInFilterRange(l.posted_at || l.created_at, filters);
       });
     },
 
@@ -351,7 +351,7 @@ export const useDashboardStore = create<DashboardState>()(
           return false;
         if (filters.platform !== "all" && l.platform !== filters.platform)
           return false;
-        return isDateInFilterRange(l.created_at, filters);
+        return isDateInFilterRange(l.posted_at || l.created_at, filters);
       });
 
       // 2. Urgency and status filters

@@ -216,6 +216,17 @@ function applyFilters(rawAlerts: AlertData[], filters: AlertFilters): AlertData[
 }
 
 let activeUnsubscribe: (() => void) | null = null;
+const ALERT_REVIEW_WINDOW_DAYS = 30;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+export function getAlertReviewSinceIso(days = ALERT_REVIEW_WINDOW_DAYS): string {
+  return new Date(Date.now() - days * MS_PER_DAY).toISOString();
+}
+
+function isWithinAlertReviewWindow(value: unknown, days = ALERT_REVIEW_WINDOW_DAYS): boolean {
+  const time = new Date(parseDate(value)).getTime();
+  return Number.isFinite(time) && time >= Date.now() - days * MS_PER_DAY;
+}
 
 export const useAlertStore = create<AlertState>()(
   subscribeWithSelector((set, get) => ({
@@ -253,8 +264,9 @@ export const useAlertStore = create<AlertState>()(
       try {
         const loadAlerts = async () => {
           try {
-            const fetched = await fetchSupabaseAlerts();
+            const fetched = await fetchSupabaseAlerts({ since: getAlertReviewSinceIso() });
             const filtered = fetched.filter((alert) =>
+              isWithinAlertReviewWindow(alert.created_at) &&
               isRecordInBrandScope({ brand: alert.brand }, scopedBrandKey)
             );
 
@@ -456,6 +468,7 @@ export const useAlertStore = create<AlertState>()(
             } as CorrectionRequest;
 
             if (!isRecordInBrandScope({ brand: req.brand }, scopedBrandKey)) return;
+            if (!isWithinAlertReviewWindow(req.created_at)) return;
             requests.push(req);
           });
 
