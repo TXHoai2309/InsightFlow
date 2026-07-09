@@ -69,7 +69,9 @@ export function Header({ onMenuToggle }: HeaderProps) {
           ? CRISIS_EMPLOYEE_TOUR_EVENT
           : BRAND_MANAGER_TOUR_EVENT;
     window.dispatchEvent(new Event(eventName));
-    const scopedBrandKey = profile?.role === "admin" ? null : normalizeBrandName(profile?.brandName || profile?.brandId || "");
+  };
+
+  const scopedBrandKey = profile?.role === "admin" ? null : normalizeBrandName(profile?.brandName || profile?.brandId || "");
 
     useEffect(() => {
       if (!dbSecond || !profile) {
