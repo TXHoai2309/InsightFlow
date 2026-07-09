@@ -774,16 +774,12 @@ export default function AlertsPage() {
   }, [selectedEvidence, alerts, rawAlerts]);
 
   const dashboardStore = useDashboardStore();
-<<<<<<< HEAD
-  useDashboard({ autoFetch: true, refetchInterval: 1800000 });
-=======
   useDashboard({
     autoFetch: true,
-    refetchInterval: 60000,
+    refetchInterval: 1800000,
     includeMentions: false,
     maxLeads: 200,
   });
->>>>>>> d592e20f68c854b34c4a446ec42f6c71814aeb4a
 
   // Compute lists of high-risk items for the Crisis Priority Center (unified Sự vụ & Bài viết & Thông tin liên hệ)
   const highRiskIncidents = useMemo(() => {

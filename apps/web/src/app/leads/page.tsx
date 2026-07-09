@@ -74,18 +74,14 @@ export default function LeadsPage() {
     if (clearHighlight) setHighlightedLeadId(null);
   }, []);
 
-<<<<<<< HEAD
-  useDashboard({ autoFetch: true, refetchInterval: 1800000 });
-=======
   const { refetch } = useDashboard({
     autoFetch: true,
-    refetchInterval: 30 * 60 * 1000,
+    refetchInterval: 1800000,
     dataWindowDays: 30,
     maxLeads: 500,
     maxMentions: 1500,
     includeMentions: false,
   });
->>>>>>> d592e20f68c854b34c4a446ec42f6c71814aeb4a
 
   const {
     workspaces,
@@ -624,7 +620,7 @@ export default function LeadsPage() {
             </div>
             <button
               type="button"
-              onClick={refetch}
+              onClick={() => refetch(true)}
               disabled={isLoading}
               className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-4 py-2 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)] disabled:cursor-not-allowed disabled:opacity-60"
             >

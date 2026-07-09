@@ -438,7 +438,7 @@ export const useAlertStore = create<AlertState>()(
                   loadAlerts();
                 }
               )
-              .subscribe((status) => {
+              .subscribe((status: any) => {
                 console.log("[AlertStore] Realtime subscription status:", status);
               });
 

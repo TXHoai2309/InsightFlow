@@ -52,7 +52,7 @@ export default function MentionsPage() {
           </button>
           <button
             type="button"
-            onClick={refetch}
+            onClick={() => refetch(true)}
             disabled={isLoading}
             className="flex items-center gap-2 px-4 py-3 bg-[var(--color-brand)] text-white rounded-lg shadow-sm hover:bg-[var(--color-brand-hover)] transition-all font-medium text-sm disabled:cursor-not-allowed disabled:opacity-60"
           >

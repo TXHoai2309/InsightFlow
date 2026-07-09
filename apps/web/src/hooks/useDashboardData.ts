@@ -61,9 +61,9 @@ export function useDashboard(options: UseDashboardOptions = {}) {
   const [isInitialized, setIsInitialized] = useState(false);
 
   const fetchDashboardData = async (force: boolean = false) => {
+    const brandKey = getScopedBrandKey(profile) || "global";
+    const cacheKey = `insightflow_dashboard_cache_${brandKey}`;
     try {
-      const brandKey = getScopedBrandKey(profile) || "global";
-      const cacheKey = `insightflow_dashboard_cache_${brandKey}`;
       let hasRenderedCache = false;
 
       // Check client-side localStorage cache if not forcing refresh
