@@ -114,7 +114,7 @@ interface DashboardState {
 
 const defaultFilters: DashboardFilters = {
   workspace_id: "all",
-  time_range: "all",
+  time_range: "24h", // Default to Today (ngày hôm nay)
   platform: "all",
   sentiment: "all",
   topic: "all",
@@ -123,9 +123,45 @@ const defaultFilters: DashboardFilters = {
 
 /** Tính timestamp cutoff từ time_range */
 function getCutoffMs(timeRange: DashboardFilters["time_range"]): number | null {
-  if (timeRange === "all") return null;
-  const ms = { "24h": 1, "7d": 7, "30d": 30 };
-  return Date.now() - ms[timeRange] * 24 * 60 * 60 * 1000;
+  if (timeRange === "all" || timeRange === "custom") return null;
+  
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const startOfTodayMs = startOfToday.getTime();
+
+  if (timeRange === "24h") {
+    return startOfTodayMs;
+  }
+  if (timeRange === "7d") {
+    return startOfTodayMs - 6 * 24 * 60 * 60 * 1000;
+  }
+  if (timeRange === "30d") {
+    return startOfTodayMs - 29 * 24 * 60 * 60 * 1000;
+  }
+  return null;
+}
+
+function isDateInFilterRange(dateStr: string, filters: DashboardFilters): boolean {
+  const time = new Date(dateStr).getTime();
+  if (!Number.isFinite(time)) return false;
+
+  if (filters.time_range === "custom") {
+    if (filters.custom_start_date) {
+      const start = new Date(`${filters.custom_start_date}T00:00:00Z`).getTime();
+      if (time < start) return false;
+    }
+    if (filters.custom_end_date) {
+      const end = new Date(`${filters.custom_end_date}T23:59:59Z`).getTime();
+      if (time > end) return false;
+    }
+    return true;
+  }
+
+  const cutoff = getCutoffMs(filters.time_range);
+  if (cutoff !== null) {
+    return time >= cutoff && time <= Date.now();
+  }
+  return true;
 }
 
 export const useDashboardStore = create<DashboardState>()(
@@ -392,7 +428,6 @@ export const useDashboardStore = create<DashboardState>()(
 
     getFilteredMentions: () => {
       const { mentions, filters } = get();
-      const cutoff = getCutoffMs(filters.time_range);
       
       // Normalize workspace filter for case-insensitive matching
       const normFilter =
@@ -418,11 +453,7 @@ export const useDashboardStore = create<DashboardState>()(
           return false;
           
         // 5. Filter by Time Range
-        if (cutoff !== null) {
-          const time = new Date(m.posted_at).getTime();
-          // Invalid, old, and future timestamps do not belong in a bounded range.
-          if (!Number.isFinite(time) || time < cutoff || time > Date.now()) return false;
-        }
+        if (!isDateInFilterRange(m.posted_at, filters)) return false;
 
         return true;
       });
@@ -430,7 +461,6 @@ export const useDashboardStore = create<DashboardState>()(
 
     getFilteredAlerts: () => {
       const { alerts, filters } = get();
-      const cutoff = getCutoffMs(filters.time_range);
       const normFilter =
         filters.workspace_id !== "all"
           ? normalizeBrandName(filters.workspace_id)
@@ -438,11 +468,7 @@ export const useDashboardStore = create<DashboardState>()(
       return alerts.filter((a) => {
         if (normFilter && normalizeBrandName(a.workspace_id) !== normFilter)
           return false;
-        if (cutoff !== null) {
-          const time = new Date(a.created_at).getTime();
-          if (time < cutoff || time > Date.now()) return false;
-        }
-        return true;
+        return isDateInFilterRange(a.created_at, filters);
       });
     },
 
@@ -452,18 +478,13 @@ export const useDashboardStore = create<DashboardState>()(
         filters.workspace_id !== "all"
           ? normalizeBrandName(filters.workspace_id)
           : null;
-      const cutoff = getCutoffMs(filters.time_range);
 
       return leads.filter((l) => {
         if (normFilter && normalizeBrandName(l.workspace_id) !== normFilter)
           return false;
         if (filters.platform !== "all" && l.platform !== filters.platform)
           return false;
-        if (cutoff !== null) {
-          const time = new Date(l.created_at).getTime();
-          if (time < cutoff || time > Date.now()) return false;
-        }
-        return true;
+        return isDateInFilterRange(l.created_at, filters);
       });
     },
 
@@ -480,14 +501,7 @@ export const useDashboardStore = create<DashboardState>()(
           return false;
         if (filters.platform !== "all" && l.platform !== filters.platform)
           return false;
-
-        const cutoff = getCutoffMs(filters.time_range);
-        if (cutoff !== null) {
-          const time = new Date(l.created_at).getTime();
-          if (time < cutoff || time > Date.now()) return false;
-        }
-
-        return true;
+        return isDateInFilterRange(l.created_at, filters);
       });
 
       // 2. Urgency and status filters

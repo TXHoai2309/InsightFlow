@@ -6,6 +6,7 @@ import {
   EMPTY_LABEL, IRRELEVANT_PRESET_LABEL, isIrrelevantPreset,
   POSITIVE_COLD_PRESET_LABEL, isPositiveColdPreset,
   NEGATIVE_STAFF_ATTITUDE_PRESET_LABEL, isNegativeStaffAttitudePreset,
+  POSITIVE_NONE_PRESET_LABEL, isPositiveNonePreset,
 } from './types';
 import { useData } from './hooks/useData';
 import { useLabeling } from './hooks/useLabeling';
@@ -182,7 +183,7 @@ export default function App() {
   useEffect(() => {
     const prev = prevFilterRef.current;
     if (prev.brand !== brandFilter || prev.source !== sourceFilter ||
-        prev.onlyRated !== onlyRated || prev.skipGMapsSpam !== skipGMapsSpam) {
+      prev.onlyRated !== onlyRated || prev.skipGMapsSpam !== skipGMapsSpam) {
       jumpTo(0);
       prevFilterRef.current = { brand: brandFilter, source: sourceFilter, onlyRated, skipGMapsSpam };
     }
@@ -330,6 +331,15 @@ export default function App() {
         next.intent = toggled.intent;
         updated = true;
       }
+      else if (key === '7') {
+        const toggled = isPositiveNonePreset(lbl) ? EMPTY_LABEL : POSITIVE_NONE_PRESET_LABEL;
+        next.sentiment = toggled.sentiment;
+        next.topic = [...toggled.topic];
+        next.relevance = toggled.relevance;
+        next.urgency = toggled.urgency;
+        next.intent = toggled.intent;
+        updated = true;
+      }
       else if (key === '8') {
         const toggled = isNegativeStaffAttitudePreset(lbl) ? EMPTY_LABEL : NEGATIVE_STAFF_ATTITUDE_PRESET_LABEL;
         next.sentiment = toggled.sentiment;
@@ -366,7 +376,7 @@ export default function App() {
       else if (key === 'v') { next.urgency = 'urgent'; updated = true; }
       else if (key === 'd') { next.urgency = 'none'; updated = true; }
       // Intent
-      else if (key === 'h') { next.intent = 'hot';  updated = true; }
+      else if (key === 'h') { next.intent = 'hot'; updated = true; }
       else if (key === 'm') { next.intent = 'warm'; updated = true; }
       else if (key === 'b') { next.intent = 'cold'; updated = true; }
       else if (key === 'n') { next.intent = 'none'; updated = true; }
@@ -397,7 +407,7 @@ export default function App() {
     setDataMode('supabase');
     setPendingRestoreThreadId(restoreThreadId ?? currentThread?.post._entity_key ?? null);
     saveLabelingSession(restoreThreadId ?? currentThread?.post._entity_key ?? null);
-    
+
     try {
       await loadFromSupabase(
         { url: supabaseUrl.trim(), anonKey: supabaseAnonKey.trim() },
@@ -482,22 +492,20 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setAssignmentView('pending')}
-                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
-                      assignmentView === 'pending'
+                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${assignmentView === 'pending'
                         ? 'bg-blue-600 text-white'
                         : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-surface-700'
-                    }`}
+                      }`}
                   >
                     Cần gán
                   </button>
                   <button
                     type="button"
                     onClick={() => setAssignmentView('completed')}
-                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
-                      assignmentView === 'completed'
+                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${assignmentView === 'completed'
                         ? 'bg-blue-600 text-white'
                         : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-surface-700'
-                    }`}
+                      }`}
                   >
                     Đã gán
                   </button>

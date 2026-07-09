@@ -20,6 +20,7 @@ import { BMAlertBanner } from "./BMAlertBanner";
 import { BMSentimentChart } from "./BMSentimentChart";
 import { BMTopSources } from "./BMTopSources";
 import { BMTopTopics } from "./BMTopTopics";
+import { BMPlatformDashboard } from "./BMPlatformDashboard";
 
 import type { Workspace } from "@/types/dashboard";
 
@@ -36,18 +37,39 @@ export function BrandManagerDashboard({
     leads,
     workspaces,
     filters,
+    isLoading,
     setWorkspaces,
     setFilters,
   } = useDashboardStore();
 
   const { t } = useTranslation();
   const [isMounted, setIsMounted] = useState(false);
+  const [isFirstLoadDone, setIsFirstLoadDone] = useState(false);
+  const [viewMode, setViewMode] = useState<"overview" | "platform">("overview");
 
   useEffect(() => {
     setIsMounted(true);
     if (initialWorkspaces.length > 0) setWorkspaces(initialWorkspaces);
     setFilters({ sentiment: "all", topic: "all" });
   }, []);
+
+  useEffect(() => {
+    if (!isLoading && isMounted) {
+      setIsFirstLoadDone(true);
+    }
+  }, [isLoading, isMounted]);
+
+  // Sync viewMode based on filters.platform selection
+  useEffect(() => {
+    if (filters.platform !== "all") {
+      setViewMode("platform");
+    }
+  }, [filters.platform]);
+
+  const handleBackToOverview = () => {
+    setFilters({ platform: "all" });
+    setViewMode("overview");
+  };
 
   /* ── Filtered mentions for current period ─────────────────── */
   const currentMentions = useMemo(() => {
@@ -56,34 +78,85 @@ export function BrandManagerDashboard({
         ? filters.workspace_id.toLowerCase().replace(/[\s\-_.]/g, "").trim()
         : null;
 
-    const durationMap: Record<string, number> = { "24h": 1, "7d": 7, "30d": 30 };
-    const durationMs =
-      filters.time_range !== "all"
-        ? durationMap[filters.time_range] * 24 * 60 * 60 * 1000
-        : null;
-    const cutoff = durationMs ? Date.now() - durationMs : null;
-
     return mentions.filter((m) => {
+      // 1. Brand/Workspace filter
       const b = m.workspace_id
         ? m.workspace_id.toLowerCase().replace(/[\s\-_.]/g, "").trim()
         : "";
       if (normFilter && b !== normFilter) return false;
+
+      // 2. Platform filter
       if (filters.platform !== "all" && m.platform !== filters.platform) return false;
-      if (cutoff !== null) {
-        const time = new Date(m.posted_at).getTime();
-        if (!Number.isFinite(time) || time < cutoff || time > Date.now()) return false;
+
+      // 3. Time filter
+      const time = new Date(m.posted_at).getTime();
+      if (!Number.isFinite(time)) return false;
+
+      if (filters.time_range === "custom") {
+        if (filters.custom_start_date) {
+          const start = new Date(`${filters.custom_start_date}T00:00:00Z`).getTime();
+          if (time < start) return false;
+        }
+        if (filters.custom_end_date) {
+          const end = new Date(`${filters.custom_end_date}T23:59:59Z`).getTime();
+          if (time > end) return false;
+        }
+      } else {
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+        const startOfTodayMs = startOfToday.getTime();
+
+        let cutoff: number | null = null;
+        if (filters.time_range === "24h") {
+          cutoff = startOfTodayMs;
+        } else if (filters.time_range === "7d") {
+          cutoff = startOfTodayMs - 6 * 24 * 60 * 60 * 1000;
+        } else if (filters.time_range === "30d") {
+          cutoff = startOfTodayMs - 29 * 24 * 60 * 60 * 1000;
+        }
+
+        if (cutoff !== null) {
+          if (time < cutoff || time > Date.now()) return false;
+        }
       }
+
       return true;
     });
-  }, [mentions, filters.workspace_id, filters.time_range, filters.platform]);
+  }, [
+    mentions,
+    filters.workspace_id,
+    filters.time_range,
+    filters.platform,
+    filters.custom_start_date,
+    filters.custom_end_date,
+  ]);
+
 
   /* ── Filtered mentions for previous period (trend calc) ────── */
   const previousMentions = useMemo(() => {
-    if (filters.time_range === "all") return [];
-    const durationMap: Record<string, number> = { "24h": 1, "7d": 7, "30d": 30 };
-    const durationMs = durationMap[filters.time_range] * 24 * 60 * 60 * 1000;
-    const currentCutoff = Date.now() - durationMs;
-    const previousCutoff = currentCutoff - durationMs;
+    if (filters.time_range === "all" || filters.time_range === "custom") return [];
+
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const startOfTodayMs = startOfToday.getTime();
+
+    let cutoff: number | null = null;
+    let durationMs = 0;
+    if (filters.time_range === "24h") {
+      cutoff = startOfTodayMs;
+      durationMs = Date.now() - startOfTodayMs;
+    } else if (filters.time_range === "7d") {
+      cutoff = startOfTodayMs - 6 * 24 * 60 * 60 * 1000;
+      durationMs = 7 * 24 * 60 * 60 * 1000;
+    } else if (filters.time_range === "30d") {
+      cutoff = startOfTodayMs - 29 * 24 * 60 * 60 * 1000;
+      durationMs = 30 * 24 * 60 * 60 * 1000;
+    }
+
+    if (cutoff === null) return [];
+
+    const currentCutoff = cutoff;
+    const previousCutoff = cutoff - durationMs;
 
     const normFilter =
       filters.workspace_id !== "all"
@@ -209,7 +282,7 @@ export function BrandManagerDashboard({
   );
   const unprocessedContacts = filteredLeads.filter((l) => l.status === "new").length;
 
-  if (!isMounted) {
+  if (!isMounted || (!isFirstLoadDone && isLoading)) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="flex flex-col items-center gap-3">
@@ -220,8 +293,20 @@ export function BrandManagerDashboard({
     );
   }
 
+  if (viewMode === "platform") {
+    return (
+      <div data-tour="dashboard-overview" className="max-w-[1600px] mx-auto space-y-6 pb-12">
+        <BMFiltersBar workspaces={workspaces} />
+        <BMPlatformDashboard
+          onBack={handleBackToOverview}
+          currentMentions={currentMentions}
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-[1600px] mx-auto space-y-6 pb-12">
+    <div data-tour="dashboard-overview" className="max-w-[1600px] mx-auto space-y-6 pb-12">
       {/* ── 1. Sticky Filter Bar ───────────────────────────────── */}
       <BMFiltersBar workspaces={workspaces} />
 
@@ -238,6 +323,7 @@ export function BrandManagerDashboard({
           negative: stats.negative_count,
         }}
         totalMentions={stats.total_mentions}
+        onViewDetail={() => setViewMode("platform")}
       />
 
       {/* ── 4. KPI Cards ────────────────────────────────────────── */}

@@ -36,6 +36,7 @@ export function MobileNav() {
             <Link
               key={item.href}
               href={item.href}
+              data-tour={`nav-${item.href.replace(/^\//, "").replace(/\//g, "-") || "home"}`}
               className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg transition-all min-w-[52px] ${
                 isActive
                   ? "text-[var(--color-brand)]"

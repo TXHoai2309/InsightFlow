@@ -16,6 +16,7 @@ const TIME_OPTIONS = [
   { value: "7d",  label: "time.7d" },
   { value: "30d", label: "time.30d" },
   { value: "all", label: "time.all" },
+  { value: "custom", label: "time.custom" },
 ] as const;
 
 const PLATFORM_ORDER: Platform[] = [
@@ -29,13 +30,29 @@ interface BMFiltersBarProps {
 
 export function BMFiltersBar({ workspaces }: BMFiltersBarProps) {
   const { t } = useTranslation();
-  const { filters, setFilters } = useDashboardStore();
+  const { filters, setFilters, isLoading } = useDashboardStore();
 
   const handle = useCallback(
     <K extends keyof DashboardFilters>(key: K, value: DashboardFilters[K]) => {
       setFilters({ [key]: value } as Partial<DashboardFilters>);
     },
     [setFilters]
+  );
+
+  const handleTimeRangeChange = useCallback(
+    (timeRange: DashboardFilters["time_range"]) => {
+      if (timeRange === "custom") {
+        const todayStr = new Date().toISOString().split("T")[0];
+        setFilters({
+          time_range: "custom",
+          custom_start_date: filters.custom_start_date || todayStr,
+          custom_end_date: filters.custom_end_date || todayStr,
+        });
+      } else {
+        setFilters({ time_range: timeRange });
+      }
+    },
+    [filters, setFilters]
   );
 
   // Today display
@@ -45,7 +62,7 @@ export function BMFiltersBar({ workspaces }: BMFiltersBarProps) {
   });
 
   return (
-    <div className="bm-filters-bar">
+    <div data-tour="dashboard-filters" className="bm-filters-bar">
       {/* Left: Title + date */}
       <div className="bm-filters-left">
         <div className="flex items-center gap-3">
@@ -55,7 +72,12 @@ export function BMFiltersBar({ workspaces }: BMFiltersBarProps) {
             </span>
           </div>
           <div>
-            <h1 className="bm-page-title">{t("bm.tab.overview")}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="bm-page-title">{t("bm.tab.overview")}</h1>
+              {isLoading && (
+                <div className="w-4 h-4 rounded-full border-2 border-[var(--color-brand)] border-t-transparent animate-spin flex-shrink-0" />
+              )}
+            </div>
             <p className="bm-page-subtitle">{dateStr}</p>
           </div>
         </div>
@@ -71,7 +93,7 @@ export function BMFiltersBar({ workspaces }: BMFiltersBarProps) {
           <select
             id="bm-time-filter"
             value={filters.time_range}
-            onChange={(e) => handle("time_range", e.target.value as DashboardFilters["time_range"])}
+            onChange={(e) => handleTimeRangeChange(e.target.value as DashboardFilters["time_range"])}
             className="bm-select"
           >
             {TIME_OPTIONS.map(({ value, label }) => (
@@ -82,6 +104,26 @@ export function BMFiltersBar({ workspaces }: BMFiltersBarProps) {
           </select>
           <span className="material-symbols-outlined bm-select-chevron">expand_more</span>
         </div>
+
+        {/* Custom date range fields */}
+        {filters.time_range === "custom" && (
+          <div className="bm-date-custom animate-fade-in">
+            <span className="material-symbols-outlined bm-date-icon">calendar_month</span>
+            <input
+              type="date"
+              value={filters.custom_start_date || ""}
+              onChange={(e) => handle("custom_start_date", e.target.value)}
+              className="bm-date-input"
+            />
+            <span className="bm-date-sep">to</span>
+            <input
+              type="date"
+              value={filters.custom_end_date || ""}
+              onChange={(e) => handle("custom_end_date", e.target.value)}
+              className="bm-date-input"
+            />
+          </div>
+        )}
 
         {/* Platform select */}
         <div className="bm-select-wrap">
@@ -102,24 +144,7 @@ export function BMFiltersBar({ workspaces }: BMFiltersBarProps) {
           <span className="material-symbols-outlined bm-select-chevron">expand_more</span>
         </div>
 
-        {/* Workspace select */}
-        {workspaces.length > 0 && (
-          <div className="bm-select-wrap">
-            <span className="material-symbols-outlined bm-select-icon">business</span>
-            <select
-              id="bm-workspace-filter"
-              value={filters.workspace_id}
-              onChange={(e) => handle("workspace_id", e.target.value)}
-              className="bm-select"
-            >
-              <option value="all">{t("dashboard.filters.allBrands")}</option>
-              {workspaces.map((ws) => (
-                <option key={ws.id} value={ws.id}>{ws.brand_name}</option>
-              ))}
-            </select>
-            <span className="material-symbols-outlined bm-select-chevron">expand_more</span>
-          </div>
-        )}
+
       </div>
 
       <style>{`

@@ -6,6 +6,7 @@ import {
   EMPTY_LABEL, IRRELEVANT_PRESET_LABEL, isIrrelevantPreset,
   POSITIVE_COLD_PRESET_LABEL, isPositiveColdPreset,
   NEGATIVE_STAFF_ATTITUDE_PRESET_LABEL, isNegativeStaffAttitudePreset,
+  POSITIVE_NONE_PRESET_LABEL, isPositiveNonePreset,
 } from '../types';
 
 interface LabelSelectorProps {
@@ -211,11 +212,10 @@ export default function LabelSelector({
           type="button"
           disabled={disabled}
           onClick={onToggleSkip}
-          className={`select-control inline-flex items-center gap-1.5 font-medium transition-colors ${
-            skipped
+          className={`select-control inline-flex items-center gap-1.5 font-medium transition-colors ${skipped
               ? 'bg-rose-100 text-rose-700 border-rose-300 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-700'
               : 'hover:bg-gray-100 dark:hover:bg-gray-800'
-          }`}
+            }`}
           title={skipped ? 'Khôi phục comment để gán nhãn' : 'Bỏ qua/Không gán nhãn cho comment này (phím i)'}
           aria-label="Bỏ qua comment này"
           aria-pressed={skipped}
@@ -231,11 +231,10 @@ export default function LabelSelector({
         onClick={() => onChange({
           ...(isIrrelevantPreset(label) ? EMPTY_LABEL : IRRELEVANT_PRESET_LABEL),
         })}
-        className={`select-control inline-flex items-center gap-1.5 font-medium transition-colors ${
-          isIrrelevantPreset(label)
+        className={`select-control inline-flex items-center gap-1.5 font-medium transition-colors ${isIrrelevantPreset(label)
             ? 'bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700'
             : ''
-        }`}
+          }`}
         title="Bật/tắt nhãn nhanh: Trung tính · Khác · Không liên quan · None · None (phím 0)"
         aria-label="Gán nhanh nhãn không liên quan"
         aria-pressed={isIrrelevantPreset(label)}
@@ -245,17 +244,37 @@ export default function LabelSelector({
         <kbd className="kbd">0</kbd>
       </button>
 
+      {/* Quick-assign button (phím 7) */}
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => onChange({
+          ...(isPositiveNonePreset(label) ? EMPTY_LABEL : POSITIVE_NONE_PRESET_LABEL),
+        })}
+        className={`select-control inline-flex items-center gap-1.5 font-medium transition-colors ${isPositiveNonePreset(label)
+            ? 'bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700'
+            : ''
+          }`}
+        title="Bật/tắt nhãn nhanh: Tích cực · Khác · Có · None · None (phím 7)"
+        aria-label="Gán nhanh nhãn tích cực, none"
+        aria-pressed={isPositiveNonePreset(label)}
+      >
+        <Zap className="h-3.5 w-3.5" aria-hidden="true" />
+        <span>{isPositiveNonePreset(label) ? 'Bỏ gán nhanh' : 'Tích cực, None'}</span>
+        <kbd className="kbd">7</kbd>
+      </button>
+
+      {/* Quick-assign button (phím 9) */}
       <button
         type="button"
         disabled={disabled}
         onClick={() => onChange({
           ...(isPositiveColdPreset(label) ? EMPTY_LABEL : POSITIVE_COLD_PRESET_LABEL),
         })}
-        className={`select-control inline-flex items-center gap-1.5 font-medium transition-colors ${
-          isPositiveColdPreset(label)
+        className={`select-control inline-flex items-center gap-1.5 font-medium transition-colors ${isPositiveColdPreset(label)
             ? 'bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700'
             : ''
-        }`}
+          }`}
         title="Bật/tắt nhãn nhanh: Tích cực · Khác · Có · None · Cold (phím 9)"
         aria-label="Gán nhanh nhãn tích cực, cold"
         aria-pressed={isPositiveColdPreset(label)}
@@ -271,11 +290,10 @@ export default function LabelSelector({
         onClick={() => onChange({
           ...(isNegativeStaffAttitudePreset(label) ? EMPTY_LABEL : NEGATIVE_STAFF_ATTITUDE_PRESET_LABEL),
         })}
-        className={`select-control inline-flex items-center gap-1.5 font-medium transition-colors ${
-          isNegativeStaffAttitudePreset(label)
+        className={`select-control inline-flex items-center gap-1.5 font-medium transition-colors ${isNegativeStaffAttitudePreset(label)
             ? 'bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700'
             : ''
-        }`}
+          }`}
         title="Bật/tắt nhãn nhanh: Tiêu cực · Dịch vụ · Có · Cao · None (phím 8)"
         aria-label="Gán nhanh nhãn tiêu cực về thái độ nhân viên"
         aria-pressed={isNegativeStaffAttitudePreset(label)}
@@ -287,23 +305,21 @@ export default function LabelSelector({
 
       <div className="flex gap-1 ml-1 flex-wrap items-center text-xs">
         {label.sentiment && (
-          <span className={`px-2 py-0.5 rounded-full font-semibold ${
-            label.sentiment === 'positive' ? 'badge-positive' :
-            label.sentiment === 'negative' ? 'badge-negative' : 'badge-neutral'
-          }`}>
+          <span className={`px-2 py-0.5 rounded-full font-semibold ${label.sentiment === 'positive' ? 'badge-positive' :
+              label.sentiment === 'negative' ? 'badge-negative' : 'badge-neutral'
+            }`}>
             {label.sentiment === 'positive' ? '😊' : label.sentiment === 'negative' ? '😠' : '😐'}{' '}
             {SENTIMENT_LABELS[label.sentiment]}
           </span>
         )}
         {label.urgency && (
-          <span className={`px-2 py-0.5 rounded-full font-semibold ${
-            label.urgency === 'none' ? 'badge-neutral' :
-            label.urgency === 'low' ? 'badge-normal' :
-            label.urgency === 'medium' ? 'badge-notable' :
-            label.urgency === 'high' ? 'bg-orange-500 text-white' : 'badge-crisis'
-          }`}>
+          <span className={`px-2 py-0.5 rounded-full font-semibold ${label.urgency === 'none' ? 'badge-neutral' :
+              label.urgency === 'low' ? 'badge-normal' :
+                label.urgency === 'medium' ? 'badge-notable' :
+                  label.urgency === 'high' ? 'bg-orange-500 text-white' : 'badge-crisis'
+            }`}>
             {label.urgency === 'none' ? '⚪' : label.urgency === 'low' ? '🟢' : label.urgency === 'medium' ? '🟡' :
-             label.urgency === 'high' ? '🟠' : '🔴'}{' '}
+              label.urgency === 'high' ? '🟠' : '🔴'}{' '}
             {URGENCY_LABELS[label.urgency]}
           </span>
         )}
@@ -322,10 +338,9 @@ export default function LabelSelector({
           );
         })()}
         {label.relevance !== null && label.relevance !== undefined && (
-          <span className={`px-2 py-0.5 rounded-full font-semibold ${
-            label.relevance ? 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300'
-                            : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
-          }`}>
+          <span className={`px-2 py-0.5 rounded-full font-semibold ${label.relevance ? 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300'
+              : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
+            }`}>
             {label.relevance ? '✅ Liên quan' : '❌ Không liên quan'}
           </span>
         )}

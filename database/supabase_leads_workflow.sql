@@ -69,3 +69,185 @@ alter table public.leads
   add column if not exists notes text,
   add column if not exists updated_by text,
   add column if not exists updated_by_role text;
+
+grant select, insert, update, delete on public.leads to anon, authenticated;
+
+alter table public.leads enable row level security;
+
+drop policy if exists leads_select_policy on public.leads;
+drop policy if exists leads_insert_policy on public.leads;
+drop policy if exists leads_update_policy on public.leads;
+drop policy if exists leads_delete_policy on public.leads;
+
+create policy leads_select_policy
+  on public.leads
+  for select
+  to anon, authenticated
+  using (true);
+
+create policy leads_insert_policy
+  on public.leads
+  for insert
+  to anon, authenticated
+  with check (true);
+
+create policy leads_update_policy
+  on public.leads
+  for update
+  to anon, authenticated
+  using (true)
+  with check (true);
+
+create policy leads_delete_policy
+  on public.leads
+  for delete
+  to anon, authenticated
+  using (true);
+
+-- ── Label Change Requests ────────────────────────────────────────────────────
+
+create table if not exists public.label_change_requests (
+  id uuid primary key default gen_random_uuid(),
+  source_type text,
+  source_id text,
+  lead_id text,
+  mention_id text,
+  workspace_id text,
+  platform text,
+  author text,
+  content_preview text,
+  source_url text,
+  current_labels jsonb,
+  requested_labels jsonb,
+  changed_fields text[],
+  current_queue text,
+  requested_queue text,
+  current_label text,
+  requested_label text,
+  reason_code text,
+  reason_note text,
+  evidence_checked boolean default false,
+  status text default 'pending',
+  brand_id text,
+  brand_name text,
+  requested_by text,
+  requested_by_name text,
+  requested_by_email text,
+  requested_by_role text,
+  requested_at timestamptz,
+  reviewed_by text,
+  reviewed_by_uid text,
+  reviewed_by_name text,
+  reviewed_by_email text,
+  reviewed_at timestamptz,
+  review_note text,
+  final_label jsonb,
+  history jsonb,
+  applied_at timestamptz,
+  audit_log_id text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  updated_by text,
+  updated_by_role text
+);
+
+grant select, insert, update, delete on public.label_change_requests to anon, authenticated;
+
+alter table public.label_change_requests
+  add column if not exists requested_by_email text,
+  add column if not exists reviewed_by_uid text,
+  add column if not exists reviewed_by_email text,
+  add column if not exists final_label jsonb,
+  add column if not exists history jsonb;
+
+create table if not exists public.label_change_history (
+  id uuid primary key default gen_random_uuid(),
+  request_id uuid,
+  brand_id text,
+  brand_name text,
+  workspace_id text,
+  mention_id text,
+  mention_content text,
+  action text,
+  status text,
+  old_label jsonb,
+  new_label jsonb,
+  requested_by_name text,
+  requested_by_email text,
+  requested_by_role text,
+  reviewed_by_uid text,
+  reviewed_by_name text,
+  reviewed_by_email text,
+  note text,
+  source text,
+  changed_at timestamptz default now(),
+  created_at timestamptz default now()
+);
+
+grant select, insert, update, delete on public.label_change_history to anon, authenticated;
+
+alter table public.label_change_requests enable row level security;
+
+drop policy if exists label_change_requests_select_policy on public.label_change_requests;
+drop policy if exists label_change_requests_insert_policy on public.label_change_requests;
+drop policy if exists label_change_requests_update_policy on public.label_change_requests;
+drop policy if exists label_change_requests_delete_policy on public.label_change_requests;
+
+create policy label_change_requests_select_policy
+  on public.label_change_requests
+  for select
+  to anon, authenticated
+  using (true);
+
+create policy label_change_requests_insert_policy
+  on public.label_change_requests
+  for insert
+  to anon, authenticated
+  with check (true);
+
+create policy label_change_requests_update_policy
+  on public.label_change_requests
+  for update
+  to anon, authenticated
+  using (true)
+  with check (true);
+
+create policy label_change_requests_delete_policy
+  on public.label_change_requests
+  for delete
+  to anon, authenticated
+  using (true);
+
+alter table public.label_change_history enable row level security;
+
+drop policy if exists label_change_history_select_policy on public.label_change_history;
+drop policy if exists label_change_history_insert_policy on public.label_change_history;
+drop policy if exists label_change_history_update_policy on public.label_change_history;
+drop policy if exists label_change_history_delete_policy on public.label_change_history;
+
+create policy label_change_history_select_policy
+  on public.label_change_history
+  for select
+  to anon, authenticated
+  using (true);
+
+create policy label_change_history_insert_policy
+  on public.label_change_history
+  for insert
+  to anon, authenticated
+  with check (true);
+
+create policy label_change_history_update_policy
+  on public.label_change_history
+  for update
+  to anon, authenticated
+  using (true)
+  with check (true);
+
+create policy label_change_history_delete_policy
+  on public.label_change_history
+  for delete
+  to anon, authenticated
+  using (true);
+
+notify pgrst, 'reload schema';

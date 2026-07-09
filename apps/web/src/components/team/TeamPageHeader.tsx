@@ -18,6 +18,7 @@ export function TeamPageHeader({ onAddClick, showAddButton = true }: TeamPageHea
       {showAddButton && (
         <button
           onClick={onAddClick}
+          data-tour="team-add-staff"
           className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#6C5CE7] px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-[#5a4cdb] active:scale-[0.98] shadow-sm"
         >
           <span>➕</span> Thêm nhân viên

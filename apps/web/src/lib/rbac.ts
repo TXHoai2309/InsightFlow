@@ -19,6 +19,13 @@ export interface UserRoleProfile {
   permissions: string[];
   defaultRoute: string;
   temporaryPasswordIssued?: boolean;
+  onboarding?: Partial<Record<UserRole, RoleOnboardingState>>;
+}
+
+export interface RoleOnboardingState {
+  completedAt?: string;
+  lastSeenAt?: string;
+  version?: string;
 }
 
 export type BusinessAction =
@@ -177,7 +184,17 @@ const ROUTE_POLICIES: RoutePolicy[] = [
     permission: "alerts",
   },
   {
+    route: "/crisis-monitoring",
+    roles: ["brand_manager", "crisis_employee"],
+    permission: "alerts",
+  },
+  {
     route: "/leads",
+    roles: ["brand_manager", "lead_employee"],
+    permission: "leads",
+  },
+  {
+    route: "/lead-monitoring",
     roles: ["brand_manager", "lead_employee"],
     permission: "leads",
   },
@@ -286,6 +303,7 @@ export function buildUserRoleProfile(params: {
   storedPermissions?: unknown;
   storedDefaultRoute?: unknown;
   storedTemporaryPasswordIssued?: unknown;
+  storedOnboarding?: unknown;
 }): UserRoleProfile {
   const email = (params.email || "").trim().toLowerCase();
   const role = normalizeRole(params.storedRole);
@@ -299,6 +317,12 @@ export function buildUserRoleProfile(params: {
       (permission): permission is string => typeof permission === "string",
     )
     : ROLE_CONFIG[role].permissions;
+  const onboarding =
+    params.storedOnboarding &&
+    typeof params.storedOnboarding === "object" &&
+    !Array.isArray(params.storedOnboarding)
+      ? (params.storedOnboarding as UserRoleProfile["onboarding"])
+      : undefined;
 
   return {
     uid: params.uid,
@@ -321,6 +345,7 @@ export function buildUserRoleProfile(params: {
         ? params.storedDefaultRoute
         : ROLE_CONFIG[role].defaultRoute,
     temporaryPasswordIssued: params.storedTemporaryPasswordIssued === true,
+    onboarding,
   };
 }
 

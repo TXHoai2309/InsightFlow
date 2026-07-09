@@ -15,6 +15,7 @@ InsightFlow không chỉ là dashboard hiển thị số liệu. Mục tiêu s�
 | `docs/API.md` | Tham khảo API hiện có/định hướng API |
 | `docs/DEPLOYMENT.md` | Hướng dẫn triển khai |
 | `docs/CHANGELOG.md` | Nhật ký thay đổi |
+| `docs/sprint-2-crisis-management-center.md` | Tài liệu tính năng Trung tâm Xử lý Khẩn cấp & Đồng bộ Realtime cho Nhân viên xử lý khủng hoảng |
 
 Nếu có xung đột, ưu tiên tài liệu theo thứ tự:
 
@@ -418,6 +419,7 @@ Sprint 2 được coi là đúng hướng khi:
 
 | Phiên bản | Ngày | Thay đổi |
 |---|---|---|
+| 2.2 | 2026-07-03 | Xây dựng Trung tâm Xử lý Khẩn cấp: Split View (Khẩn cấp/Chi tiết), tích hợp thông tin liên hệ và phím hành động nhanh (Call, Zalo, Email), đồng bộ thời gian thực Firestore onSnapshot. |
 | 2.1 | 2026-07-02 | Bổ sung Contact Intelligence: contact-level aggregation, influence score, spam score và priority boost. |
 | 2.0 | 2026-07-02 | Cập nhật README theo SPEC/ARCHITECTURE Sprint 2: role-based workflow, không đổi cấu trúc thư mục, label lifecycle, onboarding, report và auto-response safety. |
 
@@ -513,3 +515,28 @@ Admin	demo.admin@insightflow.com	/admin
 Quản lý thương hiệu	manager@highlandscoffee.com	/dashboard
 Nhân viên xử lý khủng hoảng	nguyen_van_crisis@highlandscoffee.com	/alerts
 Nhân viên xử lý lead	tran_thi_lead@highlandscoffee.com	/leads
+
+## 19. Trang Hàng chờ Cảnh báo (/alerts) & Chi tiết vụ việc (/alerts/[id])
+
+### A. Trang Hàng chờ Cảnh báo (/alerts) - Giao diện Chia cột Mới
+Trang hàng chờ xử lý khủng hoảng đã được thiết kế lại toàn diện thành giao diện chia cột hiện đại:
+- **Cột trái (Hàng chờ ưu tiên - Priority Process Queue)**:
+  - Hiển thị danh sách các vụ việc rủi ro kèm theo chỉ số Risk Score, nền tảng nguồn tin, thời gian phát hiện bài viết và thời gian SLA đếm ngược (đã định dạng thân thiện theo ngày/giờ/phút).
+  - Tích hợp các bộ lọc nhanh: Tìm kiếm theo từ khóa nội dung, chọn Thương hiệu, Nguồn Platform, lọc theo mức độ rủi ro (Khẩn cấp, Cao, Trung bình, Thấp) và chế độ xem các vụ việc "Của tôi" đang phụ trách.
+  - Phân mục Accordion dưới chân trang: Hiển thị các vụ việc đã giải quyết gần đây và các yêu cầu sửa nhãn đang chờ duyệt.
+- **Cột phải (Widget liên quan)**:
+  - **Trending Now**: Liệt kê các từ khóa đang nóng và xu hướng thảo luận.
+  - **Hoạt động đội ngũ**: Nhật ký hành động thời gian thực của các nhân viên trực trực thuộc thương hiệu.
+  - **Hiệu suất trực**: Thống kê số lượng vụ việc đã xử lý và tỷ lệ hoàn thành KPI.
+
+### B. Trang Chi tiết vụ việc (/alerts/[id]) & Phân quyền Thao tác (RBAC)
+Trang chi tiết vụ việc hỗ trợ quy trình xử lý chuyên sâu trên thời gian thực với Firestore, tuân thủ đúng phân quyền vai trò:
+- **Nhân viên trực (`crisis_employee`)**:
+  - Có quyền thay đổi trạng thái xử lý sự vụ (Status Stepper), gửi ý kiến đóng góp lên Timeline lịch sử xử lý, viết private notes nội bộ và gửi Escalation khẩn cấp.
+  - Không có quyền trực tiếp can thiệp dữ liệu rủi ro. Nút **"Sửa nhãn"** bị ẩn đi.
+  - Khi cần chỉnh sửa mức độ rủi ro, sắc thái hay chủ đề, nhân viên bắt buộc phải gửi thông qua thẻ **"Gửi yêu cầu sửa nhãn"** (Correction Request Form) để quản lý duyệt.
+- **Quản lý thương hiệu (`brand_manager` / `admin`)**:
+  - Được quyền bấm nút **"Sửa nhãn"** để chỉnh sửa và lưu trực tiếp mức độ rủi ro của sự vụ trên Firestore.
+  - Thẻ biểu mẫu đề xuất sửa nhãn được ẩn đi.
+
+

@@ -10,6 +10,36 @@
 > - Các commit merge vẫn được giữ lại để phản ánh đúng dòng phát triển giữa các nhánh.
 >   Tất cả các thay đổi đáng chú ý đối với dự án này sẽ được ghi lại trong file này.
 >   Định dạng dựa trên [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) và dự án này tuân thủ [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [Unreleased] - 2026-07-06
+
+### Added
+- **Trang chi tiết xử lý sự vụ (`/alerts/[id]`)**:
+  - Giao diện chi tiết 2 cột (Left Column 60% hiển thị nội dung gốc, phân tích sắc thái, chỉ số rủi ro, Timeline lịch sử xử lý; Right Column 40% hiển thị điều khiển trạng thái, mức độ rủi ro, biểu mẫu sửa nhãn, Private Notes, Escalate báo cáo cấp cao, SOP gợi ý).
+  - Tích hợp real-time live sync bằng Firestore `onSnapshot` để luôn cập nhật trạng thái mới nhất từ cơ sở dữ liệu thứ 2 (`insightflow_labels`).
+  - Thiết lập cơ chế khóa tương tác bảo vệ chéo (Session Lock) giúp cảnh báo `⚠️ Nhân viên khác đang xử lý` khi có người khác truy cập cùng lúc.
+- **Phân quyền thao tác dữ liệu (RBAC) trên trang chi tiết**:
+  - Nhân viên trực (`crisis_employee`) chỉ có quyền giải quyết sự vụ bằng cách đổi trạng thái hoặc ghi chú. Nút "Sửa nhãn" rủi ro trực tiếp bị ẩn đi.
+  - Khi muốn thay đổi nhãn, nhân viên trực bắt buộc phải gửi yêu cầu thông qua biểu mẫu chỉnh sửa (chọn trường cần sửa, nêu lý do) để chờ cấp quản lý duyệt.
+  - Quản trị viên (`admin`) và Quản lý thương hiệu (`brand_manager`) có quyền click nút "Sửa nhãn" để đổi trực tiếp giá trị rủi ro ngay trên trang chi tiết và được ẩn thẻ gửi yêu cầu sửa nhãn.
+
+### Changed
+- **Nâng cấp trang hàng chờ Cảnh báo (`/alerts`)**:
+  - Thiết kế lại trang hàng chờ thành giao diện chia cột hiện đại (cột trái hàng chờ, cột phải widget Trending, Đội ngũ và Hiệu suất).
+  - Định dạng thời gian phản hồi SLA sang ngày/giờ/phút trực quan.
+  - Chuyển hướng các nút "Chi tiết", "Xem chi tiết" của danh sách bài viết đang xử lý và bài viết đã giải quyết trực tiếp sang trang chi tiết dynamic route `/alerts/[id]`.
+  - Khắc phục lỗi platform logo bị hiển thị biểu tượng mặc định (bằng cách sửa prop `source` thành `platform` của component `PlatformLogo`).
+  - Khắc phục lỗi hiển thị tên người xử lý ở widget Hoạt động đội ngũ khi sự vụ chuyển sang trạng thái "Đã xử lý" (hiển thị đúng tên nhân viên trực thay vì rơi vào giá trị mặc định).
+
+## [Unreleased] - 2026-07-03
+
+### Added
+
+- **Giao diện & Nghiệp vụ Xử lý Khủng hoảng (Crisis Command Center)**:
+  - Tích hợp Split View phân tách giao diện: Trung tâm khẩn cấp (Emergency Feed - tối giản, tập trung) và Xem tất cả (Detailed Queue - đầy đủ bảng biểu, lọc nâng cao).
+  - Tự động dò tìm thông tin liên lạc (leads) trùng tác giả hoặc nội dung để hiển thị SĐT, Email trực tiếp trên thẻ sự vụ.
+  - Tích hợp phím liên hệ khẩn cấp: Gọi điện (`tel:`), Nhắn Zalo qua số điện thoại (`https://zalo.me/`), Xem bình luận gốc (Platform link đã chuẩn hóa tuyệt đối), Gửi email (`mailto:`).
+  - Tự động chuyển đổi chế độ xem thông minh khi không có sự vụ rủi ro cao.
+  - Thiết lập cơ chế đồng bộ thời gian thực (Real-time Sync) 100% qua Firestore `onSnapshot` để thẻ sự cố tự động ẩn khỏi hàng chờ các nhân viên khác ngay khi được tiếp nhận.
 
 ## [Unreleased] - 2026-07-06
 

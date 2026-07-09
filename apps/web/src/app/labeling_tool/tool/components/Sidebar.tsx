@@ -142,6 +142,18 @@ export default function Sidebar({
           </div>
         ) : pendingCounts ? (
           <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2 flex justify-between rounded-md bg-gray-50 px-3 py-2 text-sm dark:bg-surface-700/40">
+              <span className="text-gray-600 dark:text-gray-400">Tổng post (crawled)</span>
+              <span className="font-bold text-gray-900 dark:text-gray-100">
+                {pendingCounts.totalPosts.toLocaleString()}
+              </span>
+            </div>
+            <div className="col-span-2 flex justify-between rounded-md bg-gray-50 px-3 py-2 text-sm dark:bg-surface-700/40">
+              <span className="text-gray-600 dark:text-gray-400">Tổng comment (crawled)</span>
+              <span className="font-bold text-gray-900 dark:text-gray-100">
+                {pendingCounts.totalComments.toLocaleString()}
+              </span>
+            </div>
             <div className="rounded-md border border-blue-100 bg-blue-50 p-3 dark:border-blue-900/40 dark:bg-blue-900/20">
               <div className="text-xs text-blue-700 dark:text-blue-300">Post chưa gán</div>
               <div className="mt-1 text-2xl font-bold text-blue-900 dark:text-blue-100">

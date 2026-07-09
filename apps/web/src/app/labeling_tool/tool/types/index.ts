@@ -45,7 +45,7 @@ export const URGENCY_LABELS: Record<NonNullable<Urgency>, string> = {
 };
 
 export const INTENT_LABELS: Record<NonNullable<Intent>, { label: string; emoji: string; tooltip: string }> = {
-  hot:  { label: 'Hot',  emoji: '🔥', tooltip: 'Quan tâm mạnh, có ý định mua/ứng tuyển ngay' },
+  hot: { label: 'Hot', emoji: '🔥', tooltip: 'Quan tâm mạnh, có ý định mua/ứng tuyển ngay' },
   warm: { label: 'Warm', emoji: '🌡️', tooltip: 'Quan tâm vừa, đang tìm hiểu hoặc cân nhắc' },
   cold: { label: 'Cold', emoji: '🧊', tooltip: 'Ít quan tâm, đề cập nhưng không có ý định' },
   none: { label: 'None', emoji: '➖', tooltip: 'Không liên quan đến mua hàng/tuyển dụng' },
@@ -124,6 +124,26 @@ export function isNegativeStaffAttitudePreset(label: Label): boolean {
     label.intent === 'none' &&
     label.topic.length === 1 &&
     label.topic[0] === 'service'
+  );
+}
+
+/** Nhãn mặc định cho "Tích cực, None" — gán nhanh bằng phím 7 */
+export const POSITIVE_NONE_PRESET_LABEL: Label = {
+  sentiment: 'positive',
+  topic: ['other'],
+  relevance: true,
+  urgency: 'none',
+  intent: 'none',
+};
+
+export function isPositiveNonePreset(label: Label): boolean {
+  return (
+    label.sentiment === 'positive' &&
+    label.relevance === true &&
+    label.urgency === 'none' &&
+    label.intent === 'none' &&
+    label.topic.length === 1 &&
+    label.topic[0] === 'other'
   );
 }
 
