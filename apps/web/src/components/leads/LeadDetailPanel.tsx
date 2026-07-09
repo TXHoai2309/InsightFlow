@@ -199,11 +199,6 @@ export function LeadDetailPanel({
     [lead, mentionById],
   );
 
-  const primaryAction = useMemo(
-    () => (lead ? getPrimaryLeadAction(lead) : null),
-    [lead],
-  );
-
   const returnToken = useMemo(
     () => (lead ? createLeadReturnToken(lead.id) : ""),
     [lead],
@@ -1514,8 +1509,8 @@ export function LeadDetailPanel({
                 customerName={lead.author || "Khách hàng"}
                 sentiment={(currentLabels.sentiment === "positive" || currentLabels.sentiment === "negative") ? currentLabels.sentiment : "neutral"}
                 category="lead"
-                primaryActionLabel={primaryAction?.label}
-                onCopyAndOpenContact={primaryAction ? () => handleOpenAction(primaryAction) : undefined}
+                primaryActionLabel={sourceAction?.label}
+                onCopyAndOpenContact={sourceAction ? () => handleOpenAction({ ...sourceAction, isContact: true }) : undefined}
               />
             </section>
             <section className="rounded-xl border border-[var(--color-border)] p-3">
