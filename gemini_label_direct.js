@@ -480,7 +480,7 @@ async function startLabeling() {
     }
 
     // ==========================================
-    // PHASE 2: PROCESS COMMENTS
+    // PHASE 2: PROCESS COMMENTS (scan comments table directly, like Phase 1 for posts)
     // ==========================================
     if (!keysExhausted) {
       console.log(`\n🔍 PHASE 2: Processing comments...`);
@@ -499,6 +499,9 @@ async function startLabeling() {
       }
       console.log(`💡 Found ${annotatedCommentIds.size} already-labeled comments.`);
 
+      // Cursor-based pagination over the comments table (same approach as Phase 1 for posts)
+      let lastPostId = '';
+      let lastCommentId = '';
       let commentsExhausted = false;
 
       while (!commentsExhausted) {
@@ -509,99 +512,54 @@ async function startLabeling() {
           break;
         }
 
-        console.log(`Fetching unassigned comments from queue...`);
-        let assignments = null;
+        console.log(`Fetching comments from table (cursor: ${lastPostId || 'start'}/${lastCommentId || 'start'})...`);
+        let comments = null;
         let fetchAttempts = 0;
+        // Cursor: fetch rows where (post_id, comment_id) > (lastPostId, lastCommentId)
+        const cursorFilter = lastPostId
+          ? `&or=(post_id.gt.${encodeURIComponent(lastPostId)},and(post_id.eq.${encodeURIComponent(lastPostId)},comment_id.gt.${encodeURIComponent(lastCommentId)}))`
+          : '';
         while (fetchAttempts < 5) {
           try {
-            assignments = await request('labeling_assignments', `platform=eq.${FILTER_PLATFORM}&entity_type=eq.comment&status=in.(unassigned,assigned,updated_review)&select=post_id,entity_key&limit=${FETCH_LIMIT}`);
+            comments = await request('comments', `platform=eq.${FILTER_PLATFORM}&select=comment_id,post_id,text,data_version&order=post_id.asc,comment_id.asc&limit=${FETCH_LIMIT}${cursorFilter}`);
             break;
           } catch (err) {
             fetchAttempts++;
-            console.warn(`⚠️ Error fetching assignments (attempt ${fetchAttempts}/5): ${err.message}`);
+            console.warn(`⚠️ Error fetching comments (attempt ${fetchAttempts}/5): ${err.message}`);
             if (fetchAttempts >= 5) throw err;
             await sleep(5000);
           }
         }
 
-        if (!assignments || assignments.length === 0) {
-          console.log('✅ Reached the end of comment assignments queue.');
-          commentsExhausted = true;
-          break;
-        }
-
-        // Construct composite OR conditions matching the index (platform, post_id, comment_id)
-        const orConditions = assignments.map(a => {
-          const parts = a.entity_key.split(':');
-          const commentId = parts.length >= 4 ? parts[parts.length - 1] : null;
-          if (a.post_id && commentId) {
-            const escapedPostId = a.post_id.replace(/"/g, '\\"');
-            const escapedCommentId = commentId.replace(/"/g, '\\"');
-            return `and(post_id.eq."${escapedPostId}",comment_id.eq."${escapedCommentId}")`;
-          }
-          return null;
-        }).filter(Boolean);
-
-        if (orConditions.length === 0) {
-          console.log('No valid conditions parsed from assignments.');
-          commentsExhausted = true;
-          break;
-        }
-
-        // Fetch details from comments table in chunks to avoid URL length limit (8KB)
-        const DETAIL_CHUNK_SIZE = 30;
-        let comments = [];
-        try {
-          const detailPromises = [];
-          for (let i = 0; i < orConditions.length; i += DETAIL_CHUNK_SIZE) {
-            const chunk = orConditions.slice(i, i + DETAIL_CHUNK_SIZE);
-            const query = `platform=eq.${FILTER_PLATFORM}&select=comment_id,post_id,text,data_version&or=(${encodeURIComponent(chunk.join(','))})`;
-            detailPromises.push(request('comments', query));
-          }
-          const results = await Promise.all(detailPromises);
-          comments = results.flat();
-        } catch (err) {
-          console.warn(`⚠️ Error fetching comment details: ${err.message}`);
-          await sleep(5000);
-          continue; // Retry this batch
-        }
-
         if (!comments || comments.length === 0) {
-          // If the comments actually do not exist in the comments table, we shouldn't get stuck forever.
-          // Let's mark these assignments as completed so they are pruned from the queue.
-          console.warn('⚠️ No comments found in comments table for these assignments. Clearing queue assignments...');
-          for (const a of assignments) {
-            pendingAssignmentKeys.push({ type: 'comment', key: a.entity_key });
-          }
-          await flushAssignments();
-          continue;
+          console.log('✅ Reached the end of comments table.');
+          commentsExhausted = true;
+          break;
         }
 
-        // Clear queue assignments for comments that do not exist in database
-        const foundCommentIds = new Set(comments.map(c => c.comment_id));
-        for (const a of assignments) {
-          const parts = a.entity_key.split(':');
-          const commentId = parts.length >= 4 ? parts[parts.length - 1] : null;
-          if (!commentId || !foundCommentIds.has(commentId)) {
-            pendingAssignmentKeys.push({ type: 'comment', key: a.entity_key });
-          }
-        }
+        // Advance cursor to the last item in this chunk
+        lastPostId = comments[comments.length - 1].post_id;
+        lastCommentId = comments[comments.length - 1].comment_id;
 
-        const unlabeledComments = [];
+        // Mark already-labeled or empty comments for assignment cleanup
         for (const c of comments) {
           if (annotatedCommentIds.has(c.comment_id) || (c.text || '').trim().length === 0) {
             pendingAssignmentKeys.push({ type: 'comment', key: `${platformPrefix}:comment:${c.post_id}:${c.comment_id}` });
-          } else {
-            unlabeledComments.push(c);
           }
         }
+        if (pendingAssignmentKeys.length >= 150) {
+          await flushAssignments();
+        }
 
+        const unlabeledComments = comments.filter(
+          c => !annotatedCommentIds.has(c.comment_id) && (c.text || '').trim().length > 0
+        );
+
+        console.log(`Found ${unlabeledComments.length}/${comments.length} unlabeled comments in this chunk.`);
         if (unlabeledComments.length === 0) {
           await flushAssignments();
           continue;
         }
-
-        console.log(`Found ${unlabeledComments.length}/${comments.length} unlabeled comments in this chunk.`);
 
         const batches = [];
         for (let i = 0; i < unlabeledComments.length; i += BATCH_SIZE) {
@@ -690,6 +648,8 @@ async function startLabeling() {
               // Defer assignment cleanup
               for (const item of batch) {
                 pendingAssignmentKeys.push({ type: 'comment', key: `${platformPrefix}:comment:${item.post_id}:${item.comment_id}` });
+                // Add to local cache so we don't re-process if seen again
+                annotatedCommentIds.add(item.comment_id);
               }
 
               if (pendingAssignmentKeys.length >= 150) {
@@ -716,7 +676,7 @@ async function startLabeling() {
               if (err.message.includes('429')) {
                 exhaustedKeys.set(activeKeyIndex, Date.now() + 60000); // 60s cooldown
                 console.warn(`⏳ Key[${activeKeyIndex}] got 429: ${err.message}. Cooling down for 60s. Rotating...`);
-                
+
                 console.log(`⏳ Sleeping 15s to let shared project rate limits clear...`);
                 await sleep(15000); // 15s delay before trying next key to prevent shared project rate limits from failing immediately
                 const next = getNextAvailableKeyIndex(activeKeyIndex);
