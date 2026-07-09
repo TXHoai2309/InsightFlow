@@ -471,12 +471,16 @@ export default function AlertsPage() {
   }, [brandFilteredAlerts, t]);
 
   // Shift Performance resolved ratio calculation
-  const shiftPerformance = useMemo(() => {
+  const shiftPerformanceStats = useMemo(() => {
     const resolved = brandFilteredAlerts.filter(a => a.status === "resolved").length;
     const total = brandFilteredAlerts.length;
-    if (total === 0) return 94; // Realistic fallback to match screenshot
-    return Math.round((resolved / total) * 100);
+    // We default to 100% KPI completion if there are no alerts to handle
+    const percentage = total === 0 ? 100 : Math.round((resolved / total) * 100);
+    return { percentage, resolved, total };
   }, [brandFilteredAlerts]);
+
+  const shiftPerformance = shiftPerformanceStats.percentage;
+
 
   // Trending now — 3-source approach for meaningful insight:
   // 1. Predefined crisis keyword matching (highest signal)
@@ -1593,17 +1597,35 @@ export default function AlertsPage() {
           </div>
 
           {/* Shift performance resolution ratio */}
-          <div className="glass-card rounded-2xl p-5 md:p-6 bg-slate-900 text-white border border-slate-800 shadow-xl space-y-4 relative overflow-hidden group">
-            <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-white/5 rounded-full blur-xl group-hover:scale-110 transition-transform"></div>
-            <div className="space-y-1">
-              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{t("alerts.page.shiftPerformance")}</span>
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-3xl font-black text-white">{shiftPerformance}%</span>
-                <span className="text-[10px] font-bold text-green-400">{t("alerts.page.processed")}</span>
+          <div className="glass-card rounded-2xl p-5 md:p-6 bg-white dark:bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] shadow-sm space-y-4 relative overflow-hidden group">
+            <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-indigo-500/5 rounded-full blur-xl group-hover:scale-110 transition-transform"></div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[9px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t("alerts.page.shiftPerformance")}</span>
+                <span className="material-symbols-outlined text-indigo-500 text-lg">insights</span>
+              </div>
+              <div className="flex items-baseline justify-between mt-1">
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-3xl font-black text-[var(--color-text-primary)]">{shiftPerformance}%</span>
+                  <span className="text-[10px] font-bold text-green-500">{t("alerts.page.processed")}</span>
+                </div>
+                <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${
+                  shiftPerformance >= 90
+                    ? "bg-green-50 dark:bg-green-950/20 text-green-600 dark:text-green-400 border border-green-100/50 dark:border-green-900/30"
+                    : "bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border border-amber-100/50 dark:border-amber-900/30"
+                }`}>
+                  {shiftPerformance >= 90 ? "Đạt KPI" : "Cần cải thiện"}
+                </span>
               </div>
             </div>
-            <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+            <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
               <div className="bg-gradient-to-r from-blue-500 to-indigo-500 h-full rounded-full transition-all duration-500" style={{ width: `${shiftPerformance}%` }}></div>
+            </div>
+            <div className="flex justify-between items-center text-[10px] text-[var(--color-text-secondary)] font-semibold pt-1.5 border-t border-[var(--color-border)]/40">
+              <span>Số vụ việc giải quyết:</span>
+              <span className="font-bold text-[var(--color-text-primary)]">
+                {shiftPerformanceStats.resolved} / {shiftPerformanceStats.total} sự vụ
+              </span>
             </div>
           </div>
 
