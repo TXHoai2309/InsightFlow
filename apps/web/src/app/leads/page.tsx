@@ -77,10 +77,6 @@ export default function LeadsPage() {
   const { refetch } = useDashboard({
     autoFetch: true,
     refetchInterval: 1800000,
-    dataWindowDays: 30,
-    maxLeads: 500,
-    maxMentions: 1500,
-    includeMentions: false,
   });
 
   const {

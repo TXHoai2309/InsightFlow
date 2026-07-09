@@ -867,7 +867,7 @@ async function loadSupabaseRowsByIds<T extends SupabaseRow>(
   if (!ids || ids.length === 0) return [];
   const unique = Array.from(new Set(ids.filter(Boolean)));
   const pageSize = 100;
-  const results: T[] = [];
+  const promises: Promise<T[]>[] = [];
 
   const isAnnotationTable = table === "annotations";
   for (let i = 0; i < unique.length; i += pageSize) {
@@ -878,13 +878,13 @@ async function loadSupabaseRowsByIds<T extends SupabaseRow>(
       ...extraParams,
       [idField]: `in.(${formattedIds.join(",")})`,
       select: columns.join(","),
-      limit: String(Math.min(chunk.length, pageSize, maxRows)),
+      limit: String(maxRows), // Fetch up to maxRows to ensure complete candidate list
     });
-    const page = await supabaseRequest<T[]>(config, table, requestParams.toString());
-    results.push(...page);
+    promises.push(supabaseRequest<T[]>(config, table, requestParams.toString()));
   }
 
-  let finalResults = results;
+  const results = await Promise.all(promises);
+  let finalResults = results.flat();
 
   // If order is updated_at desc, sort in JS to ensure true top results across chunks
   if (extraParams.order && extraParams.order.includes("updated_at.desc")) {
@@ -902,7 +902,6 @@ async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
   const config = getSupabaseConfig();
   const maxMentions = opts.maxMentions || 30000;
   const brandKey = opts.brandKey ? opts.brandKey.toLowerCase().replace(/[\s\-_.]/g, "").trim() : "";
-  const sinceIso = toQueryIsoDate(opts.since);
   const postColumns = [
     "post_id",
     "platform",
@@ -944,8 +943,8 @@ async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
   ];
 
   let annotationRows: SupabaseRow[] = [];
-
-  if (brandKey && opts.useBrandPostLookup) {
+  
+  if (brandKey) {
     // ── Brand-First Strategy ──────────────────────────────────────────
     // 1. Fetch posts matching the brand key
     let postIds: string[] = [];
@@ -966,7 +965,7 @@ async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
         or: `(brand_slug.eq.${searchTerm},brand.eq.${encodeURIComponent(displayBrandName)})`,
         select: "post_id",
         order: "posted_at.desc.nullslast",
-        limit: String(Math.min(maxMentions, 1000)),
+        limit: "1000",
       });
       const brandPosts = await supabaseRequest<SupabaseRow[]>(config, "posts", query.toString());
       postIds = brandPosts.map((p) => String(p.post_id || "").trim()).filter(Boolean);
@@ -978,8 +977,8 @@ async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
 
     // 2. Fetch completed annotations corresponding to these post IDs per platform
     try {
-      const platforms = getMentionPlatforms(opts);
-      const perPlatformLimit = Math.max(50, Math.ceil(maxMentions / platforms.length));
+      const platforms = ["facebook", "tiktok", "youtube", "thread", "be", "google_maps", "news"];
+      const perPlatformLimit = Math.max(500, Math.floor(maxMentions / platforms.length));
       const promises = platforms.map((p) =>
         loadSupabaseRowsByIds<SupabaseRow>(
           config,
@@ -987,12 +986,7 @@ async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
           "post_id",
           postIds,
           annotationColumns,
-          {
-            platform: p === "be" ? "in.(be,befood)" : (p === "thread" ? "in.(thread,threads)" : `eq.${p}`),
-            status: "eq.completed",
-            ...(sinceIso ? { updated_at: `gte.${sinceIso}` } : {}),
-            order: "updated_at.desc.nullslast",
-          },
+          { platform: p === "be" ? "in.(be,befood)" : (p === "thread" ? "in.(thread,threads)" : `eq.${p}`), status: "eq.completed", order: "updated_at.desc.nullslast" },
           perPlatformLimit,
         ).catch((err) => {
           console.warn(`[DashboardService] Failed to fetch annotations for platform ${p}:`, err);
@@ -1008,18 +1002,13 @@ async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
   } else {
     // ── Global Strategy (Fallback) ───────────────────────────────────
     try {
-      const platforms = getMentionPlatforms(opts);
-      const perPlatformLimit = Math.max(50, Math.ceil(maxMentions / platforms.length));
+      const platforms = ["facebook", "tiktok", "youtube", "thread", "be", "google_maps", "news"];
+      const perPlatformLimit = Math.max(500, Math.floor(maxMentions / platforms.length));
       const promises = platforms.map((p) =>
         loadSupabaseRows<SupabaseRow>(
           config,
           "annotations",
-          {
-            platform: p === "be" ? "in.(be,befood)" : (p === "thread" ? "in.(thread,threads)" : `eq.${p}`),
-            status: "eq.completed",
-            ...(sinceIso ? { updated_at: `gte.${sinceIso}` } : {}),
-            order: "updated_at.desc.nullslast",
-          },
+          { platform: p === "be" ? "in.(be,befood)" : (p === "thread" ? "in.(thread,threads)" : `eq.${p}`), status: "eq.completed", order: "updated_at.desc.nullslast" },
           perPlatformLimit,
         ).catch((err) => {
           console.warn(`[DashboardService] Failed to fetch annotations for platform ${p}:`, err);
@@ -1077,14 +1066,7 @@ async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
     .filter((row) => String(row.comment_id || row.id || "").trim())
     .map((row) => supabaseCommentToMention(row, postById, annotationByKey));
 
-  const mentions = [...posts, ...comments].filter((mention) => {
-    if (!brandKey) return true;
-    const workspaceKey = normalizeBrandName(mention.workspace_id);
-    const displayKey = normalizeBrandName(formatBrandDisplayName(mention.workspace_id));
-    return workspaceKey === brandKey || displayKey === brandKey;
-  });
-
-  return mentions.sort(
+  return [...posts, ...comments].sort(
     (a, b) => new Date(b.posted_at).getTime() - new Date(a.posted_at).getTime(),
   );
 }
@@ -1164,38 +1146,7 @@ export interface FetchOptions {
   after?: QueryDocumentSnapshot<DocumentData>;
   /** Set a max limit (default: no limit — fetches ALL records) */
   maxMentions?: number;
-  maxLeads?: number;
   brandKey?: string;
-  since?: string | Date;
-  includeMentions?: boolean;
-  excludePlatforms?: string[];
-  useBrandPostLookup?: boolean;
-}
-
-function toQueryIsoDate(value: string | Date | undefined): string | null {
-  if (!value) return null;
-  const date = value instanceof Date ? value : new Date(value);
-  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
-}
-
-function getSinceTime(value: string | Date | undefined): number | null {
-  const iso = toQueryIsoDate(value);
-  if (!iso) return null;
-  const time = new Date(iso).getTime();
-  return Number.isFinite(time) ? time : null;
-}
-
-function isOnOrAfter(value: unknown, sinceTime: number | null): boolean {
-  if (sinceTime === null) return true;
-  const time = new Date(parseDate(value)).getTime();
-  return Number.isFinite(time) && time >= sinceTime;
-}
-
-function getMentionPlatforms(opts: FetchOptions): string[] {
-  const excluded = new Set((opts.excludePlatforms || []).map((platform) => platform.toLowerCase()));
-  return ["facebook", "tiktok", "youtube", "thread", "be", "google_maps", "news"].filter(
-    (platform) => !excluded.has(platform),
-  );
 }
 
 // ─── Supabase Fetch Helper ───────────────────────────────────────────────────
@@ -1244,9 +1195,7 @@ export class DashboardService {
       // ── Mentions ──────────────────────────────────────────────────────────
       // NOTE: No orderBy — avoids Firestore index requirement.
       // We sort in-memory after fetching.
-      const sinceTime = getSinceTime(opts.since);
-      const sinceIso = toQueryIsoDate(opts.since);
-      let mentions = opts.includeMentions === false ? [] : await fetchSupabaseMentions(opts);
+      let mentions = await fetchSupabaseMentions(opts);
       /*
       const legacyFirestoreMentionMapper = (doc: QueryDocumentSnapshot<DocumentData>) => {
         const d = doc.data();
@@ -1438,9 +1387,6 @@ export class DashboardService {
           new Date(b.posted_at).getTime() - new Date(a.posted_at).getTime(),
       );
       mentions = uniqueRecordsById(mentions);
-      mentions = mentions.filter((mention) =>
-        isOnOrAfter(mention.posted_at || mention.created_at, sinceTime)
-      );
 
       const lastMentionDoc = undefined;
       const mentionsSnap = { docs: [] as QueryDocumentSnapshot<DocumentData>[] };
@@ -1482,7 +1428,7 @@ export class DashboardService {
           });
         }
       });
-      let workspaces = Array.from(brandMap.values()).sort((a, b) =>
+      const workspaces = Array.from(brandMap.values()).sort((a, b) =>
         a.brand_name.localeCompare(b.brand_name)
       );
 
@@ -1520,16 +1466,11 @@ export class DashboardService {
       let leads: Lead[] = [];
       try {
         const sbConfig = getSupabaseConfig();
-        const maxLeads = opts.maxLeads ?? 200;
-        const leadParams: Record<string, string> = {
-          order: "created_at.desc.nullslast",
-          limit: String(maxLeads),
-        };
         const leadsRows = await loadSupabaseRows<Record<string, unknown>>(
           sbConfig,
           "leads",
-          leadParams,
-          maxLeads,
+          { order: "created_at.desc.nullslast", limit: "200" },
+          200,
         );
         leads = leadsRows.map((d) => {
           const labels = (d.labels as Record<string, unknown>) || {};
@@ -1726,44 +1667,19 @@ export class DashboardService {
         });
       });
 
-      leads = Array.from(leadById.values()).filter((lead) =>
-        isOnOrAfter(lead.posted_at || lead.created_at, sinceTime)
-      );
+      leads = Array.from(leadById.values());
       leads.sort(
         (a, b) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-      );
-      leads.forEach((lead) => {
-        if (!lead.workspace_id) return;
-        const displayName = formatBrandDisplayName(lead.workspace_id);
-        const key = normalizeBrandName(displayName);
-        if (!brandMap.has(key)) {
-          brandMap.set(key, {
-            id: lead.workspace_id,
-            brand_name: displayName,
-            scale: "medium",
-            keywords: [],
-            synonyms: [],
-            priority: false,
-            created_at: lead.created_at,
-          });
-        }
-      });
-      workspaces = Array.from(brandMap.values()).sort((a, b) =>
-        a.brand_name.localeCompare(b.brand_name)
       );
 
       let labelChangeRequests: LabelChangeRequest[] = [];
       try {
         const sbConfig = getSupabaseConfig();
-        const requestParams: Record<string, string> = {
-          order: "requested_at.desc.nullslast",
-        };
-        if (sinceIso) requestParams.requested_at = `gte.${sinceIso}`;
         const requestRows = await loadSupabaseRows<Record<string, unknown>>(
           sbConfig,
           "label_change_requests",
-          requestParams,
+          { order: "requested_at.desc.nullslast" },
           500,
         );
         labelChangeRequests = requestRows.map((d) => {
@@ -1833,9 +1749,6 @@ export class DashboardService {
           (a, b) =>
             new Date(b.requested_at).getTime() -
             new Date(a.requested_at).getTime(),
-        );
-        labelChangeRequests = labelChangeRequests.filter((request) =>
-          isOnOrAfter(request.requested_at, sinceTime)
         );
       } catch {
         // Collection chua ton tai - bo qua
@@ -1936,41 +1849,8 @@ export class DashboardService {
       updated_by: profile.uid,
       updated_by_role: profile.role,
     });
-    const config = getSupabaseConfig();
-    let insertData: Record<string, unknown> = { ...requestData };
-
-    for (let attempt = 0; attempt < 8; attempt += 1) {
-      try {
-        const rows = await supabaseWrite<LabelChangeRequest[]>(
-          config,
-          "label_change_requests",
-          "POST",
-          [insertData],
-          "",
-          true,
-          "return=representation",
-        );
-        const inserted = rows?.[0];
-        if (!inserted?.id) {
-          throw new Error("Supabase did not return the inserted label change request.");
-        }
-        return inserted;
-      } catch (error) {
-        const missingColumn = getMissingSupabaseColumn(error);
-        if (missingColumn && missingColumn in insertData) {
-          const { [missingColumn]: _removed, ...nextInsertData } = insertData;
-          insertData = nextInsertData;
-          console.warn(
-            `[DashboardService] Retrying label request without missing Supabase column: ${missingColumn}`,
-          );
-          continue;
-        }
-        console.error("[DashboardService] createLabelChangeRequest error:", error);
-        throw error;
-      }
-    }
-
-    throw new Error("Could not create label change request with the current Supabase schema.");
+    const res = await supabaseFetch("label_change_requests", "", "POST", [requestData]);
+    return { ...requestData, id: (res && res[0]?.id) || String(Date.now()) } as LabelChangeRequest;
   }
 
   static async fetchLabelChangeRequests(opts: { limit?: number; status?: LabelChangeRequest["status"] } = {}): Promise<LabelChangeRequest[]> {

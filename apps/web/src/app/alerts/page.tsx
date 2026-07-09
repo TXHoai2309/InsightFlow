@@ -777,8 +777,6 @@ export default function AlertsPage() {
   useDashboard({
     autoFetch: true,
     refetchInterval: 1800000,
-    includeMentions: false,
-    maxLeads: 200,
   });
 
   // Compute lists of high-risk items for the Crisis Priority Center (unified Sự vụ & Bài viết & Thông tin liên hệ)

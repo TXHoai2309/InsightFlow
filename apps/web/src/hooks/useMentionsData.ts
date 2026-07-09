@@ -11,8 +11,8 @@ interface UseMentionsOptions {
   refetchInterval?: number;
 }
 
-const MENTION_FETCH_WINDOW_DAYS = 30;
-const MENTION_FETCH_LIMIT = 700;
+// Module-level in-memory cache time tracking to avoid duplicate fetching during menu transitions
+
 
 export function useMentionsData(options: UseMentionsOptions = {}) {
   const { autoFetch = true, refetchInterval = 1800000 } = options;
@@ -69,14 +69,7 @@ export function useMentionsData(options: UseMentionsOptions = {}) {
       }
 
       const rawBrandKey = brandKey === "global" ? undefined : brandKey;
-      const since = new Date(
-        Date.now() - MENTION_FETCH_WINDOW_DAYS * 24 * 60 * 60 * 1000,
-      ).toISOString();
-      const rawData = await DashboardService.fetchRawData({
-        brandKey: rawBrandKey,
-        since,
-        maxMentions: MENTION_FETCH_LIMIT,
-      });
+      const rawData = await DashboardService.fetchRawData({ brandKey: rawBrandKey, maxMentions: 1000 });
       const mentions = filterByBusinessPolicy(rawData.mentions, profile, "view_mentions");
       const workspaces = filterByBusinessPolicy(
         rawData.workspaces.map((workspace) => ({
