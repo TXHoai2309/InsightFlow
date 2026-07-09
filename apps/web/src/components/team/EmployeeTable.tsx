@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { StaffAccount } from "./types";
 import { EmployeeActionMenu } from "./EmployeeActionMenu";
@@ -24,6 +24,17 @@ export function EmployeeTable({
   revealedPasswords,
 }: EmployeeTableProps) {
   const { t } = useTranslation();
+  const [copiedUid, setCopiedUid] = useState<string | null>(null);
+
+  const copyPassword = async (uid: string, password: string) => {
+    try {
+      await navigator.clipboard.writeText(password);
+      setCopiedUid(uid);
+      setTimeout(() => setCopiedUid(null), 1600);
+    } catch {
+      // Clipboard may be unavailable in some browser contexts.
+    }
+  };
 
   const getRoleBadgeClass = (role: string) => {
     if (role === "crisis_employee" || role === "crisis_staff") {
@@ -47,24 +58,28 @@ export function EmployeeTable({
               <th className="px-6 py-4 font-semibold text-gray-500">Trạng thái</th>
               <th className="whitespace-nowrap px-6 py-4 font-semibold text-gray-500">Ngày tạo</th>
               <th className="whitespace-nowrap px-6 py-4 font-semibold text-gray-500">Đăng nhập cuối</th>
+              <th className="whitespace-nowrap px-6 py-4 font-semibold text-gray-500">Mật khẩu tạm</th>
               <th className="px-6 py-4 font-semibold text-gray-500">Hành động</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {staff.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
                   Không tìm thấy nhân viên nào phù hợp với bộ lọc.
                 </td>
               </tr>
             ) : (
               staff.map((item) => {
                 const initial = (item.displayName || item.email || "?").charAt(0).toUpperCase();
+                const temporaryPassword = revealedPasswords[item.uid];
+                const hasTemporaryPassword = item.hasTemporaryPassword || item.temporaryPassword;
+
                 return (
                   <tr key={item.uid} className="transition-colors hover:bg-gray-50/50">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#6C5CE7]/20 to-purple-100 text-[#6C5CE7] font-bold">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#6C5CE7]/20 to-purple-100 font-bold text-[#6C5CE7]">
                           {initial}
                         </div>
                         <div className="min-w-0">
@@ -82,13 +97,13 @@ export function EmployeeTable({
 
                     <td className="px-6 py-4">
                       <div className="flex max-w-[220px] flex-wrap gap-1.5">
-                        {(item.permissions || []).map((p) => (
+                        {(item.permissions || []).map((permission) => (
                           <span
-                            key={p}
+                            key={permission}
                             className="rounded border border-[#6C5CE7]/20 bg-[#6C5CE7]/10 px-2 py-0.5 text-[11px] font-medium text-[#6C5CE7]"
-                            title={p}
+                            title={permission}
                           >
-                            {t(getPermissionLabelKey(p))}
+                            {t(getPermissionLabelKey(permission))}
                           </span>
                         ))}
                       </div>
@@ -99,34 +114,57 @@ export function EmployeeTable({
                         className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-medium ${
                           item.disabled
                             ? "bg-red-50 text-red-700"
-                            : item.hasTemporaryPassword || item.temporaryPassword
+                            : hasTemporaryPassword
                               ? "bg-yellow-50 text-yellow-700"
                               : "bg-green-50 text-green-700"
                         }`}
                       >
                         <span
                           className={`h-1.5 w-1.5 rounded-full ${
-                            item.disabled
-                              ? "bg-red-500"
-                              : item.hasTemporaryPassword || item.temporaryPassword
-                                ? "bg-yellow-500"
-                                : "bg-green-500"
+                            item.disabled ? "bg-red-500" : hasTemporaryPassword ? "bg-yellow-500" : "bg-green-500"
                           }`}
                         />
-                        {item.disabled
-                          ? "Đã khóa"
-                          : item.hasTemporaryPassword || item.temporaryPassword
-                            ? "Chờ đổi MK"
-                            : "Đang hoạt động"}
+                        {item.disabled ? "Đã khóa" : hasTemporaryPassword ? "Chờ đổi MK" : "Đang hoạt động"}
                       </span>
                     </td>
 
-                    <td className="px-6 py-4 text-[13px] text-gray-500 whitespace-nowrap">
+                    <td className="whitespace-nowrap px-6 py-4 text-[13px] text-gray-500">
                       {formatStaffDate(item.createdAt)}
                     </td>
 
-                    <td className="px-6 py-4 text-[13px] text-gray-500 whitespace-nowrap">
+                    <td className="whitespace-nowrap px-6 py-4 text-[13px] text-gray-500">
                       {formatStaffDate(item.lastLoginAt)}
+                    </td>
+
+                    <td className="px-6 py-4">
+                      {temporaryPassword ? (
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-[13px] text-gray-900">{temporaryPassword}</span>
+                          <button
+                            type="button"
+                            onClick={() => copyPassword(item.uid, temporaryPassword)}
+                            className="rounded-lg border border-gray-200 px-2.5 py-1 text-[12px] font-semibold text-gray-600 transition hover:border-[#6C5CE7] hover:text-[#6C5CE7]"
+                          >
+                            {copiedUid === item.uid ? "Đã sao chép" : "Sao chép"}
+                          </button>
+                        </div>
+                      ) : hasTemporaryPassword ? (
+                        <button
+                          type="button"
+                          onClick={() => onRevealPassword(item)}
+                          className="rounded-lg border border-gray-200 px-3 py-1.5 font-mono text-[13px] text-gray-700 transition hover:border-[#6C5CE7] hover:bg-[#6C5CE7]/5 hover:text-[#6C5CE7]"
+                        >
+                          **********
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => onResetPassword(item)}
+                          className="rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] font-semibold text-gray-700 transition hover:border-[#6C5CE7] hover:bg-[#6C5CE7]/5 hover:text-[#6C5CE7]"
+                        >
+                          Cấp lại
+                        </button>
+                      )}
                     </td>
 
                     <td className="px-6 py-4">

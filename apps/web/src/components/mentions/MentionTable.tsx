@@ -38,7 +38,7 @@ const sentimentMap: Record<
 };
 
 // Sample tags/hashtags based on topic
-const topicTags: Record<Mention["topic"], string[]> = {
+const topicTags: Record<string, string[]> = {
   quality: ["#UX/UI", "#Recommend"],
   price: ["#Price", "#Value"],
   service: ["#Performance", "#Support"],

@@ -30,7 +30,7 @@ export function useMentionsData(options: UseMentionsOptions = {}) {
     setLoading(true);
     try {
       const rawData =
-        await DashboardService.fetchRawData();
+        await DashboardService.fetchRawData({ maxMentions: 1000 });
       const mentions = filterByBusinessPolicy(rawData.mentions, profile, "view_mentions");
       const workspaces = filterByBusinessPolicy(
         rawData.workspaces.map((workspace) => ({

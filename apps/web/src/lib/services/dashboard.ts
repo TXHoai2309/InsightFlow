@@ -70,8 +70,11 @@ export function mapSourceToPlatform(source: string): Platform {
     ?.toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[-\s]/g, "_");
-  return SOURCE_TO_PLATFORM[normalized] ?? "news";
+    .replace(/[-\s]+/g, "_")
+    .replace(/[^a-z0-9_]/g, "")
+    .replace(/^_+|_+$/g, "");
+  if (!normalized) return "unknown";
+  return SOURCE_TO_PLATFORM[normalized] ?? (normalized as Platform);
 }
 
 /**
@@ -106,7 +109,7 @@ export function formatBrandDisplayName(raw: string): string {
 }
 
 // ─── Platform display info (dùng cho TopSources và DashboardFilters) ─────────
-export const PLATFORM_META: Record<Platform, { label: string; color: string; icon?: string }> =
+export const PLATFORM_META: Record<string, { label: string; color: string; icon?: string }> =
 {
   facebook: { label: "Facebook", color: "var(--color-platform-facebook)", icon: "ti-brand-facebook" },
   tiktok: { label: "TikTok", color: "var(--color-platform-tiktok)", icon: "ti-brand-tiktok" },
@@ -140,11 +143,15 @@ function mapTopic(raw: unknown): TopicType {
   const firstTopic = Array.isArray(raw) ? raw[0] : raw;
   const topic = String(firstTopic || "")
     .toLowerCase()
-    .trim();
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[-\s]+/g, "_")
+    .replace(/[^a-z0-9_]/g, "")
+    .replace(/^_+|_+$/g, "");
   if (VALID_TOPICS.has(topic)) {
     return topic as TopicType;
   }
-  return "other";
+  return (topic || "other") as TopicType;
 }
 
 function mapSentiment(raw: unknown): Mention["sentiment"] {
@@ -834,7 +841,7 @@ function supabaseCommentToMention(
 
 async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
   const config = getSupabaseConfig();
-  const maxPosts = opts.maxMentions || 200;
+  const maxPosts = Math.min(opts.maxMentions || 200, 1000);
   const postColumns = [
     "post_id",
     "platform",
@@ -868,7 +875,7 @@ async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
       "posts",
       postColumns,
       { order: "posted_at.desc.nullslast" },
-      Math.min(maxPosts, 100),
+      maxPosts,
       ["post_id"],
     );
   } catch (error) {
@@ -880,7 +887,7 @@ async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
         "posts",
         postColumns,
         {},
-        Math.min(maxPosts, 100),
+        maxPosts,
         ["post_id"],
       );
     } catch (fallbackError) {
@@ -1826,7 +1833,7 @@ export class DashboardService {
 
   static calculateTopSources(mentions: Mention[]): TopSource[] {
     const total = mentions.length || 1;
-    const counts: Partial<Record<Platform, number>> = {};
+    const counts: Record<string, number> = {};
 
     mentions.forEach((m) => {
       counts[m.platform] = (counts[m.platform] ?? 0) + 1;

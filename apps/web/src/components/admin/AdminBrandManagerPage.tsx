@@ -40,6 +40,20 @@ function getInitials(name: string) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
+function isManualPasswordInput(event: React.ChangeEvent<HTMLInputElement>) {
+  const inputType = (event.nativeEvent as InputEvent).inputType;
+  if (!inputType) return true;
+  return inputType === "insertText" || inputType === "insertCompositionText" || inputType.startsWith("delete");
+}
+
+function preventNonManualPasswordInput(event: React.FormEvent<HTMLInputElement>) {
+  const inputType = (event.nativeEvent as InputEvent).inputType;
+  if (!inputType) return;
+  if (inputType !== "insertText" && inputType !== "insertCompositionText" && !inputType.startsWith("delete")) {
+    event.preventDefault();
+  }
+}
+
 /* ---------- Inline icons (no extra deps) ---------- */
 const Icon = {
   Shield: (p: React.SVGProps<SVGSVGElement>) => (
@@ -175,6 +189,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
   const [passwordRequestUid, setPasswordRequestUid] = useState<string | null>(null);
   const [passwordRequestMode, setPasswordRequestMode] = useState<"reveal" | "reset">("reveal");
   const [adminPassword, setAdminPassword] = useState("");
+  const [passwordFieldNonce, setPasswordFieldNonce] = useState("");
   const [revealLoading, setRevealLoading] = useState(false);
   const [revealError, setRevealError] = useState("");
 
@@ -447,6 +462,18 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
     }
   };
 
+  const openPasswordRequest = (uid: string, mode: "reveal" | "reset") => {
+    setPasswordRequestUid(uid);
+    setPasswordRequestMode(mode);
+    setRevealError("");
+    setAdminPassword("");
+    setPasswordFieldNonce(
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random()}`,
+    );
+  };
+
   const handleRevealTemporaryPassword = async (managerUid: string) => {
     setRevealLoading(true);
     setRevealError("");
@@ -520,6 +547,19 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
       setRevealError(messageByCode[err.code] || backendMessage || "Yêu cầu thất bại.");
     } finally {
       setRevealLoading(false);
+    }
+  };
+
+  const handleAdminPasswordChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!isManualPasswordInput(event)) {
+      setAdminPassword("");
+      setRevealError("Vui lòng nhập mật khẩu bằng tay, không dán hoặc dùng mật khẩu đã lưu.");
+      return;
+    }
+
+    setAdminPassword(event.target.value);
+    if (revealError === "Vui lòng nhập mật khẩu bằng tay, không dán hoặc dùng mật khẩu đã lưu.") {
+      setRevealError("");
     }
   };
 
@@ -845,6 +885,8 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
                 <input
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
+                  name="brand-manager-search"
+                  autoComplete="off"
                   placeholder="Tìm theo tên, email, thương hiệu..."
                   className="w-56 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] py-2 pl-8 pr-3 text-[13px] text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/15"
                 />
@@ -938,12 +980,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
                         ) : item.hasTemporaryPassword || item.temporaryPassword ? (
                           <button
                             type="button"
-                            onClick={() => {
-                              setPasswordRequestUid(item.uid);
-                              setPasswordRequestMode("reveal");
-                              setRevealError("");
-                              setAdminPassword("");
-                            }}
+                            onClick={() => openPasswordRequest(item.uid, "reveal")}
                             className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 font-mono text-[13px] text-[var(--color-text-primary)] transition hover:bg-[var(--color-brand-subtle)] hover:text-[var(--color-brand)]"
                           >
                             ••••••••••
@@ -951,12 +988,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
                         ) : (
                           <button
                             type="button"
-                            onClick={() => {
-                              setPasswordRequestUid(item.uid);
-                              setPasswordRequestMode("reset");
-                              setRevealError("");
-                              setAdminPassword("");
-                            }}
+                            onClick={() => openPasswordRequest(item.uid, "reset")}
                             className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-[12px] font-semibold text-[var(--color-text-primary)] transition hover:bg-[var(--color-brand-subtle)] hover:text-[var(--color-brand)]"
                           >
                             Cấp lại
@@ -997,7 +1029,14 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
 
       {passwordRequestUid && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-[420px] rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 shadow-xl animate-in fade-in zoom-in-95 duration-150">
+          <form
+            autoComplete="off"
+            onSubmit={(event) => {
+              event.preventDefault();
+              handleRevealTemporaryPassword(passwordRequestUid);
+            }}
+            className="w-full max-w-[420px] rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 shadow-xl animate-in fade-in zoom-in-95 duration-150"
+          >
             <h3 className="text-[18px] font-bold text-[var(--color-text-primary)]">
               {passwordRequestMode === "reset" ? "Xác thực để cấp lại mật khẩu" : "Xác thực để xem mật khẩu"}
             </h3>
@@ -1013,15 +1052,42 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
               </div>
             )}
 
+            <input
+              type="email"
+              name="username"
+              value={auth.currentUser?.email || ""}
+              readOnly
+              autoComplete="off"
+              tabIndex={-1}
+              aria-hidden="true"
+              className="sr-only"
+            />
+
             <label className="mt-5 block space-y-2">
               <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">
                 Mật khẩu Admin
               </span>
               <input
+                key={passwordFieldNonce}
                 value={adminPassword}
-                onChange={(event) => setAdminPassword(event.target.value)}
+                onBeforeInput={preventNonManualPasswordInput}
+                onPaste={(event) => {
+                  event.preventDefault();
+                  setAdminPassword("");
+                  setRevealError("Vui lòng nhập mật khẩu bằng tay, không dán hoặc dùng mật khẩu đã lưu.");
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  setAdminPassword("");
+                  setRevealError("Vui lòng nhập mật khẩu bằng tay, không dán hoặc dùng mật khẩu đã lưu.");
+                }}
+                onChange={handleAdminPasswordChange}
                 type="password"
+                name={`manual-admin-password-${passwordFieldNonce}`}
                 autoComplete="new-password"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
                 autoFocus
                 className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2.5 text-[14px] text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/15"
               />
@@ -1041,9 +1107,8 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
                 Hủy
               </button>
               <button
-                type="button"
+                type="submit"
                 disabled={revealLoading || !adminPassword}
-                onClick={() => handleRevealTemporaryPassword(passwordRequestUid)}
                 className="rounded-lg bg-[var(--color-brand)] px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {revealLoading
@@ -1053,7 +1118,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
                     : "Xem mật khẩu"}
               </button>
             </div>
-          </div>
+          </form>
         </div>
       )}
 

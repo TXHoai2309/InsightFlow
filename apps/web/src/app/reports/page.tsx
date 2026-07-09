@@ -2,12 +2,11 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { generateDailyReportExcel, generateCustomReportExcel } from "@/lib/excelExport";
-import { collection, getDocs } from "firebase/firestore";
-import { secondDb } from "@/lib/firebase";
-import { mapSourceToPlatform, PLATFORM_META } from "@/lib/services/dashboard";
+import { generateWeeklyBrandReportPDF } from "@/lib/pdfExport";
+import { generateWeeklyBrandReportExcel } from "@/lib/excelExport";
+import { DashboardService } from "@/lib/services/dashboard";
 import { useAuth } from "@/hooks/useAuth";
-import { getScopedBrandKey, isRecordInBrandScope } from "@/lib/brandScope";
+import { filterByBusinessPolicy, getScopedBrandKey, isRecordInBrandScope } from "@/lib/brandScope";
 
 
 /**
@@ -24,6 +23,12 @@ interface Mention {
   sentiment: string;
   topic: string;
   posted_at: string;
+  author?: string;
+  url?: string;
+  likes?: number;
+  comments?: number;
+  shares?: number;
+  reach?: number;
 }
 
 interface DailyReport {
@@ -164,7 +169,7 @@ function ReportPreviewModal({
                 download
               </span>
             )}
-            Tải Excel
+            Tải PDF
           </button>
         </div>
       </div>
@@ -408,7 +413,7 @@ function ArchivedReportDetailModal({
                   download
                 </span>
               )}
-              {t("reports.common.download", { defaultValue: "Tải Excel" })}
+              {t("reports.common.download", { defaultValue: "Tải PDF" })}
             </button>
           </div>
         </div>
@@ -430,8 +435,33 @@ function formatBrandName(brand: string): string {
     .join(" ");
 }
 
+const REPORT_PLATFORM_LABELS: Record<string, string> = {
+  facebook: "Facebook",
+  tiktok: "TikTok",
+  youtube: "YouTube",
+  google_maps: "Google Maps",
+  befood: "BeFood",
+  threads: "Threads",
+  thread: "Threads",
+  news: "Báo chí",
+  news_html: "Báo chí",
+  unknown: "Không rõ",
+};
+
 function normalizeSourceName(source: string): string {
-  return mapSourceToPlatform(source);
+  const normalized = String(source || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+  if (normalized.includes("facebook")) return "facebook";
+  if (normalized.includes("tiktok")) return "tiktok";
+  if (normalized.includes("youtube")) return "youtube";
+  if (normalized.includes("google")) return "google_maps";
+  if (normalized.includes("befood") || normalized === "be") return "befood";
+  if (normalized.includes("thread")) return "threads";
+  if (normalized.includes("news") || normalized.includes("bao")) return "news";
+  return normalized || "unknown";
 }
 
 function mapContentType(raw: unknown): Mention["content_type"] {
@@ -482,8 +512,8 @@ function parsePostedAtDate(value: string): Date | null {
 }
 
 function formatPlatformLabel(source: string): string {
-  const key = source.toLowerCase() as keyof typeof PLATFORM_META;
-  return PLATFORM_META[key]?.label || source;
+  const key = source.toLowerCase();
+  return REPORT_PLATFORM_LABELS[key] || source;
 }
 
 function formatContentTypeLabel(type: Mention["content_type"]): string {
@@ -967,16 +997,22 @@ function LanguageSelectModal({
   onClose,
   onSelect,
   isExporting,
+  format,
 }: {
   isOpen: boolean;
   onClose: () => void;
   onSelect: (lang: "vi" | "en") => void;
   isExporting: boolean;
+  format: "pdf" | "excel";
 }) {
   if (!isOpen) return null;
+  const formatLabel = format === "excel" ? "Excel" : "PDF";
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+    <div
+      className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      aria-label={`Chọn ngôn ngữ báo cáo ${formatLabel}`}
+    >
       <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] p-6 rounded-2xl shadow-xl w-full max-w-sm flex flex-col gap-5">
         <div className="flex justify-between items-center border-b border-[var(--color-border)] pb-3">
           <h3 className="text-lg font-bold text-[var(--color-text-primary)]">
@@ -990,8 +1026,12 @@ function LanguageSelectModal({
           </button>
         </div>
 
+        <p className="hidden">
+          Vui lòng lựa chọn ngôn ngữ phù hợp cho file PDF tải xuống.
+        </p>
+
         <p className="text-xs text-[var(--color-text-secondary)] -mt-2">
-          Vui lòng lựa chọn ngôn ngữ phù hợp cho file Excel tải xuống.
+          Vui lòng lựa chọn ngôn ngữ phù hợp cho file {formatLabel} tải xuống.
         </p>
 
         <div className="grid grid-cols-2 gap-3">
@@ -1020,7 +1060,7 @@ function LanguageSelectModal({
         {isExporting && (
           <div className="flex items-center justify-center gap-2 text-xs text-[var(--color-brand)] font-bold mt-1">
             <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
-            Đang xuất báo cáo Excel...
+            Đang xuất báo cáo PDF...
           </div>
         )}
       </div>
@@ -1048,6 +1088,7 @@ export default function ReportsPage() {
     type: "periodic" | "range" | "custom" | "archive";
     data: any;
   } | null>(null);
+  const [exportFormat, setExportFormat] = useState<"pdf" | "excel">("pdf");
 
   const [currentPage, setCurrentPage] = useState(1);
   const [customMentionsPage, setCustomMentionsPage] = useState(1);
@@ -1231,39 +1272,46 @@ export default function ReportsPage() {
       try {
         if (authLoading) return;
         setLoading(true);
-        const snapshot = await getDocs(
-          collection(secondDb, "insightflow_labels"),
-        );
-        const data: Mention[] = [];
+        const rawData = await DashboardService.fetchRawData();
+        const supabaseMentions = filterByBusinessPolicy(rawData.mentions, profile, "view_mentions");
         const brandOrder = ["Highland Coffee", "Starbucks", "Mixue"];
         const brandSet = new Set<string>(brandOrder);
+        const data: Mention[] = supabaseMentions
+          .map((mention) => ({
+            id: mention.id,
+            parent_id: mention.parent_id,
+            brand: formatBrandName(mention.workspace_id),
+            source: mention.platform,
+            platform: mention.platform,
+            content: mention.content,
+            post_content: mention.post_content,
+            comment_content: mention.comment_content,
+            original_content: mention.original_content,
+            author: mention.author,
+            url: mention.url,
+            content_type: mapContentType(mention.content_type),
+            sentiment: mention.sentiment || "neutral",
+            topic: normalizeTopicName(mention.topic),
+            posted_at: parsePostedAtRaw(mention.posted_at),
+          }))
+          .filter((mention) => isRecordInBrandScope({ brand: mention.brand }, scopedBrandKey));
 
-        snapshot.forEach((doc) => {
-          const d = doc.data();
-          const labels = d.labels || {};
-          const rawBrand = d.brand || d.workspace_id || "unknown";
-          const b = formatBrandName(rawBrand);
-          if (!isRecordInBrandScope({ brand: b }, scopedBrandKey)) return;
-          if (brandOrder.includes(b)) {
-            brandSet.add(b);
-          }
-
-          let posted = parsePostedAtRaw(d.post_date ?? d.posted_at);
-
-          data.push({
-            id: doc.id,
-            brand: b,
-            source: normalizeSourceName(d.source || d.platform || "unknown"),
-            content: d.clean_text || d.content || d.text || d.original_text || "",
-            content_type: mapContentType(d.content_type),
-            sentiment: labels.sentiment || d.baseline_sentiment || d.sentiment || "neutral",
-            topic: normalizeTopicName(labels.topic || d.baseline_topic || d.topic),
-            posted_at: posted,
-          });
+        data.forEach((mention) => {
+          if (brandOrder.includes(mention.brand)) brandSet.add(mention.brand);
+          else if (mention.brand && mention.brand !== "Unknown") brandSet.add(mention.brand);
         });
 
         setMentions(data);
-        const scopedBrands = brandOrder.filter((brand) => brandSet.has(brand) && isRecordInBrandScope({ brand }, scopedBrandKey));
+        const scopedBrands = Array.from(brandSet)
+          .filter((brand) => isRecordInBrandScope({ brand }, scopedBrandKey))
+          .sort((a, b) => {
+            const orderA = brandOrder.indexOf(a);
+            const orderB = brandOrder.indexOf(b);
+            if (orderA >= 0 || orderB >= 0) {
+              return (orderA >= 0 ? orderA : 999) - (orderB >= 0 ? orderB : 999);
+            }
+            return a.localeCompare(b);
+          });
         setBrands(scopedBrands);
         if (scopedBrandKey && scopedBrands.length === 1) {
           setSelectedBrand(scopedBrands[0]);
@@ -1277,7 +1325,7 @@ export default function ReportsPage() {
       }
     }
     fetchData();
-  }, [authLoading, scopedBrandKey]);
+  }, [authLoading, profile, scopedBrandKey]);
 
   // Generate Reports List directly from required date range
   const reportsList = useMemo(() => {
@@ -1414,8 +1462,17 @@ export default function ReportsPage() {
     };
   }, [mentions, reportsList]);
 
+  const openExport = (format: "pdf" | "excel", config: { type: "periodic" | "range" | "custom" | "archive"; data: any }) => {
+    setExportFormat(format);
+    setExportConfig(config);
+  };
+
+  const handleExportPDF = (report: DailyReport) => {
+    openExport("pdf", { type: "periodic", data: report });
+  };
+
   const handleExportExcel = (report: DailyReport) => {
-    setExportConfig({ type: "periodic", data: report });
+    openExport("excel", { type: "periodic", data: report });
   };
 
   const getPeriodicRangeStartDate = (range: string) => {
@@ -1457,7 +1514,7 @@ export default function ReportsPage() {
     return labels[range] || `${range} ngày`;
   };
 
-  const handleExportPeriodicRangeExcel = () => {
+  const handleExportPeriodicRange = (format: "pdf" | "excel") => {
     const rangeMentions = getPeriodicRangeMentions(periodicExportRange);
     if (rangeMentions.length === 0) {
       alert("Không có mention nào trong khoảng thời gian đã chọn.");
@@ -1466,7 +1523,7 @@ export default function ReportsPage() {
 
     const start = getPeriodicRangeStartDate(periodicExportRange);
     const end = new Date();
-    setExportConfig({
+    openExport(format, {
       type: "range",
       data: {
         id: `range-${periodicExportRange}`,
@@ -1583,9 +1640,9 @@ export default function ReportsPage() {
     }, 2400);
   };
 
-  const handleExportCustomExcel = () => {
+  const handleExportCustom = (format: "pdf" | "excel") => {
     if (!customReportData) return;
-    setExportConfig({ type: "custom", data: customReportData });
+    openExport(format, { type: "custom", data: customReportData });
   };
 
   const handleArchiveReport = () => {
@@ -1625,24 +1682,32 @@ export default function ReportsPage() {
     );
   };
 
-  const handleExportArchivedExcel = (report: any) => {
-    setExportConfig({ type: "archive", data: report });
+  const handleExportArchived = (format: "pdf" | "excel", report: any) => {
+    openExport(format, { type: "archive", data: report });
   };
 
-  const executeExportExcel = async (lang: "vi" | "en") => {
+  const executeExportReport = async (lang: "vi" | "en") => {
     if (!exportConfig) return;
     const { type, data } = exportConfig;
     const fixedT = i18n.getFixedT(lang);
+    const generateReportFile =
+      exportFormat === "excel" ? generateWeeklyBrandReportExcel : generateWeeklyBrandReportPDF;
     try {
-      setGeneratingPdfId(data.id || "export-excel");
+      setGeneratingPdfId(data.id || `export-${exportFormat}`);
       if (type === "periodic") {
-        await generateDailyReportExcel(
-          data.brand,
-          data.dateStr,
-          data.mentions,
-          fixedT,
-          lang
+        const dateFormatted = new Date(data.dateObj || new Date()).toLocaleDateString(
+          lang === "vi" ? "vi-VN" : "en-US",
         );
+        await generateReportFile({
+          brandName: data.brand,
+          startDate: dateFormatted,
+          endDate: dateFormatted,
+          mentions: data.mentions,
+          filtersSummary: lang === "vi" ? "Báo cáo theo ngày" : "Daily report",
+          insights: generateAIInsights(data.brand, data.mentions, "", lang),
+          t: fixedT,
+          lang,
+        });
       } else if (type === "range") {
         const startFormatted = new Date(data.startDate).toLocaleDateString(
           lang === "vi" ? "vi-VN" : "en-US",
@@ -1656,16 +1721,16 @@ export default function ReportsPage() {
             : `Date range: ${data.rangeLabel}`;
         const insights = generateAIInsights(data.brand, data.mentions, "", lang);
 
-        await generateCustomReportExcel(
-          data.brand,
-          startFormatted,
-          endFormatted,
-          data.mentions,
+        await generateReportFile({
+          brandName: data.brand,
+          startDate: startFormatted,
+          endDate: endFormatted,
+          mentions: data.mentions,
           insights,
           filtersSummary,
-          fixedT,
-          lang
-        );
+          t: fixedT,
+          lang,
+        });
       } else if (type === "custom") {
         const filtersSummary = `${customPlatforms.length} nguồn, ${customTopics.length} chủ đề, ${customSentiments.length} sắc thái.`;
         const dateStartFormatted = new Date(customStartDate).toLocaleDateString(
@@ -1676,16 +1741,16 @@ export default function ReportsPage() {
         );
         const insights = generateAIInsights(customBrand, data.mentions, customPrompt, lang);
 
-        await generateCustomReportExcel(
-          customBrand,
-          dateStartFormatted,
-          dateEndFormatted,
-          data.mentions,
+        await generateReportFile({
+          brandName: customBrand,
+          startDate: dateStartFormatted,
+          endDate: dateEndFormatted,
+          mentions: data.mentions,
           insights,
           filtersSummary,
-          fixedT,
-          lang
-        );
+          t: fixedT,
+          lang,
+        });
       } else if (type === "archive") {
         const startFormatted = new Date(
           data.startDate || new Date(),
@@ -1698,19 +1763,19 @@ export default function ReportsPage() {
           ? generateAIInsights(data.brand, data.mentions, "", lang)
           : data.insights || "";
 
-        await generateCustomReportExcel(
-          data.brand,
-          startFormatted,
-          endFormatted,
-          data.mentions || [],
+        await generateReportFile({
+          brandName: data.brand,
+          startDate: startFormatted,
+          endDate: endFormatted,
+          mentions: data.mentions || [],
           insights,
-          data.filtersSummary || "Báo cáo lưu trữ",
-          fixedT,
-          lang
-        );
+          filtersSummary: data.filtersSummary || "Báo cáo lưu trữ",
+          t: fixedT,
+          lang,
+        });
       }
     } catch (error) {
-      console.error("Lỗi xuất Excel:", error);
+      console.error("Lỗi xuất PDF:", error);
     } finally {
       setGeneratingPdfId(null);
       setExportConfig(null);
@@ -1765,7 +1830,7 @@ export default function ReportsPage() {
           report={previewReport}
           onClose={() => setPreviewReport(null)}
           onExport={() => {
-            handleExportExcel(previewReport);
+            handleExportPDF(previewReport);
           }}
           isExporting={generatingPdfId === previewReport.id}
         />
@@ -1784,8 +1849,9 @@ export default function ReportsPage() {
       <LanguageSelectModal
         isOpen={!!exportConfig}
         onClose={() => setExportConfig(null)}
-        onSelect={executeExportExcel}
+        onSelect={executeExportReport}
         isExporting={!!generatingPdfId}
+        format={exportFormat}
       />
 
       {/* ── Header ── */}
@@ -1960,7 +2026,7 @@ export default function ReportsPage() {
                 </select>
               </div>
               <button
-                onClick={handleExportPeriodicRangeExcel}
+                onClick={() => handleExportPeriodicRange("pdf")}
                 disabled={generatingPdfId === `range-${periodicExportRange}`}
                 className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--color-brand)] text-white text-xs font-bold hover:bg-[var(--color-brand-hover)] disabled:opacity-50 transition-colors"
               >
@@ -1971,7 +2037,21 @@ export default function ReportsPage() {
                     table_view
                   </span>
                 )}
-                Xuất Excel
+                Xuất PDF
+              </button>
+              <button
+                onClick={() => handleExportPeriodicRange("excel")}
+                disabled={generatingPdfId === `range-${periodicExportRange}`}
+                className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg border border-[var(--color-border)] text-[var(--color-text-primary)] text-xs font-bold hover:bg-[var(--color-bg-surface-raised)] disabled:opacity-50 transition-colors"
+              >
+                {generatingPdfId === `range-${periodicExportRange}` ? (
+                  <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
+                ) : (
+                  <span className="material-symbols-outlined text-[16px]">
+                    table_view
+                  </span>
+                )}
+                Excel
               </button>
             </div>
           )}
@@ -2039,7 +2119,7 @@ export default function ReportsPage() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleExportExcel(rpt);
+                            handleExportPDF(rpt);
                           }}
                           disabled={
                             generatingPdfId === rpt.id ||
@@ -2054,7 +2134,7 @@ export default function ReportsPage() {
                               table_view
                             </span>
                           )}
-                          {generatingPdfId === rpt.id ? t("reports.common.generating", { defaultValue: "Đang tạo..." }) : "Excel"}
+                          {generatingPdfId === rpt.id ? t("reports.common.generating", { defaultValue: "Đang tạo..." }) : "PDF"}
                         </button>
                         <button className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-brand)] hover:text-white hover:border-[var(--color-brand)] transition-all text-[11px] font-bold">
                           <span className="material-symbols-outlined text-[16px]">
@@ -2153,14 +2233,14 @@ export default function ReportsPage() {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleExportExcel(rpt);
+                                  handleExportPDF(rpt);
                                 }}
                                 disabled={
                                   generatingPdfId === rpt.id ||
                                   rpt.mentions.length === 0
                                 }
                                 className="p-2 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)] transition-colors disabled:opacity-50"
-                                title="Xuất Excel"
+                                title="Xuất PDF"
                               >
                                 {generatingPdfId === rpt.id ? (
                                   <span className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin inline-block"></span>
@@ -2171,12 +2251,19 @@ export default function ReportsPage() {
                                 )}
                               </button>
                               <button
-                                onClick={(e) => e.stopPropagation()}
-                                className="p-2 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors"
-                                title="Thêm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleExportExcel(rpt);
+                                }}
+                                disabled={
+                                  generatingPdfId === rpt.id ||
+                                  rpt.mentions.length === 0
+                                }
+                                className="p-2 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors disabled:opacity-50"
+                                title="Xuất Excel"
                               >
                                 <span className="material-symbols-outlined text-xl">
-                                  more_vert
+                                  table_view
                                 </span>
                               </button>
                             </div>
@@ -2580,7 +2667,7 @@ export default function ReportsPage() {
                       Lưu trữ báo cáo
                     </button>
                     <button
-                      onClick={handleExportCustomExcel}
+                      onClick={() => handleExportCustom("pdf")}
                       disabled={generatingPdfId === "custom-export"}
                       className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-5 py-2 bg-[var(--color-brand)] text-white rounded-xl font-bold text-xs hover:bg-[var(--color-brand-hover)] transition-all disabled:opacity-50"
                     >
@@ -2591,7 +2678,21 @@ export default function ReportsPage() {
                           table_view
                         </span>
                       )}
-                      Tải báo cáo Excel
+                      Tải báo cáo PDF
+                    </button>
+                    <button
+                      onClick={() => handleExportCustom("excel")}
+                      disabled={generatingPdfId === "custom-export"}
+                      className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-5 py-2 border border-[var(--color-border)] text-[var(--color-text-primary)] rounded-xl font-bold text-xs hover:bg-[var(--color-bg-surface-raised)] transition-all disabled:opacity-50"
+                    >
+                      {generatingPdfId === "custom-export" ? (
+                        <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
+                      ) : (
+                        <span className="material-symbols-outlined text-[16px]">
+                          table_view
+                        </span>
+                      )}
+                      Excel
                     </button>
                   </div>
                 </div>
@@ -2823,7 +2924,7 @@ export default function ReportsPage() {
                         Xem
                       </button>
                       <button
-                        onClick={() => handleExportArchivedExcel(rpt)}
+                        onClick={() => handleExportArchived("pdf", rpt)}
                         disabled={generatingPdfId === rpt.id}
                         className="flex-1 md:flex-none flex items-center justify-center gap-1 px-4 py-2.5 bg-[var(--color-brand)]/10 text-[var(--color-brand)] border border-[var(--color-brand)]/20 rounded-xl font-bold text-xs hover:bg-[var(--color-brand)]/25 transition-colors disabled:opacity-50"
                       >
@@ -2835,6 +2936,20 @@ export default function ReportsPage() {
                           </span>
                         )}
                         {t("reports.common.download", { defaultValue: "Tải về" })}
+                      </button>
+                      <button
+                        onClick={() => handleExportArchived("excel", rpt)}
+                        disabled={generatingPdfId === rpt.id}
+                        className="flex-1 md:flex-none flex items-center justify-center gap-1 px-4 py-2.5 border border-[var(--color-border)] text-[var(--color-text-primary)] rounded-xl font-bold text-xs hover:bg-[var(--color-bg-surface-high)] transition-colors disabled:opacity-50"
+                      >
+                        {generatingPdfId === rpt.id ? (
+                          <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
+                        ) : (
+                          <span className="material-symbols-outlined text-[16px]">
+                            table_view
+                          </span>
+                        )}
+                        Excel
                       </button>
                     </div>
                   </div>

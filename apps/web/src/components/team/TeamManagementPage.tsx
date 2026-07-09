@@ -51,6 +51,20 @@ function isCrisisRole(role: StaffRoleValue) {
   return role === "crisis_employee" || role === "crisis_staff";
 }
 
+function isManualPasswordInput(event: React.ChangeEvent<HTMLInputElement>) {
+  const inputType = (event.nativeEvent as InputEvent).inputType;
+  if (!inputType) return true;
+  return inputType === "insertText" || inputType === "insertCompositionText" || inputType.startsWith("delete");
+}
+
+function preventNonManualPasswordInput(event: React.FormEvent<HTMLInputElement>) {
+  const inputType = (event.nativeEvent as InputEvent).inputType;
+  if (!inputType) return;
+  if (inputType !== "insertText" && inputType !== "insertCompositionText" && !inputType.startsWith("delete")) {
+    event.preventDefault();
+  }
+}
+
 interface TeamManagementPageProps {
   initialTab?: "list" | "create";
 }
@@ -93,6 +107,7 @@ export function TeamManagementPage({ initialTab = "list" }: TeamManagementPagePr
   const [passwordRequestUid, setPasswordRequestUid] = useState<string | null>(null);
   const [passwordRequestMode, setPasswordRequestMode] = useState<"reveal" | "reset">("reveal");
   const [managerPassword, setManagerPassword] = useState("");
+  const [passwordFieldNonce, setPasswordFieldNonce] = useState("");
   const [revealLoading, setRevealLoading] = useState(false);
   const [revealError, setRevealError] = useState("");
 
@@ -206,24 +221,60 @@ export function TeamManagementPage({ initialTab = "list" }: TeamManagementPagePr
     navigateToTab("create");
   };
 
+  const openPasswordRequest = (account: StaffAccount, mode: "reveal" | "reset") => {
+    setPasswordRequestUid(account.uid);
+    setPasswordRequestMode(mode);
+    setRevealError("");
+    setManagerPassword("");
+    setPasswordFieldNonce(
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random()}`,
+    );
+  };
+
   const handleRevealTemporaryPassword = async (uid: string) => {
     setRevealLoading(true);
     setRevealError("");
     try {
-      const user = auth.currentUser!;
-      await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email!, managerPassword));
+      const user = auth.currentUser;
+      if (!user?.email) {
+        throw new Error("Phien dang nhap khong hop le.");
+      }
+
+      await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, managerPassword));
       const token = await user.getIdToken(true);
       const res = await fetch(passwordRequestMode === "reset" ? `/api/staff/${uid}/reset-temporary-password` : `/api/staff/${uid}/temporary-password`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) throw new Error(data.error || "Khong the thuc hien yeu cau.");
       setRevealedPasswords((c) => ({ ...c, [uid]: data.data.temporaryPassword }));
       setStaff((c) => c.map(i => i.uid === uid ? { ...i, hasTemporaryPassword: true, temporaryPassword: data.data.temporaryPassword } : i));
       setPasswordRequestUid(null);
       setManagerPassword("");
-    } catch (err: any) { setRevealError(err.message); } finally { setRevealLoading(false); }
+    } catch (err: any) {
+      const messageByCode: Record<string, string> = {
+        "auth/wrong-password": "Mat khau xac thuc cua Quan ly thuong hieu khong dung.",
+        "auth/invalid-credential": "Mat khau xac thuc cua Quan ly thuong hieu khong dung.",
+        "auth/too-many-requests": "Qua nhieu yeu cau. Vui long thu lai sau.",
+      };
+      setRevealError(messageByCode[err.code] || err.message || "Yeu cau that bai.");
+    } finally { setRevealLoading(false); }
+  };
+
+  const handleManagerPasswordChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!isManualPasswordInput(event)) {
+      setManagerPassword("");
+      setRevealError("Vui lòng nhập mật khẩu bằng tay, không dán hoặc dùng mật khẩu đã lưu.");
+      return;
+    }
+
+    setManagerPassword(event.target.value);
+    if (revealError === "Vui lòng nhập mật khẩu bằng tay, không dán hoặc dùng mật khẩu đã lưu.") {
+      setRevealError("");
+    }
   };
 
   const handleEditStaff = async () => {
@@ -317,7 +368,7 @@ export function TeamManagementPage({ initialTab = "list" }: TeamManagementPagePr
             <>
               {actionError && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[14px] text-red-700">{actionError}</div>}
               <EmployeeToolbar searchQuery={searchQuery} onSearchChange={setSearchQuery} roleFilter={roleFilter} onRoleChange={setRoleFilter} statusFilter={statusFilter} onStatusChange={setStatusFilter} onRefresh={loadStaff} onExport={handleExport} />
-              <EmployeeTable staff={filteredStaff} onEdit={openEditModal} onToggleStatus={handleToggleStatus} onResetPassword={(acc) => { setPasswordRequestUid(acc.uid); setPasswordRequestMode("reset"); setRevealError(""); setManagerPassword(""); }} onRevealPassword={(acc) => { setPasswordRequestUid(acc.uid); setPasswordRequestMode("reveal"); setRevealError(""); setManagerPassword(""); }} revealedPasswords={revealedPasswords} />
+              <EmployeeTable staff={filteredStaff} onEdit={openEditModal} onToggleStatus={handleToggleStatus} onResetPassword={(acc) => openPasswordRequest(acc, "reset")} onRevealPassword={(acc) => openPasswordRequest(acc, "reveal")} revealedPasswords={revealedPasswords} />
             </>
           )}
         </div>
@@ -353,22 +404,56 @@ export function TeamManagementPage({ initialTab = "list" }: TeamManagementPagePr
 
       {passwordRequestUid && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 p-4">
-          <div className="w-full max-w-[420px] rounded-2xl bg-white p-6 shadow-xl">
+          <form
+            autoComplete="off"
+            onSubmit={(event) => {
+              event.preventDefault();
+              handleRevealTemporaryPassword(passwordRequestUid);
+            }}
+            className="w-full max-w-[420px] rounded-2xl bg-white p-6 shadow-xl"
+          >
             <h3 className="text-[20px] font-bold text-gray-900">{passwordRequestMode === "reset" ? t("team.password.modal.resetTitle") : t("team.password.modal.revealTitle")}</h3>
             <p className="mt-2 text-[14px] text-gray-500">{passwordRequestMode === "reset" ? t("team.password.modal.resetDesc") : t("team.password.modal.revealDesc")}</p>
             {revealError && <div className="mt-4 rounded-xl bg-red-50 p-3 text-[14px] text-red-700">{revealError}</div>}
             <input
+              type="email"
+              name="username"
+              value={auth.currentUser?.email || ""}
+              readOnly
+              autoComplete="off"
+              tabIndex={-1}
+              aria-hidden="true"
+              className="sr-only"
+            />
+            <input
+              key={passwordFieldNonce}
               type="password"
+              name={`manual-manager-password-${passwordFieldNonce}`}
               value={managerPassword}
-              onChange={(e) => setManagerPassword(e.target.value)}
+              onBeforeInput={preventNonManualPasswordInput}
+              onPaste={(event) => {
+                event.preventDefault();
+                setManagerPassword("");
+                setRevealError("Vui lòng nhập mật khẩu bằng tay, không dán hoặc dùng mật khẩu đã lưu.");
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                setManagerPassword("");
+                setRevealError("Vui lòng nhập mật khẩu bằng tay, không dán hoặc dùng mật khẩu đã lưu.");
+              }}
+              onChange={handleManagerPasswordChange}
               placeholder={t("team.password.modal.managerPassword")}
+              autoComplete="new-password"
+              autoCorrect="off"
+              autoCapitalize="none"
+              spellCheck={false}
               className="mt-4 w-full rounded-xl border border-gray-200 p-3 text-[14px] outline-none focus:border-[#6C5CE7] focus:ring-1 focus:ring-[#6C5CE7]"
             />
             <div className="mt-6 flex justify-end gap-3">
-              <button onClick={() => { setPasswordRequestUid(null); setManagerPassword(""); setRevealError(""); }} className="rounded-xl border border-gray-200 px-5 py-2.5 text-[14px] font-medium text-gray-700 hover:bg-gray-50">Há»§y</button>
-              <button onClick={() => handleRevealTemporaryPassword(passwordRequestUid)} disabled={revealLoading || !managerPassword} className="rounded-xl bg-[#6C5CE7] px-5 py-2.5 text-[14px] font-semibold text-white disabled:opacity-60">XÃ¡c nháº­n</button>
+              <button type="button" onClick={() => { setPasswordRequestUid(null); setManagerPassword(""); setRevealError(""); }} className="rounded-xl border border-gray-200 px-5 py-2.5 text-[14px] font-medium text-gray-700 hover:bg-gray-50">Hủy</button>
+              <button type="submit" disabled={revealLoading || !managerPassword} className="rounded-xl bg-[#6C5CE7] px-5 py-2.5 text-[14px] font-semibold text-white disabled:opacity-60">Xác nhận</button>
             </div>
-          </div>
+          </form>
         </div>
       )}
 

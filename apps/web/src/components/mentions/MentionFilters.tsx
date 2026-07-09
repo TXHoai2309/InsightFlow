@@ -27,6 +27,41 @@ const timeRangeOptions = [
   { value: "30d", label: "30 ngày qua" },
 ];
 
+const defaultPlatforms = ["facebook", "tiktok", "youtube", "thread", "be", "google_maps", "news"];
+const defaultTopics = [
+  "quality",
+  "price",
+  "service",
+  "staff",
+  "delivery",
+  "experience",
+  "legal",
+  "operation",
+  "marketing",
+  "competitor",
+  "other",
+];
+
+const platformLabels: Record<string, string> = {
+  facebook: "Facebook",
+  tiktok: "TikTok",
+  youtube: "YouTube",
+  thread: "Threads",
+  threads: "Threads",
+  be: "Be / BeFood",
+  befood: "Be / BeFood",
+  google_maps: "Google Maps",
+  news: "Báo chí",
+};
+
+function titleizeFilterValue(value: string) {
+  return value
+    .split(/[_\-\s]+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
 export function MentionFilters({ workspaces, filters, allMentions, contentMode, onContentModeChange }: MentionFiltersProps) {
   const { t } = useTranslation();
   const { setFilters } = useDashboardStore();
@@ -49,19 +84,35 @@ export function MentionFilters({ workspaces, filters, allMentions, contentMode, 
 
   // Derive available platforms from actual data
   const availablePlatforms = useMemo(() => {
-    const platformSet = new Set<string>();
-    allMentions.forEach(m => platformSet.add(m.platform));
+    const platformSet = new Set<string>(defaultPlatforms);
+    allMentions.forEach(m => {
+      if (m.platform) platformSet.add(m.platform);
+    });
     return Array.from(platformSet).sort();
   }, [allMentions]);
 
   // Derive available topics from actual data
   const availableTopics = useMemo(() => {
-    const topicSet = new Set<string>();
+    const topicSet = new Set<string>(defaultTopics);
     allMentions.forEach(m => {
       if (m.topic) topicSet.add(m.topic);
     });
     return Array.from(topicSet).sort();
   }, [allMentions]);
+
+  const getPlatformLabel = (platform: string) => {
+    const normalized = platform.toLowerCase();
+    return t(`dashboard.filters.${normalized}`, {
+      defaultValue: platformLabels[normalized] || titleizeFilterValue(platform),
+    });
+  };
+
+  const getTopicLabel = (topic: string) => {
+    const normalized = topic.toLowerCase();
+    return t(`dashboard.topics.${normalized}`, {
+      defaultValue: titleizeFilterValue(topic),
+    });
+  };
 
   // Get brand display name: check workspaces list, then fall back to raw value
   const getBrandName = (brandId: string) => {
@@ -159,7 +210,7 @@ export function MentionFilters({ workspaces, filters, allMentions, contentMode, 
           </option>
           {availablePlatforms.map((platform) => (
             <option key={platform} value={platform} style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
-              {t(`dashboard.filters.${platform.toLowerCase()}`, { defaultValue: platform })}
+              {getPlatformLabel(platform)}
             </option>
           ))}
         </select>
@@ -191,7 +242,7 @@ export function MentionFilters({ workspaces, filters, allMentions, contentMode, 
           </option>
           {availableTopics.map((topic) => (
             <option key={topic} value={topic} style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
-              {t(`dashboard.topics.${topic.toLowerCase()}`, { defaultValue: topic })}
+              {getTopicLabel(topic)}
             </option>
           ))}
         </select>

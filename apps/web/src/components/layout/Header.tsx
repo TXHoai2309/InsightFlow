@@ -25,7 +25,7 @@ interface HeaderProps {
 export function Header({ onMenuToggle }: HeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
-  const { user, role } = useAuth();
+  const { user, role, profile } = useAuth();
   const { t } = useTranslation();
   const { theme, toggleTheme } = useTheme();
   const { language, setLanguage } = useLanguage();
@@ -36,9 +36,12 @@ export function Header({ onMenuToggle }: HeaderProps) {
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   };
 
-  const userName = role === "brand_manager" ? "Highlands Brand Manager" : (user?.displayName || user?.email?.split("@")[0] || t("header.guest"));
+  const brandManagerName = profile?.storedBrandName
+    ? `${profile.storedBrandName} Brand Manager`
+    : (user?.displayName || user?.email?.split("@")[0] || t("header.guest"));
+  const userName = role === "brand_manager" ? brandManagerName : (user?.displayName || user?.email?.split("@")[0] || t("header.guest"));
   const roleLabel = role === "brand_manager" ? "Quản lý thương hiệu" : (role ? ROLE_CONFIG[role].label : t("header.guest"));
-  const initials = role === "brand_manager" ? "HM" : getInitials(user?.displayName || userName);
+  const initials = getInitials(role === "brand_manager" ? brandManagerName : (user?.displayName || userName));
   const isDark = theme === "dark";
   const handleOpenGuide = () => {
     const eventName =

@@ -11,7 +11,8 @@ export type Platform =
   | "thread"       // Threads (Meta)
   | "be"           // BeFood
   | "google_maps"  // Google Maps reviews
-  | "news";        // Báo điện tử / báo online
+  | "news"         // Báo điện tử / báo online
+  | (string & {});
 
 export interface Mention {
   id: string;
@@ -36,7 +37,8 @@ export interface Mention {
   | "operation"
   | "marketing"
   | "competitor"
-  | "other";
+  | "other"
+  | (string & {});
   credibility_score: number;  // 0–100 (từ baseline_confidence × 100)
   created_at: string;         // ISO string (từ crawled_at)
   posted_at: string;          // ISO string (ngày đăng bài thật: post_date / created_at từ nguồn)
