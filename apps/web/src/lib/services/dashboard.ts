@@ -900,12 +900,8 @@ async function loadSupabaseRowsByIds<T extends SupabaseRow>(
 
 async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
   const config = getSupabaseConfig();
-<<<<<<< HEAD
-  const maxPosts = Math.min(opts.maxMentions || 200, 1000);
-=======
   const maxMentions = opts.maxMentions || 30000;
   const brandKey = opts.brandKey ? opts.brandKey.toLowerCase().replace(/[\s\-_.]/g, "").trim() : "";
->>>>>>> 711e7f4f0c867189a293d04ab06982eddb4daf97
   const postColumns = [
     "post_id",
     "platform",
@@ -946,43 +942,6 @@ async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
     "created_at",
   ];
 
-<<<<<<< HEAD
-  let postRows: SupabaseRow[];
-  try {
-    postRows = await loadSupabaseRowsWithSelectFallback(
-      config,
-      "posts",
-      postColumns,
-      { order: "posted_at.desc.nullslast" },
-      maxPosts,
-      ["post_id"],
-    );
-  } catch (error) {
-    if (!isSupabaseRecoverableReadError(error, "posts")) throw error;
-    console.warn("[DashboardService] Supabase posts sorted fetch failed, retrying without order:", error);
-    try {
-      postRows = await loadSupabaseRowsWithSelectFallback(
-        config,
-        "posts",
-        postColumns,
-        {},
-        maxPosts,
-        ["post_id"],
-      );
-    } catch (fallbackError) {
-      if (!isSupabaseRecoverableReadError(fallbackError, "posts")) throw fallbackError;
-      console.warn("[DashboardService] Supabase posts fallback fetch failed, retrying minimal columns:", fallbackError);
-      postRows = await loadSupabaseRowsWithSelectFallback(
-        config,
-        "posts",
-        ["post_id", "platform", "brand", "brand_slug", "posted_at", "payload_json"],
-        {},
-        50,
-        ["post_id"],
-      ).catch((minimalError) => {
-        console.warn("[DashboardService] Supabase posts minimal fetch failed, continuing without posts:", minimalError);
-        return [] as SupabaseRow[];
-=======
   let annotationRows: SupabaseRow[] = [];
   
   if (brandKey) {
@@ -1003,7 +962,6 @@ async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
         select: "post_id",
         order: "posted_at.desc.nullslast",
         limit: "1000",
->>>>>>> 711e7f4f0c867189a293d04ab06982eddb4daf97
       });
       const brandPosts = await supabaseRequest<SupabaseRow[]>(config, "posts", query.toString());
       postIds = brandPosts.map((p) => String(p.post_id || "").trim()).filter(Boolean);
