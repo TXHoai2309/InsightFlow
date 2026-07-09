@@ -91,9 +91,18 @@ export function Dashboard({
         ? filters.workspace_id.toLowerCase().replace(/[\s\-_.]/g, "").trim()
         : null;
 
-    const durationMap: Record<string, number> = { "24h": 1, "7d": 7, "30d": 30 };
-    const durationMs = filters.time_range !== "all" ? durationMap[filters.time_range] * 24 * 60 * 60 * 1000 : null;
-    const cutoff = durationMs ? Date.now() - durationMs : null;
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const startOfTodayMs = startOfToday.getTime();
+
+    let cutoff: number | null = null;
+    if (filters.time_range === "24h") {
+      cutoff = startOfTodayMs;
+    } else if (filters.time_range === "7d") {
+      cutoff = startOfTodayMs - 6 * 24 * 60 * 60 * 1000;
+    } else if (filters.time_range === "30d") {
+      cutoff = startOfTodayMs - 29 * 24 * 60 * 60 * 1000;
+    }
 
     return mentions.filter((m) => {
       const b = m.workspace_id ? m.workspace_id.toLowerCase().replace(/[\s\-_.]/g, "").trim() : "";
@@ -109,10 +118,28 @@ export function Dashboard({
 
   const previousOverviewMentions = useMemo(() => {
     if (filters.time_range === "all") return [];
-    const durationMap: Record<string, number> = { "24h": 1, "7d": 7, "30d": 30 };
-    const durationMs = durationMap[filters.time_range] * 24 * 60 * 60 * 1000;
-    const currentCutoff = Date.now() - durationMs;
-    const previousCutoff = currentCutoff - durationMs;
+    
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const startOfTodayMs = startOfToday.getTime();
+
+    let cutoff: number | null = null;
+    let durationMs = 0;
+    if (filters.time_range === "24h") {
+      cutoff = startOfTodayMs;
+      durationMs = Date.now() - startOfTodayMs;
+    } else if (filters.time_range === "7d") {
+      cutoff = startOfTodayMs - 6 * 24 * 60 * 60 * 1000;
+      durationMs = 7 * 24 * 60 * 60 * 1000;
+    } else if (filters.time_range === "30d") {
+      cutoff = startOfTodayMs - 29 * 24 * 60 * 60 * 1000;
+      durationMs = 30 * 24 * 60 * 60 * 1000;
+    }
+
+    if (cutoff === null) return [];
+
+    const currentCutoff = cutoff;
+    const previousCutoff = cutoff - durationMs;
 
     const normFilter =
       filters.workspace_id !== "all"

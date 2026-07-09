@@ -12,3 +12,4 @@ export { BMTodayFocus }          from "./BMTodayFocus";
 export * from "./BMTabs";
 export * from "./BMTeamManagement";
 export * from "./BMContactCrisis";
+export { BMPlatformDashboard } from "./BMPlatformDashboard";

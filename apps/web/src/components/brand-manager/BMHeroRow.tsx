@@ -27,6 +27,7 @@ interface BMHeroRowProps {
     negative: number;
   };
   totalMentions: number;
+  onViewDetail?: () => void;
 }
 
 /* ── Gauge arc drawing ──────────────────────────────────────── */
@@ -227,7 +228,7 @@ function SentimentDonut({
 }
 
 /* ── Main component ─────────────────────────────────────────── */
-export function BMHeroRow({ score, trend, sentiment, totalMentions }: BMHeroRowProps) {
+export function BMHeroRow({ score, trend, sentiment, totalMentions, onViewDetail }: BMHeroRowProps) {
   const { t } = useTranslation();
   const isHealthy = score >= 70;
   const isWarning = score < 70 && score >= 40;
@@ -343,18 +344,34 @@ export function BMHeroRow({ score, trend, sentiment, totalMentions }: BMHeroRowP
         </div>
 
         <div style={{ marginTop: 20 }}>
-          <Link
-            href="/mentions"
-            id="bm-hero-sentiment-link"
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              gap: 6, fontSize: 13, fontWeight: 600,
-              color: "var(--color-brand)", textDecoration: "none",
-            }}
-          >
-            <span>{t("bm.hero.viewDetail")}</span>
-            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>arrow_forward</span>
-          </Link>
+          {onViewDetail ? (
+            <button
+              onClick={onViewDetail}
+              id="bm-hero-sentiment-link"
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                gap: 6, fontSize: 13, fontWeight: 600,
+                color: "var(--color-brand)", textDecoration: "none",
+                background: "none", border: "none", cursor: "pointer", width: "100%"
+              }}
+            >
+              <span>{t("bm.hero.viewDetail")}</span>
+              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>arrow_forward</span>
+            </button>
+          ) : (
+            <Link
+              href="/mentions"
+              id="bm-hero-sentiment-link"
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                gap: 6, fontSize: 13, fontWeight: 600,
+                color: "var(--color-brand)", textDecoration: "none",
+              }}
+            >
+              <span>{t("bm.hero.viewDetail")}</span>
+              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>arrow_forward</span>
+            </Link>
+          )}
         </div>
       </div>
 
@@ -406,14 +423,26 @@ export function BMHeroRow({ score, trend, sentiment, totalMentions }: BMHeroRowP
             </div>
           </div>
 
-          <Link
-            href="/mentions"
-            id="bm-ai-insight-link"
-            className="bm-ai-cta"
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: 15 }}>analytics</span>
-            {t("bm.hero.aiAction")}
-          </Link>
+          {onViewDetail ? (
+            <button
+              onClick={onViewDetail}
+              id="bm-ai-insight-link"
+              className="bm-ai-cta cursor-pointer w-full justify-center"
+              style={{ border: "none" }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 15 }}>analytics</span>
+              {t("bm.hero.aiAction")}
+            </button>
+          ) : (
+            <Link
+              href="/mentions"
+              id="bm-ai-insight-link"
+              className="bm-ai-cta"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 15 }}>analytics</span>
+              {t("bm.hero.aiAction")}
+            </Link>
+          )}
         </div>
 
         {/* 7-day mini sparkline */}

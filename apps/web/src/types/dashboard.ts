@@ -44,6 +44,8 @@ export interface Mention {
   posted_at: string;          // ISO string (ngày đăng bài thật: post_date / created_at từ nguồn)
   url?: string;
   labels?: ClassificationLabel;
+  star_count?: number | null;
+  location_name?: string | null;
 }
 
 export interface Alert {
@@ -237,7 +239,9 @@ export interface SentimentTrendPoint {
 
 export interface DashboardFilters {
   workspace_id: string; // 'all' or specific workspace
-  time_range: "all" | "24h" | "7d" | "30d";
+  time_range: "all" | "24h" | "7d" | "30d" | "custom";
+  custom_start_date?: string; // YYYY-MM-DD
+  custom_end_date?: string;   // YYYY-MM-DD
   platform: string;
   sentiment: "all" | "positive" | "negative" | "neutral";
   topic?: "all" | Mention["topic"];

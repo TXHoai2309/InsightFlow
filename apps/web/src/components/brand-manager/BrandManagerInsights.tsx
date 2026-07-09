@@ -44,9 +44,19 @@ export function BrandManagerInsights() {
 
   /* ── Current window ───────────────────────────────────────── */
   const currentMentions = useMemo(() => {
-    const durMap: Record<string, number> = { "24h": 1, "7d": 7, "30d": 30 };
-    const ms = filters.time_range !== "all" ? durMap[filters.time_range] * 86_400_000 : null;
-    const cutoff = ms ? Date.now() - ms : null;
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const startOfTodayMs = startOfToday.getTime();
+
+    let cutoff: number | null = null;
+    if (filters.time_range === "24h") {
+      cutoff = startOfTodayMs;
+    } else if (filters.time_range === "7d") {
+      cutoff = startOfTodayMs - 6 * 24 * 60 * 60 * 1000;
+    } else if (filters.time_range === "30d") {
+      cutoff = startOfTodayMs - 29 * 24 * 60 * 60 * 1000;
+    }
+
     return mentions.filter((m: Mention) => {
       if (filters.platform !== "all" && m.platform !== filters.platform) return false;
       if (cutoff) {
@@ -60,14 +70,33 @@ export function BrandManagerInsights() {
   /* ── Previous window ──────────────────────────────────────── */
   const prevMentions = useMemo(() => {
     if (filters.time_range === "all") return [];
-    const durMap: Record<string, number> = { "24h": 1, "7d": 7, "30d": 30 };
-    const ms = durMap[filters.time_range] * 86_400_000;
-    const curr = Date.now() - ms;
-    const prev = curr - ms;
+    
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const startOfTodayMs = startOfToday.getTime();
+
+    let cutoff: number | null = null;
+    let durationMs = 0;
+    if (filters.time_range === "24h") {
+      cutoff = startOfTodayMs;
+      durationMs = Date.now() - startOfTodayMs;
+    } else if (filters.time_range === "7d") {
+      cutoff = startOfTodayMs - 6 * 24 * 60 * 60 * 1000;
+      durationMs = 7 * 24 * 60 * 60 * 1000;
+    } else if (filters.time_range === "30d") {
+      cutoff = startOfTodayMs - 29 * 24 * 60 * 60 * 1000;
+      durationMs = 30 * 24 * 60 * 60 * 1000;
+    }
+
+    if (cutoff === null) return [];
+
+    const currentCutoff = cutoff;
+    const previousCutoff = cutoff - durationMs;
+
     return mentions.filter((m: Mention) => {
       if (filters.platform !== "all" && m.platform !== filters.platform) return false;
       const t = new Date(m.posted_at).getTime();
-      return t >= prev && t < curr;
+      return t >= previousCutoff && t < currentCutoff;
     });
   }, [mentions, filters.time_range, filters.platform]);
 
