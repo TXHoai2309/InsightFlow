@@ -7,7 +7,6 @@
 
 import React from "react";
 import dynamic from "next/dynamic";
-import { useDashboard } from "@/hooks/useDashboardData";
 
 const BrandManagerDashboard = dynamic(
   () => import("@/components/brand-manager").then((mod) => mod.BrandManagerDashboard),
@@ -15,14 +14,10 @@ const BrandManagerDashboard = dynamic(
 );
 
 export default function BrandManagerPage() {
-  useDashboard({
-    autoFetch: true,
-    refetchInterval: 1800000, // Làm mới mỗi 30 phút
-  });
-
   return (
     <>
       <BrandManagerDashboard />
     </>
   );
 }
+

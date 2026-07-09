@@ -11,6 +11,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { DashboardService, normalizeBrandName } from "@/lib/services/dashboard";
+import { filterLeadsForDashboard } from "@/lib/lead-metrics";
 import { useTranslation } from "react-i18next";
 
 import { BMFiltersBar } from "./BMFiltersBar";
@@ -128,14 +129,12 @@ export function BrandManagerDashboard({
   const currentMentions = useMemo(() => {
     const normFilter =
       filters.workspace_id !== "all"
-        ? filters.workspace_id.toLowerCase().replace(/[\s\-_.]/g, "").trim()
+        ? normalizeBrandName(filters.workspace_id)
         : null;
 
     return mentions.filter((m) => {
       // 1. Brand/Workspace filter
-      const b = m.workspace_id
-        ? m.workspace_id.toLowerCase().replace(/[\s\-_.]/g, "").trim()
-        : "";
+      const b = m.workspace_id ? normalizeBrandName(m.workspace_id) : "";
       if (normFilter && b !== normFilter) return false;
 
       // 2. Platform filter
@@ -189,13 +188,11 @@ export function BrandManagerDashboard({
 
     const normFilter =
       filters.workspace_id !== "all"
-        ? filters.workspace_id.toLowerCase().replace(/[\s\-_.]/g, "").trim()
+        ? normalizeBrandName(filters.workspace_id)
         : null;
 
     return mentions.filter((m) => {
-      const b = m.workspace_id
-        ? m.workspace_id.toLowerCase().replace(/[\s\-_.]/g, "").trim()
-        : "";
+      const b = m.workspace_id ? normalizeBrandName(m.workspace_id) : "";
       if (normFilter && b !== normFilter) return false;
       if (filters.platform !== "all" && m.platform !== filters.platform) return false;
       const time = new Date(m.posted_at).getTime();
@@ -212,14 +209,11 @@ export function BrandManagerDashboard({
     });
   }, [alerts, filters.workspace_id, checkTimeFilter]);
 
-  const filteredLeads = useMemo(() => {
-    const targetBrand = filters.workspace_id !== "all" ? normalizeBrandName(filters.workspace_id) : null;
-    return leads.filter((l) => {
-      if (targetBrand && normalizeBrandName(l.workspace_id || "") !== targetBrand) return false;
-      if (filters.platform !== "all" && l.platform !== filters.platform) return false;
-      return checkTimeFilter(l.created_at);
-    });
-  }, [leads, filters.workspace_id, filters.platform, checkTimeFilter]);
+  const filteredLeads = useMemo(
+    () => filterLeadsForDashboard(leads, filters),
+    [leads, filters.workspace_id, filters.platform, filters.time_range],
+  );
+
 
   const stats = useMemo(
     () => DashboardService.calculateStats(currentMentions, filteredAlerts, filteredLeads),
@@ -382,7 +376,7 @@ export function BrandManagerDashboard({
         alertsHigh={highAlerts.length}
         unprocessed={unprocessedContacts}
         crises={derivedAlerts.filter((a) => a.severity === "critical").length}
-        hotLeads={stats.hot_leads_today}
+        hotLeads={filteredLeads.length}
       />
 
       {/* ── 5. Row 2: Sentiment Trend (Full Width) ──────────────── */}

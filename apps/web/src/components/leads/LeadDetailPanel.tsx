@@ -34,6 +34,7 @@ import {
   isPendingLeadRerouteRequest,
   isClassificationLabelComplete,
 } from "@/lib/label-change";
+import { QuickReplyHelper } from "@/components/ui/QuickReplyHelper";
 import type {
   ClassificationLabel,
   DashboardFilters,
@@ -1336,13 +1337,16 @@ export function LeadDetailPanel({
                 {meta.nextActionLabel} vì {priorityText.toLowerCase()}.
               </p>
             </section>
-            <section className="rounded-xl border border-[var(--color-border)] p-4">
+            <section className="rounded-xl border border-[var(--color-border)] p-4 space-y-3">
               <p className="text-sm font-bold text-[var(--color-text-primary)]">
-                Gợi ý nội dung phản hồi
+                Gợi ý phản hồi thông minh (AI)
               </p>
-              <p className="mt-3 rounded-lg bg-[var(--color-bg-surface-raised)] p-3 text-sm leading-6 text-[var(--color-text-primary)]">
-                Chào anh/chị {lead.author || ""}, em thấy mình đang quan tâm đến thông tin sản phẩm/dịch vụ. Em có thể hỗ trợ tư vấn nhanh theo nhu cầu của mình ngay tại đây ạ.
-              </p>
+              <QuickReplyHelper
+                mentionContent={lead.content}
+                customerName={lead.author || "Khách hàng"}
+                sentiment={(currentLabels.sentiment === "positive" || currentLabels.sentiment === "negative") ? currentLabels.sentiment : "neutral"}
+                category="lead"
+              />
             </section>
             <section className="rounded-xl border border-[var(--color-border)] p-4">
               <p className="text-sm font-bold text-[var(--color-text-primary)]">

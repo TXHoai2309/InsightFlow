@@ -101,7 +101,7 @@ export function BMKpiCards({
       value: hotLeads,
       sub: t("bm.kpi.needsAssign"),
       status: hotLeads > 0 ? "positive" : "neutral",
-      href: "/leads?intent=hot",
+      href: "/leads",
     },
   ];
 

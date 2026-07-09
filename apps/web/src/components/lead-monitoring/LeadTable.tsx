@@ -1,215 +1,290 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, MessageSquare, GripHorizontal } from "lucide-react";
-import { useDashboardStore } from "@/stores/dashboard.store";
+import {
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  ExternalLink,
+  MessageSquare,
+  UserPlus,
+} from "lucide-react";
+import { getLeadWorkbenchMeta, sortLeadsForWorkbench } from "@/lib/lead-workbench";
+import type { Lead } from "@/types/dashboard";
+import { useLeadMonitoringLeads } from "./useLeadMonitoringLeads";
+
+const filterChips = [
+  { id: "all", label: "Tất cả" },
+  { id: "hot", label: "Hot" },
+  { id: "overdue", label: "Quá SLA" },
+  { id: "unassigned", label: "Chưa gán" },
+  { id: "uncontacted", label: "Chưa phản hồi" },
+] as const;
+
+type FilterChip = (typeof filterChips)[number]["id"];
+
+function getAvatarInitials(name?: string) {
+  if (!name) return "KH";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+  return name.substring(0, 2).toUpperCase();
+}
+
+function getScoreInfo(intent: Lead["intent"]) {
+  if (intent === "hot") {
+    return {
+      score: 95,
+      label: "Hot",
+      color: "text-[#BA1A1A]",
+      bar: "#BA1A1A",
+      tag: "bg-[#FFDAD6] text-[#410002]",
+    };
+  }
+  if (intent === "warm") {
+    return {
+      score: 68,
+      label: "Warm",
+      color: "text-[#A14A00]",
+      bar: "#D97706",
+      tag: "bg-[#FFE2C7] text-[#5B2A00]",
+    };
+  }
+  return {
+    score: 35,
+    label: "Cold",
+    color: "text-[#4234B6]",
+    bar: "#5B4FCF",
+    tag: "bg-[#E2DFFF] text-[#0F0069]",
+  };
+}
+
+function getStatusInfo(status: Lead["status"]) {
+  switch (status) {
+    case "new":
+      return { label: "Chưa phản hồi", dot: "bg-[#BA1A1A]", text: "text-[#BA1A1A]" };
+    case "processing":
+      return { label: "Đang tư vấn", dot: "bg-[#D97706]", text: "text-[#A14A00]" };
+    case "completed":
+      return { label: "Đã chốt", dot: "bg-[#22C55E]", text: "text-[#147A3F]" };
+    case "skipped":
+      return { label: "Bỏ qua", dot: "bg-[#787585]", text: "text-[#474554]" };
+    default:
+      return { label: "Chưa rõ", dot: "bg-[#787585]", text: "text-[#474554]" };
+  }
+}
+
+function formatSla(lead: Lead) {
+  const meta = getLeadWorkbenchMeta(lead);
+  if (!meta.isPending) return { label: "Đã xử lý", tone: "bg-[#D7F4E2] text-[#147A3F]" };
+  if (meta.isOverdue) {
+    const minutes = Math.max(1, Math.ceil(Math.abs(meta.remainingMs) / 60000));
+    return { label: `Quá ${minutes}p`, tone: "bg-[#FFDAD6] text-[#BA1A1A]" };
+  }
+  const minutes = Math.max(1, Math.ceil(meta.remainingMs / 60000));
+  if (minutes < 60) return { label: `Còn ${minutes}p`, tone: "bg-[#FFF1D6] text-[#A14A00]" };
+  const hours = Math.ceil(minutes / 60);
+  return { label: `Còn ${hours}g`, tone: "bg-[#E2DFFF] text-[#4234B6]" };
+}
+
+function getLeadSignal(lead: Lead) {
+  const signals = lead.intent_signals?.filter(Boolean).slice(0, 2) || [];
+  if (signals.length > 0) return signals.join(", ");
+
+  const content = lead.content.toLowerCase();
+  if (/giá|gia|sỉ|si|order|mua|đặt|dat/.test(content)) return "Hỏi mua / hỏi giá";
+  if (/ship|giao|còn hàng|con hang/.test(content)) return "Hỏi giao hàng / tồn kho";
+  return "Cần kiểm tra thêm";
+}
+
+function calculateResponseTime(created: string, firstContacted?: string) {
+  if (!firstContacted) return "Chưa phản hồi";
+  const diff = new Date(firstContacted).getTime() - new Date(created).getTime();
+  const mins = Math.max(0, Math.floor(diff / 60000));
+  if (mins < 60) return `${mins} phút`;
+  return `${Math.floor(mins / 60)} giờ`;
+}
 
 export function LeadTable() {
-  const { getFilteredLeads } = useDashboardStore();
-  const rawLeads = getFilteredLeads();
-  
-  // Phân trang đơn giản (10 leads / trang)
+  const monitoringLeads = useLeadMonitoringLeads();
+  const rawLeads = useMemo(
+    () => sortLeadsForWorkbench(monitoringLeads),
+    [monitoringLeads],
+  );
+  const [activeFilter, setActiveFilter] = useState<FilterChip>("hot");
   const [page, setPage] = useState(1);
-  const itemsPerPage = 10;
-  const totalPages = Math.ceil(rawLeads.length / itemsPerPage);
-  
+  const itemsPerPage = 8;
+
+  const filteredLeads = useMemo(() => {
+    if (activeFilter === "all") return rawLeads;
+    return rawLeads.filter((lead) => {
+      const meta = getLeadWorkbenchMeta(lead);
+      if (activeFilter === "hot") return lead.intent === "hot";
+      if (activeFilter === "overdue") return meta.isOverdue;
+      if (activeFilter === "unassigned") return !lead.owner_id && meta.isPending;
+      if (activeFilter === "uncontacted") return lead.status === "new" && !lead.first_contacted_at;
+      return true;
+    });
+  }, [activeFilter, rawLeads]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredLeads.length / itemsPerPage));
   const leads = useMemo(() => {
-    const start = (page - 1) * itemsPerPage;
-    return rawLeads.slice(start, start + itemsPerPage);
-  }, [rawLeads, page]);
-
-  const getAvatarInitials = (name?: string) => {
-    if (!name) return "KH";
-    const parts = name.split(" ");
-    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-    return name.substring(0, 2).toUpperCase();
-  };
-
-  const getAvatarBg = (id: string) => {
-    const charCode = id.charCodeAt(id.length - 1) || 0;
-    if (charCode % 3 === 0) return "bg-[#B0A2FF] text-[#1A1B20]";
-    if (charCode % 3 === 1) return "bg-[#C8C4D6] text-[#1A1B20]";
-    return "bg-[#EEEDF4] text-[#474554]";
-  };
-
-  const getScoreInfo = (intent: string) => {
-    switch (intent) {
-      case "hot":
-        return { score: 95, color: "text-[#BA1A1A]", bg: "#BA1A1A", tag: "KHÁCH NÓNG", tagStyle: "bg-[#FFDAD6] text-[#410002]" };
-      case "warm":
-        return { score: 65, color: "text-[#4234B6]", bg: "#4234B6", tag: "ĐANG QUAN TÂM", tagStyle: "bg-[#E2DFFF] text-[#0F0069]" };
-      default:
-        return { score: 35, color: "text-[#5F52A8]", bg: "#5F52A8", tag: "THU THẬP THÊM", tagStyle: "bg-[#EEEDF4] text-[#474554]" };
-    }
-  };
-
-  const getStatusInfo = (status: string) => {
-    switch (status) {
-      case "new": return { label: "Mới tiếp nhận", dot: "bg-[#BA1A1A]", ping: true, text: "text-[#1A1B20]" };
-      case "processing": return { label: "Đang tư vấn", dot: "bg-[#4234B6]", ping: true, text: "text-[#1A1B20]" };
-      case "completed": return { label: "Đã chốt", dot: "bg-[#22C55E]", ping: false, text: "text-[#474554]" };
-      case "skipped": return { label: "Bỏ qua", dot: "bg-[#787585]", ping: false, text: "text-[#474554]" };
-      default: return { label: "Chưa rõ", dot: "bg-[#787585]", ping: false, text: "text-[#474554]" };
-    }
-  };
-
-  const calculateResponseTime = (created: string, firstContacted?: string) => {
-    if (!firstContacted) return null;
-    const diff = new Date(firstContacted).getTime() - new Date(created).getTime();
-    if (diff < 0) return "0 phút";
-    const mins = Math.floor(diff / 60000);
-    if (mins < 60) return `${mins} phút`;
-    return `${Math.floor(mins / 60)} giờ`;
-  };
+    const safePage = Math.min(page, totalPages);
+    const start = (safePage - 1) * itemsPerPage;
+    return filteredLeads.slice(start, start + itemsPerPage);
+  }, [filteredLeads, page, totalPages]);
 
   return (
-    <div className="flex flex-col rounded-[16px] border border-[#E9E7EE] bg-[#FFFFFF] shadow-sm overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-[#E9E7EE] px-6 py-5">
-        <h2 className="font-['Hanken_Grotesk'] text-[16px] font-bold text-[#1A1B20]">
-          Danh sách khách hàng tiềm năng gần đây ({rawLeads.length})
-        </h2>
-        <span className="text-[12px] italic text-[#787585]">
-          Chế độ giám sát (Chỉ đọc)
-        </span>
+    <div className="flex flex-col overflow-hidden rounded-[14px] border border-[#E9E7EE] bg-white shadow-sm">
+      <div className="flex flex-col gap-4 border-b border-[#E9E7EE] px-5 py-5 xl:flex-row xl:items-center xl:justify-between">
+        <div>
+          <h2 className="font-['Hanken_Grotesk'] text-[18px] font-bold text-[#1A1B20]">
+            Danh sách lead ưu tiên ({filteredLeads.length})
+          </h2>
+          <p className="mt-1 text-[13px] text-[#787585]">
+            Mặc định hiển thị hot lead để khớp KPI tổng quan; chọn Tất cả để xem toàn bộ lead
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {filterChips.map((chip) => (
+            <button
+              key={chip.id}
+              type="button"
+              onClick={() => {
+                setActiveFilter(chip.id);
+                setPage(1);
+              }}
+              className={`rounded-full border px-3 py-1.5 text-[12px] font-bold transition-colors ${
+                activeFilter === chip.id
+                  ? "border-[#4234B6] bg-[#4234B6] text-white"
+                  : "border-[#E9E7EE] bg-white text-[#474554] hover:bg-[#F4F3FA]"
+              }`}
+            >
+              {chip.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Table */}
       <div className="overflow-x-auto">
-        <table className="w-full text-left font-['Inter'] min-w-[800px]">
-          <thead className="bg-[#F4F3FA]">
+        <table className="w-full min-w-[1180px] text-left font-['Inter']">
+          <thead className="sticky top-0 z-10 bg-[#F4F3FA]">
             <tr>
-              <th className="px-6 py-3 text-[11px] font-bold uppercase tracking-wider text-[#474554]">
-                Khách hàng
-              </th>
-              <th className="px-6 py-3 text-[11px] font-bold uppercase tracking-wider text-[#474554] w-[280px]">
-                Nội dung / Nguồn
-              </th>
-              <th className="px-6 py-3 text-[11px] font-bold uppercase tracking-wider text-[#474554]">
-                Điểm / Nhãn
-              </th>
-              <th className="px-6 py-3 text-[11px] font-bold uppercase tracking-wider text-[#474554]">
-                Trạng thái
-              </th>
-              <th className="px-6 py-3 text-[11px] font-bold uppercase tracking-wider text-[#474554]">
-                Nhân sự phụ trách
-              </th>
-              <th className="px-6 py-3 text-[11px] font-bold uppercase tracking-wider text-[#474554]">
-                Phản hồi
-              </th>
+              {["Khách hàng", "Tín hiệu mua hàng", "Điểm", "SLA", "Trạng thái", "Phụ trách", "Phản hồi", "Hành động"].map((head) => (
+                <th key={head} className="px-5 py-3 text-[11px] font-bold uppercase tracking-wide text-[#474554]">
+                  {head}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-[#E9E7EE]">
             {leads.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-6 py-12 text-center text-[#787585]">
-                  Không có dữ liệu phù hợp với bộ lọc hiện tại.
+                <td colSpan={8} className="px-5 py-12 text-center text-[14px] text-[#787585]">
+                  Không có lead phù hợp với bộ lọc hiện tại.
                 </td>
               </tr>
             ) : (
               leads.map((lead) => {
                 const scoreInfo = getScoreInfo(lead.intent);
                 const statusInfo = getStatusInfo(lead.status);
-                const responseTime = calculateResponseTime(lead.created_at, lead.first_contacted_at);
+                const sla = formatSla(lead);
+                const sourceHref = lead.url || lead.source_url;
 
                 return (
-                  <tr 
-                    key={lead.id} 
-                    className="group transition-colors duration-200 hover:bg-[#F4F3FA]"
-                  >
-                    {/* Khách hàng */}
-                    <td className="px-6 py-4 align-top">
+                  <tr key={lead.id} className="transition-colors hover:bg-[#FAF8FF]">
+                    <td className="px-5 py-4 align-top">
                       <div className="flex items-center gap-3">
-                        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[14px] font-bold ${getAvatarBg(lead.id)}`}>
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#EEEDF4] text-[13px] font-bold text-[#4234B6]">
                           {getAvatarInitials(lead.author)}
                         </div>
-                        <div className="flex flex-col">
-                          <span className="text-[14px] font-semibold text-[#1A1B20]">{lead.author}</span>
-                          <span className="text-[12px] text-[#787585] mt-0.5" title={lead.id}>Lead ID: {lead.id.substring(0, 8)}...</span>
+                        <div className="min-w-0">
+                          <p className="truncate text-[14px] font-bold text-[#1A1B20]">
+                            {lead.author || "Khách hàng"}
+                          </p>
+                          <p className="mt-0.5 text-[12px] capitalize text-[#787585]">
+                            {lead.platform} · {lead.id.substring(0, 8)}
+                          </p>
                         </div>
                       </div>
                     </td>
 
-                    {/* Nội dung / Nguồn */}
-                    <td className="px-6 py-4 align-top">
-                      <div className="flex max-w-[280px] flex-col gap-1.5">
-                        <span className="text-[14px] text-[#1A1B20] italic line-clamp-3">"{lead.content}"</span>
-                        <div className="flex items-center gap-1.5 text-[12px] text-[#787585] mt-1 capitalize">
-                          {lead.platform === "facebook" ? (
-                            <GripHorizontal className="h-3.5 w-3.5" />
-                          ) : (
-                            <MessageSquare className="h-3.5 w-3.5" />
-                          )}
-                          <span>{lead.platform}</span>
-                        </div>
-                      </div>
+                    <td className="max-w-[340px] px-5 py-4 align-top">
+                      <p className="text-[13px] font-bold text-[#1A1B20]">
+                        {getLeadSignal(lead)}
+                      </p>
+                      <p className="mt-1 line-clamp-2 text-[13px] leading-5 text-[#474554]">
+                        "{lead.content}"
+                      </p>
                     </td>
 
-                    {/* Điểm / Nhãn */}
-                    <td className="px-6 py-4 align-top">
-                      <div className="flex flex-col gap-2">
-                        <div className="flex flex-col gap-1">
-                          <span className={`text-[14px] font-bold ${scoreInfo.color}`}>
-                            {scoreInfo.score}/100
-                          </span>
-                          <div className="h-1.5 w-12 overflow-hidden rounded-full bg-[#EEEDF4]">
-                            <div 
-                              className="h-full rounded-full"
-                              style={{ 
-                                width: `${scoreInfo.score}%`, 
-                                backgroundColor: scoreInfo.bg
-                              }}
-                            />
-                          </div>
-                        </div>
-                        <div>
-                          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${scoreInfo.tagStyle}`}>
-                            {scoreInfo.tag}
-                          </span>
-                        </div>
-                      </div>
-                    </td>
-
-                    {/* Trạng thái */}
-                    <td className="px-6 py-4 align-top">
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="relative flex h-2.5 w-2.5 shrink-0">
-                          {statusInfo.ping && (
-                            <span className={`absolute inline-flex h-full w-full animate-ping rounded-full ${statusInfo.dot} opacity-75`}></span>
-                          )}
-                          <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${statusInfo.dot}`}></span>
+                    <td className="px-5 py-4 align-top">
+                      <div className="flex min-w-[90px] flex-col gap-2">
+                        <span className={`text-[14px] font-bold ${scoreInfo.color}`}>
+                          {scoreInfo.score}/100
                         </span>
-                        <span className={`text-[13px] font-semibold ${statusInfo.text}`}>
+                        <div className="h-1.5 w-16 overflow-hidden rounded-full bg-[#EEEDF4]">
+                          <div className="h-full rounded-full" style={{ width: `${scoreInfo.score}%`, backgroundColor: scoreInfo.bar }} />
+                        </div>
+                        <span className={`w-fit rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${scoreInfo.tag}`}>
+                          {scoreInfo.label}
+                        </span>
+                      </div>
+                    </td>
+
+                    <td className="px-5 py-4 align-top">
+                      <span className={`inline-flex rounded-full px-2.5 py-1 text-[12px] font-bold ${sla.tone}`}>
+                        {sla.label}
+                      </span>
+                    </td>
+
+                    <td className="px-5 py-4 align-top">
+                      <div className="flex items-center gap-2">
+                        <span className={`h-2.5 w-2.5 rounded-full ${statusInfo.dot}`} />
+                        <span className={`text-[13px] font-bold ${statusInfo.text}`}>
                           {statusInfo.label}
                         </span>
                       </div>
                     </td>
 
-                    {/* Nhân sự phụ trách */}
-                    <td className="px-6 py-4 align-top">
-                      <div className="mt-1 flex items-center gap-2">
-                        {lead.owner_name ? (
-                          <>
-                            <img 
-                              src={`https://ui-avatars.com/api/?name=${encodeURIComponent(lead.owner_name)}&background=E9E7EE&color=4234B6`} 
-                              alt={lead.owner_name}
-                              className="h-6 w-6 rounded-full"
-                            />
-                            <span className="text-[14px] font-medium text-[#1A1B20]">{lead.owner_name}</span>
-                          </>
-                        ) : (
-                          <span className="text-[13px] italic text-[#787585]">Chưa phân bổ</span>
-                        )}
-                      </div>
+                    <td className="px-5 py-4 align-top">
+                      {lead.owner_name ? (
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#E2DFFF] text-[11px] font-bold text-[#4234B6]">
+                            {getAvatarInitials(lead.owner_name)}
+                          </div>
+                          <span className="text-[13px] font-semibold text-[#1A1B20]">
+                            {lead.owner_name}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="rounded-full bg-[#FFF1D6] px-2.5 py-1 text-[12px] font-bold text-[#A14A00]">
+                          Chưa gán
+                        </span>
+                      )}
                     </td>
 
-                    {/* Phản hồi */}
-                    <td className="px-6 py-4 align-top">
-                      <div className="mt-1">
-                        {responseTime ? (
-                          <span className="text-[14px] font-medium text-[#4234B6]">{responseTime}</span>
+                    <td className="px-5 py-4 align-top">
+                      <span className="text-[13px] font-semibold text-[#474554]">
+                        {calculateResponseTime(lead.created_at, lead.first_contacted_at)}
+                      </span>
+                    </td>
+
+                    <td className="px-5 py-4 align-top">
+                      <div className="flex items-center gap-2">
+                        <button type="button" className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#E9E7EE] text-[#4234B6] hover:bg-[#F4F3FA]" title="Gán nhân sự">
+                          <UserPlus className="h-4 w-4" />
+                        </button>
+                        <button type="button" className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#E9E7EE] text-[#147A3F] hover:bg-[#F3FCF6]" title="Đánh dấu đã phản hồi">
+                          <CheckCircle2 className="h-4 w-4" />
+                        </button>
+                        {sourceHref ? (
+                          <a href={sourceHref} target="_blank" rel="noreferrer" className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#E9E7EE] text-[#474554] hover:bg-[#F4F3FA]" title="Mở bài gốc">
+                            <ExternalLink className="h-4 w-4" />
+                          </a>
                         ) : (
-                          <span className="text-[14px] text-[#787585]">--</span>
+                          <button type="button" className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#E9E7EE] text-[#787585]" title="Xem nội dung">
+                            <MessageSquare className="h-4 w-4" />
+                          </button>
                         )}
                       </div>
                     </td>
@@ -221,23 +296,24 @@ export function LeadTable() {
         </table>
       </div>
 
-      {/* Footer / Pagination */}
-      <div className="flex items-center justify-between border-t border-[#E9E7EE] px-6 py-4">
+      <div className="flex items-center justify-between border-t border-[#E9E7EE] px-5 py-4">
         <span className="text-[13px] text-[#787585]">
-          Hiển thị {leads.length > 0 ? (page - 1) * itemsPerPage + 1 : 0} đến {Math.min(page * itemsPerPage, rawLeads.length)} trong {rawLeads.length}
+          Hiển thị {leads.length > 0 ? (Math.min(page, totalPages) - 1) * itemsPerPage + 1 : 0} đến {Math.min(Math.min(page, totalPages) * itemsPerPage, filteredLeads.length)} trong {filteredLeads.length}
         </span>
         <div className="flex items-center gap-2">
-          <button 
+          <button
+            type="button"
             disabled={page === 1}
-            onClick={() => setPage(p => Math.max(1, p - 1))}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-[#474554] transition-colors hover:bg-[#EEEDF4] hover:text-[#1A1B20] disabled:opacity-50"
+            onClick={() => setPage((current) => Math.max(1, current - 1))}
+            className="flex h-8 w-8 items-center justify-center rounded-[8px] text-[#474554] transition-colors hover:bg-[#EEEDF4] disabled:opacity-40"
           >
             <ChevronLeft className="h-5 w-5" />
           </button>
-          <button 
-            disabled={page >= totalPages || totalPages === 0}
-            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-[#474554] transition-colors hover:bg-[#EEEDF4] hover:text-[#1A1B20] disabled:opacity-50"
+          <button
+            type="button"
+            disabled={page >= totalPages}
+            onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+            className="flex h-8 w-8 items-center justify-center rounded-[8px] text-[#474554] transition-colors hover:bg-[#EEEDF4] disabled:opacity-40"
           >
             <ChevronRight className="h-5 w-5" />
           </button>

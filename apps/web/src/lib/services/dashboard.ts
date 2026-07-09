@@ -724,9 +724,9 @@ function getSupabaseLabel(
       ...rowLabels,
       ...annotationLabel,
       intent:
-        annotationLabel.intent ??
-        rowLabels.intent ??
-        (inferredIntent !== "none" ? inferredIntent : undefined),
+        inferredIntent !== "none"
+          ? inferredIntent
+          : annotationLabel.intent ?? rowLabels.intent,
       sentiment:
         annotationLabel.sentiment ??
         rowLabels.sentiment ??
@@ -1474,7 +1474,14 @@ export class DashboardService {
         );
         leads = leadsRows.map((d) => {
           const labels = (d.labels as Record<string, unknown>) || {};
-          const intent = mapIntent((d.intent as string) || (labels.intent as string));
+          const intent = inferLeadIntent(
+            d.intent,
+            labels.intent,
+            d.current_label,
+            d.label,
+            d.lead_intent,
+            d.intent_type,
+          );
           return {
             id: String(d.id),
             mention_id: normalizeOptionalText(d.mention_id || d.source_mention_id),
@@ -1578,7 +1585,11 @@ export class DashboardService {
 
       mentions.forEach((m) => {
         const labels = m.labels;
-        const intent = mapIntent(labels?.intent);
+        const intent = inferLeadIntent(
+          labels?.intent,
+          labels,
+          m.labels,
+        );
         if (intent === "none" || leadById.has(m.id)) return;
 
         leadById.set(m.id, {

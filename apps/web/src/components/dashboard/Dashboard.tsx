@@ -13,7 +13,8 @@ import { useAlertStore } from "@/stores/alert.store";
 import { useAuth } from "@/hooks/useAuth";
 import { getScopedBrandKey } from "@/lib/brandScope";
 import { useRouter } from "next/navigation";
-import { DashboardService } from "@/lib/services/dashboard";
+import { DashboardService, normalizeBrandName } from "@/lib/services/dashboard";
+import { filterLeadsForDashboard } from "@/lib/lead-metrics";
 
 // New components
 import { BrandHealthScore } from "./BrandHealthScore";
@@ -88,7 +89,7 @@ export function Dashboard({
   const overviewMentions = useMemo(() => {
     const normFilter =
       filters.workspace_id !== "all"
-        ? filters.workspace_id.toLowerCase().replace(/[\s\-_.]/g, "").trim()
+        ? normalizeBrandName(filters.workspace_id)
         : null;
 
     const startOfToday = new Date();
@@ -105,7 +106,7 @@ export function Dashboard({
     }
 
     return mentions.filter((m) => {
-      const b = m.workspace_id ? m.workspace_id.toLowerCase().replace(/[\s\-_.]/g, "").trim() : "";
+      const b = m.workspace_id ? normalizeBrandName(m.workspace_id) : "";
       if (normFilter && b !== normFilter) return false;
       if (filters.platform !== "all" && m.platform !== filters.platform) return false;
       if (cutoff !== null) {
@@ -143,11 +144,11 @@ export function Dashboard({
 
     const normFilter =
       filters.workspace_id !== "all"
-        ? filters.workspace_id.toLowerCase().replace(/[\s\-_.]/g, "").trim()
+        ? normalizeBrandName(filters.workspace_id)
         : null;
 
     return mentions.filter((m) => {
-      const b = m.workspace_id ? m.workspace_id.toLowerCase().replace(/[\s\-_.]/g, "").trim() : "";
+      const b = m.workspace_id ? normalizeBrandName(m.workspace_id) : "";
       if (normFilter && b !== normFilter) return false;
       if (filters.platform !== "all" && m.platform !== filters.platform) return false;
       const time = new Date(m.posted_at).getTime();
@@ -156,7 +157,10 @@ export function Dashboard({
   }, [mentions, filters.workspace_id, filters.time_range, filters.platform]);
 
   const filteredAlerts = useMemo(() => getFilteredAlerts(), [filters, alerts, getFilteredAlerts]);
-  const filteredLeadsForStats = useMemo(() => getFilteredLeadsWithoutUrgency(), [filters, leads, getFilteredLeadsWithoutUrgency]);
+  const filteredLeadsForStats = useMemo(
+    () => filterLeadsForDashboard(leads, filters),
+    [leads, filters.workspace_id, filters.platform, filters.time_range],
+  );
 
   const stats = useMemo(
     () => DashboardService.calculateStats(overviewMentions, filteredAlerts, filteredLeadsForStats),
@@ -172,9 +176,10 @@ export function Dashboard({
     const prevTotal = prevStats.total_mentions;
     const totalTrend = prevTotal === 0 ? 0 : ((stats.total_mentions - prevTotal) / prevTotal) * 100;
     const sentimentTrend = stats.net_sentiment - prevStats.net_sentiment;
-    const leadsTrend = prevStats.hot_leads_today === 0
+    const prevTotalLeads = prevStats.hot_leads_today;
+    const leadsTrend = prevTotalLeads === 0
       ? 0
-      : Math.round(((stats.hot_leads_today - prevStats.hot_leads_today) / prevStats.hot_leads_today) * 100);
+      : Math.round(((filteredLeadsForStats.length - prevTotalLeads) / prevTotalLeads) * 100);
     return { total: totalTrend, sentiment: sentimentTrend, leads: leadsTrend };
   }, [stats, prevStats]);
 
@@ -217,7 +222,7 @@ export function Dashboard({
       high: filteredAlerts.filter(a => a.severity === 'high' || a.severity === 'critical').length 
     },
     newLeads: { 
-      value: stats.hot_leads_today, 
+      value: filteredLeadsForStats.length, 
       trend: `+${Math.abs(Math.round(trends.leads))}` 
     },
     unprocessedContacts: { 
