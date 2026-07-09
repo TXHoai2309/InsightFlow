@@ -43,6 +43,7 @@ export interface Mention {
   created_at: string;         // ISO string (từ crawled_at)
   posted_at: string;          // ISO string (ngày đăng bài thật: post_date / created_at từ nguồn)
   url?: string;
+  contact?: string;
   labels?: ClassificationLabel;
   star_count?: number | null;
   location_name?: string | null;
@@ -72,7 +73,7 @@ export type LabelTopic =
   | "location"
   | "promotion"
   | "other";
-export type LabelUrgency = "normal" | "notable" | "crisis";
+export type LabelUrgency = "none" | "low" | "medium" | "high" | "urgent";
 export type LabelIntent = "hot" | "warm" | "cold" | "none";
 
 export interface ClassificationLabel {
@@ -122,12 +123,21 @@ export interface LabelChangeRequest {
   requested_by_name: string;
   requested_by_role: string;
   requested_at: string;
+  updated_at?: string;
+  updated_by?: string;
+  updated_by_name?: string;
+  updated_by_role?: string;
   reviewed_by?: string;
   reviewed_by_name?: string;
   reviewed_at?: string;
   review_note?: string;
+  cancelled_at?: string;
+  cancelled_by?: string;
+  cancelled_by_name?: string;
+  cancel_reason?: string;
   applied_at?: string;
   audit_log_id?: string;
+  revision_count?: number;
 }
 
 export interface Lead {

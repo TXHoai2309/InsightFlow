@@ -123,11 +123,11 @@ export function LeadStats({ leads, isLoading, profile, onSelectView }: LeadStats
 
   if (isLoading) {
     return (
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-[clamp(6px,0.55vw,10px)] md:grid-cols-3">
         {[0, 1, 2].map((item) => (
           <div
             key={item}
-            className="h-[88px] animate-pulse rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-3"
+            className="h-[66px] animate-pulse rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-2.5"
           >
             <div className="h-4 w-1/2 rounded bg-[var(--color-bg-surface-raised)]" />
             <div className="mt-3 h-7 w-16 rounded bg-[var(--color-bg-surface-high)]" />
@@ -138,22 +138,22 @@ export function LeadStats({ leads, isLoading, profile, onSelectView }: LeadStats
   }
 
   return (
-    <div className="grid gap-3 md:grid-cols-3">
+    <div className="grid gap-[clamp(6px,0.55vw,10px)] md:grid-cols-3">
       {cards.map((card) => (
         <button
           key={card.title}
           type="button"
           onClick={() => onSelectView?.(card.view)}
-          className="group grid min-h-[92px] grid-cols-[46px_minmax(0,1fr)_auto] items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-3 text-left shadow-sm transition hover:border-[var(--color-brand-border)] hover:shadow-md"
+          className="group grid min-h-[66px] grid-cols-[34px_minmax(0,1fr)_auto] items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-2.5 py-2 text-left shadow-sm transition hover:border-[var(--color-brand-border)] hover:shadow-md"
         >
           <span
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+            className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg"
             style={{ backgroundColor: card.bg, color: card.color }}
           >
-            <span className="material-symbols-outlined">{card.icon}</span>
+            <span className="material-symbols-outlined text-[20px]">{card.icon}</span>
           </span>
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-[var(--color-text-primary)]">
+            <p className="truncate text-[13px] font-semibold text-[var(--color-text-primary)]">
               {card.title}
             </p>
             <p className="truncate text-xs text-[var(--color-text-secondary)]">
@@ -161,7 +161,7 @@ export function LeadStats({ leads, isLoading, profile, onSelectView }: LeadStats
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            <span className="text-3xl font-bold tabular-nums" style={{ color: card.color }}>
+            <span className="text-[clamp(24px,1.75vw,30px)] font-bold leading-none tabular-nums" style={{ color: card.color }}>
               {card.value}
             </span>
             <span className="material-symbols-outlined text-[var(--color-text-muted)] transition group-hover:translate-x-0.5">

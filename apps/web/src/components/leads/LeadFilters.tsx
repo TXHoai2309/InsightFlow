@@ -33,18 +33,18 @@ export function LeadFilters({ workspaces, brandLocked = false }: LeadFiltersProp
   );
 
   return (
-    <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-xl p-4 md:p-5 shadow-sm">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h3 className="font-bold text-lg text-[var(--color-text-primary)]">{t("leads.filters.title")}</h3>
-          <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">
+    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-3 shadow-sm">
+      <div className="grid gap-3 min-[1160px]:grid-cols-[minmax(220px,1fr)_minmax(420px,0.95fr)] min-[1160px]:items-center">
+        <div className="min-w-0">
+          <h3 className="text-base font-bold text-[var(--color-text-primary)]">{t("leads.filters.title")}</h3>
+          <p className="mt-0.5 max-w-[520px] text-xs text-[var(--color-text-secondary)]">
             {t("leads.filters.desc")}
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2 md:gap-3">
+        <div className="grid gap-2 sm:grid-cols-3">
           {/* Workspace Filter */}
-          <div className="flex flex-col min-w-[150px] flex-1 sm:flex-initial">
+          <div className="flex min-w-0 flex-col">
             <label className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase mb-1 tracking-wider">
               {t("leads.filters.brand")}
             </label>
@@ -53,7 +53,7 @@ export function LeadFilters({ workspaces, brandLocked = false }: LeadFiltersProp
                 value={filters.workspace_id}
                 onChange={(e) => handleFilterChange("workspace_id", e.target.value)}
                 disabled={brandLocked}
-                className={`appearance-none pl-3 pr-9 py-2 rounded-lg text-sm focus:ring-1 focus:ring-[var(--color-brand)] outline-none transition-all select-app w-full border border-[var(--color-border)] ${brandLocked ? "opacity-70 cursor-not-allowed" : "cursor-pointer"}`}
+                className={`w-full appearance-none rounded-lg border border-[var(--color-border)] py-2 pl-3 pr-9 text-sm outline-none transition-all focus:ring-1 focus:ring-[var(--color-brand)] ${brandLocked ? "cursor-not-allowed opacity-70" : "cursor-pointer"} select-app`}
               >
                 {!brandLocked && (
                   <option value="all" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
@@ -73,7 +73,7 @@ export function LeadFilters({ workspaces, brandLocked = false }: LeadFiltersProp
           </div>
 
           {/* Platform Filter */}
-          <div className="flex flex-col min-w-[130px] flex-1 sm:flex-initial">
+          <div className="flex min-w-0 flex-col">
             <label className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase mb-1 tracking-wider">
               {t("leads.filters.platform")}
             </label>
@@ -83,7 +83,7 @@ export function LeadFilters({ workspaces, brandLocked = false }: LeadFiltersProp
                 onChange={(e) =>
                   handleFilterChange("platform", e.target.value as Filters["platform"])
                 }
-                className="appearance-none pl-3 pr-9 py-2 rounded-lg text-sm focus:ring-1 focus:ring-[var(--color-brand)] outline-none transition-all cursor-pointer select-app w-full border border-[var(--color-border)]"
+                className="w-full cursor-pointer appearance-none rounded-lg border border-[var(--color-border)] py-2 pl-3 pr-9 text-sm outline-none transition-all focus:ring-1 focus:ring-[var(--color-brand)] select-app"
               >
                 <option value="all" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
                   {t("leads.filters.platformAll")}
@@ -101,7 +101,7 @@ export function LeadFilters({ workspaces, brandLocked = false }: LeadFiltersProp
           </div>
 
           {/* Urgency Filter */}
-          <div className="flex flex-col min-w-[140px] flex-1 sm:flex-initial">
+          <div className="flex min-w-0 flex-col">
             <label className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase mb-1 tracking-wider">
               {t("leads.filters.urgency")}
             </label>
@@ -111,7 +111,7 @@ export function LeadFilters({ workspaces, brandLocked = false }: LeadFiltersProp
                 onChange={(e) =>
                   handleFilterChange("urgency", e.target.value as Filters["urgency"])
                 }
-                className="appearance-none pl-3 pr-9 py-2 rounded-lg text-sm focus:ring-1 focus:ring-[var(--color-brand)] outline-none transition-all cursor-pointer select-app font-bold w-full border border-[var(--color-border)]"
+                className="w-full cursor-pointer appearance-none rounded-lg border border-[var(--color-border)] py-2 pl-3 pr-9 text-sm font-bold outline-none transition-all focus:ring-1 focus:ring-[var(--color-brand)] select-app"
               >
                 <option value="pending" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
                   {t("leads.filters.pending")}

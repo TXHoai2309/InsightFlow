@@ -217,8 +217,8 @@ export default function LeadsPage() {
   );
 
   const sortedLeads = useMemo(
-    () => sortLeadsForWorkbench(visibleBaseLeads, currentTime),
-    [visibleBaseLeads, currentTime],
+    () => sortLeadsForWorkbench(visibleBaseLeads, currentTime, profile),
+    [visibleBaseLeads, currentTime, profile],
   );
 
   const pendingLabelRequestByLeadId = useMemo(() => {
@@ -426,16 +426,7 @@ export default function LeadsPage() {
     visibleLeads.length === 0 ? 0 : (currentPage - 1) * LEADS_PAGE_SIZE + 1;
   const lastLeadNumber = Math.min(currentPage * LEADS_PAGE_SIZE, visibleLeads.length);
 
-  const brandPlatformFilteredLeads = useMemo(() => {
-    const normFilter =
-      filters.workspace_id !== "all" ? normalizeBrandName(filters.workspace_id) : null;
-    return leads.filter((lead) => {
-      if (normFilter && normalizeBrandName(lead.workspace_id) !== normFilter) return false;
-      if (filters.platform !== "all" && lead.platform !== filters.platform) return false;
-      if (!canLeadBeVisibleToUser(lead, profile)) return false;
-      return true;
-    });
-  }, [leads, filters.workspace_id, filters.platform, profile]);
+  const brandPlatformFilteredLeads = visibleBaseLeads;
 
   const pendingResultLead = useMemo(() => {
     return sortedLeads.find((lead) =>
@@ -520,8 +511,16 @@ export default function LeadsPage() {
   }
 
   return (
-    <div data-tour="leads-workbench" className="grid min-h-full gap-3 p-3 xl:grid-cols-[minmax(0,1fr)_420px] 2xl:gap-4">
-      <main className="min-w-0 space-y-3">
+    <div
+      className="grid min-h-full max-w-[100vw] gap-[clamp(6px,0.55vw,10px)] overflow-hidden p-[clamp(6px,0.6vw,12px)] xl:grid-cols-[minmax(0,var(--lead-main-ratio))_minmax(0,var(--lead-detail-ratio))]"
+      style={
+        {
+          "--lead-main-ratio": "72fr",
+          "--lead-detail-ratio": "28fr",
+        } as React.CSSProperties
+      }
+    >
+      <main className="min-w-0 space-y-[clamp(6px,0.55vw,10px)] overflow-hidden">
         <LeadStats
           leads={brandPlatformFilteredLeads}
           isLoading={isLoading}
@@ -530,7 +529,7 @@ export default function LeadsPage() {
         />
 
         {restoreNotice && (
-          <section className="flex items-center justify-between gap-3 rounded-xl border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] px-4 py-3 text-sm font-semibold text-[var(--color-text-primary)]">
+          <section className="flex items-center justify-between gap-3 rounded-xl border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] px-3 py-2 text-sm font-semibold text-[var(--color-text-primary)]">
             <span>{restoreNotice}</span>
             <button
               type="button"
@@ -543,7 +542,7 @@ export default function LeadsPage() {
         )}
 
         {pendingResultLead && (
-          <section className="flex flex-col gap-3 rounded-xl border border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] p-3 md:flex-row md:items-center md:justify-between">
+          <section className="flex flex-col gap-2 rounded-xl border border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] p-3 md:flex-row md:items-center md:justify-between">
             <div className="flex min-w-0 items-start gap-3">
               <span className="material-symbols-outlined text-[var(--color-warning)]">
                 pending_actions
@@ -571,7 +570,7 @@ export default function LeadsPage() {
         )}
 
         {viewCounts.label_review > 0 && activeView !== "label_review" && (
-          <section className="flex flex-col gap-3 rounded-xl border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] p-3 md:flex-row md:items-center md:justify-between">
+          <section className="flex flex-col gap-2 rounded-xl border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] p-3 md:flex-row md:items-center md:justify-between">
             <div className="flex min-w-0 items-start gap-3">
               <span className="material-symbols-outlined text-[var(--color-brand)]">
                 rule
@@ -595,15 +594,15 @@ export default function LeadsPage() {
           </section>
         )}
 
-        <section className="space-y-3">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            <div data-tour="leads-view-tabs" className="flex flex-wrap gap-2">
+        <section className="space-y-[clamp(6px,0.55vw,10px)]">
+          <div className="flex flex-col gap-2 min-[1500px]:flex-row min-[1500px]:items-center min-[1500px]:justify-between">
+            <div className="flex flex-wrap gap-1.5">
               {workbenchViews.map((view) => (
                 <button
                   key={view.id}
                   type="button"
                   onClick={() => setActiveView(view.id)}
-                  className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${
+                  className={`rounded-lg border px-2.5 py-1.5 text-sm font-semibold leading-tight transition ${
                     activeView === view.id
                       ? "border-[var(--color-brand)] bg-[var(--color-brand)] text-white shadow-sm"
                       : "border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)]"
@@ -626,7 +625,7 @@ export default function LeadsPage() {
             <button
               type="button"
               onClick={() => setShowFilters((value) => !value)}
-              className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-4 py-2 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)]"
+              className="inline-flex w-fit items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-2.5 py-1.5 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)]"
             >
               <span className="material-symbols-outlined text-base">tune</span>
               Bộ lọc
@@ -640,9 +639,9 @@ export default function LeadsPage() {
             />
           )}
 
-          <div className="space-y-3">
+          <div className="space-y-[clamp(6px,0.55vw,10px)]">
             {error && (
-              <div className="flex items-center gap-2 rounded-xl border border-[var(--color-error)]/20 bg-[var(--color-error-subtle)] p-4 text-sm font-medium text-[var(--color-error)]">
+              <div className="flex items-center gap-2 rounded-xl border border-[var(--color-error)]/20 bg-[var(--color-error-subtle)] p-3 text-sm font-medium text-[var(--color-error)]">
                 <span className="material-symbols-outlined">error</span>
                 <span>{error}</span>
               </div>
@@ -652,15 +651,15 @@ export default function LeadsPage() {
               [0, 1, 2].map((item) => (
                 <div
                   key={item}
-                  className="h-[104px] animate-pulse rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)]"
+                  className="h-[88px] animate-pulse rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)]"
                 />
               ))
             ) : visibleLeads.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-bg-surface)] p-10 text-center">
+              <div className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-bg-surface)] p-8 text-center">
                 <span className="material-symbols-outlined text-4xl text-[var(--color-text-muted)]">
                   inbox
                 </span>
-                <h3 className="mt-3 text-lg font-bold text-[var(--color-text-primary)]">
+                <h3 className="mt-3 text-base font-bold text-[var(--color-text-primary)]">
                   {activeView === "label_review"
                     ? "Không có lead nào đang chờ duyệt nhãn"
                     : "Không có lead trong nhóm này"}
@@ -694,7 +693,7 @@ export default function LeadsPage() {
             )}
 
             {visibleLeads.length > 0 && (
-              <div className="flex flex-col gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-4 py-3 text-sm text-[var(--color-text-secondary)] md:flex-row md:items-center md:justify-between">
+              <div className="flex flex-col gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm text-[var(--color-text-secondary)] md:flex-row md:items-center md:justify-between">
                 <span>
                   Hiển thị {firstLeadNumber}-{lastLeadNumber} trong {visibleLeads.length} lead
                 </span>

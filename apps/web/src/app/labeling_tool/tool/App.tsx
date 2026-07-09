@@ -340,6 +340,15 @@ export default function App() {
         next.intent = toggled.intent;
         updated = true;
       }
+      else if (key === '8') {
+        const toggled = isNegativeStaffAttitudePreset(lbl) ? EMPTY_LABEL : NEGATIVE_STAFF_ATTITUDE_PRESET_LABEL;
+        next.sentiment = toggled.sentiment;
+        next.topic = [...toggled.topic];
+        next.relevance = toggled.relevance;
+        next.urgency = toggled.urgency;
+        next.intent = toggled.intent;
+        updated = true;
+      }
       else if (key === '9') {
         const toggled = isPositiveColdPreset(lbl) ? EMPTY_LABEL : POSITIVE_COLD_PRESET_LABEL;
         next.sentiment = toggled.sentiment;

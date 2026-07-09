@@ -4,14 +4,17 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { filterByBrandScope } from "@/lib/brandScope";
 import { auth } from "@/lib/firebase";
+import { DashboardService } from "@/lib/services/dashboard";
+import { useDashboardStore } from "@/stores/dashboard.store";
+import { normalizeClassificationLabel } from "@/lib/label-change";
 
 type Sentiment = "positive" | "negative" | "neutral" | null;
-type Urgency = "normal" | "notable" | "crisis" | null;
+type Urgency = "none" | "low" | "medium" | "high" | "urgent" | null;
 type Intent = "hot" | "warm" | "cold" | "none" | null;
 
 interface LabelValue {
   sentiment?: Sentiment;
-  topic?: string | string[];
+  topic?: string;
   relevance?: boolean | null;
   urgency?: Urgency;
   intent?: Intent;
@@ -33,9 +36,6 @@ interface LabelRequest {
   brand_id?: string;
   brand_name?: string;
   workspace_id?: string;
-  source_type?: "lead" | "mention" | "comment" | "post";
-  source_id?: string;
-  lead_id?: string;
   mention_id: string;
   requested_by_name: string;
   requested_by_email?: string;
@@ -70,7 +70,7 @@ interface LabelAuditEntry {
   workspace_id?: string;
   mention_id: string;
   mention_content?: string;
-  action: LabelRequest["status"] | "created" | "note_added";
+  action: LabelRequest["status"] | "created" | "updated" | "note_added";
   status: LabelRequest["status"] | "pending";
   old_label: LabelValue;
   new_label: LabelValue;
@@ -90,101 +90,22 @@ interface HistoryFilters {
   toDate: string;
   labelType: "all" | "sentiment" | "topic" | "relevance" | "urgency" | "intent";
   requester: string;
-  status: "all" | LabelRequest["status"] | "created" | "note_added";
+  status: "all" | LabelRequest["status"] | "created" | "updated" | "note_added";
 }
 
 type RequestTimeRange = "today" | "7d" | "30d" | "all";
-
-type SupabaseRow = Record<string, any>;
-
-function getSupabaseConfig() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
-  if (!url.trim() || !anonKey.trim()) {
-    throw new Error("Missing Supabase config.");
-  }
-  return {
-    url: url.trim().replace(/\/rest\/v1\/?$/, "").replace(/\/$/, ""),
-    anonKey: anonKey.trim(),
-  };
-}
-
-function supabaseEndpoint(table: string, queryString = "") {
-  const config = getSupabaseConfig();
-  return `${config.url}/rest/v1/${table}${queryString ? `?${queryString}` : ""}`;
-}
-
-async function supabaseRequest<T>(
-  table: string,
-  queryString = "",
-  init: RequestInit = {},
-): Promise<T> {
-  const config = getSupabaseConfig();
-  const response = await fetch(supabaseEndpoint(table, queryString), {
-    ...init,
-    headers: {
-      apikey: config.anonKey,
-      Authorization: `Bearer ${config.anonKey}`,
-      ...(init.body ? { "Content-Type": "application/json" } : {}),
-      ...(init.headers || {}),
-    },
-  });
-  if (!response.ok) {
-    const message = await response.text();
-    throw new Error(`Supabase ${table} ${response.status}: ${message}`);
-  }
-  if (response.status === 204) return undefined as T;
-  const text = await response.text();
-  return text ? (JSON.parse(text) as T) : (undefined as T);
-}
-
-function getMissingSupabaseColumn(error: unknown) {
-  if (!(error instanceof Error)) return null;
-  const columnMissingMatch = error.message.match(/column\s+\w+\.([A-Za-z0-9_]+)\s+does not exist/);
-  if (columnMissingMatch?.[1]) return columnMissingMatch[1];
-
-  const schemaCacheMatch = error.message.match(/Could not find the '([^']+)' column/);
-  return schemaCacheMatch?.[1] || null;
-}
-
-function stripUndefinedFields<T extends Record<string, unknown>>(value: T): T {
-  return Object.fromEntries(
-    Object.entries(value).filter(([, fieldValue]) => fieldValue !== undefined),
-  ) as T;
-}
-
-async function patchSupabaseRow(
-  table: string,
-  queryString: string,
-  payload: Record<string, unknown>,
-) {
-  let nextPayload = { ...payload };
-
-  while (Object.keys(nextPayload).length > 0) {
-    try {
-      await supabaseRequest<void>(table, queryString, {
-        method: "PATCH",
-        body: JSON.stringify(nextPayload),
-        headers: { Prefer: "return=minimal" },
-      });
-      return;
-    } catch (error) {
-      const missingColumn = getMissingSupabaseColumn(error);
-      if (!missingColumn || !(missingColumn in nextPayload)) {
-        throw error;
-      }
-      const { [missingColumn]: _removed, ...remainingPayload } = nextPayload;
-      nextPayload = remainingPayload;
-    }
-  }
-}
 
 const TOPIC_OPTIONS = [
   "quality",
   "price",
   "service",
-  "location",
-  "promotion",
+  "staff",
+  "delivery",
+  "experience",
+  "legal",
+  "operation",
+  "marketing",
+  "competitor",
   "other",
 ];
 
@@ -198,8 +119,6 @@ const TOPIC_LABELS: Record<string, string> = {
   quality: "Chất lượng",
   price: "Giá",
   service: "Dịch vụ",
-  location: "Địa điểm",
-  promotion: "Khuyến mãi",
   staff: "Nhân viên",
   delivery: "Giao hàng",
   experience: "Trải nghiệm",
@@ -211,9 +130,11 @@ const TOPIC_LABELS: Record<string, string> = {
 };
 
 const URGENCY_LABELS: Record<string, string> = {
-  normal: "Bình thường",
-  notable: "Đáng chú ý",
-  crisis: "🚨 Crisis",
+  none: "None",
+  low: "Thấp",
+  medium: "Trung bình",
+  high: "Cao",
+  urgent: "Khẩn cấp",
 };
 
 const INTENT_LABELS: Record<string, { label: string; emoji: string }> = {
@@ -223,106 +144,34 @@ const INTENT_LABELS: Record<string, { label: string; emoji: string }> = {
   none: { label: "None", emoji: "➖" },
 };
 
-function getLabelTopics(label: LabelValue): string[] {
-  if (Array.isArray(label.topic)) {
-    return label.topic.filter((topic): topic is string => Boolean(topic));
-  }
-  return label.topic ? [label.topic] : [];
-}
-
-function normalizeTopics(
-  topic: unknown,
-  topics: unknown,
-  fallbackTopic: LabelValue["topic"],
-): string | string[] | undefined {
-  const values = [
-    ...(Array.isArray(topic) ? topic : typeof topic === "string" ? [topic] : []),
-    ...(Array.isArray(topics) ? topics : typeof topics === "string" ? [topics] : []),
-  ]
-    .filter((item): item is string => typeof item === "string")
-    .map((item) => item.trim())
-    .filter(Boolean);
-
-  if (values.length > 0) return Array.from(new Set(values));
-
-  const fallbackTopics = getLabelTopics({ topic: fallbackTopic });
-  if (fallbackTopics.length > 1) return fallbackTopics;
-  return fallbackTopics[0];
-}
-
-function normalizeUrgencyValue(value: unknown, fallback: Urgency): Urgency {
-  return value === "normal" || value === "notable" || value === "crisis"
-    ? value
-    : fallback ?? null;
-}
-
-function normalizeIntentValue(value: unknown, fallback: Intent): Intent {
-  return value === "hot" || value === "warm" || value === "cold" || value === "none"
-    ? value
-    : fallback ?? null;
-}
-
 function normalizeLabel(value: unknown, fallback: LabelValue): LabelValue {
   if (!value || typeof value !== "object") return fallback;
   const row = value as Partial<LabelValue> & { topic?: string | string[]; topics?: string[] };
+  const legacyUrgencyMap: Record<string, NonNullable<Urgency>> = {
+    normal: "low",
+    notable: "medium",
+    crisis: "urgent",
+  };
+  const rawUrgency = typeof row.urgency === "string" ? row.urgency : "";
+  const normalizedUrgency =
+    rawUrgency in legacyUrgencyMap ? legacyUrgencyMap[rawUrgency] : row.urgency;
+  const topic = Array.isArray(row.topic)
+    ? row.topic[0]
+    : typeof row.topic === "string"
+      ? row.topic
+      : Array.isArray(row.topics)
+        ? row.topics[0]
+        : fallback.topic;
   return {
     sentiment:
       row.sentiment === "positive" || row.sentiment === "negative" || row.sentiment === "neutral"
         ? row.sentiment
         : fallback.sentiment,
-    topic: normalizeTopics(row.topic, row.topics, fallback.topic),
+    topic: typeof topic === "string" ? topic : fallback.topic,
     relevance: typeof row.relevance === "boolean" ? row.relevance : fallback.relevance,
-    urgency: normalizeUrgencyValue(row.urgency, fallback.urgency ?? null),
-    intent: normalizeIntentValue(row.intent, fallback.intent ?? null),
+    urgency: normalizedUrgency || fallback.urgency,
+    intent: row.intent || fallback.intent,
   };
-}
-
-function toStoredLabel(label: LabelValue): LabelValue {
-  return {
-    sentiment: label.sentiment ?? null,
-    topic: getLabelTopics(label),
-    relevance: label.relevance ?? null,
-    urgency: label.urgency ?? null,
-    intent: label.intent ?? null,
-  };
-}
-
-function getRequestLeadId(request: LabelRequest) {
-  return (
-    request.lead_id ||
-    (request.source_type === "lead" ? request.source_id : "") ||
-    request.mention_id ||
-    request.mention.id
-  );
-}
-
-function buildLeadReviewPayload(
-  status: LabelRequest["status"],
-  finalLabel: LabelValue,
-  changedAt: string,
-  profile: { uid?: string; role?: string } | null | undefined,
-) {
-  const storedLabel = toStoredLabel(finalLabel);
-  const topics = getLabelTopics(storedLabel);
-  const isApproved = status === "approved" || status === "edited";
-  return stripUndefinedFields({
-    ...(isApproved
-      ? {
-          labels: storedLabel,
-          current_labels: storedLabel,
-          sentiment: storedLabel.sentiment || undefined,
-          topic: topics[0] || undefined,
-          intent: storedLabel.intent || undefined,
-          intent_signals: topics,
-        }
-      : {}),
-    label_correction_status: status === "rejected" ? "rejected" : "approved",
-    pending_label_request_id: null,
-    last_label_corrected_at: changedAt,
-    updated_by: profile?.uid,
-    updated_by_role: profile?.role,
-    updated_at: changedAt,
-  });
 }
 
 function normalizeRequestStatus(value: unknown): LabelRequest["status"] {
@@ -388,28 +237,6 @@ function compareRequests(a: LabelRequest, b: LabelRequest) {
   if (a.status === "pending" && b.status !== "pending") return -1;
   if (a.status !== "pending" && b.status === "pending") return 1;
   return (getRequestDate(b)?.getTime() || 0) - (getRequestDate(a)?.getTime() || 0);
-}
-
-function getNextReviewRequestId(
-  allRequests: LabelRequest[],
-  currentId: string,
-  range: RequestTimeRange,
-) {
-  const visibleRequests = allRequests
-    .filter((item) => isWithinRequestTimeRange(item, range))
-    .sort(compareRequests);
-  const nextPending = visibleRequests.find(
-    (item) => item.id !== currentId && item.status === "pending",
-  );
-  if (nextPending) return nextPending.id;
-
-  const currentIndex = visibleRequests.findIndex((item) => item.id === currentId);
-  return (
-    visibleRequests[currentIndex + 1]?.id ||
-    visibleRequests[currentIndex - 1]?.id ||
-    visibleRequests.find((item) => item.id !== currentId)?.id ||
-    currentId
-  );
 }
 
 function hasLabelTypeChanged(oldLabel: LabelValue, newLabel: LabelValue, labelType: HistoryFilters["labelType"]) {
@@ -514,14 +341,13 @@ function LabelPill({ label, size = "md" }: { label: LabelValue; size?: "sm" | "m
           {SENTIMENT_LABELS[label.sentiment as NonNullable<Sentiment>] || label.sentiment}
         </span>
       )}
-      {getLabelTopics(label).map((topic) => (
+      {label.topic && (
         <span
-          key={topic}
           className={`rounded-full border font-semibold tracking-wide text-[var(--color-text-secondary)] border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] ${padding}`}
         >
-          {TOPIC_LABELS[topic] || topic}
+          {TOPIC_LABELS[label.topic] || label.topic}
         </span>
-      ))}
+      )}
       {label.relevance !== undefined && label.relevance !== null && (
         <span
           className={`rounded-full border font-semibold tracking-wide text-[var(--color-text-secondary)] border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] ${padding}`}
@@ -599,14 +425,12 @@ function BrandLabelHistoryPanel({
   requesterOptions,
   statusLabels,
   onFiltersChange,
-  onOpenRequest,
 }: {
   entries: LabelAuditEntry[];
   filters: HistoryFilters;
   requesterOptions: string[];
   statusLabels: Record<string, string>;
   onFiltersChange: (filters: HistoryFilters) => void;
-  onOpenRequest?: (requestId: string) => void;
 }) {
   return (
     <div className="space-y-5">
@@ -703,6 +527,8 @@ function BrandLabelHistoryPanel({
               <option value="approved">Đã duyệt</option>
               <option value="edited">Đã sửa & duyệt</option>
               <option value="rejected">Từ chối</option>
+              <option value="cancelled">Đã hủy</option>
+              <option value="updated">Đã chỉnh yêu cầu</option>
             </select>
           </label>
         </div>
@@ -746,20 +572,9 @@ function BrandLabelHistoryPanel({
                       </p>
                     )}
                   </div>
-                  <div className="flex shrink-0 flex-col items-start gap-2 md:items-end">
-                    <span className="text-[11px] text-[var(--color-text-muted)]">
-                      {formatDate(item.changed_at)}
-                    </span>
-                    {item.request_id && onOpenRequest && (
-                      <button
-                        type="button"
-                        onClick={() => onOpenRequest(item.request_id as string)}
-                        className="rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-[11px] font-semibold text-[var(--color-brand)] transition hover:bg-[var(--color-brand-subtle)]"
-                      >
-                        Sửa request này
-                      </button>
-                    )}
-                  </div>
+                  <span className="text-[11px] text-[var(--color-text-muted)]">
+                    {formatDate(item.changed_at)}
+                  </span>
                 </div>
 
                 <p className="mt-3 line-clamp-2 text-sm text-[var(--color-text-secondary)]">
@@ -802,10 +617,9 @@ export default function LabelRequestsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState("");
   const [mode, setMode] = useState<"detail" | "compare" | "history">("detail");
   const [requestTimeRange, setRequestTimeRange] = useState<RequestTimeRange>("today");
-  const [draftLabel, setDraftLabel] = useState<LabelValue>({ sentiment: "neutral", topic: ["other"] });
+  const [draftLabel, setDraftLabel] = useState<LabelValue>({ sentiment: "neutral", topic: "other" });
   const [historyFilters, setHistoryFilters] = useState<HistoryFilters>({
     fromDate: "",
     toDate: "",
@@ -846,111 +660,122 @@ export default function LabelRequestsPage() {
     async function loadRequests() {
       setLoading(true);
       try {
-        const requestRows = await supabaseRequest<SupabaseRow[]>(
-          "label_change_requests",
-          new URLSearchParams({
-            select: "*",
-            order: "requested_at.desc.nullslast",
-            limit: "200",
-          }).toString(),
-        );
-        const rows = requestRows.map((data) => {
-          const oldLabel = normalizeLabel(
+        const { requests: rawRequests, history: rawHistory } =
+          await DashboardService.fetchLabelChangeRequests(profile?.brandId || undefined);
+
+        const mapLabelField = (raw: unknown, fallback: LabelValue): LabelValue => {
+          if (!raw || typeof raw !== "object") return fallback;
+          const r = raw as Record<string, unknown>;
+          return {
+            sentiment: (r.sentiment as Sentiment) ?? fallback.sentiment ?? null,
+            topic: (r.topic as string) ?? fallback.topic ?? "other",
+            relevance: r.relevance !== undefined ? (r.relevance as boolean | null) : (fallback.relevance ?? null),
+            urgency: (r.urgency as Urgency) ?? fallback.urgency ?? null,
+            intent: (r.intent as Intent) ?? fallback.intent ?? null,
+          };
+        };
+
+        const rows: LabelRequest[] = rawRequests.map((data) => {
+          const id = String(data.id || "");
+          const fallbackLabel: LabelValue = { sentiment: "neutral", topic: "other", relevance: null, urgency: null, intent: null };
+          const oldLabel = mapLabelField(
             data.old_label || data.current_labels || data.current_label,
-            { sentiment: "neutral", topic: "other", relevance: null, urgency: null, intent: null },
+            fallbackLabel,
           );
-          const proposedLabel = normalizeLabel(
+          const proposedLabel = mapLabelField(
             data.proposed_label || data.requested_labels || data.requested_label,
             oldLabel,
           );
-          const mention = (data.mention || {}) as LabelRequest["mention"];
+          const mentionRaw = (data.mention ?? {}) as Record<string, unknown>;
           const content = String(
-            mention.content ||
+            mentionRaw.content ||
               data.content_preview ||
               data.mention_content ||
               data.content ||
               "",
           );
-          const contentType = normalizeContentType(mention.content_type || data.source_type);
+          const contentType = normalizeContentType(mentionRaw.content_type || data.source_type);
 
           return {
-            id: String(data.id),
+            id,
             status: normalizeRequestStatus(data.status),
-            brand_id: data.brand_id || data.workspace_id,
-            brand_name: data.brand_name || data.workspace_name,
-            workspace_id: data.workspace_id || data.brand_id || data.brand_name || data.workspace_name,
-            source_type: ["lead", "mention", "comment", "post"].includes(String(data.source_type || "").toLowerCase())
-              ? (String(data.source_type).toLowerCase() as LabelRequest["source_type"])
+            brand_id: String(data.brand_id || data.workspace_id || ""),
+            brand_name: String(data.brand_name || data.workspace_name || data.workspace_id || ""),
+            workspace_id: String(data.workspace_id || data.brand_id || data.brand_name || data.workspace_name || ""),
+            mention_id: String(data.mention_id || data.source_id || mentionRaw.id || id),
+            requested_by_name: String(data.requested_by_name || data.requested_by_email || "Nhân viên"),
+            requested_by_email: data.requested_by_email ? String(data.requested_by_email) : undefined,
+            requested_by_role: data.requested_by_role ? String(data.requested_by_role) : undefined,
+            reason: data.reason || data.reason_note || data.reason_code
+              ? String(data.reason || data.reason_note || data.reason_code)
               : undefined,
-            source_id: data.source_id ? String(data.source_id) : undefined,
-            lead_id: data.lead_id ? String(data.lead_id) : undefined,
-            mention_id: data.mention_id || data.source_id || mention.id || data.id,
-            requested_by_name: data.requested_by_name || data.requested_by_email || "Nhân viên",
-            requested_by_email: data.requested_by_email,
-            requested_by_role: data.requested_by_role,
-            reason: data.reason || data.reason_note || data.reason_code,
             old_label: oldLabel,
             proposed_label: proposedLabel,
-            final_label: data.final_label ? normalizeLabel(data.final_label, proposedLabel) : undefined,
+            final_label: data.final_label ? mapLabelField(data.final_label, proposedLabel) : undefined,
             mention: {
-              id: mention.id || data.mention_id || data.source_id || data.id,
-              parent_id: mention.parent_id || null,
-              platform: mention.platform || data.platform || data.source || "unknown",
+              id: String(mentionRaw.id || data.mention_id || data.source_id || id),
+              parent_id: (mentionRaw.parent_id as string) || null,
+              platform: String(mentionRaw.platform || data.platform || data.source || "unknown"),
               content_type: contentType,
               content,
-              post_content: mention.post_content || (contentType === "post" ? content : ""),
-              comment_content: mention.comment_content || (contentType !== "post" ? content : ""),
-              author: mention.author || data.author || "",
-              posted_at: mention.posted_at || mention.created_at || "",
-              url: mention.url || data.source_url || data.url || "",
+              post_content: String(mentionRaw.post_content || (contentType === "post" ? content : "")),
+              comment_content: String(mentionRaw.comment_content || (contentType !== "post" ? content : "")),
+              author: String(mentionRaw.author || data.author || ""),
+              posted_at: String(mentionRaw.posted_at || mentionRaw.created_at || ""),
+              url: String(mentionRaw.url || data.source_url || data.url || ""),
             },
             history: Array.isArray(data.history) ? data.history : [],
             created_at: data.requested_at || data.created_at,
-          } satisfies LabelRequest;
+          };
         });
 
         const scopedRows = filterByBrandScope(rows, profile);
 
-        let persistedAuditEntries: LabelAuditEntry[] = [];
-        try {
-          const historyRows = await supabaseRequest<SupabaseRow[]>(
-            "label_change_history",
-            new URLSearchParams({
-              select: "*",
-              order: "changed_at.desc.nullslast",
-              limit: "300",
-            }).toString(),
-          );
-          persistedAuditEntries = historyRows
-            .map((data) => {
-              const oldLabel = normalizeLabel(data.old_label, { sentiment: "neutral", topic: "other" });
-              const newLabel = normalizeLabel(data.new_label, oldLabel);
-              return {
-                id: String(data.id),
-                request_id: data.request_id,
-                brand_id: data.brand_id,
-                brand_name: data.brand_name,
-                workspace_id: data.workspace_id || data.brand_id || data.brand_name,
-                mention_id: String(data.mention_id || ""),
-                mention_content: data.mention_content,
-                action: data.action || data.status || "edited",
-                status: data.status || "edited",
-                old_label: oldLabel,
-                new_label: newLabel,
-                requested_by_name: data.requested_by_name || data.requested_by_email || "Nhân viên",
-                requested_by_email: data.requested_by_email,
-                requested_by_role: data.requested_by_role,
-                reviewed_by_name: data.reviewed_by_name,
-                reviewed_by_email: data.reviewed_by_email,
-                changed_at: data.changed_at || data.created_at,
-                source: data.source || "label_change_history",
-                note: data.note,
-              } satisfies LabelAuditEntry;
-            })
-            .filter((item) => filterByBrandScope([item], profile).length > 0);
-        } catch (historyError) {
-          console.warn("Failed to load label change history:", historyError);
-        }
+        const persistedAuditEntries: LabelAuditEntry[] = rawHistory.map((data) => {
+          const fallbackLabel: LabelValue = { sentiment: "neutral", topic: "other" };
+          const mapLbl = (raw: unknown) => {
+            if (!raw || typeof raw !== "object") return fallbackLabel;
+            const r = raw as Record<string, unknown>;
+            return {
+              sentiment: (r.sentiment as Sentiment) ?? fallbackLabel.sentiment,
+              topic: (r.topic as string) ?? fallbackLabel.topic,
+              relevance: r.relevance !== undefined ? (r.relevance as boolean | null) : null,
+              urgency: (r.urgency as Urgency) ?? null,
+              intent: (r.intent as Intent) ?? null,
+            };
+          };
+          const oldLbl = mapLbl(data.old_label || data.current_labels);
+          const newLbl = mapLbl(data.new_label || data.requested_labels);
+          return {
+            id: String(data.id || `${data.request_id}-${data.action}-${data.created_at}`),
+            request_id: String(data.request_id || ""),
+            brand_id: String(data.brand_id || data.workspace_id || ""),
+            brand_name: String(data.brand_name || data.workspace_id || ""),
+            workspace_id: String(data.workspace_id || data.brand_id || data.brand_name || ""),
+            mention_id: String(data.mention_id || ""),
+            mention_content: data.mention_content || data.content_preview
+              ? String(data.mention_content || data.content_preview)
+              : undefined,
+            action: (data.action || data.status || "edited") as LabelAuditEntry["action"],
+            status: normalizeRequestStatus(data.status || data.action),
+            old_label: oldLbl,
+            new_label: newLbl,
+            requested_by_name: String(
+              data.requested_by_name || data.changed_by_name || data.requested_by_email || "Nhân viên",
+            ),
+            requested_by_email: data.requested_by_email ? String(data.requested_by_email) : undefined,
+            requested_by_role: data.requested_by_role ? String(data.requested_by_role) : undefined,
+            reviewed_by_name: data.reviewed_by_name || data.changed_by_name
+              ? String(data.reviewed_by_name || data.changed_by_name)
+              : undefined,
+            reviewed_by_email: data.reviewed_by_email ? String(data.reviewed_by_email) : undefined,
+            changed_at: data.changed_at || data.created_at,
+            source: String(data.source || "label_change_history"),
+            note: data.note || data.reason_note || data.cancel_reason
+              ? String(data.note || data.reason_note || data.cancel_reason)
+              : undefined,
+          } satisfies LabelAuditEntry;
+        }).filter((item) => filterByBrandScope([item], profile).length > 0);
 
         if (active) {
           setRequests(scopedRows);
@@ -1002,22 +827,8 @@ export default function LabelRequestsPage() {
   useEffect(() => {
     if (selectedRequest) {
       setDraftLabel(selectedRequest.final_label || selectedRequest.proposed_label);
-      setSaveError("");
     }
   }, [selectedRequest]);
-
-  const toggleDraftTopic = (topic: string) => {
-    setDraftLabel((current) => {
-      const topics = getLabelTopics(current);
-      const nextTopics = topics.includes(topic)
-        ? topics.filter((item) => item !== topic)
-        : [...topics, topic];
-      return {
-        ...current,
-        topic: nextTopics,
-      };
-    });
-  };
 
   const pendingCount = requests.filter((item) => item.status === "pending").length;
   const requesterOptions = useMemo(
@@ -1047,9 +858,7 @@ export default function LabelRequestsPage() {
   const updateRequestStatus = async (status: LabelRequest["status"], finalLabel = draftLabel) => {
     if (!selectedRequest) return;
     setSaving(true);
-    setSaveError("");
     const changedAt = new Date().toISOString();
-    const storedFinalLabel = toStoredLabel(finalLabel);
 
     const nextHistory = [
       ...(selectedRequest.history || []),
@@ -1059,7 +868,7 @@ export default function LabelRequestsPage() {
         by_email: profile?.email,
         at: changedAt,
         from: selectedRequest.old_label,
-        to: storedFinalLabel,
+        to: finalLabel,
       },
     ];
 
@@ -1073,7 +882,7 @@ export default function LabelRequestsPage() {
       action: status,
       status,
       old_label: selectedRequest.old_label,
-      new_label: storedFinalLabel,
+      new_label: finalLabel,
       requested_by_name: selectedRequest.requested_by_name,
       requested_by_email: selectedRequest.requested_by_email,
       requested_by_role: selectedRequest.requested_by_role,
@@ -1087,85 +896,85 @@ export default function LabelRequestsPage() {
 
     try {
       if (!selectedRequest.isDemo) {
-        const isApproved = status === "approved" || status === "edited";
-        await patchSupabaseRow(
-          "label_change_requests",
-          `id=eq.${encodeURIComponent(selectedRequest.id)}`,
-          stripUndefinedFields({
-            status,
-            requested_labels: isApproved ? storedFinalLabel : selectedRequest.proposed_label,
-            reviewed_by: profile?.uid || "",
-            reviewed_by_name: profile?.displayName || profile?.email || "",
-            reviewed_at: changedAt,
-            updated_at: changedAt,
-          }),
-        );
+        if (status === "approved" || status === "edited") {
+          await DashboardService.approveLabelChangeRequest(
+            selectedRequest.id,
+            status === "edited" ? status : "approved",
+            finalLabel as Record<string, unknown>,
+            {
+              mentionId: selectedRequest.mention_id,
+              platform: selectedRequest.mention.platform,
+              contentType: selectedRequest.mention.content_type,
+              parentId: selectedRequest.mention.parent_id,
+            },
+            selectedRequest.mention_id,
+            {
+              uid: profile?.uid || "",
+              displayName: profile?.displayName,
+              email: profile?.email,
+            },
+            selectedRequest.old_label as Record<string, unknown>,
+            nextHistory,
+          );
 
-        const leadId = getRequestLeadId(selectedRequest);
-        if (leadId) {
-          await patchSupabaseRow(
-            "leads",
-            `id=eq.${encodeURIComponent(leadId)}`,
-            buildLeadReviewPayload(status, storedFinalLabel, changedAt, profile),
+          useDashboardStore.getState().approveLabelChangeRequestInStore(
+            selectedRequest.id,
+            finalLabel as Record<string, unknown>,
+            status,
+            nextHistory,
+          );
+        } else {
+          // reject / cancel — uses Supabase
+          await DashboardService.rejectLabelChangeRequest(
+            selectedRequest.id,
+            status as "rejected" | "cancelled",
+            {
+              uid: profile?.uid || "",
+              displayName: profile?.displayName,
+              email: profile?.email,
+            },
+            {
+              reason: selectedRequest.reason,
+              finalLabel: finalLabel as Record<string, unknown>,
+              oldLabel: selectedRequest.old_label as Record<string, unknown>,
+              mentionId: selectedRequest.mention_id,
+              nextHistory,
+            },
+          );
+
+          useDashboardStore.getState().setLabelChangeRequests(
+            useDashboardStore.getState().labelChangeRequests.map((req: any) =>
+              req.id === selectedRequest.id
+                ? { ...req, status: status as any, history: nextHistory }
+                : req
+            )
+          );
+          useDashboardStore.getState().setLeads(
+            useDashboardStore.getState().leads.map((lead: any) =>
+              lead.id === selectedRequest.id ||
+              lead.id === selectedRequest.mention_id ||
+              lead.pending_label_request_id === selectedRequest.id
+                ? {
+                    ...lead,
+                    label_correction_status: "none",
+                    pending_label_request_id: undefined,
+                  }
+                : lead
+            )
           );
         }
-
-        await supabaseRequest<void>(
-          "label_change_history",
-          "",
-          {
-            method: "POST",
-            body: JSON.stringify([{
-              request_id: selectedRequest.id,
-              brand_id: selectedRequest.brand_id || profile?.brandId || "",
-              brand_name: selectedRequest.brand_name || profile?.brandName || "",
-              workspace_id:
-                selectedRequest.workspace_id ||
-                selectedRequest.brand_id ||
-                profile?.brandId ||
-                "",
-              mention_id: selectedRequest.mention_id,
-              mention_content: selectedRequest.mention.content,
-              action: status,
-              status,
-              old_label: selectedRequest.old_label,
-              new_label: storedFinalLabel,
-              requested_by_name: selectedRequest.requested_by_name,
-              requested_by_email: selectedRequest.requested_by_email || "",
-              requested_by_role: selectedRequest.requested_by_role || "",
-              reviewed_by_uid: profile?.uid || "",
-              reviewed_by_name: profile?.displayName || profile?.email || "",
-              reviewed_by_email: profile?.email || "",
-              note: selectedRequest.reason || "",
-              source: "brand_manager_review",
-              changed_at: changedAt,
-              created_at: changedAt,
-            }]),
-            headers: { Prefer: "return=minimal" },
-          },
-        ).catch((historyError) => {
-          console.warn("Failed to write label change history:", historyError);
-        });
       }
 
-      const nextRequests = requests.map((item) =>
-        item.id === selectedRequest.id
-          ? {
-              ...item,
-              status,
-              proposed_label: status === "approved" || status === "edited" ? storedFinalLabel : item.proposed_label,
-              final_label: storedFinalLabel,
-              history: nextHistory,
-            }
-          : item,
+      setRequests((current) =>
+        current.map((item) =>
+          item.id === selectedRequest.id
+            ? { ...item, status, final_label: finalLabel, history: nextHistory }
+            : item,
+        ),
       );
-      setRequests(nextRequests);
       setAuditEntries((current) => [nextAuditEntry, ...current]);
-      setSelectedId(getNextReviewRequestId(nextRequests, selectedRequest.id, requestTimeRange));
-      setMode("detail");
     } catch (error) {
       console.error("Failed to update label request:", error);
-      setSaveError("Không thể duyệt request. Vui lòng kiểm tra quyền Supabase hoặc schema bảng leads/label_change_requests.");
     } finally {
       setSaving(false);
     }
@@ -1181,11 +990,12 @@ export default function LabelRequestsPage() {
   const HISTORY_STATUS_LABELS: Record<string, string> = {
     ...STATUS_LABELS,
     created: "Tạo yêu cầu",
+    updated: "Đã chỉnh yêu cầu",
     note_added: "Ghi chú",
   };
 
   return (
-    <div data-tour="label-requests-review" className="p-4 md:p-8">
+    <div className="p-4 md:p-8">
       
 
       {/* Header */}
@@ -1213,7 +1023,7 @@ export default function LabelRequestsPage() {
       </div>
       <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
         {/* Request list */}
-        <section data-tour="label-request-list" className="h-fit rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)]">
+        <section className="h-fit rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)]">
           <div className="border-b border-[var(--color-border)] px-4 py-3.5">
             <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">
               Danh sách yêu cầu
@@ -1397,31 +1207,23 @@ export default function LabelRequestsPage() {
                           </select>
                         </label>
 
-                        <div className="space-y-2">
+                        <label className="block space-y-2">
                           <span className="text-xs font-semibold text-[var(--color-text-secondary)]">Chủ đề</span>
-                          <div className="flex flex-wrap gap-2">
-                            {TOPIC_OPTIONS.map((topic) => {
-                              const selected = getLabelTopics(draftLabel).includes(topic);
-                              return (
-                                <button
-                                  key={topic}
-                                  type="button"
-                                  onClick={() => toggleDraftTopic(topic)}
-                                  className={`rounded-full border px-3 py-1.5 text-xs font-bold transition ${
-                                    selected
-                                      ? "border-[var(--color-brand)] bg-[var(--color-brand-subtle)] text-[var(--color-brand)]"
-                                      : "border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)] hover:border-[var(--color-brand-border)]"
-                                  }`}
-                                >
-                                  {TOPIC_LABELS[topic] || topic}
-                                </button>
-                              );
-                            })}
-                          </div>
-                          <p className="text-[11px] text-[var(--color-text-muted)]">
-                            Có thể chọn nhiều chủ đề cho cùng một request.
-                          </p>
-                        </div>
+                          <select
+                            value={draftLabel.topic || ""}
+                            onChange={(event) =>
+                              setDraftLabel((current) => ({ ...current, topic: event.target.value }))
+                            }
+                            className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none"
+                          >
+                            <option value="">-- Chủ đề --</option>
+                            {TOPIC_OPTIONS.map((topic) => (
+                              <option key={topic} value={topic}>
+                                {TOPIC_LABELS[topic] || topic}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
                         
                         <label className="block space-y-2">
                           <span className="text-xs font-semibold text-[var(--color-text-secondary)]">Liên quan</span>
@@ -1484,18 +1286,21 @@ export default function LabelRequestsPage() {
                     </div>
 
                     <div className="flex flex-col gap-2">
-                      {saveError && (
-                        <p className="rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-error-subtle)] px-3 py-2 text-xs font-semibold text-[var(--color-error)]">
-                          {saveError}
-                        </p>
-                      )}
                       <button
                         type="button"
-                        disabled={saving}
-                        onClick={() => updateRequestStatus("approved", draftLabel)}
+                        disabled={saving || selectedRequest.status !== "pending"}
+                        onClick={() => updateRequestStatus("approved", selectedRequest.proposed_label)}
                         className="rounded-lg bg-[var(--color-success)] px-4 py-3 text-sm font-bold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        {selectedRequest.status === "pending" ? "Duyệt yêu cầu" : "Lưu chỉnh sửa nhãn"}
+                        Duyệt yêu cầu
+                      </button>
+                      <button
+                        type="button"
+                        disabled={saving || selectedRequest.status !== "pending"}
+                        onClick={() => updateRequestStatus("edited", draftLabel)}
+                        className="rounded-lg bg-[var(--color-brand)] px-4 py-3 text-sm font-bold text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Sửa lại nhãn và duyệt
                       </button>
                       <button
                         type="button"
@@ -1531,11 +1336,6 @@ export default function LabelRequestsPage() {
                     requesterOptions={requesterOptions}
                     statusLabels={HISTORY_STATUS_LABELS}
                     onFiltersChange={setHistoryFilters}
-                    onOpenRequest={(requestId) => {
-                      setRequestTimeRange("all");
-                      setSelectedId(requestId);
-                      setMode("detail");
-                    }}
                   />
                   <div className="hidden">
                     <p className="mb-4 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-text-muted)]">

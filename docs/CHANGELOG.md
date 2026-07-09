@@ -18,6 +18,13 @@
 - **Báo cáo PDF cho Brand Manager**:
   - Thêm chức năng xuất báo cáo PDF tổng hợp dữ liệu theo tuần để quản lý thương hiệu có thể xem nhanh tình hình đề cập, cảnh báo, lead và các chỉ số vận hành chính.
   - Tối ưu bố cục PDF để hạn chế lỗi font tiếng Việt và tránh tình trạng chữ bị đè khi nội dung dài.
+- **Báo cáo vận hành lead cho nhân viên xử lý tiềm năng**:
+  - Thêm module tổng hợp báo cáo lead theo KPI, pipeline xử lý, nguồn tạo lead, phân bổ intent, hiệu suất nhân viên và bảng chi tiết lead.
+  - Hỗ trợ xuất báo cáo lead sang Excel và CSV thay cho định dạng PDF.
+  - Thêm route `/lead-monitoring` và cho phép trang `/reports` hiển thị báo cáo lead mới khi người dùng có vai trò `lead_employee`.
+- **Proxy Supabase nội bộ cho frontend**:
+  - Thêm API route `/api/supabase/[table]` để frontend gọi Supabase qua server-side proxy, tránh lỗi CORS khi chạy tại `localhost`.
+  - Chuẩn hóa cách mã hóa tham số PostgREST `in.(...)` để tránh lỗi request khi `post_id` có ký tự đặc biệt.
 
 ### Changed
 
@@ -27,6 +34,12 @@
 - **Tối ưu cơ chế tải dữ liệu nghiệp vụ**:
   - Điều chỉnh trang Mention, Khách hàng tiềm năng và Report chỉ tự động gửi request định kỳ mỗi 30 phút.
   - Thêm nút làm mới/reset thủ công để người dùng chủ động tải lại dữ liệu khi cần, giảm tải cho database Supabase.
+- **Thay thế nghiệp vụ trang Báo cáo cho nhân viên lead**:
+  - Nhân viên `lead_employee` khi vào `/reports` se thấy báo cáo vận hành lead đúng theo công việc hằng ngày, thay vì trang báo cáo tổng hợp cũ.
+  - Các vai trò khác vẫn giữ trang báo cáo cũ để không ảnh hưởng nghiệp vụ hiện có.
+- **Đồng bộ phạm vi dữ liệu Lead Workbench**:
+  - Danh sách hàng chờ lead trong `/leads` không còn bị ẩn bởi filter thời gian mặc định `24h` của dashboard.
+  - Thống kê KPI và danh sách quick view lead này dùng chung phạm vi lọc theo brand, platform và quyền xem.
 
 ### Fixed
 
@@ -34,6 +47,22 @@
   - Khắc phục lỗi gửi yêu cầu sửa nhãn từ trang Khách hàng tiềm năng không ghi được dữ liệu vào bảng `label_change_requests`.
   - Đồng bộ lại luồng sửa nhãn ở trang Cảnh báo để nhất quán với trải nghiệm sửa nhãn ở trang Khách hàng tiềm năng.
   - Giới hạn dữ liệu cảnh báo và lead cần duyệt trong phạm vi 1 tháng gần nhất để tránh tải và duyệt toàn bộ dữ liệu cũ.
+- **Trang duyệt yêu cầu gán lại nhãn (`/label-requests`) không có dữ liệu**:
+  - Sửa luồng đọc request để không phụ thuộc vào bảng/collection lịch sử nhãn chưa tồn tại.
+  - Đổi filter thời gian mặc định sang xem tất cả request, tránh trường hợp request cũ bị lọc rỗng.
+  - Ghi lịch sử sửa nhãn theo hướng optional, không làm hỏng luồng duyệt khi endpoint lịch sử chưa sẵn sàng.
+- **Lỗi tải dữ liệu Supabase trên local**:
+  - Khắc phục lỗi CORS khi gọi Supabase REST API trực tiếp từ browser.
+  - Khắc phục lỗi fetch batch post do URL query `post_id=in.(...)` bị encode sai.
+- **Trang Khách hàng/Lead hiển thị "Không có lead trong nhóm này" dù có KPI**:
+  - Sửa logic lọc base lead của workbench để danh sách khớp với số liệu trên card thống kê.
+  - Lead của nhân viên hoặc lead chưa phân công tiếp tục được lọc theo đúng phạm vi quyền của `lead_employee`.
+
+### Verification
+
+- Đã chạy `npx.cmd tsc --noEmit --pretty false` thành công sau các thay đổi.
+
+---
 
 ## [Unreleased] - 2026-07-08
 
