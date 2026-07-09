@@ -6,7 +6,7 @@
  * Hỗ trợ Dark/Light mode.
  */
 
-import React, { useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -67,6 +67,7 @@ export function BMSentimentChart({ filteredMentions }: BMSentimentChartProps) {
   const { t } = useTranslation();
   const isDark = theme === "dark";
   const p = isDark ? PALETTE.dark : PALETTE.light;
+  const [sentimentFilter, setSentimentFilter] = useState<"all" | "positive" | "negative" | "neutral">("all");
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -78,46 +79,53 @@ export function BMSentimentChart({ filteredMentions }: BMSentimentChartProps) {
     const totalByDay = trendData.map((d) => d.positive + d.negative + d.neutral);
     const maxTotal = Math.max(...totalByDay, 1);
 
+    const datasets = [];
+    if (sentimentFilter === "all" || sentimentFilter === "positive") {
+      datasets.push({
+        label: t("bm.hero.positive"),
+        data: trendData.map((d) => d.positive),
+        borderColor: p.positive.line,
+        backgroundColor: p.positive.fill,
+        tension: 0.4, fill: true, borderWidth: 2.5,
+        pointRadius: trendData.length > 20 ? 0 : 3,
+        pointHoverRadius: 5,
+        pointBackgroundColor: p.positive.line,
+        pointBorderColor: isDark ? "#0A0612" : "#fff",
+        pointBorderWidth: 2,
+      });
+    }
+    if (sentimentFilter === "all" || sentimentFilter === "negative") {
+      datasets.push({
+        label: t("bm.hero.negative"),
+        data: trendData.map((d) => d.negative),
+        borderColor: p.negative.line,
+        backgroundColor: p.negative.fill,
+        tension: 0.4, fill: true, borderWidth: 2.5,
+        pointRadius: trendData.length > 20 ? 0 : 3,
+        pointHoverRadius: 5,
+        pointBackgroundColor: p.negative.line,
+        pointBorderColor: isDark ? "#0A0612" : "#fff",
+        pointBorderWidth: 2,
+      });
+    }
+    if (sentimentFilter === "all" || sentimentFilter === "neutral") {
+      datasets.push({
+        label: t("bm.hero.neutral"),
+        data: trendData.map((d) => d.neutral),
+        borderColor: p.neutral.line,
+        backgroundColor: p.neutral.fill,
+        tension: 0.4, fill: true, borderWidth: 1.5,
+        borderDash: [4, 3],
+        pointRadius: 0,
+        pointHoverRadius: 4,
+      });
+    }
+
     chartRef.current = new ChartJS(ctx, {
       type: "line",
       data: {
         labels: trendData.map((d) => d.date),
-        datasets: [
-          {
-            label: t("bm.hero.positive"),
-            data: trendData.map((d) => d.positive),
-            borderColor: p.positive.line,
-            backgroundColor: p.positive.fill,
-            tension: 0.4, fill: true, borderWidth: 2.5,
-            pointRadius: trendData.length > 20 ? 0 : 3,
-            pointHoverRadius: 5,
-            pointBackgroundColor: p.positive.line,
-            pointBorderColor: isDark ? "#0A0612" : "#fff",
-            pointBorderWidth: 2,
-          },
-          {
-            label: t("bm.hero.negative"),
-            data: trendData.map((d) => d.negative),
-            borderColor: p.negative.line,
-            backgroundColor: p.negative.fill,
-            tension: 0.4, fill: true, borderWidth: 2.5,
-            pointRadius: trendData.length > 20 ? 0 : 3,
-            pointHoverRadius: 5,
-            pointBackgroundColor: p.negative.line,
-            pointBorderColor: isDark ? "#0A0612" : "#fff",
-            pointBorderWidth: 2,
-          },
-          {
-            label: t("bm.hero.neutral"),
-            data: trendData.map((d) => d.neutral),
-            borderColor: p.neutral.line,
-            backgroundColor: p.neutral.fill,
-            tension: 0.4, fill: true, borderWidth: 1.5,
-            borderDash: [4, 3],
-            pointRadius: 0,
-            pointHoverRadius: 4,
-          },
-        ],
+        datasets,
       },
       options: {
         responsive: true,
@@ -165,7 +173,7 @@ export function BMSentimentChart({ filteredMentions }: BMSentimentChartProps) {
     });
 
     return () => { chartRef.current?.destroy(); chartRef.current = null; };
-  }, [filteredMentions, timeRange, theme]);
+  }, [filteredMentions, timeRange, theme, sentimentFilter]);
 
   // Legend totals
   const trend = DashboardService.calculateSentimentTrend(filteredMentions, timeRange);
@@ -178,10 +186,20 @@ export function BMSentimentChart({ filteredMentions }: BMSentimentChartProps) {
     { positive: 0, negative: 0, neutral: 0 }
   );
 
-  const rangeLabel =
-    timeRange === "all" ? t("time.all") :
-    timeRange === "24h" ? t("time.today") :
-    timeRange === "7d"  ? t("time.7d") : t("time.30d");
+  const getRangeLabel = () => {
+    switch (timeRange) {
+      case "all": return t("time.all") || "Toàn thời gian";
+      case "24h": return t("time.today") || "Hôm nay";
+      case "2d": return "2 ngày qua";
+      case "3d": return "3 ngày qua";
+      case "5d": return "5 ngày qua";
+      case "7d": return t("time.7d") || "7 ngày qua";
+      case "30d": return t("time.30d") || "30 ngày qua";
+      case "custom": return "Tùy chỉnh";
+      default: return t("time.30d") || "30 ngày qua";
+    }
+  };
+  const rangeLabel = getRangeLabel();
 
   return (
     <div className="bm-chart-card">
@@ -205,26 +223,41 @@ export function BMSentimentChart({ filteredMentions }: BMSentimentChartProps) {
           </div>
         </div>
 
-        {/* Legend */}
-        <div className="bm-chart-legend">
-          {[
-            { color: p.positive.line, label: t("bm.hero.positive"), count: totals.positive },
-            { color: p.negative.line, label: t("bm.hero.negative"), count: totals.negative },
-            { color: p.neutral.line,  label: t("bm.hero.neutral"), count: totals.neutral, dash: true },
-          ].map(({ color, label, count, dash }) => (
-            <div key={label} className="bm-legend-item">
-              <svg width="24" height="3">
-                <line
-                  x1="0" y1="1.5" x2="24" y2="1.5"
-                  stroke={color} strokeWidth="2.5"
-                  strokeDasharray={dash ? "4 3" : "none"}
-                  strokeLinecap="round"
-                />
-              </svg>
-              <span className="bm-legend-label">{label}</span>
-              <span className="bm-legend-count">{count.toLocaleString("vi-VN")}</span>
-            </div>
-          ))}
+        {/* Actions & Legend */}
+        <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
+          <select
+            value={sentimentFilter}
+            onChange={(e) => setSentimentFilter(e.target.value as any)}
+            className="bm-chart-select"
+          >
+            <option value="all">Tất cả sắc thái</option>
+            <option value="positive">Tích cực</option>
+            <option value="negative">Tiêu cực</option>
+            <option value="neutral">Trung lập</option>
+          </select>
+
+          <div className="bm-chart-legend">
+            {[
+              { color: p.positive.line, label: t("bm.hero.positive"), count: totals.positive, key: "positive" },
+              { color: p.negative.line, label: t("bm.hero.negative"), count: totals.negative, key: "negative" },
+              { color: p.neutral.line,  label: t("bm.hero.neutral"), count: totals.neutral, dash: true, key: "neutral" },
+            ]
+              .filter((item) => sentimentFilter === "all" || sentimentFilter === item.key)
+              .map(({ color, label, count, dash }) => (
+                <div key={label} className="bm-legend-item">
+                  <svg width="24" height="3">
+                    <line
+                      x1="0" y1="1.5" x2="24" y2="1.5"
+                      stroke={color} strokeWidth="2.5"
+                      strokeDasharray={dash ? "4 3" : "none"}
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  <span className="bm-legend-label">{label}</span>
+                  <span className="bm-legend-count">{count.toLocaleString("vi-VN")}</span>
+                </div>
+              ))}
+          </div>
         </div>
       </div>
 
@@ -246,6 +279,25 @@ export function BMSentimentChart({ filteredMentions }: BMSentimentChartProps) {
           display: flex; align-items: flex-start;
           justify-content: space-between; flex-wrap: wrap;
           gap: 12px; margin-bottom: 20px;
+        }
+        .bm-chart-select {
+          background: var(--color-bg-surface);
+          border: 1px solid var(--color-border);
+          color: var(--color-text-primary);
+          padding: 6px 12px;
+          border-radius: 8px;
+          font-size: 13px;
+          font-weight: 500;
+          outline: none;
+          cursor: pointer;
+          transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .bm-chart-select:hover {
+          border-color: var(--color-brand-border);
+        }
+        .bm-chart-select:focus {
+          border-color: var(--color-brand);
+          box-shadow: 0 0 0 2px var(--color-brand-subtle);
         }
         .bm-chart-title {
           font-size: 15px; font-weight: 700;

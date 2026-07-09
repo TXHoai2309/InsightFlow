@@ -13,9 +13,13 @@ import type { DashboardFilters, Workspace, Platform } from "@/types/dashboard";
 
 const TIME_OPTIONS = [
   { value: "24h", label: "time.today" },
+  { value: "2d",  label: "time.2d" },
+  { value: "3d",  label: "time.3d" },
+  { value: "5d",  label: "time.5d" },
   { value: "7d",  label: "time.7d" },
   { value: "30d", label: "time.30d" },
   { value: "all", label: "time.all" },
+  { value: "single", label: "time.single" },
   { value: "custom", label: "time.custom" },
 ] as const;
 
@@ -120,6 +124,19 @@ export function BMFiltersBar({ workspaces }: BMFiltersBarProps) {
               type="date"
               value={filters.custom_end_date || ""}
               onChange={(e) => handle("custom_end_date", e.target.value)}
+              className="bm-date-input"
+            />
+          </div>
+        )}
+
+        {/* Single specific date field */}
+        {filters.time_range === "single" && (
+          <div className="bm-date-custom animate-fade-in">
+            <span className="material-symbols-outlined bm-date-icon">calendar_month</span>
+            <input
+              type="date"
+              value={filters.single_date || ""}
+              onChange={(e) => handle("single_date", e.target.value)}
               className="bm-date-input"
             />
           </div>

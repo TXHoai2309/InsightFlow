@@ -62,20 +62,37 @@ export function AngryTopicsCard() {
     return map[t] || t;
   }
 
-  const getColor = (colorStr: string) => {
+  const getGradient = (colorStr: string) => {
     switch (colorStr) {
       case "error":
-        return "#BA1A1A";
+        return "linear-gradient(90deg, #F87171 0%, #BA1A1A 100%)";
       case "orange":
-        return "#F97316";
+        return "linear-gradient(90deg, #FBBF24 0%, #F97316 100%)";
       case "neutral":
       default:
-        return "#C8C4D6";
+        return "linear-gradient(90deg, #E2E8F0 0%, #94A3B8 100%)";
+    }
+  };
+
+  const getTopicEmoji = (label: string) => {
+    switch (label) {
+      case "Giá cả": return "💰";
+      case "Chất lượng": return "📦";
+      case "Dịch vụ": return "🛎️";
+      case "Nhân viên": return "👤";
+      case "Giao hàng": return "🚚";
+      case "Trải nghiệm": return "⭐";
+      case "Pháp lý": return "⚖️";
+      case "Vận hành": return "⚙️";
+      case "Marketing": return "📢";
+      case "Đối thủ": return "⚔️";
+      case "Khác": return "💬";
+      default: return "🔥";
     }
   };
 
   return (
-    <Card className="flex h-[260px] flex-col rounded-xl shadow-[0px_4px_20px_rgba(30,31,36,0.08)] transition-all duration-300 hover:-translate-y-[2px] hover:shadow-[0px_8px_30px_rgba(30,31,36,0.12)] border-[#C8C4D6]">
+    <Card className="flex h-[260px] flex-col rounded-xl shadow-[0px_4px_20px_rgba(30,31,36,0.08)] transition-all duration-300 hover:-translate-y-[2px] hover:shadow-[0px_8px_30px_rgba(30,31,36,0.12)] border-[#C8C4D6] bg-white/70 backdrop-blur-md">
       <CardHeader className="pb-2 pt-6 px-6">
         <CardTitle className="text-[14px] font-bold uppercase text-[#1A1B20] font-['Hanken_Grotesk'] tracking-wide leading-tight">
           Chủ đề gây phẫn nộ
@@ -86,20 +103,23 @@ export function AngryTopicsCard() {
           {angryTopics.map((item, idx) => (
             <div key={`${item.label}-${idx}`} className="flex flex-col space-y-2">
               <div className="flex items-center justify-between text-[13px]">
-                <span className="font-semibold text-[#1A1B20]">{item.label}</span>
+                <span className="font-semibold text-[#1A1B20] flex items-center gap-1.5">
+                  <span className="text-[14px]">{item.label !== "---" && getTopicEmoji(item.label)}</span>
+                  <span>{item.label}</span>
+                </span>
                 <span className="font-bold text-[#1A1B20]">{item.value}%</span>
               </div>
-              <div className="h-[6px] w-full overflow-hidden rounded-full bg-[#F4F3FA]">
+              <div className="h-[8px] w-full overflow-hidden rounded-full bg-slate-100">
                 {isMounted ? (
                   <motion.div
                     initial={{ width: 0 }}
                     animate={{ width: `${item.value}%` }}
                     transition={{ duration: 1, ease: "easeOut" }}
                     className="h-full rounded-full"
-                    style={{ backgroundColor: getColor(item.color) }}
+                    style={{ backgroundImage: getGradient(item.color) }}
                   />
                 ) : (
-                  <div className="h-full w-0 rounded-full" style={{ backgroundColor: getColor(item.color) }} />
+                  <div className="h-full w-0 rounded-full" style={{ backgroundImage: getGradient(item.color) }} />
                 )}
               </div>
             </div>
@@ -109,3 +129,4 @@ export function AngryTopicsCard() {
     </Card>
   );
 }
+

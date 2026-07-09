@@ -57,6 +57,8 @@ export interface Alert {
   spike_multiplier?: number;
   affected_mentions_count?: number;
   created_at: string;
+  resolved_at?: string;
+  assigned_to?: string | null;
   status: "new" | "acknowledged" | "resolved";
 }
 
@@ -239,9 +241,10 @@ export interface SentimentTrendPoint {
 
 export interface DashboardFilters {
   workspace_id: string; // 'all' or specific workspace
-  time_range: "all" | "24h" | "7d" | "30d" | "custom";
+  time_range: "all" | "24h" | "2d" | "3d" | "5d" | "7d" | "30d" | "custom" | "single";
   custom_start_date?: string; // YYYY-MM-DD
   custom_end_date?: string;   // YYYY-MM-DD
+  single_date?: string;       // YYYY-MM-DD
   platform: string;
   sentiment: "all" | "positive" | "negative" | "neutral";
   topic?: "all" | Mention["topic"];

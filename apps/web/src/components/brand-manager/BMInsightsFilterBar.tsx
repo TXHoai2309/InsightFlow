@@ -7,9 +7,14 @@ import type { DashboardFilters } from "@/types/dashboard";
 
 const TIME_OPTIONS = [
   { value: "24h", label: "Hôm nay" },
+  { value: "2d", label: "2 ngày" },
+  { value: "3d", label: "3 ngày" },
+  { value: "5d", label: "5 ngày" },
   { value: "7d", label: "7 ngày qua" },
   { value: "30d", label: "30 ngày qua" },
   { value: "all", label: "Toàn thời gian" },
+  { value: "single", label: "Ngày cụ thể" },
+  { value: "custom", label: "Tự chọn ngày" },
 ];
 
 export const MOCK_VENUES = [
@@ -59,6 +64,39 @@ export function BMInsightsFilterBar() {
             ))}
           </select>
         </div>
+
+        {/* Custom date range fields */}
+        {filters.time_range === "custom" && (
+          <div className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-1.5 animate-fade-in">
+            <i className="ti ti-calendar text-[var(--color-text-muted)]"></i>
+            <input
+              type="date"
+              value={filters.custom_start_date || ""}
+              onChange={(e) => handle("custom_start_date", e.target.value)}
+              className="bg-transparent text-[13px] font-semibold text-[var(--color-text-primary)] outline-none cursor-pointer"
+            />
+            <span className="text-[12px] text-[var(--color-text-muted)]">đến</span>
+            <input
+              type="date"
+              value={filters.custom_end_date || ""}
+              onChange={(e) => handle("custom_end_date", e.target.value)}
+              className="bg-transparent text-[13px] font-semibold text-[var(--color-text-primary)] outline-none cursor-pointer"
+            />
+          </div>
+        )}
+
+        {/* Single specific date picker field */}
+        {filters.time_range === "single" && (
+          <div className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-1.5 animate-fade-in">
+            <i className="ti ti-calendar text-[var(--color-text-muted)]"></i>
+            <input
+              type="date"
+              value={filters.single_date || ""}
+              onChange={(e) => handle("single_date", e.target.value)}
+              className="bg-transparent text-[13px] font-semibold text-[var(--color-text-primary)] outline-none cursor-pointer"
+            />
+          </div>
+        )}
 
         {/* Venue Filter (Mocked via workspace_id for now) */}
         <div className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-1.5">

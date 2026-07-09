@@ -249,7 +249,7 @@ export default function AlertDetailPage() {
 
     loadAlertDetail();
 
-    const intervalId = setInterval(loadAlertDetail, 60000);
+    const intervalId = setInterval(loadAlertDetail, 1800000);
     return () => clearInterval(intervalId);
   }, [id]);
 

@@ -51,6 +51,12 @@ export function BrandManagerInsights() {
     let cutoff: number | null = null;
     if (filters.time_range === "24h") {
       cutoff = startOfTodayMs;
+    } else if (filters.time_range === "2d") {
+      cutoff = startOfTodayMs - 1 * 24 * 60 * 60 * 1000;
+    } else if (filters.time_range === "3d") {
+      cutoff = startOfTodayMs - 2 * 24 * 60 * 60 * 1000;
+    } else if (filters.time_range === "5d") {
+      cutoff = startOfTodayMs - 4 * 24 * 60 * 60 * 1000;
     } else if (filters.time_range === "7d") {
       cutoff = startOfTodayMs - 6 * 24 * 60 * 60 * 1000;
     } else if (filters.time_range === "30d") {
@@ -59,17 +65,41 @@ export function BrandManagerInsights() {
 
     return mentions.filter((m: Mention) => {
       if (filters.platform !== "all" && m.platform !== filters.platform) return false;
-      if (cutoff) {
-        const t = new Date(m.posted_at).getTime();
-        if (!isFinite(t) || t < cutoff || t > Date.now()) return false;
+      const t = new Date(m.posted_at).getTime();
+      if (!isFinite(t)) return false;
+
+      if (filters.time_range === "custom") {
+        if (filters.custom_start_date) {
+          const start = new Date(`${filters.custom_start_date}T00:00:00`).getTime();
+          if (t < start) return false;
+        }
+        if (filters.custom_end_date) {
+          const end = new Date(`${filters.custom_end_date}T23:59:59`).getTime();
+          if (t > end) return false;
+        }
+      } else if (filters.time_range === "single") {
+        if (filters.single_date) {
+          const start = new Date(`${filters.single_date}T00:00:00`).getTime();
+          const end = new Date(`${filters.single_date}T23:59:59`).getTime();
+          if (t < start || t > end) return false;
+        }
+      } else if (cutoff) {
+        if (t < cutoff || t > Date.now()) return false;
       }
       return true;
     });
-  }, [mentions, filters.time_range, filters.platform]);
+  }, [
+    mentions,
+    filters.time_range,
+    filters.platform,
+    filters.custom_start_date,
+    filters.custom_end_date,
+    filters.single_date,
+  ]);
 
   /* ── Previous window ──────────────────────────────────────── */
   const prevMentions = useMemo(() => {
-    if (filters.time_range === "all") return [];
+    if (filters.time_range === "all" || filters.time_range === "custom" || filters.time_range === "single") return [];
     
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
@@ -80,6 +110,15 @@ export function BrandManagerInsights() {
     if (filters.time_range === "24h") {
       cutoff = startOfTodayMs;
       durationMs = Date.now() - startOfTodayMs;
+    } else if (filters.time_range === "2d") {
+      cutoff = startOfTodayMs - 1 * 24 * 60 * 60 * 1000;
+      durationMs = 2 * 24 * 60 * 60 * 1000;
+    } else if (filters.time_range === "3d") {
+      cutoff = startOfTodayMs - 2 * 24 * 60 * 60 * 1000;
+      durationMs = 3 * 24 * 60 * 60 * 1000;
+    } else if (filters.time_range === "5d") {
+      cutoff = startOfTodayMs - 4 * 24 * 60 * 60 * 1000;
+      durationMs = 5 * 24 * 60 * 60 * 1000;
     } else if (filters.time_range === "7d") {
       cutoff = startOfTodayMs - 6 * 24 * 60 * 60 * 1000;
       durationMs = 7 * 24 * 60 * 60 * 1000;

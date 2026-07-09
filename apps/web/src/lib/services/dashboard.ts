@@ -950,15 +950,19 @@ async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
     let postIds: string[] = [];
     try {
       let searchTerm = brandKey;
+      let displayBrandName = brandKey;
       if (brandKey.includes("highland")) {
-        searchTerm = "highland";
+        searchTerm = "highlandcoffee";
+        displayBrandName = "Highland Coffee";
       } else if (brandKey.includes("starbuck")) {
-        searchTerm = "starbuck";
+        searchTerm = "starbucks";
+        displayBrandName = "Starbucks";
       } else if (brandKey.includes("mixue")) {
         searchTerm = "mixue";
+        displayBrandName = "Mixue";
       }
       const query = new URLSearchParams({
-        or: `(brand_slug.ilike.*${searchTerm}*,brand.ilike.*${searchTerm}*)`,
+        or: `(brand_slug.eq.${searchTerm},brand.eq.${encodeURIComponent(displayBrandName)})`,
         select: "post_id",
         order: "posted_at.desc.nullslast",
         limit: "1000",
@@ -2008,8 +2012,18 @@ export class DashboardService {
     }
 
     // Group theo ngày đăng bài (posted_at)
-    let days = timeRange === "7d" ? 7 : 30;
-    if (timeRange === "all") {
+    let days = 30;
+    if (timeRange === "2d") {
+      days = 2;
+    } else if (timeRange === "3d") {
+      days = 3;
+    } else if (timeRange === "5d") {
+      days = 5;
+    } else if (timeRange === "7d") {
+      days = 7;
+    } else if (timeRange === "30d") {
+      days = 30;
+    } else if (timeRange === "all") {
       if (mentions.length === 0) {
         return [];
       }
@@ -2019,6 +2033,16 @@ export class DashboardService {
       const diffDays = Math.ceil(diffMs / (24 * 60 * 60 * 1000));
       // Giới hạn tối thiểu 1 ngày, tối đa 90 ngày để tránh render quá tải
       days = Math.max(1, Math.min(90, diffDays));
+    } else if (timeRange === "custom") {
+      if (mentions.length > 0) {
+        const timestamps = mentions.map((m) => new Date(m.posted_at).getTime());
+        const minTimestamp = Math.min(...timestamps);
+        const maxTimestamp = Math.max(...timestamps, now);
+        const diffMs = maxTimestamp - minTimestamp;
+        days = Math.max(1, Math.min(90, Math.ceil(diffMs / (24 * 60 * 60 * 1000))));
+      } else {
+        days = 30;
+      }
     }
 
     const result: SentimentTrendPoint[] = [];

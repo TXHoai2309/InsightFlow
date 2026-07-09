@@ -1,16 +1,40 @@
 -- Dashboard query indexes for Supabase REST.
 -- Run this in Supabase SQL Editor if /leads or /dashboard requests time out.
 
-create index if not exists posts_posted_at_desc_idx
-  on public.posts (posted_at desc);
+-- 1. Index cho sắp xếp thời gian (Tăng tốc các câu lệnh ORDER BY DESC)
+CREATE INDEX IF NOT EXISTS posts_posted_at_desc_idx
+  ON public.posts (posted_at DESC);
 
-create index if not exists posts_post_id_idx
-  on public.posts (post_id);
+CREATE INDEX IF NOT EXISTS annotations_created_at_desc_idx
+  ON public.annotations (created_at DESC);
 
-create index if not exists comments_post_id_idx
-  on public.comments (post_id);
+CREATE INDEX IF NOT EXISTS leads_created_at_desc_idx
+  ON public.leads (created_at DESC);
 
-create index if not exists annotations_post_id_idx
-  on public.annotations (post_id);
+CREATE INDEX IF NOT EXISTS label_change_requests_requested_at_desc_idx
+  ON public.label_change_requests (requested_at DESC);
 
-notify pgrst, 'reload schema';
+-- 2. Index cho khóa ngoại (Tăng tốc JOIN và hạn chế treo khi DELETE Cascade)
+CREATE INDEX IF NOT EXISTS posts_post_id_idx
+  ON public.posts (post_id);
+
+CREATE INDEX IF NOT EXISTS comments_post_id_idx
+  ON public.comments (post_id);
+
+CREATE INDEX IF NOT EXISTS comments_comment_id_idx
+  ON public.comments (comment_id);
+
+CREATE INDEX IF NOT EXISTS annotations_post_id_idx
+  ON public.annotations (post_id);
+
+CREATE INDEX IF NOT EXISTS annotations_comment_id_idx
+  ON public.annotations (comment_id);
+
+CREATE INDEX IF NOT EXISTS leads_mention_id_idx
+  ON public.leads (mention_id);
+
+CREATE INDEX IF NOT EXISTS leads_workspace_id_idx
+  ON public.leads (workspace_id);
+
+-- Reload PostgREST schema cache
+NOTIFY pgrst, 'reload schema';

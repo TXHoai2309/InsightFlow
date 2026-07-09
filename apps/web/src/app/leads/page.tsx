@@ -74,7 +74,7 @@ export default function LeadsPage() {
     if (clearHighlight) setHighlightedLeadId(null);
   }, []);
 
-  useDashboard({ autoFetch: true, refetchInterval: 60000 });
+  useDashboard({ autoFetch: true, refetchInterval: 1800000 });
 
   const {
     getFilteredLeadsWithoutUrgency,

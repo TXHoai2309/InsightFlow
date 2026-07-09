@@ -1372,9 +1372,13 @@
   },
   "time": {
     "today": "Hôm nay",
+    "2d": "2 ngày",
+    "3d": "3 ngày",
+    "5d": "5 ngày",
     "7d": "7 ngày",
     "30d": "30 ngày",
     "all": "Tất cả",
+    "single": "Ngày cụ thể",
     "custom": "Tự chọn ngày"
   },
   "bm": {

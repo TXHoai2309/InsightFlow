@@ -6,13 +6,18 @@
 "use client";
 
 import React from "react";
-import { BrandManagerDashboard } from "@/components/brand-manager";
+import dynamic from "next/dynamic";
 import { useDashboard } from "@/hooks/useDashboardData";
+
+const BrandManagerDashboard = dynamic(
+  () => import("@/components/brand-manager").then((mod) => mod.BrandManagerDashboard),
+  { ssr: false }
+);
 
 export default function BrandManagerPage() {
   useDashboard({
     autoFetch: true,
-    refetchInterval: 60000, // Làm mới mỗi 60 giây
+    refetchInterval: 1800000, // Làm mới mỗi 30 phút
   });
 
   return (

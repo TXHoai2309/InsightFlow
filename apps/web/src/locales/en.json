@@ -1371,9 +1371,13 @@
   },
   "time": {
     "today": "Today",
+    "2d": "2 days",
+    "3d": "3 days",
+    "5d": "5 days",
     "7d": "7 days",
     "30d": "30 days",
     "all": "All time",
+    "single": "Specific date",
     "custom": "Custom range"
   },
   "bm": {

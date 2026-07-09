@@ -95,16 +95,6 @@ export function BMKpiCards({
       href: "/alerts",
     },
     {
-      id: "bm-kpi-unprocessed",
-      icon: "contact_mail",
-      label: t("bm.kpi.unprocessed"),
-      value: unprocessed,
-      sub: crises > 0 ? `${crises} ${t("bm.kpi.crises")}` : t("bm.kpi.noCrises"),
-      subColor: crises > 0 ? "#EF4444" : "#22C55E",
-      status: unprocessed > 10 ? "danger" : unprocessed > 0 ? "warning" : "positive",
-      href: "/leads?status=new",
-    },
-    {
       id: "bm-kpi-leads",
       icon: "person_add",
       label: t("bm.kpi.leads"),
@@ -186,7 +176,7 @@ export function BMKpiCards({
       <style>{`
         .bm-kpi-grid {
           display: grid;
-          grid-template-columns: repeat(5, 1fr);
+          grid-template-columns: repeat(4, 1fr);
           gap: 16px;
         }
         @media (max-width: 1280px) { .bm-kpi-grid { grid-template-columns: repeat(3, 1fr); } }

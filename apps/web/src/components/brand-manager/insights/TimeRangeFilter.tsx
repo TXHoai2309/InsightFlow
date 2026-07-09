@@ -5,6 +5,9 @@ import { useDashboardStore } from "@/stores/dashboard.store";
 import type { DashboardFilters } from "@/types/dashboard";
 
 export const INSIGHTS_TIME_OPTIONS = [
+  { value: "2d", label: "2 ngày" },
+  { value: "3d", label: "3 ngày" },
+  { value: "5d", label: "5 ngày" },
   { value: "7d", label: "7 ngày qua" },
   { value: "30d", label: "30 ngày qua" },
   { value: "all", label: "90 ngày qua" },

@@ -85,6 +85,10 @@ interface DashboardState {
   getFilteredAlerts: () => Alert[];
   getFilteredLeads: () => Lead[];
   getFilteredLeadsWithoutUrgency: () => Lead[];
+
+  // ── Shared fetch cache timestamps ───────────────────────────────────────
+  lastFetchedAtMap: Record<string, number>;
+  setLastFetchedAt: (brandKey: string, time: number) => void;
 }
 
 const defaultFilters: DashboardFilters = {
@@ -107,6 +111,15 @@ function getCutoffMs(timeRange: DashboardFilters["time_range"]): number | null {
   if (timeRange === "24h") {
     return startOfTodayMs;
   }
+  if (timeRange === "2d") {
+    return startOfTodayMs - 1 * 24 * 60 * 60 * 1000;
+  }
+  if (timeRange === "3d") {
+    return startOfTodayMs - 2 * 24 * 60 * 60 * 1000;
+  }
+  if (timeRange === "5d") {
+    return startOfTodayMs - 4 * 24 * 60 * 60 * 1000;
+  }
   if (timeRange === "7d") {
     return startOfTodayMs - 6 * 24 * 60 * 60 * 1000;
   }
@@ -122,12 +135,21 @@ function isDateInFilterRange(dateStr: string, filters: DashboardFilters): boolea
 
   if (filters.time_range === "custom") {
     if (filters.custom_start_date) {
-      const start = new Date(`${filters.custom_start_date}T00:00:00Z`).getTime();
+      const start = new Date(`${filters.custom_start_date}T00:00:00`).getTime();
       if (time < start) return false;
     }
     if (filters.custom_end_date) {
-      const end = new Date(`${filters.custom_end_date}T23:59:59Z`).getTime();
+      const end = new Date(`${filters.custom_end_date}T23:59:59`).getTime();
       if (time > end) return false;
+    }
+    return true;
+  }
+
+  if (filters.time_range === "single") {
+    if (filters.single_date) {
+      const start = new Date(`${filters.single_date}T00:00:00`).getTime();
+      const end = new Date(`${filters.single_date}T23:59:59`).getTime();
+      return time >= start && time <= end;
     }
     return true;
   }
@@ -185,6 +207,15 @@ export const useDashboardStore = create<DashboardState>()(
 
     setLoading: (loading) => set({ isLoading: loading }),
     setError: (error) => set({ error }),
+
+    lastFetchedAtMap: {},
+    setLastFetchedAt: (brandKey, time) =>
+      set((state) => ({
+        lastFetchedAtMap: {
+          ...state.lastFetchedAtMap,
+          [brandKey]: time,
+        },
+      })),
 
     updateLeadStatus: async (id, status, profile) => {
       try {

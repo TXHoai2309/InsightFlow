@@ -8,9 +8,9 @@
  *           Top Topics, và Today's Focus sidebar.
  */
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useDashboardStore } from "@/stores/dashboard.store";
-import { DashboardService } from "@/lib/services/dashboard";
+import { DashboardService, normalizeBrandName } from "@/lib/services/dashboard";
 import { useTranslation } from "react-i18next";
 
 import { BMFiltersBar } from "./BMFiltersBar";
@@ -38,6 +38,7 @@ export function BrandManagerDashboard({
     workspaces,
     filters,
     isLoading,
+    error,
     setWorkspaces,
     setFilters,
   } = useDashboardStore();
@@ -71,6 +72,58 @@ export function BrandManagerDashboard({
     setViewMode("overview");
   };
 
+  const checkTimeFilter = useCallback((postedAt: string) => {
+    const time = new Date(postedAt).getTime();
+    if (!Number.isFinite(time)) return false;
+
+    if (filters.time_range === "custom") {
+      if (filters.custom_start_date) {
+        const start = new Date(`${filters.custom_start_date}T00:00:00`).getTime();
+        if (time < start) return false;
+      }
+      if (filters.custom_end_date) {
+        const end = new Date(`${filters.custom_end_date}T23:59:59`).getTime();
+        if (time > end) return false;
+      }
+    } else if (filters.time_range === "single") {
+      if (filters.single_date) {
+        const start = new Date(`${filters.single_date}T00:00:00`).getTime();
+        const end = new Date(`${filters.single_date}T23:59:59`).getTime();
+        if (time < start || time > end) return false;
+      }
+    } else {
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      const startOfTodayMs = startOfToday.getTime();
+
+      let cutoff: number | null = null;
+      if (filters.time_range === "24h") {
+        cutoff = startOfTodayMs;
+      } else if (filters.time_range === "2d") {
+        cutoff = startOfTodayMs - 1 * 24 * 60 * 60 * 1000;
+      } else if (filters.time_range === "3d") {
+        cutoff = startOfTodayMs - 2 * 24 * 60 * 60 * 1000;
+      } else if (filters.time_range === "5d") {
+        cutoff = startOfTodayMs - 4 * 24 * 60 * 60 * 1000;
+      } else if (filters.time_range === "7d") {
+        cutoff = startOfTodayMs - 6 * 24 * 60 * 60 * 1000;
+      } else if (filters.time_range === "30d") {
+        cutoff = startOfTodayMs - 29 * 24 * 60 * 60 * 1000;
+      }
+
+      if (cutoff !== null) {
+        if (time < cutoff || time > Date.now()) return false;
+      }
+    }
+
+    return true;
+  }, [
+    filters.time_range,
+    filters.custom_start_date,
+    filters.custom_end_date,
+    filters.single_date,
+  ]);
+
   /* ── Filtered mentions for current period ─────────────────── */
   const currentMentions = useMemo(() => {
     const normFilter =
@@ -89,52 +142,19 @@ export function BrandManagerDashboard({
       if (filters.platform !== "all" && m.platform !== filters.platform) return false;
 
       // 3. Time filter
-      const time = new Date(m.posted_at).getTime();
-      if (!Number.isFinite(time)) return false;
-
-      if (filters.time_range === "custom") {
-        if (filters.custom_start_date) {
-          const start = new Date(`${filters.custom_start_date}T00:00:00Z`).getTime();
-          if (time < start) return false;
-        }
-        if (filters.custom_end_date) {
-          const end = new Date(`${filters.custom_end_date}T23:59:59Z`).getTime();
-          if (time > end) return false;
-        }
-      } else {
-        const startOfToday = new Date();
-        startOfToday.setHours(0, 0, 0, 0);
-        const startOfTodayMs = startOfToday.getTime();
-
-        let cutoff: number | null = null;
-        if (filters.time_range === "24h") {
-          cutoff = startOfTodayMs;
-        } else if (filters.time_range === "7d") {
-          cutoff = startOfTodayMs - 6 * 24 * 60 * 60 * 1000;
-        } else if (filters.time_range === "30d") {
-          cutoff = startOfTodayMs - 29 * 24 * 60 * 60 * 1000;
-        }
-
-        if (cutoff !== null) {
-          if (time < cutoff || time > Date.now()) return false;
-        }
-      }
-
-      return true;
+      return checkTimeFilter(m.posted_at);
     });
   }, [
     mentions,
     filters.workspace_id,
-    filters.time_range,
     filters.platform,
-    filters.custom_start_date,
-    filters.custom_end_date,
+    checkTimeFilter,
   ]);
 
 
   /* ── Filtered mentions for previous period (trend calc) ────── */
   const previousMentions = useMemo(() => {
-    if (filters.time_range === "all" || filters.time_range === "custom") return [];
+    if (filters.time_range === "all" || filters.time_range === "custom" || filters.time_range === "single") return [];
 
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
@@ -145,6 +165,15 @@ export function BrandManagerDashboard({
     if (filters.time_range === "24h") {
       cutoff = startOfTodayMs;
       durationMs = Date.now() - startOfTodayMs;
+    } else if (filters.time_range === "2d") {
+      cutoff = startOfTodayMs - 1 * 24 * 60 * 60 * 1000;
+      durationMs = 2 * 24 * 60 * 60 * 1000;
+    } else if (filters.time_range === "3d") {
+      cutoff = startOfTodayMs - 2 * 24 * 60 * 60 * 1000;
+      durationMs = 3 * 24 * 60 * 60 * 1000;
+    } else if (filters.time_range === "5d") {
+      cutoff = startOfTodayMs - 4 * 24 * 60 * 60 * 1000;
+      durationMs = 5 * 24 * 60 * 60 * 1000;
     } else if (filters.time_range === "7d") {
       cutoff = startOfTodayMs - 6 * 24 * 60 * 60 * 1000;
       durationMs = 7 * 24 * 60 * 60 * 1000;
@@ -175,23 +204,22 @@ export function BrandManagerDashboard({
   }, [mentions, filters.workspace_id, filters.time_range, filters.platform]);
 
   /* ── Stats ──────────────────────────────────────────────────── */
-  const filteredAlerts = useMemo(
-    () =>
-      alerts.filter((a) => {
-        if (filters.workspace_id !== "all" && a.workspace_id !== filters.workspace_id) return false;
-        return true;
-      }),
-    [alerts, filters.workspace_id]
-  );
+  const filteredAlerts = useMemo(() => {
+    const targetBrand = filters.workspace_id !== "all" ? normalizeBrandName(filters.workspace_id) : null;
+    return alerts.filter((a) => {
+      if (targetBrand && normalizeBrandName(a.workspace_id || "") !== targetBrand) return false;
+      return checkTimeFilter(a.created_at);
+    });
+  }, [alerts, filters.workspace_id, checkTimeFilter]);
 
-  const filteredLeads = useMemo(
-    () =>
-      leads.filter((l) => {
-        if (filters.workspace_id !== "all" && l.workspace_id !== filters.workspace_id) return false;
-        return true;
-      }),
-    [leads, filters.workspace_id]
-  );
+  const filteredLeads = useMemo(() => {
+    const targetBrand = filters.workspace_id !== "all" ? normalizeBrandName(filters.workspace_id) : null;
+    return leads.filter((l) => {
+      if (targetBrand && normalizeBrandName(l.workspace_id || "") !== targetBrand) return false;
+      if (filters.platform !== "all" && l.platform !== filters.platform) return false;
+      return checkTimeFilter(l.created_at);
+    });
+  }, [leads, filters.workspace_id, filters.platform, checkTimeFilter]);
 
   const stats = useMemo(
     () => DashboardService.calculateStats(currentMentions, filteredAlerts, filteredLeads),
@@ -282,7 +310,8 @@ export function BrandManagerDashboard({
   );
   const unprocessedContacts = filteredLeads.filter((l) => l.status === "new").length;
 
-  if (!isMounted || (!isFirstLoadDone && isLoading)) {
+  const hasData = mentions.length > 0;
+  if ((!isMounted && !hasData) || (!isFirstLoadDone && isLoading)) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="flex flex-col items-center gap-3">
@@ -297,6 +326,14 @@ export function BrandManagerDashboard({
     return (
       <div data-tour="dashboard-overview" className="max-w-[1600px] mx-auto space-y-6 pb-12">
         <BMFiltersBar workspaces={workspaces} />
+        {error && (
+          <div className="p-4 rounded-xl border border-[var(--color-error-border,rgba(239,68,68,0.2))] bg-[var(--color-error-subtle)] text-[var(--color-error)] flex items-center justify-between gap-3 shadow-sm animate-pulse">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-lg">cloud_off</span>
+              <span className="text-sm font-medium">{error}</span>
+            </div>
+          </div>
+        )}
         <BMPlatformDashboard
           onBack={handleBackToOverview}
           currentMentions={currentMentions}
@@ -309,6 +346,15 @@ export function BrandManagerDashboard({
     <div data-tour="dashboard-overview" className="max-w-[1600px] mx-auto space-y-6 pb-12">
       {/* ── 1. Sticky Filter Bar ───────────────────────────────── */}
       <BMFiltersBar workspaces={workspaces} />
+
+      {error && (
+        <div className="p-4 rounded-xl border border-[var(--color-error-border,rgba(239,68,68,0.2))] bg-[var(--color-error-subtle)] text-[var(--color-error)] flex items-center justify-between gap-3 shadow-sm animate-pulse">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-lg">cloud_off</span>
+            <span className="text-sm font-medium">{error}</span>
+          </div>
+        </div>
+      )}
 
       {/* ── 2. Critical Alert Banner (above the fold) ─────────── */}
       {highAlerts.length > 0 && <BMAlertBanner alerts={highAlerts} />}

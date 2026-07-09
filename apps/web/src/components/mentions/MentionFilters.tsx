@@ -20,13 +20,6 @@ const sentimentOptions = [
   { value: "negative", label: "Tiêu cực" },
 ];
 
-const timeRangeOptions = [
-  { value: "all", label: "Tất cả thời gian" },
-  { value: "24h", label: "24 giờ qua" },
-  { value: "7d", label: "7 ngày qua" },
-  { value: "30d", label: "30 ngày qua" },
-];
-
 const defaultPlatforms = ["facebook", "tiktok", "youtube", "thread", "be", "google_maps", "news"];
 const defaultTopics = [
   "quality",
@@ -65,6 +58,18 @@ function titleizeFilterValue(value: string) {
 export function MentionFilters({ workspaces, filters, allMentions, contentMode, onContentModeChange }: MentionFiltersProps) {
   const { t } = useTranslation();
   const { setFilters } = useDashboardStore();
+
+  const timeRangeOptions = useMemo(() => [
+    { value: "24h", label: t("time.today", "Hôm nay") },
+    { value: "2d", label: t("time.2d", "2 ngày") },
+    { value: "3d", label: t("time.3d", "3 ngày") },
+    { value: "5d", label: t("time.5d", "5 ngày") },
+    { value: "7d", label: t("time.7d", "7 ngày qua") },
+    { value: "30d", label: t("time.30d", "30 ngày qua") },
+    { value: "all", label: t("time.all", "Tất cả thời gian") },
+    { value: "single", label: t("time.single", "Ngày cụ thể") },
+    { value: "custom", label: t("time.custom", "Tự chọn ngày") },
+  ] as const, [t]);
 
   // Keep the product scope fixed to the three tracked brands.
   const availableBrands = useMemo(() => {
@@ -305,6 +310,70 @@ export function MentionFilters({ workspaces, filters, allMentions, contentMode, 
           ))}
         </select>
       </div>
+
+      {/* Single specific date filter field */}
+      {filters.time_range === "single" && (
+        <div
+          className="p-4 rounded-2xl flex flex-col gap-3 animate-fade-in"
+          style={{
+            backgroundColor: "var(--color-bg-surface)",
+            border: "1px solid var(--color-border)",
+          }}
+        >
+          <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--color-text-muted)" }}>
+            Chọn Ngày
+          </label>
+          <input
+            type="date"
+            value={filters.single_date || ""}
+            onChange={(e) => setFilters({ single_date: e.target.value })}
+            className="bg-transparent border-none focus:ring-0 font-medium w-full p-0 text-sm outline-none cursor-pointer"
+            style={{ color: "var(--color-text-primary)" }}
+          />
+        </div>
+      )}
+
+      {/* Custom Date Range fields */}
+      {filters.time_range === "custom" && (
+        <>
+          <div
+            className="p-4 rounded-2xl flex flex-col gap-3 animate-fade-in"
+            style={{
+              backgroundColor: "var(--color-bg-surface)",
+              border: "1px solid var(--color-border)",
+            }}
+          >
+            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--color-text-muted)" }}>
+              Từ ngày
+            </label>
+            <input
+              type="date"
+              value={filters.custom_start_date || ""}
+              onChange={(e) => setFilters({ custom_start_date: e.target.value })}
+              className="bg-transparent border-none focus:ring-0 font-medium w-full p-0 text-sm outline-none cursor-pointer"
+              style={{ color: "var(--color-text-primary)" }}
+            />
+          </div>
+          <div
+            className="p-4 rounded-2xl flex flex-col gap-3 animate-fade-in"
+            style={{
+              backgroundColor: "var(--color-bg-surface)",
+              border: "1px solid var(--color-border)",
+            }}
+          >
+            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--color-text-muted)" }}>
+              Đến ngày
+            </label>
+            <input
+              type="date"
+              value={filters.custom_end_date || ""}
+              onChange={(e) => setFilters({ custom_end_date: e.target.value })}
+              className="bg-transparent border-none focus:ring-0 font-medium w-full p-0 text-sm outline-none cursor-pointer"
+              style={{ color: "var(--color-text-primary)" }}
+            />
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -192,17 +192,25 @@ export function SentimentTrend({ filteredMentions }: SentimentTrendProps) {
 
   const pal = isDark ? PALETTE.dark : PALETTE.light;
 
+  const getRangeLabel = () => {
+    switch (timeRange) {
+      case "all": return t("dashboard.sentimentTrend.allTime") || "Toàn thời gian";
+      case "24h": return t("dashboard.sentimentTrend.24h") || "24 giờ qua";
+      case "2d": return "2 ngày qua";
+      case "3d": return "3 ngày qua";
+      case "5d": return "5 ngày qua";
+      case "7d": return t("dashboard.sentimentTrend.7d") || "7 ngày qua";
+      case "30d": return t("dashboard.sentimentTrend.30d") || "30 ngày qua";
+      case "custom": return "Tùy chỉnh";
+      default: return t("dashboard.sentimentTrend.30d") || "30 ngày qua";
+    }
+  };
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-end mb-2">
         <span className="text-xs" style={{ color: "var(--color-text-muted)" }}>
-          {timeRange === "all"
-            ? t("dashboard.sentimentTrend.allTime")
-            : timeRange === "24h"
-            ? t("dashboard.sentimentTrend.24h")
-            : timeRange === "7d"
-            ? t("dashboard.sentimentTrend.7d")
-            : t("dashboard.sentimentTrend.30d")}
+          {getRangeLabel()}
           {` · ${t("dashboard.sentimentTrend.byPostDate")}`}
         </span>
       </div>

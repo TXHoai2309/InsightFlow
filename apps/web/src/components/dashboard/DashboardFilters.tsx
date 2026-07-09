@@ -87,10 +87,15 @@ export function DashboardFilters({ workspaces }: DashboardFiltersProps) {
                 }
                 className="appearance-none pl-4 pr-10 py-2.5 rounded-lg text-[13px] font-medium bg-white dark:bg-[#1a1b1e] border border-gray-200 dark:border-gray-800 focus:outline-none focus:ring-1 focus:ring-[#6D5FFD] cursor-pointer min-w-[140px]"
               >
-                <option value="7d">{t("dashboard.filters.7days", "7 ngày qua")}</option>
-                <option value="all">{t("dashboard.filters.allTime")}</option>
-                <option value="24h">{t("dashboard.filters.today24h")}</option>
-                <option value="30d">{t("dashboard.filters.30days")}</option>
+                <option value="24h">{t("time.today")}</option>
+                <option value="2d">{t("time.2d")}</option>
+                <option value="3d">{t("time.3d")}</option>
+                <option value="5d">{t("time.5d")}</option>
+                <option value="7d">{t("time.7d")}</option>
+                <option value="30d">{t("time.30d")}</option>
+                <option value="all">{t("time.all")}</option>
+                <option value="single">{t("time.single")}</option>
+                <option value="custom">{t("time.custom")}</option>
               </select>
               <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
                 <i className="ti ti-chevron-down text-[14px]"></i>
@@ -125,34 +130,58 @@ export function DashboardFilters({ workspaces }: DashboardFiltersProps) {
           </div>
           
           {/* Custom Date Range Picker */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[10px] font-bold uppercase text-gray-400">
-              {t("dashboard.filters.dateRange", "TỪ NGÀY - ĐẾN NGÀY")}
-            </label>
-            <div className="flex items-center gap-2">
-              <div className="relative">
-                <input
-                  type="date"
-                  className="appearance-none pl-10 pr-3 py-2.5 rounded-lg text-[13px] font-medium bg-white dark:bg-[#1a1b1e] border border-gray-200 dark:border-gray-800 focus:outline-none focus:ring-1 focus:ring-[#6D5FFD] cursor-pointer"
-                  onChange={(e) => console.log('Start date changed:', e.target.value)}
-                />
-                <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                  <i className="ti ti-calendar text-[16px]"></i>
+          {filters.time_range === "custom" && (
+            <div className="flex flex-col gap-1.5 animate-fade-in">
+              <label className="text-[10px] font-bold uppercase text-gray-400">
+                {t("dashboard.filters.dateRange", "TỪ NGÀY - ĐẾN NGÀY")}
+              </label>
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <input
+                    type="date"
+                    value={filters.custom_start_date || ""}
+                    className="appearance-none pl-10 pr-3 py-2.5 rounded-lg text-[13px] font-medium bg-white dark:bg-[#1a1b1e] border border-gray-200 dark:border-gray-800 focus:outline-none focus:ring-1 focus:ring-[#6D5FFD] cursor-pointer"
+                    onChange={(e) => handleFilterChange("custom_start_date", e.target.value)}
+                  />
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                    <i className="ti ti-calendar text-[16px]"></i>
+                  </div>
+                </div>
+                <span className="text-gray-400">-</span>
+                <div className="relative">
+                  <input
+                    type="date"
+                    value={filters.custom_end_date || ""}
+                    className="appearance-none pl-10 pr-3 py-2.5 rounded-lg text-[13px] font-medium bg-white dark:bg-[#1a1b1e] border border-gray-200 dark:border-gray-800 focus:outline-none focus:ring-1 focus:ring-[#6D5FFD] cursor-pointer"
+                    onChange={(e) => handleFilterChange("custom_end_date", e.target.value)}
+                  />
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                    <i className="ti ti-calendar text-[16px]"></i>
+                  </div>
                 </div>
               </div>
-              <span className="text-gray-400">-</span>
+            </div>
+          )}
+
+          {/* Single Specific Date Picker */}
+          {filters.time_range === "single" && (
+            <div className="flex flex-col gap-1.5 animate-fade-in">
+              <label className="text-[10px] font-bold uppercase text-gray-400">
+                CHỌN NGÀY
+              </label>
               <div className="relative">
                 <input
                   type="date"
+                  value={filters.single_date || ""}
                   className="appearance-none pl-10 pr-3 py-2.5 rounded-lg text-[13px] font-medium bg-white dark:bg-[#1a1b1e] border border-gray-200 dark:border-gray-800 focus:outline-none focus:ring-1 focus:ring-[#6D5FFD] cursor-pointer"
-                  onChange={(e) => console.log('End date changed:', e.target.value)}
+                  onChange={(e) => handleFilterChange("single_date", e.target.value)}
                 />
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
                   <i className="ti ti-calendar text-[16px]"></i>
                 </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

@@ -28,7 +28,15 @@ const API_KEYS = rawKeys
   : [];
 
 const ASSIGNEE = process.argv[2] || 'Person A';
-const FILTER_PLATFORM = process.argv[3] || 'threads';
+let FILTER_PLATFORM = process.argv[3] || 'threads';
+
+// Map 'news' CLI argument to database platform identifier 'news_html'
+if (FILTER_PLATFORM === 'news') {
+  FILTER_PLATFORM = 'news_html';
+} else if (FILTER_PLATFORM === 'google_map') {
+  FILTER_PLATFORM = 'google_maps';
+}
+
 const BATCH_SIZE = 30; // 30 items per request
 const FETCH_LIMIT = 150;
 const SUPABASE_WRITE_DELAY_MS = 500; // delay between Supabase write operations
@@ -75,8 +83,11 @@ async function request(table, query = '', init = {}) {
   const MAX_RETRIES = 12;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
       const response = await fetch(url, {
         ...init,
+        signal: controller.signal,
         headers: {
           apikey: SUPABASE_ANON_KEY,
           Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
@@ -84,6 +95,7 @@ async function request(table, query = '', init = {}) {
           ...(init.headers || {}),
         },
       });
+      clearTimeout(timeoutId);
       if (!response.ok) {
         const text = await response.text();
         const err = new Error(`Supabase ${table} HTTP ${response.status}: ${text}`);
@@ -163,8 +175,11 @@ Do NOT return markdown, explanation, or any other text. Only return the JSON arr
   for (const model of MODELS) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
       const response = await fetch(url, {
         method: 'POST',
+        signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
           'x-goog-api-key': apiKey
@@ -175,6 +190,7 @@ Do NOT return markdown, explanation, or any other text. Only return the JSON arr
           generationConfig: { responseMimeType: 'application/json', temperature: 0.1 }
         })
       });
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         const text = await response.text();
@@ -212,7 +228,7 @@ Do NOT return markdown, explanation, or any other text. Only return the JSON arr
 
 async function startLabeling() {
   const BATCH_DELAY_MS = 6200;
-  const platformPrefix = FILTER_PLATFORM === 'befood' || FILTER_PLATFORM === 'be' ? 'be' : FILTER_PLATFORM;
+  const platformPrefix = FILTER_PLATFORM;
 
   // Flush deferred assignment cleanups in one batch
   async function flushAssignments() {
@@ -226,9 +242,11 @@ async function startLabeling() {
         for (const type of types) {
           const entityKeys = chunk.filter(k => k.type === type).map(k => k.key);
           const assignments = await request('labeling_assignments', `platform=eq.${FILTER_PLATFORM}&entity_type=eq.${type}&status=in.(unassigned,assigned,updated_review)&entity_key=in.(${entityKeys.map(encodeURIComponent).join(',')})`);
+          console.log(`[flushAssignments] Found ${assignments ? assignments.length : 0} assignments to clean up from ${entityKeys.length} keys.`);
           if (assignments && assignments.length > 0) {
             const ids = assignments.map(a => a.assignment_id);
             const now = new Date().toISOString();
+            console.log(`[flushAssignments] Updating ${ids.length} assignments to status completed...`);
             await request('labeling_assignments', `assignment_id=in.(${ids.map(encodeURIComponent).join(',')})`, {
               method: 'PATCH', body: JSON.stringify({ status: 'completed', completed_at: now, updated_at: now }),
               headers: { Prefer: 'return=minimal' }
@@ -305,13 +323,25 @@ async function startLabeling() {
       }
       lastPostId = posts[posts.length - 1].post_id;
 
+      for (const p of posts) {
+        if (annotatedPostIds.has(p.post_id) || (p.payload_json?.text || p.text || '').trim().length === 0) {
+          pendingAssignmentKeys.push({ type: 'post', key: `${platformPrefix}:post:${p.post_id}` });
+        }
+      }
+      if (pendingAssignmentKeys.length >= 150) {
+        await flushAssignments();
+      }
+
       const unlabeledPosts = posts.map(p => ({
         ...p,
         text: p.payload_json?.text || p.text || ''
       })).filter(p => !annotatedPostIds.has(p.post_id) && p.text.trim().length > 0);
 
       console.log(`Found ${unlabeledPosts.length}/${posts.length} unlabeled posts in this chunk.`);
-      if (unlabeledPosts.length === 0) continue;
+      if (unlabeledPosts.length === 0) {
+        await flushAssignments();
+        continue;
+      }
 
       const batches = [];
       for (let i = 0; i < unlabeledPosts.length; i += BATCH_SIZE) {
@@ -545,6 +575,16 @@ async function startLabeling() {
           }
           await flushAssignments();
           continue;
+        }
+
+        // Clear queue assignments for comments that do not exist in database
+        const foundCommentIds = new Set(comments.map(c => c.comment_id));
+        for (const a of assignments) {
+          const parts = a.entity_key.split(':');
+          const commentId = parts.length >= 4 ? parts[parts.length - 1] : null;
+          if (!commentId || !foundCommentIds.has(commentId)) {
+            pendingAssignmentKeys.push({ type: 'comment', key: a.entity_key });
+          }
         }
 
         const unlabeledComments = [];
