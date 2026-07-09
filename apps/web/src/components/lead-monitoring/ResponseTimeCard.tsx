@@ -2,10 +2,32 @@ import React, { useState, useEffect } from "react";
 import { Gauge } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import { responseTimeByDay } from "@/mock/leads";
+import { useDashboardStore } from "@/stores/dashboard.store";
+
+function minutesBetween(start?: string, end?: string) {
+  if (!start || !end) return null;
+  const diff = new Date(end).getTime() - new Date(start).getTime();
+  if (!Number.isFinite(diff) || diff < 0) return null;
+  return Math.round(diff / 60000);
+}
 
 export function ResponseTimeCard() {
   const [isMounted, setIsMounted] = useState(false);
+  const { getFilteredLeadsWithoutUrgency } = useDashboardStore();
+  const leads = getFilteredLeadsWithoutUrgency();
+  const responseTimeByDay = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date();
+    date.setDate(date.getDate() - (6 - index));
+    const key = date.toISOString().slice(0, 10);
+    const dayLeads = leads.filter((lead) => lead.created_at?.slice(0, 10) === key);
+    const minutes = dayLeads
+      .map((lead) => minutesBetween(lead.created_at, lead.first_contacted_at || lead.last_contact_at))
+      .filter((value): value is number => value !== null);
+    return {
+      day: date.toLocaleDateString("vi-VN", { weekday: "short" }),
+      minutes: minutes.length ? Math.round(minutes.reduce((sum, value) => sum + value, 0) / minutes.length) : 0,
+    };
+  });
 
   useEffect(() => {
     setIsMounted(true);

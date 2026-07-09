@@ -76,7 +76,6 @@ export default function LeadsPage() {
   useDashboard({ autoFetch: true, refetchInterval: 60000 });
 
   const {
-    getFilteredLeadsWithoutUrgency,
     workspaces,
     filters,
     leads,
@@ -98,10 +97,16 @@ export default function LeadsPage() {
     return () => clearInterval(interval);
   }, []);
 
-  const baseLeads = useMemo(
-    () => getFilteredLeadsWithoutUrgency(),
-    [getFilteredLeadsWithoutUrgency, filters, leads],
-  );
+  const baseLeads = useMemo(() => {
+    const normFilter =
+      filters.workspace_id !== "all" ? normalizeBrandName(filters.workspace_id) : null;
+
+    return leads.filter((lead) => {
+      if (normFilter && normalizeBrandName(lead.workspace_id) !== normFilter) return false;
+      if (filters.platform !== "all" && lead.platform !== filters.platform) return false;
+      return true;
+    });
+  }, [leads, filters.workspace_id, filters.platform]);
 
   const workbenchViews = useMemo(
     () => getLeadWorkbenchViews(profile),
@@ -381,16 +386,7 @@ export default function LeadsPage() {
     visibleLeads.length === 0 ? 0 : (currentPage - 1) * LEADS_PAGE_SIZE + 1;
   const lastLeadNumber = Math.min(currentPage * LEADS_PAGE_SIZE, visibleLeads.length);
 
-  const brandPlatformFilteredLeads = useMemo(() => {
-    const normFilter =
-      filters.workspace_id !== "all" ? normalizeBrandName(filters.workspace_id) : null;
-    return leads.filter((lead) => {
-      if (normFilter && normalizeBrandName(lead.workspace_id) !== normFilter) return false;
-      if (filters.platform !== "all" && lead.platform !== filters.platform) return false;
-      if (!canLeadBeVisibleToUser(lead, profile)) return false;
-      return true;
-    });
-  }, [leads, filters.workspace_id, filters.platform, profile]);
+  const brandPlatformFilteredLeads = visibleBaseLeads;
 
   const pendingResultLead = useMemo(() => {
     return sortedLeads.find((lead) =>

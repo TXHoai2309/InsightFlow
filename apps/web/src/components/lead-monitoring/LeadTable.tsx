@@ -121,10 +121,10 @@ export function LeadTable() {
                     <td className="px-6 py-4 align-top">
                       <div className="flex items-center gap-3">
                         <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[14px] font-bold ${getAvatarBg(lead.id)}`}>
-                          {getAvatarInitials(lead.author)}
+                          {getAvatarInitials(lead.author || "Khach hang")}
                         </div>
                         <div className="flex flex-col">
-                          <span className="text-[14px] font-semibold text-[#1A1B20]">{lead.author}</span>
+                          <span className="text-[14px] font-semibold text-[#1A1B20]">{lead.author || "Khách hàng"}</span>
                           <span className="text-[12px] text-[#787585] mt-0.5" title={lead.id}>Lead ID: {lead.id.substring(0, 8)}...</span>
                         </div>
                       </div>

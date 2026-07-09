@@ -1,4 +1,5 @@
 import type { TFunction } from "i18next";
+import type { LeadReportData } from "@/lib/lead-report";
 
 function escapeHtml(value: unknown) {
   return String(value ?? "")
@@ -160,6 +161,162 @@ function downloadExcel(filename: string, sheets: Array<{ name: string; rows: Arr
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+function downloadBlob(filename: string, content: BlobPart, type: string) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+function csvEscape(value: unknown) {
+  const text = String(value ?? "");
+  if (/[",\r\n]/.test(text)) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
+}
+
+function rowsToCsv(rows: Array<Array<unknown>>) {
+  return rows.map((row) => row.map(csvEscape).join(",")).join("\r\n");
+}
+
+function getLeadReportOverviewRows(report: LeadReportData) {
+  const { kpis } = report;
+  return [
+    ["Chi so", "Gia tri"],
+    ["Thoi gian xuat", report.generatedAt],
+    ["Tong lead", kpis.total],
+    ["Hot lead", kpis.hot],
+    ["Warm lead", kpis.warm],
+    ["Cold lead", kpis.cold],
+    ["Da lien he", kpis.contacted],
+    ["Chua lien he", kpis.uncontacted],
+    ["Can ghi ket qua", kpis.needResult],
+    ["Follow-up dang mo", kpis.followUpDue],
+    ["Follow-up qua han", kpis.followUpOverdue],
+    ["Cho chuyen sales", kpis.salesHandoff],
+    ["Da chuyen doi", kpis.converted],
+    ["Bo qua", kpis.skipped],
+    ["Tre SLA", kpis.slaBreached],
+    ["Phan hoi dau tien TB (phut)", kpis.avgFirstResponseMinutes ?? ""],
+    ["Ghi nhan ket qua TB (phut)", kpis.avgResultMinutes ?? ""],
+    ["Ty le lien he", `${kpis.contactRate}%`],
+    ["Ty le dung SLA", `${kpis.slaOnTimeRate}%`],
+    ["Ty le chuyen doi", `${kpis.conversionRate}%`],
+    ["Tom tat", report.aiSummary],
+  ];
+}
+
+function getLeadReportDetailRows(report: LeadReportData) {
+  return [
+    [
+      "Lead ID",
+      "Khach hang",
+      "Thuong hieu",
+      "Nguon",
+      "Intent",
+      "Trang thai",
+      "Nhan vien phu trach",
+      "Tao luc",
+      "Lien he dau tien",
+      "Phan hoi (phut)",
+      "Ket qua",
+      "Ghi nhan ket qua",
+      "So lan tiep can",
+      "Follow-up",
+      "SLA",
+      "Diem uu tien",
+      "Noi dung",
+      "URL",
+    ],
+    ...report.detailRows.map((row) => [
+      row.id,
+      row.customer,
+      row.workspaceId,
+      row.platform,
+      row.intent,
+      row.status,
+      row.ownerName,
+      row.createdAt,
+      row.firstContactedAt,
+      row.responseMinutes ?? "",
+      row.resultType,
+      row.resultRecordedAt,
+      row.contactAttempts,
+      row.followUpAt,
+      row.slaStatus,
+      row.priorityScore,
+      row.content,
+      row.url,
+    ]),
+  ];
+}
+
+function getLeadReportDistributionRows(title: string, rows: LeadReportData["intentDistribution"]) {
+  return [
+    [title],
+    ["Nhom", "So luong", "Ty le"],
+    ...rows.map((row) => [row.label, row.count, `${row.percentage}%`]),
+  ];
+}
+
+function getLeadReportStaffRows(report: LeadReportData) {
+  return [
+    ["Nhan vien", "Tong lead", "Da lien he", "Da chuyen doi", "Can ghi ket qua", "Qua han", "Phan hoi TB (phut)", "Ty le chuyen doi"],
+    ...report.staffPerformance.map((row) => [
+      row.ownerName,
+      row.total,
+      row.contacted,
+      row.converted,
+      row.needResult,
+      row.overdue,
+      row.avgFirstResponseMinutes ?? "",
+      `${row.conversionRate}%`,
+    ]),
+  ];
+}
+
+export function exportLeadReportExcel(report: LeadReportData, filename = "Lead_Report") {
+  downloadExcel(`${safeFilePart(filename)}.xls`, [
+    { name: "Tong quan", rows: getLeadReportOverviewRows(report) },
+    { name: "Chi tiet lead", rows: getLeadReportDetailRows(report) },
+    {
+      name: "Phan tich",
+      rows: [
+        ...getLeadReportDistributionRows("Phan bo intent", report.intentDistribution),
+        [],
+        ...getLeadReportDistributionRows("Nguon lead", report.sourceDistribution),
+        [],
+        ...getLeadReportDistributionRows("Pipeline", report.pipeline),
+        [],
+        ["Ngay", "Lead moi", "Da lien he", "Da chuyen doi", "Phan hoi TB (phut)"],
+        ...report.responseTrend.map((row) => [
+          row.day,
+          row.created,
+          row.contacted,
+          row.converted,
+          row.avgResponseMinutes,
+        ]),
+      ],
+    },
+    { name: "Hieu suat nhan vien", rows: getLeadReportStaffRows(report) },
+  ]);
+}
+
+export function exportLeadReportCsv(report: LeadReportData, filename = "Lead_Report") {
+  const csv = rowsToCsv(getLeadReportDetailRows(report));
+  downloadBlob(
+    `${safeFilePart(filename)}.csv`,
+    `\uFEFF${csv}`,
+    "text/csv;charset=utf-8",
+  );
 }
 
 export async function generateDailyReportExcel(

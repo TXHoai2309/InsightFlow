@@ -8,6 +8,7 @@ import { secondDb } from "@/lib/firebase";
 import { mapSourceToPlatform, PLATFORM_META } from "@/lib/services/dashboard";
 import { useAuth } from "@/hooks/useAuth";
 import { getScopedBrandKey, isRecordInBrandScope } from "@/lib/brandScope";
+import DashboardLeadMonitoringPage from "@/app/dashboard/lead-monitoring/page";
 
 
 /**
@@ -1029,6 +1030,24 @@ function LanguageSelectModal({
 }
 
 export default function ReportsPage() {
+  const { profile, loading: authLoading } = useAuth();
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-[#f8f7ff] px-6 py-10 text-slate-700">
+        Dang tai bao cao...
+      </div>
+    );
+  }
+
+  if (!authLoading && profile?.role === "lead_employee") {
+    return <DashboardLeadMonitoringPage />;
+  }
+
+  return <LegacyReportsPage />;
+}
+
+function LegacyReportsPage() {
   const { t, i18n } = useTranslation();
   const { profile, loading: authLoading } = useAuth();
   const scopedBrandKey = getScopedBrandKey(profile);

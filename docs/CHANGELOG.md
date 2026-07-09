@@ -10,6 +10,51 @@
 > - Các commit merge vẫn được giữ lại để phản ánh đúng dòng phát triển giữa các nhánh.
 >   Tất cả các thay đổi đáng chú ý đối với dự án này sẽ được ghi lại trong file này.
 >   Định dạng dựa trên [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) và dự án này tuân thủ [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased] - 2026-07-09
+
+### Added
+
+- **Bao cao van hanh lead cho nhan vien xu ly tiem nang**:
+  - Them module tong hop bao cao lead theo KPI, pipeline xu ly, nguon tao lead, phan bo intent, hieu suat nhan vien va bang chi tiet lead.
+  - Ho tro xuat bao cao lead sang Excel va CSV thay cho dinh dang PDF.
+  - Them route `/lead-monitoring` va cho phep trang `/reports` hien thi bao cao lead moi khi nguoi dung co vai tro `lead_employee`.
+
+- **Proxy Supabase noi bo cho frontend**:
+  - Them API route `/api/supabase/[table]` de frontend goi Supabase qua server-side proxy, tranh loi CORS khi chay tai `localhost`.
+  - Chuan hoa cach ma hoa tham so PostgREST `in.(...)` de tranh loi request khi `post_id` co ky tu dac biet.
+
+### Changed
+
+- **Thay the nghiep vu trang Bao cao cho nhan vien lead**:
+  - Nhan vien `lead_employee` khi vao `/reports` se thay bao cao van hanh lead dung theo cong viec hang ngay, thay vi trang bao cao tong hop cu.
+  - Cac vai tro khac van giu trang bao cao cu de khong anh huong nghiep vu hien co.
+
+- **Dong bo pham vi du lieu Lead Workbench**:
+  - Danh sach hang cho lead trong `/leads` khong con bi an boi filter thoi gian mac dinh `24h` cua dashboard.
+  - Thong ke KPI va danh sach quick view lead nay dung chung pham vi loc theo brand, platform va quyen xem.
+
+### Fixed
+
+- **Trang duyet yeu cau gan lai nhan (`/label-requests`) khong co du lieu**:
+  - Sua luong doc request de khong phu thuoc vao bang/collection lich su nhan chua ton tai.
+  - Doi filter thoi gian mac dinh sang xem tat ca request, tranh truong hop request cu bi loc rong.
+  - Ghi lich su sua nhan theo huong optional, khong lam hong luong duyet khi endpoint lich su chua san sang.
+
+- **Loi tai du lieu Supabase tren local**:
+  - Khac phuc loi CORS khi goi Supabase REST API truc tiep tu browser.
+  - Khac phuc loi fetch batch post do URL query `post_id=in.(...)` bi encode sai.
+
+- **Trang Khach hang/Lead hien thi "Khong co lead trong nhom nay" du co KPI**:
+  - Sua logic loc base lead cua workbench de danh sach khop voi so lieu tren card thong ke.
+  - Lead cua nhan vien hoac lead chua phan cong tiep tuc duoc loc theo dung pham vi quyen cua `lead_employee`.
+
+### Verification
+
+- Da chay `npx.cmd tsc --noEmit --pretty false` thanh cong sau cac thay doi.
+
+---
+
 ## [Unreleased] - 2026-07-06
 
 ### Added

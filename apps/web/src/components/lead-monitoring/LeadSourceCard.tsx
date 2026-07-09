@@ -2,10 +2,26 @@ import React, { useState, useEffect } from "react";
 import { Search } from "lucide-react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
-import { leadSources } from "@/mock/leads";
+import { useDashboardStore } from "@/stores/dashboard.store";
 
 export function LeadSourceCard() {
   const [isMounted, setIsMounted] = useState(false);
+  const { getFilteredLeadsWithoutUrgency } = useDashboardStore();
+  const leads = getFilteredLeadsWithoutUrgency();
+  const total = leads.length || 1;
+  const leadSources = Object.entries(
+    leads.reduce<Record<string, number>>((acc, lead) => {
+      acc[lead.platform] = (acc[lead.platform] || 0) + 1;
+      return acc;
+    }, {}),
+  )
+    .map(([label, count]) => ({
+      label,
+      count,
+      value: Math.round((count / total) * 100),
+    }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 4);
 
   useEffect(() => {
     setIsMounted(true);
@@ -21,7 +37,9 @@ export function LeadSourceCard() {
       </CardHeader>
       <CardContent className="flex-1 pb-6 px-6 pt-2">
         <div className="flex flex-col justify-between h-full py-1">
-          {leadSources.map((item) => (
+          {leadSources.length === 0 ? (
+            <p className="py-12 text-center text-sm text-gray-500">Chưa có dữ liệu nguồn.</p>
+          ) : leadSources.map((item) => (
             <div key={item.label} className="flex flex-col space-y-1.5">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-medium text-gray-700 dark:text-gray-300">{item.label}</span>

@@ -2,10 +2,30 @@ import React, { useState, useEffect } from "react";
 import { Info } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
-import { leadScoreDistribution } from "@/mock/leads";
+import { useDashboardStore } from "@/stores/dashboard.store";
 
 export function LeadScoreCard() {
   const [isMounted, setIsMounted] = useState(false);
+  const { getFilteredLeadsWithoutUrgency } = useDashboardStore();
+  const leads = getFilteredLeadsWithoutUrgency();
+  const total = leads.length || 1;
+  const leadScoreDistribution = [
+    {
+      label: "Hot",
+      value: Math.round((leads.filter((lead) => lead.intent === "hot").length / total) * 100),
+      color: "#BA1A1A",
+    },
+    {
+      label: "Warm",
+      value: Math.round((leads.filter((lead) => lead.intent === "warm").length / total) * 100),
+      color: "#4234B6",
+    },
+    {
+      label: "Cold",
+      value: Math.round((leads.filter((lead) => lead.intent === "cold").length / total) * 100),
+      color: "#B0A2FF",
+    },
+  ];
 
   useEffect(() => {
     setIsMounted(true);
@@ -39,8 +59,8 @@ export function LeadScoreCard() {
                       animationBegin={0}
                       animationDuration={1000}
                     >
-                      {leadScoreDistribution.map((entry, index) => (
-                         <Cell key={`cell-${index}`} fill={entry.color} />
+                      {leadScoreDistribution.map((entry) => (
+                         <Cell key={entry.label} fill={entry.color} />
                       ))}
                     </Pie>
                     <Tooltip
@@ -61,8 +81,8 @@ export function LeadScoreCard() {
           
           {/* Legend Section */}
           <div className="flex w-[45%] flex-col justify-center space-y-3">
-            {leadScoreDistribution.map((item, index) => (
-              <div key={index} className="flex items-center space-x-2">
+            {leadScoreDistribution.map((item) => (
+              <div key={item.label} className="flex items-center space-x-2">
                 <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
                 <span className="text-[13px] text-gray-600 dark:text-gray-300">
                   {item.label} <span className="text-gray-400">({item.value}%)</span>

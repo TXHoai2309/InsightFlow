@@ -1002,6 +1002,8 @@ function buildLeadWorkflowPayload(
 export interface FetchOptions {
   /** Pagination cursor */
   after?: QueryDocumentSnapshot<DocumentData>;
+  /** Optional normalized brand scope key passed by dashboard hooks */
+  brandKey?: string;
   /** Set a max limit (default: no limit — fetches ALL records) */
   maxMentions?: number;
 }
