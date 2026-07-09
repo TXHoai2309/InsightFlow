@@ -76,7 +76,6 @@ export function useMentionsData(options: UseMentionsOptions = {}) {
         brandKey: rawBrandKey,
         since,
         maxMentions: MENTION_FETCH_LIMIT,
-        excludePlatforms: ["news"],
       });
       const mentions = filterByBusinessPolicy(rawData.mentions, profile, "view_mentions");
       const workspaces = filterByBusinessPolicy(

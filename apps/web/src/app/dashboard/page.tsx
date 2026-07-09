@@ -21,7 +21,6 @@ export default function BrandManagerPage() {
     dataWindowDays: 30,
     maxMentions: 400,
     maxLeads: 200,
-    excludePlatforms: ["news"],
     initialFetchDelayMs: 500,
   });
 

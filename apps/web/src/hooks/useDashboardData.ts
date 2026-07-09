@@ -25,7 +25,7 @@ interface UseDashboardOptions {
 // Module-level in-memory cache time tracking to avoid duplicate fetching during menu transitions
 
 
-const DEFAULT_EXCLUDED_PLATFORMS = ["news"];
+const DEFAULT_EXCLUDED_PLATFORMS: string[] = [];
 
 export function useDashboard(options: UseDashboardOptions = {}) {
   const {

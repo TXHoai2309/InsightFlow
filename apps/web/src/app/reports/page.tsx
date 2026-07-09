@@ -1278,7 +1278,6 @@ export default function ReportsPage() {
           since: reportSince,
           maxMentions: 700,
           includeMentions: true,
-          excludePlatforms: ["news"],
         });
         const supabaseMentions = filterByBusinessPolicy(rawData.mentions, profile, "view_mentions");
         const brandOrder = ["Highland Coffee", "Starbucks", "Mixue"];
