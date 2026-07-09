@@ -2,17 +2,13 @@ import type { Lead } from "@/types/dashboard";
 import type { UserRoleProfile } from "@/lib/rbac";
 
 export type LeadWorkbenchView =
-  | "priority"
-  | "mine"
   | "unassigned"
-  | "need_result"
-  | "uncontacted"
+  | "priority"
+  | "active"
+  | "closed"
   | "urgent"
   | "follow_up"
-  | "waiting"
-  | "sales_handoff"
-  | "label_review"
-  | "converted";
+  | "need_result";
 
 export type LeadOwnershipStatus =
   | "unassigned"
@@ -56,37 +52,24 @@ export const WORKBENCH_VIEWS: Array<{
   id: LeadWorkbenchView;
   label: string;
 }> = [
-  { id: "priority", label: "Cần xử lý ngay" },
-  { id: "mine", label: "Của tôi" },
   { id: "unassigned", label: "Chưa phân công" },
-  { id: "need_result", label: "Cần ghi nhận" },
-  { id: "urgent", label: "Sắp quá hạn" },
-  { id: "follow_up", label: "Follow-up" },
-  { id: "waiting", label: "Chờ phản hồi" },
-  { id: "sales_handoff", label: "Chờ chuyển sales" },
-  { id: "label_review", label: "Chờ duyệt nhãn" },
-  { id: "converted", label: "Đã chuyển đổi" },
+  { id: "priority", label: "Chờ xử lý" },
+  { id: "active", label: "Đang xử lý" },
+  { id: "closed", label: "Đã đóng" },
 ];
 
 export const EMPLOYEE_PRIORITY_WORKBENCH_VIEWS: Array<{
   id: LeadWorkbenchView;
   label: string;
-}> = [
-  { id: "priority", label: "Cần xử lý ngay" },
-  { id: "urgent", label: "Sắp quá hạn" },
-  { id: "follow_up", label: "Follow-up" },
-  { id: "need_result", label: "Cần ghi nhận" },
-  { id: "waiting", label: "Chờ phản hồi" },
-  { id: "sales_handoff", label: "Chờ chuyển sales" },
-  { id: "label_review", label: "Chờ duyệt nhãn" },
-];
+}> = WORKBENCH_VIEWS;
 
 function isLeadEmployee(profile: UserRoleProfile | null | undefined) {
   return profile?.role === "lead_employee";
 }
 
 export function getLeadWorkbenchViews(profile: UserRoleProfile | null | undefined) {
-  return isLeadEmployee(profile) ? EMPLOYEE_PRIORITY_WORKBENCH_VIEWS : WORKBENCH_VIEWS;
+  void profile;
+  return WORKBENCH_VIEWS;
 }
 
 export function getDefaultLeadWorkbenchView(
@@ -456,31 +439,56 @@ export function matchesLeadWorkbenchView(
   const meta = getLeadWorkbenchMeta(lead, nowMs);
   const ownership = getLeadOwnershipMeta(lead, profile);
 
+  if (view === "unassigned") {
+    return ownership.status === "unassigned" && lead.status !== "completed" && lead.status !== "skipped";
+  }
+
   if (view === "priority") {
+    if (!meta.isPending) return false;
+
+    // If Brand Manager: show if it has pending label correction or ready to sales handoff
+    const isManager = profile?.role === "admin" || profile?.role === "brand_manager";
+    if (isManager && (lead.label_correction_status === "pending" || meta.isSalesHandoff)) {
+      return true;
+    }
+
+    // Otherwise (or in addition): priority/overdue/urgent/needs result/new lead assigned to me
+    const isMine = ownership.status === "assigned_to_me" || ownership.status === "manager_override";
     return (
-      meta.isPending &&
+      isMine &&
       (meta.needsResultCapture ||
-        meta.isSalesHandoff ||
-        lead.intent === "hot" ||
         meta.isUrgent ||
         meta.isOverdue ||
+        meta.isFollowUp ||
         lead.status === "new")
     );
   }
-  if (view === "mine") return ownership.status === "assigned_to_me";
-  if (view === "unassigned") return ownership.status === "unassigned";
-  if (view === "need_result") return meta.needsResultCapture;
-  if (view === "uncontacted") {
-    return lead.status === "new" && (!lead.contact_attempts || lead.contact_attempts === 0);
+
+  if (view === "active") {
+    if (!meta.isPending) return false;
+    const isMine = ownership.status === "assigned_to_me" || ownership.status === "manager_override";
+    if (!isMine) return false;
+
+    // Active means it is mine, but not in immediate priority action queue
+    const isPriority =
+      meta.needsResultCapture ||
+      meta.isUrgent ||
+      meta.isOverdue ||
+      meta.isFollowUp ||
+      lead.status === "new";
+
+    return !isPriority;
   }
+
+  if (view === "closed") {
+    return lead.status === "completed" || lead.status === "skipped";
+  }
+
+  // Supporting views for KPI calculations inside LeadStats:
   if (view === "urgent") return meta.isOverdue || meta.isUrgent;
   if (view === "follow_up") return meta.isFollowUp;
-  if (view === "waiting") {
-    return lead.status === "processing" && Boolean(lead.contact_attempts) && !meta.needsResultCapture;
-  }
-  if (view === "sales_handoff") return meta.isSalesHandoff;
-  if (view === "label_review") return lead.label_correction_status === "pending";
-  if (view === "converted") return lead.status === "completed";
+  if (view === "need_result") return meta.needsResultCapture;
+
   return true;
 }
 

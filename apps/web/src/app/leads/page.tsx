@@ -249,12 +249,11 @@ export default function LeadsPage() {
   }, [pendingLabelRequestByLeadId, sortedLeads]);
 
   const viewCounts = useMemo(() => {
-    return workbenchViews.reduce(
-      (acc, view) => {
-        acc[view.id] = visibleBaseLeads.filter((lead) =>
-          view.id === "label_review"
-            ? pendingLabelRequestByLeadId.has(lead.id)
-            : matchesLeadWorkbenchView(lead, view.id, currentTime, profile),
+    const allViews: LeadWorkbenchView[] = ["unassigned", "priority", "active", "closed", "need_result"];
+    return allViews.reduce(
+      (acc, viewId) => {
+        acc[viewId] = visibleBaseLeads.filter((lead) =>
+          matchesLeadWorkbenchView(lead, viewId, currentTime, profile),
         ).length;
         return acc;
       },
@@ -262,18 +261,15 @@ export default function LeadsPage() {
     );
   }, [
     currentTime,
-    pendingLabelRequestByLeadId,
     profile,
     visibleBaseLeads,
-    workbenchViews,
   ]);
 
   const visibleLeads = useMemo(() => {
-    if (activeView === "label_review") return labelReviewLeads;
     return sortedLeads.filter((lead) =>
       matchesLeadWorkbenchView(lead, activeView, currentTime, profile),
     );
-  }, [activeView, currentTime, labelReviewLeads, profile, sortedLeads]);
+  }, [activeView, currentTime, profile, sortedLeads]);
 
   const totalPages = Math.max(1, Math.ceil(visibleLeads.length / LEADS_PAGE_SIZE));
 
@@ -450,7 +446,7 @@ export default function LeadsPage() {
       }, 80);
     }
     setActiveView(
-      meta.needsResultCapture ? "need_result" : getDefaultLeadWorkbenchView(profile),
+      meta.needsResultCapture ? "priority" : getDefaultLeadWorkbenchView(profile),
     );
   };
 
@@ -471,7 +467,7 @@ export default function LeadsPage() {
     );
 
     if (remainingNeedResult.length > 0) {
-      setActiveView("need_result");
+      setActiveView("priority");
       setSelectedLeadId(remainingNeedResult[0].id);
       return;
     }
@@ -565,37 +561,12 @@ export default function LeadsPage() {
             <button
               type="button"
               onClick={() => {
-                setActiveView("need_result");
+                setActiveView("priority");
                 setSelectedLeadId(pendingResultLead.id);
               }}
               className="rounded-lg border border-[var(--color-warning)]/40 bg-[var(--color-bg-surface)] px-3 py-2 text-sm font-bold text-[var(--color-text-primary)]"
             >
               Ghi nhận ngay
-            </button>
-          </section>
-        )}
-
-        {viewCounts.label_review > 0 && activeView !== "label_review" && (
-          <section className="flex flex-col gap-2 rounded-xl border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] p-3 md:flex-row md:items-center md:justify-between">
-            <div className="flex min-w-0 items-start gap-3">
-              <span className="material-symbols-outlined text-[var(--color-brand)]">
-                rule
-              </span>
-              <div className="min-w-0">
-                <p className="text-sm font-bold text-[var(--color-text-primary)]">
-                  Có {viewCounts.label_review} lead đang chờ duyệt nhãn
-                </p>
-                <p className="truncate text-sm text-[var(--color-text-secondary)]">
-                  Theo dõi các request sửa nhãn, đặc biệt những lead đang tạm khóa do chờ chuyển queue.
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setActiveView("label_review")}
-              className="rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm font-bold text-[var(--color-brand)]"
-            >
-              Xem trạng thái
             </button>
           </section>
         )}
@@ -682,14 +653,10 @@ export default function LeadsPage() {
                   inbox
                 </span>
                 <h3 className="mt-3 text-base font-bold text-[var(--color-text-primary)]">
-                  {activeView === "label_review"
-                    ? "Không có lead nào đang chờ duyệt nhãn"
-                    : "Không có lead trong nhóm này"}
+                  Không có lead trong nhóm này
                 </h3>
                 <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-                  {activeView === "label_review"
-                    ? "Các request sửa nhãn đang chờ quản lý duyệt sẽ xuất hiện tại đây."
-                    : "Chuyển quick view hoặc mở bộ lọc để xem nhóm lead khác."}
+                  Chuyển quick view hoặc mở bộ lọc để xem nhóm lead khác.
                 </p>
               </div>
             ) : (

@@ -76,7 +76,7 @@ export function LeadStats({ leads, isLoading, profile, onSelectView }: LeadStats
             icon: "timer",
             color: "var(--color-warning)",
             bg: "var(--color-warning-subtle)",
-            view: "urgent" as const,
+            view: "priority" as const,
           },
           {
             title: "Follow-up hôm nay",
@@ -85,7 +85,7 @@ export function LeadStats({ leads, isLoading, profile, onSelectView }: LeadStats
             icon: "event",
             color: "var(--color-info)",
             bg: "var(--color-info-subtle)",
-            view: "follow_up" as const,
+            view: "priority" as const,
           },
         ]
       : [
@@ -108,7 +108,7 @@ export function LeadStats({ leads, isLoading, profile, onSelectView }: LeadStats
             icon: "timer",
             color: "var(--color-warning)",
             bg: "var(--color-warning-subtle)",
-            view: "urgent" as const,
+            view: "priority" as const,
           },
           {
             title: "Follow-up hôm nay",
@@ -117,7 +117,7 @@ export function LeadStats({ leads, isLoading, profile, onSelectView }: LeadStats
             icon: "event",
             color: "var(--color-info)",
             bg: "var(--color-info-subtle)",
-            view: "follow_up" as const,
+            view: "priority" as const,
           },
         ];
 
