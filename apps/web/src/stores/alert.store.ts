@@ -281,6 +281,18 @@ function applyFilters(rawAlerts: AlertData[], filters: AlertFilters): AlertData[
 }
 
 let activeUnsubscribe: (() => void) | null = null;
+const ALERT_REVIEW_WINDOW_DAYS = 30;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const ALERT_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
+
+export function getAlertReviewSinceIso(days = ALERT_REVIEW_WINDOW_DAYS): string {
+  return new Date(Date.now() - days * MS_PER_DAY).toISOString();
+}
+
+function isWithinAlertReviewWindow(value: unknown, days = ALERT_REVIEW_WINDOW_DAYS): boolean {
+  const time = new Date(parseDate(value)).getTime();
+  return Number.isFinite(time) && time >= Date.now() - days * MS_PER_DAY;
+}
 
 export const useAlertStore = create<AlertState>()(
   subscribeWithSelector((set, get) => ({
@@ -317,11 +329,11 @@ export const useAlertStore = create<AlertState>()(
 
       set({ isLoading: true, error: null });
 
-      // Core function: fetch full alert list from Supabase REST
       const loadAlerts = async () => {
         try {
-          const fetched = await fetchSupabaseAlerts();
+          const fetched = await fetchSupabaseAlerts({ since: getAlertReviewSinceIso() });
           const filtered = fetched.filter((alert) =>
+            isWithinAlertReviewWindow(alert.created_at) &&
             isRecordInBrandScope({ brand: alert.brand }, scopedBrandKey)
           );
 
@@ -438,10 +450,9 @@ export const useAlertStore = create<AlertState>()(
           }
         }
 
-        // ===== STRATEGY 2: Fallback polling (8s) =====
-        // Disabled to reduce server load. Relying on Realtime sync & Manual Refresh.
-        // const intervalId = setInterval(loadAlerts, 8000);
-        // cleanupFns.push(() => clearInterval(intervalId));
+        // ===== STRATEGY 2: Fallback polling (30 min) =====
+        const intervalId = setInterval(loadAlerts, ALERT_REFRESH_INTERVAL_MS);
+        cleanupFns.push(() => clearInterval(intervalId));
 
         activeUnsubscribe = () => cleanupFns.forEach((fn) => fn());
       } catch (error) {
@@ -672,6 +683,7 @@ export const useAlertStore = create<AlertState>()(
             } as CorrectionRequest;
 
             if (!isRecordInBrandScope({ brand: req.brand }, scopedBrandKey)) return;
+            if (!isWithinAlertReviewWindow(req.created_at)) return;
             requests.push(req);
           });
 

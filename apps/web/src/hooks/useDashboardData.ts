@@ -14,13 +14,31 @@ import { useAuth } from "@/hooks/useAuth";
 interface UseDashboardOptions {
   autoFetch?: boolean;
   refetchInterval?: number;
+  dataWindowDays?: number;
+  maxLeads?: number;
+  maxMentions?: number;
+  includeMentions?: boolean;
+  excludePlatforms?: string[];
+  initialFetchDelayMs?: number;
 }
 
 // Module-level in-memory cache time tracking to avoid duplicate fetching during menu transitions
 
 
+const DEFAULT_EXCLUDED_PLATFORMS = ["news"];
+
 export function useDashboard(options: UseDashboardOptions = {}) {
-  const { autoFetch = true, refetchInterval = 1800000 } = options;
+  const {
+    autoFetch = true,
+    refetchInterval = 1800000, // 30 minutes default
+    dataWindowDays = 30,
+    maxLeads,
+    maxMentions = 700,
+    includeMentions,
+    excludePlatforms = DEFAULT_EXCLUDED_PLATFORMS,
+    initialFetchDelayMs = 0,
+  } = options;
+  const excludePlatformsKey = excludePlatforms.join("|");
   const { profile, loading: authLoading } = useAuth();
 
   const {
@@ -85,8 +103,18 @@ export function useDashboard(options: UseDashboardOptions = {}) {
 
       // 1. Fetch raw data từ Firestore (lọc theo brand nếu có)
       const rawBrandKey = brandKey === "global" ? undefined : brandKey;
+      const since = dataWindowDays
+        ? new Date(Date.now() - dataWindowDays * 24 * 60 * 60 * 1000).toISOString()
+        : undefined;
       const rawData =
-        await DashboardService.fetchRawData({ brandKey: rawBrandKey });
+        await DashboardService.fetchRawData({
+          brandKey: rawBrandKey,
+          since,
+          maxLeads,
+          maxMentions,
+          includeMentions,
+          excludePlatforms,
+        });
       const workspaces = filterByBusinessPolicy(
         rawData.workspaces.map((workspace) => ({
           ...workspace,
@@ -154,7 +182,7 @@ export function useDashboard(options: UseDashboardOptions = {}) {
         error instanceof Error
           ? error.message
           : "Không thể kết nối Firestore";
-      
+
       console.error("[useDashboard] fetch error:", error);
 
       // Fallback: If DB errors, keep old data in store or load from localStorage cache
@@ -199,21 +227,47 @@ export function useDashboard(options: UseDashboardOptions = {}) {
 
   useEffect(() => {
     if (!autoFetch || authLoading) return;
+    let disposed = false;
+    let interval: ReturnType<typeof setInterval> | undefined;
 
-    const brandKey = getScopedBrandKey(profile) || "global";
-    const lastFetched = lastFetchedAtMap[brandKey] || 0;
-    const CACHE_DURATION = 90 * 1000; // 90 seconds cache window
+    const runInitialCheckAndFetch = () => {
+      if (disposed) return;
 
-    // Only fetch if we don't have data in the Zustand store or it is older than 90 seconds
-    const hasData = useDashboardStore.getState().mentions.length > 0;
-    if (!hasData || Date.now() - lastFetched >= CACHE_DURATION) {
-      fetchDashboardData();
-    }
+      const brandKey = getScopedBrandKey(profile) || "global";
+      const lastFetched = lastFetchedAtMap[brandKey] || 0;
+      const CACHE_DURATION = 90 * 1000; // 90 seconds cache window
 
-    setIsInitialized(true);
-    const interval = setInterval(() => fetchDashboardData(), refetchInterval);
-    return () => clearInterval(interval);
-  }, [autoFetch, refetchInterval, authLoading, profile?.brandId, profile?.brandName, profile?.role]);
+      // Only fetch if we don't have data in the Zustand store or it is older than 90 seconds
+      const hasData = useDashboardStore.getState().mentions.length > 0;
+      if (!hasData || Date.now() - lastFetched >= CACHE_DURATION) {
+        fetchDashboardData();
+      }
+
+      setIsInitialized(true);
+      interval = setInterval(() => fetchDashboardData(), refetchInterval);
+    };
+
+    const timeout = setTimeout(runInitialCheckAndFetch, initialFetchDelayMs);
+
+    return () => {
+      disposed = true;
+      clearTimeout(timeout);
+      if (interval) clearInterval(interval);
+    };
+  }, [
+    autoFetch,
+    refetchInterval,
+    authLoading,
+    profile?.brandId,
+    profile?.brandName,
+    profile?.role,
+    dataWindowDays,
+    maxLeads,
+    maxMentions,
+    includeMentions,
+    excludePlatformsKey,
+    initialFetchDelayMs,
+  ]);
 
   // Re-tính trend data khi time_range filter thay đổi
   useEffect(() => {

@@ -4,7 +4,11 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { useDashboardStore } from "@/stores/dashboard.store";
-import { useAlertStore, type CorrectionRequest } from "@/stores/alert.store";
+import {
+  getAlertReviewSinceIso,
+  useAlertStore,
+  type CorrectionRequest,
+} from "@/stores/alert.store";
 import { useDashboard } from "@/hooks/useDashboardData";
 import { dbSecond } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
@@ -770,7 +774,16 @@ export default function AlertsPage() {
   }, [selectedEvidence, alerts, rawAlerts]);
 
   const dashboardStore = useDashboardStore();
+<<<<<<< HEAD
   useDashboard({ autoFetch: true, refetchInterval: 1800000 });
+=======
+  useDashboard({
+    autoFetch: true,
+    refetchInterval: 60000,
+    includeMentions: false,
+    maxLeads: 200,
+  });
+>>>>>>> d592e20f68c854b34c4a446ec42f6c71814aeb4a
 
   // Compute lists of high-risk items for the Crisis Priority Center (unified Sự vụ & Bài viết & Thông tin liên hệ)
   const highRiskIncidents = useMemo(() => {
@@ -1852,7 +1865,7 @@ function TrendModal({ alert, onClose }: TrendModalProps) {
 
       try {
         // 1. Fetch from Supabase.
-        const fetched = await fetchSupabaseAlerts();
+        const fetched = await fetchSupabaseAlerts({ since: getAlertReviewSinceIso() });
 
         if (active) {
           // 2. Parse and filter docs in-memory

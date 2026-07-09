@@ -9,7 +9,7 @@ import { MentionTable } from "@/components/mentions/MentionTable";
 import { MentionStats } from "@/components/mentions/MentionStats";
 
 export default function MentionsPage() {
-  useMentionsData({ autoFetch: true, refetchInterval: 120000 });
+  const { refetch } = useMentionsData({ autoFetch: true, refetchInterval: 30 * 60 * 1000 });
   const { t } = useTranslation();
   const [contentMode, setContentMode] = useState<"all" | "post" | "comment">("all");
 
@@ -50,7 +50,12 @@ export default function MentionsPage() {
             </span>
             {t("mentions.exportBtn")}
           </button>
-          <button className="flex items-center gap-2 px-4 py-3 bg-[var(--color-brand)] text-white rounded-lg shadow-sm hover:bg-[var(--color-brand-hover)] transition-all font-medium text-sm">
+          <button
+            type="button"
+            onClick={refetch}
+            disabled={isLoading}
+            className="flex items-center gap-2 px-4 py-3 bg-[var(--color-brand)] text-white rounded-lg shadow-sm hover:bg-[var(--color-brand-hover)] transition-all font-medium text-sm disabled:cursor-not-allowed disabled:opacity-60"
+          >
             <span className="material-symbols-outlined text-lg">refresh</span>
             {t("mentions.refreshBtn")}
           </button>

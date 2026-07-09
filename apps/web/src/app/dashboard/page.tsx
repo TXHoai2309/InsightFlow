@@ -17,7 +17,16 @@ const BrandManagerDashboard = dynamic(
 export default function BrandManagerPage() {
   useDashboard({
     autoFetch: true,
+<<<<<<< HEAD
     refetchInterval: 1800000, // Làm mới mỗi 30 phút
+=======
+    refetchInterval: 30 * 60 * 1000,
+    dataWindowDays: 30,
+    maxMentions: 400,
+    maxLeads: 200,
+    excludePlatforms: ["news"],
+    initialFetchDelayMs: 500,
+>>>>>>> d592e20f68c854b34c4a446ec42f6c71814aeb4a
   });
 
   return (
@@ -26,3 +35,4 @@ export default function BrandManagerPage() {
     </>
   );
 }
+

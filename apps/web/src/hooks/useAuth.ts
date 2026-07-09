@@ -73,20 +73,18 @@ async function resolveUserProfile(firebaseUser: NonNullable<typeof auth.currentU
     resolvedProfile = await resolveProfileFromClaims(firebaseUser);
   }
 
-  try {
-    await setDoc(
-      userRef,
-      stripUndefinedFields({
-        ...resolvedProfile,
-        lastLogin: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        createdAt: storedData?.createdAt || new Date().toISOString(),
-      }),
-      { merge: true },
-    );
-  } catch (error) {
+  void setDoc(
+    userRef,
+    stripUndefinedFields({
+      ...resolvedProfile,
+      lastLogin: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      createdAt: storedData?.createdAt || new Date().toISOString(),
+    }),
+    { merge: true },
+  ).catch((error) => {
     console.warn("Could not update Firestore user profile after login.", error);
-  }
+  });
 
   return resolvedProfile;
 }

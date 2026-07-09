@@ -52,6 +52,12 @@ function parseDate(field: unknown): string {
   return value.includes("+") || value.endsWith("Z") ? value : `${value}Z`;
 }
 
+function toIsoDate(value: string | Date | undefined): string | null {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+}
+
 function normalizeBrandKey(brand: string): string {
   const normalized = String(brand || "")
     .toLowerCase()
@@ -193,19 +199,63 @@ interface SupabaseCommentRow {
   payload_json: Record<string, any> | null;
 }
 
+const ALERT_POST_SELECT = [
+  "platform",
+  "post_id",
+  "url",
+  "source",
+  "brand_slug",
+  "brand",
+  "author",
+  "contact",
+  "language",
+  "posted_at",
+  "like_count",
+  "comment_count",
+  "share_count",
+  "view_count",
+  "reply_count",
+  "star_count",
+  "payload_json",
+].join(",");
+
+const ALERT_COMMENT_SELECT = [
+  "platform",
+  "post_id",
+  "comment_id",
+  "parent_comment_id",
+  "url",
+  "username",
+  "contact",
+  "text",
+  "posted_at",
+  "like_count",
+  "reply_count",
+  "star_count",
+  "comment_level",
+  "payload_json",
+].join(",");
+
+const ALERT_BATCH_SELECT: Record<string, string> = {
+  posts: ALERT_POST_SELECT,
+  comments: ALERT_COMMENT_SELECT,
+};
+
 // Fetch rows in batches to avoid URL length limits on in.(...) queries
 async function batchFetch<T>(
   table: string,
   column: string,
   ids: string[],
-  batchSize = 40
+  batchSize = 10
 ): Promise<T[]> {
   if (ids.length === 0) return [];
   const results: T[] = [];
+  const select = ALERT_BATCH_SELECT[table];
   for (let i = 0; i < ids.length; i += batchSize) {
     const batch = ids.slice(i, i + batchSize);
     const inClause = batch.map((id) => `"${id.replace(/"/g, '\\"')}"`).join(",");
-    const rows = await supabaseRequest<T[]>(table, `${column}=in.(${inClause})`).catch((err) => {
+    const query = `${select ? `select=${select}&` : ""}${column}=in.(${inClause})`;
+    const rows = await supabaseRequest<T[]>(table, query).catch((err) => {
       console.error(`Failed to fetch batch from ${table}:`, err);
       return [] as T[];
     });
@@ -214,20 +264,28 @@ async function batchFetch<T>(
   return results;
 }
 
-export async function fetchSupabaseAlerts(): Promise<AlertData[]> {
+export async function fetchSupabaseAlerts(options: {
+  since?: string | Date;
+  perPlatform?: number;
+} = {}): Promise<AlertData[]> {
   const PLATFORMS = ["google_maps", "facebook", "befood", "tiktok", "threads", "news_html"];
-  const PER_PLATFORM = 100;
+  const PER_PLATFORM = options.perPlatform ?? 100;
   const negFilter = encodeURIComponent('"sentiment":"negative"');
+  const sinceIso = toIsoDate(options.since);
+  const sinceTime = sinceIso ? new Date(sinceIso).getTime() : null;
 
   const threeMonthsAgo = new Date();
   threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
   const threeMonthsAgoISO = threeMonthsAgo.toISOString();
 
+  const effectiveSinceIso = sinceIso || threeMonthsAgoISO;
+  const sinceQuery = `&updated_at=gte.${encodeURIComponent(effectiveSinceIso)}`;
+
   const platformBatches = await Promise.all(
     PLATFORMS.map((p) =>
       supabaseRequest<SupabaseAnnotationRow[]>(
         "annotations",
-        `status=eq.completed&platform=eq.${p}&label=like.*${negFilter}*&updated_at=gte.${threeMonthsAgoISO}&order=updated_at.desc&limit=${PER_PLATFORM}`
+        `status=eq.completed&platform=eq.${p}&label=like.*${negFilter}*${sinceQuery}&order=updated_at.desc&limit=${PER_PLATFORM}`
       ).catch(() => [] as SupabaseAnnotationRow[])
     )
   );
@@ -245,10 +303,8 @@ export async function fetchSupabaseAlerts(): Promise<AlertData[]> {
   ) as string[];
 
   // Fetch posts and comments in batches to avoid URL length limits
-  const [postsList, commentsList] = await Promise.all([
-    batchFetch<SupabasePostRow>("posts", "post_id", postIds),
-    batchFetch<SupabaseCommentRow>("comments", "comment_id", commentIds),
-  ]);
+  const postsList = await batchFetch<SupabasePostRow>("posts", "post_id", postIds);
+  const commentsList = await batchFetch<SupabaseCommentRow>("comments", "comment_id", commentIds);
 
   const postMap = new Map<string, SupabasePostRow>();
   postsList.forEach((p) => postMap.set(p.post_id, p));
@@ -377,7 +433,12 @@ export async function fetchSupabaseAlerts(): Promise<AlertData[]> {
     }
   }
 
-  return alerts.filter((a) => a.sentiment === "negative");
+  return alerts.filter((a) => {
+    if (a.sentiment !== "negative") return false;
+    if (sinceTime === null) return true;
+    const createdTime = new Date(a.created_at).getTime();
+    return Number.isFinite(createdTime) && createdTime >= sinceTime;
+  });
 }
 
 export async function fetchSingleSupabaseAlert(entityKey: string): Promise<AlertData | null> {
