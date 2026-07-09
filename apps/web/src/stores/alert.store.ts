@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 import { dbSecond } from "@/lib/firebase";
 import { collection, doc, limit, query, updateDoc, onSnapshot, addDoc } from "firebase/firestore";
-import { isRecordInBrandScope, isSameBrandScope } from "@/lib/brandScope";
+import { isRecordInBrandScope, isSameBrandScope, getScopedBrandKey } from "@/lib/brandScope";
 import { normalizeBrandName } from "@/lib/services/dashboard";
 import { canPerformAction, type UserRoleProfile } from "@/lib/rbac";
 import { fetchSupabaseAlerts, updateSupabaseAlertLabel } from "@/lib/supabase";
@@ -49,6 +49,21 @@ export interface InternalNote {
   timestamp: string;
 }
 
+export interface EscalationData {
+  draft_response: string;
+  compensation: string;
+  submitted_by_email: string;
+  submitted_by_name: string;
+  submitted_at: string;
+  status: "pending" | "approved" | "rejected";
+  approved_by_email?: string | null;
+  approved_by_name?: string | null;
+  approved_at?: string | null;
+  approved_response?: string | null;
+  compensation_approved?: string | null;
+  approval_note?: string;
+}
+
 export interface AlertData {
   id: string;
   brand: string;
@@ -88,6 +103,7 @@ export interface AlertData {
   relevance?: boolean | null;
   urgency?: string | null;
   intent?: string | null;
+  escalation?: EscalationData | null;
 }
 
 export interface AlertFilters {
@@ -137,7 +153,8 @@ interface AlertState {
     id: string,
     newStatus: string,
     profile: UserRoleProfile | null | undefined,
-    attempt?: { note: string; image_url?: string }
+    attempt?: { note: string; image_url?: string; escalation?: EscalationData | null },
+    brandFallback?: string
   ) => Promise<void>;
   fetchCorrectionRequests: (scopedBrandKey?: string | null) => Promise<void>;
   createCorrectionRequest: (requestData: Omit<CorrectionRequest, "id" | "created_at" | "status">) => Promise<void>;
@@ -315,7 +332,7 @@ export const useAlertStore = create<AlertState>()(
 
         await loadAlerts();
 
-        const intervalId = setInterval(loadAlerts, 1800000); // 30 minutes
+        const intervalId = setInterval(loadAlerts, 4000); // 4 seconds for list sync
         activeUnsubscribe = () => clearInterval(intervalId);
       } catch (error) {
         const message =
@@ -325,7 +342,7 @@ export const useAlertStore = create<AlertState>()(
       }
     },
 
-    updateAlertStatus: async (id, newStatus, profile, attempt) => {
+    updateAlertStatus: async (id, newStatus, profile, attempt, brandFallback) => {
       console.log("[AlertStore] updateAlertStatus called:", { id, newStatus, profileEmail: profile?.email, profileRole: profile?.role });
       const currentAlert = get().rawAlerts.find((alert) => alert.id === id);
       console.log("[AlertStore] currentAlert found:", currentAlert);
@@ -334,9 +351,24 @@ export const useAlertStore = create<AlertState>()(
         console.error("[AlertStore] Permission check failed:", { profileExists: !!profile, hasPermission: profile ? canPerformAction(profile, "update_crisis_status") : false });
         throw new Error("User is not allowed to update crisis status.");
       }
-      if (!currentAlert || !isSameBrandScope(profile, { brand: currentAlert.brand })) {
-        console.error("[AlertStore] Brand scope check failed:", { alertExists: !!currentAlert, sameScope: currentAlert ? isSameBrandScope(profile, { brand: currentAlert.brand }) : false });
-        throw new Error("Alert is outside the user's brand scope.");
+
+      const resolvedBrand = currentAlert?.brand || brandFallback;
+
+      console.log("[AlertStore] Brand scope check diagnostic:", {
+        profileEmail: profile?.email,
+        profileRole: profile?.role,
+        profileBrandName: profile?.brandName,
+        profileBrandId: profile?.brandId,
+        scopedBrandKey: getScopedBrandKey(profile),
+        currentAlertBrand: currentAlert?.brand,
+        brandFallback,
+        resolvedBrand,
+        currentAlertNormalized: resolvedBrand ? normalizeBrandName(resolvedBrand) : null,
+      });
+
+      if (!resolvedBrand || !isSameBrandScope(profile, { brand: resolvedBrand })) {
+        console.error("[AlertStore] Brand scope check failed:", { resolvedBrand, sameScope: resolvedBrand ? isSameBrandScope(profile, { brand: resolvedBrand }) : false });
+        throw new Error(`Alert is outside the user's brand scope. Profile: [Name: ${profile?.brandName}, ID: ${profile?.brandId}], Alert Brand: [${resolvedBrand}]`);
       }
 
       const resolvedAt =
@@ -359,6 +391,7 @@ export const useAlertStore = create<AlertState>()(
                 resolved_at: undefined,
                 resolved_by_email: null,
                 resolved_by_name: null,
+                escalation: null,
               };
             }
 
@@ -381,6 +414,7 @@ export const useAlertStore = create<AlertState>()(
               resolved_at: resolvedAt || undefined,
               resolved_by_email: resolvedAt ? profile.email : null,
               resolved_by_name: resolvedAt ? profile.displayName : null,
+              escalation: attempt?.escalation !== undefined ? attempt.escalation : alert.escalation,
             };
           }
           return alert;
@@ -417,6 +451,7 @@ export const useAlertStore = create<AlertState>()(
               updated_by: profile.uid,
               updated_by_role: profile.role,
               updated_at: new Date().toISOString(),
+              escalation: null,
             };
           }
 
@@ -428,6 +463,7 @@ export const useAlertStore = create<AlertState>()(
             resolved_by: resolvedAt ? profile.uid : null,
             resolved_by_email: resolvedAt ? profile.email : null,
             resolved_by_name: resolvedAt ? profile.displayName : null,
+            escalation: attempt?.escalation !== undefined ? attempt.escalation : existingLabel.escalation ?? null,
             updated_by: profile.uid,
             updated_by_role: profile.role,
             updated_at: new Date().toISOString(),
@@ -438,7 +474,7 @@ export const useAlertStore = create<AlertState>()(
         // Revert local state update
         set((state) => {
           const nextRawAlerts = state.rawAlerts.map((alert) => {
-            if (alert.id === id) {
+            if (alert.id === id && currentAlert) {
               return currentAlert;
             }
             return alert;

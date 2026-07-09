@@ -1180,6 +1180,7 @@ export default function AlertsPage() {
               processedActiveAlerts.map(alert => {
                 const riskScore = getRiskScore(alert);
                 const isResolving = alert.status === "resolving";
+                const isPendingApproval = alert.status === "pending_approval";
 
                 // Card severity aesthetics mapping
                 let borderClass = "border-l-4 border-slate-300";
@@ -1285,7 +1286,12 @@ export default function AlertsPage() {
                             {t("alerts.page.statusResolving")}
                           </span>
                         )}
-                        {!isResolving && alert.status !== "resolved" && (
+                        {isPendingApproval && (
+                          <span className="bg-orange-50 dark:bg-orange-950/20 text-orange-700 dark:text-orange-300 text-[9px] font-bold px-1.5 py-0.5 rounded border border-orange-100 dark:border-orange-900/30 animate-pulse">
+                            Cho duyet phuong an
+                          </span>
+                        )}
+                        {!isResolving && !isPendingApproval && alert.status !== "resolved" && (
                           <span className="bg-red-50 dark:bg-red-950/20 text-red-600 text-[9px] font-bold px-1.5 py-0.5 rounded border border-red-100 dark:border-red-900/30">
                             {t("alerts.page.statusPending")}
                           </span>
@@ -1300,7 +1306,7 @@ export default function AlertsPage() {
 
                     {/* Right action controls */}
                     <div className="p-4 md:p-5 flex md:flex-col justify-center items-center gap-2 flex-shrink-0 md:w-40 border-t md:border-t-0 md:border-l border-[var(--color-border)]/50 bg-slate-50/20 dark:bg-slate-800/10">
-                      {isResolving ? (
+                      {isResolving || isPendingApproval ? (
                         <div className="w-full space-y-2 text-center">
                           <div className="flex items-center gap-1.5 justify-center">
                             <div className="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center overflow-hidden">
@@ -1312,9 +1318,13 @@ export default function AlertsPage() {
                           </div>
                           <button
                             onClick={() => router.push(`/alerts/${encodeURIComponent(alert.id)}`)}
-                            className="w-full py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[var(--color-text-primary)] text-xs font-bold transition-all cursor-pointer border border-[var(--color-border)]"
+                            className={`w-full py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                              isPendingApproval && isManager
+                                ? "bg-orange-600 hover:bg-orange-700 text-white border-orange-600"
+                                : "bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[var(--color-text-primary)] border-[var(--color-border)]"
+                            }`}
                           >
-                            {t("alerts.page.details")}
+                            {isPendingApproval && isManager ? "Xem duyet" : t("alerts.page.details")}
                           </button>
                         </div>
                       ) : (

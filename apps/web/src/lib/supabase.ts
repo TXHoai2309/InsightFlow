@@ -64,6 +64,15 @@ function normalizeBrandKey(brand: string): string {
   return normalized;
 }
 
+function extractBrandFromKey(key: string | null | undefined): string | null {
+  if (!key) return null;
+  const lower = key.toLowerCase();
+  if (lower.includes("highland")) return "Highland Coffee";
+  if (lower.includes("starbuck")) return "Starbucks";
+  if (lower.includes("mixue")) return "Mixue";
+  return null;
+}
+
 function formatBrandName(brand: string): string {
   const key = normalizeBrandKey(brand);
   if (key === "highlandcoffee") return "Highland Coffee";
@@ -259,7 +268,14 @@ export async function fetchSupabaseAlerts(): Promise<AlertData[]> {
       const commentPayload = comment?.payload_json || {};
 
       const brand = formatBrandName(
-        String(post?.brand || postPayload.brand || anno.platform || "")
+        String(
+          post?.brand ||
+          postPayload.brand ||
+          extractBrandFromKey(anno.post_id) ||
+          extractBrandFromKey(anno.entity_key) ||
+          anno.platform ||
+          ""
+        )
       );
       const source = normalizeSource(
         String(post?.source || postPayload.source || anno.platform || "")
@@ -347,6 +363,7 @@ export async function fetchSupabaseAlerts(): Promise<AlertData[]> {
         relevance: typeof labelObj.relevance === "boolean" ? labelObj.relevance : null,
         urgency: labelObj.urgency || null,
         intent: labelObj.intent || null,
+        escalation: labelObj.escalation ?? null,
       };
 
       alerts.push(alert);
@@ -398,7 +415,16 @@ export async function fetchSingleSupabaseAlert(entityKey: string): Promise<Alert
   const postPayload = post?.payload_json || {};
   const commentPayload = comment?.payload_json || {};
 
-  const brand = formatBrandName(String(post?.brand || postPayload.brand || anno.platform || ""));
+  const brand = formatBrandName(
+    String(
+      post?.brand ||
+      postPayload.brand ||
+      extractBrandFromKey(anno.post_id) ||
+      extractBrandFromKey(anno.entity_key) ||
+      anno.platform ||
+      ""
+    )
+  );
   const source = normalizeSource(String(post?.source || postPayload.source || anno.platform || ""));
 
   let text = "";
@@ -470,6 +496,7 @@ export async function fetchSingleSupabaseAlert(entityKey: string): Promise<Alert
     relevance: typeof labelObj.relevance === "boolean" ? labelObj.relevance : null,
     urgency: labelObj.urgency || null,
     intent: labelObj.intent || null,
+    escalation: labelObj.escalation ?? null,
   };
 }
 

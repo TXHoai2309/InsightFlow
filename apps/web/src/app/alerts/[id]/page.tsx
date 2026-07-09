@@ -3,11 +3,11 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
-import { useAlertStore, type AlertData } from "@/stores/alert.store";
+import { useAlertStore, type AlertData, type EscalationData } from "@/stores/alert.store";
 import { useAuth } from "@/hooks/useAuth";
 import { PlatformLogo } from "@/components/platform/PlatformLogo";
 import { dbSecond } from "@/lib/firebase";
-import { doc, onSnapshot, updateDoc, arrayUnion } from "firebase/firestore";
+import { doc, onSnapshot, updateDoc, arrayUnion, collection, addDoc } from "firebase/firestore";
 import { canPerformAction } from "@/lib/rbac";
 import { fetchSingleSupabaseAlert, updateSupabaseAlertLabel, fetchCommentsForPost, type PostComment } from "@/lib/supabase";
 // Helper function to format brand display names
@@ -310,6 +310,12 @@ export default function AlertDetailPage() {
   // Toast status states
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [draftResponse, setDraftResponse] = useState("");
+  const [proposedCompensation, setProposedCompensation] = useState("");
+  const [approvalResponse, setApprovalResponse] = useState("");
+  const [approvalCompensation, setApprovalCompensation] = useState("");
+  const [approvalNote, setApprovalNote] = useState("");
+  const [escalationBusy, setEscalationBusy] = useState(false);
 
   const riskScore = useMemo(() => {
     if (!alert) return 0;
@@ -319,6 +325,120 @@ export default function AlertDetailPage() {
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  useEffect(() => {
+    if (!alert?.escalation) return;
+    setDraftResponse(alert.escalation.draft_response || "");
+    setProposedCompensation(alert.escalation.compensation || "");
+    setApprovalResponse(alert.escalation.approved_response || alert.escalation.draft_response || "");
+    setApprovalCompensation(alert.escalation.compensation_approved || alert.escalation.compensation || "");
+    setApprovalNote(alert.escalation.approval_note || "");
+  }, [alert?.id, alert?.escalation]);
+
+  const createEscalationNotification = async (payload: {
+    title: string;
+    message: string;
+    recipient_role: "brand_manager" | "crisis_employee";
+    recipient_email?: string | null;
+  }) => {
+    if (!dbSecond || !alert) return;
+
+    await addDoc(collection(dbSecond, "notifications"), {
+      title: payload.title,
+      message: payload.message,
+      type: "escalation",
+      alert_id: alert.id,
+      brand: alert.brand,
+      created_at: new Date().toISOString(),
+      read: false,
+      recipient_role: payload.recipient_role,
+      recipient_email: payload.recipient_email || null,
+      sender_email: profile?.email || "",
+    });
+  };
+
+  const handleSubmitEscalation = async () => {
+    if (!alert || !draftResponse.trim() || !proposedCompensation.trim()) {
+      triggerToast("Vui lòng nhập dự thảo phản hồi và mức đền bù đề xuất.");
+      return;
+    }
+
+    const escalation: EscalationData = {
+      draft_response: draftResponse.trim(),
+      compensation: proposedCompensation.trim(),
+      submitted_by_email: profile?.email || "unknown",
+      submitted_by_name: profile?.displayName || getResolverName(profile?.email) || "Crisis Officer",
+      submitted_at: new Date().toISOString(),
+      status: "pending",
+      approved_by_email: null,
+      approved_by_name: null,
+      approved_at: null,
+      approved_response: null,
+      compensation_approved: null,
+      approval_note: "",
+    };
+
+    setEscalationBusy(true);
+    try {
+      await updateAlertStatus(alert.id, "pending_approval", profile, {
+        note: "Đã gửi phương án phản hồi và đền bù lên Brand Manager duyệt.",
+        escalation,
+      }, alert.brand);
+      await createEscalationNotification({
+        title: `Yêu cầu duyệt phương án: Vụ việc #${alert.id.slice(-4)}`,
+        message: `${escalation.submitted_by_name} đã gửi phương án phản hồi cho ${formatBrandName(alert.brand)}.`,
+        recipient_role: "brand_manager",
+      });
+      setAlert({ ...alert, status: "pending_approval", escalation });
+      triggerToast("Đã gửi phương án lên Brand Manager duyệt.");
+    } catch (e) {
+      console.error(e);
+      triggerToast("Không thể gửi duyệt phương án: " + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setEscalationBusy(false);
+    }
+  };
+
+  const handleResolveEscalation = async (decision: "approved" | "rejected") => {
+    if (!alert?.escalation) return;
+
+    const nextStatus = decision === "approved" ? "responded" : "resolving";
+    const escalation: EscalationData = {
+      ...alert.escalation,
+      status: decision,
+      approved_by_email: profile?.email || null,
+      approved_by_name: profile?.displayName || getResolverName(profile?.email) || null,
+      approved_at: new Date().toISOString(),
+      approved_response: approvalResponse.trim() || alert.escalation.draft_response,
+      compensation_approved: approvalCompensation.trim() || alert.escalation.compensation,
+      approval_note: approvalNote.trim(),
+    };
+
+    setEscalationBusy(true);
+    try {
+      await updateAlertStatus(alert.id, nextStatus, profile, {
+        note: decision === "approved"
+          ? "Brand Manager đã phê duyệt phương án phản hồi."
+          : `Brand Manager yêu cầu chỉnh sửa phương án.${approvalNote.trim() ? ` Ghi chú: ${approvalNote.trim()}` : ""}`,
+        escalation,
+      }, alert.brand);
+      await createEscalationNotification({
+        title: decision === "approved" ? `Phương án đã được duyệt: #${alert.id.slice(-4)}` : `Cần chỉnh sửa phương án: #${alert.id.slice(-4)}`,
+        message: decision === "approved"
+          ? "Brand Manager đã duyệt phương án phản hồi và mức đền bù."
+          : "Brand Manager yêu cầu chỉnh sửa phương án phản hồi.",
+        recipient_role: "crisis_employee",
+        recipient_email: alert.escalation.submitted_by_email,
+      });
+      setAlert({ ...alert, status: nextStatus, escalation });
+      triggerToast(decision === "approved" ? "Đã phê duyệt phương án." : "Đã gửi yêu cầu chỉnh sửa.");
+    } catch (e) {
+      console.error(e);
+      triggerToast("Không thể xử lý phê duyệt: " + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setEscalationBusy(false);
+    }
   };
 
   // Real-time Supabase doc polling
@@ -348,7 +468,7 @@ export default function AlertDetailPage() {
 
     loadAlertDetail();
 
-    const intervalId = setInterval(loadAlertDetail, 1800000); // 30 minutes
+    const intervalId = setInterval(loadAlertDetail, 3000); // 3 seconds for active sync
     return () => clearInterval(intervalId);
   }, [id]);
 
@@ -509,6 +629,7 @@ export default function AlertDetailPage() {
   // Handle template selection
   const selectTemplateText = (text: string) => {
     setTimelineNote(text);
+    setDraftResponse(text);
   };
 
   if (loading) {
@@ -579,13 +700,16 @@ export default function AlertDetailPage() {
             <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs text-[var(--color-text-muted)] font-semibold">
               <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${alert.status === "new" ? "bg-blue-100 text-blue-600 dark:bg-blue-950/20" :
                   alert.status === "resolving" ? "bg-amber-100 text-amber-600 dark:bg-amber-950/20" :
-                    alert.status === "resolved" ? "bg-green-100 text-green-600 dark:bg-green-950/20" : "bg-slate-100 text-slate-600"
+                    alert.status === "pending_approval" ? "bg-orange-100 text-orange-700 dark:bg-orange-950/20 animate-pulse" :
+                      alert.status === "responded" ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/20" :
+                        alert.status === "resolved" ? "bg-green-100 text-green-600 dark:bg-green-950/20" : "bg-slate-100 text-slate-600"
                 }`}>
                 {
                   alert.status === "new" ? "Mới phát hiện" :
                     alert.status === "resolving" ? "Đang xử lý" :
-                      alert.status === "responded" ? "Đã phản hồi" :
-                        alert.status === "resolved" ? "Đã giải quyết" : "Đã đóng"
+                      alert.status === "pending_approval" ? "Chờ duyệt phương án" :
+                        alert.status === "responded" ? "Đã phản hồi" :
+                          alert.status === "resolved" ? "Đã đóng" : "Đã đóng"
                 }
               </span>
               <span className="flex items-center gap-1">
@@ -1042,6 +1166,155 @@ export default function AlertDetailPage() {
               )}
             </div>
 
+            {/* Widget: Crisis Escalation Approval */}
+            <div className="bg-[var(--color-bg-surface)] border border-orange-200/70 dark:border-orange-900/30 rounded-2xl shadow-sm p-6 space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-orange-600 uppercase tracking-wider">
+                    Crisis Escalation & Approval
+                  </label>
+                  <p className="text-[11px] text-[var(--color-text-secondary)] mt-1">
+                    De xuat phuong an phan hoi va den bu cho vu viec nghiem trong.
+                  </p>
+                </div>
+                <span className={`px-2 py-1 rounded-full text-[10px] font-black ${
+                  alert.escalation?.status === "approved"
+                    ? "bg-green-100 text-green-700"
+                    : alert.escalation?.status === "rejected"
+                      ? "bg-red-100 text-red-700"
+                      : alert.status === "pending_approval"
+                        ? "bg-orange-100 text-orange-700 animate-pulse"
+                        : "bg-slate-100 text-slate-600"
+                }`}>
+                  {alert.escalation?.status === "approved"
+                    ? "APPROVED"
+                    : alert.escalation?.status === "rejected"
+                      ? "NEEDS REVISION"
+                      : alert.status === "pending_approval"
+                        ? "PENDING"
+                        : "DRAFT"}
+                </span>
+              </div>
+
+              {!isManager && alert.status === "resolving" && (
+                <div className="space-y-3">
+                  {alert.escalation?.status === "rejected" && alert.escalation.approval_note && (
+                    <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 text-xs text-red-700 dark:text-red-300">
+                      <strong>Ghi chu tu Brand Manager:</strong> {alert.escalation.approval_note}
+                    </div>
+                  )}
+                  <textarea
+                    value={draftResponse}
+                    onChange={(e) => setDraftResponse(e.target.value)}
+                    placeholder="Nhap du thao phan hoi cong khai..."
+                    className="w-full text-xs p-3 border border-[var(--color-border)] rounded-xl bg-[var(--color-bg-surface-raised)] focus:outline-none focus:ring-2 focus:ring-orange-500/20 text-[var(--color-text-primary)] h-28 resize-none"
+                  />
+                  <input
+                    value={proposedCompensation}
+                    onChange={(e) => setProposedCompensation(e.target.value)}
+                    placeholder="Muc den bu de xuat, vi du: Voucher Highlands 200,000 VND"
+                    className="w-full text-xs p-3 border border-[var(--color-border)] rounded-xl bg-[var(--color-bg-surface-raised)] focus:outline-none focus:ring-2 focus:ring-orange-500/20 text-[var(--color-text-primary)]"
+                  />
+                  <button
+                    disabled={escalationBusy}
+                    onClick={handleSubmitEscalation}
+                    className="w-full py-3 bg-orange-600 hover:bg-orange-700 disabled:opacity-60 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-sm">outgoing_mail</span>
+                    Gui duyet phuong an
+                  </button>
+                </div>
+              )}
+
+              {!isManager && alert.status === "pending_approval" && (
+                <div className="p-4 rounded-xl bg-orange-50 dark:bg-orange-950/20 border border-orange-100 dark:border-orange-900/30 text-xs text-orange-700 dark:text-orange-300 font-bold flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-orange-500 animate-ping" />
+                  Dang cho Brand Manager duyet phuong an.
+                </div>
+              )}
+
+              {isManager && alert.status === "pending_approval" && alert.escalation && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-[var(--color-border)]">
+                      <p className="font-black text-[10px] uppercase text-[var(--color-text-muted)] mb-1">Du thao de xuat</p>
+                      <p className="whitespace-pre-wrap text-[var(--color-text-primary)]">{alert.escalation.draft_response}</p>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-[var(--color-border)]">
+                      <p className="font-black text-[10px] uppercase text-[var(--color-text-muted)] mb-1">Den bu de xuat</p>
+                      <p className="text-[var(--color-text-primary)]">{alert.escalation.compensation}</p>
+                    </div>
+                  </div>
+                  <textarea
+                    value={approvalResponse}
+                    onChange={(e) => setApprovalResponse(e.target.value)}
+                    className="w-full text-xs p-3 border border-[var(--color-border)] rounded-xl bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] h-24 resize-none"
+                    placeholder="Noi dung phat ngon duyet..."
+                  />
+                  <input
+                    value={approvalCompensation}
+                    onChange={(e) => setApprovalCompensation(e.target.value)}
+                    className="w-full text-xs p-3 border border-[var(--color-border)] rounded-xl bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)]"
+                    placeholder="Muc den bu duyet..."
+                  />
+                  <textarea
+                    value={approvalNote}
+                    onChange={(e) => setApprovalNote(e.target.value)}
+                    className="w-full text-xs p-3 border border-[var(--color-border)] rounded-xl bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] h-16 resize-none"
+                    placeholder="Ghi chu phan hoi neu can..."
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      disabled={escalationBusy}
+                      onClick={() => handleResolveEscalation("rejected")}
+                      className="flex-1 py-3 rounded-xl bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-xs font-bold cursor-pointer"
+                    >
+                      Yeu cau chinh sua
+                    </button>
+                    <button
+                      disabled={escalationBusy}
+                      onClick={() => handleResolveEscalation("approved")}
+                      className="flex-1 py-3 rounded-xl bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-xs font-bold cursor-pointer"
+                    >
+                      Dong y phe duyet
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {alert.status === "responded" && alert.escalation?.status === "approved" && (
+                <div className="space-y-3">
+                  <div className="p-3 rounded-xl bg-green-50 dark:bg-green-950/20 border border-green-100 dark:border-green-900/30 text-xs">
+                    <p className="font-black text-green-700 dark:text-green-300 mb-1">Phuong an da duoc duyet</p>
+                    <p className="whitespace-pre-wrap text-[var(--color-text-primary)]">{alert.escalation.approved_response}</p>
+                    <p className="mt-2 font-bold text-[var(--color-text-primary)]">Den bu: {alert.escalation.compensation_approved}</p>
+                  </div>
+                  {!isManager && (
+                    <button
+                      disabled={escalationBusy}
+                      onClick={async () => {
+                        try {
+                          setEscalationBusy(true);
+                          await updateAlertStatus(alert.id, "resolved", profile, {
+                            note: "Da dang phan hoi da duoc duyet va hoan tat vu viec.",
+                          }, alert.brand);
+                          setAlert({ ...alert, status: "resolved" });
+                          triggerToast("Da hoan tat vu viec.");
+                        } catch (e) {
+                          triggerToast("Khong the hoan tat vu viec.");
+                        } finally {
+                          setEscalationBusy(false);
+                        }
+                      }}
+                      className="w-full py-3 rounded-xl bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-xs font-bold cursor-pointer"
+                    >
+                      Dang phan hoi & hoan tat
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* Widget: Status Stepper */}
             <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl shadow-sm p-6 space-y-4">
               <label className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider">
@@ -1056,8 +1329,9 @@ export default function AlertDetailPage() {
                   style={{
                     width:
                       alert.status === "new" ? "0%" :
-                        alert.status === "resolving" ? "33%" :
-                          alert.status === "responded" ? "66%" : "100%"
+                        alert.status === "resolving" ? "25%" :
+                          alert.status === "pending_approval" ? "50%" :
+                            alert.status === "responded" ? "75%" : "100%"
                   }}
                 ></div>
 
@@ -1065,10 +1339,11 @@ export default function AlertDetailPage() {
                 {[
                   { key: "new", label: "Mới" },
                   { key: "resolving", label: "Đang xử lý" },
+                  { key: "pending_approval", label: "Cho duyet" },
                   { key: "responded", label: "Đã phản hồi" },
-                  { key: "closed", label: "Đã đóng" }
+                  { key: "resolved", label: "Đã đóng" }
                 ].map((step, index) => {
-                  const statuses = ["new", "resolving", "responded", "closed"];
+                  const statuses = ["new", "resolving", "pending_approval", "responded", "resolved"];
                   const currentIdx = statuses.indexOf(alert.status);
                   const isCompleted = index <= currentIdx;
                   const isCurrent = alert.status === step.key;
@@ -1081,7 +1356,7 @@ export default function AlertDetailPage() {
                         try {
                           await updateAlertStatus(alert.id, step.key, profile, {
                             note: `Thay đổi trạng thái xử lý thành: ${step.label}`
-                          });
+                          }, alert.brand);
                           triggerToast(`Chuyển trạng thái thành ${step.label}!`);
                         } catch (e) {
                           triggerToast("Không thể thay đổi trạng thái.");

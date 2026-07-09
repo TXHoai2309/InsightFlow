@@ -6,21 +6,39 @@
  * Thêm Dark Mode Toggle Button (Sun/Moon) với animation mượt mà.
  */
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { ROLE_CONFIG } from "@/lib/rbac";
+import { dbSecond } from "@/lib/firebase";
+import { normalizeBrandName } from "@/lib/services/dashboard";
+import { collection, doc, limit, onSnapshot, query, updateDoc } from "firebase/firestore";
 
 interface HeaderProps {
   onMenuToggle: () => void;
 }
 
+interface AppNotification {
+  id: string;
+  title: string;
+  message: string;
+  alert_id?: string;
+  brand?: string;
+  created_at?: string;
+  read?: boolean;
+  recipient_role?: string;
+  recipient_email?: string | null;
+}
+
 export function Header({ onMenuToggle }: HeaderProps) {
+  const router = useRouter();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
-  const { user, role } = useAuth();
+  const { user, role, profile } = useAuth();
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const { t } = useTranslation();
   const { theme, toggleTheme } = useTheme();
   const { language, setLanguage } = useLanguage();
@@ -35,6 +53,59 @@ export function Header({ onMenuToggle }: HeaderProps) {
   const roleLabel = role === "brand_manager" ? "Quản lý thương hiệu" : (role ? ROLE_CONFIG[role].label : t("header.guest"));
   const initials = role === "brand_manager" ? "HM" : getInitials(user?.displayName || userName);
   const isDark = theme === "dark";
+  const scopedBrandKey = profile?.role === "admin" ? null : normalizeBrandName(profile?.brandName || profile?.brandId || "");
+
+  useEffect(() => {
+    if (!dbSecond || !profile) {
+      setNotifications([]);
+      return;
+    }
+
+    const notificationsQuery = query(collection(dbSecond, "notifications"), limit(100));
+    return onSnapshot(notificationsQuery, (snapshot) => {
+      const rows = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data() as Omit<AppNotification, "id">;
+        return { id: docSnap.id, ...data };
+      });
+
+      const filtered = rows
+        .filter((item) => {
+          const roleMatches = !item.recipient_role || item.recipient_role === profile.role;
+          const emailMatches = !item.recipient_email || item.recipient_email === profile.email;
+          const brandMatches =
+            !scopedBrandKey ||
+            !item.brand ||
+            normalizeBrandName(item.brand) === scopedBrandKey;
+          return roleMatches && emailMatches && brandMatches;
+        })
+        .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+        .slice(0, 20);
+
+      setNotifications(filtered);
+    }, (error) => {
+      console.error("[Header] notifications snapshot error:", error);
+      setNotifications([]);
+    });
+  }, [profile, scopedBrandKey]);
+
+  const unreadCount = useMemo(() => {
+    return notifications.filter((notification) => !notification.read).length;
+  }, [notifications]);
+
+  const handleNotificationClick = async (notification: AppNotification) => {
+    try {
+      if (!notification.read && dbSecond) {
+        await updateDoc(doc(dbSecond, "notifications", notification.id), { read: true });
+      }
+    } catch (error) {
+      console.warn("[Header] failed to mark notification read:", error);
+    }
+
+    setShowNotifications(false);
+    if (notification.alert_id) {
+      router.push(`/alerts/${encodeURIComponent(notification.alert_id)}`);
+    }
+  };
 
   return (
     <header
@@ -94,9 +165,11 @@ export function Header({ onMenuToggle }: HeaderProps) {
             aria-label="Thông báo"
           >
             <i className="ti ti-bell text-[22px]"></i>
-            <span className="absolute top-1 right-1 w-[16px] h-[16px] bg-red-500 rounded-full flex items-center justify-center text-[9px] text-white font-bold border-2 border-white dark:border-[#1a1b1e]">
-              8
-            </span>
+            {unreadCount > 0 && (
+              <span className="absolute top-1 right-1 min-w-[16px] h-[16px] px-1 bg-red-500 rounded-full flex items-center justify-center text-[9px] text-white font-bold border-2 border-white dark:border-[#1a1b1e]">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
           </button>
 
           {showNotifications && (
@@ -113,14 +186,32 @@ export function Header({ onMenuToggle }: HeaderProps) {
                   className="font-semibold text-[14px]"
                   style={{ color: "var(--color-text-primary)" }}
                 >
-                  {t("header.notifications")} (8)
+                  {t("header.notifications")} ({unreadCount})
                 </h4>
               </div>
               <div className="max-h-64 overflow-y-auto">
+                {notifications.map((n) => (
+                  <button
+                    key={n.id}
+                    onClick={() => handleNotificationClick(n)}
+                    className="w-full text-left p-3 cursor-pointer transition-colors"
+                    style={{ borderBottom: "1px solid var(--color-border)" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--color-bg-surface-raised)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+                  >
+                    <p className="text-[13px] font-semibold flex items-center gap-2" style={{ color: "var(--color-text-primary)" }}>
+                      {!n.read && <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />}
+                      <span>{n.title}</span>
+                    </p>
+                    <p className="text-[12px] mt-0.5" style={{ color: "var(--color-text-secondary)" }}>
+                      {n.message}
+                    </p>
+                  </button>
+                ))}
                 {[
                   { icon: "🔴", title: t("header.newLead") || "Lead mới", sub: t("header.fromHighlands") },
                   { icon: "🚨", title: t("header.crisisAlert"), sub: t("header.spikeDetected") },
-                ].map((n, i) => (
+                ].slice(0, 0).map((n, i) => (
                   <div
                     key={i}
                     className="p-3 cursor-pointer transition-colors"
