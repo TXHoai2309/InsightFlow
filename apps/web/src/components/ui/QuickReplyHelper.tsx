@@ -11,6 +11,8 @@ interface QuickReplyHelperProps {
   sentiment: "positive" | "negative" | "neutral";
   category: "crisis" | "lead" | "faq" | "general";
   onSelectReply?: (text: string) => void;
+  primaryActionLabel?: string;
+  onCopyAndOpenContact?: () => void;
 }
 
 export function QuickReplyHelper({
@@ -19,6 +21,8 @@ export function QuickReplyHelper({
   sentiment,
   category,
   onSelectReply,
+  primaryActionLabel,
+  onCopyAndOpenContact,
 }: QuickReplyHelperProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedSentiment, setSelectedSentiment] = useState<"positive" | "negative" | "neutral">(sentiment);
@@ -235,6 +239,27 @@ export function QuickReplyHelper({
                 value={generatedReply}
                 className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-3 text-[13px] text-[var(--color-text-primary)] leading-relaxed focus:outline-none"
               />
+              {onCopyAndOpenContact && (
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(generatedReply);
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                      } catch (err) {
+                        console.error("Failed to copy text", err);
+                      }
+                      onCopyAndOpenContact();
+                    }}
+                    className="flex items-center justify-center gap-2 rounded-xl bg-[#6C63FF] px-4 py-2.5 text-[13px] font-bold text-white hover:bg-[#5A52D5] transition-all shadow-sm w-full sm:w-auto"
+                  >
+                    <Sparkles className="h-4 w-4 fill-white/10" />
+                    <span>Sao chép & {primaryActionLabel || "Liên hệ"}</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

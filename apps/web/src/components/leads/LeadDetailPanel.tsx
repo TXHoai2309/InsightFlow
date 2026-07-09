@@ -51,6 +51,7 @@ import {
   getLeadOwnershipMeta,
   getLeadSourceAction,
   getLeadWorkbenchMeta,
+  getPrimaryLeadAction,
   type LeadActionLink,
   type LeadWorkbenchView,
 } from "@/lib/lead-workbench";
@@ -196,6 +197,11 @@ export function LeadDetailPanel({
   const mentionTarget = useMemo(
     () => (lead ? resolveLeadMentionTarget(lead, mentionById) : null),
     [lead, mentionById],
+  );
+
+  const primaryAction = useMemo(
+    () => (lead ? getPrimaryLeadAction(lead) : null),
+    [lead],
   );
 
   const returnToken = useMemo(
@@ -1508,6 +1514,8 @@ export function LeadDetailPanel({
                 customerName={lead.author || "Khách hàng"}
                 sentiment={(currentLabels.sentiment === "positive" || currentLabels.sentiment === "negative") ? currentLabels.sentiment : "neutral"}
                 category="lead"
+                primaryActionLabel={primaryAction?.label}
+                onCopyAndOpenContact={primaryAction ? () => handleOpenAction(primaryAction) : undefined}
               />
             </section>
             <section className="rounded-xl border border-[var(--color-border)] p-3">
