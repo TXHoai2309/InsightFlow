@@ -8,7 +8,7 @@
 import { useEffect, useState } from "react";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { DashboardService } from "@/lib/services/dashboard";
-import { filterByBusinessPolicy } from "@/lib/brandScope";
+import { filterByBusinessPolicy, getScopedBrandKey } from "@/lib/brandScope";
 import { useAuth } from "@/hooks/useAuth";
 
 interface UseDashboardOptions {
@@ -41,9 +41,10 @@ export function useDashboard(options: UseDashboardOptions = {}) {
     try {
       setLoading(true);
 
-      // 1. Fetch raw data từ Firestore (không giới hạn records)
+      // 1. Fetch raw data từ Firestore (lọc theo brand nếu có)
+      const brandKey = getScopedBrandKey(profile) || undefined;
       const rawData =
-        await DashboardService.fetchRawData();
+        await DashboardService.fetchRawData({ brandKey });
       const workspaces = filterByBusinessPolicy(
         rawData.workspaces.map((workspace) => ({
           ...workspace,
