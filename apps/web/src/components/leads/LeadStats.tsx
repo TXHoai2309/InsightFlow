@@ -85,7 +85,7 @@ export function LeadStats({ leads, isLoading, profile, onSelectView }: LeadStats
             icon: "event",
             color: "var(--color-info)",
             bg: "var(--color-info-subtle)",
-            view: "priority" as const,
+            view: "active" as const,
           },
         ]
       : [
@@ -117,7 +117,7 @@ export function LeadStats({ leads, isLoading, profile, onSelectView }: LeadStats
             icon: "event",
             color: "var(--color-info)",
             bg: "var(--color-info-subtle)",
-            view: "priority" as const,
+            view: "active" as const,
           },
         ];
 

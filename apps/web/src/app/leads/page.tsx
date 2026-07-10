@@ -269,9 +269,9 @@ export default function LeadsPage() {
 
   const visibleLeads = useMemo(() => {
     return sortedLeads.filter((lead) =>
-      matchesLeadWorkbenchView(lead, activeView, currentTime, profile),
+      lead.id === selectedLeadId || matchesLeadWorkbenchView(lead, activeView, currentTime, profile),
     );
-  }, [activeView, currentTime, profile, sortedLeads]);
+  }, [activeView, currentTime, profile, sortedLeads, selectedLeadId]);
 
   const totalPages = Math.max(1, Math.ceil(visibleLeads.length / LEADS_PAGE_SIZE));
 

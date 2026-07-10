@@ -82,8 +82,7 @@ type ResultAction =
   | "no_response"
   | "follow_up"
   | "not_fit"
-  | "converted"
-  | "transfer_sales";
+  | "converted";
 
 const RESULT_OPTIONS: Array<{
   id: ResultAction;
@@ -94,7 +93,6 @@ const RESULT_OPTIONS: Array<{
   { id: "positive", label: "Khách phản hồi tích cực", icon: "thumb_up", status: "processing" },
   { id: "no_response", label: "Chưa phản hồi", icon: "schedule", status: "processing" },
   { id: "follow_up", label: "Hẹn lại", icon: "event", status: "processing" },
-  { id: "transfer_sales", label: "Chuyển sales", icon: "move_up", status: "processing" },
   { id: "not_fit", label: "Không phù hợp", icon: "block", status: "skipped" },
   { id: "converted", label: "Đã chuyển đổi", icon: "emoji_events", status: "completed" },
 ];
@@ -666,11 +664,6 @@ export function LeadDetailPanel({
 
       if (followUpAt) {
         resultData.follow_up_at = followUpAt;
-      }
-
-      if (selectedResult === "transfer_sales") {
-        resultData.sales_status = "ready_to_transfer";
-        resultData.sales_transferred_at = nowIso;
       }
 
       if (selectedResult === "not_fit" || selectedResult === "converted") {

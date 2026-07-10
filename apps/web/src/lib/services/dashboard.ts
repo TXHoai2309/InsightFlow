@@ -2012,7 +2012,7 @@ export class DashboardService {
       "PATCH",
       stripUndefinedFields({
         status,
-        final_label: finalLabel,
+        requested_labels: normalizedLabel,
         reviewed_by: reviewer.uid,
         reviewed_by_name: reviewer.displayName || reviewer.email || "",
         reviewed_at: nowIso,
