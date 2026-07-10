@@ -30,6 +30,7 @@ interface LeadWorkbenchRowProps {
   highlighted?: boolean;
   labelRequest?: LabelChangeRequest;
   staffList?: any[];
+  detailPanelOpen?: boolean;
   onSelect: (lead: Lead) => void;
   onStartedAction?: (lead: Lead) => void;
 }
@@ -78,6 +79,7 @@ export function LeadWorkbenchRow({
   highlighted = false,
   labelRequest,
   staffList = [],
+  detailPanelOpen = false,
   onSelect,
   onStartedAction,
 }: LeadWorkbenchRowProps) {
@@ -619,17 +621,6 @@ export function LeadWorkbenchRow({
             <p className="text-sm font-bold text-[var(--color-error)]">
               {error}
             </p>
-
-            {labelRequest && (
-            <div className="mt-1 text-xs font-semibold text-[var(--color-text-secondary)] bg-slate-50 dark:bg-slate-900/30 border border-slate-100 dark:border-slate-800/50 rounded-lg p-2 max-w-fit">
-              Yêu cầu sửa nhãn: <span className="text-[var(--color-brand)]">{getQueueLabel(labelRequest.current_queue)}</span> → <span className="text-[var(--color-success)]">{getQueueLabel(labelRequest.requested_queue)}</span>
-              {labelRequest.review_note ? ` · ${labelRequest.review_note}` : ""}
-            </div>
-          )}
-          {error && (
-            <p className="text-xs font-semibold text-[var(--color-error)]">
-              {error}
-            </p>
           )}
         </div>
       </div>
@@ -766,7 +757,6 @@ export function LeadWorkbenchRow({
           )}
         </div>
       </div>
-    </div>
 
       {
     toast && (

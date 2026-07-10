@@ -244,7 +244,7 @@ export function useDashboard(options: UseDashboardOptions = {}) {
         .on(
           "postgres_changes",
           { event: "*", schema: "public", table: "leads" },
-          (payload) => {
+          (payload: any) => {
             console.log("[useDashboard] Realtime lead event received:", payload);
             if (payload.eventType === "UPDATE") {
               const updated = payload.new as any;

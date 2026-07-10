@@ -697,6 +697,7 @@ export default function LeadsPage() {
                   highlighted={highlightedLeadId === lead.id}
                   labelRequest={pendingLabelRequestByLeadId.get(lead.id)}
                   staffList={staffList}
+                  detailPanelOpen={isDetailPanelOpen}
                   onSelect={(nextLead: Lead) => {
                     clearPendingRestore(true);
                     rememberOptimisticLead(nextLead);
