@@ -607,6 +607,21 @@ export default function AlertDetailPage() {
       if (detail) {
         setAlert(detail);
         setNewSeverity(detail.severity || "medium");
+
+        // Sync to alert store to ensure store actions work correctly
+        const storeRawAlerts = useAlertStore.getState().rawAlerts;
+        const existsIndex = storeRawAlerts.findIndex(a => a.id === detail.id);
+        if (existsIndex === -1) {
+          useAlertStore.setState({
+            rawAlerts: [...storeRawAlerts, detail]
+          });
+        } else {
+          const updatedRawAlerts = [...storeRawAlerts];
+          updatedRawAlerts[existsIndex] = detail;
+          useAlertStore.setState({
+            rawAlerts: updatedRawAlerts
+          });
+        }
       } else {
         setAlert(null);
       }
@@ -670,13 +685,34 @@ export default function AlertDetailPage() {
   // Locking only happens when the Crisis Officer clicks "Nhận xử lý" on the list page.
   // This prevents Brand Managers or observers from accidentally overwriting the lock.
 
-  // Handler: direct note submit on processing history timeline
   const handleAddTimelineNote = async () => {
     if (!alert || !timelineNote.trim()) return;
+    const noteText = timelineNote.trim();
     try {
-      await updateAlertStatus(alert.id, alert.status, profile, {
-        note: timelineNote.trim()
+      await updateAlertStatus(
+        alert.id,
+        alert.status,
+        profile,
+        {
+          note: noteText
+        },
+        alert.brand
+      );
+      
+      const nextHistory = alert.resolution_history ? [...alert.resolution_history] : [];
+      const authorName = profile?.displayName || getResolverName(profile?.email) || "Nhân viên trực";
+      nextHistory.push({
+        attempt_number: nextHistory.length + 1,
+        timestamp: new Date().toISOString(),
+        note: noteText,
+        resolved_by_email: profile?.email || undefined,
+        resolved_by_name: authorName
       });
+      setAlert({
+        ...alert,
+        resolution_history: nextHistory
+      });
+
       setTimelineNote("");
       triggerToast("Đã thêm ghi chú xử lý!");
     } catch (e) {
@@ -786,6 +822,7 @@ export default function AlertDetailPage() {
 
       await createCorrectionRequest(payload);
       setCorrectionReason("");
+      setLabelTab("pending");
       triggerToast("Gửi yêu cầu chỉnh sửa thành công!");
     } catch (e) {
       console.error(e);
@@ -842,7 +879,7 @@ export default function AlertDetailPage() {
     <div className="min-h-screen bg-[var(--color-bg-base)] text-[var(--color-text-primary)] animate-fade-in pb-16">
 
       {/* Dynamic Header Block */}
-      <div className="sticky top-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-[var(--color-border)] px-4 md:px-8 py-4 z-30 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="sticky top-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-[var(--color-border)] px-4 md:px-8 py-4 z-20 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-4">
           <button
             onClick={() => router.push("/alerts")}

@@ -5,7 +5,7 @@ import { collection, doc, limit, query, updateDoc, onSnapshot, addDoc } from "fi
 import { isRecordInBrandScope, isSameBrandScope, getScopedBrandKey } from "@/lib/brandScope";
 import { normalizeBrandName } from "@/lib/services/dashboard";
 import { canPerformAction, type UserRoleProfile } from "@/lib/rbac";
-import { fetchSupabaseAlerts, updateSupabaseAlertLabel } from "@/lib/supabase";
+import { fetchSupabaseAlerts, updateSupabaseAlertLabel, supabaseRequest } from "@/lib/supabase";
 import { supabaseClient } from "@/lib/supabaseClient";
 
 function getResolverName(emailOrId: string | null | undefined): string {
@@ -767,6 +767,60 @@ export const useAlertStore = create<AlertState>()(
       };
 
       await addDoc(collection(dbSecond, "label_change_requests"), newDoc);
+
+      // Sync to Supabase label_change_requests table
+      const supabasePayload = {
+        source_type: alert?.content_type || "post",
+        source_id: requestData.alert_id,
+        mention_id: requestData.alert_id,
+        workspace_id: cleanBrandId,
+        platform: alert?.source || "unknown",
+        author: alert?.author || "Không rõ tác giả",
+        content_preview: (alert?.text || "").slice(0, 300),
+        source_url: alert?.url || "",
+        current_labels: newDoc.old_label,
+        requested_labels: newDoc.proposed_label,
+        changed_fields: [],
+        current_queue: "",
+        requested_queue: "",
+        reason_code: "other",
+        reason_note: requestData.reason || "",
+        evidence_checked: true,
+        status: "pending",
+        brand_id: cleanBrandId,
+        brand_name: requestData.brand || "",
+        requested_by: requestData.requester_uid || "",
+        requested_by_name: getResolverName(requestData.requester_email || ""),
+        requested_by_email: requestData.requester_email || "",
+        requested_by_role: "crisis_employee",
+        requested_at: newDoc.created_at,
+        created_at: newDoc.created_at,
+        updated_at: newDoc.created_at,
+        history: newDoc.history,
+      };
+
+      try {
+        await supabaseRequest<void>("label_change_requests", "", {
+          method: "POST",
+          body: JSON.stringify([supabasePayload]),
+          headers: { Prefer: "return=minimal" },
+        });
+      } catch (supabaseErr) {
+        console.error("[AlertStore] Failed to write label change request to Supabase:", supabaseErr);
+      }
+
+      // Add real-time notification for brand managers
+      await addDoc(collection(dbSecond, "notifications"), {
+        title: `Yêu cầu sửa nhãn: Vụ việc #${requestData.alert_id.slice(-4)}`,
+        message: `${getResolverName(requestData.requester_email || "")} đã gửi yêu cầu sửa nhãn cho ${formatBrandName(requestData.brand || "")}.`,
+        type: "correction",
+        alert_id: requestData.alert_id,
+        brand: requestData.brand || "",
+        created_at: new Date().toISOString(),
+        read: false,
+        recipient_role: "brand_manager",
+        recipient_email: null,
+      });
     },
 
     resolveCorrectionRequest: async (requestId, alertId, decision, profile) => {
@@ -847,6 +901,26 @@ export const useAlertStore = create<AlertState>()(
         created_at: changedAt,
       });
 
+      // Add real-time notification for the crisis employee who requested it
+      if (req?.requester_email) {
+        const notifyTitle = decision === "approved" ? "Yêu cầu sửa nhãn đã được duyệt" : "Yêu cầu sửa nhãn bị từ chối";
+        const notifyMsg = decision === "approved"
+          ? `Brand Manager đã duyệt yêu cầu sửa nhãn của bạn cho vụ việc #${alertId.slice(-4)}.`
+          : `Brand Manager đã từ chối yêu cầu sửa nhãn của bạn cho vụ việc #${alertId.slice(-4)}.`;
+
+        await addDoc(collection(dbSecond, "notifications"), {
+          title: notifyTitle,
+          message: notifyMsg,
+          type: "correction_result",
+          alert_id: alertId,
+          brand: req.brand || "",
+          created_at: new Date().toISOString(),
+          read: false,
+          recipient_role: "crisis_employee",
+          recipient_email: req.requester_email,
+        });
+      }
+
       if (decision === "approved" && req) {
         await updateSupabaseAlertLabel(alertId, (existingLabel) => ({
           ...existingLabel,
@@ -857,6 +931,26 @@ export const useAlertStore = create<AlertState>()(
           relevance: req.new_relevance,
           intent: req.new_intent,
         }));
+      }
+
+      // Sync the request resolution back to Supabase label_change_requests table
+      try {
+        await supabaseRequest<void>(
+          "label_change_requests",
+          `mention_id=eq.${encodeURIComponent(alertId)}&status=eq.pending`,
+          {
+            method: "PATCH",
+            body: JSON.stringify({
+              status: decision,
+              reviewed_by: profile.uid,
+              reviewed_by_name: profile.displayName || profile.email || "",
+              reviewed_at: changedAt,
+              updated_at: changedAt,
+            }),
+          }
+        );
+      } catch (supabaseErr) {
+        console.warn("[AlertStore] Failed to update request status in Supabase:", supabaseErr);
       }
     },
 

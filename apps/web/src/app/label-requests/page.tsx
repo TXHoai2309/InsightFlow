@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { filterByBrandScope } from "@/lib/brandScope";
-import { auth } from "@/lib/firebase";
+import { auth, dbSecond } from "@/lib/firebase";
+import { collection, query, where, getDocs, doc, updateDoc, addDoc } from "firebase/firestore";
 
 type Sentiment = "positive" | "negative" | "neutral" | null;
 type Urgency = "normal" | "notable" | "crisis" | null;
@@ -854,6 +855,79 @@ export default function LabelRequestsPage() {
             limit: "200",
           }).toString(),
         );
+
+        // Sync any orphaned pending requests from Firestore to Supabase
+        if (dbSecond) {
+          try {
+            const q = query(
+              collection(dbSecond, "label_change_requests"),
+              where("status", "==", "pending")
+            );
+            const snap = await getDocs(q);
+            console.log("[LabelRequests] Firestore pending docs:", snap.size, snap.docs.map(d => ({ id: d.id, mention_id: d.data().mention_id, brand_id: d.data().brand_id, status: d.data().status })));
+            console.log("[LabelRequests] Supabase requestRows count:", requestRows.length, "pending:", requestRows.filter((r: any) => r.status === "pending").length);
+            for (const docSnap of snap.docs) {
+              const fData = docSnap.data();
+              const existsInSupabase = requestRows.some(
+                (r) => r.mention_id === fData.mention_id && r.status === "pending"
+              );
+              console.log("[LabelRequests] Firestore doc", docSnap.id, "mention_id:", fData.mention_id, "existsInSupabase:", existsInSupabase);
+              if (!existsInSupabase) {
+                const cleanBrandId = fData.brand_id || "";
+                const supabasePayload = {
+                  source_type: fData.mention?.content_type || "post",
+                  source_id: fData.mention_id,
+                  mention_id: fData.mention_id,
+                  workspace_id: cleanBrandId,
+                  platform: fData.mention?.platform || "unknown",
+                  author: fData.mention?.author || "Không rõ tác giả",
+                  content_preview: (fData.mention?.content || "").slice(0, 300),
+                  source_url: fData.mention?.url || "",
+                  current_labels: fData.old_label || {},
+                  requested_labels: fData.proposed_label || {},
+                  changed_fields: [],
+                  current_queue: "",
+                  requested_queue: "",
+                  reason_code: fData.reason_code || "other",
+                  reason_note: fData.reason || "",
+                  evidence_checked: true,
+                  status: "pending",
+                  brand_id: cleanBrandId,
+                  brand_name: fData.brand_name || "",
+                  requested_by: fData.requested_by_uid || fData.requester_uid || "",
+                  requested_by_name: fData.requested_by_name || "",
+                  requested_by_email: fData.requested_by_email || "",
+                  requested_by_role: fData.requested_by_role || "crisis_employee",
+                  requested_at: fData.created_at || new Date().toISOString(),
+                  created_at: fData.created_at || new Date().toISOString(),
+                  updated_at: fData.created_at || new Date().toISOString(),
+                  history: fData.history || [],
+                };
+
+                try {
+                  await supabaseRequest<void>("label_change_requests", "", {
+                    method: "POST",
+                    body: JSON.stringify([supabasePayload]),
+                    headers: { Prefer: "return=minimal" },
+                  });
+                  console.log("[LabelRequests] Successfully synced Firestore doc to Supabase:", docSnap.id);
+                } catch (postErr) {
+                  console.error("[LabelRequests] Failed to POST to Supabase:", postErr);
+                }
+
+                requestRows.unshift({
+                  ...supabasePayload,
+                  id: docSnap.id,
+                });
+              }
+            }
+          } catch (syncErr) {
+            console.warn("Failed to sync Firestore requests to Supabase:", syncErr);
+          }
+        } else {
+          console.warn("[LabelRequests] dbSecond is not available, skipping Firestore sync");
+        }
+
         const rows = requestRows.map((data) => {
           const oldLabel = normalizeLabel(
             data.old_label || data.current_labels || data.current_label,
@@ -1100,6 +1174,56 @@ export default function LabelRequestsPage() {
             updated_at: changedAt,
           }),
         );
+
+        // Sync to Firestore label_change_requests collection
+        try {
+          if (dbSecond) {
+            const q = query(
+              collection(dbSecond, "label_change_requests"),
+              where("mention_id", "==", selectedRequest.mention_id),
+              where("status", "==", "pending")
+            );
+            const snap = await getDocs(q);
+            const batchPromises = snap.docs.map((docSnap) => {
+              const docRef = doc(dbSecond, "label_change_requests", docSnap.id);
+              return updateDoc(docRef, {
+                status,
+                updated_at: changedAt,
+                reviewed_by_uid: profile?.uid || "",
+                reviewed_by_name: profile?.displayName || profile?.email || "Brand Manager",
+                reviewed_by_email: profile?.email || "",
+                reviewed_at: changedAt,
+              });
+            });
+            await Promise.all(batchPromises);
+          }
+        } catch (firestoreErr) {
+          console.warn("[updateRequestStatus] Failed to sync update to Firestore:", firestoreErr);
+        }
+
+        // Add real-time notification for the crisis employee who requested it in Firestore
+        try {
+          if (dbSecond && selectedRequest.requested_by_email) {
+            const notifyTitle = status === "approved" || status === "edited" ? "Yêu cầu sửa nhãn đã được duyệt" : "Yêu cầu sửa nhãn bị từ chối";
+            const notifyMsg = status === "approved" || status === "edited"
+              ? `Brand Manager đã duyệt yêu cầu sửa nhãn của bạn cho vụ việc #${selectedRequest.mention_id.slice(-4)}.`
+              : `Brand Manager đã từ chối yêu cầu sửa nhãn của bạn cho vụ việc #${selectedRequest.mention_id.slice(-4)}.`;
+
+            await addDoc(collection(dbSecond, "notifications"), {
+              title: notifyTitle,
+              message: notifyMsg,
+              type: "correction_result",
+              alert_id: selectedRequest.mention_id,
+              brand: selectedRequest.brand_name || "",
+              created_at: new Date().toISOString(),
+              read: false,
+              recipient_role: "crisis_employee",
+              recipient_email: selectedRequest.requested_by_email,
+            });
+          }
+        } catch (notifyErr) {
+          console.warn("[updateRequestStatus] Failed to send notification to requester:", notifyErr);
+        }
 
         const leadId = getRequestLeadId(selectedRequest);
         if (leadId) {
