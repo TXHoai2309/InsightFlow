@@ -293,9 +293,9 @@ export default function LeadsPage() {
 
   const visibleLeads = useMemo(() => {
     return sortedLeads.filter((lead) =>
-      lead.id === selectedLeadId || matchesLeadWorkbenchView(lead, activeView, currentTime, profile),
+      matchesLeadWorkbenchView(lead, activeView, currentTime, profile),
     );
-  }, [activeView, currentTime, profile, sortedLeads, selectedLeadId]);
+  }, [activeView, currentTime, profile, sortedLeads]);
 
   const totalPages = Math.max(1, Math.ceil(visibleLeads.length / LEADS_PAGE_SIZE));
 
@@ -473,7 +473,7 @@ export default function LeadsPage() {
       }, 80);
     }
     setActiveView(
-      meta.needsResultCapture ? "priority" : getDefaultLeadWorkbenchView(profile),
+      meta.needsResultCapture ? "active" : getDefaultLeadWorkbenchView(profile),
     );
   };
 
