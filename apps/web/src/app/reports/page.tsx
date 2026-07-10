@@ -7,7 +7,7 @@ import { generateWeeklyBrandReportExcel } from "@/lib/excelExport";
 import { DashboardService } from "@/lib/services/dashboard";
 import { useAuth } from "@/hooks/useAuth";
 import { filterByBusinessPolicy, getScopedBrandKey, isRecordInBrandScope } from "@/lib/brandScope";
-import DashboardLeadMonitoringPage from "@/app/dashboard/lead-monitoring/page";
+import { LeadEmployeeReportPage } from "@/components/lead-monitoring/LeadEmployeeReportPage";
 
 
 /**
@@ -1081,7 +1081,7 @@ export default function ReportsPage() {
   }
 
   if (!authLoading && profile?.role === "lead_employee") {
-    return <DashboardLeadMonitoringPage />;
+    return <LeadEmployeeReportPage />;
   }
 
   return <LegacyReportsPage />;

@@ -18,11 +18,12 @@ export function ResponseTimeTrendCard() {
     }
 
     leads.forEach((lead) => {
-      if (!lead.first_contacted_at) return;
+      const contactedAt = lead.first_contacted_at || lead.last_contact_at;
+      if (!contactedAt) return;
       const createdAt = new Date(lead.created_at);
       const key = createdAt.toLocaleDateString("vi-VN", { weekday: "short" });
       if (!days[key]) return;
-      const diff = new Date(lead.first_contacted_at).getTime() - createdAt.getTime();
+      const diff = new Date(contactedAt).getTime() - createdAt.getTime();
       if (diff >= 0) {
         days[key].totalMins += Math.floor(diff / 60000);
         days[key].count += 1;
@@ -37,15 +38,17 @@ export function ResponseTimeTrendCard() {
 
   const sla = useMemo(() => {
     const pending = leads.filter((lead) => lead.status === "new" || lead.status === "processing");
-    const overdue = pending.filter((lead) => getLeadWorkbenchMeta(lead).isOverdue).length;
-    const contacted = leads.filter((lead) => lead.first_contacted_at).length;
+    const nowMs = Date.now();
+    const overdue = pending.filter((lead) => getLeadWorkbenchMeta(lead, nowMs).isOverdue).length;
+    const contacted = leads.filter((lead) => lead.first_contacted_at || lead.last_contact_at).length;
     const avg =
       contacted === 0
         ? 0
         : Math.round(
             leads.reduce((sum, lead) => {
-              if (!lead.first_contacted_at) return sum;
-              return sum + Math.max(0, new Date(lead.first_contacted_at).getTime() - new Date(lead.created_at).getTime()) / 60000;
+              const contactedAt = lead.first_contacted_at || lead.last_contact_at;
+              if (!contactedAt) return sum;
+              return sum + Math.max(0, new Date(contactedAt).getTime() - new Date(lead.created_at).getTime()) / 60000;
             }, 0) / contacted,
           );
 

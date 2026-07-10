@@ -9,6 +9,14 @@ interface QuickReplyHelperProps {
   mentionContent: string;
   customerName?: string;
   sentiment: "positive" | "negative" | "neutral";
+  topic?: string;
+  intent?: string;
+  urgency?: string;
+  relevance?: boolean | null;
+  leadStatus?: string;
+  resultType?: string;
+  lastActionType?: string;
+  lastContactChannel?: string;
   category: "crisis" | "lead" | "faq" | "general";
   onSelectReply?: (text: string) => void;
   primaryActionLabel?: string;
@@ -19,6 +27,14 @@ export function QuickReplyHelper({
   mentionContent,
   customerName = "",
   sentiment,
+  topic = "other",
+  intent,
+  urgency,
+  relevance,
+  leadStatus,
+  resultType,
+  lastActionType,
+  lastContactChannel,
   category,
   onSelectReply,
   primaryActionLabel,
@@ -26,7 +42,7 @@ export function QuickReplyHelper({
 }: QuickReplyHelperProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedSentiment, setSelectedSentiment] = useState<"positive" | "negative" | "neutral">(sentiment);
-  const [selectedTopic, setSelectedTopic] = useState<string>("other");
+  const [selectedTopic, setSelectedTopic] = useState<string>(topic || "other");
   const [tone, setTone] = useState<"polite_and_apologetic" | "friendly" | "professional" | "humorous">("polite_and_apologetic");
   const [generatedReply, setGeneratedReply] = useState("");
   const [generating, setGenerating] = useState(false);
@@ -40,16 +56,10 @@ export function QuickReplyHelper({
     }
   }, [sentiment]);
 
-  // Set default topic based on category to help employee
+  // Sync selectedTopic from the normalized label data. Category is only a fallback.
   useEffect(() => {
-    if (category === "crisis") {
-      setSelectedTopic("service"); // Default topic for crisis is usually service
-    } else if (category === "lead") {
-      setSelectedTopic("quality"); // Default topic for leads is usually product inquiry
-    } else {
-      setSelectedTopic("other");
-    }
-  }, [category]);
+    setSelectedTopic(topic || (category === "crisis" ? "service" : "other"));
+  }, [category, topic]);
 
   const handleGenerate = async () => {
     setGenerating(true);
@@ -65,6 +75,13 @@ export function QuickReplyHelper({
         tone,
         sentiment: selectedSentiment,
         topic: selectedTopic,
+        intent,
+        urgency,
+        relevance,
+        leadStatus,
+        resultType,
+        lastActionType,
+        lastContactChannel,
       };
 
       const res = await fetch("/api/templates/generate-reply", {
