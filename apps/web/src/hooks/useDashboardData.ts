@@ -11,6 +11,7 @@ import { DashboardService } from "@/lib/services/dashboard";
 import { filterByBusinessPolicy, getScopedBrandKey } from "@/lib/brandScope";
 import { useAuth } from "@/hooks/useAuth";
 import { supabaseClient } from "@/lib/supabaseClient";
+import { useAlertStore } from "@/stores/alert.store";
 
 interface UseDashboardOptions {
   autoFetch?: boolean;
@@ -213,8 +214,23 @@ export function useDashboard(options: UseDashboardOptions = {}) {
     }
 
     setIsInitialized(true);
+
+    // Prefetch alerts page data in the background when the dashboard is idle
+    const prefetchTimer = setTimeout(() => {
+      const alertStore = useAlertStore.getState();
+      const hasAlerts = alertStore.rawAlerts.length > 0;
+      const isAlertsFresh = Date.now() - alertStore.lastFetchedAt < 30 * 60 * 1000;
+      if (!hasAlerts || !isAlertsFresh) {
+        alertStore.fetchAlerts(brandKey === "global" ? null : brandKey);
+        alertStore.fetchCorrectionRequests(brandKey === "global" ? null : brandKey);
+      }
+    }, 1500);
+
     const interval = setInterval(() => fetchDashboardData(), refetchInterval);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      clearTimeout(prefetchTimer);
+    };
   }, [autoFetch, refetchInterval, authLoading, profile?.brandId, profile?.brandName, profile?.role]);
 
   // Realtime subscription on leads table to sync assignee and status instantly

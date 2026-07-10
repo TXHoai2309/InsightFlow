@@ -16,6 +16,9 @@ export type Platform =
 
 export interface Mention {
   id: string;
+  entity_key?: string;
+  post_id?: string;
+  comment_id?: string | null;
   parent_id?: string | null;
   workspace_id: string;       // = brand field từ Firestore
   platform: Platform;

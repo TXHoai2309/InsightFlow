@@ -24,11 +24,23 @@ CREATE INDEX IF NOT EXISTS comments_post_id_idx
 CREATE INDEX IF NOT EXISTS comments_comment_id_idx
   ON public.comments (comment_id);
 
+CREATE INDEX IF NOT EXISTS comments_platform_post_id_level_posted_idx
+  ON public.comments (platform, post_id, comment_level, posted_at);
+
 CREATE INDEX IF NOT EXISTS annotations_post_id_idx
   ON public.annotations (post_id);
 
 CREATE INDEX IF NOT EXISTS annotations_comment_id_idx
   ON public.annotations (comment_id);
+
+CREATE INDEX IF NOT EXISTS annotations_platform_post_assignee_idx
+  ON public.annotations (platform, post_id, assignee);
+
+CREATE INDEX IF NOT EXISTS labeling_assignments_platform_status_updated_idx
+  ON public.labeling_assignments (platform, status, updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS labeling_assignments_platform_post_idx
+  ON public.labeling_assignments (platform, post_id);
 
 CREATE INDEX IF NOT EXISTS leads_mention_id_idx
   ON public.leads (mention_id);

@@ -9,6 +9,7 @@ import { PlatformLogo } from "@/components/platform/PlatformLogo";
 import { dbSecond } from "@/lib/firebase";
 import { doc, onSnapshot, updateDoc, arrayUnion, collection, addDoc } from "firebase/firestore";
 import { canPerformAction } from "@/lib/rbac";
+import { getScopedBrandKey } from "@/lib/brandScope";
 import { fetchSingleSupabaseAlert, updateSupabaseAlertLabel, fetchCommentsForPost, type PostComment } from "@/lib/supabase";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { QuickReplyHelper } from "@/components/ui/QuickReplyHelper";
@@ -594,30 +595,48 @@ export default function AlertDetailPage() {
 
   const loadAlertDetail = useCallback(async (showGlobalLoading = false) => {
     if (!id) return;
-    if (showGlobalLoading) {
+
+    const readStoreAlert = () => useAlertStore.getState().rawAlerts.find((a) =>
+      a.id === id ||
+      a.source_id === id ||
+      a.post_id === id ||
+      a.comment_id === id
+    );
+    let storeAlert = readStoreAlert();
+    if (!storeAlert) {
+      await useAlertStore.getState().fetchAlerts(getScopedBrandKey(profile));
+      storeAlert = readStoreAlert();
+    }
+
+    if (storeAlert) {
+      setAlert(storeAlert);
+      setNewSeverity(storeAlert.severity || "medium");
+      setLoading(false);
+      setRefreshing(true);
+    } else if (showGlobalLoading) {
       setLoading(true);
     } else {
       setRefreshing(true);
     }
+
     try {
-      let detail = await fetchSingleSupabaseAlert(id);
-      if (!detail) {
-        const storeAlert = useAlertStore.getState().rawAlerts.find(a => a.id === id);
-        if (storeAlert) detail = storeAlert;
-      }
+      const detail = await fetchSingleSupabaseAlert(id);
       if (detail) {
         setAlert(detail);
         setNewSeverity(detail.severity || "medium");
-      } else {
+      } else if (!storeAlert) {
         setAlert(null);
       }
     } catch (err) {
       console.error("Error loading alert document details from Supabase:", err);
+      if (!storeAlert) {
+        setAlert(null);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [id]);
+  }, [id, profile]);
 
   // Real-time detail sync: Supabase Realtime (push) + manual refresh
   useEffect(() => {

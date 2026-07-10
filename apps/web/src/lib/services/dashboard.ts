@@ -841,6 +841,9 @@ function supabasePostToMention(row: SupabaseRow, annotationByKey: Map<string, Su
 
   return {
     id: postId,
+    entity_key: normalizeOptionalText(annotation?.entity_key) || buildEntityKeys(platform, postId)[0],
+    post_id: postId,
+    comment_id: null,
     parent_id: null,
     workspace_id: String(row.brand || row.brand_slug || payload.brand || payload.workspace_id || ""),
     platform: mapSourceToPlatform(platform),
@@ -891,6 +894,9 @@ function supabaseCommentToMention(
 
   return {
     id: commentId,
+    entity_key: normalizeOptionalText(annotation?.entity_key) || buildEntityKeys(platform, postId, commentId)[0],
+    post_id: postId,
+    comment_id: commentId,
     parent_id: parentCommentId || postId || null,
     workspace_id: String(row.brand || payload.brand || post?.workspace_id || ""),
     platform: mapSourceToPlatform(platform),

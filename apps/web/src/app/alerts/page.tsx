@@ -239,7 +239,8 @@ export default function AlertsPage() {
   const [sortBy, setSortBy] = useState<"risk" | "newest" | "reach">("risk");
   const [isResolvedExpanded, setIsResolvedExpanded] = useState(false);
   const [isRequestsExpanded, setIsRequestsExpanded] = useState(false);
-  const [timeFilter, setTimeFilter] = useState<string>("all");
+  const [timeFilter, setTimeFilter] = useState<string>("24h");
+  const [singleDate, setSingleDate] = useState<string>("");
   const [customStartDate, setCustomStartDate] = useState<string>("");
   const [customEndDate, setCustomEndDate] = useState<string>("");
   const [showDatePopover, setShowDatePopover] = useState(false);
@@ -343,18 +344,35 @@ export default function AlertsPage() {
       let startDate: Date | null = null;
       let endDate: Date | null = null;
 
-      if (timeFilter === "custom") {
-        if (customStartDate) startDate = new Date(customStartDate + "T00:00:00");
-        if (customEndDate) endDate = new Date(customEndDate + "T23:59:59");
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      const startOfTodayMs = startOfToday.getTime();
+
+      if (timeFilter === "24h") {
+        startDate = new Date(startOfTodayMs);
+      } else if (timeFilter === "2d") {
+        startDate = new Date(startOfTodayMs - 1 * 24 * 60 * 60 * 1000);
+      } else if (timeFilter === "3d") {
+        startDate = new Date(startOfTodayMs - 2 * 24 * 60 * 60 * 1000);
+      } else if (timeFilter === "5d") {
+        startDate = new Date(startOfTodayMs - 4 * 24 * 60 * 60 * 1000);
       } else if (timeFilter === "7d") {
-        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        startDate = new Date(startOfTodayMs - 6 * 24 * 60 * 60 * 1000);
       } else if (timeFilter === "30d") {
-        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        startDate = new Date(startOfTodayMs - 29 * 24 * 60 * 60 * 1000);
       } else if (timeFilter === "this_month") {
         startDate = new Date(now.getFullYear(), now.getMonth(), 1);
       } else if (timeFilter === "last_month") {
         startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
         endDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      } else if (timeFilter === "single") {
+        if (singleDate) {
+          startDate = new Date(singleDate + "T00:00:00");
+          endDate = new Date(singleDate + "T23:59:59");
+        }
+      } else if (timeFilter === "custom") {
+        if (customStartDate) startDate = new Date(customStartDate + "T00:00:00");
+        if (customEndDate) endDate = new Date(customEndDate + "T23:59:59");
       } else if (/^\d{4}-\d{2}$/.test(timeFilter)) {
         const [year, month] = timeFilter.split("-").map(Number);
         startDate = new Date(year, month - 1, 1);
@@ -374,7 +392,7 @@ export default function AlertsPage() {
     }
 
     return result;
-  }, [rawAlerts, filters.brand, timeFilter, customStartDate, customEndDate]);
+  }, [rawAlerts, filters.brand, timeFilter, singleDate, customStartDate, customEndDate]);
 
   const availableMonths = useMemo(() => {
     const monthSet = new Set<string>();
@@ -1081,63 +1099,55 @@ export default function AlertsPage() {
                 </select>
               )}
 
-              {/* Time Range — with floating date popover for custom */}
-              <div className="relative">
+              {/* Time Range */}
+              <div className="flex flex-wrap items-center gap-2">
                 <select
                   value={timeFilter}
                   onChange={(e) => {
                     setTimeFilter(e.target.value);
-                    setShowDatePopover(e.target.value === "custom");
                   }}
                   className="select-app border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 pl-3 pr-8 bg-white dark:bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] focus:outline-none cursor-pointer"
                 >
-                  <option value="all">{t("alerts.page.allTime")}</option>
-                  <option value="7d">{t("alerts.page.last7d")}</option>
-                  <option value="30d">{t("alerts.page.last30d")}</option>
-                  <option value="this_month">{t("alerts.page.thisMonth")}</option>
-                  <option value="last_month">{t("alerts.page.lastMonth")}</option>
-                  <option value="custom">
-                    {customStartDate && customEndDate
-                      ? `${customStartDate.split("-").reverse().join("/")} – ${customEndDate.split("-").reverse().join("/")}`
-                      : t("alerts.page.customDate")}
-                  </option>
+                  <option value="24h">Hôm nay</option>
+                  <option value="2d">2 ngày</option>
+                  <option value="3d">3 ngày</option>
+                  <option value="5d">5 ngày</option>
+                  <option value="7d">7 ngày qua</option>
+                  <option value="30d">30 ngày qua</option>
+                  <option value="all">Toàn thời gian</option>
+                  <option value="single">Ngày cụ thể</option>
+                  <option value="custom">Tự chọn ngày</option>
                 </select>
 
-                {/* Floating date picker popover */}
-                {timeFilter === "custom" && showDatePopover && (
-                  <div
-                    className="absolute right-0 top-full mt-1.5 z-50 bg-white dark:bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] rounded-2xl shadow-xl p-3 flex flex-col gap-2 min-w-[240px]"
-                    style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.12)" }}
-                  >
-                    <p className="text-[10px] font-black uppercase tracking-wider text-[var(--color-text-muted)] mb-0.5">{t("alerts.page.selectDateRange")}</p>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase">{t("alerts.page.fromDate")}</label>
-                      <input
-                        type="date"
-                        value={customStartDate}
-                        onChange={(e) => setCustomStartDate(e.target.value)}
-                        className="border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 px-2 bg-[var(--color-bg-base)] dark:bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] focus:outline-none w-full"
-                        style={{ colorScheme: "light dark" }}
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase">{t("alerts.page.toDate")}</label>
-                      <input
-                        type="date"
-                        value={customEndDate}
-                        onChange={(e) => setCustomEndDate(e.target.value)}
-                        className="border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 px-2 bg-[var(--color-bg-base)] dark:bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] focus:outline-none w-full"
-                        style={{ colorScheme: "light dark" }}
-                      />
-                    </div>
-                    <button
-                      onClick={() => setShowDatePopover(false)}
-                      className="mt-1 w-full py-1.5 rounded-xl bg-[var(--color-brand)] text-white text-xs font-bold hover:opacity-90 transition-opacity"
-                    >
-                      {t("alerts.page.apply")}
-                    </button>
+                {/* Single Date Input */}
+                {timeFilter === "single" && (
+                  <input
+                    type="date"
+                    value={singleDate}
+                    onChange={(e) => setSingleDate(e.target.value)}
+                    className="border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 px-3 bg-white dark:bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] focus:outline-none cursor-pointer"
+                  />
+                )}
+
+                {/* Custom Date Range Inputs */}
+                {timeFilter === "custom" && (
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="date"
+                      value={customStartDate}
+                      onChange={(e) => setCustomStartDate(e.target.value)}
+                      className="border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 px-3 bg-white dark:bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] focus:outline-none cursor-pointer"
+                    />
+                    <span className="text-xs text-[var(--color-text-muted)]">đến</span>
+                    <input
+                      type="date"
+                      value={customEndDate}
+                      onChange={(e) => setCustomEndDate(e.target.value)}
+                      className="border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 px-3 bg-white dark:bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] focus:outline-none cursor-pointer"
+                    />
                   </div>
                 )}
+
               </div>
             </div>
           </div>
