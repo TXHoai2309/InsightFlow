@@ -305,7 +305,6 @@ export function needsLeadResultCapture(lead: Lead) {
 function inferNextAction(lead: Lead) {
   if (lead.status === "completed") return "Đã chuyển đổi";
   if (lead.status === "skipped") return "Không tiềm năng";
-  if (lead.sales_status === "ready_to_transfer") return "Chuyển sales";
   if (needsLeadResultCapture(lead)) return "Ghi nhận kết quả";
   if (hasFollowUpSignal(lead)) return "Hẹn follow-up";
   return getPrimaryLeadAction(lead)?.label || "Xem chi tiết";
@@ -316,14 +315,12 @@ function buildPriorityReasons(
   isUrgent: boolean,
   isOverdue: boolean,
   needsResult: boolean,
-  isSalesHandoff: boolean,
 ) {
   const reasons: string[] = [];
   const content = lead.content.toLowerCase();
   const signals = lead.intent_signals.filter(Boolean).slice(0, 2);
 
   if (needsResult) reasons.push("Đã mở liên hệ, cần ghi nhận kết quả");
-  if (isSalesHandoff) reasons.push("Khách đủ điều kiện chuyển sales");
   if (lead.intent === "hot") reasons.push("Có ý định mua rõ ràng");
   if (signals.length > 0) reasons.push(signals.join(", "));
   if (/giá|gia|mua|ship|giao|order|đặt|dat|còn hàng|con hang|location|quality/.test(content)) {
@@ -357,11 +354,10 @@ export function getLeadWorkbenchMeta(
   const isFollowUp = isPending && hasFollowUpSignal(lead);
   const contactable = hasContactChannel(lead);
   const needsResult = needsLeadResultCapture(lead);
-  const isSalesHandoff = lead.sales_status === "ready_to_transfer";
+  const isSalesHandoff = false;
 
   let priorityScore = 0;
   if (needsResult) priorityScore += 55;
-  if (isSalesHandoff) priorityScore += 45;
   if (lead.intent === "hot") priorityScore += 45;
   if (lead.intent === "warm") priorityScore += 25;
   if (lead.intent === "cold") priorityScore += 8;
@@ -394,7 +390,6 @@ export function getLeadWorkbenchMeta(
       isUrgent,
       isOverdue,
       needsResult,
-      isSalesHandoff,
     ),
     nextActionLabel: inferNextAction(lead),
   };
@@ -446,22 +441,16 @@ export function matchesLeadWorkbenchView(
   if (view === "priority") {
     if (!meta.isPending) return false;
 
-    // If Brand Manager: show if it has pending label correction or ready to sales handoff
+    // If Brand Manager: show if it has pending label correction
     const isManager = profile?.role === "admin" || profile?.role === "brand_manager";
-    if (isManager && (lead.label_correction_status === "pending" || meta.isSalesHandoff)) {
+    if (isManager && lead.label_correction_status === "pending") {
       return true;
     }
 
-    // Otherwise (or in addition): priority/overdue/urgent/needs result/new lead assigned to me
+    // Otherwise (or in addition): priority matches if the lead is mine and has NOT been contacted yet
     const isMine = ownership.status === "assigned_to_me" || ownership.status === "manager_override";
-    return (
-      isMine &&
-      (meta.needsResultCapture ||
-        meta.isUrgent ||
-        meta.isOverdue ||
-        meta.isFollowUp ||
-        lead.status === "new")
-    );
+    const hasBeenContacted = Boolean(lead.last_contact_at || (lead.contact_attempts && lead.contact_attempts > 0));
+    return isMine && !hasBeenContacted;
   }
 
   if (view === "active") {
@@ -469,15 +458,9 @@ export function matchesLeadWorkbenchView(
     const isMine = ownership.status === "assigned_to_me" || ownership.status === "manager_override";
     if (!isMine) return false;
 
-    // Active means it is mine, but not in immediate priority action queue
-    const isPriority =
-      meta.needsResultCapture ||
-      meta.isUrgent ||
-      meta.isOverdue ||
-      meta.isFollowUp ||
-      lead.status === "new";
-
-    return !isPriority;
+    // Active matches if the lead is mine and HAS been contacted
+    const hasBeenContacted = Boolean(lead.last_contact_at || (lead.contact_attempts && lead.contact_attempts > 0));
+    return hasBeenContacted;
   }
 
   if (view === "closed") {
@@ -517,10 +500,6 @@ export function sortLeadsForWorkbench(
 
     if (aMeta.needsResultCapture !== bMeta.needsResultCapture) {
       return aMeta.needsResultCapture ? -1 : 1;
-    }
-
-    if (aMeta.isSalesHandoff !== bMeta.isSalesHandoff) {
-      return aMeta.isSalesHandoff ? -1 : 1;
     }
 
     if (aMeta.priorityScore !== bMeta.priorityScore) {

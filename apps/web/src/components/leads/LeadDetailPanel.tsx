@@ -82,8 +82,7 @@ type ResultAction =
   | "no_response"
   | "follow_up"
   | "not_fit"
-  | "converted"
-  | "transfer_sales";
+  | "converted";
 
 const RESULT_OPTIONS: Array<{
   id: ResultAction;
@@ -94,7 +93,6 @@ const RESULT_OPTIONS: Array<{
   { id: "positive", label: "Khách phản hồi tích cực", icon: "thumb_up", status: "processing" },
   { id: "no_response", label: "Chưa phản hồi", icon: "schedule", status: "processing" },
   { id: "follow_up", label: "Hẹn lại", icon: "event", status: "processing" },
-  { id: "transfer_sales", label: "Chuyển sales", icon: "move_up", status: "processing" },
   { id: "not_fit", label: "Không phù hợp", icon: "block", status: "skipped" },
   { id: "converted", label: "Đã chuyển đổi", icon: "emoji_events", status: "completed" },
 ];
@@ -668,11 +666,6 @@ export function LeadDetailPanel({
         resultData.follow_up_at = followUpAt;
       }
 
-      if (selectedResult === "transfer_sales") {
-        resultData.sales_status = "ready_to_transfer";
-        resultData.sales_transferred_at = nowIso;
-      }
-
       if (selectedResult === "not_fit" || selectedResult === "converted") {
         resultData.closed_at = nowIso;
       }
@@ -704,7 +697,10 @@ export function LeadDetailPanel({
   ];
 
   return (
-    <aside className="sticky top-0 hidden h-[calc(100dvh-16px)] min-h-0 shrink-0 flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm xl:flex">
+    <aside
+      data-tour="lead-detail-panel"
+      className="sticky top-0 hidden h-[calc(100dvh-16px)] min-h-0 shrink-0 flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm xl:flex"
+    >
       <div className="shrink-0 border-b border-[var(--color-border)] p-3">
         <div className="flex items-start justify-between gap-2.5">
           <div className="flex min-w-0 items-center gap-2.5">
@@ -755,6 +751,7 @@ export function LeadDetailPanel({
             <button
               key={tab.id}
               type="button"
+              data-tour={tab.id === "action" ? "lead-detail-tab-action" : undefined}
               onClick={() => handleTabChange(tab.id)}
               className={`rounded-lg px-2 py-1.5 text-xs font-semibold transition ${
                 activeTab === tab.id
@@ -774,7 +771,7 @@ export function LeadDetailPanel({
       >
         {activeTab === "action" && (
           <div className="space-y-2">
-            <section className="rounded-xl border border-[var(--color-border)] p-2.5">
+            <section data-tour="lead-detail-owner" className="rounded-xl border border-[var(--color-border)] p-2.5">
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <p className="text-[13px] font-bold text-[var(--color-text-primary)]">
@@ -799,6 +796,7 @@ export function LeadDetailPanel({
               {ownership.canClaim && (
                 <button
                   type="button"
+                  data-tour="lead-detail-claim-button"
                   onClick={handleClaim}
                   disabled={!canClaimLead}
                   className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-3 py-1.5 text-sm font-bold text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50"
@@ -877,7 +875,7 @@ export function LeadDetailPanel({
               </p>
             </section>
 
-            <section className="rounded-xl border border-[var(--color-border)] p-2.5">
+            <section data-tour="lead-detail-label-request" className="rounded-xl border border-[var(--color-border)] p-2.5">
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <p className="text-[13px] font-bold text-[var(--color-text-primary)]">
@@ -1249,7 +1247,7 @@ export function LeadDetailPanel({
               )}
             </section>
 
-            <details className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-2.5">
+            <details data-tour="lead-detail-extra-actions" className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-2.5">
               <summary className="cursor-pointer text-[13px] font-bold text-[var(--color-text-primary)]">
                 Thông tin & thao tác bổ sung
               </summary>
@@ -1263,7 +1261,7 @@ export function LeadDetailPanel({
               </p>
             </section>
 
-            <section className="rounded-xl border border-[var(--color-border)] p-2.5">
+            <section data-tour="lead-detail-source-actions" className="rounded-xl border border-[var(--color-border)] p-2.5">
               <p className="text-sm font-bold text-[var(--color-text-primary)]">
                 Nguồn lead
               </p>
@@ -1304,7 +1302,7 @@ export function LeadDetailPanel({
               )}
             </section>
 
-            <section className="rounded-xl border border-[var(--color-border)] p-2.5">
+            <section data-tour="lead-detail-contact-actions" className="rounded-xl border border-[var(--color-border)] p-2.5">
               <p className="text-sm font-bold text-[var(--color-text-primary)]">
                 Kênh liên hệ
               </p>
@@ -1345,7 +1343,7 @@ export function LeadDetailPanel({
               </div>
             </section>
 
-            <section className="rounded-xl border border-[var(--color-brand-border)] p-2.5">
+            <section data-tour="lead-detail-result-actions" className="rounded-xl border border-[var(--color-brand-border)] p-2.5">
               <p className="text-sm font-bold text-[var(--color-text-primary)]">
                 Ghi nhận kết quả nhanh
               </p>
@@ -1384,7 +1382,7 @@ export function LeadDetailPanel({
                 ))}
               </div>
               {selectedResult === "follow_up" && (
-                <div className="mt-3 grid grid-cols-2 gap-2">
+                <div data-tour="lead-detail-followup" className="mt-3 grid grid-cols-2 gap-2">
                   <label className="text-xs font-semibold text-[var(--color-text-secondary)]">
                     Ngày follow-up
                     <input

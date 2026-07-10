@@ -8,7 +8,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAuthStore } from "@/stores/auth.store";
 import { LEAD_EMPLOYEE_TOUR_EVENT } from "@/components/onboarding/events";
 
-const LEAD_EMPLOYEE_ONBOARDING_VERSION = "2026-07-lead-employee-tour-v1";
+const LEAD_EMPLOYEE_ONBOARDING_VERSION = "2026-07-lead-employee-tour-v2";
 
 type TourMode = "intro" | "tour";
 
@@ -18,6 +18,7 @@ interface TourStep {
   title: string;
   body: string;
   actionHint: string;
+  prepare?: "open-first-lead" | "open-action-tab";
 }
 
 interface TargetRect {
@@ -30,69 +31,81 @@ interface TargetRect {
 const tourSteps: TourStep[] = [
   {
     route: "/leads",
-    selector: '[data-tour="leads-view-tabs"]',
-    title: "Chọn đúng hàng chờ lead",
-    body:
-      "Các nút này chia lead theo trạng thái xử lý: cần ưu tiên, sắp quá hạn, follow-up và cần ghi nhận kết quả.",
-    actionHint: "Bắt đầu từ nhóm ưu tiên, sau đó kiểm tra nhóm Cần ghi nhận để không bỏ sót kết quả liên hệ.",
+    selector: '[data-tour="lead-stats-priority"]',
+    title: "Bắt đầu từ lead ưu tiên",
+    body: "Card này cho biết số lead cần xử lý ngay trong phạm vi của bạn.",
+    actionHint: "Bấm card để mở nhóm lead cần ưu tiên trước.",
   },
   {
     route: "/leads",
-    selector: '[data-tour="leads-workbench"]',
-    title: "Làm việc trên danh sách lead",
-    body:
-      "Mỗi dòng lead thể hiện nguồn, intent, mức độ ưu tiên và hành động chính. Khi chọn một lead, panel bên cạnh sẽ mở chi tiết xử lý.",
-    actionHint: "Nhận xử lý lead trước, sau đó mở kênh liên hệ phù hợp.",
+    selector: '[data-tour="lead-view-tabs"]',
+    title: "Chọn đúng nhóm công việc",
+    body: "Quick view chia lead theo trạng thái: chưa phân công, chờ xử lý, đang xử lý và đã đóng.",
+    actionHint: "Ưu tiên Chưa phân công hoặc Chờ xử lý, rồi xử lý lần lượt từng lead.",
+  },
+  {
+    route: "/leads",
+    selector: '[data-tour="lead-row-first"]',
+    title: "Mở một lead cụ thể",
+    body: "Dòng lead hiển thị khách hàng, nguồn, intent, SLA và lý do ưu tiên.",
+    actionHint: "Bấm vào dòng lead để mở panel thao tác ở bên phải.",
+  },
+  {
+    route: "/leads",
+    selector: '[data-tour="lead-row-primary-action"]',
+    title: "Dùng nút hành động chính",
+    body: "Nút này thay đổi theo trạng thái lead: nhận xử lý, liên hệ hoặc ghi nhận kết quả.",
+    actionHint: "Nếu lead chưa ai nhận, hãy nhận xử lý trước khi liên hệ khách.",
   },
   {
     route: "/leads",
     selector: '[data-tour="lead-detail-panel"]',
-    title: "Panel xử lý và ghi nhận kết quả",
-    body:
-      "Panel này là nơi bạn xem người phụ trách, lý do ưu tiên, kiểm tra nhãn, mở nguồn, liên hệ khách và lưu kết quả sau khi tương tác.",
-    actionHint: "Sau khi bấm liên hệ, hãy quay lại đây để lưu kết quả ngay.",
+    title: "Làm việc trong panel xử lý",
+    body: "Panel là nơi xem người phụ trách, nội dung, nguồn, kênh liên hệ và kết quả cần lưu.",
+    actionHint: "Làm việc chủ yếu ở tab Xử lý để không bỏ sót bước.",
+    prepare: "open-first-lead",
   },
   {
-    route: "/mentions",
-    selector: '[data-tour="mentions-filters"]',
-    title: "Lọc đề cập để kiểm tra nguồn lead",
-    body:
-      "Mentions giúp bạn rà lại bài viết hoặc bình luận gốc. Bộ lọc hỗ trợ thu hẹp theo brand, sắc thái, nền tảng, chủ đề và thời gian.",
-    actionHint: "Dùng bộ lọc khi cần xác minh vì sao một lead được đưa vào hàng chờ.",
+    route: "/leads",
+    selector: '[data-tour="lead-detail-owner"]',
+    title: "Kiểm tra người phụ trách",
+    body: "Lead chưa phân công cần được nhận trước khi chăm sóc.",
+    actionHint: "Nếu thấy nút Nhận xử lý, hãy bấm để khóa lead về bạn.",
+    prepare: "open-action-tab",
   },
   {
-    route: "/mentions",
-    selector: '[data-tour="mentions-table"]',
-    title: "Mở chi tiết đề cập",
-    body:
-      "Bảng này chứa nội dung đề cập, sắc thái và nguồn. Bạn có thể mở chi tiết để đọc ngữ cảnh trước khi liên hệ hoặc yêu cầu sửa nhãn.",
-    actionHint: "Kiểm tra ngữ cảnh gốc trước khi gửi yêu cầu sửa nhãn cho quản lý.",
+    route: "/leads",
+    selector: '[data-tour="lead-detail-contact-actions"]',
+    title: "Liên hệ khách",
+    body: "Mở Messenger, Zalo, điện thoại, email hoặc profile nếu hệ thống có dữ liệu.",
+    actionHint: "Sau khi mở kênh liên hệ, lead sẽ cần ghi nhận kết quả.",
+    prepare: "open-action-tab",
   },
   {
-    route: "/reports",
-    selector: '[data-tour="reports-center"]',
-    title: "Theo dõi kết quả bằng Reports",
-    body:
-      "Reports giúp bạn xem lại số liệu tổng hợp và báo cáo theo thời gian. Đây là nơi tham khảo kết quả sau các hoạt động xử lý lead.",
-    actionHint: "Dùng báo cáo để nắm xu hướng, không thay thế việc ghi nhận kết quả trên từng lead.",
+    route: "/leads",
+    selector: '[data-tour="lead-detail-result-actions"]',
+    title: "Ghi nhận kết quả",
+    body: "Chọn kết quả sau khi đã liên hệ để lead không bị treo trong hàng chờ.",
+    actionHint: "Nếu khách hẹn lại, chọn Hẹn lại và nhập ngày giờ follow-up.",
+    prepare: "open-action-tab",
   },
 ];
 
 const introCards = [
   {
-    title: "Tập trung vào lead",
+    title: "Đi theo từng lead",
     icon: "leaderboard",
-    text: "Tour chỉ hướng dẫn các chức năng phục vụ xử lý khách hàng tiềm năng.",
+    text: "Chọn nhóm, mở lead, nhận xử lý rồi liên hệ khách.",
   },
   {
-    title: "Đúng quy trình chăm sóc",
+    title: "Không bỏ sót kết quả",
     icon: "task_alt",
-    text: "Nhận xử lý, mở liên hệ, ghi nhận kết quả và follow-up đúng hạn.",
+    text: "Sau khi liên hệ, quay lại panel để lưu kết quả hoặc follow-up.",
   },
   {
-    title: "Có thể kiểm tra nguồn",
-    icon: "article",
-    text: "Khi nghi ngờ nhãn hoặc ngữ cảnh, bạn quay về Mentions để xem đề cập gốc.",
+    title: "Chỉ hiện lần đầu",
+    icon: "visibility_off",
+    text: "Tour tự động chỉ bật một lần. Sau này có thể mở lại bằng nút Hướng dẫn.",
   },
 ];
 
@@ -119,19 +132,49 @@ function findVisibleTarget(selector: string) {
   );
 }
 
+function clickIfPresent(selector: string) {
+  const target = document.querySelector<HTMLElement>(selector);
+  if (!target) return false;
+  target.click();
+  return true;
+}
+
+function openDetailsIfPresent(selector: string) {
+  const target = document.querySelector<HTMLDetailsElement>(selector);
+  if (!target) return false;
+  target.open = true;
+  return true;
+}
+
+function prepareStepTarget(step: TourStep) {
+  if (!step.prepare) return;
+
+  if (!findVisibleTarget('[data-tour="lead-detail-panel"]')) {
+    clickIfPresent('[data-tour="lead-row-first"]');
+  }
+
+  if (step.prepare === "open-action-tab") {
+    window.setTimeout(() => {
+      clickIfPresent('[data-tour="lead-detail-tab-action"]');
+      openDetailsIfPresent('[data-tour="lead-detail-extra-actions"]');
+    }, 120);
+  }
+}
+
 function getTooltipStyle(targetRect: TargetRect | null): CSSProperties {
   if (typeof window === "undefined" || !targetRect) {
     return {
       left: "50%",
       top: "50%",
       transform: "translate(-50%, -50%)",
+      width: "min(420px, calc(100vw - 32px))",
     };
   }
 
-  const width = Math.min(430, window.innerWidth - 32);
-  const belowTop = targetRect.top + targetRect.height + 16;
-  const aboveTop = targetRect.top - 280;
-  const hasRoomBelow = belowTop + 260 < window.innerHeight;
+  const width = Math.min(390, window.innerWidth - 32);
+  const belowTop = targetRect.top + targetRect.height + 18;
+  const aboveTop = targetRect.top - 230;
+  const hasRoomBelow = belowTop + 230 < window.innerHeight;
   const top = hasRoomBelow ? belowTop : Math.max(16, aboveTop);
   const left = clamp(
     targetRect.left + targetRect.width / 2 - width / 2,
@@ -203,13 +246,15 @@ export function LeadEmployeeOnboarding() {
 
     let attempts = 0;
     let timer: number | undefined;
+    let resizeTimer: number | undefined;
 
     const updateTarget = () => {
       attempts += 1;
+      prepareStepTarget(step);
       const target = findVisibleTarget(step.selector);
 
-      if (!target && attempts < 18) {
-        timer = window.setTimeout(updateTarget, 120);
+      if (!target && attempts < 20) {
+        timer = window.setTimeout(updateTarget, 140);
         return;
       }
 
@@ -232,14 +277,18 @@ export function LeadEmployeeOnboarding() {
 
     updateTarget();
 
-    const handleResize = () => updateTarget();
+    const handleResize = () => {
+      if (resizeTimer) window.clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(updateTarget, 120);
+    };
     window.addEventListener("resize", handleResize);
 
     return () => {
       if (timer) window.clearTimeout(timer);
+      if (resizeTimer) window.clearTimeout(resizeTimer);
       window.removeEventListener("resize", handleResize);
     };
-  }, [mode, pathname, shouldShow, step.route, step.selector]);
+  }, [mode, pathname, shouldShow, step]);
 
   const completeOnboarding = async () => {
     if (!profile) return false;
@@ -294,7 +343,12 @@ export function LeadEmployeeOnboarding() {
     setMode("tour");
   };
 
-  const closeForNow = () => {
+  const closeAndRemember = async () => {
+    if (!manualOpen && !hasCompletedCurrentVersion) {
+      await completeOnboarding();
+      return;
+    }
+
     setDismissed(true);
     setManualOpen(false);
     setTargetRect(null);
@@ -322,17 +376,17 @@ export function LeadEmployeeOnboarding() {
   if (mode === "intro") {
     return (
       <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/55 p-4" role="dialog" aria-modal="true">
-        <section className="w-full max-w-[760px] rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-5 shadow-2xl md:p-6">
+        <section className="w-full max-w-[720px] rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-5 shadow-2xl md:p-6">
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.08em] text-[var(--color-brand)]">
-                Onboarding vai trò
+                Hướng dẫn lần đầu
               </p>
               <h2 className="mt-1 text-2xl font-bold text-[var(--color-text-primary)]">
-                Hướng dẫn thao tác cho Nhân viên xử lý lead
+                Làm quen quy trình xử lý lead
               </h2>
-              <p className="mt-2 max-w-[620px] text-sm leading-6 text-[var(--color-text-secondary)]">
-                Tour này tập trung vào quy trình nhận lead, liên hệ khách, ghi nhận kết quả, kiểm tra nguồn và xem báo cáo.
+              <p className="mt-2 max-w-[600px] text-sm leading-6 text-[var(--color-text-secondary)]">
+                Tour này chỉ đi trên trang Khách hàng và tập trung vào hành động cần làm trong một ca xử lý.
               </p>
             </div>
             <span className="inline-flex w-fit items-center gap-2 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] px-3 py-2 text-sm font-bold text-[var(--color-brand)]">
@@ -369,19 +423,11 @@ export function LeadEmployeeOnboarding() {
           <div className="mt-6 flex flex-col gap-2 border-t border-[var(--color-border)] pt-4 sm:flex-row sm:justify-end">
             <button
               type="button"
-              onClick={closeForNow}
+              onClick={closeAndRemember}
               disabled={isCompleting}
               className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm font-bold text-[var(--color-text-secondary)] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Để sau
-            </button>
-            <button
-              type="button"
-              onClick={completeOnboarding}
-              disabled={isCompleting}
-              className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm font-bold text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Không hiện lại
+              Bỏ qua và không hiện lại
             </button>
             <button
               type="button"
@@ -389,7 +435,7 @@ export function LeadEmployeeOnboarding() {
               disabled={isCompleting}
               className="rounded-lg bg-[var(--color-brand)] px-4 py-2 text-sm font-bold text-white hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Bắt đầu tour thao tác
+              Bắt đầu hướng dẫn
             </button>
           </div>
         </section>
@@ -405,10 +451,10 @@ export function LeadEmployeeOnboarding() {
         <div
           className="pointer-events-none fixed rounded-xl border-2 border-[var(--color-brand)] bg-transparent shadow-[0_0_0_9999px_rgba(0,0,0,0.46),0_0_0_6px_rgba(108,92,231,0.24)] transition-all"
           style={{
-            top: targetRect.top - 8,
-            left: targetRect.left - 8,
-            width: targetRect.width + 16,
-            height: targetRect.height + 16,
+            top: targetRect.top - 10,
+            left: targetRect.left - 10,
+            width: targetRect.width + 20,
+            height: targetRect.height + 20,
           }}
         />
       )}
@@ -432,8 +478,9 @@ export function LeadEmployeeOnboarding() {
           </div>
           <button
             type="button"
-            onClick={closeForNow}
-            className="rounded-full p-1 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-raised)]"
+            onClick={closeAndRemember}
+            disabled={isCompleting}
+            className="rounded-full p-1 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-raised)] disabled:cursor-not-allowed disabled:opacity-50"
             aria-label="Đóng hướng dẫn"
           >
             <span className="material-symbols-outlined text-xl">close</span>
@@ -446,16 +493,22 @@ export function LeadEmployeeOnboarding() {
 
         <div className="mt-3 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)]/40 p-3">
           <p className="text-xs font-bold uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
-            Cách thao tác
+            Cần làm
           </p>
           <p className="mt-1 text-sm font-semibold leading-6 text-[var(--color-text-primary)]">
             {step.actionHint}
           </p>
         </div>
 
+        {!targetRect && (
+          <p className="mt-3 rounded-lg bg-[var(--color-bg-surface-raised)] px-3 py-2 text-sm font-semibold text-[var(--color-text-secondary)]">
+            Chưa tìm thấy đối tượng để khoanh vùng. Nếu danh sách đang trống, hãy đổi bộ lọc hoặc quay lại khi có lead mới.
+          </p>
+        )}
+
         {pathname !== step.route && (
           <p className="mt-3 rounded-lg bg-[var(--color-bg-surface-raised)] px-3 py-2 text-sm font-semibold text-[var(--color-text-secondary)]">
-            Đang mở trang {step.route}. Tour sẽ không mở lặp lại nếu trang tải chậm.
+            Đang mở trang {step.route}.
           </p>
         )}
 
@@ -501,9 +554,7 @@ export function LeadEmployeeOnboarding() {
                 ? "Đang lưu..."
                 : isLastStep
                   ? "Hoàn tất"
-                  : pathname === step.route
-                    ? "Tiếp tục"
-                    : "Đang mở trang..."}
+                  : "Tiếp tục"}
             </button>
           </div>
         </div>
