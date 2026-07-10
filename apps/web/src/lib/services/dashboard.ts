@@ -2063,19 +2063,42 @@ export class DashboardService {
     history: Record<string, unknown>[];
   }> {
     const config = getSupabaseConfig();
-    const requestsQuery = workspaceId
-      ? `workspace_id=eq.${encodeURIComponent(workspaceId)}&order=created_at.desc&limit=200`
-      : `order=created_at.desc&limit=200`;
-    const historyQuery = workspaceId
-      ? `workspace_id=eq.${encodeURIComponent(workspaceId)}&order=created_at.desc&limit=400`
-      : `order=created_at.desc&limit=400`;
+    const scopeKey = workspaceId ? normalizeBrandName(workspaceId) : "";
+    const isInScope = (row: Record<string, unknown>) => {
+      if (!scopeKey) return true;
+      const candidates = [
+        row.workspace_id,
+        row.brand_id,
+        row.brand_name,
+        row.workspace_name,
+        row.brand,
+      ];
+      return candidates.some((value) => normalizeBrandName(String(value || "")) === scopeKey);
+    };
 
     const [requests, history] = await Promise.all([
-      supabaseRequest<Record<string, unknown>[]>(config, "label_change_requests", requestsQuery),
-      supabaseRequest<Record<string, unknown>[]>(config, "label_change_history", historyQuery).catch(() => [] as Record<string, unknown>[]),
+      supabaseRequest<Record<string, unknown>[]>(
+        config,
+        "label_change_requests",
+        "order=created_at.desc&limit=500",
+      ).catch((error) => {
+        console.warn("[DashboardService] label_change_requests unavailable:", error);
+        return [] as Record<string, unknown>[];
+      }),
+      supabaseRequest<Record<string, unknown>[]>(
+        config,
+        "label_change_history",
+        "order=created_at.desc&limit=1000",
+      ).catch((error) => {
+        console.warn("[DashboardService] label_change_history unavailable:", error);
+        return [] as Record<string, unknown>[];
+      }),
     ]);
 
-    return { requests: requests ?? [], history: history ?? [] };
+    return {
+      requests: (requests ?? []).filter(isInScope).slice(0, 200),
+      history: (history ?? []).filter(isInScope).slice(0, 400),
+    };
   }
 
   static async rejectLabelChangeRequest(
