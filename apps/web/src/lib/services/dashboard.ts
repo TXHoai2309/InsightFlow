@@ -566,7 +566,70 @@ function isSupabaseStatementTimeout(error: unknown) {
 function getMissingSupabaseColumn(error: unknown) {
   if (!(error instanceof Error)) return null;
   const match = error.message.match(/column\s+\w+\.([A-Za-z0-9_]+)\s+does not exist/);
-  return match?.[1] || null;
+  if (match?.[1]) return match[1];
+  const schemaCacheMatch = error.message.match(/Could not find the '([^']+)' column/);
+  return schemaCacheMatch?.[1] || null;
+}
+
+function removeColumnFromPayload(
+  body: Record<string, unknown> | Record<string, unknown>[],
+  column: string,
+) {
+  if (Array.isArray(body)) {
+    return body.map((row) => {
+      const { [column]: _removed, ...rest } = row;
+      return rest;
+    });
+  }
+
+  const { [column]: _removed, ...rest } = body;
+  return rest;
+}
+
+async function supabaseWriteWithColumnFallback<T = unknown>(
+  config: SupabaseConfig,
+  table: string,
+  method: "POST" | "PATCH" | "DELETE",
+  body: Record<string, unknown> | Record<string, unknown>[],
+  queryParams = "",
+  returnRows = true,
+  prefer?: string,
+): Promise<T> {
+  let nextBody = body;
+  const removedColumns = new Set<string>();
+
+  while (true) {
+    try {
+      return await supabaseWrite<T>(
+        config,
+        table,
+        method,
+        nextBody,
+        queryParams,
+        returnRows,
+        prefer,
+      );
+    } catch (error) {
+      const missingColumn = getMissingSupabaseColumn(error);
+      if (!missingColumn || removedColumns.has(missingColumn)) {
+        throw error;
+      }
+
+      const hasColumn = Array.isArray(nextBody)
+        ? nextBody.some((row) => Object.prototype.hasOwnProperty.call(row, missingColumn))
+        : Object.prototype.hasOwnProperty.call(nextBody, missingColumn);
+
+      if (!hasColumn) {
+        throw error;
+      }
+
+      console.warn(
+        `[DashboardService] ${table} is missing column "${missingColumn}". Retrying ${method} without it.`,
+      );
+      removedColumns.add(missingColumn);
+      nextBody = removeColumnFromPayload(nextBody, missingColumn);
+    }
+  }
 }
 
 async function loadSupabaseRows<T extends SupabaseRow>(
@@ -2006,13 +2069,14 @@ export class DashboardService {
     const normalizedLabel = normalizeClassificationLabel(finalLabel);
 
     const config = getSupabaseConfig();
-    await supabaseWrite(
+    await supabaseWriteWithColumnFallback(
       config,
       "label_change_requests",
       "PATCH",
       stripUndefinedFields({
         status,
         requested_labels: normalizedLabel,
+        final_label: normalizedLabel,
         reviewed_by: reviewer.uid,
         reviewed_by_name: reviewer.displayName || reviewer.email || "",
         reviewed_at: nowIso,
@@ -2135,7 +2199,7 @@ export class DashboardService {
     const nowIso = new Date().toISOString();
     const config = getSupabaseConfig();
 
-    await supabaseWrite(
+    await supabaseWriteWithColumnFallback(
       config,
       "label_change_requests",
       "PATCH",
@@ -2152,7 +2216,7 @@ export class DashboardService {
       false,
     );
 
-    await supabaseWrite(
+    await supabaseWriteWithColumnFallback(
       config,
       "label_change_history",
       "POST",
