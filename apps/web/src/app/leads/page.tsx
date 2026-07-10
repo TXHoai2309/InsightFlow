@@ -51,6 +51,7 @@ export default function LeadsPage() {
   const { profile, loading: authLoading } = useAuth();
   const [activeView, setActiveView] = useState<LeadWorkbenchView>("priority");
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [currentTime, setCurrentTime] = useState(Date.now());
@@ -217,8 +218,8 @@ export default function LeadsPage() {
   );
 
   const sortedLeads = useMemo(
-    () => sortLeadsForWorkbench(visibleBaseLeads, currentTime),
-    [visibleBaseLeads, currentTime],
+    () => sortLeadsForWorkbench(visibleBaseLeads, currentTime, profile),
+    [visibleBaseLeads, currentTime, profile],
   );
 
   const pendingLabelRequestByLeadId = useMemo(() => {
@@ -248,12 +249,11 @@ export default function LeadsPage() {
   }, [pendingLabelRequestByLeadId, sortedLeads]);
 
   const viewCounts = useMemo(() => {
-    return workbenchViews.reduce(
-      (acc, view) => {
-        acc[view.id] = visibleBaseLeads.filter((lead) =>
-          view.id === "label_review"
-            ? pendingLabelRequestByLeadId.has(lead.id)
-            : matchesLeadWorkbenchView(lead, view.id, currentTime, profile),
+    const allViews: LeadWorkbenchView[] = ["unassigned", "priority", "active", "closed", "need_result"];
+    return allViews.reduce(
+      (acc, viewId) => {
+        acc[viewId] = visibleBaseLeads.filter((lead) =>
+          matchesLeadWorkbenchView(lead, viewId, currentTime, profile),
         ).length;
         return acc;
       },
@@ -261,18 +261,15 @@ export default function LeadsPage() {
     );
   }, [
     currentTime,
-    pendingLabelRequestByLeadId,
     profile,
     visibleBaseLeads,
-    workbenchViews,
   ]);
 
   const visibleLeads = useMemo(() => {
-    if (activeView === "label_review") return labelReviewLeads;
     return sortedLeads.filter((lead) =>
       matchesLeadWorkbenchView(lead, activeView, currentTime, profile),
     );
-  }, [activeView, currentTime, labelReviewLeads, profile, sortedLeads]);
+  }, [activeView, currentTime, profile, sortedLeads]);
 
   const totalPages = Math.max(1, Math.ceil(visibleLeads.length / LEADS_PAGE_SIZE));
 
@@ -426,16 +423,7 @@ export default function LeadsPage() {
     visibleLeads.length === 0 ? 0 : (currentPage - 1) * LEADS_PAGE_SIZE + 1;
   const lastLeadNumber = Math.min(currentPage * LEADS_PAGE_SIZE, visibleLeads.length);
 
-  const brandPlatformFilteredLeads = useMemo(() => {
-    const normFilter =
-      filters.workspace_id !== "all" ? normalizeBrandName(filters.workspace_id) : null;
-    return leads.filter((lead) => {
-      if (normFilter && normalizeBrandName(lead.workspace_id) !== normFilter) return false;
-      if (filters.platform !== "all" && lead.platform !== filters.platform) return false;
-      if (!canLeadBeVisibleToUser(lead, profile)) return false;
-      return true;
-    });
-  }, [leads, filters.workspace_id, filters.platform, profile]);
+  const brandPlatformFilteredLeads = visibleBaseLeads;
 
   const pendingResultLead = useMemo(() => {
     return sortedLeads.find((lead) =>
@@ -447,6 +435,7 @@ export default function LeadsPage() {
     rememberOptimisticLead(lead);
     setSelectedLeadId(lead.id);
     setDetailTab("action");
+    setIsPanelCollapsed(false);
     const meta = getLeadWorkbenchMeta(lead, currentTime);
     if (meta.needsResultCapture) {
       skipNextPageReset.current = true;
@@ -457,7 +446,7 @@ export default function LeadsPage() {
       }, 80);
     }
     setActiveView(
-      meta.needsResultCapture ? "need_result" : getDefaultLeadWorkbenchView(profile),
+      meta.needsResultCapture ? "priority" : getDefaultLeadWorkbenchView(profile),
     );
   };
 
@@ -478,7 +467,7 @@ export default function LeadsPage() {
     );
 
     if (remainingNeedResult.length > 0) {
-      setActiveView("need_result");
+      setActiveView("priority");
       setSelectedLeadId(remainingNeedResult[0].id);
       return;
     }
@@ -520,8 +509,20 @@ export default function LeadsPage() {
   }
 
   return (
-    <div data-tour="leads-workbench" className="grid min-h-full gap-3 p-3 xl:grid-cols-[minmax(0,1fr)_420px] 2xl:gap-4">
-      <main className="min-w-0 space-y-3">
+    <div
+      className={`grid min-h-full max-w-[100vw] gap-[clamp(6px,0.55vw,10px)] overflow-hidden p-[clamp(6px,0.6vw,12px)] ${
+        selectedLead && !isPanelCollapsed
+          ? "xl:grid-cols-[minmax(0,var(--lead-main-ratio))_minmax(0,var(--lead-detail-ratio))]"
+          : "grid-cols-1"
+      }`}
+      style={
+        {
+          "--lead-main-ratio": "72fr",
+          "--lead-detail-ratio": "28fr",
+        } as React.CSSProperties
+      }
+    >
+      <main className="min-w-0 space-y-[clamp(6px,0.55vw,10px)] overflow-hidden">
         <LeadStats
           leads={brandPlatformFilteredLeads}
           isLoading={isLoading}
@@ -530,7 +531,7 @@ export default function LeadsPage() {
         />
 
         {restoreNotice && (
-          <section className="flex items-center justify-between gap-3 rounded-xl border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] px-4 py-3 text-sm font-semibold text-[var(--color-text-primary)]">
+          <section className="flex items-center justify-between gap-3 rounded-xl border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] px-3 py-2 text-sm font-semibold text-[var(--color-text-primary)]">
             <span>{restoreNotice}</span>
             <button
               type="button"
@@ -543,7 +544,7 @@ export default function LeadsPage() {
         )}
 
         {pendingResultLead && (
-          <section className="flex flex-col gap-3 rounded-xl border border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] p-3 md:flex-row md:items-center md:justify-between">
+          <section className="flex flex-col gap-2 rounded-xl border border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] p-3 md:flex-row md:items-center md:justify-between">
             <div className="flex min-w-0 items-start gap-3">
               <span className="material-symbols-outlined text-[var(--color-warning)]">
                 pending_actions
@@ -560,7 +561,7 @@ export default function LeadsPage() {
             <button
               type="button"
               onClick={() => {
-                setActiveView("need_result");
+                setActiveView("priority");
                 setSelectedLeadId(pendingResultLead.id);
               }}
               className="rounded-lg border border-[var(--color-warning)]/40 bg-[var(--color-bg-surface)] px-3 py-2 text-sm font-bold text-[var(--color-text-primary)]"
@@ -570,47 +571,28 @@ export default function LeadsPage() {
           </section>
         )}
 
-        {viewCounts.label_review > 0 && activeView !== "label_review" && (
-          <section className="flex flex-col gap-3 rounded-xl border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] p-3 md:flex-row md:items-center md:justify-between">
-            <div className="flex min-w-0 items-start gap-3">
-              <span className="material-symbols-outlined text-[var(--color-brand)]">
-                rule
-              </span>
-              <div className="min-w-0">
-                <p className="text-sm font-bold text-[var(--color-text-primary)]">
-                  Có {viewCounts.label_review} lead đang chờ duyệt nhãn
-                </p>
-                <p className="truncate text-sm text-[var(--color-text-secondary)]">
-                  Theo dõi các request sửa nhãn, đặc biệt những lead đang tạm khóa do chờ chuyển queue.
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setActiveView("label_review")}
-              className="rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm font-bold text-[var(--color-brand)]"
-            >
-              Xem trạng thái
-            </button>
-          </section>
-        )}
-
-        <section className="space-y-3">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            <div data-tour="leads-view-tabs" className="flex flex-wrap gap-2">
+        <section className="space-y-[clamp(6px,0.55vw,10px)]">
+          <div className="flex flex-col gap-2 min-[1500px]:flex-row min-[1500px]:items-center min-[1500px]:justify-between">
+            <div className="flex flex-wrap gap-2">
               {workbenchViews.map((view) => (
                 <button
                   key={view.id}
                   type="button"
                   onClick={() => setActiveView(view.id)}
-                  className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${
+                  className={`inline-flex items-center rounded-xl border px-3.5 py-2 text-sm font-bold tracking-tight transition-all duration-200 ${
                     activeView === view.id
-                      ? "border-[var(--color-brand)] bg-[var(--color-brand)] text-white shadow-sm"
-                      : "border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)]"
+                      ? "border-[var(--color-brand)] bg-[var(--color-brand)] text-white shadow-md shadow-[var(--color-brand)]/10"
+                      : "border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-strong)] dark:bg-slate-900/40"
                   }`}
                 >
-                  {view.label}
-                  <span className="ml-2 opacity-80">{viewCounts[view.id]}</span>
+                  <span>{view.label}</span>
+                  <span className={`ml-2 px-2 py-0.5 rounded-full text-[11px] font-extrabold transition-all duration-200 ${
+                    activeView === view.id
+                      ? "bg-white/20 text-white"
+                      : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+                  }`}>
+                    {viewCounts[view.id]}
+                  </span>
                 </button>
               ))}
             </div>
@@ -626,11 +608,21 @@ export default function LeadsPage() {
             <button
               type="button"
               onClick={() => setShowFilters((value) => !value)}
-              className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-4 py-2 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)]"
+              className="inline-flex w-fit items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-2.5 py-1.5 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)]"
             >
               <span className="material-symbols-outlined text-base">tune</span>
               Bộ lọc
             </button>
+            {selectedLead && isPanelCollapsed && (
+              <button
+                type="button"
+                onClick={() => setIsPanelCollapsed(false)}
+                className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] px-2.5 py-1.5 text-sm font-semibold text-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)]/80"
+              >
+                <span className="material-symbols-outlined text-base">dock_to_left</span>
+                Xem chi tiết
+              </button>
+            )}
           </div>
 
           {showFilters && (
@@ -640,9 +632,9 @@ export default function LeadsPage() {
             />
           )}
 
-          <div className="space-y-3">
+          <div className="space-y-[clamp(6px,0.55vw,10px)]">
             {error && (
-              <div className="flex items-center gap-2 rounded-xl border border-[var(--color-error)]/20 bg-[var(--color-error-subtle)] p-4 text-sm font-medium text-[var(--color-error)]">
+              <div className="flex items-center gap-2 rounded-xl border border-[var(--color-error)]/20 bg-[var(--color-error-subtle)] p-3 text-sm font-medium text-[var(--color-error)]">
                 <span className="material-symbols-outlined">error</span>
                 <span>{error}</span>
               </div>
@@ -652,23 +644,19 @@ export default function LeadsPage() {
               [0, 1, 2].map((item) => (
                 <div
                   key={item}
-                  className="h-[104px] animate-pulse rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)]"
+                  className="h-[88px] animate-pulse rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)]"
                 />
               ))
             ) : visibleLeads.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-bg-surface)] p-10 text-center">
+              <div className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-bg-surface)] p-8 text-center">
                 <span className="material-symbols-outlined text-4xl text-[var(--color-text-muted)]">
                   inbox
                 </span>
-                <h3 className="mt-3 text-lg font-bold text-[var(--color-text-primary)]">
-                  {activeView === "label_review"
-                    ? "Không có lead nào đang chờ duyệt nhãn"
-                    : "Không có lead trong nhóm này"}
+                <h3 className="mt-3 text-base font-bold text-[var(--color-text-primary)]">
+                  Không có lead trong nhóm này
                 </h3>
                 <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-                  {activeView === "label_review"
-                    ? "Các request sửa nhãn đang chờ quản lý duyệt sẽ xuất hiện tại đây."
-                    : "Chuyển quick view hoặc mở bộ lọc để xem nhóm lead khác."}
+                  Chuyển quick view hoặc mở bộ lọc để xem nhóm lead khác.
                 </p>
               </div>
             ) : (
@@ -687,6 +675,7 @@ export default function LeadsPage() {
                     setSelectedLeadId(nextLead.id);
                     setDetailTab("action");
                     setRestoreNotice("");
+                    setIsPanelCollapsed(false);
                   }}
                   onStartedAction={handleStartedAction}
                 />
@@ -694,7 +683,7 @@ export default function LeadsPage() {
             )}
 
             {visibleLeads.length > 0 && (
-              <div className="flex flex-col gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-4 py-3 text-sm text-[var(--color-text-secondary)] md:flex-row md:items-center md:justify-between">
+              <div className="flex flex-col gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm text-[var(--color-text-secondary)] md:flex-row md:items-center md:justify-between">
                 <span>
                   Hiển thị {firstLeadNumber}-{lastLeadNumber} trong {visibleLeads.length} lead
                 </span>
@@ -725,23 +714,27 @@ export default function LeadsPage() {
         </section>
       </main>
 
-      <LeadDetailPanel
-        lead={selectedLead}
-        mentions={mentions}
-        nowMs={currentTime}
-        onClose={() => setSelectedLeadId(null)}
-        onAfterResult={handleAfterResult}
-        onStartedAction={handleStartedAction}
-        returnContext={{
-          view: activeView,
-          page: currentPage,
-          selectedLeadId,
-          filters,
-          listScrollTop: getLeadListScrollTop(),
-        }}
-        activeTab={detailTab}
-        onTabChange={setDetailTab}
-      />
+      {selectedLead && !isPanelCollapsed && (
+        <LeadDetailPanel
+          lead={selectedLead}
+          mentions={mentions}
+          nowMs={currentTime}
+          onClose={() => setSelectedLeadId(null)}
+          onAfterResult={handleAfterResult}
+          onStartedAction={handleStartedAction}
+          returnContext={{
+            view: activeView,
+            page: currentPage,
+            selectedLeadId,
+            filters,
+            listScrollTop: getLeadListScrollTop(),
+          }}
+          activeTab={detailTab}
+          onTabChange={setDetailTab}
+          isCollapsed={isPanelCollapsed}
+          onCollapseToggle={() => setIsPanelCollapsed(true)}
+        />
+      )}
     </div>
   );
 }

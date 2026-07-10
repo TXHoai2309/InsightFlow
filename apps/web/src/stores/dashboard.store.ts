@@ -8,6 +8,7 @@ import { subscribeWithSelector } from "zustand/middleware";
 import { normalizeBrandName, DashboardService } from "@/lib/services/dashboard";
 import { canPerformAction, type UserRoleProfile } from "@/lib/rbac";
 import { isSameBrandScope } from "@/lib/brandScope";
+import { normalizeClassificationLabel } from "@/lib/label-change";
 import type {
   DashboardStats,
   DashboardFilters,
@@ -79,6 +80,30 @@ interface DashboardState {
     >,
     profile: UserRoleProfile | null | undefined,
   ) => Promise<LabelChangeRequest>;
+  updateLabelChangeRequest: (
+    requestId: string,
+    data: Pick<
+      LabelChangeRequest,
+      | "requested_labels"
+      | "changed_fields"
+      | "requested_queue"
+      | "reason_code"
+      | "reason_note"
+      | "evidence_checked"
+    >,
+    profile: UserRoleProfile | null | undefined,
+  ) => Promise<LabelChangeRequest>;
+  cancelLabelChangeRequest: (
+    requestId: string,
+    cancelReason: string,
+    profile: UserRoleProfile | null | undefined,
+  ) => Promise<LabelChangeRequest>;
+  approveLabelChangeRequestInStore: (
+    requestId: string,
+    finalLabel: Record<string, unknown>,
+    status: "approved" | "edited",
+    nextHistory: any[],
+  ) => void;
 
   // ── Computed (client-side filtering) ─────────────────────────────────────
   getFilteredMentions: () => Mention[];
@@ -305,6 +330,131 @@ export const useDashboardStore = create<DashboardState>()(
         console.error("[DashboardStore] createLabelChangeRequest error:", error);
         throw error;
       }
+    },
+
+    updateLabelChangeRequest: async (requestId, data, profile) => {
+      try {
+        const currentRequest = get().labelChangeRequests.find(
+          (request) => request.id === requestId,
+        );
+        if (!canPerformAction(profile, "create_label_request")) {
+          throw new Error("User is not allowed to update label change requests.");
+        }
+        if (!currentRequest || !isSameBrandScope(profile, currentRequest)) {
+          throw new Error("Label request is outside the user's brand scope.");
+        }
+        if (currentRequest.status !== "pending") {
+          throw new Error("Only pending label change requests can be updated.");
+        }
+        if (currentRequest.requested_by !== profile?.uid) {
+          throw new Error("Only the requester can update this label change request.");
+        }
+
+        const updatedRequest = await DashboardService.updateLabelChangeRequest(
+          currentRequest,
+          data,
+          profile,
+        );
+
+        set((state) => ({
+          labelChangeRequests: state.labelChangeRequests.map((request) =>
+            request.id === requestId ? updatedRequest : request,
+          ),
+        }));
+
+        return updatedRequest;
+      } catch (error) {
+        console.error("[DashboardStore] updateLabelChangeRequest error:", error);
+        throw error;
+      }
+    },
+
+    cancelLabelChangeRequest: async (requestId, cancelReason, profile) => {
+      try {
+        const currentRequest = get().labelChangeRequests.find(
+          (request) => request.id === requestId,
+        );
+        if (!canPerformAction(profile, "create_label_request")) {
+          throw new Error("User is not allowed to cancel label change requests.");
+        }
+        if (!currentRequest || !isSameBrandScope(profile, currentRequest)) {
+          throw new Error("Label request is outside the user's brand scope.");
+        }
+        if (currentRequest.status !== "pending") {
+          throw new Error("Only pending label change requests can be cancelled.");
+        }
+        if (currentRequest.requested_by !== profile?.uid) {
+          throw new Error("Only the requester can cancel this label change request.");
+        }
+
+        const cancelledRequest = await DashboardService.cancelLabelChangeRequest(
+          currentRequest,
+          cancelReason,
+          profile,
+        );
+
+        set((state) => ({
+          labelChangeRequests: state.labelChangeRequests.map((request) =>
+            request.id === requestId ? cancelledRequest : request,
+          ),
+          leads: state.leads.map((lead) =>
+            lead.id === currentRequest.lead_id ||
+            lead.id === currentRequest.source_id ||
+            lead.pending_label_request_id === currentRequest.id
+              ? {
+                  ...lead,
+                  label_correction_status: "none",
+                  pending_label_request_id: undefined,
+                }
+              : lead,
+          ),
+        }));
+
+        return cancelledRequest;
+      } catch (error) {
+        console.error("[DashboardStore] cancelLabelChangeRequest error:", error);
+        throw error;
+      }
+    },
+
+    approveLabelChangeRequestInStore: (requestId, finalLabel, status, nextHistory) => {
+      set((state) => {
+        const request = state.labelChangeRequests.find((r) => r.id === requestId);
+        const normLabel = normalizeClassificationLabel(finalLabel);
+        const nextStatus = status === "edited" ? "approved" : status;
+
+        return {
+          labelChangeRequests: state.labelChangeRequests.map((r) =>
+            r.id === requestId
+              ? {
+                  ...r,
+                  status: nextStatus as any,
+                  history: nextHistory,
+                  applied_at: new Date().toISOString(),
+                }
+              : r
+          ),
+          leads: state.leads.map((lead) => {
+            const isMatch =
+              request &&
+              (lead.id === request.lead_id ||
+                lead.id === request.source_id ||
+                (lead.mention_id && lead.mention_id === request.mention_id) ||
+                (lead.source_mention_id && lead.source_mention_id === request.mention_id));
+            if (isMatch) {
+              return {
+                ...lead,
+                labels: normLabel,
+                intent: (normLabel.intent as any) || "none",
+                label_correction_status: "approved" as const,
+                pending_label_request_id: undefined,
+                last_label_corrected_at: new Date().toISOString(),
+              };
+            }
+            return lead;
+          }),
+        };
+      });
     },
 
     getFilteredMentions: () => {

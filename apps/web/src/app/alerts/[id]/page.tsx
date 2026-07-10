@@ -11,13 +11,14 @@ import { doc, onSnapshot, updateDoc, arrayUnion, collection, addDoc } from "fire
 import { canPerformAction } from "@/lib/rbac";
 import { fetchSingleSupabaseAlert, updateSupabaseAlertLabel, fetchCommentsForPost, type PostComment } from "@/lib/supabase";
 import { supabaseClient } from "@/lib/supabaseClient";
+import { QuickReplyHelper } from "@/components/ui/QuickReplyHelper";
 // Helper function to format brand display names
 function formatBrandName(brand: string): string {
   if (!brand) return "";
   const lower = brand.toLowerCase();
   if (lower === "mixue") return "Mixue";
   if (lower.includes("starbuck")) return "Starbucks";
-  if (lower.includes("highland")) return "Highland Coffee";
+  if (lower.includes("highland")) return "Highlands Coffee";
   return brand
     .split(/[-_\s]+/)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
@@ -1484,6 +1485,15 @@ export default function AlertDetailPage() {
                       <strong>Ghi chu tu Brand Manager:</strong> {alert.escalation.approval_note}
                     </div>
                   )}
+                  <QuickReplyHelper
+                    mentionContent={alert.text || ""}
+                    customerName={alert.author || "Khách hàng"}
+                    sentiment={(alert.sentiment === "positive" || alert.sentiment === "negative") ? alert.sentiment : "neutral"}
+                    category="crisis"
+                    onSelectReply={(text) => {
+                      setDraftResponse(text);
+                    }}
+                  />
                   <textarea
                     value={draftResponse}
                     onChange={(e) => setDraftResponse(e.target.value)}

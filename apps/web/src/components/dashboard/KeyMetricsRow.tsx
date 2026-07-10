@@ -102,13 +102,13 @@ export function KeyMetricsRow({ metrics }: KeyMetricsRowProps) {
         href="/alerts"
       />
       <MetricCard 
-        label={t("dashboard.metrics.newLeads", "Lead mới")} 
+        label={t("dashboard.metrics.newLeads", "Lead Tiềm Năng")} 
         value={metrics.newLeads.value} 
         trend={metrics.newLeads.trend}
         trendPositive={true}
         isSuccess={metrics.newLeads.value > 0}
         icon="person_add"
-        href="/leads?status=new"
+        href="/leads"
       />
       <MetricCard 
         label={t("dashboard.metrics.unassignedContacts", "Chưa phân công")} 

@@ -107,7 +107,7 @@ export function isPositiveColdPreset(label: Label): boolean {
   );
 }
 
-/** Nhãn mặc định cho "Tiêu cực về thái độ nhân viên" - gán nhanh bằng phím 8 */
+/** Nhãn mặc định cho "Tiêu cực về thái độ nhân viên" — gán nhanh bằng phím 8 */
 export const NEGATIVE_STAFF_ATTITUDE_PRESET_LABEL: Label = {
   sentiment: 'negative',
   topic: ['service'],

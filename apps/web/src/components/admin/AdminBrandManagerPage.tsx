@@ -228,7 +228,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
     try {
       const brandMap = new Map<string, BrandOption>();
 
-      const seedBrands = ["Highland Coffee", "Starbucks", "Mixue"];
+      const seedBrands = ["Highlands Coffee", "Starbucks", "Mixue"];
       seedBrands.forEach((name) => {
         const key = slugifyBrandDomain(name);
         brandMap.set(key, {

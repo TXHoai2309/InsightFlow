@@ -346,7 +346,7 @@
   "alerts.report.time": "Thời điểm ghi nhận",
   "alerts.report.impactTitle": "Đánh giá mức độ ảnh hưởng",
   "alerts.report.impactLabel": "Mức độ ảnh hưởng thương hiệu & rủi ro truyền thông",
-  "alerts.report.impactPlaceholder": "Ví dụ: Sự cố ngộ độc thực phẩm gây ảnh hưởng trực tiếp đến uy tín thương hiệu Highland Coffee, nguy cơ tẩy chay diện rộng trên mạng xã hội...",
+  "alerts.report.impactPlaceholder": "Ví dụ: Sự cố ngộ độc thực phẩm gây ảnh hưởng trực tiếp đến uy tín thương hiệu Highlands Coffee, nguy cơ tẩy chay diện rộng trên mạng xã hội...",
   "alerts.report.sopTitle": "Quy trình xử lý chuẩn (SOP)",
   "alerts.report.sopLabel": "Các bước hành động & Phân công xử lý khẩn cấp",
   "alerts.report.sopPlaceholder": "Ví dụ: 1. Liên hệ trực tiếp khách hàng xin lỗi và hỗ trợ y tế. 2. Đăng thông cáo báo chí chính thức. 3. Thu hồi lô sản phẩm nghi vấn...",
@@ -819,7 +819,7 @@
   "footer.terms": "Điều khoản",
   "header.administrator": "Quản trị viên",
   "header.crisisAlert": "🚨 Cảnh báo khủng hoảng",
-  "header.fromHighlands": "từ Highland Coffee",
+  "header.fromHighlands": "từ Highlands Coffee",
   "header.guest": "Khách",
   "header.newLead": "🔴 Hot Lead mới",
   "header.newNotifications": "Thông báo mới (5)",
@@ -1574,7 +1574,7 @@
       "crises": "Khủng hoảng",
       "noCrises": "Không có khủng hoảng",
       "leads": "Lead tiềm năng",
-      "needsAssign": "cần phân công"
+      "needsAssign": "Tất cả lead trong kỳ"
     },
     "chart": {
       "title": "Xu hướng Mentions & Sentiment",

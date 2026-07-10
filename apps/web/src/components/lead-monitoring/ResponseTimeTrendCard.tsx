@@ -1,57 +1,62 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useMemo } from "react";
 import { Gauge } from "lucide-react";
-import { BarChart, Bar, Cell, ResponsiveContainer, XAxis, Tooltip } from "recharts";
-import { useDashboardStore } from "@/stores/dashboard.store";
+import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { getLeadWorkbenchMeta } from "@/lib/lead-workbench";
+import { useLeadMonitoringLeads } from "./useLeadMonitoringLeads";
 
 export function ResponseTimeTrendCard() {
-  const [isMounted, setIsMounted] = useState(false);
-  const { getFilteredLeads } = useDashboardStore();
-  const leads = getFilteredLeads();
+  const leads = useLeadMonitoringLeads();
 
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
-
-  const trendData = useMemo(() => {
-    // Lấy 7 ngày gần nhất
-    const days: Record<string, { totalMins: number, count: number }> = {};
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const dayStr = d.toLocaleDateString("vi-VN", { weekday: "short" });
-      days[dayStr] = { totalMins: 0, count: 0 };
+  const data = useMemo(() => {
+    const days: Record<string, { totalMins: number; count: number }> = {};
+    for (let i = 6; i >= 0; i -= 1) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      days[date.toLocaleDateString("vi-VN", { weekday: "short" })] = { totalMins: 0, count: 0 };
     }
 
-    leads.forEach(l => {
-      if (l.first_contacted_at && l.created_at) {
-        const d = new Date(l.created_at);
-        const dayStr = d.toLocaleDateString("vi-VN", { weekday: "short" });
-        if (days[dayStr]) {
-          const diff = new Date(l.first_contacted_at).getTime() - d.getTime();
-          if (diff >= 0) {
-            days[dayStr].totalMins += Math.floor(diff / 60000);
-            days[dayStr].count++;
-          }
-        }
+    leads.forEach((lead) => {
+      if (!lead.first_contacted_at) return;
+      const createdAt = new Date(lead.created_at);
+      const key = createdAt.toLocaleDateString("vi-VN", { weekday: "short" });
+      if (!days[key]) return;
+      const diff = new Date(lead.first_contacted_at).getTime() - createdAt.getTime();
+      if (diff >= 0) {
+        days[key].totalMins += Math.floor(diff / 60000);
+        days[key].count += 1;
       }
     });
 
-    return Object.entries(days).map(([day, data]) => ({
+    return Object.entries(days).map(([day, value]) => ({
       day,
-      minutes: data.count > 0 ? Math.round(data.totalMins / data.count) : 0
+      minutes: value.count > 0 ? Math.round(value.totalMins / value.count) : 0,
     }));
   }, [leads]);
 
-  const maxMinutes = Math.max(...trendData.map((d) => d.minutes), 1); // avoid /0
+  const sla = useMemo(() => {
+    const pending = leads.filter((lead) => lead.status === "new" || lead.status === "processing");
+    const overdue = pending.filter((lead) => getLeadWorkbenchMeta(lead).isOverdue).length;
+    const contacted = leads.filter((lead) => lead.first_contacted_at).length;
+    const avg =
+      contacted === 0
+        ? 0
+        : Math.round(
+            leads.reduce((sum, lead) => {
+              if (!lead.first_contacted_at) return sum;
+              return sum + Math.max(0, new Date(lead.first_contacted_at).getTime() - new Date(lead.created_at).getTime()) / 60000;
+            }, 0) / contacted,
+          );
 
-  // Custom Tooltip
+    return { overdue, avg };
+  }, [leads]);
+
   const CustomTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
+    if (active && payload?.length) {
       return (
         <div className="rounded-[8px] bg-[#1A1B20] px-3 py-1.5 text-[12px] font-semibold text-white shadow-md">
-          {payload[0].value}m
+          {payload[0].value} phút
         </div>
       );
     }
@@ -59,49 +64,43 @@ export function ResponseTimeTrendCard() {
   };
 
   return (
-    <div className="flex h-[280px] flex-col rounded-[16px] border border-[#E9E7EE] bg-[#FFFFFF] shadow-sm transition-all duration-300 hover:-translate-y-[2px] hover:shadow-hover">
-      <div className="flex items-start justify-between px-6 pt-6 pb-2">
-        <h3 className="font-['Hanken_Grotesk'] text-[14px] font-bold uppercase tracking-wider text-[#1A1B20]">
-          Tốc độ phản hồi (phút)
-        </h3>
+    <div className="flex h-[280px] flex-col rounded-[14px] border border-[#E9E7EE] bg-white shadow-sm">
+      <div className="flex items-start justify-between px-6 pb-2 pt-6">
+        <div>
+          <h3 className="font-['Hanken_Grotesk'] text-[14px] font-bold uppercase tracking-wide text-[#1A1B20]">
+            SLA phản hồi
+          </h3>
+          <p className="mt-1 text-[12px] font-medium text-[#787585]">
+            Mục tiêu dưới 5 phút
+          </p>
+        </div>
         <Gauge className="h-5 w-5 text-[#787585]" />
       </div>
 
-      <div className="flex-1 px-6 pb-4">
-        {isMounted ? (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={trendData} margin={{ top: 10, right: 0, left: 0, bottom: 0 }} barCategoryGap="20%">
-              <XAxis 
-                dataKey="day" 
-                axisLine={false} 
-                tickLine={false} 
-                tick={{ fill: '#787585', fontSize: 12, fontWeight: 500 }} 
-                dy={10}
-              />
-              <Tooltip
-                content={<CustomTooltip />}
-                cursor={{ fill: '#F4F3FA' }}
-              />
-              <Bar dataKey="minutes" radius={[4, 4, 0, 0]} animationDuration={1000}>
-                {trendData.map((entry, index) => {
-                  const ratio = 1 - (entry.minutes / maxMinutes); 
-                  const opacity = 0.2 + (ratio * 0.8);
-                  
-                  return (
-                    <Cell 
-                      key={`cell-${index}`} 
-                      fill="#5B4FCF" 
-                      fillOpacity={Math.max(0.2, Math.min(1, opacity))} 
-                      className="transition-all duration-300 hover:fill-[#4234B6] hover:fill-opacity-100"
-                    />
-                  );
-                })}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        ) : (
-          <div className="h-full w-full animate-pulse rounded-md bg-[#EEEDF4]" />
-        )}
+      <div className="grid grid-cols-2 gap-3 px-6 pt-2">
+        <div className="rounded-[10px] bg-[#F4F3FA] px-3 py-2">
+          <p className="text-[11px] font-bold uppercase text-[#787585]">TB phản hồi</p>
+          <p className="mt-1 text-[20px] font-bold text-[#1A1B20]">{sla.avg}p</p>
+        </div>
+        <div className="rounded-[10px] bg-[#FFF4F2] px-3 py-2">
+          <p className="text-[11px] font-bold uppercase text-[#BA1A1A]">Quá SLA</p>
+          <p className="mt-1 text-[20px] font-bold text-[#BA1A1A]">{sla.overdue}</p>
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1 px-4 pb-4 pt-3">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} margin={{ top: 6, right: 4, left: -28, bottom: 0 }}>
+            <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: "#787585", fontSize: 11, fontWeight: 600 }} />
+            <YAxis hide domain={[0, "dataMax + 5"]} />
+            <Tooltip content={<CustomTooltip />} cursor={{ fill: "#F4F3FA" }} />
+            <Bar dataKey="minutes" radius={[5, 5, 0, 0]} animationDuration={900}>
+              {data.map((entry) => (
+                <Cell key={entry.day} fill={entry.minutes > 5 ? "#BA1A1A" : "#22C55E"} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
       </div>
     </div>
   );

@@ -124,7 +124,7 @@ export function MentionFilters({ workspaces, filters, allMentions, contentMode, 
     const ws = workspaces.find(w => w.id === brandId);
     if (!ws) return brandId;
     return ws.brand_name.toLowerCase().includes("highland")
-      ? "Highland Coffee"
+      ? "Highlands Coffee"
       : ws.brand_name;
   };
 

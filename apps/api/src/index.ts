@@ -4,6 +4,7 @@ import alertsRoutes from "./routes/alerts";
 import authRoutes from "./routes/auth";
 import adminRoutes from "./routes/admin";
 import staffRoutes from "./routes/staff";
+import templateRoutes from "./routes/templates";
 
 const fastify = Fastify({
   logger: true,
@@ -30,6 +31,9 @@ fastify.register(adminRoutes, { prefix: "/api/admin" });
 
 // Register Staff routes
 fastify.register(staffRoutes, { prefix: "/api/staff" });
+
+// Register Template routes
+fastify.register(templateRoutes, { prefix: "/api/templates" });
 
 // Health check endpoint
 fastify.get("/health", async () => {

@@ -5,14 +5,19 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { useDashboardStore } from "@/stores/dashboard.store";
+import { filterLeadsForDashboard } from "@/lib/lead-metrics";
 
 export function BMTabs() {
   const pathname = usePathname();
+  const { getFilteredAlerts, leads, filters } = useDashboardStore();
+  const alertsCount = getFilteredAlerts().length;
+  const leadsCount = filterLeadsForDashboard(leads, filters).length;
 
   const tabs = [
     { href: "/dashboard", label: "Tổng quan" },
-    { href: "/dashboard/insights", label: "Crisis Monitoring", count: 3 },
-    { href: "/dashboard/lead-monitoring", label: "Lead Monitoring", count: 12 },
+    { href: "/dashboard/insights", label: "Crisis Monitoring", count: alertsCount },
+    { href: "/dashboard/lead-monitoring", label: "Lead Monitoring", count: leadsCount },
   ];
 
   return (

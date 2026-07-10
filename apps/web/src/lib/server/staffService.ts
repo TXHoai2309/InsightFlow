@@ -200,7 +200,7 @@ export async function listStaff(user: DecodedIdToken) {
       .collection("staff")
       .get();
 
-    brandStaffSnapshot.docs.forEach((doc) => {
+    brandStaffSnapshot.docs.forEach((doc: any) => {
       const data = doc.data();
       const uid = String(data.uid || doc.id || "");
       if (!uid) return;

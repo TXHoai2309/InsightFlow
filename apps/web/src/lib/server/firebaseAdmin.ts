@@ -100,11 +100,39 @@ function initFirebaseAdmin() {
 
 initFirebaseAdmin();
 
-const defaultApp = getApps().find((app) => app.name === "[DEFAULT]");
-const secondApp = getApps().find((app) => app.name === "datainsight") || defaultApp;
+let dbInstance: any = null;
+export const db = new Proxy({} as any, {
+  get(target, prop, receiver) {
+    if (!dbInstance) {
+      const defaultApp = getApps().find((app) => app.name === "[DEFAULT]");
+      dbInstance = defaultApp ? getFirestore(defaultApp) : getFirestore();
+    }
+    const value = Reflect.get(dbInstance, prop, receiver);
+    return typeof value === "function" ? value.bind(dbInstance) : value;
+  }
+});
 
-// Project 1 (primary): Auth + user/brand management — must match client firebase.ts `db`
-export const db = defaultApp ? getFirestore(defaultApp) : getFirestore();
-// Project 2 (secondary): crawled mentions/labels data
-export const dbData = secondApp ? getFirestore(secondApp) : getFirestore();
-export const authAdmin = defaultApp ? getAuth(defaultApp) : getAuth();
+let dbDataInstance: any = null;
+export const dbData = new Proxy({} as any, {
+  get(target, prop, receiver) {
+    if (!dbDataInstance) {
+      const defaultApp = getApps().find((app) => app.name === "[DEFAULT]");
+      const secondApp = getApps().find((app) => app.name === "datainsight") || defaultApp;
+      dbDataInstance = secondApp ? getFirestore(secondApp) : getFirestore();
+    }
+    const value = Reflect.get(dbDataInstance, prop, receiver);
+    return typeof value === "function" ? value.bind(dbDataInstance) : value;
+  }
+});
+
+let authAdminInstance: any = null;
+export const authAdmin = new Proxy({} as any, {
+  get(target, prop, receiver) {
+    if (!authAdminInstance) {
+      const defaultApp = getApps().find((app) => app.name === "[DEFAULT]");
+      authAdminInstance = defaultApp ? getAuth(defaultApp) : getAuth();
+    }
+    const value = Reflect.get(authAdminInstance, prop, receiver);
+    return typeof value === "function" ? value.bind(authAdminInstance) : value;
+  }
+});

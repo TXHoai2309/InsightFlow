@@ -7,6 +7,7 @@ import { generateWeeklyBrandReportExcel } from "@/lib/excelExport";
 import { DashboardService } from "@/lib/services/dashboard";
 import { useAuth } from "@/hooks/useAuth";
 import { filterByBusinessPolicy, getScopedBrandKey, isRecordInBrandScope } from "@/lib/brandScope";
+import DashboardLeadMonitoringPage from "@/app/dashboard/lead-monitoring/page";
 
 
 /**
@@ -426,7 +427,7 @@ function formatBrandName(brand: string): string {
   if (!brand) return "";
   const lower = brand.toLowerCase().trim();
   if (lower === "mixue") return "Mixue";
-  if (lower.includes("highland")) return "Highland Coffee";
+  if (lower.includes("highland")) return "Highlands Coffee";
   if (lower.includes("starbuck")) return "Starbucks";
 
   return brand
@@ -1069,6 +1070,24 @@ function LanguageSelectModal({
 }
 
 export default function ReportsPage() {
+  const { profile, loading: authLoading } = useAuth();
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-[#f8f7ff] px-6 py-10 text-slate-700">
+        Dang tai bao cao...
+      </div>
+    );
+  }
+
+  if (!authLoading && profile?.role === "lead_employee") {
+    return <DashboardLeadMonitoringPage />;
+  }
+
+  return <LegacyReportsPage />;
+}
+
+function LegacyReportsPage() {
   const { t, i18n } = useTranslation();
   const { profile, loading: authLoading } = useAuth();
   const scopedBrandKey = getScopedBrandKey(profile);
@@ -1274,7 +1293,7 @@ export default function ReportsPage() {
         setLoading(true);
         const rawData = await DashboardService.fetchRawData();
         const supabaseMentions = filterByBusinessPolicy(rawData.mentions, profile, "view_mentions");
-        const brandOrder = ["Highland Coffee", "Starbucks", "Mixue"];
+        const brandOrder = ["Highlands Coffee", "Starbucks", "Mixue"];
         const brandSet = new Set<string>(brandOrder);
         const data: Mention[] = supabaseMentions
           .map((mention) => ({

@@ -28,7 +28,6 @@ for (const p of possiblePaths) {
         }
       }
       console.log(`[Firebase Admin] Loaded environment variables from: ${p}`);
-      break;
     } catch (err: any) {
       console.warn(`Failed to read env file at ${p}:`, err.message);
     }

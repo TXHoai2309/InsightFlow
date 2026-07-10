@@ -11,11 +11,18 @@
 import { dbData } from "@/lib/firebase";
 import {
   collection,
+  getDoc,
   getDocs,
   query,
   limit,
+  startAfter,
   QueryDocumentSnapshot,
   DocumentData,
+  doc,
+  updateDoc,
+  setDoc,
+  addDoc,
+  deleteField,
 } from "firebase/firestore";
 import type {
   Mention,
@@ -39,6 +46,7 @@ import {
   inferQueueFromLabels,
   normalizeClassificationLabel,
 } from "@/lib/label-change";
+import { filterByBrandScope } from "@/lib/brandScope";
 
 // ─── Collection names ────────────────────────────────────────────────────────
 export const COLLECTION_NAMES = {
@@ -46,6 +54,7 @@ export const COLLECTION_NAMES = {
   alerts: "alerts",
   leads: "leads",
   labelChangeRequests: "label_change_requests",
+  labelChangeHistory: "label_change_history",
 } as const;
 
 // ─── Platform mapping: source crawl → Platform type ──────────────────────────
@@ -98,7 +107,7 @@ export function normalizeBrandName(name: string): string {
 export function formatBrandDisplayName(raw: string): string {
   if (!raw) return "";
   const b = raw.toLowerCase().trim();
-  if (b.includes("highland")) return "Highland Coffee";
+  if (b.includes("highland")) return "Highlands Coffee";
   if (b.includes("starbuck")) return "Starbucks";
   if (b.includes("mixue")) return "Mixue";
   // fallback: capitalize words
@@ -247,7 +256,7 @@ function legacyLabelToClassificationLabel(label: LabelValue): ClassificationLabe
       sentiment: "positive",
       topic: [],
       relevance: true,
-      urgency: "normal",
+      urgency: "low",
       intent: "hot",
     };
   }
@@ -256,7 +265,7 @@ function legacyLabelToClassificationLabel(label: LabelValue): ClassificationLabe
       sentiment: "positive",
       topic: [],
       relevance: true,
-      urgency: "normal",
+      urgency: "low",
       intent: "warm",
     };
   }
@@ -265,7 +274,7 @@ function legacyLabelToClassificationLabel(label: LabelValue): ClassificationLabe
       sentiment: "neutral",
       topic: [],
       relevance: true,
-      urgency: "normal",
+      urgency: "low",
       intent: "cold",
     };
   }
@@ -274,7 +283,7 @@ function legacyLabelToClassificationLabel(label: LabelValue): ClassificationLabe
       sentiment: "negative",
       topic: ["service"],
       relevance: true,
-      urgency: "crisis",
+      urgency: "urgent",
       intent: "none",
     };
   }
@@ -283,7 +292,7 @@ function legacyLabelToClassificationLabel(label: LabelValue): ClassificationLabe
       sentiment: "negative",
       topic: ["other"],
       relevance: true,
-      urgency: "crisis",
+      urgency: "urgent",
       intent: "none",
     };
   }
@@ -292,7 +301,7 @@ function legacyLabelToClassificationLabel(label: LabelValue): ClassificationLabe
       sentiment: "neutral",
       topic: [],
       relevance: true,
-      urgency: "notable",
+      urgency: "medium",
       intent: "none",
     };
   }
@@ -300,7 +309,7 @@ function legacyLabelToClassificationLabel(label: LabelValue): ClassificationLabe
     sentiment: "neutral",
     topic: [],
     relevance: false,
-    urgency: "normal",
+    urgency: "low",
     intent: "none",
   };
 }
@@ -366,6 +375,60 @@ function normalizeOptionalUrl(...values: unknown[]): string | undefined {
 function normalizeOptionalText(value: unknown): string | undefined {
   const text = String(value || "").trim();
   return text || undefined;
+}
+
+interface ParsedContact {
+  phone?: string;
+  email?: string;
+  zalo_id?: string;
+  messenger_id?: string;
+  social_profile_url?: string;
+}
+
+const RE_PHONE_VN = /(?:\+?84|0)\d{9,10}/;
+const RE_EMAIL = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
+const RE_ZALO = /zalo\s*[:\-–]?\s*(\+?84|0)\d{9,10}/i;
+const RE_MESSENGER = /(?:m\.me\/[\w.]+|(?:facebook|fb)\.com\/messages\/t\/[\w.]+|messenger\s*[:\-–]?\s*([\w.]+))/i;
+const RE_SOCIAL_URL = /https?:\/\/(?:www\.)?(?:facebook|fb|tiktok|youtube|threads\.net|instagram)[\w./-]*/i;
+
+function parseContactString(raw: string | undefined): ParsedContact {
+  if (!raw) return {};
+  const text = raw.trim();
+  if (!text) return {};
+
+  const result: ParsedContact = {};
+
+  const zaloMatch = text.match(RE_ZALO);
+  if (zaloMatch) {
+    const zaloPhone = text.slice(zaloMatch.index!).match(RE_PHONE_VN);
+    if (zaloPhone) result.zalo_id = zaloPhone[0];
+  }
+
+  const messengerMatch = text.match(RE_MESSENGER);
+  if (messengerMatch) {
+    result.messenger_id = messengerMatch[1] || messengerMatch[0];
+  }
+
+  const emailMatch = text.match(RE_EMAIL);
+  if (emailMatch) result.email = emailMatch[0];
+
+  const phoneMatch = text.match(RE_PHONE_VN);
+  if (phoneMatch && !result.zalo_id) {
+    result.phone = phoneMatch[0];
+  } else if (phoneMatch && result.zalo_id) {
+    const allPhones = text.match(new RegExp(RE_PHONE_VN.source, "g")) || [];
+    const otherPhone = allPhones.find((p) => p !== result.zalo_id);
+    if (otherPhone) result.phone = otherPhone;
+  }
+
+  const urlMatch = text.match(RE_SOCIAL_URL);
+  if (urlMatch) result.social_profile_url = urlMatch[0];
+
+  if (!result.phone && !result.email && !result.zalo_id && !result.messenger_id && !result.social_profile_url) {
+    result.social_profile_url = text;
+  }
+
+  return result;
 }
 
 function stripUndefinedFields<T extends Record<string, unknown>>(value: T): T {
@@ -442,37 +505,42 @@ async function upsertSupabaseLead(
   id: string,
   payload: Record<string, unknown>,
 ) {
-  try {
-    await supabaseWrite(
-      config,
-      "leads",
-      "POST",
-      [stripUndefinedFields({ id, ...payload })],
-      "on_conflict=id",
-      false,
-      "resolution=merge-duplicates,return=minimal",
-    );
-  } catch (error) {
-    if (
-      error instanceof Error &&
-      (error.message.includes("PGRST205") ||
-        error.message.includes("public.leads"))
-    ) {
-      throw new Error(
-        "Supabase table public.leads chua ton tai. Hay chay database/supabase_leads_workflow.sql trong Supabase SQL Editor roi reload app.",
-      );
-    }
-    if (
-      error instanceof Error &&
-      (error.message.includes('"code":"42501"') ||
-        error.message.toLowerCase().includes("row-level security"))
-    ) {
-      throw new Error(
-        "Supabase RLS dang chan ghi public.leads. Hay chay lai database/supabase_leads_workflow.sql trong Supabase SQL Editor de tao policy insert/update.",
-      );
-    }
-    throw error;
-  }
+  await supabaseWrite(
+    config,
+    "leads",
+    "POST",
+    [stripUndefinedFields({ id, ...payload })],
+    "on_conflict=id",
+    false,
+    "resolution=merge-duplicates,return=minimal",
+  );
+}
+
+async function upsertSupabaseAnnotation(
+  config: SupabaseConfig,
+  entityKey: string,
+  platform: string,
+  postId: string,
+  commentId: string | null,
+  label: ClassificationLabel,
+) {
+  await supabaseWrite(
+    config,
+    "annotations",
+    "POST",
+    [stripUndefinedFields({
+      entity_key: entityKey,
+      platform,
+      post_id: postId,
+      comment_id: commentId,
+      label: JSON.stringify(label),
+      status: "approved",
+      updated_at: new Date().toISOString(),
+    })],
+    "on_conflict=entity_key",
+    false,
+    "resolution=merge-duplicates,return=minimal",
+  );
 }
 
 function isSupabaseStatementTimeout(error: unknown) {
@@ -483,20 +551,10 @@ function isSupabaseStatementTimeout(error: unknown) {
   );
 }
 
-function isSupabaseRecoverableReadError(error: unknown, table: string) {
-  return (
-    isSupabaseStatementTimeout(error) ||
-    (error instanceof Error && error.message.includes(`Supabase ${table} 500`))
-  );
-}
-
 function getMissingSupabaseColumn(error: unknown) {
   if (!(error instanceof Error)) return null;
-  const columnMissingMatch = error.message.match(/column\s+\w+\.([A-Za-z0-9_]+)\s+does not exist/);
-  if (columnMissingMatch?.[1]) return columnMissingMatch[1];
-
-  const schemaCacheMatch = error.message.match(/Could not find the '([^']+)' column/);
-  return schemaCacheMatch?.[1] || null;
+  const match = error.message.match(/column\s+\w+\.([A-Za-z0-9_]+)\s+does not exist/);
+  return match?.[1] || null;
 }
 
 async function loadSupabaseRows<T extends SupabaseRow>(
@@ -505,7 +563,7 @@ async function loadSupabaseRows<T extends SupabaseRow>(
   params: Record<string, string>,
   maxRows = 10000,
 ): Promise<T[]> {
-  const pageSize = 100;
+  const pageSize = 1000;
   const rows: T[] = [];
   let offset = 0;
 
@@ -573,32 +631,68 @@ async function loadSupabaseRowsByPostIds<T extends SupabaseRow>(
   postIds: string[],
   params: Record<string, string>,
   maxRows = 10000,
-  batchSize = 5,
-  tolerateBatchErrors = false,
 ): Promise<T[]> {
   const rows: T[] = [];
   const uniquePostIds = Array.from(new Set(postIds.filter(Boolean)));
 
-  for (const batch of chunkValues(uniquePostIds, batchSize)) {
+  for (const batch of chunkValues(uniquePostIds, 50)) {
     if (rows.length >= maxRows) break;
-    try {
-      const batchRows = await loadSupabaseRows<T>(
-        config,
-        table,
-        {
-          ...params,
-          post_id: `in.(${batch.join(",")})`,
-        },
-        maxRows - rows.length,
-      );
-      rows.push(...batchRows);
-    } catch (error) {
-      if (!tolerateBatchErrors) throw error;
-      console.warn(`[DashboardService] Skipping Supabase ${table} batch:`, error);
-    }
+    const batchRows = await loadSupabaseRows<T>(
+      config,
+      table,
+      {
+        ...params,
+        post_id: `in.(${batch.join(",")})`,
+      },
+      maxRows - rows.length,
+    );
+    rows.push(...batchRows);
   }
 
   return rows;
+}
+
+async function loadSupabaseRowsByIds<T extends SupabaseRow>(
+  config: SupabaseConfig,
+  table: string,
+  idField: string,
+  ids: string[],
+  columns: string[],
+  extraParams: Record<string, string> = {},
+  maxRows = 10000,
+): Promise<T[]> {
+  if (!ids || ids.length === 0) return [];
+  const unique = Array.from(new Set(ids.filter(Boolean)));
+  const pageSize = 100;
+  const promises: Promise<T[]>[] = [];
+
+  const isAnnotationTable = table === "annotations";
+  for (let i = 0; i < unique.length; i += pageSize) {
+    if (isAnnotationTable && i >= 1000) break; // Limit to top 1000 IDs to avoid excessive parallel queries
+    const chunk = unique.slice(i, i + pageSize);
+    const formattedIds = chunk.map((id) => `"${id.replace(/"/g, '\\"')}"`);
+    const requestParams = new URLSearchParams({
+      ...extraParams,
+      [idField]: `in.(${formattedIds.join(",")})`,
+      select: columns.join(","),
+      limit: String(maxRows), // Fetch up to maxRows to ensure complete candidate list
+    });
+    promises.push(supabaseRequest<T[]>(config, table, requestParams.toString()));
+  }
+
+  const results = await Promise.all(promises);
+  let finalResults = results.flat();
+
+  // If order is updated_at desc, sort in JS to ensure true top results across chunks
+  if (extraParams.order && extraParams.order.includes("updated_at.desc")) {
+    finalResults.sort((a, b) => {
+      const aTime = a.updated_at ? new Date(a.updated_at as string).getTime() : 0;
+      const bTime = b.updated_at ? new Date(b.updated_at as string).getTime() : 0;
+      return bTime - aTime;
+    });
+  }
+
+  return finalResults.slice(0, maxRows);
 }
 
 async function loadSupabaseRowsByPostIdsWithSelectFallback<T extends SupabaseRow>(
@@ -609,31 +703,24 @@ async function loadSupabaseRowsByPostIdsWithSelectFallback<T extends SupabaseRow
   params: Record<string, string>,
   maxRows = 10000,
   requiredColumns: string[] = [],
-  batchSize = 5,
-  tolerateBatchErrors = false,
 ): Promise<T[]> {
   const rows: T[] = [];
   const uniquePostIds = Array.from(new Set(postIds.filter(Boolean)));
 
-  for (const batch of chunkValues(uniquePostIds, batchSize)) {
+  for (const batch of chunkValues(uniquePostIds, 20)) {
     if (rows.length >= maxRows) break;
-    try {
-      const batchRows = await loadSupabaseRowsWithSelectFallback<T>(
-        config,
-        table,
-        columns,
-        {
-          ...params,
-          post_id: `in.(${batch.join(",")})`,
-        },
-        maxRows - rows.length,
-        requiredColumns,
-      );
-      rows.push(...batchRows);
-    } catch (error) {
-      if (!tolerateBatchErrors) throw error;
-      console.warn(`[DashboardService] Skipping Supabase ${table} batch:`, error);
-    }
+    const batchRows = await loadSupabaseRowsWithSelectFallback<T>(
+      config,
+      table,
+      columns,
+      {
+        ...params,
+        post_id: `in.(${batch.join(",")})`,
+      },
+      maxRows - rows.length,
+      requiredColumns,
+    );
+    rows.push(...batchRows);
   }
 
   return rows;
@@ -695,14 +782,7 @@ function getSupabaseLabel(
   fallback: Partial<ClassificationLabel>,
 ): ClassificationLabel {
   const payload = readPayload(row);
-  const payloadLabels =
-    payload.labels && typeof payload.labels === "object"
-      ? (payload.labels as SupabaseRow)
-      : {};
-  const rowLabels = {
-    ...payloadLabels,
-    ...(row.labels && typeof row.labels === "object" ? (row.labels as SupabaseRow) : {}),
-  };
+  const rowLabels = row.labels && typeof row.labels === "object" ? (row.labels as SupabaseRow) : {};
   const annotationLabel = parseAnnotationLabel(annotation);
   const inferredIntent = inferLeadIntent(
     annotationLabel.intent,
@@ -710,13 +790,6 @@ function getSupabaseLabel(
     row.intent,
     row.lead_intent,
     row.intent_type,
-    row.current_label,
-    row.label,
-    payload.intent,
-    payload.lead_intent,
-    payload.intent_type,
-    payload.current_label,
-    payload.label,
   );
 
   return normalizeClassificationLabel(
@@ -724,9 +797,9 @@ function getSupabaseLabel(
       ...rowLabels,
       ...annotationLabel,
       intent:
-        annotationLabel.intent ??
-        rowLabels.intent ??
-        (inferredIntent !== "none" ? inferredIntent : undefined),
+        inferredIntent !== "none"
+          ? inferredIntent
+          : annotationLabel.intent ?? rowLabels.intent,
       sentiment:
         annotationLabel.sentiment ??
         rowLabels.sentiment ??
@@ -766,14 +839,6 @@ function supabasePostToMention(row: SupabaseRow, annotationByKey: Map<string, Su
     relevance: true,
   });
 
-  let locationName = readFirstText(row.author, payload.author, payload.tac_gia) || "N/A";
-  if ((locationName === "N/A" || locationName === "") && postContent) {
-    const parts = postContent.split(/[\n\ue0c8]/);
-    if (parts[0]) locationName = parts[0].trim();
-  }
-  const ratingRaw = payload.star_count ?? payload.rating ?? payload.star ?? payload.rating_star;
-  const starCount = ratingRaw !== undefined && ratingRaw !== null ? Number(ratingRaw) : null;
-
   return {
     id: postId,
     parent_id: null,
@@ -793,9 +858,8 @@ function supabasePostToMention(row: SupabaseRow, annotationByKey: Map<string, Su
     created_at: parseDate(row.updated_at || row.created_at || row.crawled_at || row.posted_at),
     posted_at: parseDate(row.posted_at || payload.thoi_gian_dang || payload.posted_at || row.created_at),
     url: normalizeOptionalUrl(row.url, row.post_url, row.source_url, payload.url),
+    contact: normalizeOptionalText(row.contact || payload.contact),
     labels: label,
-    star_count: starCount,
-    location_name: locationName,
   };
 }
 
@@ -825,10 +889,6 @@ function supabaseCommentToMention(
     relevance: true,
   });
 
-  const ratingRaw = payload.star_count ?? payload.rating ?? payload.star ?? payload.rating_star;
-  const starCount = ratingRaw !== undefined && ratingRaw !== null ? Number(ratingRaw) : null;
-  const locationName = post ? post.location_name : null;
-
   return {
     id: commentId,
     parent_id: parentCommentId || postId || null,
@@ -849,53 +909,9 @@ function supabaseCommentToMention(
     created_at: parseDate(row.updated_at || row.created_at || row.crawled_at || row.posted_at),
     posted_at: parseDate(row.posted_at || payload.gio_comment || payload.posted_at || row.created_at),
     url: normalizeOptionalUrl(row.url, post?.url, payload.url),
+    contact: normalizeOptionalText(row.contact || payload.contact),
     labels: label,
-    star_count: starCount,
-    location_name: locationName,
   };
-}
-
-async function loadSupabaseRowsByIds<T extends SupabaseRow>(
-  config: SupabaseConfig,
-  table: string,
-  idField: string,
-  ids: string[],
-  columns: string[],
-  extraParams: Record<string, string> = {},
-  maxRows = 10000,
-): Promise<T[]> {
-  if (!ids || ids.length === 0) return [];
-  const unique = Array.from(new Set(ids.filter(Boolean)));
-  const pageSize = 100;
-  const promises: Promise<T[]>[] = [];
-
-  const isAnnotationTable = table === "annotations";
-  for (let i = 0; i < unique.length; i += pageSize) {
-    if (isAnnotationTable && i >= 1000) break; // Limit to top 1000 IDs to avoid excessive parallel queries
-    const chunk = unique.slice(i, i + pageSize);
-    const formattedIds = chunk.map((id) => `"${id.replace(/"/g, '\\"')}"`);
-    const requestParams = new URLSearchParams({
-      ...extraParams,
-      [idField]: `in.(${formattedIds.join(",")})`,
-      select: columns.join(","),
-      limit: String(maxRows), // Fetch up to maxRows to ensure complete candidate list
-    });
-    promises.push(supabaseRequest<T[]>(config, table, requestParams.toString()));
-  }
-
-  const results = await Promise.all(promises);
-  let finalResults = results.flat();
-
-  // If order is updated_at desc, sort in JS to ensure true top results across chunks
-  if (extraParams.order && extraParams.order.includes("updated_at.desc")) {
-    finalResults.sort((a, b) => {
-      const aTime = a.updated_at ? new Date(a.updated_at as string).getTime() : 0;
-      const bTime = b.updated_at ? new Date(b.updated_at as string).getTime() : 0;
-      return bTime - aTime;
-    });
-  }
-
-  return finalResults.slice(0, maxRows);
 }
 
 async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
@@ -952,8 +968,8 @@ async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
       let searchTerm = brandKey;
       let displayBrandName = brandKey;
       if (brandKey.includes("highland")) {
-        searchTerm = "highlandcoffee";
-        displayBrandName = "Highland Coffee";
+        searchTerm = "highlands-coffee";
+        displayBrandName = "Highlands Coffee";
       } else if (brandKey.includes("starbuck")) {
         searchTerm = "starbucks";
         displayBrandName = "Starbucks";
@@ -969,7 +985,7 @@ async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
       });
       const brandPosts = await supabaseRequest<SupabaseRow[]>(config, "posts", query.toString());
       postIds = brandPosts.map((p) => String(p.post_id || "").trim()).filter(Boolean);
-    } catch (err) {
+    } catch (err: any) {
       console.error("[DashboardService] Failed to fetch brand posts:", err);
     }
 
@@ -988,14 +1004,14 @@ async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
           annotationColumns,
           { platform: p === "be" ? "in.(be,befood)" : (p === "thread" ? "in.(thread,threads)" : `eq.${p}`), status: "eq.completed", order: "updated_at.desc.nullslast" },
           perPlatformLimit,
-        ).catch((err) => {
+        ).catch((err: any) => {
           console.warn(`[DashboardService] Failed to fetch annotations for platform ${p}:`, err);
           return [] as SupabaseRow[];
         })
       );
       const results = await Promise.all(promises);
       annotationRows = results.flat();
-    } catch (error) {
+    } catch (error: any) {
       console.error("[DashboardService] Failed to fetch annotations for brand:", error);
       return [];
     }
@@ -1010,37 +1026,37 @@ async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
           "annotations",
           { platform: p === "be" ? "in.(be,befood)" : (p === "thread" ? "in.(thread,threads)" : `eq.${p}`), status: "eq.completed", order: "updated_at.desc.nullslast" },
           perPlatformLimit,
-        ).catch((err) => {
+        ).catch((err: any) => {
           console.warn(`[DashboardService] Failed to fetch annotations for platform ${p}:`, err);
           return [] as SupabaseRow[];
         })
       );
       const results = await Promise.all(promises);
       annotationRows = results.flat();
-    } catch (error) {
+    } catch (error: any) {
       console.error("[DashboardService] Failed to fetch annotations:", error);
       return [];
     }
   }
 
   const postIds = Array.from(
-    new Set(annotationRows.map((row) => String(row.post_id || "").trim())),
+    new Set(annotationRows.map((row: SupabaseRow) => String(row.post_id || "").trim())),
   ).filter(Boolean);
 
   const commentIds = Array.from(
     new Set(
       annotationRows
-        .filter((row) => row.entity_type === "comment")
-        .map((row) => String(row.comment_id || "").trim()),
+        .filter((row: SupabaseRow) => row.entity_type === "comment")
+        .map((row: SupabaseRow) => String(row.comment_id || "").trim()),
     ),
   ).filter(Boolean);
 
   const [postRows, commentRows] = await Promise.all([
-    loadSupabaseRowsByIds<SupabaseRow>(config, "posts", "post_id", postIds, postColumns).catch((err) => {
+    loadSupabaseRowsByIds<SupabaseRow>(config, "posts", "post_id", postIds, postColumns).catch((err: any) => {
       console.warn("[DashboardService] Failed to fetch post details:", err);
       return [] as SupabaseRow[];
     }),
-    loadSupabaseRowsByIds<SupabaseRow>(config, "comments", "comment_id", commentIds, commentColumns).catch((err) => {
+    loadSupabaseRowsByIds<SupabaseRow>(config, "comments", "comment_id", commentIds, commentColumns).catch((err: any) => {
       console.warn("[DashboardService] Failed to fetch comment details:", err);
       return [] as SupabaseRow[];
     }),
@@ -1059,12 +1075,12 @@ async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
   }
 
   const posts = postRows
-    .filter((row) => String(row.post_id || row.id || "").trim())
-    .map((row) => supabasePostToMention(row, annotationByKey));
-  const postById = new Map(posts.map((post) => [post.id, post]));
+    .filter((row: SupabaseRow) => String(row.post_id || row.id || "").trim())
+    .map((row: SupabaseRow) => supabasePostToMention(row, annotationByKey));
+  const postById = new Map<string, Mention>(posts.map((post: Mention) => [post.id, post] as [string, Mention]));
   const comments = commentRows
-    .filter((row) => String(row.comment_id || row.id || "").trim())
-    .map((row) => supabaseCommentToMention(row, postById, annotationByKey));
+    .filter((row: SupabaseRow) => String(row.comment_id || row.id || "").trim())
+    .map((row: SupabaseRow) => supabaseCommentToMention(row, postById, annotationByKey));
 
   return [...posts, ...comments].sort(
     (a, b) => new Date(b.posted_at).getTime() - new Date(a.posted_at).getTime(),
@@ -1073,13 +1089,13 @@ async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
 
 // ─── Date parser ─────────────────────────────────────────────────────────────
 function parseDate(field: unknown): string {
-  if (!field) return "1970-01-01T00:00:00Z";
+  if (!field) return new Date().toISOString();
   if (typeof (field as any).toDate === "function") {
     return (field as any).toDate().toISOString();
   }
   if (field instanceof Date) return field.toISOString();
   const s = String(field).trim();
-  if (!s) return "1970-01-01T00:00:00Z";
+  if (!s) return new Date().toISOString();
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return `${s}T00:00:00Z`;
 
   // Thử parse định dạng Việt Nam thông dụng như "HH:mm DD/MM/YYYY" hoặc "DD/MM/YYYY"
@@ -1144,37 +1160,10 @@ function buildLeadWorkflowPayload(
 export interface FetchOptions {
   /** Pagination cursor */
   after?: QueryDocumentSnapshot<DocumentData>;
+  /** Optional normalized brand scope key passed by dashboard hooks */
+  brandKey?: string;
   /** Set a max limit (default: no limit — fetches ALL records) */
   maxMentions?: number;
-  brandKey?: string;
-}
-
-// ─── Supabase Fetch Helper ───────────────────────────────────────────────────
-async function supabaseFetch<T = any>(table: string, queryStr: string = "", method = "GET", body?: any): Promise<T | null> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return null;
-
-  const endpoint = `${url}/rest/v1/${table}${queryStr ? "?" + queryStr : ""}`;
-  const res = await fetch(endpoint, {
-    method,
-    headers: {
-      "apikey": key,
-      "Authorization": `Bearer ${key}`,
-      "Content-Type": "application/json",
-      "Prefer": method === "POST" || method === "PATCH" ? "return=minimal" : "return=representation"
-    },
-    body: body ? JSON.stringify(body) : undefined
-  });
-
-  if (!res.ok) {
-    if (res.status === 404 || res.status === 406) return null; // Table not found
-    console.warn(`Supabase fetch failed for ${table}:`, await res.text());
-    return null;
-  }
-
-  if (res.status === 204) return null; // No content
-  return res.json();
 }
 
 // ─── Main service ─────────────────────────────────────────────────────────────
@@ -1183,7 +1172,7 @@ export class DashboardService {
    * Fetch raw data from Firestore.
    * Mapping field names Firestore → internal types happens here.
    */
-  static async fetchRawData(opts: FetchOptions = {}): Promise<{
+  static async fetchRawData(opts: FetchOptions = {}, profile?: UserRoleProfile | null): Promise<{
     workspaces: Workspace[];
     mentions: Mention[];
     alerts: Alert[];
@@ -1270,112 +1259,20 @@ export class DashboardService {
           ),
           posted_at: parseDate(postedAtRaw),
           url: String(d.url || d.post_url || d.source_url || ""),
-      const limitCount = opts.maxMentions || 500;
-      
-      // 1. Fetch raw annotations (limit to maxMentions to get a good dataset)
-      const [annotationsData, leadsData, requestsData] = await Promise.all([
-        supabaseFetch<any[]>("annotations", `limit=${limitCount}&order=created_at.desc`),
-        supabaseFetch<any[]>("leads", `limit=200&order=created_at.desc`),
-        supabaseFetch<any[]>("label_change_requests", `limit=100&order=requested_at.desc`)
-      ]);
-
-      const rawAnnotations = annotationsData || [];
-      const rawLeads = leadsData || [];
-      const rawRequests = requestsData || [];
-
-      // 2. Extract IDs to fetch posts and comments
-      const postIds = Array.from(new Set(rawAnnotations.filter(a => a.entity_type === 'post').map(a => a.post_id)));
-      const commentIds = Array.from(new Set(rawAnnotations.filter(a => a.entity_type === 'comment').map(a => a.comment_id)));
-
-      // Helper to fetch in chunks to avoid URL length limits
-      const fetchInChunks = async (table: string, idField: string, ids: string[]) => {
-        if (!ids || ids.length === 0) return [];
-        const unique = Array.from(new Set(ids.filter(Boolean)));
-        const results: any[] = [];
-        for (let i = 0; i < unique.length; i += 50) {
-           const chunk = unique.slice(i, i + 50);
-           const query = `${idField}=in.(${encodeURIComponent(chunk.join(','))})`;
-           const data = await supabaseFetch<any[]>(table, query);
-           if (data) results.push(...data);
-        }
-        return results;
-      };
-
-      // 3. Fetch corresponding posts and comments
-      const [postsData, commentsData] = await Promise.all([
-        fetchInChunks("posts", "post_id", postIds),
-        fetchInChunks("comments", "comment_id", commentIds)
-      ]);
-
-      const postsMap = new Map();
-      postsData.forEach(p => postsMap.set(p.post_id, p));
-
-      const commentsMap = new Map();
-      commentsData.forEach(c => commentsMap.set(c.comment_id, c));
-
-      // ── Mentions (Only from annotations) ──────────────────────────────────────────────────────────
-      const mentions: Mention[] = [];
-
-      rawAnnotations.forEach(a => {
-        const isPost = a.entity_type === 'post';
-        const row = isPost ? postsMap.get(a.post_id) : commentsMap.get(a.comment_id);
-        if (!row) return; // If content is missing, we skip
-
-        let labelObj: Partial<ClassificationLabel> = {};
-        if (a.label) {
-          try {
-             const parsed = typeof a.label === 'string' ? JSON.parse(a.label) : a.label;
-             labelObj = parsed;
-          } catch (e) {}
-        }
-
-        const payload = row.payload_json || {};
-        const id = isPost ? row.post_id : row.comment_id;
-        const parentId = isPost ? null : row.parent_comment_id || row.post_id;
-        let brand = row.brand || row.brand_slug || payload.brand || "";
-        
-        let mappedWorkspaceId = String(brand);
-        const lowerBrand = mappedWorkspaceId.toLowerCase();
-        if (lowerBrand.includes("highland")) {
-           mappedWorkspaceId = "highland-coffee";
-        } else if (lowerBrand.includes("starbuck")) {
-           mappedWorkspaceId = "starbucks";
-        } else if (lowerBrand.includes("mixue")) {
-           mappedWorkspaceId = "mixue";
-        }
-
-        const content = isPost ? payload.text || row.text || "" : row.text || payload.text || "";
-        const author = isPost ? row.author || payload.author : row.username || payload.username;
-        const url = row.url || payload.url;
-        
-        const postedAt = parseDate(row.posted_at || payload.posted_at || payload.thoi_gian_dang || payload.gio_comment || row.created_at);
-        const createdAt = parseDate(row.created_at || row.posted_at);
-
-        mentions.push({
-          id: String(id),
-          parent_id: parentId ? String(parentId) : null,
-          workspace_id: mappedWorkspaceId,
-          platform: mapSourceToPlatform(row.platform || payload.platform || ""),
-          content: normalizeText(content),
-          post_content: isPost ? normalizeText(content) : undefined,
-          comment_content: !isPost ? normalizeText(content) : undefined,
-          content_type: isPost ? "post" : "comment" as any,
-          original_content: normalizeText(content),
-          author: normalizeText(author || "N/A").trim(),
-          sentiment: mapSentiment(labelObj.sentiment),
-          topic: mapTopic(labelObj.topic),
-          credibility_score: 100,
-          created_at: createdAt,
-          posted_at: postedAt,
-          url: String(url || ""),
           labels: normalizeClassificationLabel(
-            { topic: labelObj.topic },
             {
-              sentiment: mapSentiment(labelObj.sentiment),
-              relevance: typeof labelObj.relevance === "boolean" ? labelObj.relevance : true,
-              urgency: labelObj.urgency as any,
-              intent: labelObj.intent as any,
-            }
+              ...labels,
+              topic: labels.topic ?? d.baseline_topic ?? d.topic,
+            },
+            {
+            sentiment: mapSentiment(
+              labels.sentiment ?? d.baseline_sentiment ?? d.sentiment,
+            ),
+            relevance:
+              typeof labels.relevance === "boolean" ? labels.relevance : true,
+            urgency: labels.urgency,
+            intent: labels.intent,
+            },
           ),
         };
       };
@@ -1394,12 +1291,13 @@ export class DashboardService {
       // ── Workspaces (derived từ brands trong mentions) ─────────────────────
       // Seed với 3 target brands để đảm bảo luôn hiển thị
       const TARGET_BRAND_MAP: Record<string, string> = {
-        "highland-coffee": "Highland Coffee",
+        "highland-coffee": "Highlands Coffee",
         starbucks: "Starbucks",
         mixue: "Mixue",
       };
       const brandMap = new Map<string, Workspace>();
 
+      // Pre-seed 3 target brands
       Object.entries(TARGET_BRAND_MAP).forEach(([id, name]) => {
         brandMap.set(normalizeBrandName(name), {
           id,
@@ -1412,6 +1310,7 @@ export class DashboardService {
         });
       });
 
+      // Add brands found in data
       mentions.forEach((m) => {
         if (!m.workspace_id) return;
         const displayName = formatBrandDisplayName(m.workspace_id);
@@ -1429,159 +1328,70 @@ export class DashboardService {
         }
       });
       const workspaces = Array.from(brandMap.values()).sort((a, b) =>
-        a.brand_name.localeCompare(b.brand_name)
+        a.brand_name.localeCompare(b.brand_name),
       );
 
-      // ── Alerts (Bảng không tồn tại trên Supabase, sinh tự động từ mention tiêu cực) ────────────────
-      const alerts: Alert[] = [];
-      const negativeMentions = mentions.filter((m) => m.sentiment === "negative");
-      if (negativeMentions.length > 0) {
-        alerts.push({
-          id: "generated-alert-spike-1",
-          workspace_id: negativeMentions[0].workspace_id || "highland-coffee",
-          severity: negativeMentions.length > 10 ? "critical" : negativeMentions.length > 5 ? "high" : "medium",
-          signal_type: "mention_spike",
-          message: `Phát hiện ${negativeMentions.length} bình luận/bài đăng tiêu cực gần đây.`,
-          affected_mentions_count: negativeMentions.length,
-          created_at: negativeMentions[0].created_at || new Date().toISOString(),
-          status: "new",
+      // ── Alerts ────────────────────────────────────────────────────────────
+      let alerts: Alert[] = [];
+      try {
+        const alertsSnap = await getDocs(
+          query(collection(dbData, COLLECTION_NAMES.alerts), limit(200)),
+        );
+        alerts = alertsSnap.docs.map((doc) => {
+          const d = doc.data();
+          return {
+            id: doc.id,
+            workspace_id: String(d.workspace_id || d.brand || ""),
+            severity: d.severity || "medium",
+            signal_type: d.signal_type || "mention_spike",
+            message: String(d.message || ""),
+            spike_multiplier: d.spike_multiplier,
+            affected_mentions_count: d.affected_mentions_count,
+            created_at: parseDate(d.created_at),
+            status: d.status || "new",
+          };
         });
+        alerts.sort(
+          (a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+        );
+      } catch {
+        // Collection chưa tồn tại — bỏ qua
       }
 
-      const legalMentions = mentions.filter((m) => m.topic === "legal" || m.topic === "operation");
-      if (legalMentions.length > 0) {
-        alerts.push({
-          id: "generated-alert-sensitive-1",
-          workspace_id: legalMentions[0].workspace_id || "highland-coffee",
-          severity: "critical",
-          signal_type: "sensitive_topic",
-          message: `Cảnh báo rủi ro về dịch vụ/pháp lý từ ${legalMentions.length} bài đăng.`,
-          affected_mentions_count: legalMentions.length,
-          created_at: legalMentions[0].created_at || new Date().toISOString(),
-          status: "new",
-        });
-      }
-
-      // ── Leads (Supabase) ────────────────────────────────────────────────
-      let leads: Lead[] = [];
+      // ── Leads: Hybrid Merge ──────────────────────────────────────────────
+      // Bước 1: Lấy bản ghi trạng thái xử lý từ Supabase leads table (nếu có)
+      const sbLeadsById = new Map<string, Record<string, unknown>>();
       try {
         const sbConfig = getSupabaseConfig();
         const leadsRows = await loadSupabaseRows<Record<string, unknown>>(
           sbConfig,
           "leads",
-          { order: "created_at.desc.nullslast", limit: "200" },
-          200,
+          { order: "created_at.desc.nullslast" },
+          500,
         );
-        leads = leadsRows.map((d) => {
-          const labels = (d.labels as Record<string, unknown>) || {};
-          const intent = mapIntent((d.intent as string) || (labels.intent as string));
-          return {
-            id: String(d.id),
-            mention_id: normalizeOptionalText(d.mention_id || d.source_mention_id),
-            source_mention_id: normalizeOptionalText(d.source_mention_id),
-            parent_id: d.parent_id ? String(d.parent_id) : null,
-            content_type: ["post", "comment", "reply"].includes(
-              String(d.content_type || "").toLowerCase(),
-            )
-              ? (String(d.content_type).toLowerCase() as Lead["content_type"])
-              : undefined,
-            post_id: normalizeOptionalText(d.post_id),
-            workspace_id: String(d.workspace_id || d.brand || ""),
-            platform: mapSourceToPlatform(String(d.source || d.platform || "")),
-            author: normalizeText(String(d.author || "Khách hàng")).trim(),
-            content: String(d.content || d.text || ""),
-            intent,
-            current_label: d.current_label
-              ? mapLabelValue(d.current_label as string)
-              : undefined,
-            labels: normalizeClassificationLabel(
-              (d.labels || d.current_labels || {
-                topic: Array.isArray(d.intent_signals) ? d.intent_signals : [],
-              }) as Partial<ClassificationLabel>,
-              {
-                sentiment: (labels.sentiment ?? d.sentiment) as ClassificationLabel["sentiment"],
-                relevance:
-                  typeof labels.relevance === "boolean"
-                    ? labels.relevance
-                    : true,
-                urgency: labels.urgency as ClassificationLabel["urgency"],
-                intent,
-              },
-            ),
-            intent_signals: (d.intent_signals as string[]) || [],
-            status: (d.status as Lead["status"]) || "new",
-            created_at: parseDate(d.created_at),
-            expiry_at: d.expiry_at ? parseDate(d.expiry_at) : undefined,
-            url: normalizeOptionalUrl(d.url, d.post_url, d.source_url),
-            source_url: normalizeOptionalUrl(d.source_url, d.post_url, d.url),
-            label_correction_status: mapLabelCorrectionStatus(
-              d.label_correction_status as string | undefined,
-            ),
-            pending_label_request_id: normalizeOptionalText(
-              d.pending_label_request_id,
-            ),
-            last_label_corrected_at: d.last_label_corrected_at
-              ? parseDate(d.last_label_corrected_at)
-              : undefined,
-            phone: normalizeOptionalText(d.phone),
-            email: normalizeOptionalText(d.email),
-            zalo_id: normalizeOptionalText(d.zalo_id),
-            messenger_id: normalizeOptionalText(d.messenger_id),
-            social_profile_url: normalizeOptionalUrl(
-              d.social_profile_url,
-              d.contact,
-              d.profile_url,
-            ),
-            owner_id: normalizeOptionalText(d.owner_id || d.firebase_uid),
-            owner_name: normalizeOptionalText(d.owner_name),
-            owner_email: normalizeOptionalText(d.owner_email),
-            assigned_at: d.assigned_at ? parseDate(d.assigned_at) : undefined,
-            assigned_by: normalizeOptionalText(d.assigned_by),
-            claimed_at: d.claimed_at ? parseDate(d.claimed_at) : undefined,
-            first_contacted_at: d.first_contacted_at
-              ? parseDate(d.first_contacted_at)
-              : undefined,
-            contact_attempts:
-              typeof d.contact_attempts === "number" ? d.contact_attempts : 0,
-            last_contact_at: d.last_contact_at
-              ? parseDate(d.last_contact_at)
-              : undefined,
-            pending_result: d.pending_result === true,
-            last_action_at: d.last_action_at
-              ? parseDate(d.last_action_at)
-              : undefined,
-            last_action_type: normalizeOptionalText(d.last_action_type) as Lead["last_action_type"],
-            last_contact_channel: normalizeOptionalText(d.last_contact_channel),
-            result_type: normalizeOptionalText(d.result_type) as Lead["result_type"],
-            result_recorded_at: d.result_recorded_at
-              ? parseDate(d.result_recorded_at)
-              : undefined,
-            follow_up_at: d.follow_up_at ? parseDate(d.follow_up_at) : undefined,
-            closed_at: d.closed_at ? parseDate(d.closed_at) : undefined,
-            sales_status: normalizeOptionalText(d.sales_status) as Lead["sales_status"],
-            sales_owner_id: normalizeOptionalText(d.sales_owner_id),
-            sales_owner_name: normalizeOptionalText(d.sales_owner_name),
-            sales_transferred_at: d.sales_transferred_at
-              ? parseDate(d.sales_transferred_at)
-              : undefined,
-            crm_deal_id: normalizeOptionalText(d.crm_deal_id),
-            notes: d.notes ? String(d.notes) : undefined,
-            posted_at: d.posted_at ? parseDate(d.posted_at) : undefined,
-          };
-        });
+        for (const row of leadsRows) {
+          const rowId = String(row.id || row.mention_id || "");
+          if (rowId) sbLeadsById.set(rowId, row);
+        }
       } catch {
-        // Table chưa tồn tại — bỏ qua
+        // Bảng chưa tồn tại hoặc lỗi — bỏ qua, derive từ mentions
       }
 
-      const persistedLeads = leads;
-      const leadById = new Map<string, Lead>();
-
+      // Bước 2: Luôn derive leads từ Supabase mentions thật (có intent label)
+      // rồi merge trạng thái xử lý giao dịch từ Supabase leads table
+      const derivedLeadById = new Map<string, Lead>();
       mentions.forEach((m) => {
         const labels = m.labels;
-        const intent = mapIntent(labels?.intent);
-        if (intent === "none" || leadById.has(m.id)) return;
+        const intent = inferLeadIntent(
+          labels?.intent,
+          labels,
+          m.labels,
+        );
+        if (intent === "none" || derivedLeadById.has(m.id)) return;
 
-        leadById.set(m.id, {
+        const parsed = parseContactString(m.contact);
+        const baseLead: Lead = {
           id: m.id,
           mention_id: m.id,
           source_mention_id: m.id,
@@ -1595,7 +1405,11 @@ export class DashboardService {
           intent,
           current_label: undefined,
           labels,
-          intent_signals: Array.isArray(labels?.topic) ? labels.topic : (labels?.topic ? [labels.topic] : []),
+          intent_signals: Array.isArray(labels?.topic)
+            ? labels.topic
+            : labels?.topic
+              ? [labels.topic]
+              : [],
           status: "new",
           created_at: m.created_at,
           url: m.url,
@@ -1603,11 +1417,11 @@ export class DashboardService {
           label_correction_status: undefined,
           pending_label_request_id: undefined,
           last_label_corrected_at: undefined,
-          phone: undefined,
-          email: undefined,
-          zalo_id: undefined,
-          messenger_id: undefined,
-          social_profile_url: undefined,
+          phone: parsed.phone,
+          email: parsed.email,
+          zalo_id: parsed.zalo_id,
+          messenger_id: parsed.messenger_id,
+          social_profile_url: parsed.social_profile_url,
           owner_id: undefined,
           owner_name: undefined,
           owner_email: undefined,
@@ -1632,42 +1446,68 @@ export class DashboardService {
           crm_deal_id: undefined,
           notes: undefined,
           posted_at: m.posted_at,
-        });
+        };
+
+        // Merge trạng thái xử lý từ Supabase leads nếu có
+        const d = sbLeadsById.get(m.id);
+        if (d) {
+          const rawCurrentLabels = d.current_labels || d.labels;
+          let mergedLabels = baseLead.labels;
+          if (rawCurrentLabels) {
+            try {
+              const parsed = typeof rawCurrentLabels === "string" ? JSON.parse(rawCurrentLabels) : rawCurrentLabels;
+              if (parsed && typeof parsed === "object") {
+                mergedLabels = normalizeClassificationLabel(parsed);
+              }
+            } catch (e) {
+              console.warn("Failed to parse lead labels:", e);
+            }
+          }
+
+          derivedLeadById.set(m.id, {
+            ...baseLead,
+            labels: mergedLabels,
+            intent: (mergedLabels?.intent as any) || "none",
+            status: (d.status as Lead["status"]) ?? baseLead.status,
+            expiry_at: d.expiry_at ? parseDate(d.expiry_at) : undefined,
+            label_correction_status: mapLabelCorrectionStatus(d.label_correction_status as string | undefined),
+            pending_label_request_id: normalizeOptionalText(d.pending_label_request_id),
+            last_label_corrected_at: d.last_label_corrected_at ? parseDate(d.last_label_corrected_at) : undefined,
+            phone: normalizeOptionalText(d.phone) || parsed.phone,
+            email: normalizeOptionalText(d.email) || parsed.email,
+            zalo_id: normalizeOptionalText(d.zalo_id) || parsed.zalo_id,
+            messenger_id: normalizeOptionalText(d.messenger_id) || parsed.messenger_id,
+            social_profile_url: normalizeOptionalUrl(d.social_profile_url, d.contact, d.profile_url) || parsed.social_profile_url,
+            owner_id: normalizeOptionalText(d.owner_id || d.firebase_uid),
+            owner_name: normalizeOptionalText(d.owner_name),
+            owner_email: normalizeOptionalText(d.owner_email),
+            assigned_at: d.assigned_at ? parseDate(d.assigned_at) : undefined,
+            assigned_by: normalizeOptionalText(d.assigned_by),
+            claimed_at: d.claimed_at ? parseDate(d.claimed_at) : undefined,
+            first_contacted_at: d.first_contacted_at ? parseDate(d.first_contacted_at) : undefined,
+            contact_attempts: typeof d.contact_attempts === "number" ? d.contact_attempts : 0,
+            last_contact_at: d.last_contact_at ? parseDate(d.last_contact_at) : undefined,
+            pending_result: d.pending_result === true,
+            last_action_at: d.last_action_at ? parseDate(d.last_action_at) : undefined,
+            last_action_type: normalizeOptionalText(d.last_action_type) as Lead["last_action_type"],
+            last_contact_channel: normalizeOptionalText(d.last_contact_channel),
+            result_type: normalizeOptionalText(d.result_type) as Lead["result_type"],
+            result_recorded_at: d.result_recorded_at ? parseDate(d.result_recorded_at) : undefined,
+            follow_up_at: d.follow_up_at ? parseDate(d.follow_up_at) : undefined,
+            closed_at: d.closed_at ? parseDate(d.closed_at) : undefined,
+            sales_status: normalizeOptionalText(d.sales_status) as Lead["sales_status"],
+            sales_owner_id: normalizeOptionalText(d.sales_owner_id),
+            sales_owner_name: normalizeOptionalText(d.sales_owner_name),
+            sales_transferred_at: d.sales_transferred_at ? parseDate(d.sales_transferred_at) : undefined,
+            crm_deal_id: normalizeOptionalText(d.crm_deal_id),
+            notes: d.notes ? String(d.notes) : undefined,
+          });
+        } else {
+          derivedLeadById.set(m.id, baseLead);
+        }
       });
 
-      persistedLeads.forEach((storedLead) => {
-        const mergeKey = [
-          storedLead.id,
-          storedLead.mention_id,
-          storedLead.source_mention_id,
-        ].find((key): key is string => Boolean(key && leadById.has(key)));
-        const baseLead = mergeKey ? leadById.get(mergeKey) : undefined;
-
-        leadById.set(mergeKey || storedLead.id, {
-          ...(baseLead || storedLead),
-          ...storedLead,
-          id: baseLead?.id || storedLead.id,
-          mention_id: storedLead.mention_id || baseLead?.mention_id,
-          source_mention_id:
-            storedLead.source_mention_id || baseLead?.source_mention_id,
-          post_id: storedLead.post_id || baseLead?.post_id,
-          workspace_id: storedLead.workspace_id || baseLead?.workspace_id || "",
-          platform: storedLead.platform || baseLead?.platform || "news",
-          author: storedLead.author || baseLead?.author,
-          content: storedLead.content || baseLead?.content || "",
-          labels: storedLead.labels || baseLead?.labels,
-          intent_signals:
-            storedLead.intent_signals.length > 0
-              ? storedLead.intent_signals
-              : baseLead?.intent_signals || [],
-          created_at: storedLead.created_at || baseLead?.created_at || new Date().toISOString(),
-          posted_at: storedLead.posted_at || baseLead?.posted_at,
-          url: storedLead.url || baseLead?.url,
-          source_url: storedLead.source_url || baseLead?.source_url,
-        });
-      });
-
-      leads = Array.from(leadById.values());
+      let leads: Lead[] = Array.from(derivedLeadById.values());
       leads.sort(
         (a, b) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
@@ -1675,83 +1515,9 @@ export class DashboardService {
 
       let labelChangeRequests: LabelChangeRequest[] = [];
       try {
-        const sbConfig = getSupabaseConfig();
-        const requestRows = await loadSupabaseRows<Record<string, unknown>>(
-          sbConfig,
-          "label_change_requests",
-          { order: "requested_at.desc.nullslast" },
-          500,
-        );
-        labelChangeRequests = requestRows.map((d) => {
-          const legacyCurrentLabel = mapLabelValue(d.current_label);
-          const legacyRequestedLabel = mapLabelValue(d.requested_label);
-          const currentLabels = normalizeClassificationLabel(
-            d.current_labels as Record<string, unknown> | null | undefined,
-            legacyLabelToClassificationLabel(legacyCurrentLabel),
-          );
-          const requestedLabels = normalizeClassificationLabel(
-            d.requested_labels as Record<string, unknown> | null | undefined,
-            legacyLabelToClassificationLabel(legacyRequestedLabel),
-          );
-          return {
-            id: String(d.id || ""),
-            source_type: ["lead", "mention", "comment", "post"].includes(
-              String(d.source_type || "").toLowerCase(),
-            )
-              ? (String(d.source_type).toLowerCase() as LabelChangeRequest["source_type"])
-              : "lead",
-            source_id: String(d.source_id || ""),
-            lead_id: normalizeOptionalText(d.lead_id),
-            mention_id: normalizeOptionalText(d.mention_id),
-            workspace_id: String(d.workspace_id || d.brand || ""),
-            platform: mapSourceToPlatform(String(d.source || d.platform || "")),
-            author: normalizeOptionalText(d.author),
-            content_preview: normalizeText(d.content_preview || ""),
-            source_url: normalizeOptionalUrl(d.source_url, d.url),
-            current_labels: currentLabels,
-            requested_labels: requestedLabels,
-            changed_fields: mapChangedLabelFields(
-              d.changed_fields,
-              currentLabels,
-              requestedLabels,
-            ),
-            current_queue:
-              d.current_queue !== undefined
-                ? mapLabelQueue(d.current_queue)
-                : inferQueueFromLabels(currentLabels),
-            requested_queue:
-              d.requested_queue !== undefined
-                ? mapLabelQueue(d.requested_queue)
-                : inferQueueFromLabels(requestedLabels),
-            current_label: d.current_label ? legacyCurrentLabel : undefined,
-            requested_label: d.requested_label ? legacyRequestedLabel : undefined,
-            reason_code: String(d.reason_code || "other"),
-            reason_note: String(d.reason_note || ""),
-            evidence_checked: d.evidence_checked === true,
-            status: ["pending", "approved", "rejected", "cancelled"].includes(
-              String(d.status || "").toLowerCase(),
-            )
-              ? (String(d.status).toLowerCase() as LabelChangeRequest["status"])
-              : "pending",
-            requested_by: String(d.requested_by || ""),
-            requested_by_name: String(d.requested_by_name || ""),
-            requested_by_role: String(d.requested_by_role || ""),
-            requested_at: parseDate(d.requested_at || d.created_at),
-            reviewed_by: normalizeOptionalText(d.reviewed_by),
-            reviewed_by_name: normalizeOptionalText(d.reviewed_by_name),
-            reviewed_at: d.reviewed_at ? parseDate(d.reviewed_at) : undefined,
-            review_note: normalizeOptionalText(d.review_note),
-            applied_at: d.applied_at ? parseDate(d.applied_at) : undefined,
-            audit_log_id: normalizeOptionalText(d.audit_log_id),
-          };
-        });
-        labelChangeRequests.sort(
-          (a, b) =>
-            new Date(b.requested_at).getTime() -
-            new Date(a.requested_at).getTime(),
-        );
-      } catch {
-        // Collection chua ton tai - bo qua
+        labelChangeRequests = await DashboardService.fetchLabelChangeRequestsFromSupabase(profile);
+      } catch (error) {
+        console.error("Failed to load label requests for fetchRawData:", error);
       }
 
       return {
@@ -1760,6 +1526,7 @@ export class DashboardService {
         alerts,
         leads,
         labelChangeRequests,
+        lastMentionDoc,
       };
     } catch (error) {
       console.error("[DashboardService] fetchRawData error:", error);
@@ -1767,6 +1534,9 @@ export class DashboardService {
     }
   }
 
+  /**
+   * Cập nhật trạng thái của lead trên Supabase
+   */
   static async updateLeadStatus(
     id: string,
     status: Lead["status"],
@@ -1776,6 +1546,7 @@ export class DashboardService {
     if (!profile || !canPerformAction(profile, "update_lead_status")) {
       throw new Error("User is not allowed to update lead status.");
     }
+
     const auditFields = {
       updated_by: profile.uid,
       updated_by_role: profile.role,
@@ -1807,6 +1578,11 @@ export class DashboardService {
     if (!profile || !canPerformAction(profile, "update_lead_details")) {
       throw new Error("User is not allowed to update lead details.");
     }
+
+    if (data.status && !canPerformAction(profile, "update_lead_status")) {
+      throw new Error("User is not allowed to update lead status.");
+    }
+
     const auditFields = {
       updated_by: profile.uid,
       updated_by_role: profile.role,
@@ -1826,13 +1602,121 @@ export class DashboardService {
     }
   }
 
+  // ── Stats aggregation ─────────────────────────────────────────────────────
+
+  static async fetchLabelChangeRequestsFromSupabase(
+    profile?: UserRoleProfile | null,
+  ): Promise<LabelChangeRequest[]> {
+    const config = getSupabaseConfig();
+    try {
+      const rows = await loadSupabaseRows<SupabaseRow>(
+        config,
+        "label_change_requests",
+        {},
+        500,
+      );
+      const mapped = rows.map((d) => {
+        const legacyCurrentLabel = mapLabelValue(d.current_label);
+        const legacyRequestedLabel = mapLabelValue(d.requested_label);
+        const currentLabels = normalizeClassificationLabel(
+          d.current_labels as any,
+          legacyLabelToClassificationLabel(legacyCurrentLabel),
+        );
+        const requestedLabels = normalizeClassificationLabel(
+          d.requested_labels as any,
+          legacyLabelToClassificationLabel(legacyRequestedLabel),
+        );
+        return {
+          id: String(d.id),
+          source_type: ["lead", "mention", "comment", "post"].includes(
+            String(d.source_type || "").toLowerCase(),
+          )
+            ? (String(d.source_type).toLowerCase() as LabelChangeRequest["source_type"])
+            : "lead",
+          source_id: String(d.source_id || ""),
+          lead_id: normalizeOptionalText(d.lead_id),
+          mention_id: normalizeOptionalText(d.mention_id),
+          workspace_id: String(d.workspace_id || d.brand || ""),
+          platform: mapSourceToPlatform(String(d.source || d.platform || "")),
+          author: normalizeOptionalText(d.author),
+          content_preview: normalizeText(d.content_preview || ""),
+          source_url: normalizeOptionalUrl(d.source_url, d.url),
+          current_labels: currentLabels,
+          requested_labels: requestedLabels,
+          changed_fields: mapChangedLabelFields(
+            d.changed_fields,
+            currentLabels,
+            requestedLabels,
+          ),
+          current_queue:
+            d.current_queue !== undefined
+              ? mapLabelQueue(d.current_queue)
+              : inferQueueFromLabels(currentLabels),
+          requested_queue:
+            d.requested_queue !== undefined
+              ? mapLabelQueue(d.requested_queue)
+              : inferQueueFromLabels(requestedLabels),
+          current_label: d.current_label ? legacyCurrentLabel : undefined,
+          requested_label: d.requested_label ? legacyRequestedLabel : undefined,
+          reason_code: String(d.reason_code || "other"),
+          reason_note: String(d.reason_note || ""),
+          evidence_checked: d.evidence_checked === true,
+          status: ["pending", "approved", "rejected", "cancelled"].includes(
+            String(d.status || "").toLowerCase(),
+          )
+            ? (String(d.status).toLowerCase() as LabelChangeRequest["status"])
+            : "pending",
+          requested_by: String(d.requested_by || ""),
+          requested_by_name: String(d.requested_by_name || ""),
+          requested_by_role: String(d.requested_by_role || ""),
+          requested_at: parseDate(d.requested_at || d.created_at),
+          updated_at: d.updated_at ? parseDate(d.updated_at) : undefined,
+          updated_by: normalizeOptionalText(d.updated_by),
+          updated_by_name: normalizeOptionalText(d.updated_by_name),
+          updated_by_role: normalizeOptionalText(d.updated_by_role),
+          reviewed_by: normalizeOptionalText(d.reviewed_by),
+          reviewed_by_name: normalizeOptionalText(d.reviewed_by_name),
+          reviewed_at: d.reviewed_at ? parseDate(d.reviewed_at) : undefined,
+          review_note: normalizeOptionalText(d.review_note),
+          cancelled_at: d.cancelled_at ? parseDate(d.cancelled_at) : undefined,
+          cancelled_by: normalizeOptionalText(d.cancelled_by),
+          cancelled_by_name: normalizeOptionalText(d.cancelled_by_name),
+          cancel_reason: normalizeOptionalText(d.cancel_reason),
+          applied_at: d.applied_at ? parseDate(d.applied_at) : undefined,
+          audit_log_id: normalizeOptionalText(d.audit_log_id),
+          revision_count:
+            typeof d.revision_count === "number" ? d.revision_count : undefined,
+        } satisfies LabelChangeRequest;
+      });
+
+      const scoped = filterByBrandScope(mapped, profile);
+      return scoped.sort(
+        (a, b) =>
+          new Date(b.requested_at).getTime() -
+          new Date(a.requested_at).getTime(),
+      );
+    } catch (error) {
+      console.error("Failed to fetch label requests from Supabase:", error);
+      return [];
+    }
+  }
+
   static async createLabelChangeRequest(
-    data: Omit<LabelChangeRequest, "id" | "status" | "requested_by" | "requested_by_name" | "requested_by_role" | "requested_at">,
+    data: Omit<
+      LabelChangeRequest,
+      | "id"
+      | "status"
+      | "requested_by"
+      | "requested_by_name"
+      | "requested_by_role"
+      | "requested_at"
+    >,
     profile: UserRoleProfile | null | undefined,
   ): Promise<LabelChangeRequest> {
     if (!profile || !canPerformAction(profile, "create_label_request")) {
       throw new Error("User is not allowed to create label change requests.");
     }
+
     const nowIso = new Date().toISOString();
     const requestData = stripUndefinedFields({
       ...data,
@@ -1841,7 +1725,6 @@ export class DashboardService {
       status: "pending" as const,
       requested_by: profile.uid,
       requested_by_name: profile.displayName || profile.email,
-      requested_by_email: profile.email,
       requested_by_role: profile.role,
       requested_at: nowIso,
       created_at: nowIso,
@@ -1849,33 +1732,401 @@ export class DashboardService {
       updated_by: profile.uid,
       updated_by_role: profile.role,
     });
-    const res = await supabaseFetch("label_change_requests", "", "POST", [requestData]);
-    return { ...requestData, id: (res && res[0]?.id) || String(Date.now()) } as LabelChangeRequest;
-  }
 
-  static async fetchLabelChangeRequests(opts: { limit?: number; status?: LabelChangeRequest["status"] } = {}): Promise<LabelChangeRequest[]> {
-    const rawRequests = await supabaseFetch<any[]>("label_change_requests", `limit=${opts.limit || 50}${opts.status ? `&status=eq.${opts.status}` : ""}&order=requested_at.desc`);
-    return (rawRequests || []).map((d: any) => d as any);
-  }
+    const config = getSupabaseConfig();
+    const insertedRows = await supabaseWrite<any[]>(
+      config,
+      "label_change_requests",
+      "POST",
+      requestData,
+    );
+    const inserted = insertedRows[0] || { id: "" };
+    const newId = inserted.id || "";
 
-  static async updateLabelChangeRequestStatus(id: string, status: "approved" | "rejected", profile: UserRoleProfile | null | undefined, reviewNote?: string): Promise<void> {
-    if (!profile || !canPerformAction(profile, "label_request_review")) {
-      throw new Error("User is not allowed to review label change requests.");
-    }
-    await supabaseFetch("label_change_requests", `id=eq.${id}`, "PATCH", {
-      status,
-      reviewed_by: profile.uid,
-      reviewed_by_name: profile.displayName || profile.email,
-      reviewed_at: new Date().toISOString(),
-      review_note: reviewNote,
+    const request: LabelChangeRequest = {
+      ...requestData,
+      id: newId,
+    };
+
+    const correctionData = stripUndefinedFields({
+      label_correction_status: "pending",
+      pending_label_request_id: newId,
+      label_correction_requested_at: nowIso,
+      label_correction_requested_by: profile.uid,
+      updated_by: profile.uid,
+      updated_by_role: profile.role,
+      updated_at: nowIso,
     });
+
+    const leadId = data.lead_id || data.source_id;
+    try {
+      const config = getSupabaseConfig();
+      await supabaseWrite(config, "leads", "PATCH", correctionData, `id=eq.${encodeURIComponent(leadId)}`, false);
+    } catch {
+      // Lead row may not exist yet — ignore
+    }
+
+    return request;
   }
 
-  static async deleteLead(id: string, profile: UserRoleProfile | null | undefined): Promise<void> {
-    if (!profile || !canPerformAction(profile, "update_lead_details")) {
-      throw new Error("User is not allowed to delete lead.");
+  static async updateLabelChangeRequest(
+    request: LabelChangeRequest,
+    data: Pick<
+      LabelChangeRequest,
+      | "requested_labels"
+      | "changed_fields"
+      | "requested_queue"
+      | "reason_code"
+      | "reason_note"
+      | "evidence_checked"
+    >,
+    profile: UserRoleProfile | null | undefined,
+  ): Promise<LabelChangeRequest> {
+    if (!profile || !canPerformAction(profile, "create_label_request")) {
+      throw new Error("User is not allowed to update label change requests.");
     }
-    await supabaseFetch("leads", `id=eq.${id}`, "DELETE");
+    if (request.status !== "pending") {
+      throw new Error("Only pending label change requests can be updated.");
+    }
+    if (request.requested_by !== profile.uid) {
+      throw new Error("Only the requester can update this label change request.");
+    }
+
+    const nowIso = new Date().toISOString();
+    const updatedRequest: LabelChangeRequest = {
+      ...request,
+      ...data,
+      updated_at: nowIso,
+      updated_by: profile.uid,
+      updated_by_name: profile.displayName || profile.email,
+      updated_by_role: profile.role,
+      revision_count: (request.revision_count || 0) + 1,
+    };
+
+    const updateData = stripUndefinedFields({
+      requested_labels: data.requested_labels,
+      changed_fields: data.changed_fields,
+      requested_queue: data.requested_queue,
+      reason_code: data.reason_code,
+      reason_note: data.reason_note,
+      evidence_checked: data.evidence_checked,
+      updated_at: updatedRequest.updated_at,
+      updated_by: updatedRequest.updated_by,
+      updated_by_name: updatedRequest.updated_by_name,
+      updated_by_role: updatedRequest.updated_by_role,
+      revision_count: updatedRequest.revision_count,
+    });
+
+    const config = getSupabaseConfig();
+    await supabaseWrite(
+      config,
+      "label_change_requests",
+      "PATCH",
+      updateData,
+      `id=eq.${encodeURIComponent(request.id)}`,
+      false,
+    );
+
+    await addDoc(
+      collection(dbData, COLLECTION_NAMES.labelChangeHistory),
+      stripUndefinedFields({
+        request_id: request.id,
+        action: "updated",
+        status: "pending",
+        source_type: request.source_type,
+        source_id: request.source_id,
+        lead_id: request.lead_id,
+        mention_id: request.mention_id,
+        workspace_id: request.workspace_id,
+        platform: request.platform,
+        author: request.author,
+        content_preview: request.content_preview,
+        source_url: request.source_url,
+        current_labels: request.current_labels,
+        previous_requested_labels: request.requested_labels,
+        requested_labels: data.requested_labels,
+        changed_fields: data.changed_fields,
+        current_queue: request.current_queue,
+        requested_queue: data.requested_queue,
+        reason_code: data.reason_code,
+        reason_note: data.reason_note,
+        evidence_checked: data.evidence_checked,
+        changed_by: profile.uid,
+        changed_by_name: profile.displayName || profile.email,
+        changed_by_role: profile.role,
+        changed_at: nowIso,
+        source: "lead_detail_panel",
+      }),
+    );
+
+    return updatedRequest;
+  }
+
+  static async cancelLabelChangeRequest(
+    request: LabelChangeRequest,
+    cancelReason: string,
+    profile: UserRoleProfile | null | undefined,
+  ): Promise<LabelChangeRequest> {
+    if (!profile || !canPerformAction(profile, "create_label_request")) {
+      throw new Error("User is not allowed to cancel label change requests.");
+    }
+    if (request.status !== "pending") {
+      throw new Error("Only pending label change requests can be cancelled.");
+    }
+    if (request.requested_by !== profile.uid) {
+      throw new Error("Only the requester can cancel this label change request.");
+    }
+
+    const nowIso = new Date().toISOString();
+    const cancelledRequest: LabelChangeRequest = {
+      ...request,
+      status: "cancelled",
+      updated_at: nowIso,
+      updated_by: profile.uid,
+      updated_by_name: profile.displayName || profile.email,
+      updated_by_role: profile.role,
+      cancelled_at: nowIso,
+      cancelled_by: profile.uid,
+      cancelled_by_name: profile.displayName || profile.email,
+      cancel_reason: cancelReason.trim(),
+    };
+
+    const cancelData = stripUndefinedFields({
+      status: "cancelled",
+      cancel_reason: cancelledRequest.cancel_reason,
+      cancelled_at: nowIso,
+      cancelled_by: profile.uid,
+      cancelled_by_name: profile.displayName || profile.email,
+      updated_at: nowIso,
+      updated_by: profile.uid,
+      updated_by_name: profile.displayName || profile.email,
+      updated_by_role: profile.role,
+    });
+
+    const config = getSupabaseConfig();
+    await supabaseWrite(
+      config,
+      "label_change_requests",
+      "PATCH",
+      cancelData,
+      `id=eq.${encodeURIComponent(request.id)}`,
+      false,
+    );
+
+    const leadTargetId = request.lead_id || request.source_id;
+    try {
+      await supabaseWrite(
+        config,
+        "leads",
+        "PATCH",
+        {
+          label_correction_status: "none",
+          pending_label_request_id: null,
+          label_correction_requested_at: null,
+          label_correction_requested_by: null,
+          updated_by: profile.uid,
+          updated_by_role: profile.role,
+          updated_at: nowIso,
+        },
+        `id=eq.${encodeURIComponent(leadTargetId)}`,
+        false,
+      );
+    } catch {
+      // ignore
+    }
+
+    await addDoc(
+      collection(dbData, COLLECTION_NAMES.labelChangeHistory),
+      stripUndefinedFields({
+        request_id: request.id,
+        action: "cancelled",
+        status: "cancelled",
+        source_type: request.source_type,
+        source_id: request.source_id,
+        lead_id: request.lead_id,
+        mention_id: request.mention_id,
+        workspace_id: request.workspace_id,
+        platform: request.platform,
+        author: request.author,
+        content_preview: request.content_preview,
+        source_url: request.source_url,
+        current_labels: request.current_labels,
+        requested_labels: request.requested_labels,
+        changed_fields: request.changed_fields,
+        current_queue: request.current_queue,
+        requested_queue: request.requested_queue,
+        cancel_reason: cancelledRequest.cancel_reason,
+        changed_by: profile.uid,
+        changed_by_name: profile.displayName || profile.email,
+        changed_by_role: profile.role,
+        changed_at: nowIso,
+        source: "lead_detail_panel",
+      }),
+    );
+
+    return cancelledRequest;
+  }
+
+  static async approveLabelChangeRequest(
+    requestId: string,
+    status: "approved" | "edited",
+    finalLabel: Record<string, unknown>,
+    mentionData: {
+      mentionId: string;
+      platform: string;
+      contentType: string;
+      parentId?: string | null;
+    },
+    leadId: string | undefined,
+    reviewer: { uid: string; displayName?: string; email?: string },
+    oldLabel?: Record<string, unknown>,
+    nextHistory?: any[],
+  ): Promise<void> {
+    const nowIso = new Date().toISOString();
+    const normalizedLabel = normalizeClassificationLabel(finalLabel);
+
+    const config = getSupabaseConfig();
+    await supabaseWrite(
+      config,
+      "label_change_requests",
+      "PATCH",
+      stripUndefinedFields({
+        status,
+        final_label: finalLabel,
+        reviewed_by: reviewer.uid,
+        reviewed_by_name: reviewer.displayName || reviewer.email || "",
+        reviewed_at: nowIso,
+        applied_at: nowIso,
+        updated_at: nowIso,
+        history: nextHistory,
+      }),
+      `id=eq.${encodeURIComponent(requestId)}`,
+      false,
+    );
+
+    const isComment = mentionData.contentType === "comment" || mentionData.contentType === "reply";
+    const postId = isComment ? (mentionData.parentId || "") : mentionData.mentionId;
+    const commentId = isComment ? mentionData.mentionId : null;
+    const entityKeys = buildEntityKeys(mentionData.platform, postId, commentId);
+    if (entityKeys.length > 0) {
+      try {
+        await upsertSupabaseAnnotation(
+          config,
+          entityKeys[0],
+          mentionData.platform,
+          postId,
+          commentId,
+          normalizedLabel,
+        );
+      } catch {
+        // annotations table may not support on_conflict — ignore
+      }
+    }
+
+    if (leadId) {
+      try {
+        await upsertSupabaseLead(config, leadId, {
+          labels: normalizedLabel,
+          current_labels: normalizedLabel,
+          label_correction_status: "approved",
+          pending_label_request_id: null,
+          last_label_corrected_at: nowIso,
+          updated_by: reviewer.uid,
+          updated_at: nowIso,
+        });
+      } catch {
+        // Lead row may not exist yet — ignore
+      }
+    }
+
+    await addDoc(
+      collection(dbData, COLLECTION_NAMES.labelChangeHistory),
+      stripUndefinedFields({
+        request_id: requestId,
+        action: status,
+        status,
+        mention_id: mentionData.mentionId,
+        reviewed_by_uid: reviewer.uid,
+        reviewed_by_name: reviewer.displayName || reviewer.email || "",
+        reviewed_by_email: reviewer.email || "",
+        changed_at: nowIso,
+        created_at: nowIso,
+        source: "brand_manager_review",
+        old_label: oldLabel,
+        new_label: finalLabel,
+      }),
+    );
+  }
+
+  static async fetchLabelChangeRequests(workspaceId?: string): Promise<{
+    requests: Record<string, unknown>[];
+    history: Record<string, unknown>[];
+  }> {
+    const config = getSupabaseConfig();
+    const requestsQuery = workspaceId
+      ? `workspace_id=eq.${encodeURIComponent(workspaceId)}&order=created_at.desc&limit=200`
+      : `order=created_at.desc&limit=200`;
+    const historyQuery = workspaceId
+      ? `workspace_id=eq.${encodeURIComponent(workspaceId)}&order=created_at.desc&limit=400`
+      : `order=created_at.desc&limit=400`;
+
+    const [requests, history] = await Promise.all([
+      supabaseRequest<Record<string, unknown>[]>(config, "label_change_requests", requestsQuery),
+      supabaseRequest<Record<string, unknown>[]>(config, "label_change_history", historyQuery).catch(() => [] as Record<string, unknown>[]),
+    ]);
+
+    return { requests: requests ?? [], history: history ?? [] };
+  }
+
+  static async rejectLabelChangeRequest(
+    requestId: string,
+    status: "rejected" | "cancelled",
+    reviewer: { uid: string; displayName?: string; email?: string },
+    extra?: { reason?: string; finalLabel?: Record<string, unknown>; oldLabel?: Record<string, unknown>; mentionId?: string; nextHistory?: unknown[] },
+  ): Promise<void> {
+    const nowIso = new Date().toISOString();
+    const config = getSupabaseConfig();
+
+    await supabaseWrite(
+      config,
+      "label_change_requests",
+      "PATCH",
+      stripUndefinedFields({
+        status,
+        reviewed_by: reviewer.uid,
+        reviewed_by_name: reviewer.displayName || reviewer.email || "",
+        reviewed_at: nowIso,
+        updated_at: nowIso,
+        history: extra?.nextHistory,
+        cancel_reason: extra?.reason,
+      }),
+      `id=eq.${encodeURIComponent(requestId)}`,
+      false,
+    );
+
+    await supabaseWrite(
+      config,
+      "label_change_history",
+      "POST",
+      [stripUndefinedFields({
+        request_id: requestId,
+        action: status,
+        status,
+        mention_id: extra?.mentionId,
+        old_label: extra?.oldLabel,
+        new_label: extra?.finalLabel,
+        reviewed_by_uid: reviewer.uid,
+        reviewed_by_name: reviewer.displayName || reviewer.email || "",
+        reviewed_by_email: reviewer.email || "",
+        note: extra?.reason,
+        source: "brand_manager_review",
+        changed_at: nowIso,
+        created_at: nowIso,
+      })],
+      "",
+      false,
+      "return=minimal",
+    );
   }
 
   static calculateStats(

@@ -210,7 +210,7 @@ function normalizeBrandKey(brand: string): string {
 
 function formatBrandName(brand: string): string {
   const key = normalizeBrandKey(brand);
-  if (key === "highlandcoffee") return "Highland Coffee";
+  if (key === "highlandcoffee") return "Highlands Coffee";
   if (key === "starbucks") return "Starbucks";
   if (key === "mixue") return "Mixue";
   return brand || "Unknown";
@@ -298,7 +298,7 @@ export const useAlertStore = create<AlertState>()(
   subscribeWithSelector((set, get) => ({
     rawAlerts: [],
     alerts: [],
-    brands: ["Highland Coffee", "Starbucks", "Mixue"],
+    brands: ["Highlands Coffee", "Starbucks", "Mixue"],
     isLoading: false,
     error: null,
     correctionRequests: [],
@@ -338,7 +338,7 @@ export const useAlertStore = create<AlertState>()(
           );
 
           const scopedBrands = Array.from(new Set(filtered.map((alert) => alert.brand))).sort();
-          const fallbackBrands = ["Highland Coffee", "Starbucks", "Mixue"].filter((brand) => {
+          const fallbackBrands = ["Highlands Coffee", "Starbucks", "Mixue"].filter((brand) => {
             return !scopedBrandKey || normalizeBrandName(brand) === scopedBrandKey;
           });
 
@@ -651,7 +651,7 @@ export const useAlertStore = create<AlertState>()(
             let recordBrand = data.brand_name || data.brand;
             if (!recordBrand) {
               const email = String(data.requested_by_email || data.requester_email || "").toLowerCase();
-              if (email.includes("highland")) recordBrand = "Highland Coffee";
+              if (email.includes("highland")) recordBrand = "Highlands Coffee";
               else if (email.includes("starbuck")) recordBrand = "Starbucks";
               else if (email.includes("mixue")) recordBrand = "Mixue";
             }
