@@ -29,6 +29,7 @@ interface LeadWorkbenchRowProps {
   selected?: boolean;
   highlighted?: boolean;
   labelRequest?: LabelChangeRequest;
+  staffList?: any[];
   onSelect: (lead: Lead) => void;
   onStartedAction?: (lead: Lead) => void;
 }
@@ -47,6 +48,7 @@ export function LeadWorkbenchRow({
   selected = false,
   highlighted = false,
   labelRequest,
+  staffList = [],
   onSelect,
   onStartedAction,
 }: LeadWorkbenchRowProps) {
@@ -54,6 +56,12 @@ export function LeadWorkbenchRow({
   const { updateLeadDetails } = useDashboardStore();
   const [isOpening, setIsOpening] = useState(false);
   const [error, setError] = useState("");
+  const [showMenu, setShowMenu] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const showToast = (message: string, type: "success" | "error" = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3500);
+  };
   const meta = getLeadWorkbenchMeta(lead, nowMs);
   const ownership = getLeadOwnershipMeta(lead, profile);
   const primaryAction = getPrimaryLeadAction(lead);
@@ -353,7 +361,7 @@ export function LeadWorkbenchRow({
           </div>
 
           {/* Action Button */}
-          <div className="min-w-[130px] flex items-center gap-2">
+          <div className="min-w-[130px] flex items-center gap-2 relative">
             <button
               type="button"
               onClick={handlePrimaryAction}
@@ -363,12 +371,107 @@ export function LeadWorkbenchRow({
               <span className="material-symbols-outlined text-[16px]">{ctaIcon}</span>
               <span>{isOpening ? "Đang mở..." : ctaLabel}</span>
             </button>
-            <span className="material-symbols-outlined text-[var(--color-text-muted)] cursor-pointer hover:text-[var(--color-text-primary)]">
-              more_vert
-            </span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowMenu(!showMenu);
+              }}
+              className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-primary)] transition-all"
+              title="Phân công xử lý"
+            >
+              <span className="material-symbols-outlined text-[18px]">more_vert</span>
+            </button>
+
+             {showMenu && (
+              <div className="absolute right-0 bottom-full mb-2 z-50 w-52 rounded-xl bg-white py-1.5 shadow-xl ring-1 ring-black/5 border border-[#E9E7EE] max-h-48 overflow-y-auto">
+                <div className="px-3 py-1.5 text-[10px] font-bold text-[#787585] uppercase tracking-wider border-b border-[#E9E7EE] mb-1">
+                  Phân công xử lý
+                </div>
+                 {canEdit && (
+                  <button
+                    type="button"
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      setShowMenu(false);
+                      const ownerData: any = {
+                        owner_id: null,
+                        owner_name: null,
+                        owner_email: null,
+                        assigned_at: null,
+                        assigned_by: null,
+                        claimed_at: null,
+                      };
+                      try {
+                        await updateLeadDetails(lead.id, ownerData, profile);
+                        showToast("Đã hủy gán việc thành công!", "success");
+                        const updatedLead = { ...lead, ...ownerData };
+                        onStartedAction?.(updatedLead);
+                        onSelect?.(updatedLead);
+                      } catch (err: any) {
+                        console.error(err);
+                        showToast(`Không thể hủy gán việc: ${err?.message || "Lỗi kết nối"}`, "error");
+                      }
+                    }}
+                    className="w-full text-left px-3 py-2 text-xs text-[#BA1A1A] hover:bg-[#FFDAD6]/30 font-bold transition-colors"
+                  >
+                    -- Hủy gán --
+                  </button>
+                )}
+                {staffList.map((staff: any) => (
+                  <button
+                    key={staff.uid}
+                    type="button"
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      setShowMenu(false);
+                      if (!canEdit || !profile) {
+                        showToast("Bạn không có quyền thực hiện thao tác này.", "error");
+                        return;
+                      }
+                      const nowIso = new Date().toISOString();
+                      const ownerData: any = {
+                        owner_id: staff.uid,
+                        owner_name: staff.displayName || staff.email || "Nhân viên xử lý",
+                        owner_email: staff.email,
+                        assigned_at: nowIso,
+                        assigned_by: profile.uid,
+                        claimed_at: nowIso,
+                      };
+                      try {
+                        await updateLeadDetails(lead.id, ownerData, profile);
+                        showToast(`Giao việc thành công cho ${staff.displayName || staff.email}!`, "success");
+                        const updatedLead = { ...lead, ...ownerData };
+                        onStartedAction?.(updatedLead);
+                        onSelect?.(updatedLead);
+                      } catch (err: any) {
+                        console.error(err);
+                        showToast(`Không thể giao việc: ${err?.message || "Lỗi kết nối"}`, "error");
+                      }
+                    }}
+                    className="w-full text-left px-3 py-2 text-xs text-[#1A1B20] hover:bg-[#F4F3FA] font-medium transition-colors border-t border-[#F4F3FA]"
+                  >
+                    {staff.displayName || staff.email}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
+
+      {toast && (
+        <div className={`fixed bottom-6 right-6 z-[9999] flex items-center gap-2.5 rounded-xl border bg-white px-4 py-3.5 text-sm font-bold shadow-2xl animate-fade-in ${
+          toast.type === "success"
+            ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+            : "border-red-200 bg-red-50 text-red-800"
+        }`}>
+          <span className="material-symbols-outlined text-[18px]">
+            {toast.type === "success" ? "check_circle" : "error"}
+          </span>
+          <span>{toast.message}</span>
+        </div>
+      )}
     </div>
   );
 }

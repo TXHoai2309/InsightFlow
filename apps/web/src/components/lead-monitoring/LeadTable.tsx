@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import {
   CheckCircle2,
   ChevronLeft,
@@ -12,6 +12,9 @@ import {
 import { getLeadWorkbenchMeta, sortLeadsForWorkbench } from "@/lib/lead-workbench";
 import type { Lead } from "@/types/dashboard";
 import { useLeadMonitoringLeads } from "./useLeadMonitoringLeads";
+import { auth } from "@/lib/firebase";
+import { useAuth } from "@/hooks/useAuth";
+import { useDashboardStore } from "@/stores/dashboard.store";
 
 const filterChips = [
   { id: "all", label: "Tất cả" },
@@ -106,6 +109,73 @@ function calculateResponseTime(created: string, firstContacted?: string) {
 
 export function LeadTable() {
   const monitoringLeads = useLeadMonitoringLeads();
+  const { profile } = useAuth();
+  const { updateLeadDetails, updateLeadStatus } = useDashboardStore();
+  const [staffList, setStaffList] = useState<any[]>([]);
+  const [assigningLeadId, setAssigningLeadId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchStaff = async () => {
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) return;
+        const res = await fetch("/api/staff", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setStaffList(data.data || []);
+        }
+      } catch (e) {
+        console.warn("Failed to fetch staff list:", e);
+      }
+    };
+    fetchStaff();
+  }, []);
+
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const showToast = (message: string, type: "success" | "error" = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3500);
+  };
+
+  const handleAssign = async (lead: Lead, staff: any | null) => {
+    if (!profile) return;
+    const nowIso = new Date().toISOString();
+    const ownerData: any = staff
+      ? {
+          owner_id: staff.uid,
+          owner_name: staff.displayName || staff.email || "Nhân viên xử lý",
+          owner_email: staff.email,
+          assigned_at: nowIso,
+          assigned_by: profile.uid,
+          claimed_at: nowIso,
+        }
+      : {
+          owner_id: null,
+          owner_name: null,
+          owner_email: null,
+          assigned_at: null,
+          assigned_by: null,
+          claimed_at: null,
+        };
+    try {
+      await updateLeadDetails(lead.id, ownerData, profile);
+      showToast(
+        staff
+          ? `Giao việc thành công cho ${staff.displayName || staff.email}!`
+          : "Đã hủy gán việc thành công!",
+        "success"
+      );
+    } catch (err: any) {
+      console.error("[LeadTable] Failed to assign lead:", err);
+      showToast(
+        `Giao việc thất bại: ${err?.message || "Không thể lưu thông tin vào cơ sở dữ liệu."}`,
+        "error"
+      );
+    }
+  };
+
   const rawLeads = useMemo(
     () => sortLeadsForWorkbench(monitoringLeads),
     [monitoringLeads],
@@ -270,15 +340,75 @@ export function LeadTable() {
                     </td>
 
                     <td className="px-5 py-4 align-top">
-                      <div className="flex items-center gap-2">
-                        <button type="button" className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#E9E7EE] text-[#4234B6] hover:bg-[#F4F3FA]" title="Gán nhân sự">
+                      <div className="flex items-center gap-2 relative">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setAssigningLeadId(assigningLeadId === lead.id ? null : lead.id);
+                          }}
+                          className={`flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#E9E7EE] hover:bg-[#F4F3FA] transition-all ${
+                            lead.owner_id ? "text-[#4234B6] bg-[#F4F3FA]" : "text-[#787585]"
+                          }`}
+                          title="Gán nhân sự"
+                        >
                           <UserPlus className="h-4 w-4" />
                         </button>
-                        <button type="button" className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#E9E7EE] text-[#147A3F] hover:bg-[#F3FCF6]" title="Đánh dấu đã phản hồi">
+
+                        {assigningLeadId === lead.id && (
+                          <div className="absolute right-0 top-full mt-1.5 z-50 w-52 rounded-xl bg-white py-1.5 shadow-xl ring-1 ring-black/5 border border-[#E9E7EE] max-h-48 overflow-y-auto">
+                            <div className="px-3 py-1.5 text-[10px] font-bold text-[#787585] uppercase tracking-wider border-b border-[#E9E7EE] mb-1">
+                              Chọn nhân sự phụ trách
+                            </div>
+                            <button
+                              type="button"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                setAssigningLeadId(null);
+                                await handleAssign(lead, null);
+                              }}
+                              className="w-full text-left px-3 py-2 text-xs text-[#BA1A1A] hover:bg-[#FFDAD6]/30 font-bold transition-colors"
+                            >
+                              -- Hủy gán --
+                            </button>
+                            {staffList.map((staff) => (
+                              <button
+                                key={staff.uid}
+                                type="button"
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  setAssigningLeadId(null);
+                                  await handleAssign(lead, staff);
+                                }}
+                                className="w-full text-left px-3 py-2 text-xs text-[#1A1B20] hover:bg-[#F4F3FA] font-medium transition-colors border-t border-[#F4F3FA]"
+                              >
+                                {staff.displayName || staff.email}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            try {
+                              await updateLeadStatus(lead.id, "completed", profile);
+                              showToast("Đã đánh dấu hoàn thành lead thành công!", "success");
+                            } catch (err: any) {
+                              console.error("[LeadTable] Failed to complete lead:", err);
+                              showToast(`Không thể hoàn thành lead: ${err?.message || "Lỗi kết nối"}`, "error");
+                            }
+                          }}
+                          className={`flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#E9E7EE] hover:bg-[#F3FCF6] transition-all ${
+                            lead.status === "completed" ? "text-[#147A3F] bg-[#F3FCF6] border-[#147A3F]/30" : "text-[#787585]"
+                          }`}
+                          title="Đánh dấu đã phản hồi"
+                        >
                           <CheckCircle2 className="h-4 w-4" />
                         </button>
                         {sourceHref ? (
-                          <a href={sourceHref} target="_blank" rel="noreferrer" className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#E9E7EE] text-[#474554] hover:bg-[#F4F3FA]" title="Mở bài gốc">
+                          <a href={sourceHref} target="_blank" rel="noreferrer" className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#E9E7EE] text-[#474554] hover:bg-[#F4F3FA] transition-all" title="Mở bài gốc">
                             <ExternalLink className="h-4 w-4" />
                           </a>
                         ) : (
@@ -319,6 +449,19 @@ export function LeadTable() {
           </button>
         </div>
       </div>
+
+      {toast && (
+        <div className={`fixed bottom-6 right-6 z-[9999] flex items-center gap-2.5 rounded-xl border px-4 py-3.5 text-sm font-bold shadow-2xl animate-fade-in ${
+          toast.type === "success"
+            ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+            : "border-red-200 bg-red-50 text-red-800"
+        }`}>
+          <span className="material-symbols-outlined text-[18px]">
+            {toast.type === "success" ? "check_circle" : "error"}
+          </span>
+          <span>{toast.message}</span>
+        </div>
+      )}
     </div>
   );
 }

@@ -51,8 +51,9 @@ export function useMentionsData(options: UseMentionsOptions = {}) {
             setError(null);
             hasRenderedCache = true;
 
-            const CACHE_DURATION = 90 * 1000; // 90 seconds fresh cache window
-            if (Date.now() - timestamp < CACHE_DURATION) {
+            const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes fresh cache window
+            const hasCachedMentions = data.mentions && data.mentions.length > 0;
+            if (hasCachedMentions && Date.now() - timestamp < CACHE_DURATION) {
               setLastFetchedAt(brandKey, timestamp);
               setLoading(false);
               return;
@@ -128,9 +129,9 @@ export function useMentionsData(options: UseMentionsOptions = {}) {
 
     const brandKey = getScopedBrandKey(profile) || "global";
     const lastFetched = lastFetchedAtMap[brandKey] || 0;
-    const CACHE_DURATION = 90 * 1000; // 90 seconds cache window
+    const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes cache window
 
-    // Only fetch if we don't have data in the Zustand store or it is older than 90 seconds
+    // Only fetch if we don't have data in the Zustand store or it is older than 30 minutes
     const hasData = useDashboardStore.getState().mentions.length > 0;
     if (!hasData || Date.now() - lastFetched >= CACHE_DURATION) {
       fetchMentions();

@@ -13,7 +13,7 @@ import { useDashboard } from "@/hooks/useDashboardData";
 import { dbSecond } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
 import { PlatformLogo } from "@/components/platform/PlatformLogo";
-import { fetchSupabaseAlerts, supabaseRequest } from "@/lib/supabase";
+import { supabaseRequest } from "@/lib/supabase";
 import {
   getScopedBrandKey,
   hasBusinessBrandScope,
@@ -872,8 +872,9 @@ export default function AlertsPage() {
   useEffect(() => {
     if (!brandFilterLocked || brands.length === 0) return;
     if (filters.brand !== "all") return;
-    setFilters({ brand: brands[0] });
-  }, [brandFilterLocked, brands, filters.brand, setFilters]);
+    const matchedBrand = brands.find(b => isRecordInBrandScope({ brand: b }, scopedBrandKey)) || brands[0];
+    setFilters({ brand: matchedBrand });
+  }, [brandFilterLocked, brands, filters.brand, scopedBrandKey, setFilters]);
 
   if (!authLoading && !canViewCrisisQueue) {
     return (
@@ -1067,16 +1068,18 @@ export default function AlertsPage() {
               </div>
 
               {/* Brand Selector */}
-              <select
-                value={filters.brand}
-                onChange={(e) => setFilters({ brand: e.target.value })}
-                className="select-app border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 pl-3 pr-8 bg-white dark:bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] focus:outline-none cursor-pointer"
-              >
-                <option value="all">{t("alerts.page.allBrands")}</option>
-                {brands.map(b => (
-                  <option key={b} value={b}>{b}</option>
-                ))}
-              </select>
+              {!brandFilterLocked && (
+                <select
+                  value={filters.brand}
+                  onChange={(e) => setFilters({ brand: e.target.value })}
+                  className="select-app border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 pl-3 pr-8 bg-white dark:bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] focus:outline-none cursor-pointer"
+                >
+                  <option value="all">{t("alerts.page.allBrands")}</option>
+                  {brands.map(b => (
+                    <option key={b} value={b}>{b}</option>
+                  ))}
+                </select>
+              )}
 
               {/* Time Range — with floating date popover for custom */}
               <div className="relative">
@@ -1229,8 +1232,8 @@ export default function AlertsPage() {
               <button
                 onClick={async () => {
                   try {
-                    await fetchAlerts(scopedBrandKey);
-                    await fetchCorrectionRequests(scopedBrandKey);
+                    await fetchAlerts(scopedBrandKey, true);
+                    await fetchCorrectionRequests(scopedBrandKey, true);
                     triggerToast("Đã làm mới dữ liệu!");
                   } catch (e) {
                     triggerToast("Lỗi làm mới dữ liệu!");
@@ -1859,7 +1862,7 @@ function TrendModal({ alert, onClose }: TrendModalProps) {
 
       try {
         // 1. Fetch from Supabase.
-        const fetched = await fetchSupabaseAlerts({ since: getAlertReviewSinceIso() });
+        const fetched = useAlertStore.getState().rawAlerts;
 
         if (active) {
           // 2. Parse and filter docs in-memory

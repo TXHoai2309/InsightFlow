@@ -186,6 +186,11 @@ export function LeadDetailPanel({
   const [isSaving, setIsSaving] = useState(false);
   const [isOpening, setIsOpening] = useState("");
   const [saveError, setSaveError] = useState("");
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const showToast = (message: string, type: "success" | "error" = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3500);
+  };
   const activeTab = activeTabProp || internalActiveTab;
 
   const meta = useMemo(
@@ -557,9 +562,11 @@ export function LeadDetailPanel({
 
       await updateLeadDetails(lead.id, ownerData, profile);
       onStartedAction?.({ ...lead, ...ownerData });
-    } catch (error) {
+      showToast("Nhận xử lý lead thành công!", "success");
+    } catch (error: any) {
       console.error(error);
       setSaveError("Không thể nhận xử lý lead này.");
+      showToast(`Nhận xử lý thất bại: ${error?.message || "Lỗi kết nối"}`, "error");
     }
   };
 
@@ -688,9 +695,11 @@ export function LeadDetailPanel({
       setFollowUpDate("");
       setFollowUpTime("");
       onAfterResult?.();
-    } catch (error) {
+      showToast("Ghi nhận kết quả thành công!", "success");
+    } catch (error: any) {
       console.error(error);
       setSaveError("Không thể lưu kết quả xử lý.");
+      showToast(`Không thể ghi nhận kết quả: ${error?.message || "Lỗi kết nối"}`, "error");
     } finally {
       setIsSaving(false);
     }
@@ -1546,6 +1555,19 @@ export function LeadDetailPanel({
           </div>
         )}
       </div>
+
+      {toast && (
+        <div className={`fixed bottom-6 right-6 z-[9999] flex items-center gap-2.5 rounded-xl border bg-white px-4 py-3.5 text-sm font-bold shadow-2xl animate-fade-in ${
+          toast.type === "success"
+            ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+            : "border-red-200 bg-red-50 text-red-800"
+        }`}>
+          <span className="material-symbols-outlined text-[18px]">
+            {toast.type === "success" ? "check_circle" : "error"}
+          </span>
+          <span>{toast.message}</span>
+        </div>
+      )}
     </aside>
   );
 }

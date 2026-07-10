@@ -10,6 +10,7 @@ import { useDashboardStore } from "@/stores/dashboard.store";
 import { DashboardService } from "@/lib/services/dashboard";
 import { filterByBusinessPolicy, getScopedBrandKey } from "@/lib/brandScope";
 import { useAuth } from "@/hooks/useAuth";
+import { supabaseClient } from "@/lib/supabaseClient";
 
 interface UseDashboardOptions {
   autoFetch?: boolean;
@@ -66,8 +67,9 @@ export function useDashboard(options: UseDashboardOptions = {}) {
             setError(null);
             hasRenderedCache = true;
 
-            const CACHE_DURATION = 90 * 1000; // 90 seconds fresh cache window
-            if (Date.now() - timestamp < CACHE_DURATION) {
+            const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes fresh cache window
+            const hasCachedMentions = data.mentions && data.mentions.length > 0;
+            if (hasCachedMentions && Date.now() - timestamp < CACHE_DURATION) {
               setLastFetchedAt(brandKey, timestamp);
               setLoading(false);
               return;
@@ -202,9 +204,9 @@ export function useDashboard(options: UseDashboardOptions = {}) {
 
     const brandKey = getScopedBrandKey(profile) || "global";
     const lastFetched = lastFetchedAtMap[brandKey] || 0;
-    const CACHE_DURATION = 90 * 1000; // 90 seconds cache window
+    const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes cache window
 
-    // Only fetch if we don't have data in the Zustand store or it is older than 90 seconds
+    // Only fetch if we don't have data in the Zustand store or it is older than 30 minutes
     const hasData = useDashboardStore.getState().mentions.length > 0;
     if (!hasData || Date.now() - lastFetched >= CACHE_DURATION) {
       fetchDashboardData();
@@ -214,6 +216,64 @@ export function useDashboard(options: UseDashboardOptions = {}) {
     const interval = setInterval(() => fetchDashboardData(), refetchInterval);
     return () => clearInterval(interval);
   }, [autoFetch, refetchInterval, authLoading, profile?.brandId, profile?.brandName, profile?.role]);
+
+  // Realtime subscription on leads table to sync assignee and status instantly
+  useEffect(() => {
+    if (!profile || authLoading) return;
+
+    if (supabaseClient) {
+      console.log("[useDashboard] Initializing Realtime leads subscription");
+      const channel = supabaseClient
+        .channel("realtime-leads-dashboard")
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "leads" },
+          (payload) => {
+            console.log("[useDashboard] Realtime lead event received:", payload);
+            if (payload.eventType === "UPDATE") {
+              const updated = payload.new as any;
+              setLeads(
+                useDashboardStore.getState().leads.map((l) =>
+                  l.id === updated.id
+                    ? {
+                        ...l,
+                        status: updated.status ?? l.status,
+                        owner_id: updated.owner_id ?? undefined,
+                        owner_name: updated.owner_name ?? undefined,
+                        owner_email: updated.owner_email ?? undefined,
+                        assigned_at: updated.assigned_at ?? undefined,
+                        assigned_by: updated.assigned_by ?? undefined,
+                        claimed_at: updated.claimed_at ?? undefined,
+                        first_contacted_at: updated.first_contacted_at ?? undefined,
+                        contact_attempts: updated.contact_attempts ?? l.contact_attempts,
+                        last_contact_at: updated.last_contact_at ?? undefined,
+                        pending_result: updated.pending_result ?? l.pending_result,
+                        notes: updated.notes ?? l.notes,
+                        sales_status: updated.sales_status ?? l.sales_status,
+                        sales_owner_id: updated.sales_owner_id ?? l.sales_owner_id,
+                        sales_owner_name: updated.sales_owner_name ?? l.sales_owner_name,
+                        sales_transferred_at: updated.sales_transferred_at ?? l.sales_transferred_at,
+                        crm_deal_id: updated.crm_deal_id ?? l.crm_deal_id,
+                      }
+                    : l
+                )
+              );
+            } else if (payload.eventType === "INSERT" || payload.eventType === "DELETE") {
+              // Reload derived data for new or deleted leads
+              fetchDashboardData(true);
+            }
+          }
+        )
+        .subscribe((status) => {
+          console.log("[useDashboard] Realtime leads channel status:", status);
+        });
+
+      return () => {
+        console.log("[useDashboard] Cleaning up Realtime leads subscription");
+        supabaseClient?.removeChannel(channel);
+      };
+    }
+  }, [profile, authLoading, setLeads]);
 
   // Re-tính trend data khi time_range filter thay đổi
   useEffect(() => {

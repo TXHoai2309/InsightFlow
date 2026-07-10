@@ -3,9 +3,9 @@ import { subscribeWithSelector } from "zustand/middleware";
 import { dbSecond } from "@/lib/firebase";
 import { collection, doc, limit, query, updateDoc, onSnapshot, addDoc } from "firebase/firestore";
 import { isRecordInBrandScope, isSameBrandScope, getScopedBrandKey } from "@/lib/brandScope";
-import { normalizeBrandName } from "@/lib/services/dashboard";
+import { normalizeBrandName, DashboardService } from "@/lib/services/dashboard";
 import { canPerformAction, type UserRoleProfile } from "@/lib/rbac";
-import { fetchSupabaseAlerts, updateSupabaseAlertLabel } from "@/lib/supabase";
+import { updateSupabaseAlertLabel } from "@/lib/supabase";
 import { supabaseClient } from "@/lib/supabaseClient";
 
 function getResolverName(emailOrId: string | null | undefined): string {
@@ -147,6 +147,7 @@ export interface CorrectionRequest {
 interface AlertState {
   rawAlerts: AlertData[];
   alerts: AlertData[];
+  lastFetchedAt: number;
   brands: string[];
   isLoading: boolean;
   error: string | null;
@@ -154,7 +155,7 @@ interface AlertState {
   correctionRequests: CorrectionRequest[];
   isLoadingRequests: boolean;
   setFilters: (filters: Partial<AlertFilters>) => void;
-  fetchAlerts: (scopedBrandKey?: string | null) => Promise<void>;
+  fetchAlerts: (scopedBrandKey?: string | null, force?: boolean) => Promise<void>;
   updateAlertStatus: (
     id: string,
     newStatus: string,
@@ -167,7 +168,7 @@ interface AlertState {
     },
     brandFallback?: string
   ) => Promise<void>;
-  fetchCorrectionRequests: (scopedBrandKey?: string | null) => Promise<void>;
+  fetchCorrectionRequests: (scopedBrandKey?: string | null, force?: boolean) => Promise<void>;
   createCorrectionRequest: (requestData: Omit<CorrectionRequest, "id" | "created_at" | "status">) => Promise<void>;
   resolveCorrectionRequest: (
     requestId: string,
@@ -281,6 +282,7 @@ function applyFilters(rawAlerts: AlertData[], filters: AlertFilters): AlertData[
 }
 
 let activeUnsubscribe: (() => void) | null = null;
+let activeRequestsUnsubscribe: (() => void) | null = null;
 const ALERT_REVIEW_WINDOW_DAYS = 30;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const ALERT_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
@@ -298,6 +300,7 @@ export const useAlertStore = create<AlertState>()(
   subscribeWithSelector((set, get) => ({
     rawAlerts: [],
     alerts: [],
+    lastFetchedAt: 0,
     brands: ["Highlands Coffee", "Starbucks", "Mixue"],
     isLoading: false,
     error: null,
@@ -320,7 +323,20 @@ export const useAlertStore = create<AlertState>()(
       });
     },
 
-    fetchAlerts: async (scopedBrandKey = null) => {
+    fetchAlerts: async (scopedBrandKey = null, force = false) => {
+      const now = Date.now();
+      const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
+      const hasData = get().rawAlerts.length > 0;
+      const isFresh = now - get().lastFetchedAt < CACHE_DURATION;
+
+      if (hasData && isFresh && !force) {
+        // Just refresh local filtered alerts to respect potential filter shifts
+        set((state) => ({
+          alerts: applyFilters(state.rawAlerts, state.filters)
+        }));
+        return;
+      }
+
       // Clean up any existing subscription/interval
       if (activeUnsubscribe) {
         activeUnsubscribe();
@@ -331,7 +347,59 @@ export const useAlertStore = create<AlertState>()(
 
       const loadAlerts = async () => {
         try {
-          const fetched = await fetchSupabaseAlerts({ since: getAlertReviewSinceIso() });
+          const rawBrandKey = (scopedBrandKey === "global" || !scopedBrandKey) ? undefined : scopedBrandKey;
+          const rawData = await DashboardService.fetchRawData({ brandKey: rawBrandKey });
+          const negativeMentions = rawData.mentions.filter(m => m.sentiment === "negative");
+
+          const fetched: AlertData[] = negativeMentions.map((m) => {
+            const labelObj = (m.labels || {}) as any;
+            const isCritical = labelObj.urgency === "urgent" || labelObj.urgency === "high" || m.credibility_score > 80;
+            const severity = labelObj.urgency || (isCritical ? "high" : "medium");
+
+            return {
+              id: m.id,
+              brand: m.workspace_id,
+              source: m.platform,
+              text: m.content,
+              sentiment: m.sentiment,
+              topic: m.topic || "other",
+              severity: severity,
+              negativity_score: m.credibility_score || 50,
+              created_at: m.posted_at || m.created_at,
+              status: String(labelObj.resolution_status || "new"),
+              resolved_at: labelObj.resolved_at,
+              collectionName: "annotations",
+              url: m.url || "",
+              reach: m.star_count || 0,
+              likes: m.star_count || 0,
+              comments: 0,
+              shares: 0,
+              author: m.author,
+              social_profile_url: m.contact || "",
+              being_resolved_by: labelObj.being_resolved_by || null,
+              being_resolved_at: labelObj.being_resolved_at || null,
+              resolution_history: labelObj.resolution_history || [],
+              resolved_by_email: labelObj.resolved_by_email || null,
+              resolved_by_name: labelObj.resolved_by_name || null,
+              post_content: m.post_content,
+              comment_content: m.comment_content,
+              parent_id: m.parent_id,
+              content_type: m.content_type || "post",
+              internal_notes: labelObj.internal_notes || [],
+              post_id: m.parent_id || m.id,
+              post_url: m.url || "",
+              post_like_count: m.star_count || 0,
+              relevance: typeof labelObj.relevance === "boolean" ? labelObj.relevance : true,
+              urgency: labelObj.urgency || "none",
+              intent: labelObj.intent || "none",
+              escalation: labelObj.escalation || null,
+              monitoring_started_at: labelObj.monitoring_started_at,
+              monitoring_duration_hours: labelObj.monitoring_duration_hours,
+              monitoring_initial_comments: labelObj.monitoring_initial_comments,
+              monitoring_initial_likes: labelObj.monitoring_initial_likes,
+              monitoring_initial_shares: labelObj.monitoring_initial_shares,
+            };
+          });
           const filtered = fetched.filter((alert) =>
             isWithinAlertReviewWindow(alert.created_at) &&
             isRecordInBrandScope({ brand: alert.brand }, scopedBrandKey)
@@ -409,6 +477,7 @@ export const useAlertStore = create<AlertState>()(
             brands: scopedBrands.length ? scopedBrands : fallbackBrands,
             error: null,
             isLoading: false,
+            lastFetchedAt: Date.now(),
           });
         } catch (error) {
           const message = error instanceof Error ? error.message : "Lỗi đồng bộ Supabase";
@@ -637,14 +706,21 @@ export const useAlertStore = create<AlertState>()(
       }
     },
 
-    fetchCorrectionRequests: async (scopedBrandKey = null) => {
+    fetchCorrectionRequests: async (scopedBrandKey = null, force = false) => {
+      if (activeRequestsUnsubscribe && !force) {
+        return;
+      }
       set({ isLoadingRequests: true });
       try {
         if (!dbSecond) throw new Error("Firebase data project is not configured.");
 
         const q = query(collection(dbSecond, "label_change_requests"), limit(500));
 
-        onSnapshot(q, (snapshot) => {
+        if (activeRequestsUnsubscribe) {
+          activeRequestsUnsubscribe();
+        }
+
+        activeRequestsUnsubscribe = onSnapshot(q, (snapshot) => {
           const requests: CorrectionRequest[] = [];
           snapshot.docs.forEach((docSnap) => {
             const data = docSnap.data();

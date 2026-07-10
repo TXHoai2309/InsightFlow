@@ -10,6 +10,7 @@ import {
   LeadWorkbenchRow,
 } from "@/components/leads";
 import { useAuth } from "@/hooks/useAuth";
+import { auth } from "@/lib/firebase";
 import { canPerformAction } from "@/lib/rbac";
 import { hasBusinessBrandScope } from "@/lib/brandScope";
 import type { Lead } from "@/types/dashboard";
@@ -49,6 +50,29 @@ function getLeadListScrollTop() {
 
 export default function LeadsPage() {
   const { profile, loading: authLoading } = useAuth();
+  const [staffList, setStaffList] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchStaff = async () => {
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) return;
+        const res = await fetch("/api/staff", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setStaffList(data.data || []);
+        }
+      } catch (e) {
+        console.warn("Failed to fetch staff list in LeadsPage:", e);
+      }
+    };
+    if (profile && !authLoading) {
+      fetchStaff();
+    }
+  }, [profile, authLoading]);
+
   const [activeView, setActiveView] = useState<LeadWorkbenchView>("priority");
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
@@ -669,6 +693,7 @@ export default function LeadsPage() {
                   selected={selectedLeadId === lead.id}
                   highlighted={highlightedLeadId === lead.id}
                   labelRequest={pendingLabelRequestByLeadId.get(lead.id)}
+                  staffList={staffList}
                   onSelect={(nextLead: Lead) => {
                     clearPendingRestore(true);
                     rememberOptimisticLead(nextLead);
