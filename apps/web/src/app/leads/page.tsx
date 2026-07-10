@@ -513,6 +513,7 @@ export default function LeadsPage() {
 
   return (
     <div
+      data-tour="leads-page"
       className={`grid min-h-full max-w-[100vw] gap-[clamp(6px,0.55vw,10px)] overflow-hidden p-[clamp(6px,0.6vw,12px)] ${
         selectedLead && !isPanelCollapsed
           ? "xl:grid-cols-[minmax(0,var(--lead-main-ratio))_minmax(0,var(--lead-detail-ratio))]"

@@ -1023,9 +1023,9 @@ export default function LabelRequestsPage() {
           </p>
         </div>
       </div>
-      <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
+      <div data-tour="label-request-workbench" className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
         {/* Request list */}
-        <section className="h-fit rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)]">
+        <section data-tour="label-request-list" className="h-fit rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)]">
           <div className="border-b border-[var(--color-border)] px-4 py-3.5">
             <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">
               Danh sách yêu cầu

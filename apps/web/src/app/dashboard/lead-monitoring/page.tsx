@@ -46,7 +46,7 @@ export default function DashboardLeadMonitoringPage() {
   ]);
 
   return (
-    <div className="w-full space-y-6">
+    <div data-tour="dashboard-lead-monitoring" className="w-full space-y-6">
       {isLoading && leads.length === 0 ? (
         <div className="rounded-[12px] border border-[#E9E7EE] bg-white px-5 py-4 text-[14px] font-semibold text-[#474554] shadow-sm">
           Đang tải dữ liệu báo cáo lead...
@@ -59,19 +59,21 @@ export default function DashboardLeadMonitoringPage() {
         </div>
       ) : null}
 
-      <LeadPriorityOverview />
+      <section data-tour="dashboard-lead-monitoring-priority">
+        <LeadPriorityOverview />
+      </section>
 
-      <section>
+      <section data-tour="dashboard-lead-monitoring-summary">
         <AISummaryBanner />
       </section>
 
-      <section className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <section data-tour="dashboard-lead-monitoring-metrics" className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <LeadScoreDoughnutCard />
         <LeadSourceBarCard />
         <ResponseTimeTrendCard />
       </section>
 
-      <section>
+      <section data-tour="dashboard-lead-monitoring-table">
         <LeadTable />
       </section>
     </div>

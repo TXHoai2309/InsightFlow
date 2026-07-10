@@ -8,13 +8,15 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAuthStore } from "@/stores/auth.store";
 import { BRAND_MANAGER_TOUR_EVENT } from "@/components/onboarding/events";
 
-const BRAND_MANAGER_ONBOARDING_VERSION = "2026-07-brand-manager-tour-v2";
+const BRAND_MANAGER_ONBOARDING_VERSION = "2026-07-brand-manager-tour-v4";
 
 type TourMode = "intro" | "tour";
 
 interface TourStep {
   route: string;
   selector: string;
+  moduleLabel: string;
+  depth: "detail" | "skim";
   title: string;
   body: string;
   actionHint: string;
@@ -31,76 +33,196 @@ const tourSteps: TourStep[] = [
   {
     route: "/dashboard",
     selector: '[data-tour="dashboard-filters"]',
-    title: "Dashboard: lọc đúng phạm vi cần xem",
+    moduleLabel: "Trang tổng quan",
+    depth: "detail",
+    title: "Đặt đúng phạm vi phân tích",
     body:
-      "Thanh này giúp bạn đổi mốc thời gian, nền tảng và phạm vi brand trước khi đọc số liệu. Đây là bước đầu tiên để tránh đánh giá sai tình hình.",
-    actionHint: "Chọn thời gian và kênh cần xem, sau đó đọc KPI phía dưới.",
+      "Đây là điểm bắt đầu mỗi phiên làm việc của Brand Manager. Bộ lọc thời gian, nền tảng và phạm vi thương hiệu quyết định toàn bộ KPI, biểu đồ và danh sách ưu tiên bên dưới.",
+    actionHint:
+      "Chọn khoảng thời gian cần kiểm tra, sau đó đối chiếu các kênh có biến động lớn trước khi đi sang module khác.",
   },
   {
     route: "/dashboard",
     selector: '[data-tour="dashboard-overview"]',
-    title: "Dashboard: nắm tình hình tổng quan",
+    moduleLabel: "Trang tổng quan",
+    depth: "detail",
+    title: "Đọc sức khỏe thương hiệu",
     body:
-      "Khu vực tổng quan gom cảnh báo, KPI, xu hướng cảm xúc, nguồn thảo luận và chủ đề nổi bật trong phạm vi bạn vừa lọc.",
-    actionHint: "Rà cảnh báo cao và xu hướng xấu trước khi giao việc cho nhân viên.",
+      "Khu vực tổng quan gom số lượng mention, sentiment, nguồn thảo luận, chủ đề nổi bật và tín hiệu rủi ro. Đây là nơi Brand Manager quyết định hôm nay cần ưu tiên điều gì.",
+    actionHint:
+      "Đọc theo thứ tự: tổng mention, sentiment, chủ đề tăng mạnh, rồi mới phân việc hoặc kiểm tra request.",
+  },
+  {
+    route: "/dashboard/insights",
+    selector: '[data-tour="dashboard-insights-risk"]',
+    moduleLabel: "Dashboard Insights",
+    depth: "detail",
+    title: "Nhận diện rủi ro trong dashboard",
+    body:
+      "Tab Insights trong dashboard giúp Brand Manager đọc tín hiệu khủng hoảng ở mức chiến lược: risk score, tỷ lệ tiêu cực, nền tảng phát sinh và chủ đề đang nóng.",
+    actionHint:
+      "Bắt đầu từ risk score và tỷ lệ negative; nếu hai chỉ số tăng, chuyển sang chủ đề và nền tảng để hiểu nguyên nhân.",
+  },
+  {
+    route: "/dashboard/insights",
+    selector: '[data-tour="dashboard-insights-breakdown"]',
+    moduleLabel: "Dashboard Insights",
+    depth: "detail",
+    title: "Biến insight thành hành động quản trị",
+    body:
+      "Khối đề xuất AI gom các hành động nên giao cho đội ngũ: ưu tiên chủ đề nào, kênh nào cần phản hồi và sự vụ nào cần owner rõ ràng.",
+    actionHint:
+      "Dùng phần này để quyết định giao việc hoặc yêu cầu nhân viên crisis cập nhật tình trạng xử lý, không cần tự xử lý từng alert tại đây.",
+  },
+  {
+    route: "/dashboard/lead-monitoring",
+    selector: '[data-tour="dashboard-lead-monitoring-priority"]',
+    moduleLabel: "Lead Monitoring",
+    depth: "detail",
+    title: "Theo dõi sức khỏe hàng chờ lead",
+    body:
+      "Lead Monitoring trong dashboard cho Brand Manager biết tổng tải của đội lead: lead ưu tiên, lead quá hạn, lead cần ghi nhận kết quả và các điểm nghẽn trong chăm sóc.",
+    actionHint:
+      "Đọc phần ưu tiên để biết đội lead có đang quá tải không, rồi mới đi xuống biểu đồ nguồn và bảng chi tiết.",
+  },
+  {
+    route: "/dashboard/lead-monitoring",
+    selector: '[data-tour="dashboard-lead-monitoring-table"]',
+    moduleLabel: "Lead Monitoring",
+    depth: "detail",
+    title: "Đối chiếu lead cần theo dõi",
+    body:
+      "Bảng lead trong dashboard giúp bạn kiểm tra danh sách cụ thể mà không cần bước vào nghiệp vụ chăm sóc từng khách. Đây là lớp giám sát dành cho Brand Manager.",
+    actionHint:
+      "Dùng bảng này để nhận diện lead đang kẹt, sau đó nhắc nhân viên lead xử lý hoặc cập nhật kết quả.",
+  },
+  {
+    route: "/team/staff",
+    selector: '[data-tour="team-management"]',
+    moduleLabel: "Quản lý đội ngũ",
+    depth: "detail",
+    title: "Kiểm soát đội ngũ thuộc brand",
+    body:
+      "Trang này cho biết nhân viên nào đang thuộc thương hiệu, vai trò của từng người và trạng thái tài khoản. Đây là phần Brand Manager dùng để kiểm soát quyền truy cập vận hành.",
+    actionHint:
+      "Rà vai trò định kỳ: crisis_employee xử lý Cảnh báo, lead_employee xử lý Khách hàng tiềm năng.",
   },
   {
     route: "/team/staff",
     selector: '[data-tour="team-add-staff"]',
-    title: "Đội ngũ: thêm nhân viên mới",
+    moduleLabel: "Quản lý đội ngũ",
+    depth: "detail",
+    title: "Thêm nhân viên đúng vai trò",
     body:
-      "Nút này dùng để tạo tài khoản nhân viên thuộc brand. Khi tạo, bạn chọn đúng vai trò để hệ thống mở đúng chức năng cho người đó.",
-    actionHint: "Chọn nhân viên khủng hoảng cho Alerts, chọn nhân viên lead cho Leads.",
+      "Khi tạo tài khoản mới, vai trò quyết định người đó nhìn thấy chức năng nào. Gán đúng vai trò giúp tránh lẫn nghiệp vụ và giảm rủi ro thao tác nhầm dữ liệu.",
+    actionHint:
+      "Chỉ cấp đúng quyền cần dùng. Nhân viên lead không cần xử lý khủng hoảng, nhân viên khủng hoảng không cần queue lead.",
+  },
+  {
+    route: "/mentions",
+    selector: '[data-tour="mentions-filters"]',
+    moduleLabel: "Đề cập",
+    depth: "detail",
+    title: "Lọc đúng tập đề cập cần kiểm tra",
+    body:
+      "Đề cập là nguồn dữ liệu gốc phía sau dashboard và báo cáo. Bộ lọc giúp bạn thu hẹp theo nền tảng, cảm xúc, chủ đề và loại nội dung trước khi đọc chi tiết.",
+    actionHint:
+      "Khi cần xác minh một chỉ số trên dashboard, hãy dùng cùng khoảng thời gian và cùng nền tảng ở đây.",
+  },
+  {
+    route: "/mentions",
+    selector: '[data-tour="mentions-table"]',
+    moduleLabel: "Đề cập",
+    depth: "detail",
+    title: "Đọc nội dung và kiểm tra nhãn",
+    body:
+      "Bảng này hiển thị post, comment hoặc reply đã được hệ thống gắn nhãn. Đây là nơi phát hiện nhãn sai, nội dung nhạy cảm hoặc chủ đề cần yêu cầu nhân viên xử lý thêm.",
+    actionHint:
+      "Mở các đề cập tiêu cực, bất thường hoặc có reach cao để đọc ngữ cảnh trước khi ra quyết định.",
   },
   {
     route: "/label-requests",
     selector: '[data-tour="label-request-list"]',
-    title: "Duyệt nhãn: kiểm soát chất lượng dữ liệu",
+    moduleLabel: "Duyệt yêu cầu",
+    depth: "detail",
+    title: "Kiểm soát chất lượng dữ liệu",
     body:
-      "Danh sách này chứa các yêu cầu sửa nhãn do nhân viên gửi lên. Mỗi request cần được kiểm tra nhãn hiện tại, nhãn đề xuất và bằng chứng.",
-    actionHint: "Chọn một request, đọc lý do rồi duyệt hoặc từ chối ở phần chi tiết.",
+      "Danh sách này chứa các yêu cầu sửa nhãn do nhân viên gửi lên. Nhãn sau khi duyệt sẽ ảnh hưởng dashboard, báo cáo và luồng phân việc, nên Brand Manager cần kiểm tra kỹ.",
+    actionHint:
+      "Ưu tiên request đang chờ duyệt, đọc người gửi, lý do và nội dung mention trước khi chọn hành động.",
   },
   {
-    route: "/alerts",
-    selector: '[data-tour="alerts-refresh"]',
-    title: "Alerts: giám sát khủng hoảng",
+    route: "/label-requests",
+    selector: '[data-tour="label-request-workbench"]',
+    moduleLabel: "Duyệt yêu cầu",
+    depth: "detail",
+    title: "So sánh và chốt nhãn cuối cùng",
     body:
-      "Nút làm mới giúp bạn tải lại hàng chờ cảnh báo mới nhất trước khi kiểm tra SLA và mức độ nghiêm trọng.",
-    actionHint: "Làm mới trước, sau đó ưu tiên cảnh báo nghiêm trọng hoặc sắp quá SLA.",
+      "Khu vực làm việc giúp so sánh nhãn cũ, nhãn nhân viên đề xuất và nhãn cuối cùng. Đây là bước Brand Manager xác nhận dữ liệu đủ tin cậy để đưa vào hệ thống.",
+    actionHint:
+      "Duyệt nếu đề xuất đúng, sửa lại nếu cần tinh chỉnh, hoặc từ chối khi bằng chứng chưa đủ rõ.",
   },
   {
-    route: "/leads",
-    selector: '[data-tour="leads-view-tabs"]',
-    title: "Leads: theo dõi khách hàng tiềm năng",
+    route: "/reports",
+    selector: '[data-tour="reports-center"]',
+    moduleLabel: "Báo cáo",
+    depth: "detail",
+    title: "Đọc lại kết quả vận hành",
     body:
-      "Các nút nhóm lead giúp bạn chuyển nhanh giữa lead ưu tiên, sắp quá hạn, follow-up và cần ghi nhận kết quả.",
-    actionHint: "Mở nhóm Cần ghi nhận để phát hiện lead đã liên hệ nhưng chưa lưu kết quả.",
+      "Trung tâm báo cáo tổng hợp dữ liệu thành các bản định kỳ, tùy chỉnh và lưu trữ. Đây là phần Brand Manager dùng để họp, đối soát hoặc gửi kết quả cho cấp trên.",
+    actionHint:
+      "Dùng báo cáo định kỳ để theo dõi nhịp vận hành, dùng báo cáo lưu trữ để xem lại các mốc đã chốt.",
   },
   {
     route: "/reports",
     selector: '[data-tour="reports-create-custom"]',
-    title: "Reports: tổng kết kết quả vận hành",
+    moduleLabel: "Báo cáo",
+    depth: "detail",
+    title: "Tạo báo cáo theo nhu cầu",
     body:
-      "Nút này dùng để tạo báo cáo thủ công theo bộ lọc riêng, bên cạnh các báo cáo định kỳ có sẵn.",
-    actionHint: "Dùng báo cáo thủ công khi cần tổng hợp một chiến dịch, chi nhánh hoặc khoảng thời gian cụ thể.",
+      "Báo cáo thủ công phù hợp khi cần phân tích một chiến dịch, chi nhánh, nền tảng hoặc khoảng thời gian cụ thể thay vì xem toàn bộ dữ liệu.",
+    actionHint:
+      "Chọn brand, ngày, kênh, chủ đề và sentiment; sau đó xuất PDF hoặc Excel khi cần chia sẻ.",
+  },
+  {
+    route: "/leads",
+    selector: '[data-tour="leads-page"]',
+    moduleLabel: "Khách hàng",
+    depth: "skim",
+    title: "Chỉ cần nắm nơi giám sát",
+    body:
+      "Khách hàng tiềm năng là nghiệp vụ chính của nhân viên lead. Với Brand Manager, trang này chủ yếu dùng để nhìn khối lượng, trạng thái và các lead cần chú ý.",
+    actionHint:
+      "Chỉ lướt qua số lượng và nhóm trạng thái. Việc liên hệ, chăm sóc và ghi nhận kết quả là trách nhiệm của nhân viên lead.",
+  },
+  {
+    route: "/alerts",
+    selector: '[data-tour="alerts-queue-header"]',
+    moduleLabel: "Cảnh báo",
+    depth: "skim",
+    title: "Chỉ giám sát mức độ và SLA",
+    body:
+      "Cảnh báo là nghiệp vụ chính của nhân viên khủng hoảng. Brand Manager chỉ cần biết nơi theo dõi hàng chờ, mức độ nghiêm trọng và các vụ việc cần phê duyệt hoặc leo thang.",
+    actionHint:
+      "Không cần xử lý từng alert trong tour này. Hãy xem đội ngũ có quá tải hoặc có vụ việc nghiêm trọng cần can thiệp không.",
   },
 ];
 
 const introCards = [
   {
-    title: "Không đi lẫn vai trò",
+    title: "Trọng tâm đúng vai trò",
     icon: "verified_user",
-    text: "Tour này chỉ giải thích những chức năng Brand Manager được phép dùng.",
+    text: "Tour đi sâu vào Tổng quan, Insights, Lead Monitoring, Đội ngũ, Đề cập, Duyệt yêu cầu và Báo cáo.",
   },
   {
-    title: "Đi theo quy trình thật",
-    icon: "route",
-    text: "Dashboard trước, sau đó điều phối đội ngũ, duyệt nhãn, giám sát queue và xem báo cáo.",
+    title: "Không lẫn nghiệp vụ nhân viên",
+    icon: "switch_account",
+    text: "Leads và Alerts chỉ được giới thiệu nhanh vì thao tác xử lý chính thuộc nhân viên chuyên trách.",
   },
   {
     title: "Có thể xem lại",
     icon: "help",
-    text: "Sau khi hoàn tất, bạn vẫn có thể mở lại tour bằng nút Hướng dẫn trên thanh trên cùng.",
+    text: "Sau khi hoàn tất, bạn vẫn có thể mở lại tour bằng nút Hướng dẫn ở thanh trên cùng.",
   },
 ];
 
@@ -136,10 +258,10 @@ function getTooltipStyle(targetRect: TargetRect | null): CSSProperties {
     };
   }
 
-  const width = Math.min(430, window.innerWidth - 32);
+  const width = Math.min(440, window.innerWidth - 32);
   const belowTop = targetRect.top + targetRect.height + 16;
-  const aboveTop = targetRect.top - 280;
-  const hasRoomBelow = belowTop + 260 < window.innerHeight;
+  const aboveTop = targetRect.top - 300;
+  const hasRoomBelow = belowTop + 280 < window.innerHeight;
   const top = hasRoomBelow ? belowTop : Math.max(16, aboveTop);
   const left = clamp(
     targetRect.left + targetRect.width / 2 - width / 2,
@@ -148,6 +270,10 @@ function getTooltipStyle(targetRect: TargetRect | null): CSSProperties {
   );
 
   return { top, left, width };
+}
+
+function depthLabel(depth: TourStep["depth"]) {
+  return depth === "detail" ? "Hướng dẫn chi tiết" : "Lướt qua";
 }
 
 export function BrandManagerOnboarding() {
@@ -210,14 +336,15 @@ export function BrandManagerOnboarding() {
     if (!shouldShow || mode !== "tour" || pathname !== step.route) return;
 
     let attempts = 0;
-    let timer: number | undefined;
+    let retryTimer: number | undefined;
+    let rectTimer: number | undefined;
 
     const updateTarget = () => {
       attempts += 1;
       const target = findVisibleTarget(step.selector);
 
       if (!target && attempts < 18) {
-        timer = window.setTimeout(updateTarget, 120);
+        retryTimer = window.setTimeout(updateTarget, 120);
         return;
       }
 
@@ -226,8 +353,8 @@ export function BrandManagerOnboarding() {
         return;
       }
 
-      target.scrollIntoView({ block: "center", behavior: "smooth" });
-      window.setTimeout(() => {
+      target.scrollIntoView({ block: "center", behavior: "auto" });
+      rectTimer = window.setTimeout(() => {
         const rect = target.getBoundingClientRect();
         setTargetRect({
           top: rect.top,
@@ -244,7 +371,8 @@ export function BrandManagerOnboarding() {
     window.addEventListener("resize", handleResize);
 
     return () => {
-      if (timer) window.clearTimeout(timer);
+      if (retryTimer) window.clearTimeout(retryTimer);
+      if (rectTimer) window.clearTimeout(rectTimer);
       window.removeEventListener("resize", handleResize);
     };
   }, [mode, pathname, shouldShow, step.route, step.selector]);
@@ -330,17 +458,17 @@ export function BrandManagerOnboarding() {
   if (mode === "intro") {
     return (
       <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/55 p-4" role="dialog" aria-modal="true">
-        <section className="w-full max-w-[760px] rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-5 shadow-2xl md:p-6">
+        <section className="w-full max-w-[780px] rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-5 shadow-2xl md:p-6">
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.08em] text-[var(--color-brand)]">
-                Onboarding vai trò
+                Onboarding Brand Manager
               </p>
               <h2 className="mt-1 text-2xl font-bold text-[var(--color-text-primary)]">
-                Hướng dẫn thao tác cho Quản lý thương hiệu
+                Hướng dẫn quản lý thương hiệu
               </h2>
-              <p className="mt-2 max-w-[620px] text-sm leading-6 text-[var(--color-text-secondary)]">
-                Tour sẽ mở lần lượt các trang quan trọng và chỉ vào đúng vùng cần thao tác, để bạn nắm quy trình mà không bị lẫn với màn hình của nhân viên xử lý.
+              <p className="mt-2 max-w-[640px] text-sm leading-6 text-[var(--color-text-secondary)]">
+                Tour này đi sâu vào các trang Brand Manager cần dùng hằng ngày: Tổng quan, Insights, Lead Monitoring, Đội ngũ, Đề cập, Duyệt yêu cầu và Báo cáo. Khách hàng và Cảnh báo chỉ được giới thiệu nhanh vì thao tác xử lý thuộc nhân viên chuyên trách.
               </p>
             </div>
             <span className="inline-flex w-fit items-center gap-2 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] px-3 py-2 text-sm font-bold text-[var(--color-brand)]">
@@ -366,6 +494,26 @@ export function BrandManagerOnboarding() {
                 </p>
               </article>
             ))}
+          </div>
+
+          <div className="mt-5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-4">
+            <p className="text-xs font-bold uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
+              Lộ trình tour
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {tourSteps.map((item, index) => (
+                <span
+                  key={`${item.route}-${item.selector}`}
+                  className={`rounded-full border px-3 py-1 text-xs font-bold ${
+                    item.depth === "detail"
+                      ? "border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] text-[var(--color-brand)]"
+                      : "border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)]"
+                  }`}
+                >
+                  {index + 1}. {item.moduleLabel}
+                </span>
+              ))}
+            </div>
           </div>
 
           {error && (
@@ -397,7 +545,7 @@ export function BrandManagerOnboarding() {
               disabled={isCompleting}
               className="rounded-lg bg-[var(--color-brand)] px-4 py-2 text-sm font-bold text-white hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Bắt đầu tour thao tác
+              Bắt đầu tour
             </button>
           </div>
         </section>
@@ -428,8 +576,22 @@ export function BrandManagerOnboarding() {
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-xs font-bold uppercase tracking-[0.08em] text-[var(--color-brand)]">
-              Bước {currentStep + 1}/{tourSteps.length}
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-xs font-bold uppercase tracking-[0.08em] text-[var(--color-brand)]">
+                Bước {currentStep + 1}/{tourSteps.length}
+              </p>
+              <span
+                className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] ${
+                  step.depth === "detail"
+                    ? "bg-[var(--color-brand-subtle)] text-[var(--color-brand)]"
+                    : "bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]"
+                }`}
+              >
+                {depthLabel(step.depth)}
+              </span>
+            </div>
+            <p className="mt-1 text-xs font-bold uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
+              {step.moduleLabel}
             </p>
             <h2
               id="brand-manager-tour-title"
@@ -463,7 +625,7 @@ export function BrandManagerOnboarding() {
 
         {pathname !== step.route && (
           <p className="mt-3 rounded-lg bg-[var(--color-bg-surface-raised)] px-3 py-2 text-sm font-semibold text-[var(--color-text-secondary)]">
-            Đang mở trang {step.route}. Nếu mạng chậm, tour sẽ giữ nguyên bước này và không mở lặp lại.
+            Đang mở trang {step.route}. Tour sẽ tiếp tục khi trang sẵn sàng.
           </p>
         )}
 
@@ -474,17 +636,20 @@ export function BrandManagerOnboarding() {
         )}
 
         <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             {tourSteps.map((item, index) => (
               <button
                 key={`${item.route}-${item.selector}`}
                 type="button"
                 aria-label={`Đến bước ${index + 1}`}
+                title={`${item.moduleLabel}: ${item.title}`}
                 onClick={() => goToStep(index)}
                 className={`h-2 rounded-full transition-all ${
                   index === currentStep
                     ? "w-7 bg-[var(--color-brand)]"
-                    : "w-2 bg-[var(--color-border)]"
+                    : item.depth === "detail"
+                      ? "w-2 bg-[var(--color-border)]"
+                      : "w-2 bg-[var(--color-text-muted)]/40"
                 }`}
               />
             ))}
