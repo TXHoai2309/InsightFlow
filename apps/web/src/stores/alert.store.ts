@@ -1,12 +1,13 @@
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 import { dbSecond } from "@/lib/firebase";
-import { collection, doc, limit, query, updateDoc, onSnapshot, addDoc } from "firebase/firestore";
+import { collection, doc, updateDoc, addDoc } from "firebase/firestore";
 import { isRecordInBrandScope, isSameBrandScope, getScopedBrandKey } from "@/lib/brandScope";
 import { normalizeBrandName } from "@/lib/services/dashboard";
 import { canPerformAction, type UserRoleProfile } from "@/lib/rbac";
 import { fetchSupabaseAlerts, updateSupabaseAlertLabel, supabaseRequest } from "@/lib/supabase";
 import { supabaseClient } from "@/lib/supabaseClient";
+import { normalizeClassificationLabel } from "@/lib/label-change";
 
 function getResolverName(emailOrId: string | null | undefined): string {
   if (!emailOrId) return "";
@@ -640,46 +641,49 @@ export const useAlertStore = create<AlertState>()(
     fetchCorrectionRequests: async (scopedBrandKey = null) => {
       set({ isLoadingRequests: true });
       try {
-        if (!dbSecond) throw new Error("Firebase data project is not configured.");
-
-        const q = query(collection(dbSecond, "label_change_requests"), limit(500));
-
-        onSnapshot(q, (snapshot) => {
+        const loadFromSupabase = async () => {
+          const rows = await supabaseRequest<Record<string, any>[]>(
+            "label_change_requests",
+            "order=created_at.desc&limit=500",
+          );
           const requests: CorrectionRequest[] = [];
-          snapshot.docs.forEach((docSnap) => {
-            const data = docSnap.data();
-            let recordBrand = data.brand_name || data.brand;
+          rows.forEach((data) => {
+            let recordBrand = data.brand_name || data.brand || data.workspace_id || data.brand_id;
             if (!recordBrand) {
               const email = String(data.requested_by_email || data.requester_email || "").toLowerCase();
               if (email.includes("highland")) recordBrand = "Highlands Coffee";
               else if (email.includes("starbuck")) recordBrand = "Starbucks";
               else if (email.includes("mixue")) recordBrand = "Mixue";
             }
+            const currentLabel = normalizeClassificationLabel(data.current_labels || data.old_label);
+            const requestedLabel = normalizeClassificationLabel(data.requested_labels || data.proposed_label, currentLabel);
+            const firstCurrentTopic = currentLabel.topic[0] || "other";
+            const firstRequestedTopic = requestedLabel.topic[0] || firstCurrentTopic;
 
             const req = {
-              id: docSnap.id,
-              alert_id: data.mention_id || data.alert_id,
+              id: String(data.id || ""),
+              alert_id: String(data.mention_id || data.source_id || data.alert_id || ""),
               brand: recordBrand || "",
               requester_uid: data.requested_by_uid || data.requester_uid || "",
               requester_email: data.requested_by_email || data.requester_email || "",
-              created_at: data.created_at,
-              status: data.status,
-              original_sentiment: data.old_label?.sentiment || data.original_sentiment || "neutral",
-              new_sentiment: data.proposed_label?.sentiment || data.new_sentiment || "neutral",
-              original_severity: data.old_label?.urgency || data.original_severity || "medium",
-              new_severity: data.proposed_label?.urgency || data.new_severity || "medium",
-              original_topic: data.old_label?.topic || data.original_topic || "other",
-              new_topic: data.proposed_label?.topic || data.new_topic || "other",
-              original_relevance: data.old_label?.relevance !== undefined ? data.old_label.relevance : (data.original_relevance !== undefined ? data.original_relevance : null),
-              new_relevance: data.proposed_label?.relevance !== undefined ? data.proposed_label.relevance : (data.new_relevance !== undefined ? data.new_relevance : null),
-              original_urgency: data.old_label?.urgency || data.original_urgency || "medium",
-              new_urgency: data.proposed_label?.urgency || data.new_urgency || "medium",
-              original_intent: data.old_label?.intent || data.original_intent || "none",
-              new_intent: data.proposed_label?.intent || data.new_intent || "none",
-              reason: data.reason,
+              created_at: parseDate(data.requested_at || data.created_at),
+              status: data.status || "pending",
+              original_sentiment: currentLabel.sentiment || "neutral",
+              new_sentiment: requestedLabel.sentiment || currentLabel.sentiment || "neutral",
+              original_severity: currentLabel.urgency || "medium",
+              new_severity: requestedLabel.urgency || currentLabel.urgency || "medium",
+              original_topic: firstCurrentTopic,
+              new_topic: firstRequestedTopic,
+              original_relevance: currentLabel.relevance,
+              new_relevance: requestedLabel.relevance,
+              original_urgency: currentLabel.urgency || "medium",
+              new_urgency: requestedLabel.urgency || currentLabel.urgency || "medium",
+              original_intent: currentLabel.intent || "none",
+              new_intent: requestedLabel.intent || currentLabel.intent || "none",
+              reason: data.reason_note || data.reason || data.reason_code || "",
               resolved_by: data.reviewed_by_uid || data.resolved_by || "",
               resolved_at: data.reviewed_at || data.resolved_at || "",
-              alert_text: data.mention?.content || data.alert_text || "",
+              alert_text: data.content_preview || data.mention_content || data.alert_text || "",
             } as CorrectionRequest;
 
             if (!isRecordInBrandScope({ brand: req.brand }, scopedBrandKey)) return;
@@ -690,10 +694,28 @@ export const useAlertStore = create<AlertState>()(
           requests.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
           set({ correctionRequests: requests, isLoadingRequests: false });
-        }, (error) => {
-          console.error("[AlertStore] fetchCorrectionRequests error:", error);
-          set({ isLoadingRequests: false });
-        });
+        };
+
+        await loadFromSupabase();
+
+        if (supabaseClient) {
+          const channel = supabaseClient
+            .channel(`alert-label-change-requests-${scopedBrandKey || "all"}`)
+            .on(
+              "postgres_changes",
+              { event: "*", schema: "public", table: "label_change_requests" },
+              () => {
+                loadFromSupabase().catch((error) => {
+                  console.error("[AlertStore] fetchCorrectionRequests realtime error:", error);
+                });
+              },
+            )
+            .subscribe();
+          setTimeout(() => {
+            // Keep the channel active while the store is alive; duplicate fetches replace state.
+            void channel;
+          }, 0);
+        }
       } catch (error) {
         console.error("[AlertStore] fetchCorrectionRequests error:", error);
         set({ isLoadingRequests: false });
@@ -701,8 +723,6 @@ export const useAlertStore = create<AlertState>()(
     },
 
     createCorrectionRequest: async (requestData: any) => {
-      if (!dbSecond) throw new Error("Firebase data project is not configured.");
-
       const alert = requestData.alert_full;
       const cleanBrandId = normalizeBrandId(requestData.brand || "");
 
@@ -769,9 +789,7 @@ export const useAlertStore = create<AlertState>()(
         created_at: new Date().toISOString(),
       };
 
-      await addDoc(collection(dbSecond, "label_change_requests"), newDoc);
-
-      // Sync to Supabase label_change_requests table
+      // Supabase is the source of truth for manager review.
       const supabasePayload = {
         source_type: alert?.content_type || "post",
         source_id: requestData.alert_id,
@@ -784,10 +802,10 @@ export const useAlertStore = create<AlertState>()(
         source_url: alert?.url || "",
         current_labels: newDoc.old_label,
         requested_labels: newDoc.proposed_label,
-        changed_fields: [],
-        current_queue: "",
-        requested_queue: "",
-        reason_code: "other",
+        changed_fields: ["sentiment", "topic", "relevance", "urgency", "intent"],
+        current_queue: "review",
+        requested_queue: requestData.new_urgency === "urgent" || requestData.new_severity === "urgent" ? "crisis" : "review",
+        reason_code: "alert_label_correction",
         reason_note: requestData.reason || "",
         evidence_checked: true,
         status: "pending",
@@ -803,15 +821,48 @@ export const useAlertStore = create<AlertState>()(
         history: newDoc.history,
       };
 
-      try {
-        await supabaseRequest<void>("label_change_requests", "", {
-          method: "POST",
-          body: JSON.stringify([supabasePayload]),
-          headers: { Prefer: "return=minimal" },
+      const insertedRows = await supabaseRequest<Array<{ id?: string }>>("label_change_requests", "", {
+        method: "POST",
+        body: JSON.stringify([supabasePayload]),
+        headers: { Prefer: "return=representation" },
+      });
+
+      if (dbSecond) {
+        await addDoc(collection(dbSecond, "label_change_requests"), {
+          ...newDoc,
+          supabase_request_id: insertedRows?.[0]?.id || null,
         });
-      } catch (supabaseErr) {
-        console.error("[AlertStore] Failed to write label change request to Supabase:", supabaseErr);
       }
+
+      const createdRequest: CorrectionRequest = {
+        id: insertedRows?.[0]?.id || requestData.alert_id,
+        alert_id: requestData.alert_id,
+        brand: requestData.brand || "",
+        requester_uid: requestData.requester_uid || "",
+        requester_email: requestData.requester_email || "",
+        created_at: newDoc.created_at,
+        status: "pending",
+        original_sentiment: newDoc.old_label.sentiment,
+        new_sentiment: newDoc.proposed_label.sentiment,
+        original_severity: newDoc.old_label.urgency,
+        new_severity: newDoc.proposed_label.urgency,
+        original_topic: newDoc.old_label.topic,
+        new_topic: newDoc.proposed_label.topic,
+        original_relevance: newDoc.old_label.relevance,
+        new_relevance: newDoc.proposed_label.relevance,
+        original_urgency: newDoc.old_label.urgency,
+        new_urgency: newDoc.proposed_label.urgency,
+        original_intent: newDoc.old_label.intent,
+        new_intent: newDoc.proposed_label.intent,
+        reason: newDoc.reason,
+        alert_text: alert?.text || "",
+      };
+      set((state) => ({
+        correctionRequests: [
+          createdRequest,
+          ...state.correctionRequests.filter((request) => request.id !== createdRequest.id),
+        ],
+      }));
 
     },
 

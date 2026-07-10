@@ -512,7 +512,7 @@ Crawler JSON -> SQLite local -> Supabase -> /labeling_tool -> annotations + revi
 Tài khoản test, mật khẩu chung: Test@123456
 Role	Email	Trang sau đăng nhập
 Admin	demo.admin@insightflow.com	/admin
-Quản lý thương hiệu	![alt text](image.png)	/dashboard
+Quản lý thương hiệu	manager@highlandscoffee.com	/dashboard
 Nhân viên xử lý khủng hoảng	nguyen_van_crisis@highlandscoffee.com	/alerts
 Nhân viên xử lý lead	tran_thi_lead@highlandscoffee.com	/leads
 

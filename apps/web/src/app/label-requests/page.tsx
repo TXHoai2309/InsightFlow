@@ -671,9 +671,10 @@ export default function LabelRequestsPage() {
         const mapLabelField = (raw: unknown, fallback: LabelValue): LabelValue => {
           if (!raw || typeof raw !== "object") return fallback;
           const r = raw as Record<string, unknown>;
+          const rawTopic = Array.isArray(r.topic) ? r.topic[0] : r.topic;
           return {
             sentiment: (r.sentiment as Sentiment) ?? fallback.sentiment ?? null,
-            topic: (r.topic as string) ?? fallback.topic ?? "other",
+            topic: (rawTopic as string) ?? fallback.topic ?? "other",
             relevance: r.relevance !== undefined ? (r.relevance as boolean | null) : (fallback.relevance ?? null),
             urgency: (r.urgency as Urgency) ?? fallback.urgency ?? null,
             intent: (r.intent as Intent) ?? fallback.intent ?? null,
@@ -752,9 +753,10 @@ export default function LabelRequestsPage() {
           const mapLbl = (raw: unknown) => {
             if (!raw || typeof raw !== "object") return fallbackLabel;
             const r = raw as Record<string, unknown>;
+            const rawTopic = Array.isArray(r.topic) ? r.topic[0] : r.topic;
             return {
               sentiment: (r.sentiment as Sentiment) ?? fallbackLabel.sentiment,
-              topic: (r.topic as string) ?? fallbackLabel.topic,
+              topic: (rawTopic as string) ?? fallbackLabel.topic,
               relevance: r.relevance !== undefined ? (r.relevance as boolean | null) : null,
               urgency: (r.urgency as Urgency) ?? null,
               intent: (r.intent as Intent) ?? null,
