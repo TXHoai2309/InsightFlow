@@ -178,6 +178,36 @@ Quy tắc bắt buộc:
   return rawText.trim();
 }
 
+function buildFallbackReply(
+  templateText: string | undefined,
+  customerName: string,
+  tone: string,
+  sentiment?: string,
+  topic?: string,
+) {
+  const greeting = customerName?.trim()
+    ? `Chào ${customerName.trim()},`
+    : "Chào bạn,";
+  const closing =
+    tone === "professional"
+      ? "InsightFlow sẽ ghi nhận và phản hồi bạn trong thời gian sớm nhất."
+      : "Mong bạn tiếp tục chia sẻ thêm để đội ngũ hỗ trợ tốt hơn.";
+
+  if (templateText?.trim()) {
+    return `${greeting} ${templateText.trim()} ${closing}`;
+  }
+
+  if (sentiment === "negative") {
+    return `${greeting} cảm ơn bạn đã phản hồi. Chúng mình rất tiếc vì trải nghiệm chưa tốt${topic ? ` liên quan đến ${topic}` : ""}. Đội ngũ sẽ kiểm tra lại ngay và mong được hỗ trợ bạn cụ thể hơn qua inbox hoặc thông tin liên hệ.`;
+  }
+
+  if (sentiment === "positive") {
+    return `${greeting} cảm ơn bạn rất nhiều vì phản hồi tích cực. Sự ủng hộ của bạn là động lực để đội ngũ tiếp tục cải thiện chất lượng dịch vụ.`;
+  }
+
+  return `${greeting} cảm ơn bạn đã quan tâm và để lại phản hồi. Đội ngũ đã ghi nhận thông tin${topic ? ` về ${topic}` : ""} và sẽ hỗ trợ bạn sớm nhất có thể.`;
+}
+
 async function callGeminiSuggestTemplate(
   apiKey: string,
   name: string,
@@ -466,10 +496,18 @@ export default async function templateRoutes(fastify: FastifyInstance, options: 
       : "";
 
     if (!apiKey) {
-      return reply.status(500).send({
-        success: false,
-        error: "Gemini API key is not configured in the server environment.",
-      });
+      request.log.warn("Gemini API key is not configured; using fallback quick reply.");
+      return {
+        success: true,
+        replyText: buildFallbackReply(
+          activeTemplateText || undefined,
+          customerName,
+          tone,
+          sentiment,
+          topic,
+        ),
+        source: "fallback",
+      };
     }
 
     try {

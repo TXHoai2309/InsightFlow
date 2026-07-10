@@ -661,7 +661,9 @@ export default function LabelRequestsPage() {
       setLoading(true);
       try {
         const { requests: rawRequests, history: rawHistory } =
-          await DashboardService.fetchLabelChangeRequests(profile?.brandId || undefined);
+          await DashboardService.fetchLabelChangeRequests(
+            profile?.brandName || profile?.brandId || undefined,
+          );
 
         const mapLabelField = (raw: unknown, fallback: LabelValue): LabelValue => {
           if (!raw || typeof raw !== "object") return fallback;
@@ -801,7 +803,7 @@ export default function LabelRequestsPage() {
     return () => {
       active = false;
     };
-  }, [profile?.brandId]);
+  }, [profile?.brandId, profile?.brandName]);
 
   const displayedRequests = useMemo(
     () => requests.filter((item) => isWithinRequestTimeRange(item, requestTimeRange)).sort(compareRequests),
