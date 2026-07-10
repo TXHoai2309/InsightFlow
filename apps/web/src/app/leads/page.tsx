@@ -29,6 +29,7 @@ import {
   type LeadDetailPanelTab,
 } from "@/lib/lead-return-context";
 import { normalizeBrandName } from "@/lib/services/dashboard";
+import { isIntentLead } from "@/lib/lead-intent";
 import {
   isLabelRequestForLead,
   isPendingLeadLabelRequest,
@@ -132,6 +133,7 @@ export default function LeadsPage() {
     const normFilter =
       filters.workspace_id !== "all" ? normalizeBrandName(filters.workspace_id) : null;
     const filteredLeads = leads.filter((lead) => {
+      if (!isIntentLead(lead)) return false;
       if (normFilter && normalizeBrandName(lead.workspace_id) !== normFilter) return false;
       if (filters.platform !== "all" && lead.platform !== filters.platform) return false;
       return true;
@@ -424,6 +426,7 @@ export default function LeadsPage() {
   const lastLeadNumber = Math.min(currentPage * LEADS_PAGE_SIZE, visibleLeads.length);
 
   const brandPlatformFilteredLeads = visibleBaseLeads;
+  const isDetailPanelOpen = Boolean(selectedLead && !isPanelCollapsed);
 
   const pendingResultLead = useMemo(() => {
     return sortedLeads.find((lead) =>
@@ -669,6 +672,7 @@ export default function LeadsPage() {
                   selected={selectedLeadId === lead.id}
                   highlighted={highlightedLeadId === lead.id}
                   labelRequest={pendingLabelRequestByLeadId.get(lead.id)}
+                  detailPanelOpen={isDetailPanelOpen}
                   onSelect={(nextLead: Lead) => {
                     clearPendingRestore(true);
                     rememberOptimisticLead(nextLead);

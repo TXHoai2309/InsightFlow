@@ -22,6 +22,13 @@ interface GenerateReplyBody {
   tone?: "polite_and_apologetic" | "friendly" | "professional" | "humorous";
   sentiment?: "positive" | "negative" | "neutral";
   topic?: string;
+  intent?: string;
+  urgency?: string;
+  relevance?: boolean | null;
+  leadStatus?: string;
+  resultType?: string;
+  lastActionType?: string;
+  lastContactChannel?: string;
 }
 
 // Helpers
@@ -58,7 +65,16 @@ async function callGeminiAPI(
   customerName: string,
   tone: string,
   sentiment?: string,
-  topic?: string
+  topic?: string,
+  leadContext?: {
+    intent?: string;
+    urgency?: string;
+    relevance?: boolean | null;
+    leadStatus?: string;
+    resultType?: string;
+    lastActionType?: string;
+    lastContactChannel?: string;
+  }
 ): Promise<string> {
   const model = "gemini-flash-lite-latest";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
@@ -88,6 +104,18 @@ async function callGeminiAPI(
     topicText = topicMap[topic] || topic;
   }
 
+  const leadContextLines = [
+    leadContext?.intent ? `- Intent lead: ${leadContext.intent}` : "",
+    leadContext?.urgency ? `- Mức độ khẩn cấp: ${leadContext.urgency}` : "",
+    typeof leadContext?.relevance === "boolean"
+      ? `- Liên quan thương hiệu: ${leadContext.relevance ? "có" : "không"}`
+      : "",
+    leadContext?.leadStatus ? `- Trạng thái xử lý lead: ${leadContext.leadStatus}` : "",
+    leadContext?.resultType ? `- Kết quả đã ghi nhận: ${leadContext.resultType}` : "",
+    leadContext?.lastActionType ? `- Thao tác gần nhất: ${leadContext.lastActionType}` : "",
+    leadContext?.lastContactChannel ? `- Kênh liên hệ gần nhất: ${leadContext.lastContactChannel}` : "",
+  ].filter(Boolean).join("\n");
+
   let promptText = `
 Bạn là Đại diện Chăm sóc Khách hàng AI chuyên nghiệp bằng tiếng Việt.
 Dưới đây là thông tin ngữ cảnh:
@@ -96,6 +124,10 @@ Dưới đây là thông tin ngữ cảnh:
 - Tên khách hàng (nếu có): "${customerName || 'Khách hàng'}"
 - Giọng điệu yêu cầu: ${toneText}
 `;
+
+  if (leadContextLines) {
+    promptText += `${leadContextLines}\n`;
+  }
 
   if (templateText) {
     promptText += `
@@ -409,7 +441,22 @@ export default async function templateRoutes(fastify: FastifyInstance, options: 
     if (!user) return;
 
     const body = request.body as GenerateReplyBody;
-    const { templateId, templateText, mentionContent, customerName = "", tone = "polite_and_apologetic", sentiment, topic } = body;
+    const {
+      templateId,
+      templateText,
+      mentionContent,
+      customerName = "",
+      tone = "polite_and_apologetic",
+      sentiment,
+      topic,
+      intent,
+      urgency,
+      relevance,
+      leadStatus,
+      resultType,
+      lastActionType,
+      lastContactChannel,
+    } = body;
 
     if (!mentionContent) {
       return reply.status(400).send({
@@ -471,7 +518,16 @@ export default async function templateRoutes(fastify: FastifyInstance, options: 
         customerName,
         tone,
         sentiment,
-        topic
+        topic,
+        {
+          intent,
+          urgency,
+          relevance,
+          leadStatus,
+          resultType,
+          lastActionType,
+          lastContactChannel,
+        }
       );
 
       return { success: true, replyText: generatedReply };

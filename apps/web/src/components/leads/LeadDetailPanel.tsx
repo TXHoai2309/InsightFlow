@@ -1527,6 +1527,14 @@ export function LeadDetailPanel({
                 mentionContent={lead.content}
                 customerName={lead.author || "Khách hàng"}
                 sentiment={(currentLabels.sentiment === "positive" || currentLabels.sentiment === "negative") ? currentLabels.sentiment : "neutral"}
+                topic={currentLabels.topic[0] || "other"}
+                intent={currentLabels.intent || lead.intent}
+                urgency={currentLabels.urgency || "none"}
+                relevance={currentLabels.relevance}
+                leadStatus={lead.status}
+                resultType={lead.result_type}
+                lastActionType={lead.last_action_type}
+                lastContactChannel={lead.last_contact_channel}
                 category="lead"
                 primaryActionLabel={sourceAction?.label}
                 onCopyAndOpenContact={sourceAction ? () => handleOpenAction({ ...sourceAction, isContact: true }) : undefined}

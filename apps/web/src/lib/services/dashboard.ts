@@ -47,6 +47,7 @@ import {
   normalizeClassificationLabel,
 } from "@/lib/label-change";
 import { filterByBrandScope } from "@/lib/brandScope";
+import { isIntentLead, isQualifiedLeadIntent } from "@/lib/lead-intent";
 
 // ─── Collection names ────────────────────────────────────────────────────────
 export const COLLECTION_NAMES = {
@@ -516,6 +517,17 @@ async function upsertSupabaseLead(
   );
 }
 
+async function deleteSupabaseLead(config: SupabaseConfig, id: string) {
+  await supabaseWrite(
+    config,
+    "leads",
+    "DELETE",
+    {},
+    `id=eq.${encodeURIComponent(id)}`,
+    false,
+  );
+}
+
 async function upsertSupabaseAnnotation(
   config: SupabaseConfig,
   entityKey: string,
@@ -784,22 +796,28 @@ function getSupabaseLabel(
   const payload = readPayload(row);
   const rowLabels = row.labels && typeof row.labels === "object" ? (row.labels as SupabaseRow) : {};
   const annotationLabel = parseAnnotationLabel(annotation);
-  const inferredIntent = inferLeadIntent(
-    annotationLabel.intent,
-    rowLabels.intent,
-    row.intent,
-    row.lead_intent,
-    row.intent_type,
-  );
+  const hasAnnotationIntent =
+    annotationLabel.intent !== undefined && annotationLabel.intent !== null;
+  const hasRowLabelIntent =
+    rowLabels.intent !== undefined && rowLabels.intent !== null;
+  const inferredIntent = hasAnnotationIntent
+    ? mapIntent(annotationLabel.intent)
+    : hasRowLabelIntent
+      ? mapIntent(rowLabels.intent)
+    : inferLeadIntent(
+      row.intent,
+      row.lead_intent,
+      row.intent_type,
+    );
 
   return normalizeClassificationLabel(
     {
       ...rowLabels,
       ...annotationLabel,
       intent:
-        inferredIntent !== "none"
+        hasAnnotationIntent || hasRowLabelIntent || inferredIntent !== "none"
           ? inferredIntent
-          : annotationLabel.intent ?? rowLabels.intent,
+          : rowLabels.intent,
       sentiment:
         annotationLabel.sentiment ??
         rowLabels.sentiment ??
@@ -1457,17 +1475,19 @@ export class DashboardService {
             try {
               const parsed = typeof rawCurrentLabels === "string" ? JSON.parse(rawCurrentLabels) : rawCurrentLabels;
               if (parsed && typeof parsed === "object") {
-                mergedLabels = normalizeClassificationLabel(parsed);
+                mergedLabels = normalizeClassificationLabel(parsed, baseLead.labels);
               }
             } catch (e) {
               console.warn("Failed to parse lead labels:", e);
             }
           }
+          const mergedIntent = mapIntent(mergedLabels?.intent);
+          if (!isQualifiedLeadIntent(mergedIntent)) return;
 
           derivedLeadById.set(m.id, {
             ...baseLead,
             labels: mergedLabels,
-            intent: (mergedLabels?.intent as any) || "none",
+            intent: mergedIntent,
             status: (d.status as Lead["status"]) ?? baseLead.status,
             expiry_at: d.expiry_at ? parseDate(d.expiry_at) : undefined,
             label_correction_status: mapLabelCorrectionStatus(d.label_correction_status as string | undefined),
@@ -1507,7 +1527,7 @@ export class DashboardService {
         }
       });
 
-      let leads: Lead[] = Array.from(derivedLeadById.values());
+      let leads: Lead[] = Array.from(derivedLeadById.values()).filter(isIntentLead);
       leads.sort(
         (a, b) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
@@ -2025,15 +2045,20 @@ export class DashboardService {
 
     if (leadId) {
       try {
-        await upsertSupabaseLead(config, leadId, {
-          labels: normalizedLabel,
-          current_labels: normalizedLabel,
-          label_correction_status: "approved",
-          pending_label_request_id: null,
-          last_label_corrected_at: nowIso,
-          updated_by: reviewer.uid,
-          updated_at: nowIso,
-        });
+        if (inferQueueFromLabels(normalizedLabel) === "lead") {
+          await upsertSupabaseLead(config, leadId, {
+            labels: normalizedLabel,
+            current_labels: normalizedLabel,
+            intent: normalizedLabel.intent,
+            label_correction_status: "approved",
+            pending_label_request_id: null,
+            last_label_corrected_at: nowIso,
+            updated_by: reviewer.uid,
+            updated_at: nowIso,
+          });
+        } else {
+          await deleteSupabaseLead(config, leadId);
+        }
       } catch {
         // Lead row may not exist yet — ignore
       }

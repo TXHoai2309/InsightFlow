@@ -30,10 +30,14 @@ function getAvatarInitials(name?: string) {
   return name.substring(0, 2).toUpperCase();
 }
 
-function getScoreInfo(intent: Lead["intent"]) {
+function getScoreInfo(lead: Lead) {
+  const meta = getLeadWorkbenchMeta(lead);
+  const score = meta.priorityScore;
+  const intent = lead.intent;
+
   if (intent === "hot") {
     return {
-      score: 95,
+      score,
       label: "Hot",
       color: "text-[#BA1A1A]",
       bar: "#BA1A1A",
@@ -42,7 +46,7 @@ function getScoreInfo(intent: Lead["intent"]) {
   }
   if (intent === "warm") {
     return {
-      score: 68,
+      score,
       label: "Warm",
       color: "text-[#A14A00]",
       bar: "#D97706",
@@ -50,7 +54,7 @@ function getScoreInfo(intent: Lead["intent"]) {
     };
   }
   return {
-    score: 35,
+    score,
     label: "Cold",
     color: "text-[#4234B6]",
     bar: "#5B4FCF",
@@ -185,7 +189,7 @@ export function LeadTable() {
               </tr>
             ) : (
               leads.map((lead) => {
-                const scoreInfo = getScoreInfo(lead.intent);
+                const scoreInfo = getScoreInfo(lead);
                 const statusInfo = getStatusInfo(lead.status);
                 const sla = formatSla(lead);
                 const sourceHref = lead.url || lead.source_url;

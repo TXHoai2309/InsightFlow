@@ -1,16 +1,64 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import { AISummaryBanner } from "@/components/lead-monitoring/AISummaryBanner";
 import { LeadPriorityOverview } from "@/components/lead-monitoring/LeadPriorityOverview";
 import { LeadScoreDoughnutCard } from "@/components/lead-monitoring/LeadScoreDoughnutCard";
 import { LeadSourceBarCard } from "@/components/lead-monitoring/LeadSourceBarCard";
 import { ResponseTimeTrendCard } from "@/components/lead-monitoring/ResponseTimeTrendCard";
 import { LeadTable } from "@/components/lead-monitoring/LeadTable";
+import { useDashboard } from "@/hooks/useDashboardData";
+import { useAuth } from "@/hooks/useAuth";
+import { normalizeBrandName } from "@/lib/services/dashboard";
+import { useDashboardStore } from "@/stores/dashboard.store";
 
 export default function DashboardLeadMonitoringPage() {
+  const { profile } = useAuth();
+  const { workspaces, filters, leads, isLoading, error, setFilters } = useDashboardStore();
+
+  useDashboard({
+    autoFetch: true,
+    refetchInterval: 1800000,
+  });
+
+  useEffect(() => {
+    if (!profile || profile.role === "admin" || workspaces.length === 0) return;
+    if (filters.workspace_id !== "all") return;
+
+    const profileBrandKey = normalizeBrandName(profile.brandName || profile.brandId || "");
+    const scopedWorkspace = workspaces.find(
+      (workspace) =>
+        normalizeBrandName(workspace.id) === profileBrandKey ||
+        normalizeBrandName(workspace.brand_name) === profileBrandKey,
+    );
+
+    setFilters({
+      workspace_id:
+        scopedWorkspace?.id || profile.brandId || profile.brandName || "all",
+    });
+  }, [
+    filters.workspace_id,
+    profile,
+    profile?.brandId,
+    profile?.brandName,
+    setFilters,
+    workspaces,
+  ]);
+
   return (
     <div className="w-full space-y-6">
+      {isLoading && leads.length === 0 ? (
+        <div className="rounded-[12px] border border-[#E9E7EE] bg-white px-5 py-4 text-[14px] font-semibold text-[#474554] shadow-sm">
+          Đang tải dữ liệu báo cáo lead...
+        </div>
+      ) : null}
+
+      {error ? (
+        <div className="rounded-[12px] border border-[#FFDAD6] bg-[#FFF4F2] px-5 py-4 text-[14px] font-semibold text-[#BA1A1A] shadow-sm">
+          {error}
+        </div>
+      ) : null}
+
       <LeadPriorityOverview />
 
       <section>
