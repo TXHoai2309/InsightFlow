@@ -1897,34 +1897,13 @@ export default function AlertDetailPage() {
                             )}
 
                             {isManager ? (
-                              <div className="flex gap-2 pt-1">
-                                <button
-                                  onClick={async () => {
-                                    try {
-                                      await resolveCorrectionRequest(req.id, alert.id, "approved", profile);
-                                      triggerToast("Đã duyệt yêu cầu sửa nhãn!");
-                                    } catch (err) {
-                                      triggerToast("Duyệt thất bại. Vui lòng thử lại!");
-                                    }
-                                  }}
-                                  className="flex-1 py-1 bg-green-600 hover:bg-green-700 text-white font-bold text-[10px] rounded-lg cursor-pointer flex items-center justify-center gap-0.5"
-                                >
-                                  <span className="material-symbols-outlined text-[12px]">check</span> Duyệt
-                                </button>
-                                <button
-                                  onClick={async () => {
-                                    try {
-                                      await resolveCorrectionRequest(req.id, alert.id, "rejected", profile);
-                                      triggerToast("Đã từ chối yêu cầu sửa nhãn!");
-                                    } catch (err) {
-                                      triggerToast("Từ chối thất bại. Vui lòng thử lại!");
-                                    }
-                                  }}
-                                  className="flex-1 py-1 bg-red-600 hover:bg-red-700 text-white font-bold text-[10px] rounded-lg cursor-pointer flex items-center justify-center gap-0.5"
-                                >
-                                  <span className="material-symbols-outlined text-[12px]">close</span> Từ chối
-                                </button>
-                              </div>
+                              <a
+                                href="/label-requests"
+                                className="block text-[10px] py-1.5 bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400 rounded-lg text-center font-bold border border-indigo-200/50 hover:bg-indigo-100 dark:hover:bg-indigo-950/40 transition-colors"
+                              >
+                                <span className="material-symbols-outlined text-[12px] align-middle mr-0.5">open_in_new</span>
+                                Xem tại trang Duyệt yêu cầu
+                              </a>
                             ) : (
                               <div className="text-[10px] py-1 bg-amber-100/50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 rounded-lg text-center font-bold border border-amber-200/50">
                                 Đang chờ quản lý duyệt

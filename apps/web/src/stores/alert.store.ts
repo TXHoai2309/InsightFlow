@@ -731,7 +731,10 @@ export const useAlertStore = create<AlertState>()(
         },
         mention: {
           id: requestData.alert_id,
+          entity_key: requestData.alert_id,
           parent_id: alert?.parent_id || null,
+          post_id: alert?.post_id || null,
+          comment_id: alert?.content_type === "comment" || alert?.content_type === "reply" ? requestData.alert_id : null,
           platform: alert?.source || "unknown",
           content_type: alert?.content_type || "post",
           content: alert?.text || "",
@@ -773,6 +776,7 @@ export const useAlertStore = create<AlertState>()(
         source_type: alert?.content_type || "post",
         source_id: requestData.alert_id,
         mention_id: requestData.alert_id,
+        lead_id: requestData.alert_id,
         workspace_id: cleanBrandId,
         platform: alert?.source || "unknown",
         author: alert?.author || "Không rõ tác giả",
@@ -809,18 +813,6 @@ export const useAlertStore = create<AlertState>()(
         console.error("[AlertStore] Failed to write label change request to Supabase:", supabaseErr);
       }
 
-      // Add real-time notification for brand managers
-      await addDoc(collection(dbSecond, "notifications"), {
-        title: `Yêu cầu sửa nhãn: Vụ việc #${requestData.alert_id.slice(-4)}`,
-        message: `${getResolverName(requestData.requester_email || "")} đã gửi yêu cầu sửa nhãn cho ${formatBrandName(requestData.brand || "")}.`,
-        type: "correction",
-        alert_id: requestData.alert_id,
-        brand: requestData.brand || "",
-        created_at: new Date().toISOString(),
-        read: false,
-        recipient_role: "brand_manager",
-        recipient_email: null,
-      });
     },
 
     resolveCorrectionRequest: async (requestId, alertId, decision, profile) => {

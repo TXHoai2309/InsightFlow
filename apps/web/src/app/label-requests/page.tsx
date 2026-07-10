@@ -5,8 +5,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { filterByBrandScope } from "@/lib/brandScope";
 import { auth } from "@/lib/firebase";
 import { DashboardService } from "@/lib/services/dashboard";
+import { supabaseClient } from "@/lib/supabaseClient";
 import { useDashboardStore } from "@/stores/dashboard.store";
-import { normalizeClassificationLabel } from "@/lib/label-change";
 
 type Sentiment = "positive" | "negative" | "neutral" | null;
 type Urgency = "none" | "low" | "medium" | "high" | "urgent" | null;
@@ -36,6 +36,8 @@ interface LabelRequest {
   brand_id?: string;
   brand_name?: string;
   workspace_id?: string;
+  source_id?: string;
+  lead_id?: string;
   mention_id: string;
   requested_by_name: string;
   requested_by_email?: string;
@@ -46,6 +48,9 @@ interface LabelRequest {
   final_label?: LabelValue;
   mention: {
     id: string;
+    entity_key?: string | null;
+    post_id?: string | null;
+    comment_id?: string | null;
     parent_id?: string | null;
     platform: string;
     content_type: "post" | "comment" | "reply";
@@ -628,6 +633,7 @@ export default function LabelRequestsPage() {
     status: "all",
   });
   const [staffNames, setStaffNames] = useState<string[]>([]);
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -658,10 +664,9 @@ export default function LabelRequestsPage() {
     let active = true;
 
     async function loadRequests() {
-      setLoading(true);
       try {
         const { requests: rawRequests, history: rawHistory } =
-          await DashboardService.fetchLabelChangeRequests(profile?.brandId || undefined);
+          await DashboardService.fetchLabelChangeRequests();
 
         const mapLabelField = (raw: unknown, fallback: LabelValue): LabelValue => {
           if (!raw || typeof raw !== "object") return fallback;
@@ -702,6 +707,8 @@ export default function LabelRequestsPage() {
             brand_id: String(data.brand_id || data.workspace_id || ""),
             brand_name: String(data.brand_name || data.workspace_name || data.workspace_id || ""),
             workspace_id: String(data.workspace_id || data.brand_id || data.brand_name || data.workspace_name || ""),
+            source_id: data.source_id ? String(data.source_id) : undefined,
+            lead_id: data.lead_id ? String(data.lead_id) : undefined,
             mention_id: String(data.mention_id || data.source_id || mentionRaw.id || id),
             requested_by_name: String(data.requested_by_name || data.requested_by_email || "Nhân viên"),
             requested_by_email: data.requested_by_email ? String(data.requested_by_email) : undefined,
@@ -714,6 +721,15 @@ export default function LabelRequestsPage() {
             final_label: data.final_label ? mapLabelField(data.final_label, proposedLabel) : undefined,
             mention: {
               id: String(mentionRaw.id || data.mention_id || data.source_id || id),
+              entity_key: (mentionRaw.entity_key || data.mention_id || data.source_id)
+                ? String(mentionRaw.entity_key || data.mention_id || data.source_id)
+                : null,
+              post_id: (mentionRaw.post_id || data.post_id)
+                ? String(mentionRaw.post_id || data.post_id)
+                : null,
+              comment_id: (mentionRaw.comment_id || data.comment_id)
+                ? String(mentionRaw.comment_id || data.comment_id)
+                : null,
               parent_id: (mentionRaw.parent_id as string) || null,
               platform: String(mentionRaw.platform || data.platform || data.source || "unknown"),
               content_type: contentType,
@@ -779,7 +795,11 @@ export default function LabelRequestsPage() {
 
         if (active) {
           setRequests(scopedRows);
-          setSelectedId(scopedRows[0]?.id || null);
+          setSelectedId((current) =>
+            current && scopedRows.some((item) => item.id === current)
+              ? current
+              : scopedRows[0]?.id || null,
+          );
           setAuditEntries([
             ...persistedAuditEntries,
             ...scopedRows.flatMap(requestToAuditEntries),
@@ -800,6 +820,33 @@ export default function LabelRequestsPage() {
     loadRequests();
     return () => {
       active = false;
+    };
+  }, [profile?.brandId, reloadToken]);
+
+  useEffect(() => {
+    const refresh = () => setReloadToken((current) => current + 1);
+    const interval = window.setInterval(refresh, 8000);
+    let channel: ReturnType<NonNullable<typeof supabaseClient>["channel"]> | null = null;
+
+    if (supabaseClient) {
+      channel = supabaseClient
+        .channel(`label-requests-review-${profile?.brandId || "all"}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "label_change_requests" },
+          refresh,
+        )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "label_change_history" },
+          refresh,
+        )
+        .subscribe();
+    }
+
+    return () => {
+      window.clearInterval(interval);
+      if (channel && supabaseClient) supabaseClient.removeChannel(channel);
     };
   }, [profile?.brandId]);
 
@@ -906,8 +953,11 @@ export default function LabelRequestsPage() {
               platform: selectedRequest.mention.platform,
               contentType: selectedRequest.mention.content_type,
               parentId: selectedRequest.mention.parent_id,
+              entityKey: selectedRequest.mention.entity_key || selectedRequest.mention_id,
+              postId: selectedRequest.mention.post_id,
+              commentId: selectedRequest.mention.comment_id,
             },
-            selectedRequest.mention_id,
+            selectedRequest.lead_id || selectedRequest.source_id || selectedRequest.mention_id,
             {
               uid: profile?.uid || "",
               displayName: profile?.displayName,
