@@ -576,7 +576,7 @@ export default function LeadsPage() {
 
         <section className="space-y-[clamp(6px,0.55vw,10px)]">
           <div className="flex flex-col gap-2 min-[1500px]:flex-row min-[1500px]:items-center min-[1500px]:justify-between">
-            <div className="flex flex-wrap gap-2">
+            <div data-tour="lead-view-tabs" className="flex flex-wrap gap-2">
               {workbenchViews.map((view) => (
                 <button
                   key={view.id}
@@ -601,6 +601,7 @@ export default function LeadsPage() {
             </div>
             <button
               type="button"
+              data-tour="lead-refresh-button"
               onClick={() => refetch(true)}
               disabled={isLoading}
               className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-4 py-2 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)] disabled:cursor-not-allowed disabled:opacity-60"
@@ -610,6 +611,7 @@ export default function LeadsPage() {
             </button>
             <button
               type="button"
+              data-tour="lead-filter-button"
               onClick={() => setShowFilters((value) => !value)}
               className="inline-flex w-fit items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-2.5 py-1.5 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)]"
             >

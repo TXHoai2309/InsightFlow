@@ -139,10 +139,11 @@ export function LeadStats({ leads, isLoading, profile, onSelectView }: LeadStats
 
   return (
     <div className="grid gap-3 md:grid-cols-3">
-      {cards.map((card) => (
+      {cards.map((card, index) => (
         <button
           key={card.title}
           type="button"
+          data-tour={index === 0 ? "lead-stats-priority" : undefined}
           onClick={() => onSelectView?.(card.view)}
           className="group relative overflow-hidden flex min-h-[76px] items-center justify-between gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-4 text-left shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-[var(--color-brand-border)] hover:shadow-md dark:bg-slate-900/40"
         >

@@ -269,6 +269,7 @@ export function LeadWorkbenchRow({
       <div
         id={`lead-row-${lead.id}`}
         data-lead-id={lead.id}
+        data-tour={rank === 1 ? "lead-row-first" : undefined}
         role="button"
         tabIndex={0}
         onClick={() => onSelect(lead)}
@@ -398,6 +399,7 @@ export function LeadWorkbenchRow({
             <div className="flex min-w-[130px] items-center gap-2">
               <button
                 type="button"
+                data-tour={rank === 1 ? "lead-row-primary-action" : undefined}
                 onClick={handlePrimaryAction}
                 disabled={isOpening}
                 className={`inline-flex w-full items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-[13px] font-bold tracking-tight shadow-sm transition-all duration-200 hover:-translate-y-0.5 disabled:pointer-events-none disabled:opacity-60 ${buttonStyle}`}
@@ -419,6 +421,7 @@ export function LeadWorkbenchRow({
     <div
       id={`lead-row-${lead.id}`}
       data-lead-id={lead.id}
+      data-tour={rank === 1 ? "lead-row-first" : undefined}
       role="button"
       tabIndex={0}
       onClick={() => onSelect(lead)}
@@ -561,6 +564,7 @@ export function LeadWorkbenchRow({
 
             <button
               type="button"
+              data-tour={rank === 1 ? "lead-row-primary-action" : undefined}
               onClick={handlePrimaryAction}
               disabled={isOpening}
               className={`inline-flex min-h-10 w-full min-w-0 max-w-full items-center justify-center gap-1.5 overflow-hidden rounded-lg px-2.5 py-2 text-xs font-black tracking-tight shadow-sm transition-all duration-200 hover:-translate-y-0.5 disabled:pointer-events-none disabled:opacity-60 ${buttonStyle}`}
