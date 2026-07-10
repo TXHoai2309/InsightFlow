@@ -1,9 +1,8 @@
 import { normalizeBrandName } from "@/lib/services/dashboard";
+import { isIntentLead } from "@/lib/lead-intent";
 import type { DashboardFilters, Lead } from "@/types/dashboard";
 
-export function isIntentLead(lead: Lead) {
-  return lead.intent === "hot" || lead.intent === "warm" || lead.intent === "cold";
-}
+export { isIntentLead };
 
 export function isDateInDashboardRange(
   dateValue: string | undefined,

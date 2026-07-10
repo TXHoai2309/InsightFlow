@@ -47,6 +47,7 @@ import {
   normalizeClassificationLabel,
 } from "@/lib/label-change";
 import { filterByBrandScope } from "@/lib/brandScope";
+import { isIntentLead, isQualifiedLeadIntent } from "@/lib/lead-intent";
 
 // ─── Collection names ────────────────────────────────────────────────────────
 export const COLLECTION_NAMES = {
@@ -516,6 +517,17 @@ async function upsertSupabaseLead(
   );
 }
 
+async function deleteSupabaseLead(config: SupabaseConfig, id: string) {
+  await supabaseWrite(
+    config,
+    "leads",
+    "DELETE",
+    {},
+    `id=eq.${encodeURIComponent(id)}`,
+    false,
+  );
+}
+
 async function upsertSupabaseAnnotation(
   config: SupabaseConfig,
   entityKey: string,
@@ -554,7 +566,70 @@ function isSupabaseStatementTimeout(error: unknown) {
 function getMissingSupabaseColumn(error: unknown) {
   if (!(error instanceof Error)) return null;
   const match = error.message.match(/column\s+\w+\.([A-Za-z0-9_]+)\s+does not exist/);
-  return match?.[1] || null;
+  if (match?.[1]) return match[1];
+  const schemaCacheMatch = error.message.match(/Could not find the '([^']+)' column/);
+  return schemaCacheMatch?.[1] || null;
+}
+
+function removeColumnFromPayload(
+  body: Record<string, unknown> | Record<string, unknown>[],
+  column: string,
+) {
+  if (Array.isArray(body)) {
+    return body.map((row) => {
+      const { [column]: _removed, ...rest } = row;
+      return rest;
+    });
+  }
+
+  const { [column]: _removed, ...rest } = body;
+  return rest;
+}
+
+async function supabaseWriteWithColumnFallback<T = unknown>(
+  config: SupabaseConfig,
+  table: string,
+  method: "POST" | "PATCH" | "DELETE",
+  body: Record<string, unknown> | Record<string, unknown>[],
+  queryParams = "",
+  returnRows = true,
+  prefer?: string,
+): Promise<T> {
+  let nextBody = body;
+  const removedColumns = new Set<string>();
+
+  while (true) {
+    try {
+      return await supabaseWrite<T>(
+        config,
+        table,
+        method,
+        nextBody,
+        queryParams,
+        returnRows,
+        prefer,
+      );
+    } catch (error) {
+      const missingColumn = getMissingSupabaseColumn(error);
+      if (!missingColumn || removedColumns.has(missingColumn)) {
+        throw error;
+      }
+
+      const hasColumn = Array.isArray(nextBody)
+        ? nextBody.some((row) => Object.prototype.hasOwnProperty.call(row, missingColumn))
+        : Object.prototype.hasOwnProperty.call(nextBody, missingColumn);
+
+      if (!hasColumn) {
+        throw error;
+      }
+
+      console.warn(
+        `[DashboardService] ${table} is missing column "${missingColumn}". Retrying ${method} without it.`,
+      );
+      removedColumns.add(missingColumn);
+      nextBody = removeColumnFromPayload(nextBody, missingColumn);
+    }
+  }
 }
 
 async function loadSupabaseRows<T extends SupabaseRow>(
@@ -784,22 +859,28 @@ function getSupabaseLabel(
   const payload = readPayload(row);
   const rowLabels = row.labels && typeof row.labels === "object" ? (row.labels as SupabaseRow) : {};
   const annotationLabel = parseAnnotationLabel(annotation);
-  const inferredIntent = inferLeadIntent(
-    annotationLabel.intent,
-    rowLabels.intent,
-    row.intent,
-    row.lead_intent,
-    row.intent_type,
-  );
+  const hasAnnotationIntent =
+    annotationLabel.intent !== undefined && annotationLabel.intent !== null;
+  const hasRowLabelIntent =
+    rowLabels.intent !== undefined && rowLabels.intent !== null;
+  const inferredIntent = hasAnnotationIntent
+    ? mapIntent(annotationLabel.intent)
+    : hasRowLabelIntent
+      ? mapIntent(rowLabels.intent)
+    : inferLeadIntent(
+      row.intent,
+      row.lead_intent,
+      row.intent_type,
+    );
 
   return normalizeClassificationLabel(
     {
       ...rowLabels,
       ...annotationLabel,
       intent:
-        inferredIntent !== "none"
+        hasAnnotationIntent || hasRowLabelIntent || inferredIntent !== "none"
           ? inferredIntent
-          : annotationLabel.intent ?? rowLabels.intent,
+          : rowLabels.intent,
       sentiment:
         annotationLabel.sentiment ??
         rowLabels.sentiment ??
@@ -1463,17 +1544,19 @@ export class DashboardService {
             try {
               const parsed = typeof rawCurrentLabels === "string" ? JSON.parse(rawCurrentLabels) : rawCurrentLabels;
               if (parsed && typeof parsed === "object") {
-                mergedLabels = normalizeClassificationLabel(parsed);
+                mergedLabels = normalizeClassificationLabel(parsed, baseLead.labels);
               }
             } catch (e) {
               console.warn("Failed to parse lead labels:", e);
             }
           }
+          const mergedIntent = mapIntent(mergedLabels?.intent);
+          if (!isQualifiedLeadIntent(mergedIntent)) return;
 
           derivedLeadById.set(m.id, {
             ...baseLead,
             labels: mergedLabels,
-            intent: (mergedLabels?.intent as any) || "none",
+            intent: mergedIntent,
             status: (d.status as Lead["status"]) ?? baseLead.status,
             expiry_at: d.expiry_at ? parseDate(d.expiry_at) : undefined,
             label_correction_status: mapLabelCorrectionStatus(d.label_correction_status as string | undefined),
@@ -1513,7 +1596,7 @@ export class DashboardService {
         }
       });
 
-      let leads: Lead[] = Array.from(derivedLeadById.values());
+      let leads: Lead[] = Array.from(derivedLeadById.values()).filter(isIntentLead);
       leads.sort(
         (a, b) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
@@ -2015,13 +2098,14 @@ export class DashboardService {
     const normalizedLabel = normalizeClassificationLabel(finalLabel);
 
     const config = getSupabaseConfig();
-    await supabaseWrite(
+    await supabaseWriteWithColumnFallback(
       config,
       "label_change_requests",
       "PATCH",
       stripUndefinedFields({
         status,
-        final_label: finalLabel,
+        requested_labels: normalizedLabel,
+        final_label: normalizedLabel,
         reviewed_by: reviewer.uid,
         reviewed_by_name: reviewer.displayName || reviewer.email || "",
         reviewed_at: nowIso,
@@ -2054,15 +2138,20 @@ export class DashboardService {
 
     if (leadId) {
       try {
-        await upsertSupabaseLead(config, leadId, {
-          labels: normalizedLabel,
-          current_labels: normalizedLabel,
-          label_correction_status: "approved",
-          pending_label_request_id: null,
-          last_label_corrected_at: nowIso,
-          updated_by: reviewer.uid,
-          updated_at: nowIso,
-        });
+        if (inferQueueFromLabels(normalizedLabel) === "lead") {
+          await upsertSupabaseLead(config, leadId, {
+            labels: normalizedLabel,
+            current_labels: normalizedLabel,
+            intent: normalizedLabel.intent,
+            label_correction_status: "approved",
+            pending_label_request_id: null,
+            last_label_corrected_at: nowIso,
+            updated_by: reviewer.uid,
+            updated_at: nowIso,
+          });
+        } else {
+          await deleteSupabaseLead(config, leadId);
+        }
       } catch {
         // Lead row may not exist yet — ignore
       }
@@ -2092,19 +2181,42 @@ export class DashboardService {
     history: Record<string, unknown>[];
   }> {
     const config = getSupabaseConfig();
-    const requestsQuery = workspaceId
-      ? `workspace_id=eq.${encodeURIComponent(workspaceId)}&order=created_at.desc&limit=200`
-      : `order=created_at.desc&limit=200`;
-    const historyQuery = workspaceId
-      ? `workspace_id=eq.${encodeURIComponent(workspaceId)}&order=created_at.desc&limit=400`
-      : `order=created_at.desc&limit=400`;
+    const scopeKey = workspaceId ? normalizeBrandName(workspaceId) : "";
+    const isInScope = (row: Record<string, unknown>) => {
+      if (!scopeKey) return true;
+      const candidates = [
+        row.workspace_id,
+        row.brand_id,
+        row.brand_name,
+        row.workspace_name,
+        row.brand,
+      ];
+      return candidates.some((value) => normalizeBrandName(String(value || "")) === scopeKey);
+    };
 
     const [requests, history] = await Promise.all([
-      supabaseRequest<Record<string, unknown>[]>(config, "label_change_requests", requestsQuery),
-      supabaseRequest<Record<string, unknown>[]>(config, "label_change_history", historyQuery).catch(() => [] as Record<string, unknown>[]),
+      supabaseRequest<Record<string, unknown>[]>(
+        config,
+        "label_change_requests",
+        "order=created_at.desc&limit=500",
+      ).catch((error) => {
+        console.warn("[DashboardService] label_change_requests unavailable:", error);
+        return [] as Record<string, unknown>[];
+      }),
+      supabaseRequest<Record<string, unknown>[]>(
+        config,
+        "label_change_history",
+        "order=created_at.desc&limit=1000",
+      ).catch((error) => {
+        console.warn("[DashboardService] label_change_history unavailable:", error);
+        return [] as Record<string, unknown>[];
+      }),
     ]);
 
-    return { requests: requests ?? [], history: history ?? [] };
+    return {
+      requests: (requests ?? []).filter(isInScope).slice(0, 200),
+      history: (history ?? []).filter(isInScope).slice(0, 400),
+    };
   }
 
   static async rejectLabelChangeRequest(
@@ -2116,7 +2228,7 @@ export class DashboardService {
     const nowIso = new Date().toISOString();
     const config = getSupabaseConfig();
 
-    await supabaseWrite(
+    await supabaseWriteWithColumnFallback(
       config,
       "label_change_requests",
       "PATCH",
@@ -2133,7 +2245,7 @@ export class DashboardService {
       false,
     );
 
-    await supabaseWrite(
+    await supabaseWriteWithColumnFallback(
       config,
       "label_change_history",
       "POST",

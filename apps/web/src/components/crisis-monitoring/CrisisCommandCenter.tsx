@@ -183,9 +183,9 @@ export function CrisisCommandCenter() {
   ];
 
   return (
-    <div className="grid w-full grid-cols-1 gap-6 lg:grid-cols-12">
+    <div data-tour="dashboard-insights" className="grid w-full grid-cols-1 gap-6 lg:grid-cols-12">
       <div className="space-y-6 lg:col-span-8">
-        <Card className="rounded-lg border-[#F1B7B2] bg-[#FFF7F6] shadow-[0_10px_30px_rgba(186,26,26,0.08)]">
+        <Card data-tour="dashboard-insights-risk" className="rounded-lg border-[#F1B7B2] bg-[#FFF7F6] shadow-[0_10px_30px_rgba(186,26,26,0.08)]">
           <CardContent className="p-5">
             <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
               <div className="flex gap-4">
@@ -225,14 +225,14 @@ export function CrisisCommandCenter() {
           </CardContent>
         </Card>
 
-        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section data-tour="dashboard-insights-kpis" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <KpiCard icon={MessageSquareWarning} label="Tiêu cực" value={String(data.negativeMentions.length)} meta="Bài viết và bình luận" tone="bg-red-50 text-[#BA1A1A]" />
           <KpiCard icon={AlertTriangle} label="Critical" value={String(data.criticalAlerts.length)} meta="Sự vụ ưu tiên cao" tone="bg-amber-50 text-amber-700" />
           <KpiCard icon={Clock3} label="Trễ SLA" value={String(data.overdueAlerts.length)} meta="Cần xử lý ngay" tone="bg-rose-50 text-rose-700" />
           <KpiCard icon={UserRoundCheck} label="Chưa giao" value={String(data.unassignedAlerts)} meta="Đang chờ owner" tone="bg-indigo-50 text-indigo-700" />
         </section>
 
-        <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <section data-tour="dashboard-insights-breakdown" className="grid grid-cols-1 gap-6 xl:grid-cols-2">
           <Card className={kpiCardClass}>
             <CardHeader className="px-5 pb-3 pt-5">
               <div className="flex items-center justify-between gap-3">
@@ -279,7 +279,7 @@ export function CrisisCommandCenter() {
           </Card>
         </section>
 
-        <Card className={kpiCardClass}>
+        <Card data-tour="dashboard-insights-actions" className={kpiCardClass}>
           <CardHeader className="px-5 pb-3 pt-5">
             <div className="flex items-center justify-between gap-3">
               <CardTitle className="text-sm font-black uppercase text-[#1A1B20]">AI đề xuất hành động</CardTitle>

@@ -460,16 +460,16 @@ export function TeamManagementPage({ initialTab = "list" }: TeamManagementPagePr
       {editingStaff && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-gray-900/60 p-4">
           <div className="w-full max-w-[560px] rounded-2xl bg-white p-6 shadow-xl">
-            <h3 className="text-[20px] font-bold text-gray-900">Chá»‰nh sá»­a nhÃ¢n viÃªn</h3>
+            <h3 className="text-[20px] font-bold text-gray-900">Chỉnh sửa nhân viên</h3>
             <p className="mt-1 text-[14px] text-gray-500">{editingStaff.email}</p>
 
             <label className="mt-6 block">
-              <span className="text-[14px] font-semibold text-gray-900">Há» tÃªn</span>
+              <span className="text-[14px] font-semibold text-gray-900">Họ tên</span>
               <input value={editFullName} onChange={(e) => setEditFullName(e.target.value)} className="mt-2 w-full rounded-xl border border-gray-200 p-3 text-[14px] outline-none focus:border-[#6C5CE7] focus:ring-1 focus:ring-[#6C5CE7]" />
             </label>
 
             <div className="mt-6">
-              <span className="text-[14px] font-semibold text-gray-900">Vai trÃ²</span>
+              <span className="text-[14px] font-semibold text-gray-900">Vai trò</span>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 {roleOptions.map((opt) => (
                   <label key={opt.value} className={`cursor-pointer rounded-xl border-2 p-4 transition-all ${editStaffRole === opt.value ? "border-[#6C5CE7] bg-[#6C5CE7]/5" : "border-gray-200 hover:border-gray-300"}`}>
@@ -500,8 +500,8 @@ export function TeamManagementPage({ initialTab = "list" }: TeamManagementPagePr
             </fieldset>
 
             <div className="mt-8 flex justify-end gap-3">
-              <button onClick={() => setEditingStaff(null)} className="rounded-xl border border-gray-200 px-5 py-2.5 text-[14px] font-medium text-gray-700 hover:bg-gray-50">Há»§y</button>
-              <button onClick={handleEditStaff} disabled={savingEdit || !editFullName.trim()} className="rounded-xl bg-[#6C5CE7] px-5 py-2.5 text-[14px] font-semibold text-white disabled:opacity-60">{savingEdit ? "Äang lÆ°u..." : "LÆ°u thay Ä‘á»•i"}</button>
+              <button onClick={() => setEditingStaff(null)} className="rounded-xl border border-gray-200 px-5 py-2.5 text-[14px] font-medium text-gray-700 hover:bg-gray-50">Hủy</button>
+              <button onClick={handleEditStaff} disabled={savingEdit || !editFullName.trim()} className="rounded-xl bg-[#6C5CE7] px-5 py-2.5 text-[14px] font-semibold text-white disabled:opacity-60">{savingEdit ? "Đang lưu..." : "Lưu thay đổi"}</button>
             </div>
           </div>
         </div>

@@ -30,6 +30,7 @@ import {
   type LeadDetailPanelTab,
 } from "@/lib/lead-return-context";
 import { normalizeBrandName } from "@/lib/services/dashboard";
+import { isIntentLead } from "@/lib/lead-intent";
 import {
   isLabelRequestForLead,
   isPendingLeadLabelRequest,
@@ -156,6 +157,7 @@ export default function LeadsPage() {
     const normFilter =
       filters.workspace_id !== "all" ? normalizeBrandName(filters.workspace_id) : null;
     const filteredLeads = leads.filter((lead) => {
+      if (!isIntentLead(lead)) return false;
       if (normFilter && normalizeBrandName(lead.workspace_id) !== normFilter) return false;
       if (filters.platform !== "all" && lead.platform !== filters.platform) return false;
       return true;
@@ -291,9 +293,9 @@ export default function LeadsPage() {
 
   const visibleLeads = useMemo(() => {
     return sortedLeads.filter((lead) =>
-      matchesLeadWorkbenchView(lead, activeView, currentTime, profile),
+      lead.id === selectedLeadId || matchesLeadWorkbenchView(lead, activeView, currentTime, profile),
     );
-  }, [activeView, currentTime, profile, sortedLeads]);
+  }, [activeView, currentTime, profile, sortedLeads, selectedLeadId]);
 
   const totalPages = Math.max(1, Math.ceil(visibleLeads.length / LEADS_PAGE_SIZE));
 
@@ -448,6 +450,7 @@ export default function LeadsPage() {
   const lastLeadNumber = Math.min(currentPage * LEADS_PAGE_SIZE, visibleLeads.length);
 
   const brandPlatformFilteredLeads = visibleBaseLeads;
+  const isDetailPanelOpen = Boolean(selectedLead && !isPanelCollapsed);
 
   const pendingResultLead = useMemo(() => {
     return sortedLeads.find((lead) =>
@@ -534,11 +537,11 @@ export default function LeadsPage() {
 
   return (
     <div
-      className={`grid min-h-full max-w-[100vw] gap-[clamp(6px,0.55vw,10px)] overflow-hidden p-[clamp(6px,0.6vw,12px)] ${
-        selectedLead && !isPanelCollapsed
+      data-tour="leads-page"
+      className={`grid min-h-full max-w-[100vw] gap-[clamp(6px,0.55vw,10px)] overflow-hidden p-[clamp(6px,0.6vw,12px)] ${selectedLead && !isPanelCollapsed
           ? "xl:grid-cols-[minmax(0,var(--lead-main-ratio))_minmax(0,var(--lead-detail-ratio))]"
           : "grid-cols-1"
-      }`}
+        }`}
       style={
         {
           "--lead-main-ratio": "72fr",
@@ -597,24 +600,22 @@ export default function LeadsPage() {
 
         <section className="space-y-[clamp(6px,0.55vw,10px)]">
           <div className="flex flex-col gap-2 min-[1500px]:flex-row min-[1500px]:items-center min-[1500px]:justify-between">
-            <div className="flex flex-wrap gap-2">
+            <div data-tour="lead-view-tabs" className="flex flex-wrap gap-2">
               {workbenchViews.map((view) => (
                 <button
                   key={view.id}
                   type="button"
                   onClick={() => setActiveView(view.id)}
-                  className={`inline-flex items-center rounded-xl border px-3.5 py-2 text-sm font-bold tracking-tight transition-all duration-200 ${
-                    activeView === view.id
+                  className={`inline-flex items-center rounded-xl border px-3.5 py-2 text-sm font-bold tracking-tight transition-all duration-200 ${activeView === view.id
                       ? "border-[var(--color-brand)] bg-[var(--color-brand)] text-white shadow-md shadow-[var(--color-brand)]/10"
                       : "border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-strong)] dark:bg-slate-900/40"
-                  }`}
+                    }`}
                 >
                   <span>{view.label}</span>
-                  <span className={`ml-2 px-2 py-0.5 rounded-full text-[11px] font-extrabold transition-all duration-200 ${
-                    activeView === view.id
+                  <span className={`ml-2 px-2 py-0.5 rounded-full text-[11px] font-extrabold transition-all duration-200 ${activeView === view.id
                       ? "bg-white/20 text-white"
                       : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
-                  }`}>
+                    }`}>
                     {viewCounts[view.id]}
                   </span>
                 </button>
@@ -622,6 +623,7 @@ export default function LeadsPage() {
             </div>
             <button
               type="button"
+              data-tour="lead-refresh-button"
               onClick={() => refetch(true)}
               disabled={isLoading}
               className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-4 py-2 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)] disabled:cursor-not-allowed disabled:opacity-60"
@@ -631,6 +633,7 @@ export default function LeadsPage() {
             </button>
             <button
               type="button"
+              data-tour="lead-filter-button"
               onClick={() => setShowFilters((value) => !value)}
               className="inline-flex w-fit items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-2.5 py-1.5 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)]"
             >

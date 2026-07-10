@@ -661,7 +661,9 @@ export default function LabelRequestsPage() {
       setLoading(true);
       try {
         const { requests: rawRequests, history: rawHistory } =
-          await DashboardService.fetchLabelChangeRequests(profile?.brandId || undefined);
+          await DashboardService.fetchLabelChangeRequests(
+            profile?.brandName || profile?.brandId || undefined,
+          );
 
         const mapLabelField = (raw: unknown, fallback: LabelValue): LabelValue => {
           if (!raw || typeof raw !== "object") return fallback;
@@ -801,7 +803,7 @@ export default function LabelRequestsPage() {
     return () => {
       active = false;
     };
-  }, [profile?.brandId]);
+  }, [profile?.brandId, profile?.brandName]);
 
   const displayedRequests = useMemo(
     () => requests.filter((item) => isWithinRequestTimeRange(item, requestTimeRange)).sort(compareRequests),
@@ -831,6 +833,12 @@ export default function LabelRequestsPage() {
   }, [selectedRequest]);
 
   const pendingCount = requests.filter((item) => item.status === "pending").length;
+  const canApproveSelectedRequest =
+    selectedRequest &&
+    (selectedRequest.status === "pending" ||
+      selectedRequest.status === "approved" ||
+      selectedRequest.status === "edited");
+  const canRejectSelectedRequest = selectedRequest?.status === "pending";
   const requesterOptions = useMemo(
     () => Array.from(new Set([...staffNames, ...auditEntries.map((item) => item.requested_by_name).filter(Boolean)])).sort(),
     [auditEntries, staffNames],
@@ -859,11 +867,12 @@ export default function LabelRequestsPage() {
     if (!selectedRequest) return;
     setSaving(true);
     const changedAt = new Date().toISOString();
+    const resolvedStatus: LabelRequest["status"] = status === "edited" ? "approved" : status;
 
     const nextHistory = [
       ...(selectedRequest.history || []),
       {
-        action: status,
+        action: resolvedStatus,
         by_name: profile?.displayName || profile?.email || "Brand Manager",
         by_email: profile?.email,
         at: changedAt,
@@ -873,14 +882,14 @@ export default function LabelRequestsPage() {
     ];
 
     const nextAuditEntry: LabelAuditEntry = {
-      id: `${selectedRequest.id}-${status}-${Date.now()}`,
+      id: `${selectedRequest.id}-${resolvedStatus}-${Date.now()}`,
       request_id: selectedRequest.id,
       brand_id: selectedRequest.brand_id || profile?.brandId,
       brand_name: selectedRequest.brand_name || profile?.brandName,
       mention_id: selectedRequest.mention_id,
       mention_content: selectedRequest.mention.content,
-      action: status,
-      status,
+      action: resolvedStatus,
+      status: resolvedStatus,
       old_label: selectedRequest.old_label,
       new_label: finalLabel,
       requested_by_name: selectedRequest.requested_by_name,
@@ -896,10 +905,10 @@ export default function LabelRequestsPage() {
 
     try {
       if (!selectedRequest.isDemo) {
-        if (status === "approved" || status === "edited") {
+        if (resolvedStatus === "approved") {
           await DashboardService.approveLabelChangeRequest(
             selectedRequest.id,
-            status === "edited" ? status : "approved",
+            "approved",
             finalLabel as Record<string, unknown>,
             {
               mentionId: selectedRequest.mention_id,
@@ -920,14 +929,14 @@ export default function LabelRequestsPage() {
           useDashboardStore.getState().approveLabelChangeRequestInStore(
             selectedRequest.id,
             finalLabel as Record<string, unknown>,
-            status,
+            "approved",
             nextHistory,
           );
         } else {
           // reject / cancel — uses Supabase
           await DashboardService.rejectLabelChangeRequest(
             selectedRequest.id,
-            status as "rejected" | "cancelled",
+            resolvedStatus as "rejected" | "cancelled",
             {
               uid: profile?.uid || "",
               displayName: profile?.displayName,
@@ -945,7 +954,7 @@ export default function LabelRequestsPage() {
           useDashboardStore.getState().setLabelChangeRequests(
             useDashboardStore.getState().labelChangeRequests.map((req: any) =>
               req.id === selectedRequest.id
-                ? { ...req, status: status as any, history: nextHistory }
+                ? { ...req, status: resolvedStatus as any, history: nextHistory }
                 : req
             )
           );
@@ -968,7 +977,7 @@ export default function LabelRequestsPage() {
       setRequests((current) =>
         current.map((item) =>
           item.id === selectedRequest.id
-            ? { ...item, status, final_label: finalLabel, history: nextHistory }
+            ? { ...item, status: resolvedStatus, final_label: finalLabel, history: nextHistory }
             : item,
         ),
       );
@@ -1021,9 +1030,9 @@ export default function LabelRequestsPage() {
           </p>
         </div>
       </div>
-      <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
+      <div data-tour="label-request-workbench" className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
         {/* Request list */}
-        <section className="h-fit rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)]">
+        <section data-tour="label-request-list" className="h-fit rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)]">
           <div className="border-b border-[var(--color-border)] px-4 py-3.5">
             <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">
               Danh sách yêu cầu
@@ -1288,23 +1297,15 @@ export default function LabelRequestsPage() {
                     <div className="flex flex-col gap-2">
                       <button
                         type="button"
-                        disabled={saving || selectedRequest.status !== "pending"}
-                        onClick={() => updateRequestStatus("approved", selectedRequest.proposed_label)}
+                        disabled={saving || !canApproveSelectedRequest}
+                        onClick={() => updateRequestStatus("approved", draftLabel)}
                         className="rounded-lg bg-[var(--color-success)] px-4 py-3 text-sm font-bold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         Duyệt yêu cầu
                       </button>
                       <button
                         type="button"
-                        disabled={saving || selectedRequest.status !== "pending"}
-                        onClick={() => updateRequestStatus("edited", draftLabel)}
-                        className="rounded-lg bg-[var(--color-brand)] px-4 py-3 text-sm font-bold text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        Sửa lại nhãn và duyệt
-                      </button>
-                      <button
-                        type="button"
-                        disabled={saving || selectedRequest.status !== "pending"}
+                        disabled={saving || !canRejectSelectedRequest}
                         onClick={() => updateRequestStatus("rejected", selectedRequest.old_label)}
                         className="rounded-lg border border-[var(--color-border)] px-4 py-3 text-sm font-bold text-[var(--color-text-secondary)] transition hover:bg-[var(--color-bg-surface-raised)] disabled:cursor-not-allowed disabled:opacity-50"
                       >
