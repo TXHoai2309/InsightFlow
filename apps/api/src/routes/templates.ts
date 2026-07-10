@@ -22,6 +22,13 @@ interface GenerateReplyBody {
   tone?: "polite_and_apologetic" | "friendly" | "professional" | "humorous";
   sentiment?: "positive" | "negative" | "neutral";
   topic?: string;
+  intent?: string;
+  urgency?: string;
+  relevance?: boolean | null;
+  leadStatus?: string;
+  resultType?: string;
+  lastActionType?: string;
+  lastContactChannel?: string;
 }
 
 // Helpers
@@ -58,7 +65,16 @@ async function callGeminiAPI(
   customerName: string,
   tone: string,
   sentiment?: string,
-  topic?: string
+  topic?: string,
+  leadContext?: {
+    intent?: string;
+    urgency?: string;
+    relevance?: boolean | null;
+    leadStatus?: string;
+    resultType?: string;
+    lastActionType?: string;
+    lastContactChannel?: string;
+  }
 ): Promise<string> {
   const model = "gemini-flash-lite-latest";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
@@ -88,6 +104,18 @@ async function callGeminiAPI(
     topicText = topicMap[topic] || topic;
   }
 
+  const leadContextLines = [
+    leadContext?.intent ? `- Intent lead: ${leadContext.intent}` : "",
+    leadContext?.urgency ? `- Mức độ khẩn cấp: ${leadContext.urgency}` : "",
+    typeof leadContext?.relevance === "boolean"
+      ? `- Liên quan thương hiệu: ${leadContext.relevance ? "có" : "không"}`
+      : "",
+    leadContext?.leadStatus ? `- Trạng thái xử lý lead: ${leadContext.leadStatus}` : "",
+    leadContext?.resultType ? `- Kết quả đã ghi nhận: ${leadContext.resultType}` : "",
+    leadContext?.lastActionType ? `- Thao tác gần nhất: ${leadContext.lastActionType}` : "",
+    leadContext?.lastContactChannel ? `- Kênh liên hệ gần nhất: ${leadContext.lastContactChannel}` : "",
+  ].filter(Boolean).join("\n");
+
   let promptText = `
 Bạn là Đại diện Chăm sóc Khách hàng AI chuyên nghiệp bằng tiếng Việt.
 Dưới đây là thông tin ngữ cảnh:
@@ -96,6 +124,10 @@ Dưới đây là thông tin ngữ cảnh:
 - Tên khách hàng (nếu có): "${customerName || 'Khách hàng'}"
 - Giọng điệu yêu cầu: ${toneText}
 `;
+
+  if (leadContextLines) {
+    promptText += `${leadContextLines}\n`;
+  }
 
   if (templateText) {
     promptText += `
@@ -144,6 +176,36 @@ Quy tắc bắt buộc:
   const rawText = result.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!rawText) throw new Error("Empty text returned from Gemini API.");
   return rawText.trim();
+}
+
+function buildFallbackReply(
+  templateText: string | undefined,
+  customerName: string,
+  tone: string,
+  sentiment?: string,
+  topic?: string,
+) {
+  const greeting = customerName?.trim()
+    ? `Chào ${customerName.trim()},`
+    : "Chào bạn,";
+  const closing =
+    tone === "professional"
+      ? "InsightFlow sẽ ghi nhận và phản hồi bạn trong thời gian sớm nhất."
+      : "Mong bạn tiếp tục chia sẻ thêm để đội ngũ hỗ trợ tốt hơn.";
+
+  if (templateText?.trim()) {
+    return `${greeting} ${templateText.trim()} ${closing}`;
+  }
+
+  if (sentiment === "negative") {
+    return `${greeting} cảm ơn bạn đã phản hồi. Chúng mình rất tiếc vì trải nghiệm chưa tốt${topic ? ` liên quan đến ${topic}` : ""}. Đội ngũ sẽ kiểm tra lại ngay và mong được hỗ trợ bạn cụ thể hơn qua inbox hoặc thông tin liên hệ.`;
+  }
+
+  if (sentiment === "positive") {
+    return `${greeting} cảm ơn bạn rất nhiều vì phản hồi tích cực. Sự ủng hộ của bạn là động lực để đội ngũ tiếp tục cải thiện chất lượng dịch vụ.`;
+  }
+
+  return `${greeting} cảm ơn bạn đã quan tâm và để lại phản hồi. Đội ngũ đã ghi nhận thông tin${topic ? ` về ${topic}` : ""} và sẽ hỗ trợ bạn sớm nhất có thể.`;
 }
 
 async function callGeminiSuggestTemplate(
@@ -379,7 +441,22 @@ export default async function templateRoutes(fastify: FastifyInstance, options: 
     if (!user) return;
 
     const body = request.body as GenerateReplyBody;
-    const { templateId, templateText, mentionContent, customerName = "", tone = "polite_and_apologetic", sentiment, topic } = body;
+    const {
+      templateId,
+      templateText,
+      mentionContent,
+      customerName = "",
+      tone = "polite_and_apologetic",
+      sentiment,
+      topic,
+      intent,
+      urgency,
+      relevance,
+      leadStatus,
+      resultType,
+      lastActionType,
+      lastContactChannel,
+    } = body;
 
     if (!mentionContent) {
       return reply.status(400).send({
@@ -419,10 +496,18 @@ export default async function templateRoutes(fastify: FastifyInstance, options: 
       : "";
 
     if (!apiKey) {
-      return reply.status(500).send({
-        success: false,
-        error: "Gemini API key is not configured in the server environment.",
-      });
+      request.log.warn("Gemini API key is not configured; using fallback quick reply.");
+      return {
+        success: true,
+        replyText: buildFallbackReply(
+          activeTemplateText || undefined,
+          customerName,
+          tone,
+          sentiment,
+          topic,
+        ),
+        source: "fallback",
+      };
     }
 
     try {
@@ -433,7 +518,16 @@ export default async function templateRoutes(fastify: FastifyInstance, options: 
         customerName,
         tone,
         sentiment,
-        topic
+        topic,
+        {
+          intent,
+          urgency,
+          relevance,
+          leadStatus,
+          resultType,
+          lastActionType,
+          lastContactChannel,
+        }
       );
 
       return { success: true, replyText: generatedReply };

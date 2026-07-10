@@ -7,7 +7,7 @@ import { generateWeeklyBrandReportExcel } from "@/lib/excelExport";
 import { DashboardService } from "@/lib/services/dashboard";
 import { useAuth } from "@/hooks/useAuth";
 import { filterByBusinessPolicy, getScopedBrandKey, isRecordInBrandScope } from "@/lib/brandScope";
-import DashboardLeadMonitoringPage from "@/app/dashboard/lead-monitoring/page";
+import { LeadEmployeeReportPage } from "@/components/lead-monitoring/LeadEmployeeReportPage";
 
 
 /**
@@ -463,6 +463,13 @@ function normalizeSourceName(source: string): string {
   if (normalized.includes("thread")) return "threads";
   if (normalized.includes("news") || normalized.includes("bao")) return "news";
   return normalized || "unknown";
+}
+
+function normalizeReportPlatformKey(source: string): string {
+  const normalized = normalizeSourceName(source);
+  if (normalized === "threads") return "thread";
+  if (normalized === "befood") return "be";
+  return normalized;
 }
 
 function mapContentType(raw: unknown): Mention["content_type"] {
@@ -1081,7 +1088,7 @@ export default function ReportsPage() {
   }
 
   if (!authLoading && profile?.role === "lead_employee") {
-    return <DashboardLeadMonitoringPage />;
+    return <LeadEmployeeReportPage />;
   }
 
   return <LegacyReportsPage />;
@@ -1291,7 +1298,10 @@ function LegacyReportsPage() {
       try {
         if (authLoading) return;
         setLoading(true);
-        const rawData = await DashboardService.fetchRawData();
+        const rawData = await DashboardService.fetchRawData({
+          brandKey: scopedBrandKey || undefined,
+          maxMentions: scopedBrandKey ? 1000 : 30000,
+        });
         const supabaseMentions = filterByBusinessPolicy(rawData.mentions, profile, "view_mentions");
         const brandOrder = ["Highlands Coffee", "Starbucks", "Mixue"];
         const brandSet = new Set<string>(brandOrder);
@@ -1300,8 +1310,8 @@ function LegacyReportsPage() {
             id: mention.id,
             parent_id: mention.parent_id,
             brand: formatBrandName(mention.workspace_id),
-            source: mention.platform,
-            platform: mention.platform,
+            source: normalizeReportPlatformKey(mention.platform),
+            platform: normalizeReportPlatformKey(mention.platform),
             content: mention.content,
             post_content: mention.post_content,
             comment_content: mention.comment_content,
@@ -1598,7 +1608,7 @@ function LegacyReportsPage() {
         if (mDate < start || mDate > end) return false;
 
         // Platform filter
-        if (!customPlatforms.includes(m.source)) return false;
+        if (!customPlatforms.includes(normalizeReportPlatformKey(m.source))) return false;
 
         // Topic filter
         if (!customTopics.includes(m.topic.toLowerCase())) return false;

@@ -29,6 +29,7 @@ import {
   type LeadDetailPanelTab,
 } from "@/lib/lead-return-context";
 import { normalizeBrandName } from "@/lib/services/dashboard";
+import { isIntentLead } from "@/lib/lead-intent";
 import {
   isLabelRequestForLead,
   isPendingLeadLabelRequest,
@@ -132,6 +133,7 @@ export default function LeadsPage() {
     const normFilter =
       filters.workspace_id !== "all" ? normalizeBrandName(filters.workspace_id) : null;
     const filteredLeads = leads.filter((lead) => {
+      if (!isIntentLead(lead)) return false;
       if (normFilter && normalizeBrandName(lead.workspace_id) !== normFilter) return false;
       if (filters.platform !== "all" && lead.platform !== filters.platform) return false;
       return true;
@@ -267,9 +269,9 @@ export default function LeadsPage() {
 
   const visibleLeads = useMemo(() => {
     return sortedLeads.filter((lead) =>
-      matchesLeadWorkbenchView(lead, activeView, currentTime, profile),
+      lead.id === selectedLeadId || matchesLeadWorkbenchView(lead, activeView, currentTime, profile),
     );
-  }, [activeView, currentTime, profile, sortedLeads]);
+  }, [activeView, currentTime, profile, sortedLeads, selectedLeadId]);
 
   const totalPages = Math.max(1, Math.ceil(visibleLeads.length / LEADS_PAGE_SIZE));
 
@@ -424,6 +426,7 @@ export default function LeadsPage() {
   const lastLeadNumber = Math.min(currentPage * LEADS_PAGE_SIZE, visibleLeads.length);
 
   const brandPlatformFilteredLeads = visibleBaseLeads;
+  const isDetailPanelOpen = Boolean(selectedLead && !isPanelCollapsed);
 
   const pendingResultLead = useMemo(() => {
     return sortedLeads.find((lead) =>
@@ -510,6 +513,7 @@ export default function LeadsPage() {
 
   return (
     <div
+      data-tour="leads-page"
       className={`grid min-h-full max-w-[100vw] gap-[clamp(6px,0.55vw,10px)] overflow-hidden p-[clamp(6px,0.6vw,12px)] ${
         selectedLead && !isPanelCollapsed
           ? "xl:grid-cols-[minmax(0,var(--lead-main-ratio))_minmax(0,var(--lead-detail-ratio))]"
@@ -573,7 +577,7 @@ export default function LeadsPage() {
 
         <section className="space-y-[clamp(6px,0.55vw,10px)]">
           <div className="flex flex-col gap-2 min-[1500px]:flex-row min-[1500px]:items-center min-[1500px]:justify-between">
-            <div className="flex flex-wrap gap-2">
+            <div data-tour="lead-view-tabs" className="flex flex-wrap gap-2">
               {workbenchViews.map((view) => (
                 <button
                   key={view.id}
@@ -598,6 +602,7 @@ export default function LeadsPage() {
             </div>
             <button
               type="button"
+              data-tour="lead-refresh-button"
               onClick={() => refetch(true)}
               disabled={isLoading}
               className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-4 py-2 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)] disabled:cursor-not-allowed disabled:opacity-60"
@@ -607,6 +612,7 @@ export default function LeadsPage() {
             </button>
             <button
               type="button"
+              data-tour="lead-filter-button"
               onClick={() => setShowFilters((value) => !value)}
               className="inline-flex w-fit items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-2.5 py-1.5 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)]"
             >
@@ -669,6 +675,7 @@ export default function LeadsPage() {
                   selected={selectedLeadId === lead.id}
                   highlighted={highlightedLeadId === lead.id}
                   labelRequest={pendingLabelRequestByLeadId.get(lead.id)}
+                  detailPanelOpen={isDetailPanelOpen}
                   onSelect={(nextLead: Lead) => {
                     clearPendingRestore(true);
                     rememberOptimisticLead(nextLead);
