@@ -9,6 +9,7 @@ import React, { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { PLATFORM_META } from "@/lib/services/dashboard";
+import { CustomSelect } from "@/components/ui/CustomSelect";
 import type { DashboardFilters, Workspace, Platform } from "@/types/dashboard";
 
 const TIME_OPTIONS = [
@@ -92,22 +93,13 @@ export function BMFiltersBar({ workspaces }: BMFiltersBarProps) {
       <div className="bm-filters-right">
 
         {/* Time select */}
-        <div className="bm-select-wrap">
-          <span className="material-symbols-outlined bm-select-icon">schedule</span>
-          <select
-            id="bm-time-filter"
-            value={filters.time_range}
-            onChange={(e) => handleTimeRangeChange(e.target.value as DashboardFilters["time_range"])}
-            className="bm-select"
-          >
-            {TIME_OPTIONS.map(({ value, label }) => (
-              <option key={value} value={value}>
-                {t(label)}
-              </option>
-            ))}
-          </select>
-          <span className="material-symbols-outlined bm-select-chevron">expand_more</span>
-        </div>
+        <CustomSelect
+          value={filters.time_range}
+          onChange={(val) => handleTimeRangeChange(val as DashboardFilters["time_range"])}
+          options={TIME_OPTIONS.map(opt => ({ value: opt.value, label: t(opt.label) }))}
+          icon={<span className="material-symbols-outlined text-[16px] text-gray-400">schedule</span>}
+          minWidth="150px"
+        />
 
         {/* Custom date range fields */}
         {filters.time_range === "custom" && (
@@ -143,23 +135,16 @@ export function BMFiltersBar({ workspaces }: BMFiltersBarProps) {
         )}
 
         {/* Platform select */}
-        <div className="bm-select-wrap">
-          <span className="material-symbols-outlined bm-select-icon">cell_tower</span>
-          <select
-            id="bm-platform-filter"
-            value={filters.platform}
-            onChange={(e) => handle("platform", e.target.value as DashboardFilters["platform"])}
-            className="bm-select"
-          >
-            <option value="all">{t("dashboard.filters.allPlatforms")}</option>
-            {PLATFORM_ORDER.map((p) => (
-              <option key={p} value={p}>
-                {PLATFORM_META[p]?.label ?? p}
-              </option>
-            ))}
-          </select>
-          <span className="material-symbols-outlined bm-select-chevron">expand_more</span>
-        </div>
+        <CustomSelect
+          value={filters.platform || "all"}
+          onChange={(val) => handle("platform", val as DashboardFilters["platform"])}
+          options={[
+            { value: "all", label: t("dashboard.filters.allPlatforms", "Tất cả nền tảng") },
+            ...PLATFORM_ORDER.map(p => ({ value: p, label: PLATFORM_META[p]?.label ?? p }))
+          ]}
+          icon={<span className="material-symbols-outlined text-[16px] text-gray-400">cell_tower</span>}
+          minWidth="160px"
+        />
 
 
       </div>
