@@ -7,6 +7,11 @@ import { useDashboard } from "@/hooks/useDashboardData";
 import { getScopedBrandKey } from "@/lib/brandScope";
 import { exportCrisisReportCsv, exportCrisisReportExcel } from "@/lib/excelExport";
 import { formatCrisisMinutes, type CrisisReportBucket } from "@/lib/crisis-report";
+import {
+  DEFAULT_CRISIS_REPORT_FILTERS,
+  countActiveCrisisReportFilters,
+  type CrisisReportFilters,
+} from "@/lib/crisis-report-filters";
 import { ReportExportPreviewModal } from "@/components/reports/ReportExportPreviewModal";
 import { getAlertReviewSinceIso, useAlertStore } from "@/stores/alert.store";
 import { useCrisisMonitoringReport } from "./useCrisisMonitoringReport";
@@ -18,6 +23,29 @@ function formatPercent(value: number) {
 function reportFilename() {
   return `Bao_cao_nhan_vien_khung_hoang_${new Date().toISOString().slice(0, 10)}`;
 }
+
+const SOURCE_OPTIONS = [
+  { value: "all", label: "Tat ca nguon" },
+  { value: "facebook", label: "Facebook" },
+  { value: "tiktok", label: "TikTok" },
+  { value: "youtube", label: "YouTube" },
+  { value: "thread", label: "Threads" },
+  { value: "google_maps", label: "Google Maps" },
+  { value: "news", label: "Bao dien tu" },
+  { value: "be", label: "BeFood" },
+];
+
+const TOPIC_OPTIONS = [
+  "service",
+  "quality",
+  "staff",
+  "price",
+  "delivery",
+  "experience",
+  "legal",
+  "operation",
+  "other",
+];
 
 function KpiCard({
   title,
@@ -100,10 +128,32 @@ function DistributionList({ items }: { items: CrisisReportBucket[] }) {
   );
 }
 
+function FilterField({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="space-y-1">
+      <span className="text-[11px] font-black uppercase tracking-wide text-[var(--color-text-muted)]">
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+const inputClass =
+  "h-10 w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 text-sm font-semibold text-[var(--color-text-primary)] outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20";
+
 export function CrisisEmployeeReportPage() {
   const { profile } = useAuth();
-  const report = useCrisisMonitoringReport();
+  const [reportFilters, setReportFilters] = useState<CrisisReportFilters>(DEFAULT_CRISIS_REPORT_FILTERS);
+  const report = useCrisisMonitoringReport(reportFilters);
   const [pendingExport, setPendingExport] = useState<"excel" | "csv" | null>(null);
+  const activeFilterCount = countActiveCrisisReportFilters(reportFilters);
   const {
     isLoading,
     error,
@@ -118,6 +168,13 @@ export function CrisisEmployeeReportPage() {
     fetchAlerts(scopedBrandKey, false);
     fetchCorrectionRequests(scopedBrandKey, false);
   }, [fetchAlerts, fetchCorrectionRequests, profile]);
+
+  const updateReportFilter = <K extends keyof CrisisReportFilters>(
+    key: K,
+    value: CrisisReportFilters[K],
+  ) => {
+    setReportFilters((current) => ({ ...current, [key]: value }));
+  };
 
   const exportFile = () => {
     if (pendingExport === "excel") exportCrisisReportExcel(report, reportFilename());
@@ -216,6 +273,144 @@ export function CrisisEmployeeReportPage() {
           {error}
         </div>
       ) : null}
+
+      <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-4 shadow-sm">
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-base font-black text-[var(--color-text-primary)]">Bo loc bao cao</h2>
+            <p className="text-sm text-[var(--color-text-secondary)]">
+              Ap dung cho KPI, bang chi tiet, preview va file xuat.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setReportFilters(DEFAULT_CRISIS_REPORT_FILTERS)}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-[var(--color-border)] px-3 py-2 text-sm font-bold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-high)]"
+          >
+            <span className="material-symbols-outlined text-base">restart_alt</span>
+            Dat lai{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+          </button>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <FilterField label="Thoi gian">
+            <select
+              value={reportFilters.timeRange}
+              onChange={(event) => updateReportFilter("timeRange", event.target.value as CrisisReportFilters["timeRange"])}
+              className={inputClass}
+            >
+              <option value="all">Tat ca</option>
+              <option value="today">Hom nay</option>
+              <option value="7d">7 ngay</option>
+              <option value="30d">30 ngay</option>
+              <option value="custom">Tuy chon</option>
+            </select>
+          </FilterField>
+          <FilterField label="Trang thai">
+            <select
+              value={reportFilters.status}
+              onChange={(event) => updateReportFilter("status", event.target.value)}
+              className={inputClass}
+            >
+              <option value="all">Tat ca</option>
+              <option value="new">Moi</option>
+              <option value="resolving">Dang xu ly</option>
+              <option value="monitoring">Dang theo doi</option>
+              <option value="pending_approval">Cho duyet</option>
+              <option value="resolved">Da xu ly</option>
+            </select>
+          </FilterField>
+          <FilterField label="Muc do">
+            <select
+              value={reportFilters.severity}
+              onChange={(event) => updateReportFilter("severity", event.target.value as CrisisReportFilters["severity"])}
+              className={inputClass}
+            >
+              <option value="all">Tat ca</option>
+              <option value="critical">Critical</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+          </FilterField>
+          <FilterField label="SLA">
+            <select
+              value={reportFilters.sla}
+              onChange={(event) => updateReportFilter("sla", event.target.value as CrisisReportFilters["sla"])}
+              className={inputClass}
+            >
+              <option value="all">Tat ca</option>
+              <option value="in_sla">Trong/Dung SLA</option>
+              <option value="overdue">Qua han</option>
+              <option value="late">Tre SLA</option>
+              <option value="closed">Da dong</option>
+            </select>
+          </FilterField>
+          <FilterField label="Escalation">
+            <select
+              value={reportFilters.escalation}
+              onChange={(event) => updateReportFilter("escalation", event.target.value as CrisisReportFilters["escalation"])}
+              className={inputClass}
+            >
+              <option value="all">Tat ca</option>
+              <option value="yes">Da escalation</option>
+              <option value="no">Chua escalation</option>
+            </select>
+          </FilterField>
+          <FilterField label="Nguon">
+            <select
+              value={reportFilters.source}
+              onChange={(event) => updateReportFilter("source", event.target.value)}
+              className={inputClass}
+            >
+              {SOURCE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </FilterField>
+          <FilterField label="Chu de">
+            <select
+              value={reportFilters.topic}
+              onChange={(event) => updateReportFilter("topic", event.target.value)}
+              className={inputClass}
+            >
+              <option value="all">Tat ca</option>
+              {TOPIC_OPTIONS.map((topic) => (
+                <option key={topic} value={topic}>{topic}</option>
+              ))}
+            </select>
+          </FilterField>
+          <FilterField label="Tu khoa">
+            <input
+              value={reportFilters.keyword}
+              onChange={(event) => updateReportFilter("keyword", event.target.value)}
+              placeholder="ID, topic, noi dung..."
+              className={inputClass}
+            />
+          </FilterField>
+        </div>
+
+        {reportFilters.timeRange === "custom" ? (
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <FilterField label="Tu ngay">
+              <input
+                type="date"
+                value={reportFilters.startDate}
+                onChange={(event) => updateReportFilter("startDate", event.target.value)}
+                className={inputClass}
+              />
+            </FilterField>
+            <FilterField label="Den ngay">
+              <input
+                type="date"
+                value={reportFilters.endDate}
+                onChange={(event) => updateReportFilter("endDate", event.target.value)}
+                className={inputClass}
+              />
+            </FilterField>
+          </div>
+        ) : null}
+      </section>
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <KpiCard

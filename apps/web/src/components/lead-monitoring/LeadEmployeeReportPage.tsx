@@ -7,6 +7,11 @@ import { useDashboard } from "@/hooks/useDashboardData";
 import { normalizeBrandName } from "@/lib/services/dashboard";
 import { exportLeadReportCsv, exportLeadReportExcel } from "@/lib/excelExport";
 import { formatMinutes, type LeadReportBucket } from "@/lib/lead-report";
+import {
+  DEFAULT_LEAD_REPORT_FILTERS,
+  countActiveLeadReportFilters,
+  type LeadReportFilters,
+} from "@/lib/lead-report-filters";
 import { ReportExportPreviewModal } from "@/components/reports/ReportExportPreviewModal";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { useLeadMonitoringReport } from "./useLeadMonitoringReport";
@@ -18,6 +23,17 @@ function formatPercent(value: number) {
 function reportFilename() {
   return `Bao_cao_nhan_vien_lead_${new Date().toISOString().slice(0, 10)}`;
 }
+
+const SOURCE_OPTIONS = [
+  { value: "all", label: "Tat ca nguon" },
+  { value: "facebook", label: "Facebook" },
+  { value: "tiktok", label: "TikTok" },
+  { value: "google_maps", label: "Google Maps" },
+  { value: "be", label: "BeFood" },
+  { value: "youtube", label: "YouTube" },
+  { value: "thread", label: "Threads" },
+  { value: "news", label: "Bao dien tu" },
+];
 
 function KpiCard({
   title,
@@ -98,11 +114,40 @@ function DistributionList({ items }: { items: LeadReportBucket[] }) {
   );
 }
 
+function FilterField({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="space-y-1">
+      <span className="text-[11px] font-black uppercase tracking-wide text-[var(--color-text-muted)]">
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+const inputClass =
+  "h-10 w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 text-sm font-semibold text-[var(--color-text-primary)] outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20";
+
 export function LeadEmployeeReportPage() {
   const { profile } = useAuth();
   const { filters, workspaces, isLoading, error, setFilters } = useDashboardStore();
-  const report = useLeadMonitoringReport();
+  const [reportFilters, setReportFilters] = useState<LeadReportFilters>(DEFAULT_LEAD_REPORT_FILTERS);
+  const report = useLeadMonitoringReport(reportFilters);
   const [pendingExport, setPendingExport] = useState<"excel" | "csv" | null>(null);
+  const activeFilterCount = countActiveLeadReportFilters(reportFilters);
+
+  const updateReportFilter = <K extends keyof LeadReportFilters>(
+    key: K,
+    value: LeadReportFilters[K],
+  ) => {
+    setReportFilters((current) => ({ ...current, [key]: value }));
+  };
 
   useDashboard({ autoFetch: true, refetchInterval: 60000 });
 
@@ -223,6 +268,131 @@ export function LeadEmployeeReportPage() {
           {error}
         </div>
       ) : null}
+
+      <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-4 shadow-sm">
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-base font-black text-[var(--color-text-primary)]">Bo loc bao cao</h2>
+            <p className="text-sm text-[var(--color-text-secondary)]">
+              Ap dung cho KPI, bang chi tiet, preview va file xuat.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setReportFilters(DEFAULT_LEAD_REPORT_FILTERS)}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-[var(--color-border)] px-3 py-2 text-sm font-bold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-high)]"
+          >
+            <span className="material-symbols-outlined text-base">restart_alt</span>
+            Dat lai{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+          </button>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <FilterField label="Thoi gian">
+            <select
+              value={reportFilters.timeRange}
+              onChange={(event) => updateReportFilter("timeRange", event.target.value as LeadReportFilters["timeRange"])}
+              className={inputClass}
+            >
+              <option value="all">Tat ca</option>
+              <option value="today">Hom nay</option>
+              <option value="7d">7 ngay</option>
+              <option value="30d">30 ngay</option>
+              <option value="custom">Tuy chon</option>
+            </select>
+          </FilterField>
+          <FilterField label="Trang thai">
+            <select
+              value={reportFilters.status}
+              onChange={(event) => updateReportFilter("status", event.target.value as LeadReportFilters["status"])}
+              className={inputClass}
+            >
+              <option value="all">Tat ca</option>
+              <option value="new">Moi</option>
+              <option value="processing">Dang xu ly</option>
+              <option value="completed">Da chuyen doi</option>
+              <option value="skipped">Bo qua</option>
+            </select>
+          </FilterField>
+          <FilterField label="Intent">
+            <select
+              value={reportFilters.intent}
+              onChange={(event) => updateReportFilter("intent", event.target.value as LeadReportFilters["intent"])}
+              className={inputClass}
+            >
+              <option value="all">Tat ca</option>
+              <option value="hot">Hot</option>
+              <option value="warm">Warm</option>
+              <option value="cold">Cold</option>
+              <option value="none">Khong co intent</option>
+            </select>
+          </FilterField>
+          <FilterField label="SLA">
+            <select
+              value={reportFilters.sla}
+              onChange={(event) => updateReportFilter("sla", event.target.value as LeadReportFilters["sla"])}
+              className={inputClass}
+            >
+              <option value="all">Tat ca</option>
+              <option value="in_sla">Trong/Dung SLA</option>
+              <option value="overdue">Qua han</option>
+              <option value="late">Tre SLA</option>
+              <option value="closed">Da dong</option>
+            </select>
+          </FilterField>
+          <FilterField label="Nguon">
+            <select
+              value={reportFilters.source}
+              onChange={(event) => updateReportFilter("source", event.target.value)}
+              className={inputClass}
+            >
+              {SOURCE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </FilterField>
+          <FilterField label="Phu trach">
+            <select
+              value={reportFilters.owner}
+              onChange={(event) => updateReportFilter("owner", event.target.value as LeadReportFilters["owner"])}
+              className={inputClass}
+            >
+              <option value="all">Tat ca duoc phep</option>
+              <option value="mine">Cua toi</option>
+              <option value="unassigned">Chua phan cong</option>
+            </select>
+          </FilterField>
+          <FilterField label="Tu khoa">
+            <input
+              value={reportFilters.keyword}
+              onChange={(event) => updateReportFilter("keyword", event.target.value)}
+              placeholder="ID, khach hang, noi dung..."
+              className={inputClass}
+            />
+          </FilterField>
+        </div>
+
+        {reportFilters.timeRange === "custom" ? (
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <FilterField label="Tu ngay">
+              <input
+                type="date"
+                value={reportFilters.startDate}
+                onChange={(event) => updateReportFilter("startDate", event.target.value)}
+                className={inputClass}
+              />
+            </FilterField>
+            <FilterField label="Den ngay">
+              <input
+                type="date"
+                value={reportFilters.endDate}
+                onChange={(event) => updateReportFilter("endDate", event.target.value)}
+                className={inputClass}
+              />
+            </FilterField>
+          </div>
+        ) : null}
+      </section>
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <KpiCard title="Tổng lead" value={report.kpis.total} sub={`${report.kpis.hot} hot · ${report.kpis.warm} warm`} />

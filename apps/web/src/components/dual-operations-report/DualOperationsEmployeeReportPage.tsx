@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import { useDashboard } from "@/hooks/useDashboardData";
@@ -8,7 +8,9 @@ import { getScopedBrandKey } from "@/lib/brandScope";
 import { exportDualOperationsReportCsv, exportDualOperationsReportExcel } from "@/lib/excelExport";
 import type { DualOperationsBucket } from "@/lib/dual-operations-report";
 import { formatCrisisMinutes } from "@/lib/crisis-report";
+import { DEFAULT_CRISIS_REPORT_FILTERS, type CrisisReportFilters } from "@/lib/crisis-report-filters";
 import { formatMinutes } from "@/lib/lead-report";
+import { DEFAULT_LEAD_REPORT_FILTERS, type LeadReportFilters } from "@/lib/lead-report-filters";
 import { normalizeBrandName } from "@/lib/services/dashboard";
 import { ReportExportPreviewModal } from "@/components/reports/ReportExportPreviewModal";
 import { getAlertReviewSinceIso, useAlertStore } from "@/stores/alert.store";
@@ -22,6 +24,45 @@ function formatPercent(value: number) {
 function reportFilename() {
   return `Bao_cao_nhan_vien_2_nghiep_vu_${new Date().toISOString().slice(0, 10)}`;
 }
+
+type DualOperationFilter = "all" | "lead" | "crisis";
+
+interface DualReportFilters {
+  operation: DualOperationFilter;
+  timeRange: LeadReportFilters["timeRange"];
+  startDate: string;
+  endDate: string;
+  sla: LeadReportFilters["sla"];
+  priority: "all" | "high";
+  source: string;
+  leadStatus: LeadReportFilters["status"];
+  crisisStatus: string;
+  keyword: string;
+}
+
+const DEFAULT_DUAL_REPORT_FILTERS: DualReportFilters = {
+  operation: "all",
+  timeRange: "all",
+  startDate: "",
+  endDate: "",
+  sla: "all",
+  priority: "all",
+  source: "all",
+  leadStatus: "all",
+  crisisStatus: "all",
+  keyword: "",
+};
+
+const SOURCE_OPTIONS = [
+  { value: "all", label: "Tat ca nguon" },
+  { value: "facebook", label: "Facebook" },
+  { value: "tiktok", label: "TikTok" },
+  { value: "google_maps", label: "Google Maps" },
+  { value: "be", label: "BeFood" },
+  { value: "youtube", label: "YouTube" },
+  { value: "thread", label: "Threads" },
+  { value: "news", label: "Bao dien tu" },
+];
 
 function KpiCard({
   title,
@@ -104,10 +145,72 @@ function DistributionList({ items }: { items: DualOperationsBucket[] }) {
   );
 }
 
+function FilterField({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="space-y-1">
+      <span className="text-[11px] font-black uppercase tracking-wide text-[var(--color-text-muted)]">
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+const inputClass =
+  "h-10 w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 text-sm font-semibold text-[var(--color-text-primary)] outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20";
+
+function countActiveDualReportFilters(filters: DualReportFilters) {
+  return [
+    filters.operation !== "all",
+    filters.timeRange !== "all",
+    filters.sla !== "all",
+    filters.priority !== "all",
+    filters.source !== "all",
+    filters.leadStatus !== "all",
+    filters.crisisStatus !== "all",
+    Boolean(filters.keyword.trim()),
+  ].filter(Boolean).length;
+}
+
 export function DualOperationsEmployeeReportPage() {
   const { profile } = useAuth();
-  const report = useDualOperationsReport();
+  const [reportFilters, setReportFilters] = useState<DualReportFilters>(DEFAULT_DUAL_REPORT_FILTERS);
+  const leadFilters = useMemo<LeadReportFilters>(() => ({
+    ...DEFAULT_LEAD_REPORT_FILTERS,
+    timeRange: reportFilters.timeRange,
+    startDate: reportFilters.startDate,
+    endDate: reportFilters.endDate,
+    sla: reportFilters.sla,
+    source: reportFilters.source,
+    keyword: reportFilters.keyword,
+    status: reportFilters.leadStatus,
+    intent: reportFilters.priority === "high" ? "hot" : "all",
+  }), [reportFilters]);
+  const crisisFilters = useMemo<CrisisReportFilters>(() => ({
+    ...DEFAULT_CRISIS_REPORT_FILTERS,
+    timeRange: reportFilters.timeRange,
+    startDate: reportFilters.startDate,
+    endDate: reportFilters.endDate,
+    sla: reportFilters.sla,
+    source: reportFilters.source,
+    keyword: reportFilters.keyword,
+    status: reportFilters.crisisStatus,
+    severity: reportFilters.priority === "high" ? "high_critical" : "all",
+  }), [reportFilters]);
+  const report = useDualOperationsReport({
+    leadFilters,
+    crisisFilters,
+    includeLead: reportFilters.operation !== "crisis",
+    includeCrisis: reportFilters.operation !== "lead",
+  });
   const [pendingExport, setPendingExport] = useState<"excel" | "csv" | null>(null);
+  const activeFilterCount = countActiveDualReportFilters(reportFilters);
   const { filters, workspaces, isLoading: dashboardLoading, error: dashboardError, setFilters } = useDashboardStore();
   const {
     isLoading: alertLoading,
@@ -146,6 +249,13 @@ export function DualOperationsEmployeeReportPage() {
     fetchAlerts(scopedBrandKey, false);
     fetchCorrectionRequests(scopedBrandKey, false);
   }, [fetchAlerts, fetchCorrectionRequests, profile]);
+
+  const updateReportFilter = <K extends keyof DualReportFilters>(
+    key: K,
+    value: DualReportFilters[K],
+  ) => {
+    setReportFilters((current) => ({ ...current, [key]: value }));
+  };
 
   const exportFile = () => {
     if (pendingExport === "excel") exportDualOperationsReportExcel(report, reportFilename());
@@ -244,6 +354,142 @@ export function DualOperationsEmployeeReportPage() {
           {dashboardError || alertError}
         </div>
       ) : null}
+
+      <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-4 shadow-sm">
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-base font-black text-[var(--color-text-primary)]">Bo loc bao cao</h2>
+            <p className="text-sm text-[var(--color-text-secondary)]">
+              Ap dung dong thoi cho KPI tong hop, viec uu tien, preview va file xuat.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setReportFilters(DEFAULT_DUAL_REPORT_FILTERS)}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-[var(--color-border)] px-3 py-2 text-sm font-bold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-high)]"
+          >
+            <span className="material-symbols-outlined text-base">restart_alt</span>
+            Dat lai{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+          </button>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <FilterField label="Nghiep vu">
+            <select
+              value={reportFilters.operation}
+              onChange={(event) => updateReportFilter("operation", event.target.value as DualReportFilters["operation"])}
+              className={inputClass}
+            >
+              <option value="all">Tat ca</option>
+              <option value="lead">Chi Lead</option>
+              <option value="crisis">Chi Khung hoang</option>
+            </select>
+          </FilterField>
+          <FilterField label="Thoi gian">
+            <select
+              value={reportFilters.timeRange}
+              onChange={(event) => updateReportFilter("timeRange", event.target.value as DualReportFilters["timeRange"])}
+              className={inputClass}
+            >
+              <option value="all">Tat ca</option>
+              <option value="today">Hom nay</option>
+              <option value="7d">7 ngay</option>
+              <option value="30d">30 ngay</option>
+              <option value="custom">Tuy chon</option>
+            </select>
+          </FilterField>
+          <FilterField label="SLA">
+            <select
+              value={reportFilters.sla}
+              onChange={(event) => updateReportFilter("sla", event.target.value as DualReportFilters["sla"])}
+              className={inputClass}
+            >
+              <option value="all">Tat ca</option>
+              <option value="in_sla">Trong/Dung SLA</option>
+              <option value="overdue">Qua han</option>
+              <option value="late">Tre SLA</option>
+              <option value="closed">Da dong</option>
+            </select>
+          </FilterField>
+          <FilterField label="Uu tien">
+            <select
+              value={reportFilters.priority}
+              onChange={(event) => updateReportFilter("priority", event.target.value as DualReportFilters["priority"])}
+              className={inputClass}
+            >
+              <option value="all">Tat ca</option>
+              <option value="high">Hot lead / Crisis cao</option>
+            </select>
+          </FilterField>
+          <FilterField label="Nguon">
+            <select
+              value={reportFilters.source}
+              onChange={(event) => updateReportFilter("source", event.target.value)}
+              className={inputClass}
+            >
+              {SOURCE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </FilterField>
+          <FilterField label="Trang thai Lead">
+            <select
+              value={reportFilters.leadStatus}
+              onChange={(event) => updateReportFilter("leadStatus", event.target.value as DualReportFilters["leadStatus"])}
+              className={inputClass}
+            >
+              <option value="all">Tat ca</option>
+              <option value="new">Moi</option>
+              <option value="processing">Dang xu ly</option>
+              <option value="completed">Da chuyen doi</option>
+              <option value="skipped">Bo qua</option>
+            </select>
+          </FilterField>
+          <FilterField label="Trang thai Crisis">
+            <select
+              value={reportFilters.crisisStatus}
+              onChange={(event) => updateReportFilter("crisisStatus", event.target.value)}
+              className={inputClass}
+            >
+              <option value="all">Tat ca</option>
+              <option value="new">Moi</option>
+              <option value="resolving">Dang xu ly</option>
+              <option value="monitoring">Dang theo doi</option>
+              <option value="pending_approval">Cho duyet</option>
+              <option value="resolved">Da xu ly</option>
+            </select>
+          </FilterField>
+          <FilterField label="Tu khoa">
+            <input
+              value={reportFilters.keyword}
+              onChange={(event) => updateReportFilter("keyword", event.target.value)}
+              placeholder="ID, noi dung, topic..."
+              className={inputClass}
+            />
+          </FilterField>
+        </div>
+
+        {reportFilters.timeRange === "custom" ? (
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <FilterField label="Tu ngay">
+              <input
+                type="date"
+                value={reportFilters.startDate}
+                onChange={(event) => updateReportFilter("startDate", event.target.value)}
+                className={inputClass}
+              />
+            </FilterField>
+            <FilterField label="Den ngay">
+              <input
+                type="date"
+                value={reportFilters.endDate}
+                onChange={(event) => updateReportFilter("endDate", event.target.value)}
+                className={inputClass}
+              />
+            </FilterField>
+          </div>
+        ) : null}
+      </section>
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <KpiCard
