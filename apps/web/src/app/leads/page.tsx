@@ -196,7 +196,10 @@ export default function LeadsPage() {
     const returnToken = params.get("returnToken");
     const returnContext = loadLeadReturnContext(returnToken);
     const requestedFilters = returnContext?.filters;
-    const requestedPanelTab = returnContext?.panelTab;
+    const requestedPanelTab = returnContext?.panelTab as
+      | LeadDetailPanelTab
+      | "suggestion"
+      | undefined;
     const requestedView = params.get("view") as LeadWorkbenchView | null;
     const requestedPage = Number(params.get("page") || "1");
     const requestedLeadId = params.get("leadId");
@@ -213,7 +216,7 @@ export default function LeadsPage() {
     }
 
     if (requestedPanelTab) {
-      setDetailTab(requestedPanelTab);
+      setDetailTab(requestedPanelTab === "suggestion" ? "action" : requestedPanelTab);
     }
 
     if (nextView && workbenchViews.some((view) => view.id === nextView)) {
@@ -585,6 +588,7 @@ export default function LeadsPage() {
                 </p>
               </div>
             </div>
+            <div className="flex w-fit flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => {
@@ -595,6 +599,7 @@ export default function LeadsPage() {
             >
               Ghi nhận ngay
             </button>
+            </div>
           </section>
         )}
 
@@ -621,6 +626,7 @@ export default function LeadsPage() {
                 </button>
               ))}
             </div>
+            <div className="flex w-fit flex-wrap items-center gap-2">
             <button
               type="button"
               data-tour="lead-refresh-button"
@@ -635,7 +641,7 @@ export default function LeadsPage() {
               type="button"
               data-tour="lead-filter-button"
               onClick={() => setShowFilters((value) => !value)}
-              className="inline-flex w-fit items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-2.5 py-1.5 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)]"
+              className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-2.5 py-1.5 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)]"
             >
               <span className="material-symbols-outlined text-base">tune</span>
               Bộ lọc
@@ -650,6 +656,7 @@ export default function LeadsPage() {
                 Xem chi tiết
               </button>
             )}
+            </div>
           </div>
 
           {showFilters && (
