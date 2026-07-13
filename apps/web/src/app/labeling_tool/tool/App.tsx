@@ -232,7 +232,6 @@ export default function App() {
     loadPendingAssignmentCounts(
       { url: supabaseUrl.trim(), anonKey: supabaseAnonKey.trim() },
       platformFilter,
-      person,
     )
       .then(counts => {
         if (!cancelled) setPendingCounts(counts);
@@ -414,7 +413,6 @@ export default function App() {
         platformFilter,
         supabaseLimit,
         assignmentView,
-        person,
         { from: queueDateFrom || undefined, to: queueDateTo || undefined },
         supabaseBrandQuery,
         controller.signal,
