@@ -30,6 +30,7 @@ interface AppNotification {
   id: string;
   title: string;
   message: string;
+  type?: string;
   alert_id?: string;
   brand?: string;
   created_at?: string;
@@ -121,7 +122,11 @@ export function Header({ onMenuToggle }: HeaderProps) {
 
       setShowNotifications(false);
       if (notification.alert_id) {
-        router.push(`/alerts/${encodeURIComponent(notification.alert_id)}`);
+        if (notification.type === "lead_assignment") {
+          router.push(`/leads?leadId=${encodeURIComponent(notification.alert_id)}`);
+        } else {
+          router.push(`/alerts/${encodeURIComponent(notification.alert_id)}`);
+        }
       }
     };
 

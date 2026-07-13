@@ -3,11 +3,14 @@ import { subscribeWithSelector } from "zustand/middleware";
 import { dbSecond } from "@/lib/firebase";
 import { collection, doc, updateDoc, addDoc } from "firebase/firestore";
 import { isRecordInBrandScope, isSameBrandScope, getScopedBrandKey } from "@/lib/brandScope";
-import { normalizeBrandName } from "@/lib/services/dashboard";
+import { normalizeBrandName, DashboardService } from "@/lib/services/dashboard";
 import { canPerformAction, type UserRoleProfile } from "@/lib/rbac";
 import { fetchSupabaseAlerts, updateSupabaseAlertLabel, supabaseRequest } from "@/lib/supabase";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { normalizeClassificationLabel } from "@/lib/label-change";
+import { calculateNegativityScore } from "@/lib/negativityScore";
+import { useDashboardStore } from "@/stores/dashboard.store";
+import type { Mention } from "@/types/dashboard";
 
 function getResolverName(emailOrId: string | null | undefined): string {
   if (!emailOrId) return "";
@@ -68,6 +71,7 @@ export interface EscalationData {
 
 export interface AlertData {
   id: string;
+  source_id?: string;
   brand: string;
   source: string;
   text: string;
@@ -98,6 +102,7 @@ export interface AlertData {
   content_type?: string;
   internal_notes?: InternalNote[];
   post_id?: string;
+  comment_id?: string;
   post_url?: string;
   post_like_count?: number;
   post_comment_count?: number;
@@ -148,6 +153,7 @@ export interface CorrectionRequest {
 interface AlertState {
   rawAlerts: AlertData[];
   alerts: AlertData[];
+  lastFetchedAt: number;
   brands: string[];
   isLoading: boolean;
   error: string | null;
@@ -155,7 +161,7 @@ interface AlertState {
   correctionRequests: CorrectionRequest[];
   isLoadingRequests: boolean;
   setFilters: (filters: Partial<AlertFilters>) => void;
-  fetchAlerts: (scopedBrandKey?: string | null) => Promise<void>;
+  fetchAlerts: (scopedBrandKey?: string | null, force?: boolean) => Promise<void>;
   updateAlertStatus: (
     id: string,
     newStatus: string,
@@ -168,7 +174,7 @@ interface AlertState {
     },
     brandFallback?: string
   ) => Promise<void>;
-  fetchCorrectionRequests: (scopedBrandKey?: string | null) => Promise<void>;
+  fetchCorrectionRequests: (scopedBrandKey?: string | null, force?: boolean) => Promise<void>;
   createCorrectionRequest: (requestData: Omit<CorrectionRequest, "id" | "created_at" | "status">) => Promise<void>;
   resolveCorrectionRequest: (
     requestId: string,
@@ -281,7 +287,150 @@ function applyFilters(rawAlerts: AlertData[], filters: AlertFilters): AlertData[
   return result;
 }
 
+function mentionToAlertData(m: Mention): AlertData {
+  const labelObj = (m.labels || {}) as any;
+  const negativity = calculateNegativityScore({
+    sentiment: m.sentiment || "negative",
+    topic: m.topic || "other",
+    urgency: labelObj.urgency || "normal",
+    likeCount: m.star_count || 0,
+    commentCount: 0,
+    shareCount: 0,
+    platform: m.platform || "",
+    text: m.content || "",
+  });
+  const isCritical =
+    labelObj.urgency === "urgent" ||
+    labelObj.urgency === "high" ||
+    negativity.score > 80;
+  const severity =
+    labelObj.urgency ||
+    (isCritical ? "high" : negativity.severity === "critical" ? "high" : negativity.severity);
+
+  return {
+    id: m.entity_key || m.id,
+    source_id: m.id,
+    brand: m.workspace_id,
+    source: m.platform,
+    text: m.content,
+    sentiment: m.sentiment,
+    topic: m.topic || "other",
+    severity,
+    negativity_score: negativity.score,
+    created_at: m.posted_at || m.created_at,
+    status: String(labelObj.resolution_status || "new"),
+    resolved_at: labelObj.resolved_at,
+    collectionName: "annotations",
+    url: m.url || "",
+    reach: m.star_count || 0,
+    likes: m.star_count || 0,
+    comments: 0,
+    shares: 0,
+    author: m.author,
+    social_profile_url: m.contact || "",
+    being_resolved_by: labelObj.being_resolved_by || null,
+    being_resolved_at: labelObj.being_resolved_at || null,
+    resolution_history: labelObj.resolution_history || [],
+    resolved_by_email: labelObj.resolved_by_email || null,
+    resolved_by_name: labelObj.resolved_by_name || null,
+    post_content: m.post_content,
+    comment_content: m.comment_content,
+    parent_id: m.parent_id,
+    content_type: m.content_type || "post",
+    internal_notes: labelObj.internal_notes || [],
+    post_id: m.post_id || m.parent_id || m.id,
+    comment_id: m.comment_id || undefined,
+    post_url: m.url || "",
+    post_like_count: m.star_count || 0,
+    relevance: typeof labelObj.relevance === "boolean" ? labelObj.relevance : true,
+    urgency: labelObj.urgency || "none",
+    intent: labelObj.intent || "none",
+    escalation: labelObj.escalation || null,
+    monitoring_started_at: labelObj.monitoring_started_at,
+    monitoring_duration_hours: labelObj.monitoring_duration_hours,
+    monitoring_initial_comments: labelObj.monitoring_initial_comments,
+    monitoring_initial_likes: labelObj.monitoring_initial_likes,
+    monitoring_initial_shares: labelObj.monitoring_initial_shares,
+  };
+}
+
+function buildAlertsFromMentions(mentions: Mention[], scopedBrandKey?: string | null): AlertData[] {
+  return mentions
+    .filter((m) => m.sentiment === "negative")
+    .map(mentionToAlertData)
+    .filter((alert) =>
+      isWithinAlertReviewWindow(alert.created_at) &&
+      isRecordInBrandScope({ brand: alert.brand }, scopedBrandKey ?? null)
+    );
+}
+
+function loadDashboardCachedMentions(scopedBrandKey?: string | null): Mention[] {
+  if (typeof window === "undefined") return [];
+  const brandKey = scopedBrandKey && scopedBrandKey !== "global" ? scopedBrandKey : "global";
+  const keys = [
+    `insightflow_dashboard_cache_${brandKey}`,
+    "insightflow_dashboard_cache_global",
+  ];
+
+  for (const key of keys) {
+    try {
+      const cached = localStorage.getItem(key);
+      if (!cached) continue;
+      const { data } = JSON.parse(cached);
+      if (Array.isArray(data?.mentions) && data.mentions.length > 0) {
+        return data.mentions as Mention[];
+      }
+    } catch (error) {
+      console.warn("[AlertStore] Failed to read dashboard cache:", error);
+    }
+  }
+  return [];
+}
+
+function setAlertsFromDashboardCache(
+  setState: typeof useAlertStore.setState,
+  getState: typeof useAlertStore.getState,
+  scopedBrandKey?: string | null,
+): boolean {
+  const dashboardMentions = useDashboardStore.getState().mentions;
+  const mentions = dashboardMentions.length > 0
+    ? dashboardMentions
+    : loadDashboardCachedMentions(scopedBrandKey);
+  if (mentions.length === 0) return false;
+
+  const recentLocks = getState().recentLocks || {};
+  const fetched = buildAlertsFromMentions(mentions, scopedBrandKey).map((alert) => {
+    const recent = recentLocks[alert.id];
+    if (recent && Date.now() - recent.timestamp < 15000) {
+      return {
+        ...alert,
+        being_resolved_by: recent.email,
+        being_resolved_at: recent.email
+          ? alert.being_resolved_at || new Date(recent.timestamp).toISOString()
+          : null,
+      };
+    }
+    return alert;
+  });
+
+  const scopedBrands = Array.from(new Set(fetched.map((alert) => alert.brand))).sort();
+  const fallbackBrands = ["Highlands Coffee", "Starbucks", "Mixue"].filter((brand) => {
+    return !scopedBrandKey || normalizeBrandName(brand) === scopedBrandKey;
+  });
+
+  setState((state) => ({
+    rawAlerts: fetched,
+    alerts: applyFilters(fetched, state.filters),
+    brands: scopedBrands.length ? scopedBrands : fallbackBrands,
+    error: null,
+    isLoading: false,
+    lastFetchedAt: Date.now(),
+  }));
+  return fetched.length > 0;
+}
+
 let activeUnsubscribe: (() => void) | null = null;
+let activeRequestsUnsubscribe: (() => void) | null = null;
 const ALERT_REVIEW_WINDOW_DAYS = 30;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const ALERT_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
@@ -299,6 +448,7 @@ export const useAlertStore = create<AlertState>()(
   subscribeWithSelector((set, get) => ({
     rawAlerts: [],
     alerts: [],
+    lastFetchedAt: 0,
     brands: ["Highlands Coffee", "Starbucks", "Mixue"],
     isLoading: false,
     error: null,
@@ -321,7 +471,24 @@ export const useAlertStore = create<AlertState>()(
       });
     },
 
-    fetchAlerts: async (scopedBrandKey = null) => {
+    fetchAlerts: async (scopedBrandKey = null, force = false) => {
+      const now = Date.now();
+      const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
+      const hasData = get().rawAlerts.length > 0;
+      const isFresh = now - get().lastFetchedAt < CACHE_DURATION;
+
+      if (hasData && isFresh && !force) {
+        // Just refresh local filtered alerts to respect potential filter shifts
+        set((state) => ({
+          alerts: applyFilters(state.rawAlerts, state.filters)
+        }));
+        return;
+      }
+
+      if (!force && setAlertsFromDashboardCache(set, get, scopedBrandKey)) {
+        return;
+      }
+
       // Clean up any existing subscription/interval
       if (activeUnsubscribe) {
         activeUnsubscribe();
@@ -330,13 +497,15 @@ export const useAlertStore = create<AlertState>()(
 
       set({ isLoading: true, error: null });
 
+      if (force) {
+        setAlertsFromDashboardCache(set, get, scopedBrandKey);
+      }
+
       const loadAlerts = async () => {
         try {
-          const fetched = await fetchSupabaseAlerts({ since: getAlertReviewSinceIso() });
-          const filtered = fetched.filter((alert) =>
-            isWithinAlertReviewWindow(alert.created_at) &&
-            isRecordInBrandScope({ brand: alert.brand }, scopedBrandKey)
-          );
+          const rawBrandKey = (scopedBrandKey === "global" || !scopedBrandKey) ? undefined : scopedBrandKey;
+          const rawData = await DashboardService.fetchRawData({ brandKey: rawBrandKey });
+          const filtered = buildAlertsFromMentions(rawData.mentions, scopedBrandKey);
 
           const scopedBrands = Array.from(new Set(filtered.map((alert) => alert.brand))).sort();
           const fallbackBrands = ["Highlands Coffee", "Starbucks", "Mixue"].filter((brand) => {
@@ -410,6 +579,7 @@ export const useAlertStore = create<AlertState>()(
             brands: scopedBrands.length ? scopedBrands : fallbackBrands,
             error: null,
             isLoading: false,
+            lastFetchedAt: Date.now(),
           });
         } catch (error) {
           const message = error instanceof Error ? error.message : "Lỗi đồng bộ Supabase";
@@ -638,7 +808,10 @@ export const useAlertStore = create<AlertState>()(
       }
     },
 
-    fetchCorrectionRequests: async (scopedBrandKey = null) => {
+    fetchCorrectionRequests: async (scopedBrandKey = null, force = false) => {
+      if (activeRequestsUnsubscribe && !force) {
+        return;
+      }
       set({ isLoadingRequests: true });
       try {
         const loadFromSupabase = async () => {

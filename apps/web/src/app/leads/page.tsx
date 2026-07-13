@@ -10,6 +10,7 @@ import {
   LeadWorkbenchRow,
 } from "@/components/leads";
 import { useAuth } from "@/hooks/useAuth";
+import { auth } from "@/lib/firebase";
 import { canPerformAction } from "@/lib/rbac";
 import { hasBusinessBrandScope } from "@/lib/brandScope";
 import type { Lead } from "@/types/dashboard";
@@ -50,6 +51,29 @@ function getLeadListScrollTop() {
 
 export default function LeadsPage() {
   const { profile, loading: authLoading } = useAuth();
+  const [staffList, setStaffList] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchStaff = async () => {
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) return;
+        const res = await fetch("/api/staff", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setStaffList(data.data || []);
+        }
+      } catch (e) {
+        console.warn("Failed to fetch staff list in LeadsPage:", e);
+      }
+    };
+    if (profile && !authLoading) {
+      fetchStaff();
+    }
+  }, [profile, authLoading]);
+
   const [activeView, setActiveView] = useState<LeadWorkbenchView>("priority");
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
@@ -514,11 +538,10 @@ export default function LeadsPage() {
   return (
     <div
       data-tour="leads-page"
-      className={`grid min-h-full max-w-[100vw] gap-[clamp(6px,0.55vw,10px)] overflow-hidden p-[clamp(6px,0.6vw,12px)] ${
-        selectedLead && !isPanelCollapsed
+      className={`grid min-h-full max-w-[100vw] gap-[clamp(6px,0.55vw,10px)] overflow-hidden p-[clamp(6px,0.6vw,12px)] ${selectedLead && !isPanelCollapsed
           ? "xl:grid-cols-[minmax(0,var(--lead-main-ratio))_minmax(0,var(--lead-detail-ratio))]"
           : "grid-cols-1"
-      }`}
+        }`}
       style={
         {
           "--lead-main-ratio": "72fr",
@@ -583,18 +606,16 @@ export default function LeadsPage() {
                   key={view.id}
                   type="button"
                   onClick={() => setActiveView(view.id)}
-                  className={`inline-flex items-center rounded-xl border px-3.5 py-2 text-sm font-bold tracking-tight transition-all duration-200 ${
-                    activeView === view.id
+                  className={`inline-flex items-center rounded-xl border px-3.5 py-2 text-sm font-bold tracking-tight transition-all duration-200 ${activeView === view.id
                       ? "border-[var(--color-brand)] bg-[var(--color-brand)] text-white shadow-md shadow-[var(--color-brand)]/10"
                       : "border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-strong)] dark:bg-slate-900/40"
-                  }`}
+                    }`}
                 >
                   <span>{view.label}</span>
-                  <span className={`ml-2 px-2 py-0.5 rounded-full text-[11px] font-extrabold transition-all duration-200 ${
-                    activeView === view.id
+                  <span className={`ml-2 px-2 py-0.5 rounded-full text-[11px] font-extrabold transition-all duration-200 ${activeView === view.id
                       ? "bg-white/20 text-white"
                       : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
-                  }`}>
+                    }`}>
                     {viewCounts[view.id]}
                   </span>
                 </button>
@@ -675,6 +696,7 @@ export default function LeadsPage() {
                   selected={selectedLeadId === lead.id}
                   highlighted={highlightedLeadId === lead.id}
                   labelRequest={pendingLabelRequestByLeadId.get(lead.id)}
+                  staffList={staffList}
                   detailPanelOpen={isDetailPanelOpen}
                   onSelect={(nextLead: Lead) => {
                     clearPendingRestore(true);

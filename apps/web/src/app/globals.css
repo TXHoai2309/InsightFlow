@@ -3,6 +3,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* The marketing homepage intentionally uses a classic editorial typeface. */
+.home-times-new-roman,
+.home-times-new-roman * {
+  font-family: "Times New Roman", Times, serif !important;
+}
+
 /* ═══════════════════════════════════════════════════════════════
    DESIGN TOKEN SYSTEM — CSS Custom Properties
    Đây là nguồn sự thật duy nhất (Single Source of Truth) cho màu sắc.

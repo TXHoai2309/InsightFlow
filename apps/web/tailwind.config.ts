@@ -56,8 +56,8 @@ const config: Config = {
         gutter: "20px",
       },
       fontFamily: {
-        sans: ["Inter", "sans-serif"],
-        display: ["Hanken Grotesk", "sans-serif"],
+        sans: ["Inter", "system-ui", "sans-serif"],
+        display: ["Plus Jakarta Sans", "Inter", "sans-serif"],
       },
       fontSize: {
         "headline-lg-mobile": [

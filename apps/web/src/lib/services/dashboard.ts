@@ -922,6 +922,9 @@ function supabasePostToMention(row: SupabaseRow, annotationByKey: Map<string, Su
 
   return {
     id: postId,
+    entity_key: normalizeOptionalText(annotation?.entity_key) || buildEntityKeys(platform, postId)[0],
+    post_id: postId,
+    comment_id: null,
     parent_id: null,
     workspace_id: String(row.brand || row.brand_slug || payload.brand || payload.workspace_id || ""),
     platform: mapSourceToPlatform(platform),
@@ -972,6 +975,9 @@ function supabaseCommentToMention(
 
   return {
     id: commentId,
+    entity_key: normalizeOptionalText(annotation?.entity_key) || buildEntityKeys(platform, postId, commentId)[0],
+    post_id: postId,
+    comment_id: commentId,
     parent_id: parentCommentId || postId || null,
     workspace_id: String(row.brand || payload.brand || post?.workspace_id || ""),
     platform: mapSourceToPlatform(platform),
@@ -1221,9 +1227,9 @@ function buildLeadWorkflowPayload(
   auditFields: Record<string, unknown>,
 ) {
   const mergedLead = { ...(lead || {}), ...data };
-  const ownerId = data.owner_id || lead?.owner_id || profile.uid;
-  const ownerEmail = data.owner_email || lead?.owner_email || profile.email;
-  const ownerName = data.owner_name || lead?.owner_name || getProfileDisplayName(profile);
+  const ownerId = data.owner_id === null ? null : (data.owner_id || lead?.owner_id || profile.uid);
+  const ownerEmail = data.owner_email === null ? null : (data.owner_email || lead?.owner_email || profile.email);
+  const ownerName = data.owner_name === null ? null : (data.owner_name || lead?.owner_name || getProfileDisplayName(profile));
   const cleanLead = stripUndefinedFields({
     ...mergedLead,
     ...data,
@@ -1448,8 +1454,8 @@ export class DashboardService {
         const leadsRows = await loadSupabaseRows<Record<string, unknown>>(
           sbConfig,
           "leads",
-          { order: "created_at.desc.nullslast" },
-          500,
+          { order: "updated_at.desc.nullslast" },
+          2000,
         );
         for (const row of leadsRows) {
           const rowId = String(row.id || row.mention_id || "");
@@ -1679,6 +1685,29 @@ export class DashboardService {
         id,
         buildLeadWorkflowPayload(lead, data, profile, auditFields),
       );
+
+      // Gửi thông báo đến nhân viên nếu được phân công mới
+      const isNewAssignment = data.owner_id && data.owner_id !== (lead?.owner_id || null);
+      if (isNewAssignment && dbData) {
+        try {
+          const brandName = lead?.workspace_id || "hệ thống";
+          const authorName = lead?.author || "Khách hàng";
+          await addDoc(collection(dbData, "notifications"), {
+            title: `Giao việc mới (${brandName.toUpperCase()})`,
+            message: `Bạn được giao xử lý khách hàng tiềm năng: ${authorName}`,
+            type: "lead_assignment",
+            alert_id: id,
+            brand: lead?.workspace_id || "",
+            created_at: new Date().toISOString(),
+            read: false,
+            recipient_role: "lead_employee",
+            recipient_email: data.owner_email || null,
+            sender_email: profile?.email || "",
+          });
+        } catch (notifErr) {
+          console.warn("[DashboardService] Failed to create assignment notification:", notifErr);
+        }
+      }
     } catch (error) {
       console.error("[DashboardService] updateLeadDetails error:", error);
       throw error;

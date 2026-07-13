@@ -29,6 +29,7 @@ interface LeadWorkbenchRowProps {
   selected?: boolean;
   highlighted?: boolean;
   labelRequest?: LabelChangeRequest;
+  staffList?: any[];
   detailPanelOpen?: boolean;
   onSelect: (lead: Lead) => void;
   onStartedAction?: (lead: Lead) => void;
@@ -77,6 +78,7 @@ export function LeadWorkbenchRow({
   selected = false,
   highlighted = false,
   labelRequest,
+  staffList = [],
   detailPanelOpen = false,
   onSelect,
   onStartedAction,
@@ -85,6 +87,12 @@ export function LeadWorkbenchRow({
   const { updateLeadDetails } = useDashboardStore();
   const [isOpening, setIsOpening] = useState(false);
   const [error, setError] = useState("");
+  const [showMenu, setShowMenu] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const showToast = (message: string, type: "success" | "error" = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3500);
+  };
   const meta = getLeadWorkbenchMeta(lead, nowMs);
   const ownership = getLeadOwnershipMeta(lead, profile);
   const primaryAction = getPrimaryLeadAction(lead);
@@ -274,8 +282,7 @@ export function LeadWorkbenchRow({
         tabIndex={0}
         onClick={() => onSelect(lead)}
         onKeyDown={handleRowKeyDown}
-        className={`w-full overflow-hidden rounded-2xl border bg-[var(--color-bg-surface)] p-4 text-left shadow-sm transition-all duration-300 hover:translate-y-[-1px] hover:shadow-md ${
-          highlighted
+        className={`w-full overflow-hidden rounded-2xl border bg-[var(--color-bg-surface)] p-4 text-left shadow-sm transition-all duration-300 hover:translate-y-[-1px] hover:shadow-md ${highlighted
             ? "border-[var(--color-brand)] bg-[var(--color-brand-subtle)] ring-4 ring-[var(--color-brand)]/20"
             : selected
               ? "border-[var(--color-brand)] ring-2 ring-[var(--color-brand)]/10"
@@ -284,17 +291,16 @@ export function LeadWorkbenchRow({
                 : meta.isOverdue || meta.isUrgent
                   ? "border-red-500/50"
                   : "border-[var(--color-border)] hover:border-[var(--color-brand-border)]"
-        }`}
+          }`}
       >
         <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
           <div className="flex min-w-0 flex-1 items-start gap-4">
             <div className="flex shrink-0 flex-col items-center justify-center self-center">
               <span
-                className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-extrabold ${
-                  rank === 1
+                className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-extrabold ${rank === 1
                     ? "bg-red-500 text-white"
                     : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
-                }`}
+                  }`}
               >
                 {rank}
               </span>
@@ -325,13 +331,12 @@ export function LeadWorkbenchRow({
                 </span>
                 {labelRequest && (
                   <span
-                    className={`min-w-0 truncate rounded-full border px-2 py-0.5 text-[11px] font-bold ${
-                      isLeadWorkflowBlocked
+                    className={`min-w-0 truncate rounded-full border px-2 py-0.5 text-[11px] font-bold ${isLeadWorkflowBlocked
                         ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/30 dark:bg-amber-950/20 dark:text-amber-300"
                         : labelRequest.status === "pending"
                           ? "border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] text-[var(--color-brand)]"
                           : "border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]"
-                    }`}
+                      }`}
                   >
                     {getLabelRequestStatusLabel(labelRequest.status)} · {getLabelRequestWorkflowLabel(labelRequest)}
                   </span>
@@ -380,14 +385,12 @@ export function LeadWorkbenchRow({
 
             <div className="flex min-w-[100px] flex-col gap-0.5 text-left lg:text-right">
               <div className="flex items-center gap-1 lg:justify-end">
-                <span className={`material-symbols-outlined text-[16px] ${
-                  meta.isOverdue || meta.isUrgent ? "text-[var(--color-error)] animate-pulse" : "text-[var(--color-text-secondary)]"
-                }`}>
+                <span className={`material-symbols-outlined text-[16px] ${meta.isOverdue || meta.isUrgent ? "text-[var(--color-error)] animate-pulse" : "text-[var(--color-text-secondary)]"
+                  }`}>
                   {meta.needsResultCapture ? "task_alt" : "schedule"}
                 </span>
-                <span className={`text-sm font-extrabold tracking-tight ${
-                  meta.isOverdue || meta.isUrgent ? "text-[var(--color-error)]" : "text-[var(--color-text-secondary)]"
-                }`}>
+                <span className={`text-sm font-extrabold tracking-tight ${meta.isOverdue || meta.isUrgent ? "text-[var(--color-error)]" : "text-[var(--color-text-secondary)]"
+                  }`}>
                   {formatLeadSla(meta)}
                 </span>
               </div>
@@ -434,11 +437,10 @@ export function LeadWorkbenchRow({
         <div className="flex items-center gap-3 sm:block">
           <div className="sm:absolute sm:left-5 sm:top-1/2 sm:-translate-y-1/2">
             <span
-              className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-extrabold shadow-sm ${
-                rank === 1
+              className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-extrabold shadow-sm ${rank === 1
                   ? "bg-red-500 text-white"
                   : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
-              }`}
+                }`}
             >
               {rank}
             </span>
@@ -474,13 +476,12 @@ export function LeadWorkbenchRow({
                 </span>
                 {labelRequest && (
                   <span
-                    className={`min-w-0 truncate rounded-full border px-2.5 py-1 text-xs font-bold ${
-                      isLeadWorkflowBlocked
+                    className={`min-w-0 truncate rounded-full border px-2.5 py-1 text-xs font-bold ${isLeadWorkflowBlocked
                         ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/30 dark:bg-amber-950/20 dark:text-amber-300"
                         : labelRequest.status === "pending"
                           ? "border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] text-[var(--color-brand)]"
                           : "border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]"
-                    }`}
+                      }`}
                   >
                     {getLabelRequestStatusLabel(labelRequest.status)} · {getLabelRequestWorkflowLabel(labelRequest)}
                   </span>
@@ -541,19 +542,17 @@ export function LeadWorkbenchRow({
             </div>
 
             <div className="flex min-w-0 items-center gap-2">
-              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
-                meta.isOverdue || meta.isUrgent
+              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${meta.isOverdue || meta.isUrgent
                   ? "bg-red-50 text-red-600 dark:bg-red-950/20 dark:text-red-300"
                   : "bg-slate-50 text-[var(--color-text-secondary)] dark:bg-slate-900/30"
-              }`}>
+                }`}>
                 <span className="material-symbols-outlined text-[20px]">
                   {meta.needsResultCapture ? "task_alt" : "schedule"}
                 </span>
               </span>
               <div className="min-w-0">
-                <p className={`truncate text-sm font-black ${
-                  meta.isOverdue || meta.isUrgent ? "text-[var(--color-error)]" : "text-[var(--color-text-primary)]"
-                }`}>
+                <p className={`truncate text-sm font-black ${meta.isOverdue || meta.isUrgent ? "text-[var(--color-error)]" : "text-[var(--color-text-primary)]"
+                  }`}>
                   {formatLeadSla(meta)}
                 </p>
                 <p className="mt-0.5 text-[11px] font-semibold text-[var(--color-text-muted)]">
@@ -562,16 +561,103 @@ export function LeadWorkbenchRow({
               </div>
             </div>
 
-            <button
-              type="button"
-              data-tour={rank === 1 ? "lead-row-primary-action" : undefined}
-              onClick={handlePrimaryAction}
-              disabled={isOpening}
-              className={`inline-flex min-h-10 w-full min-w-0 max-w-full items-center justify-center gap-1.5 overflow-hidden rounded-lg px-2.5 py-2 text-xs font-black tracking-tight shadow-sm transition-all duration-200 hover:-translate-y-0.5 disabled:pointer-events-none disabled:opacity-60 ${buttonStyle}`}
-            >
-              <span className="material-symbols-outlined shrink-0 text-[18px]">{ctaIcon}</span>
-              <span className="min-w-0 truncate">{isOpening ? "Đang mở..." : ctaLabel}</span>
-            </button>
+            <div className="flex items-center gap-2 relative min-w-0 w-full">
+              <button
+                type="button"
+                data-tour={rank === 1 ? "lead-row-primary-action" : undefined}
+                onClick={handlePrimaryAction}
+                disabled={isOpening}
+                className={`inline-flex min-h-10 w-full min-w-0 max-w-full items-center justify-center gap-1.5 overflow-hidden rounded-lg px-2.5 py-2 text-xs font-black tracking-tight shadow-sm transition-all duration-200 hover:-translate-y-0.5 disabled:pointer-events-none disabled:opacity-60 ${buttonStyle}`}
+              >
+                <span className="material-symbols-outlined shrink-0 text-[18px]">{ctaIcon}</span>
+                <span className="min-w-0 truncate">{isOpening ? "Đang mở..." : ctaLabel}</span>
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowMenu(!showMenu);
+                }}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-primary)] transition-all"
+                title="Phân công xử lý"
+              >
+                <span className="material-symbols-outlined text-[18px]">more_vert</span>
+              </button>
+
+              {showMenu && (
+                <div className="absolute right-0 bottom-full mb-2 z-50 w-52 rounded-xl bg-white py-1.5 shadow-xl ring-1 ring-black/5 border border-[#E9E7EE] max-h-48 overflow-y-auto">
+                  <div className="px-3 py-1.5 text-[10px] font-bold text-[#787585] uppercase tracking-wider border-b border-[#E9E7EE] mb-1">
+                    Phân công xử lý
+                  </div>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        setShowMenu(false);
+                        const ownerData: any = {
+                          owner_id: null,
+                          owner_name: null,
+                          owner_email: null,
+                          assigned_at: null,
+                          assigned_by: null,
+                          claimed_at: null,
+                        };
+                        try {
+                          await updateLeadDetails(lead.id, ownerData, profile);
+                          showToast("Đã hủy gán việc thành công!", "success");
+                          const updatedLead = { ...lead, ...ownerData };
+                          onStartedAction?.(updatedLead);
+                          onSelect?.(updatedLead);
+                        } catch (err: any) {
+                          console.error(err);
+                          showToast(`Không thể hủy gán việc: ${err?.message || "Lỗi kết nối"}`, "error");
+                        }
+                      }}
+                      className="w-full text-left px-3 py-2 text-xs text-[#BA1A1A] hover:bg-[#FFDAD6]/30 font-bold transition-colors"
+                    >
+                      -- Hủy gán --
+                    </button>
+                  )}
+                  {staffList.map((staff: any) => (
+                    <button
+                      key={staff.uid}
+                      type="button"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        setShowMenu(false);
+                        if (!canEdit || !profile) {
+                          showToast("Bạn không có quyền thực hiện thao tác này.", "error");
+                          return;
+                        }
+                        const nowIso = new Date().toISOString();
+                        const ownerData: any = {
+                          owner_id: staff.uid,
+                          owner_name: staff.displayName || staff.email || "Nhân viên xử lý",
+                          owner_email: staff.email,
+                          assigned_at: nowIso,
+                          assigned_by: profile.uid,
+                          claimed_at: nowIso,
+                        };
+                        try {
+                          await updateLeadDetails(lead.id, ownerData, profile);
+                          showToast(`Giao việc thành công cho ${staff.displayName || staff.email}!`, "success");
+                          const updatedLead = { ...lead, ...ownerData };
+                          onStartedAction?.(updatedLead);
+                          onSelect?.(updatedLead);
+                        } catch (err: any) {
+                          console.error(err);
+                          showToast(`Không thể giao việc: ${err?.message || "Lỗi kết nối"}`, "error");
+                        }
+                      }}
+                      className="w-full text-left px-3 py-2 text-xs text-[#1A1B20] hover:bg-[#F4F3FA] font-medium transition-colors border-t border-[#F4F3FA]"
+                    >
+                      {staff.displayName || staff.email}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex flex-col gap-2 rounded-lg bg-slate-50/90 p-3 dark:bg-slate-900/30 min-[1180px]:flex-row min-[1180px]:items-center min-[1180px]:justify-between">
@@ -625,6 +711,22 @@ export function LeadWorkbenchRow({
           )}
         </div>
       </div>
-    </div>
+
+
+
+      {
+    toast && (
+      <div className={`fixed bottom-6 right-6 z-[9999] flex items-center gap-2.5 rounded-xl border bg-white px-4 py-3.5 text-sm font-bold shadow-2xl animate-fade-in ${toast.type === "success"
+          ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+          : "border-red-200 bg-red-50 text-red-800"
+        }`}>
+        <span className="material-symbols-outlined text-[18px]">
+          {toast.type === "success" ? "check_circle" : "error"}
+        </span>
+        <span>{toast.message}</span>
+      </div>
+    )
+  }
+    </div >
   );
 }

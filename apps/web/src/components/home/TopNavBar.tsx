@@ -39,13 +39,15 @@ export default function TopNavBar() {
   };
 
   const navLinks = [
-    { href: "/#features", label: t("nav.features") },
-    { href: "/nganh", label: t("nav.industries") },
-    { href: "/ve-chung-toi", label: t("nav.about") },
+    { href: "/#solution", label: "Giải pháp" },
+    { href: "/#workflow", label: "Quy trình" },
+    { href: "/#modules", label: "Tính năng" },
+    { href: "/#use-cases", label: "Vai trò" },
+    { href: "/#consultation", label: "Tư vấn" },
   ];
 
   const isActive = (href: string) => {
-    if (href === "/#features") return pathname === "/";
+    if (href.startsWith("/#")) return false;
     return pathname.startsWith(href);
   };
 
@@ -131,7 +133,7 @@ export default function TopNavBar() {
           </Link>
 
           {/* Desktop Nav */}
-          <div className="hidden md:flex items-center space-x-8">
+          <div className="hidden lg:flex items-center space-x-8">
             {navLinks.map((link) => (
               <Link
                 key={link.href}
@@ -147,7 +149,7 @@ export default function TopNavBar() {
           <div className="flex items-center gap-3">
             {/* Logged in: show avatar */}
             {!loading && user && (
-              <div className="hidden md:flex items-center gap-3">
+              <div className="hidden lg:flex items-center gap-3">
                 <Link
                   href={appRoute}
                   className="flex items-center gap-[12px] group"
@@ -172,12 +174,18 @@ export default function TopNavBar() {
 
             {/* Logged out: show login + signup */}
             {!loading && !user && (
-              <div className="hidden md:flex items-center gap-3">
+              <div className="hidden lg:flex items-center gap-3">
                 <Link
                   href="/login"
                   className="text-[15px] font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-brand)] transition-colors"
                 >
                   {t("auth.login.loginBtn")}
+                </Link>
+                <Link
+                  href="/#consultation"
+                  className="inline-flex items-center justify-center rounded-[10px] bg-[#5b4fcf] px-4 py-2.5 text-[14px] font-bold text-white transition hover:-translate-y-0.5 hover:shadow-[0_10px_22px_rgba(91,79,207,0.24)]"
+                >
+                  Tư vấn dùng thử
                 </Link>
               </div>
             )}
@@ -186,7 +194,7 @@ export default function TopNavBar() {
             <button
               onClick={toggleTheme}
               title={isDark ? "Chế độ sáng" : "Chế độ tối"}
-              className="hidden md:flex theme-toggle"
+              className="hidden lg:flex theme-toggle"
               role="switch"
               aria-checked={isDark}
               aria-label={isDark ? "Chuyển sang chế độ sáng" : "Chuyển sang chế độ tối"}
@@ -199,7 +207,7 @@ export default function TopNavBar() {
             </button>
             {/* Mobile hamburger */}
             <button
-              className="md:hidden p-2 text-[var(--color-brand)]"
+              className="lg:hidden p-2 text-[var(--color-brand)]"
               onClick={() => setMobileOpen(true)}
               aria-label="Toggle menu"
             >
@@ -212,7 +220,7 @@ export default function TopNavBar() {
       {/* Mobile Drawer Overlay */}
       {mobileOpen && (
         <div 
-          className="fixed inset-0 backdrop-blur-sm z-[110] transition-opacity md:hidden"
+          className="fixed inset-0 backdrop-blur-sm z-[110] transition-opacity lg:hidden"
           style={{ background: isDark ? "rgba(17,19,24,0.6)" : "rgba(26,26,46,0.4)" }}
           onClick={() => setMobileOpen(false)}
         ></div>
@@ -220,7 +228,7 @@ export default function TopNavBar() {
 
       {/* Mobile Drawer */}
       <div 
-        className={`fixed top-0 right-0 bottom-0 w-[280px] bg-[var(--color-bg-surface)] z-[120] shadow-2xl transition-transform duration-300 md:hidden flex flex-col ${mobileOpen ? "translate-x-0" : "translate-x-full"}`}
+        className={`fixed top-0 right-0 bottom-0 w-[280px] bg-[var(--color-bg-surface)] z-[120] shadow-2xl transition-transform duration-300 lg:hidden flex flex-col ${mobileOpen ? "translate-x-0" : "translate-x-full"}`}
       >
         <div className="p-5 flex justify-between items-center">
           <button
@@ -269,6 +277,25 @@ export default function TopNavBar() {
               </span>
             </button>
           </div>
+
+          {!loading && !user && (
+            <div className="px-[24px] py-[16px] border-t border-[var(--color-border)]">
+              <Link
+                href="/#consultation"
+                onClick={() => setMobileOpen(false)}
+                className="flex w-full items-center justify-center rounded-[12px] bg-[#5b4fcf] px-4 py-3 text-[16px] font-bold text-white"
+              >
+                Tư vấn dùng thử
+              </Link>
+              <Link
+                href="/login"
+                onClick={() => setMobileOpen(false)}
+                className="mt-3 flex w-full items-center justify-center text-[15px] font-semibold text-[var(--color-text-secondary)]"
+              >
+                {t("auth.login.loginBtn")}
+              </Link>
+            </div>
+          )}
 
           {!loading && user && (
             <div className="mt-4 border-t border-[var(--color-border)] px-[24px] py-[16px]">

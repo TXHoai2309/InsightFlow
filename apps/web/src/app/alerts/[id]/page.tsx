@@ -6,9 +6,10 @@ import { useTranslation } from "react-i18next";
 import { useAlertStore, type AlertData, type EscalationData } from "@/stores/alert.store";
 import { useAuth } from "@/hooks/useAuth";
 import { PlatformLogo } from "@/components/platform/PlatformLogo";
-import { dbSecond } from "@/lib/firebase";
+import { dbSecond, auth } from "@/lib/firebase";
 import { doc, onSnapshot, updateDoc, arrayUnion, collection, addDoc } from "firebase/firestore";
 import { canPerformAction } from "@/lib/rbac";
+import { getScopedBrandKey } from "@/lib/brandScope";
 import { fetchSingleSupabaseAlert, updateSupabaseAlertLabel, fetchCommentsForPost, type PostComment } from "@/lib/supabase";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { QuickReplyHelper } from "@/components/ui/QuickReplyHelper";
@@ -340,9 +341,9 @@ export default function AlertDetailPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Post comments state (for post-type alerts)
-  const [postComments, setPostComments] = useState<PostComment[]>([]);
-  const [loadingComments, setLoadingComments] = useState(false);
+  // Left column active tab state ("content" | "history")
+  const [activeLeftTab, setActiveLeftTab] = useState<"content" | "history">("content");
+  const [brandTemplates, setBrandTemplates] = useState<any[]>([]);
 
   // Note text input states
   const [timelineNote, setTimelineNote] = useState("");
@@ -594,21 +595,35 @@ export default function AlertDetailPage() {
 
   const loadAlertDetail = useCallback(async (showGlobalLoading = false) => {
     if (!id) return;
-    if (showGlobalLoading) {
+
+    const readStoreAlert = () => useAlertStore.getState().rawAlerts.find((a) =>
+      a.id === id ||
+      a.source_id === id ||
+      a.post_id === id ||
+      a.comment_id === id
+    );
+    let storeAlert = readStoreAlert();
+    if (!storeAlert) {
+      await useAlertStore.getState().fetchAlerts(getScopedBrandKey(profile));
+      storeAlert = readStoreAlert();
+    }
+
+    if (storeAlert) {
+      setAlert(storeAlert);
+      setNewSeverity(storeAlert.severity || "medium");
+      setLoading(false);
+      setRefreshing(true);
+    } else if (showGlobalLoading) {
       setLoading(true);
     } else {
       setRefreshing(true);
     }
+
     try {
-      let detail = await fetchSingleSupabaseAlert(id);
-      if (!detail) {
-        const storeAlert = useAlertStore.getState().rawAlerts.find(a => a.id === id);
-        if (storeAlert) detail = storeAlert;
-      }
+      const detail = await fetchSingleSupabaseAlert(id);
       if (detail) {
         setAlert(detail);
         setNewSeverity(detail.severity || "medium");
-
         // Sync to alert store to ensure store actions work correctly
         const storeRawAlerts = useAlertStore.getState().rawAlerts;
         const existsIndex = storeRawAlerts.findIndex(a => a.id === detail.id);
@@ -623,16 +638,19 @@ export default function AlertDetailPage() {
             rawAlerts: updatedRawAlerts
           });
         }
-      } else {
+      } else if (!storeAlert) {
         setAlert(null);
       }
     } catch (err) {
       console.error("Error loading alert document details from Supabase:", err);
+      if (!storeAlert) {
+        setAlert(null);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [id]);
+  }, [id, profile]);
 
   // Real-time detail sync: Supabase Realtime (push) + manual refresh
   useEffect(() => {
@@ -672,15 +690,29 @@ export default function AlertDetailPage() {
   }, [id, loadAlertDetail]);
 
 
-  // Fetch comments when alert is a post
+  // Fetch brand response templates
   useEffect(() => {
-    if (!alert || alert.content_type !== "post" || !alert.post_id) return;
-    setLoadingComments(true);
-    fetchCommentsForPost(alert.post_id)
-      .then(setPostComments)
-      .catch(() => setPostComments([]))
-      .finally(() => setLoadingComments(false));
-  }, [alert?.post_id, alert?.content_type]);
+    const loadTemplates = async () => {
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) return;
+        const res = await fetch("/api/templates", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          // Filter by active and category === "crisis"
+          const list = (data.data || []).filter((t: any) => t.isActive && t.category === "crisis");
+          setBrandTemplates(list);
+        }
+      } catch (err) {
+        console.error("Error loading brand templates:", err);
+      }
+    };
+    if (alert) {
+      loadTemplates();
+    }
+  }, [alert]);
 
   // NOTE: Detail page does NOT auto-lock on mount.
   // Locking only happens when the Crisis Officer clicks "Nhận xử lý" on the list page.
@@ -876,124 +908,158 @@ export default function AlertDetailPage() {
     sentimentBadge = "bg-green-50 dark:bg-green-950/20 text-green-600 dark:text-green-400 border border-green-100 dark:border-green-900/30";
   }
 
+  // Progress step helpers
+  const statusSteps = ["new", "resolving", "pending_approval", "responded", "monitoring", "resolved"];
+  const statusLabels: Record<string, string> = {
+    new: "Mới",
+    resolving: "Đang xử lý",
+    pending_approval: "Chờ duyệt",
+    responded: "Đã phản hồi",
+    monitoring: "Theo dõi",
+    resolved: "Đã đóng",
+  };
+  const currentStepIdx = statusSteps.indexOf(alert.status ?? "new");
+  const progressPct = Math.round((currentStepIdx / (statusSteps.length - 1)) * 100);
+
   return (
     <div className="min-h-screen bg-[var(--color-bg-base)] text-[var(--color-text-primary)] animate-fade-in pb-16">
 
-      {/* Dynamic Header Block */}
-      <div className="sticky top-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-[var(--color-border)] px-4 md:px-8 py-4 z-20 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => router.push("/alerts")}
-            className="p-2 hover:bg-[var(--color-bg-surface-raised)] rounded-xl border border-[var(--color-border)] text-slate-500 hover:text-slate-800 transition-all cursor-pointer"
-          >
-            <span className="material-symbols-outlined text-base">arrow_back</span>
-          </button>
-          <div>
-            <h1 className="text-lg md:text-xl font-black text-[var(--color-text-primary)] uppercase flex items-center gap-2">
-              Vụ việc #{alert.id.slice(-4)}
-              <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold text-white shadow-sm flex items-center gap-1 ${alert.severity === "critical" ? "bg-red-600" :
-                alert.severity === "high" ? "bg-orange-500" :
+      {/* Sticky Header */}
+      <div className="sticky top-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-[var(--color-border)] z-30">
+        <div className="px-4 md:px-8 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              onClick={() => router.push("/alerts")}
+              className="p-1.5 hover:bg-[var(--color-bg-surface-raised)] rounded-xl border border-[var(--color-border)] text-slate-500 hover:text-slate-800 transition-all cursor-pointer flex-shrink-0"
+            >
+              <span className="material-symbols-outlined text-base">arrow_back</span>
+            </button>
+            <div className="min-w-0">
+              <h1 className="text-base md:text-lg font-black text-[var(--color-text-primary)] uppercase flex items-center gap-2 flex-wrap">
+                Vụ việc #{alert.id.slice(-4)}
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold text-white flex items-center gap-1 flex-shrink-0 ${
+                  alert.severity === "critical" ? "bg-red-600" :
+                  alert.severity === "high" ? "bg-orange-500" :
                   alert.severity === "medium" ? "bg-yellow-500" : "bg-slate-500"
                 }`}>
-                {riskScore} - {
-                  alert.severity === "critical" ? "Khẩn cấp" :
+                  {riskScore} · {
+                    alert.severity === "critical" ? "Khẩn cấp" :
                     alert.severity === "high" ? "Rủi ro cao" :
-                      alert.severity === "medium" ? "Trung bình" : "Thấp"
-                }
-              </span>
-            </h1>
-            <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs text-[var(--color-text-muted)] font-semibold">
-              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${alert.status === "new" ? "bg-blue-100 text-blue-600 dark:bg-blue-950/20" :
-                alert.status === "resolving" ? "bg-amber-100 text-amber-600 dark:bg-amber-950/20" :
-                  alert.status === "pending_approval" ? "bg-orange-100 text-orange-700 dark:bg-orange-950/20 animate-pulse" :
-                    alert.status === "responded" ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/20" :
-                      alert.status === "monitoring" ? "bg-cyan-100 text-cyan-700 dark:bg-cyan-950/20 border border-cyan-200 dark:border-cyan-800" :
-                        alert.status === "resolved" ? "bg-green-100 text-green-600 dark:bg-green-950/20" : "bg-slate-100 text-slate-600"
-                }`}>
-                {
-                  alert.status === "new" ? "Mới phát hiện" :
-                    alert.status === "resolving" ? "Đang xử lý" :
-                      alert.status === "pending_approval" ? "Chờ duyệt phương án" :
-                        alert.status === "responded" ? "Đã phản hồi" :
-                          alert.status === "monitoring" ? "Theo dõi thêm" :
-                            alert.status === "resolved" ? "Đã đóng" : "Đã đóng"
-                }
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="material-symbols-outlined text-xs">person</span>
-                Phụ trách: {alert.being_resolved_by ? getResolverName(alert.being_resolved_by) : "Chưa có"}
-              </span>
-              {isLockedByOthers && (
-                <span className="text-red-500 font-bold bg-red-50 dark:bg-red-950/10 px-2 py-0.5 rounded border border-red-100 dark:border-red-900/30 flex items-center gap-1 animate-pulse">
-                  ⚠️ Nhân viên khác đang xử lý
+                    alert.severity === "medium" ? "Trung bình" : "Thấp"
+                  }
                 </span>
-              )}
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold flex-shrink-0 ${
+                  alert.status === "new" ? "bg-blue-100 text-blue-600" :
+                  alert.status === "resolving" ? "bg-amber-100 text-amber-600" :
+                  alert.status === "pending_approval" ? "bg-orange-100 text-orange-700 animate-pulse" :
+                  alert.status === "responded" ? "bg-indigo-100 text-indigo-700" :
+                  alert.status === "monitoring" ? "bg-cyan-100 text-cyan-700" :
+                  alert.status === "resolved" ? "bg-green-100 text-green-600" : "bg-slate-100 text-slate-600"
+                }`}>
+                  {
+                    alert.status === "new" ? "Mới phát hiện" :
+                    alert.status === "resolving" ? "Đang xử lý" :
+                    alert.status === "pending_approval" ? "Chờ duyệt" :
+                    alert.status === "responded" ? "Đã phản hồi" :
+                    alert.status === "monitoring" ? "Theo dõi thêm" :
+                    "Đã đóng"
+                  }
+                </span>
+              </h1>
+              <div className="flex items-center gap-2 mt-0.5 text-[11px] text-[var(--color-text-muted)] font-semibold">
+                <span className="material-symbols-outlined text-[11px]">person</span>
+                {alert.being_resolved_by ? getResolverName(alert.being_resolved_by) : "Chưa có người phụ trách"}
+                {isLockedByOthers && (
+                  <span className="text-red-500 font-bold bg-red-50 px-1.5 py-0.5 rounded text-[10px] flex items-center gap-0.5 animate-pulse">
+                    ⚠️ Đang được xử lý
+                  </span>
+                )}
+              </div>
             </div>
+          </div>
+
+          <div className="flex gap-2 self-end sm:self-auto flex-shrink-0">
+            <button
+              onClick={() => { loadAlertDetail(false); triggerToast("Đã làm mới!"); }}
+              disabled={refreshing}
+              className="flex items-center gap-1 px-3 py-1.5 border border-[var(--color-border)] text-[var(--color-text-secondary)] font-bold text-xs rounded-xl hover:bg-[var(--color-bg-surface-raised)] transition-all cursor-pointer disabled:opacity-50"
+            >
+              <span className={`material-symbols-outlined text-sm ${refreshing ? 'animate-spin' : ''}`}>refresh</span>
+              <span className="hidden sm:inline">Làm mới</span>
+            </button>
+
+            <button
+              onClick={() => { navigator.clipboard.writeText(window.location.href); triggerToast("Đã sao chép!"); }}
+              className="px-3 py-1.5 border border-[var(--color-border)] text-[var(--color-text-secondary)] font-bold text-xs rounded-xl hover:bg-[var(--color-bg-surface-raised)] transition-all cursor-pointer"
+            >
+              Chia sẻ
+            </button>
+
+            {!isMine && !isLockedByOthers && (
+              <button
+                onClick={() => { lockAlertForResolution(alert.id, profile); triggerToast("Đã nhận xử lý!"); }}
+                className="px-4 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all cursor-pointer"
+              >
+                Nhận xử lý
+              </button>
+            )}
+
+            {isMine && alert.status !== "resolved" && alert.status !== "monitoring" && (
+              <button
+                onClick={() => setShowMonitoringModal(true)}
+                className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all cursor-pointer"
+              >
+                Hoàn tất
+              </button>
+            )}
+
+            {isMine && alert.status === "monitoring" && (
+              <button
+                onClick={async () => {
+                  try {
+                    await updateAlertStatus(alert.id, "resolved", profile, { note: "Đã đóng hẳn vụ việc." }, alert.brand);
+                    setAlert({ ...alert, status: "resolved" });
+                    triggerToast("Đã đóng hẳn!");
+                  } catch (e) { triggerToast("Lỗi!"); }
+                }}
+                className="px-4 py-1.5 bg-green-700 hover:bg-green-800 text-white font-bold text-xs rounded-xl shadow-sm transition-all cursor-pointer"
+              >
+                Đóng hẳn
+              </button>
+            )}
           </div>
         </div>
 
-        <div className="flex gap-2 self-end sm:self-auto">
-          <button
-            onClick={() => {
-              loadAlertDetail(false);
-              triggerToast("Đã làm mới dữ liệu!");
-            }}
-            disabled={refreshing}
-            className="flex items-center gap-1 px-4 py-2 border border-[var(--color-border)] text-[var(--color-text-secondary)] font-bold text-xs rounded-xl hover:bg-[var(--color-bg-surface-raised)] transition-all cursor-pointer disabled:opacity-50"
-          >
-            <span className={`material-symbols-outlined text-sm ${refreshing ? 'animate-spin' : ''}`}>refresh</span>
-            Làm mới
-          </button>
-
-          <button
-            onClick={() => {
-              navigator.clipboard.writeText(window.location.href);
-              triggerToast("Đã sao chép liên kết chia sẻ!");
-            }}
-            className="px-4 py-2 border border-[var(--color-border)] text-[var(--color-text-secondary)] font-bold text-xs rounded-xl hover:bg-[var(--color-bg-surface-raised)] transition-all cursor-pointer"
-          >
-            Chia sẻ
-          </button>
-
-          {!isMine && !isLockedByOthers && (
-            <button
-              onClick={() => {
-                lockAlertForResolution(alert.id, profile);
-                triggerToast("Đã nhận xử lý vụ việc này!");
-              }}
-              className="px-5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all cursor-pointer"
-            >
-              Nhận xử lý
-            </button>
-          )}
-
-          {isMine && alert.status !== "resolved" && alert.status !== "monitoring" && (
-            <button
-              onClick={() => setShowMonitoringModal(true)}
-              className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all cursor-pointer"
-            >
-              Hoàn tất xử lý
-            </button>
-          )}
-
-          {isMine && alert.status === "monitoring" && (
-            <button
-              onClick={async () => {
-                try {
-                  await updateAlertStatus(alert.id, "resolved", profile, {
-                    note: "Đã xác nhận đóng hẳn vụ việc sau thời gian theo dõi."
-                  }, alert.brand);
-                  setAlert({ ...alert, status: "resolved" });
-                  triggerToast("Vụ việc đã được đóng hẳn!");
-                } catch (e) {
-                  triggerToast("Lỗi đóng vụ việc. Vui lòng thử lại!");
-                }
-              }}
-              className="px-5 py-2 bg-green-700 hover:bg-green-800 text-white font-bold text-xs rounded-xl shadow-sm transition-all cursor-pointer"
-            >
-              Đóng hẳn vụ việc
-            </button>
-          )}
+        {/* Progress Bar — tiến độ xử lý */}
+        <div className="px-4 md:px-8 pb-3">
+          <div className="flex items-center gap-1.5">
+            {statusSteps.map((step, idx) => {
+              const isCompleted = idx <= currentStepIdx;
+              const isCurrent = alert.status === step;
+              return (
+                <React.Fragment key={step}>
+                  <div className="flex flex-col items-center">
+                    <div className={`w-2.5 h-2.5 rounded-full border-2 transition-all duration-300 ${
+                      isCurrent ? "bg-indigo-600 border-indigo-600 scale-125 shadow shadow-indigo-200" :
+                      isCompleted ? "bg-indigo-400 border-indigo-400" :
+                      "bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600"
+                    }`} />
+                    <span className={`text-[8px] font-bold mt-0.5 whitespace-nowrap hidden md:block ${
+                      isCurrent ? "text-indigo-600 dark:text-indigo-400" :
+                      isCompleted ? "text-[var(--color-text-secondary)]" :
+                      "text-[var(--color-text-muted)]"
+                    }`}>{statusLabels[step]}</span>
+                  </div>
+                  {idx < statusSteps.length - 1 && (
+                    <div className={`flex-1 h-0.5 transition-all duration-500 ${
+                      idx < currentStepIdx ? "bg-indigo-400" : "bg-slate-200 dark:bg-slate-700"
+                    }`} />
+                  )}
+                </React.Fragment>
+              );
+            })}
+            <span className="text-[10px] font-black text-indigo-600 ml-1 flex-shrink-0">{progressPct}%</span>
+          </div>
         </div>
       </div>
 
@@ -1002,373 +1068,390 @@ export default function AlertDetailPage() {
         {/* LEFT COLUMN: 60% Width */}
         <div className="lg:col-span-7 space-y-6">
 
-          {/* Widget: Real-time Monitoring Countdown & Activity Alert */}
-          {alert.status === "monitoring" && (
-            <div className="bg-gradient-to-br from-cyan-50 to-indigo-50 dark:from-slate-900 dark:to-slate-800 border border-cyan-200 dark:border-cyan-800 rounded-2xl p-5 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-cyan-600 dark:text-cyan-400 animate-pulse text-lg">visibility</span>
-                  <span className="font-bold text-xs text-[var(--color-text-primary)] uppercase tracking-wider">
-                    Giai đoạn theo dõi khủng hoảng
-                  </span>
-                </div>
-                <span className="bg-cyan-100 text-cyan-700 dark:bg-cyan-950 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                  Real-time Countdown
-                </span>
-              </div>
+          {/* Tabs Selector */}
+          <div className="flex border-b border-[var(--color-border)]">
+            <button
+              onClick={() => setActiveLeftTab("content")}
+              className={`pb-2.5 px-4 text-xs font-bold transition-all relative ${
+                activeLeftTab === "content"
+                  ? "text-purple-600 dark:text-purple-400 font-extrabold"
+                  : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+              }`}
+            >
+              Nội dung cảnh báo
+              {activeLeftTab === "content" && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-600 dark:bg-purple-400 rounded-full" />
+              )}
+            </button>
+            <button
+              onClick={() => setActiveLeftTab("history")}
+              className={`pb-2.5 px-4 text-xs font-bold transition-all relative ${
+                activeLeftTab === "history"
+                  ? "text-purple-600 dark:text-purple-400 font-extrabold"
+                  : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+              }`}
+            >
+              Lịch sử xử lý ({alert.resolution_history?.length || 0})
+              {activeLeftTab === "history" && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-600 dark:bg-purple-400 rounded-full" />
+              )}
+            </button>
+          </div>
 
-              <div className="bg-white dark:bg-slate-900 border border-[var(--color-border)] rounded-xl p-4 text-center space-y-1">
-                <p className="text-[10px] text-[var(--color-text-muted)] font-semibold uppercase">Thời gian theo dõi còn lại</p>
-                <p className="text-lg md:text-xl font-black text-cyan-600 dark:text-cyan-400 font-mono tracking-tight">
-                  {timeLeftStr || "Đang tính toán..."}
-                </p>
-              </div>
+          {/* Tab Contents */}
+          {activeLeftTab === "content" && (
+            <div className="space-y-6">
+              {/* Widget: Real-time Monitoring Countdown & Activity Alert */}
+              {alert.status === "monitoring" && (
+                <div className="bg-gradient-to-br from-cyan-50 to-indigo-50 dark:from-slate-900 dark:to-slate-800 border border-cyan-200 dark:border-cyan-800 rounded-2xl p-5 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-cyan-600 dark:text-cyan-400 animate-pulse text-lg">visibility</span>
+                      <span className="font-bold text-xs text-[var(--color-text-primary)] uppercase tracking-wider">
+                        Giai đoạn theo dõi khủng hoảng
+                      </span>
+                    </div>
+                    <span className="bg-cyan-100 text-cyan-700 dark:bg-cyan-950 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                      Real-time Countdown
+                    </span>
+                  </div>
 
-              {/* Activity / Abnormality alert banner */}
-              {newActivityDetails ? (
-                <div className="p-4 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 rounded-xl space-y-2 animate-pulse">
-                  <div className="flex items-center gap-2 text-red-700 dark:text-red-400 font-bold text-xs">
-                    <span className="material-symbols-outlined text-sm">warning</span>
-                    <span>CẢNH BÁO HOẠT ĐỘNG BẤT THƯỜNG</span>
-                  </div>
-                  <p className="text-[11px] text-[var(--color-text-secondary)] leading-relaxed">
-                    Hệ thống ghi nhận có tương tác mới phát sinh so với thời điểm bắt đầu theo dõi:
-                  </p>
-                  <div className="flex gap-4 text-[10px] font-bold text-red-600 dark:text-red-400 pt-1">
-                    {newActivityDetails.likes > 0 && (
-                      <span>+ {newActivityDetails.likes} Likes (Ngưỡng an toàn: &le; 5)</span>
-                    )}
-                    {newActivityDetails.comments > 0 && (
-                      <span>+ {newActivityDetails.comments} Comments</span>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="p-4 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900/30 rounded-xl flex items-start gap-2.5">
-                  <span className="material-symbols-outlined text-green-600 dark:text-green-400 text-sm mt-0.5">verified_user</span>
-                  <div className="space-y-0.5">
-                    <p className="text-green-700 dark:text-green-400 font-bold text-xs">Trạng thái an toàn</p>
-                    <p className="text-[11px] text-[var(--color-text-secondary)] leading-normal">
-                      Chưa phát hiện hành vi tương tác đột biến nào. Hệ thống sẽ tự động đóng vụ việc khi hết thời gian.
+                  <div className="bg-white dark:bg-slate-900 border border-[var(--color-border)] rounded-xl p-4 text-center space-y-1">
+                    <p className="text-[10px] text-[var(--color-text-muted)] font-semibold uppercase">Thời gian theo dõi còn lại</p>
+                    <p className="text-lg md:text-xl font-black text-cyan-600 dark:text-cyan-400 font-mono tracking-tight">
+                      {timeLeftStr || "Đang tính toán..."}
                     </p>
                   </div>
-                </div>
-              )}
-            </div>
-          )}
 
-          {/* Original Post Card (shown when alert is a comment) */}
-          {alert.content_type === "comment" && alert.post_content && alert.post_content !== alert.text && (
-            <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl shadow-sm overflow-hidden">
-              <div className="px-5 py-3 border-b border-[var(--color-border)] flex items-center justify-between bg-indigo-50/50 dark:bg-indigo-950/10">
-                <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-indigo-600 text-base">article</span>
-                  <h3 className="font-black text-xs text-indigo-700 dark:text-indigo-400 uppercase">Bài viết gốc</h3>
-                </div>
-                {alert.post_url && alert.post_url !== "#" && alert.post_url.trim() !== "" && (
-                  <a
-                    href={alert.post_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-indigo-600 hover:underline text-[11px] font-bold flex items-center gap-1"
-                  >
-                    Truy cập bài viết
-                    <span className="material-symbols-outlined text-[10px]">open_in_new</span>
-                  </a>
-                )}
-              </div>
-              <div className="p-5">
-                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/20 border border-[var(--color-border)]/60 text-xs md:text-sm text-[var(--color-text-primary)] leading-relaxed font-medium whitespace-pre-line">
-                  {alert.post_content}
-                </div>
-                {(alert.post_like_count || alert.post_comment_count || alert.post_share_count) ? (
-                  <div className="flex items-center gap-5 mt-4 text-[11px] text-[var(--color-text-muted)] font-bold">
-                    <div className="flex items-center gap-1">
-                      <span className="material-symbols-outlined text-slate-400 text-sm">thumb_up</span>
-                      <span>{(alert.post_like_count || 0).toLocaleString("vi-VN")}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <span className="material-symbols-outlined text-slate-400 text-sm">chat_bubble</span>
-                      <span>{(alert.post_comment_count || 0).toLocaleString("vi-VN")}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <span className="material-symbols-outlined text-slate-400 text-sm">share</span>
-                      <span>{(alert.post_share_count || 0).toLocaleString("vi-VN")}</span>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          )}
-
-          {/* Alert Content Card */}
-          <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-[var(--color-border)] flex flex-wrap justify-between items-center bg-slate-50/50 dark:bg-slate-800/10 gap-3">
-              <div className="flex items-center gap-3">
-                <PlatformLogo platform={alert.source} size="sm" />
-                <div>
-                  <h3 className="font-black text-xs text-[var(--color-text-primary)] uppercase">
-                    {alert.content_type === "comment" ? "Bình luận cảnh báo" : "Bài viết cảnh báo"} — {alert.source ? String(alert.source).toUpperCase() : "Không rõ"}
-                  </h3>
-                  <a
-                    href={alert.url !== "#" ? alert.url : undefined}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-indigo-600 hover:underline text-[11px] font-bold flex items-center gap-1 mt-0.5"
-                  >
-                    Xem trên nền tảng gốc
-                    <span className="material-symbols-outlined text-[10px]">open_in_new</span>
-                  </a>
-                </div>
-              </div>
-              <div className="text-right text-[10px] text-[var(--color-text-muted)] font-semibold">
-                <p>Đăng: {getRelativeTime(alert.created_at)}</p>
-                <p className="text-red-500 font-bold mt-0.5">Phát hiện: {getRelativeTime(alert.created_at)}</p>
-              </div>
-            </div>
-
-            <div className="p-6">
-              <div className="flex items-start gap-4 mb-5">
-                <div className="w-11 h-11 rounded-full bg-slate-100 dark:bg-slate-800 border border-[var(--color-border)] flex items-center justify-center overflow-hidden flex-shrink-0">
-                  {alert.social_profile_url && alert.social_profile_url !== "#" ? (
-                    <img src={alert.social_profile_url} alt={alert.author} className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-xs font-bold text-slate-500">
-                      {String(alert.author || "A").substring(0, 2).toUpperCase()}
-                    </span>
-                  )}
-                </div>
-                <div>
-                  <h4 className="font-bold text-sm text-[var(--color-text-primary)]">@{alert.author || "Ẩn danh"}</h4>
-                  <div className="flex items-center gap-2 mt-1">
-                    {alert.reach && alert.reach > 50000 ? (
-                      <span className="bg-pink-50 dark:bg-pink-950/20 text-pink-600 text-[9px] font-bold px-2 py-0.5 rounded-lg border border-pink-100 dark:border-pink-900/30">
-                        KOL lớn
-                      </span>
-                    ) : null}
-                    <span className="text-[10px] text-[var(--color-text-secondary)] font-medium">
-                      {(alert.reach || 0).toLocaleString("vi-VN")} lượt tiếp cận
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Text content container */}
-              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/20 border border-[var(--color-border)]/60 text-xs md:text-sm text-[var(--color-text-primary)] leading-relaxed font-medium whitespace-pre-line">
-                {alert.text}
-              </div>
-
-              {/* Engagement statistics bar */}
-              <div className="flex items-center gap-6 mt-6 pt-4 border-t border-[var(--color-border)]/60 text-xs text-[var(--color-text-secondary)] font-bold">
-                <div className="flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-slate-400 text-sm">thumb_up</span>
-                  <span>{(alert.likes || 0).toLocaleString("vi-VN")}</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-slate-400 text-sm">chat_bubble</span>
-                  <span>{(alert.comments || 0).toLocaleString("vi-VN")}</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-slate-400 text-sm">share</span>
-                  <span>{(alert.shares || 0).toLocaleString("vi-VN")}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Comments Section (shown when alert is a post) */}
-          {alert.content_type === "post" && (
-            <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-[var(--color-border)] flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/10">
-                <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-blue-500 text-base">forum</span>
-                  <h3 className="font-black text-xs text-[var(--color-text-primary)] uppercase">
-                    Bình luận ({postComments.length})
-                  </h3>
-                </div>
-              </div>
-
-              <div className="p-5">
-                {loadingComments ? (
-                  <div className="flex items-center justify-center py-8 gap-2">
-                    <svg className="animate-spin h-5 w-5 text-[var(--color-brand)]" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                    </svg>
-                    <span className="text-xs text-[var(--color-text-secondary)] font-bold">Đang tải bình luận...</span>
-                  </div>
-                ) : postComments.length === 0 ? (
-                  <div className="text-center py-8">
-                    <span className="material-symbols-outlined text-slate-300 text-4xl">chat_bubble_outline</span>
-                    <p className="text-xs text-[var(--color-text-muted)] font-bold mt-2">Chưa có bình luận nào.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4 max-h-[500px] overflow-y-auto pr-1">
-                    {postComments.map((cmt) => (
-                      <div
-                        key={cmt.comment_id}
-                        className={`p-4 rounded-xl border border-[var(--color-border)]/60 text-xs ${cmt.comment_level > 0
-                            ? "ml-6 bg-slate-50/50 dark:bg-slate-800/10"
-                            : "bg-white dark:bg-[var(--color-bg-surface-raised)]"
-                          }`}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center flex-shrink-0">
-                              <span className="text-[9px] font-bold text-slate-500">
-                                {cmt.username.substring(0, 2).toUpperCase()}
-                              </span>
-                            </div>
-                            <span className="font-bold text-[var(--color-text-primary)]">
-                              {cmt.username}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-3 text-[10px] text-[var(--color-text-muted)]">
-                            {cmt.like_count > 0 && (
-                              <span className="flex items-center gap-0.5">
-                                <span className="material-symbols-outlined text-[10px]">thumb_up</span>
-                                {cmt.like_count}
-                              </span>
-                            )}
-                            <span>{getRelativeTime(cmt.posted_at)}</span>
-                          </div>
-                        </div>
-                        <p className="text-[var(--color-text-secondary)] leading-relaxed whitespace-pre-line">
-                          {cmt.text}
-                        </p>
-                        {cmt.url && (
-                          <a
-                            href={cmt.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-indigo-500 hover:underline text-[10px] font-bold mt-2 inline-flex items-center gap-0.5"
-                          >
-                            Xem gốc <span className="material-symbols-outlined text-[10px]">open_in_new</span>
-                          </a>
+                  {/* Activity / Abnormality alert banner */}
+                  {newActivityDetails ? (
+                    <div className="p-4 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 rounded-xl space-y-2 animate-pulse">
+                      <div className="flex items-center gap-2 text-red-700 dark:text-red-400 font-bold text-xs">
+                        <span className="material-symbols-outlined text-sm">warning</span>
+                        <span>CẢNH BÁO HOẠT ĐỘNG BẤT THƯỜNG</span>
+                      </div>
+                      <p className="text-[11px] text-[var(--color-text-secondary)] leading-relaxed">
+                        Hệ thống ghi nhận có tương tác mới phát sinh so với thời điểm bắt đầu theo dõi:
+                      </p>
+                      <div className="flex gap-4 text-[10px] font-bold text-red-600 dark:text-red-400 pt-1">
+                        {newActivityDetails.likes > 0 && (
+                          <span>+ {newActivityDetails.likes} Likes (Ngưỡng an toàn: &le; 5)</span>
+                        )}
+                        {newActivityDetails.comments > 0 && (
+                          <span>+ {newActivityDetails.comments} Comments</span>
                         )}
                       </div>
-                    ))}
+                    </div>
+                  ) : (
+                    <div className="p-4 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900/30 rounded-xl flex items-start gap-2.5">
+                      <span className="material-symbols-outlined text-green-600 dark:text-green-400 text-sm mt-0.5">verified_user</span>
+                      <div className="space-y-0.5">
+                        <p className="text-green-700 dark:text-green-400 font-bold text-xs">Trạng thái an toàn</p>
+                        <p className="text-[11px] text-[var(--color-text-secondary)] leading-normal">
+                          Chưa phát hiện hành vi tương tác đột biến nào. Hệ thống sẽ tự động đóng vụ việc khi hết thời gian.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Unified Alert & Context Card */}
+              <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl shadow-sm overflow-hidden p-5 space-y-4">
+                
+                {/* Header section with platform, content type and original link */}
+                <div className="flex flex-wrap justify-between items-center border-b border-[var(--color-border)]/50 pb-3 gap-3">
+                  <div className="flex items-center gap-2">
+                    <PlatformLogo platform={alert.source} size="sm" />
+                    <div>
+                      <h3 className="font-black text-xs text-[var(--color-text-primary)] uppercase leading-none">
+                        {alert.content_type === "comment" ? "Bình luận cảnh báo" : "Bài viết cảnh báo"}
+                      </h3>
+                      <div className="flex items-center gap-3.5 mt-1">
+                        <a
+                          href={alert.url !== "#" ? alert.url : undefined}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-indigo-600 hover:underline text-[10px] font-bold flex items-center gap-0.5"
+                        >
+                          Xem trên {alert.source ? String(alert.source).toUpperCase() : "nền tảng gốc"}
+                          <span className="material-symbols-outlined text-[10px]">open_in_new</span>
+                        </a>
+                        {alert.url && alert.url !== "#" && (
+                          <button
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(alert.text || "");
+                                triggerToast("Đã sao chép nội dung cảnh báo!");
+                                window.open(alert.url, "_blank", "noopener,noreferrer");
+                              } catch (err) {
+                                console.warn("Failed to copy source text:", err);
+                              }
+                            }}
+                            className="text-purple-600 hover:underline text-[10px] font-bold flex items-center gap-0.5 cursor-pointer bg-transparent border-none p-0"
+                          >
+                            <span className="material-symbols-outlined text-[11px]">content_copy</span>
+                            Sao chép &amp; Mở nguồn
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right text-[10px] text-[var(--color-text-muted)] font-semibold">
+                    <p>Đăng: {getRelativeTime(alert.created_at)}</p>
+                    <p className="text-red-500 font-bold mt-0.5">Phát hiện: {getRelativeTime(alert.created_at)}</p>
+                  </div>
+                </div>
+
+                {/* Nested Original Post (only if this is a comment and has original post content) */}
+                {alert.content_type === "comment" && alert.post_content && alert.post_content !== alert.text && (
+                  <div className="p-3 bg-slate-50 dark:bg-slate-800/10 border border-[var(--color-border)]/50 rounded-xl text-xs space-y-1.5">
+                    <div className="flex justify-between items-center text-[10px] font-bold text-[var(--color-text-secondary)] uppercase">
+                      <span className="flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[12px]">article</span> Bài viết gốc
+                      </span>
+                      {alert.post_url && alert.post_url !== "#" && (
+                        <a
+                          href={alert.post_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-indigo-600 hover:underline flex items-center gap-0.5"
+                        >
+                          Truy cập bài gốc <span className="material-symbols-outlined text-[10px]">open_in_new</span>
+                        </a>
+                      )}
+                    </div>
+                    <p className="text-[var(--color-text-secondary)] leading-relaxed whitespace-pre-line font-medium">{alert.post_content}</p>
+                    
+                    {/* Original post stats */}
+                    {(alert.post_like_count || alert.post_comment_count || alert.post_share_count) ? (
+                      <div className="flex items-center gap-4 text-[10px] text-[var(--color-text-muted)] font-bold pt-1 border-t border-[var(--color-border)]/30 mt-2">
+                        <div className="flex items-center gap-1">
+                          <span className="material-symbols-outlined text-slate-400 text-xs">thumb_up</span>
+                          <span>{(alert.post_like_count || 0).toLocaleString("vi-VN")}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="material-symbols-outlined text-slate-400 text-xs">chat_bubble</span>
+                          <span>{(alert.post_comment_count || 0).toLocaleString("vi-VN")}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="material-symbols-outlined text-slate-400 text-xs">share</span>
+                          <span>{(alert.post_share_count || 0).toLocaleString("vi-VN")}</span>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+
+                {/* Main Warning Comment or Post Section */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 border border-[var(--color-border)] flex items-center justify-center overflow-hidden flex-shrink-0">
+                      {alert.social_profile_url && alert.social_profile_url !== "#" ? (
+                        <img src={alert.social_profile_url} alt={alert.author} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-xs font-bold text-slate-500">
+                          {String(alert.author || "A").substring(0, 2).toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-xs text-[var(--color-text-primary)]">@{alert.author || "Ẩn danh"}</h4>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {alert.reach && alert.reach > 50000 && (
+                          <span className="bg-pink-50 dark:bg-pink-950/20 text-pink-600 text-[9px] font-bold px-1.5 py-0.2 rounded-lg border border-pink-100 dark:border-pink-900/30">
+                            KOL lớn
+                          </span>
+                        )}
+                        <span className="text-[9px] text-[var(--color-text-secondary)] font-medium">
+                          {(alert.reach || 0).toLocaleString("vi-VN")} lượt tiếp cận
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Text content of alert */}
+                  <div className="p-3.5 bg-indigo-50/20 dark:bg-indigo-950/10 border border-indigo-100/30 rounded-xl text-xs md:text-sm text-[var(--color-text-primary)] leading-relaxed font-semibold whitespace-pre-line">
+                    {alert.text}
+                  </div>
+
+                  {/* Post Engagement Bar (only show if alert is a post) */}
+                  {alert.content_type === "post" && (alert.likes || alert.comments || alert.shares) ? (
+                    <div className="flex items-center gap-4 text-[10px] text-[var(--color-text-secondary)] font-bold pt-1">
+                      <div className="flex items-center gap-1">
+                        <span className="material-symbols-outlined text-slate-400 text-xs">thumb_up</span>
+                        <span>{(alert.likes || 0).toLocaleString("vi-VN")}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="material-symbols-outlined text-slate-400 text-xs">chat_bubble</span>
+                        <span>{(alert.comments || 0).toLocaleString("vi-VN")}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="material-symbols-outlined text-slate-400 text-xs">share</span>
+                        <span>{(alert.shares || 0).toLocaleString("vi-VN")}</span>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+
+                {/* Quick case details strip (metadata badge block) */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-[var(--color-border)]/50 text-[10px] text-[var(--color-text-secondary)] font-semibold">
+                  <div>
+                    <span className="text-[var(--color-text-muted)] block text-[9px] uppercase tracking-wider mb-0.5">Chủ đề</span>
+                    <span className="font-bold text-blue-600 bg-blue-50 dark:bg-blue-950/20 px-1.5 py-0.5 rounded">
+                      {getTopicLabel(Array.isArray(alert.topic) ? alert.topic[0] : alert.topic)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[var(--color-text-muted)] block text-[9px] uppercase tracking-wider mb-0.5">Cảm xúc</span>
+                    <span className={`font-bold px-1.5 py-0.5 rounded border ${
+                      alert.sentiment === "negative" ? "bg-red-50 text-red-600 border-red-100" :
+                      alert.sentiment === "positive" ? "bg-green-50 text-green-600 border-green-100" :
+                      "bg-slate-50 text-slate-500 border-slate-200"
+                    }`}>
+                      {alert.sentiment === "negative" ? "Tiêu cực" : alert.sentiment === "positive" ? "Tích cực" : "Trung lập"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[var(--color-text-muted)] block text-[9px] uppercase tracking-wider mb-0.5">Thương hiệu</span>
+                    <span className="font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-950/20 px-1.5 py-0.5 rounded">
+                      {formatBrandName(alert.brand)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[var(--color-text-muted)] block text-[9px] uppercase tracking-wider mb-0.5">Người xử lý</span>
+                    <span className="font-bold text-[var(--color-text-primary)]">
+                      {alert.being_resolved_by ? getResolverName(alert.being_resolved_by) : <span className="text-slate-400 italic">Chưa có</span>}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeLeftTab === "history" && (
+            <div className="space-y-6">
+              {/* Processing History (Timeline Log) */}
+              <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl shadow-sm p-6 space-y-6">
+                <h3 className="font-black text-xs md:text-sm text-[var(--color-text-primary)] uppercase tracking-wider pb-3 border-b border-[var(--color-border)]">
+                  Lịch sử xử lý sự vụ
+                </h3>
+
+                <div className="relative space-y-6 pl-6 before:absolute before:inset-y-1 before:left-[11px] before:w-0.5 before:bg-[var(--color-border)]">
+                  {/* Event: initial detection */}
+                  <div className="relative">
+                     <div className="absolute -left-[23px] top-0.5 w-[14px] h-[14px] bg-indigo-600 rounded-full border-4 border-[var(--color-bg-surface)] ring-1 ring-[var(--color-border)]"></div>
+                     <div>
+                       <div className="flex items-center justify-between text-xs">
+                         <p className="font-bold text-[var(--color-text-primary)]">Hệ thống phát hiện tự động</p>
+                         <span className="text-[10px] text-[var(--color-text-muted)] font-semibold">{getRelativeTime(alert.created_at)}</span>
+                       </div>
+                       <p className="text-[11px] text-[var(--color-text-secondary)] mt-1">
+                         Hệ thống đã tự động gán nhãn rủi ro khẩn cấp dựa trên từ khóa nhạy cảm.
+                       </p>
+                     </div>
+                  </div>
+
+                  {/* Event: locked / resolution history logs */}
+                  {alert.resolution_history?.map((h, index) => (
+                    <div key={index} className="relative">
+                      <div className="absolute -left-[23px] top-0.5 w-[14px] h-[14px] bg-purple-500 rounded-full border-4 border-[var(--color-bg-surface)] ring-1 ring-[var(--color-border)]"></div>
+                      <div>
+                        <div className="flex items-center justify-between text-xs">
+                          <p className="font-bold text-[var(--color-text-primary)]">
+                            {h.resolved_by_name || getResolverName(h.resolved_by_email) || "Nhân viên trực"}
+                          </p>
+                          <span className="text-[10px] text-[var(--color-text-muted)] font-semibold">{getRelativeTime(h.timestamp)}</span>
+                        </div>
+                        <div className="mt-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-[var(--color-border)]/50 text-[11px] text-[var(--color-text-secondary)] whitespace-pre-wrap leading-relaxed">
+                          {h.note}
+                          {h.image_url && (
+                            <div className="mt-2.5 max-w-[200px] border border-[var(--color-border)] rounded-lg overflow-hidden shadow-sm">
+                              <img src={h.image_url} alt="Bằng chứng xử lý" className="w-full h-auto" />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Quick add processing log (timeline note) */}
+                {isMine && alert.status !== "resolved" && (
+                  <div className="mt-4 flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Nhập ghi chú xử lý mới vào timeline..."
+                      value={timelineNote}
+                      onChange={(e) => setTimelineNote(e.target.value)}
+                      className="flex-1 text-xs px-3 py-2 border border-[var(--color-border)] rounded-xl bg-[var(--color-bg-surface-raised)] focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-[var(--color-text-primary)] font-medium"
+                    />
+                    <button
+                      onClick={handleAddTimelineNote}
+                      className="bg-purple-600 hover:bg-purple-700 text-white p-2 rounded-xl flex items-center justify-center cursor-pointer shadow-sm"
+                    >
+                      <span className="material-symbols-outlined text-base">send</span>
+                    </button>
                   </div>
                 )}
               </div>
             </div>
           )}
-
-          {/* Risk Analysis Card */}
-          <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl shadow-sm p-6 space-y-5">
-            <div className="flex justify-between items-center pb-3 border-b border-[var(--color-border)]">
-              <h3 className="font-black text-xs md:text-sm text-[var(--color-text-primary)] uppercase tracking-wider">
-                Phân tích rủi ro &amp; Sắc thái
-              </h3>
-              <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${sentimentBadge}`}>
-                {alert.sentiment === "negative" ? "Tiêu cực (88%)" :
-                  alert.sentiment === "positive" ? "Tích cực" : "Trung lập"}
-              </span>
-            </div>
-
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-[11px] font-bold text-[var(--color-text-secondary)]">
-                  <span>LAN TRUYỀN NHANH</span>
-                  <span className="text-red-500 font-black">{(riskScore * 0.9).toFixed(0)} pts</span>
-                </div>
-                <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                  <div className="bg-red-500 h-full rounded-full transition-all duration-1000" style={{ width: `${riskScore * 0.9}%` }}></div>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-[11px] font-bold text-[var(--color-text-secondary)]">
-                  <span>TỪ KHÓA NHẠY CẢM</span>
-                  <span className="text-orange-500 font-black">{(riskScore * 0.75).toFixed(0)} pts</span>
-                </div>
-                <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                  <div className="bg-orange-500 h-full rounded-full transition-all duration-1000" style={{ width: `${riskScore * 0.75}%` }}></div>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-[11px] font-bold text-[var(--color-text-secondary)]">
-                  <span>ẢNH HƯỞNG CỦA KOL</span>
-                  <span className="text-purple-500 font-black">{(riskScore * 0.6).toFixed(0)} pts</span>
-                </div>
-                <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                  <div className="bg-purple-500 h-full rounded-full transition-all duration-1000" style={{ width: `${riskScore * 0.6}%` }}></div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Processing History (Timeline Log) */}
-          <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl shadow-sm p-6 space-y-6">
-            <h3 className="font-black text-xs md:text-sm text-[var(--color-text-primary)] uppercase tracking-wider pb-3 border-b border-[var(--color-border)]">
-              Lịch sử xử lý sự vụ
-            </h3>
-
-            <div className="relative space-y-6 pl-6 before:absolute before:inset-y-1 before:left-[11px] before:w-0.5 before:bg-[var(--color-border)]">
-              {/* Event: initial detection */}
-              <div className="relative">
-                <div className="absolute -left-[23px] top-0.5 w-[14px] h-[14px] bg-indigo-600 rounded-full border-4 border-[var(--color-bg-surface)] ring-1 ring-[var(--color-border)]"></div>
-                <div>
-                  <div className="flex items-center justify-between text-xs">
-                    <p className="font-bold text-[var(--color-text-primary)]">Hệ thống phát hiện tự động</p>
-                    <span className="text-[10px] text-[var(--color-text-muted)] font-semibold">{getRelativeTime(alert.created_at)}</span>
-                  </div>
-                  <p className="text-[11px] text-[var(--color-text-secondary)] mt-1">
-                    Hệ thống đã tự động gán nhãn rủi ro khẩn cấp dựa trên từ khóa nhạy cảm.
-                  </p>
-                </div>
-              </div>
-
-              {/* Event: locked / resolution history logs */}
-              {alert.resolution_history?.map((h, index) => (
-                <div key={index} className="relative">
-                  <div className="absolute -left-[23px] top-0.5 w-[14px] h-[14px] bg-purple-500 rounded-full border-4 border-[var(--color-bg-surface)] ring-1 ring-[var(--color-border)]"></div>
-                  <div>
-                    <div className="flex items-center justify-between text-xs">
-                      <p className="font-bold text-[var(--color-text-primary)]">
-                        {h.resolved_by_name || getResolverName(h.resolved_by_email) || "Nhân viên trực"}
-                      </p>
-                      <span className="text-[10px] text-[var(--color-text-muted)] font-semibold">{getRelativeTime(h.timestamp)}</span>
-                    </div>
-                    <div className="mt-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-[var(--color-border)]/50 text-[11px] text-[var(--color-text-secondary)] whitespace-pre-wrap leading-relaxed">
-                      {h.note}
-                      {h.image_url && (
-                        <div className="mt-2.5 max-w-[200px] border border-[var(--color-border)] rounded-lg overflow-hidden shadow-sm">
-                          <img src={h.image_url} alt="Bằng chứng xử lý" className="w-full h-auto" />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Quick add processing log (timeline note) */}
-            {isMine && alert.status !== "resolved" && (
-              <div className="mt-4 flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Nhập ghi chú xử lý mới vào timeline..."
-                  value={timelineNote}
-                  onChange={(e) => setTimelineNote(e.target.value)}
-                  className="flex-1 text-xs px-3 py-2 border border-[var(--color-border)] rounded-xl bg-[var(--color-bg-surface-raised)] focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-[var(--color-text-primary)] font-medium"
-                />
-                <button
-                  onClick={handleAddTimelineNote}
-                  className="bg-purple-600 hover:bg-purple-700 text-white p-2 rounded-xl flex items-center justify-center cursor-pointer shadow-sm"
-                >
-                  <span className="material-symbols-outlined text-base">send</span>
-                </button>
-              </div>
-            )}
-          </div>
         </div>
 
-        {/* RIGHT COLUMN: 40% Width - Sticky Widget Group */}
-        <div className="lg:col-span-5 space-y-6">
+        {/* RIGHT COLUMN: simplified */}
+        <div className="lg:col-span-5 space-y-5">
+          <div className="sticky top-[140px] space-y-5 pb-20">
 
-          <div className="sticky top-[80px] space-y-6 pb-20">
+
+
+            {/* Widget: Quick Reply + Draft (khi đang xử lý và là người phụ trách) */}
+            {isMine && alert.status === "resolving" && (
+              <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl shadow-sm p-5 space-y-4">
+                <h3 className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-purple-500 text-base">quickreply</span>
+                  Soạn phản hồi
+                </h3>
+
+                {brandTemplates.length > 0 && (
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider block">Mẫu phản hồi của Brand</label>
+                    <select
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val) setDraftResponse(val);
+                      }}
+                      className="w-full text-xs p-2 border border-[var(--color-border)] rounded-xl bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] focus:outline-none"
+                    >
+                      <option value="">-- Chọn mẫu phản hồi đã lưu --</option>
+                      {brandTemplates.map((t) => (
+                        <option key={t.id} value={t.templateText}>
+                          {t.name} ({t.sentiment === "all" ? "Tất cả" : t.sentiment})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <QuickReplyHelper
+                  mentionContent={alert.text || ""}
+                  customerName={alert.author || "Khách hàng"}
+                  sentiment={(alert.sentiment === "positive" || alert.sentiment === "negative") ? alert.sentiment : "neutral"}
+                  category="crisis"
+                  onSelectReply={(text) => setDraftResponse(text)}
+                  primaryActionLabel="Mở nguồn gốc"
+                  onCopyAndOpenContact={alert.url && alert.url !== "#" ? () => {
+                    window.open(alert.url, "_blank", "noopener,noreferrer");
+                  } : undefined}
+                />
+                <textarea
+                  value={draftResponse}
+                  onChange={(e) => setDraftResponse(e.target.value)}
+                  placeholder="Nhập nội dung phản hồi công khai..."
+                  className="w-full text-xs p-3 border border-[var(--color-border)] rounded-xl bg-[var(--color-bg-surface-raised)] focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-[var(--color-text-primary)] h-28 resize-none"
+                />
+              </div>
+            )}
 
             {/* Widget: Severity Label Dropdown */}
             <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl shadow-sm p-6 space-y-4">
@@ -1982,14 +2065,14 @@ export default function AlertDetailPage() {
             </div>
 
             {/* Widget: Internal Notes */}
-            <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl shadow-sm p-6 space-y-4">
-              <label className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider block">
-                Ghi chú nội bộ dành cho team
-              </label>
+            <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl shadow-sm p-5 space-y-4">
+              <h3 className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-wider flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-slate-400 text-base">sticky_note_2</span>
+                Ghi chú nội bộ
+              </h3>
 
-              {/* Render existing internal notes list */}
               {alert.internal_notes && alert.internal_notes.length > 0 && (
-                <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                   {alert.internal_notes.map((noteObj: any, i: number) => (
                     <div key={i} className="p-3 bg-slate-50 dark:bg-slate-800/40 border border-[var(--color-border)]/50 rounded-xl text-[11px] space-y-1">
                       <div className="flex justify-between font-bold text-[var(--color-text-primary)]">
@@ -2008,85 +2091,42 @@ export default function AlertDetailPage() {
                 placeholder="Nhập ghi chú quan trọng cho team..."
                 className="w-full text-xs p-2.5 border border-[var(--color-border)] rounded-xl bg-[var(--color-bg-surface-raised)] focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-[var(--color-text-primary)] h-20"
               />
-
               <button
                 onClick={handleAddInternalNote}
-                className="w-full py-2 bg-slate-900 dark:bg-slate-700 hover:bg-slate-800 dark:hover:bg-slate-600 text-white font-bold text-xs rounded-xl shadow-sm active:scale-95 transition-all cursor-pointer"
+                className="w-full py-2 bg-slate-900 dark:bg-slate-700 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-sm active:scale-95 transition-all cursor-pointer"
               >
                 Lưu ghi chú nội bộ
               </button>
             </div>
 
-            {/* Widget: Escalate Button */}
+            {/* Widget: Escalate Button (Báo cáo cấp cao) */}
             {isMine && (
               <button
                 onClick={() => setShowReportModal(true)}
-                className="w-full py-4 bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-md transition-all active:scale-[0.98] cursor-pointer"
+                className="w-full py-3.5 bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-md transition-all active:scale-[0.98] cursor-pointer"
               >
                 <span className="material-symbols-outlined text-base">bolt</span>
-                ESCALATE (BÁO CÁO CẤP CAO)
+                ESCALATE — Báo cáo cấp cao
               </button>
             )}
 
-            {/* Widget: Suggestion Templates */}
-            <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl shadow-sm overflow-hidden">
-              <div className="p-4 border-b border-[var(--color-border)] flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/10">
-                <span className="font-bold text-xs text-[var(--color-text-primary)] uppercase tracking-wider">
-                  Mẫu phản hồi gợi ý (SOP)
-                </span>
-                <span className="material-symbols-outlined text-slate-400 text-base">quickreply</span>
-              </div>
-              <div className="p-4 space-y-3">
-                <div
-                  onClick={() => selectTemplateText("Chào bạn, chúng tôi rất tiếc về sự cố này. Vui lòng inbox để được hỗ trợ ngay...")}
-                  className="p-3 bg-slate-50 dark:bg-slate-800/30 border border-[var(--color-border)]/50 rounded-xl cursor-pointer hover:border-purple-500 transition-all text-left"
-                >
-                  <p className="text-[11px] font-bold text-purple-600 dark:text-purple-400 mb-1">Xác nhận &amp; Xin lỗi</p>
-                  <p className="text-[10px] text-[var(--color-text-secondary)] italic line-clamp-2">
-                    "Chào bạn, chúng tôi rất tiếc về sự cố này. Vui lòng inbox để được hỗ trợ ngay..."
-                  </p>
-                </div>
-                <div
-                  onClick={() => selectTemplateText("Cảm ơn bạn đã phản hồi. Để giải quyết nhanh nhất, bạn cho mình xin mã đơn hàng...")}
-                  className="p-3 bg-slate-50 dark:bg-slate-800/30 border border-[var(--color-border)]/50 rounded-xl cursor-pointer hover:border-purple-500 transition-all text-left"
-                >
-                  <p className="text-[11px] font-bold text-purple-600 dark:text-purple-400 mb-1">Cần thêm thông tin</p>
-                  <p className="text-[10px] text-[var(--color-text-secondary)] italic line-clamp-2">
-                    "Cảm ơn bạn đã phản hồi. Để giải quyết nhanh nhất, bạn cho mình xin mã đơn hàng..."
-                  </p>
-                </div>
-              </div>
-            </div>
-
           </div>
-
         </div>
-
       </div>
 
-      {/* Modals rendering at root level */}
+      {/* Modals */}
       {showReportModal && (
-        <IncidentReportModal
-          item={alert}
-          onClose={() => setShowReportModal(false)}
-          triggerToast={triggerToast}
-        />
+        <IncidentReportModal item={alert} onClose={() => setShowReportModal(false)} triggerToast={triggerToast} />
       )}
       {showMonitoringModal && alert && (
         <MonitoringTransitionModal
           onClose={() => setShowMonitoringModal(false)}
           onConfirm={async (note, durationHours) => {
             const finalStatus = durationHours > 0 ? "monitoring" : "resolved";
-            await updateAlertStatus(
-              alert.id,
-              finalStatus,
-              profile,
-              {
-                note,
-                monitoring_duration_hours: durationHours > 0 ? durationHours : undefined
-              },
-              alert.brand
-            );
+            await updateAlertStatus(alert.id, finalStatus, profile, {
+              note,
+              monitoring_duration_hours: durationHours > 0 ? durationHours : undefined
+            }, alert.brand);
             setAlert({
               ...alert,
               status: finalStatus,
@@ -2096,19 +2136,18 @@ export default function AlertDetailPage() {
               monitoring_initial_likes: alert.likes || 0,
               monitoring_initial_shares: alert.shares || 0,
             });
-            triggerToast(durationHours > 0 ? "Vụ việc đã được chuyển sang theo dõi thêm!" : "Đã hoàn tất và đóng vụ việc!");
+            triggerToast(durationHours > 0 ? "Đã chuyển sang theo dõi thêm!" : "Đã hoàn tất!");
           }}
         />
       )}
 
-      {/* Floating Status Toast Notification */}
+      {/* Toast */}
       {toastMessage && (
         <div className="fixed bottom-5 right-5 z-50 bg-green-600 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 border border-green-500 animate-slide-up">
           <span className="material-symbols-outlined text-sm">check_circle</span>
           <span className="text-xs font-bold">{toastMessage}</span>
         </div>
       )}
-
     </div>
   );
 }

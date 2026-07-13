@@ -100,6 +100,98 @@ interface SupabaseAnnotation {
   updated_at: string;
 }
 
+const ASSIGNMENT_SELECT = [
+  'assignment_id',
+  'entity_key',
+  'platform',
+  'entity_type',
+  'post_id',
+  'root_comment_id',
+  'queue_group',
+  'status',
+  'data_version',
+  'content_hash',
+].join(',');
+
+const POST_SELECT = [
+  'platform',
+  'post_id',
+  'url',
+  'source',
+  'brand_slug',
+  'brand',
+  'author',
+  'contact',
+  'language',
+  'posted_at',
+  'data_version',
+  'like_count',
+  'comment_count',
+  'share_count',
+  'view_count',
+  'reply_count',
+  'star_count',
+  'labeling_status',
+  'needs_review',
+  'review_reason',
+  'payload_json',
+].join(',');
+
+const COMMENT_SELECT = [
+  'platform',
+  'post_id',
+  'comment_id',
+  'parent_comment_id',
+  'url',
+  'username',
+  'contact',
+  'text',
+  'posted_at',
+  'data_version',
+  'like_count',
+  'reply_count',
+  'star_count',
+  'comment_level',
+  'labeling_status',
+  'needs_review',
+  'review_reason',
+  'payload_json',
+].join(',');
+
+const ANNOTATION_SELECT = [
+  'entity_key',
+  'assignee',
+  'label',
+  'status',
+  'labeled_version',
+  'needs_review',
+  'updated_at',
+].join(',');
+
+const LOAD_CONCURRENCY = 4;
+const MAX_COMMENTS_PER_POST = 500;
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  async function worker(): Promise<void> {
+    while (nextIndex < items.length) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      results[currentIndex] = await mapper(items[currentIndex], currentIndex);
+    }
+  }
+
+  const workerCount = Math.min(concurrency, items.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  return results;
+}
+
 function normalizeUrl(url: string): string {
   const trimmed = url.trim().replace(/\/rest\/v1\/?$/, '');
   return trimmed.replace(/\/$/, '');
@@ -501,7 +593,10 @@ export async function loadSupabaseThreads(
       : `eq.${platform}`;
   const threads: Thread[] = [];
   const includedPostKeys = new Set<string>();
-  const pageSize = (hasDateRange(dateRange) || (brand && brand !== 'all')) ? 100 : limit;
+  const needsClientFilter = hasDateRange(dateRange) || (brand && brand !== 'all');
+  const pageSize = needsClientFilter
+    ? Math.min(Math.max(limit * 3, 30), 100)
+    : Math.min(limit, 50);
   let offset = 0;
   let exhausted = false;
 
@@ -510,7 +605,7 @@ export async function loadSupabaseThreads(
       throw new DOMException('The user aborted a request.', 'AbortError');
     }
     const assignmentParams = new URLSearchParams({
-      select: '*',
+      select: ASSIGNMENT_SELECT,
       platform: platformFilter,
       status: assignmentView === 'completed'
         ? 'eq.completed'
@@ -535,13 +630,13 @@ export async function loadSupabaseThreads(
       ? await request<SupabasePost[]>(
           config,
           'posts',
-          `platform=${platformFilter}&post_id=in.(${uniquePostIds.map(encode).join(',')})`,
+          `select=${POST_SELECT}&platform=${platformFilter}&post_id=in.(${uniquePostIds.map(encode).join(',')})`,
           { signal }
         )
       : [];
     const postMap = new Map(postsList.map(p => [p.post_id, p]));
 
-    const promises = assignments.map(async (assignment) => {
+    const results = await mapWithConcurrency(assignments, LOAD_CONCURRENCY, async (assignment) => {
       const postKey = `${assignment.platform}:${assignment.post_id}`;
       if (includedPostKeys.has(postKey)) return null;
 
@@ -575,14 +670,20 @@ export async function loadSupabaseThreads(
         ? 'in.(be,befood)'
         : `eq.${assignment.platform}`;
       const annotationQuery = new URLSearchParams({
-        select: 'entity_key,assignee,label,status,labeled_version,needs_review,updated_at',
+        select: ANNOTATION_SELECT,
         platform: annoPlatform,
         post_id: `eq.${assignment.post_id}`,
         assignee: `eq.${assignee}`,
       }).toString();
 
       const [comments, annotations] = await Promise.all([
-        loadPostComments(config, assignment.platform, assignment.post_id, signal),
+        loadPostComments(
+          config,
+          assignment.platform,
+          assignment.post_id,
+          signal,
+          commentIdFromAssignment(assignment),
+        ),
         request<SupabaseAnnotation[]>(config, 'annotations', annotationQuery, { signal }),
       ]);
 
@@ -614,8 +715,6 @@ export async function loadSupabaseThreads(
       }
       return { postKey, parsed };
     });
-
-    const results = await Promise.all(promises);
     for (const res of results) {
       if (res && !includedPostKeys.has(res.postKey)) {
         includedPostKeys.add(res.postKey);
@@ -644,17 +743,27 @@ async function loadPostComments(
   platform: string,
   postId: string,
   signal?: AbortSignal,
+  focusedCommentId?: string | null,
 ): Promise<SupabaseComment[]> {
   const all: SupabaseComment[] = [];
   const pageSize = 1000;
   let offset = 0;
-  while (true) {
-    const commentsQuery = `select=*&platform=eq.${encode(platform)}&post_id=eq.${encode(postId)}&order=comment_level.asc,posted_at.asc&limit=${pageSize}&offset=${offset}`;
+  while (all.length < MAX_COMMENTS_PER_POST) {
+    const currentPageSize = Math.min(pageSize, MAX_COMMENTS_PER_POST - all.length);
+    const commentsQuery = `select=${COMMENT_SELECT}&platform=eq.${encode(platform)}&post_id=eq.${encode(postId)}&order=comment_level.asc,posted_at.asc&limit=${currentPageSize}&offset=${offset}`;
     const page = await request<SupabaseComment[]>(config, 'comments', commentsQuery, { signal });
     all.push(...page);
-    if (page.length < pageSize) return all;
+    if (page.length < currentPageSize) break;
     offset += pageSize;
   }
+
+  if (focusedCommentId && !all.some(comment => comment.comment_id === focusedCommentId)) {
+    const focusedQuery = `select=${COMMENT_SELECT}&platform=eq.${encode(platform)}&post_id=eq.${encode(postId)}&comment_id=eq.${encode(focusedCommentId)}&limit=1`;
+    const focused = await request<SupabaseComment[]>(config, 'comments', focusedQuery, { signal });
+    all.push(...focused.filter(comment => !all.some(existing => existing.comment_id === comment.comment_id)));
+  }
+
+  return all;
 }
 
 async function digest(value: string): Promise<string> {

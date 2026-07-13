@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -12,7 +12,7 @@ import { useDashboard } from "@/hooks/useDashboardData";
 import { dbSecond } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
 import { PlatformLogo } from "@/components/platform/PlatformLogo";
-import { fetchSupabaseAlerts, supabaseRequest } from "@/lib/supabase";
+import { supabaseRequest } from "@/lib/supabase";
 import {
   getScopedBrandKey,
   hasBusinessBrandScope,
@@ -237,8 +237,9 @@ export default function AlertsPage() {
   const [showMineOnly, setShowMineOnly] = useState(false);
   const [sortBy, setSortBy] = useState<"risk" | "newest" | "reach">("risk");
   const [isResolvedExpanded, setIsResolvedExpanded] = useState(false);
-
+  const [isRequestsExpanded, setIsRequestsExpanded] = useState(false);
   const [timeFilter, setTimeFilter] = useState<string>("all");
+  const [singleDate, setSingleDate] = useState<string>("");
   const [customStartDate, setCustomStartDate] = useState<string>("");
   const [customEndDate, setCustomEndDate] = useState<string>("");
   const [showDatePopover, setShowDatePopover] = useState(false);
@@ -305,6 +306,8 @@ export default function AlertsPage() {
     updateAlertStatus,
     lockAlertForResolution,
     unlockAlertForResolution,
+    fetchCorrectionRequests,
+    isLoadingRequests,
   } = useAlertStore();
   // Filter alerts by currently selected brand filter for dashboard overview calculations
   const brandFilteredAlerts = useMemo(() => {
@@ -333,18 +336,35 @@ export default function AlertsPage() {
       let startDate: Date | null = null;
       let endDate: Date | null = null;
 
-      if (timeFilter === "custom") {
-        if (customStartDate) startDate = new Date(customStartDate + "T00:00:00");
-        if (customEndDate) endDate = new Date(customEndDate + "T23:59:59");
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      const startOfTodayMs = startOfToday.getTime();
+
+      if (timeFilter === "24h") {
+        startDate = new Date(startOfTodayMs);
+      } else if (timeFilter === "2d") {
+        startDate = new Date(startOfTodayMs - 1 * 24 * 60 * 60 * 1000);
+      } else if (timeFilter === "3d") {
+        startDate = new Date(startOfTodayMs - 2 * 24 * 60 * 60 * 1000);
+      } else if (timeFilter === "5d") {
+        startDate = new Date(startOfTodayMs - 4 * 24 * 60 * 60 * 1000);
       } else if (timeFilter === "7d") {
-        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        startDate = new Date(startOfTodayMs - 6 * 24 * 60 * 60 * 1000);
       } else if (timeFilter === "30d") {
-        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        startDate = new Date(startOfTodayMs - 29 * 24 * 60 * 60 * 1000);
       } else if (timeFilter === "this_month") {
         startDate = new Date(now.getFullYear(), now.getMonth(), 1);
       } else if (timeFilter === "last_month") {
         startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
         endDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      } else if (timeFilter === "single") {
+        if (singleDate) {
+          startDate = new Date(singleDate + "T00:00:00");
+          endDate = new Date(singleDate + "T23:59:59");
+        }
+      } else if (timeFilter === "custom") {
+        if (customStartDate) startDate = new Date(customStartDate + "T00:00:00");
+        if (customEndDate) endDate = new Date(customEndDate + "T23:59:59");
       } else if (/^\d{4}-\d{2}$/.test(timeFilter)) {
         const [year, month] = timeFilter.split("-").map(Number);
         startDate = new Date(year, month - 1, 1);
@@ -364,7 +384,7 @@ export default function AlertsPage() {
     }
 
     return result;
-  }, [rawAlerts, filters.brand, timeFilter, customStartDate, customEndDate]);
+  }, [rawAlerts, filters.brand, timeFilter, singleDate, customStartDate, customEndDate]);
 
   const availableMonths = useMemo(() => {
     const monthSet = new Set<string>();
@@ -861,8 +881,9 @@ export default function AlertsPage() {
   useEffect(() => {
     if (!brandFilterLocked || brands.length === 0) return;
     if (filters.brand !== "all") return;
-    setFilters({ brand: brands[0] });
-  }, [brandFilterLocked, brands, filters.brand, setFilters]);
+    const matchedBrand = brands.find(b => isRecordInBrandScope({ brand: b }, scopedBrandKey)) || brands[0];
+    setFilters({ brand: matchedBrand });
+  }, [brandFilterLocked, brands, filters.brand, scopedBrandKey, setFilters]);
 
   if (!authLoading && !canViewCrisisQueue) {
     return (
@@ -1028,10 +1049,11 @@ export default function AlertsPage() {
         {/* Left Column: Priority Process Queue List */}
         <div className="lg:col-span-2 space-y-6">
 
-          {/* Header row with search, brand dropdown, and notifications bell */}
-          <div data-tour="alerts-queue-header" className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          {/* ── HEADER ROW ── */}
+          <div data-tour="alerts-queue-header" className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            {/* Title + Critical badge */}
             <div className="flex items-center gap-3">
-              <h1 className="text-xl md:text-2.5xl font-black tracking-tight text-[var(--color-text-primary)] uppercase">
+              <h1 className="text-xl md:text-2xl font-black tracking-tight text-[var(--color-text-primary)] uppercase">
                 {t("alerts.page.title")}
               </h1>
               {activeAlerts.filter(a => a.severity.toLowerCase() === "critical").length > 0 && (
@@ -1042,194 +1064,199 @@ export default function AlertsPage() {
               )}
             </div>
 
-            <div className="flex items-center gap-2 self-end sm:self-auto w-full sm:w-auto">
+            {/* Right controls: Search + Time + Reload */}
+            <div className="flex flex-wrap items-center gap-2 self-end sm:self-auto">
               {/* Search */}
-              <div className="relative flex-grow sm:flex-grow-0">
+              <div className="relative">
                 <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">search</span>
                 <input
                   type="text"
                   placeholder={t("alerts.page.searchPlaceholder")}
                   value={searchText}
                   onChange={(e) => setSearchText(e.target.value)}
-                  className="pl-8 pr-3 py-1.5 w-full sm:w-60 border border-[var(--color-border)] rounded-xl text-xs bg-[var(--color-bg-surface-raised)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 text-[var(--color-text-primary)] font-medium"
+                  className="pl-8 pr-3 py-1.5 w-52 border border-[var(--color-border)] rounded-xl text-xs bg-[var(--color-bg-surface-raised)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 text-[var(--color-text-primary)] font-medium"
                 />
               </div>
 
-              {/* Brand Selector */}
-              <select
-                value={filters.brand}
-                onChange={(e) => setFilters({ brand: e.target.value })}
-                className="select-app border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 pl-3 pr-8 bg-white dark:bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] focus:outline-none cursor-pointer"
-              >
-                <option value="all">{t("alerts.page.allBrands")}</option>
-                {brands.map(b => (
-                  <option key={b} value={b}>{b}</option>
-                ))}
-              </select>
-
-              {/* Time Range — with floating date popover for custom */}
-              <div className="relative">
+              {/* Brand Selector (admin only) */}
+              {!brandFilterLocked && (
                 <select
-                  value={timeFilter}
-                  onChange={(e) => {
-                    setTimeFilter(e.target.value);
-                    setShowDatePopover(e.target.value === "custom");
-                  }}
+                  value={filters.brand}
+                  onChange={(e) => setFilters({ brand: e.target.value })}
                   className="select-app border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 pl-3 pr-8 bg-white dark:bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] focus:outline-none cursor-pointer"
                 >
-                  <option value="all">{t("alerts.page.allTime")}</option>
-                  <option value="7d">{t("alerts.page.last7d")}</option>
-                  <option value="30d">{t("alerts.page.last30d")}</option>
-                  <option value="this_month">{t("alerts.page.thisMonth")}</option>
-                  <option value="last_month">{t("alerts.page.lastMonth")}</option>
-                  <option value="custom">
-                    {customStartDate && customEndDate
-                      ? `${customStartDate.split("-").reverse().join("/")} – ${customEndDate.split("-").reverse().join("/")}`
-                      : t("alerts.page.customDate")}
-                  </option>
+                  <option value="all">{t("alerts.page.allBrands")}</option>
+                  {brands.map(b => (
+                    <option key={b} value={b}>{b}</option>
+                  ))}
                 </select>
+              )}
 
-                {/* Floating date picker popover */}
-                {timeFilter === "custom" && showDatePopover && (
-                  <div
-                    className="absolute right-0 top-full mt-1.5 z-50 bg-white dark:bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] rounded-2xl shadow-xl p-3 flex flex-col gap-2 min-w-[240px]"
-                    style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.12)" }}
-                  >
-                    <p className="text-[10px] font-black uppercase tracking-wider text-[var(--color-text-muted)] mb-0.5">{t("alerts.page.selectDateRange")}</p>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase">{t("alerts.page.fromDate")}</label>
-                      <input
-                        type="date"
-                        value={customStartDate}
-                        onChange={(e) => setCustomStartDate(e.target.value)}
-                        className="border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 px-2 bg-[var(--color-bg-base)] dark:bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] focus:outline-none w-full"
-                        style={{ colorScheme: "light dark" }}
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase">{t("alerts.page.toDate")}</label>
-                      <input
-                        type="date"
-                        value={customEndDate}
-                        onChange={(e) => setCustomEndDate(e.target.value)}
-                        className="border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 px-2 bg-[var(--color-bg-base)] dark:bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] focus:outline-none w-full"
-                        style={{ colorScheme: "light dark" }}
-                      />
-                    </div>
-                    <button
-                      onClick={() => setShowDatePopover(false)}
-                      className="mt-1 w-full py-1.5 rounded-xl bg-[var(--color-brand)] text-white text-xs font-bold hover:opacity-90 transition-opacity"
-                    >
-                      {t("alerts.page.apply")}
-                    </button>
+              {/* Time Range */}
+              <div className="flex items-center gap-1.5">
+                <select
+                  value={timeFilter}
+                  onChange={(e) => setTimeFilter(e.target.value)}
+                  className="select-app border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 pl-3 pr-8 bg-white dark:bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] focus:outline-none cursor-pointer"
+                >
+                  <option value="24h">Hôm nay</option>
+                  <option value="2d">2 ngày</option>
+                  <option value="3d">3 ngày</option>
+                  <option value="5d">5 ngày</option>
+                  <option value="7d">7 ngày qua</option>
+                  <option value="30d">30 ngày qua</option>
+                  <option value="all">Toàn thời gian</option>
+                  <option value="single">Ngày cụ thể</option>
+                  <option value="custom">Tự chọn ngày</option>
+                </select>
+                {timeFilter === "single" && (
+                  <input type="date" value={singleDate} onChange={(e) => setSingleDate(e.target.value)}
+                    className="border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 px-3 bg-white dark:bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] focus:outline-none cursor-pointer" />
+                )}
+                {timeFilter === "custom" && (
+                  <div className="flex items-center gap-1">
+                    <input type="date" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)}
+                      className="border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 px-2 bg-white dark:bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] focus:outline-none cursor-pointer" />
+                    <span className="text-[10px] text-[var(--color-text-muted)] font-bold">→</span>
+                    <input type="date" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)}
+                      className="border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 px-2 bg-white dark:bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] focus:outline-none cursor-pointer" />
                   </div>
                 )}
               </div>
-            </div>
-          </div>
 
-
-          {/* Filters, Pills & Dropdowns Row */}
-          <div data-tour="alerts-filters" className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--color-border)]/50 pb-4">
-
-            {/* Sort options */}
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-[var(--color-text-muted)] font-bold uppercase tracking-wider">
-                {t("alerts.page.sortBy")}
-              </span>
-              <select
-                value={sortBy}
-                onChange={(e: any) => setSortBy(e.target.value)}
-                className="bg-transparent border-0 font-black text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer text-xs"
-              >
-                <option value="risk">{t("alerts.page.sortRisk")}</option>
-                <option value="newest">{t("alerts.page.sortNewest")}</option>
-                <option value="reach">{t("alerts.page.sortReach")}</option>
-              </select>
-            </div>
-
-            {/* Severity pills & other toggles */}
-            <div className="flex flex-wrap items-center gap-2.5">
-
-              {/* Filter Pills based on Severity */}
-              <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/40 p-1 rounded-xl">
-                {[
-                  { id: "all", label: t("alerts.page.severityAll"), activeClass: "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm" },
-                  { id: "critical", label: t("alerts.page.severityCritical"), activeClass: "bg-red-600 text-white shadow-sm" },
-                  { id: "high", label: t("alerts.page.severityHigh"), activeClass: "bg-orange-500 text-white shadow-sm" },
-                  { id: "medium", label: t("alerts.page.severityMedium"), activeClass: "bg-yellow-500 text-white shadow-sm" },
-                  { id: "low", label: t("alerts.page.severityLow"), activeClass: "bg-slate-500 text-white shadow-sm" }
-                ].map(pill => {
-                  const isActive = severityFilter === pill.id;
-                  return (
-                    <button
-                      key={pill.id}
-                      onClick={() => setSeverityFilter(pill.id)}
-                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${isActive
-                        ? pill.activeClass
-                        : "text-slate-600 dark:text-slate-400 hover:text-slate-800"
-                        }`}
-                    >
-                      {pill.label}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Source Dropdown */}
-              <select
-                value={sourceFilter}
-                onChange={(e) => setSourceFilter(e.target.value)}
-                className="border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 pl-3 pr-8 bg-white dark:bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] focus:outline-none cursor-pointer"
-              >
-                <option value="all">{t("alerts.page.sourceAll")}</option>
-                <option value="facebook">{t("alerts.page.sourceFacebook")}</option>
-                <option value="tiktok">{t("alerts.page.sourceTiktok")}</option>
-                <option value="youtube">{t("alerts.page.sourceYoutube")}</option>
-                <option value="google_maps">{t("alerts.page.sourceGoogleMaps")}</option>
-                <option value="befood">{t("alerts.page.sourceBefood")}</option>
-                <option value="thread">{t("alerts.page.sourceThreads")}</option>
-                <option value="news">{t("alerts.page.sourceNews")}</option>
-              </select>
-
-              {/* Content Type Dropdown (Comment / Post) */}
-              <select
-                value={contentTypeFilter}
-                onChange={(e) => setContentTypeFilter(e.target.value)}
-                className="border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 pl-3 pr-8 bg-white dark:bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] focus:outline-none cursor-pointer"
-              >
-                <option value="all">{t("alerts.page.contentTypeAll")}</option>
-                <option value="post">{t("alerts.page.contentTypePost")}</option>
-                <option value="comment">{t("alerts.page.contentTypeComment")}</option>
-              </select>
-
-              {/* Mine Only Toggle */}
-              <button
-                onClick={() => setShowMineOnly(!showMineOnly)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${showMineOnly
-                  ? "bg-[var(--color-brand)]/10 border-[var(--color-brand)] text-[var(--color-brand)] font-black"
-                  : "border-[var(--color-border)] text-[var(--color-text-secondary)] bg-white dark:bg-[var(--color-bg-surface-raised)] hover:bg-slate-50"
-                  }`}
-              >
-                {t("alerts.page.mineOnly")}
-              </button>
-
-              {/* Reload Button */}
+              {/* Reload */}
               <button
                 onClick={async () => {
                   try {
-                    await fetchAlerts(scopedBrandKey);
+                    await fetchAlerts(scopedBrandKey, true);
+                    await fetchCorrectionRequests(scopedBrandKey, true);
                     triggerToast("Đã làm mới dữ liệu!");
                   } catch (e) {
                     triggerToast("Lỗi làm mới dữ liệu!");
                   }
                 }}
-                disabled={isLoading}
+                disabled={isLoading || isLoadingRequests}
+                title="Làm mới dữ liệu"
                 className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold border border-[var(--color-border)] text-[var(--color-text-secondary)] bg-white dark:bg-[var(--color-bg-surface-raised)] hover:bg-slate-50 transition-all cursor-pointer disabled:opacity-50"
               >
-                <span className={`material-symbols-outlined text-sm ${isLoading ? 'animate-spin' : ''}`}>refresh</span>
-                Làm mới
+                <span className={`material-symbols-outlined text-sm ${(isLoading || isLoadingRequests) ? 'animate-spin' : ''}`}>refresh</span>
+                <span className="hidden sm:inline">Làm mới</span>
               </button>
+            </div>
+          </div>
+
+          {/* ── STATS SUMMARY BAR ── */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              {
+                label: "Chưa xử lý",
+                value: brandFilteredAlerts.filter(a => a.status !== "resolving" && a.status !== "resolved" && a.status !== "pending_approval" && a.status !== "monitoring").length,
+                icon: "warning",
+                colorClass: "text-red-600 dark:text-red-400",
+                bgClass: "bg-red-50 dark:bg-red-950/30",
+                borderClass: "border-red-100 dark:border-red-900/30",
+              },
+              {
+                label: "Đang xử lý",
+                value: brandFilteredAlerts.filter(a => a.status === "resolving" || a.status === "monitoring").length,
+                icon: "autorenew",
+                colorClass: "text-orange-600 dark:text-orange-400",
+                bgClass: "bg-orange-50 dark:bg-orange-950/30",
+                borderClass: "border-orange-100 dark:border-orange-900/30",
+              },
+              {
+                label: "Chờ duyệt",
+                value: brandFilteredAlerts.filter(a => a.status === "pending_approval").length,
+                icon: "pending_actions",
+                colorClass: "text-amber-600 dark:text-amber-400",
+                bgClass: "bg-amber-50 dark:bg-amber-950/30",
+                borderClass: "border-amber-100 dark:border-amber-900/30",
+              },
+              {
+                label: "Đã giải quyết",
+                value: brandFilteredAlerts.filter(a => a.status === "resolved").length,
+                icon: "check_circle",
+                colorClass: "text-green-600 dark:text-green-400",
+                bgClass: "bg-green-50 dark:bg-green-950/30",
+                borderClass: "border-green-100 dark:border-green-900/30",
+              },
+            ].map(stat => (
+              <div key={stat.label} className={`flex items-center gap-3 p-3 rounded-xl border ${stat.bgClass} ${stat.borderClass}`}>
+                <span className={`material-symbols-outlined text-xl ${stat.colorClass}`}>{stat.icon}</span>
+                <div>
+                  <p className={`text-xl font-black leading-none ${stat.colorClass}`}>{stat.value}</p>
+                  <p className="text-[10px] text-[var(--color-text-muted)] font-semibold mt-0.5">{stat.label}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* ── FILTER ROW ── */}
+          <div data-tour="alerts-filters" className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)]/50 pb-3">
+            {/* Severity pills */}
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/50 p-1 rounded-xl">
+              {[
+                { id: "all", label: t("alerts.page.severityAll"), activeClass: "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm" },
+                { id: "critical", label: t("alerts.page.severityCritical"), activeClass: "bg-red-600 text-white shadow-sm" },
+                { id: "high", label: t("alerts.page.severityHigh"), activeClass: "bg-orange-500 text-white shadow-sm" },
+                { id: "medium", label: t("alerts.page.severityMedium"), activeClass: "bg-yellow-500 text-white shadow-sm" },
+                { id: "low", label: t("alerts.page.severityLow"), activeClass: "bg-slate-500 text-white shadow-sm" }
+              ].map(pill => (
+                <button
+                  key={pill.id}
+                  onClick={() => setSeverityFilter(pill.id)}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    severityFilter === pill.id ? pill.activeClass : "text-slate-500 dark:text-slate-400 hover:text-slate-800"
+                  }`}
+                >
+                  {pill.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Divider */}
+            <span className="w-px h-5 bg-[var(--color-border)] hidden sm:block"></span>
+
+            {/* Source */}
+            <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}
+              className="border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 pl-3 pr-7 bg-white dark:bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] focus:outline-none cursor-pointer">
+              <option value="all">{t("alerts.page.sourceAll")}</option>
+              <option value="facebook">{t("alerts.page.sourceFacebook")}</option>
+              <option value="tiktok">{t("alerts.page.sourceTiktok")}</option>
+              <option value="youtube">{t("alerts.page.sourceYoutube")}</option>
+              <option value="google_maps">{t("alerts.page.sourceGoogleMaps")}</option>
+              <option value="befood">{t("alerts.page.sourceBefood")}</option>
+              <option value="thread">{t("alerts.page.sourceThreads")}</option>
+              <option value="news">{t("alerts.page.sourceNews")}</option>
+            </select>
+
+            {/* Content type */}
+            <select value={contentTypeFilter} onChange={(e) => setContentTypeFilter(e.target.value)}
+              className="border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 pl-3 pr-7 bg-white dark:bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] focus:outline-none cursor-pointer">
+              <option value="all">{t("alerts.page.contentTypeAll")}</option>
+              <option value="post">{t("alerts.page.contentTypePost")}</option>
+              <option value="comment">{t("alerts.page.contentTypeComment")}</option>
+            </select>
+
+            {/* Mine only */}
+            <button onClick={() => setShowMineOnly(!showMineOnly)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                showMineOnly
+                  ? "bg-[var(--color-brand)]/10 border-[var(--color-brand)] text-[var(--color-brand)]"
+                  : "border-[var(--color-border)] text-[var(--color-text-secondary)] bg-white dark:bg-[var(--color-bg-surface-raised)] hover:bg-slate-50"
+              }`}>
+              {t("alerts.page.mineOnly")}
+            </button>
+
+            {/* Sort — pushed to the end */}
+            <div className="flex items-center gap-1.5 ml-auto text-xs">
+              <span className="text-[var(--color-text-muted)] font-bold uppercase tracking-wider hidden sm:inline">{t("alerts.page.sortBy")}</span>
+              <select value={sortBy} onChange={(e: any) => setSortBy(e.target.value)}
+                className="bg-transparent border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 pl-3 pr-7 focus:outline-none cursor-pointer text-[var(--color-text-primary)]">
+                <option value="risk">{t("alerts.page.sortRisk")}</option>
+                <option value="newest">{t("alerts.page.sortNewest")}</option>
+                <option value="reach">{t("alerts.page.sortReach")}</option>
+              </select>
             </div>
           </div>
 
@@ -1280,9 +1307,9 @@ export default function AlertsPage() {
                   >
 
                     {/* Leftmost panel showing Risk Score & level */}
-                    <div className="p-4 md:p-6 md:w-32 flex-shrink-0 flex md:flex-col items-center justify-center border-b md:border-b-0 md:border-r border-[var(--color-border)]/50 gap-2 text-center bg-slate-50/50 dark:bg-slate-800/10">
-                      <div className="flex flex-col items-center justify-center">
-                        <span className={`text-3xl md:text-3.5xl font-black ${textClass} tracking-tight`}>
+                    <div className="p-4 md:p-5 md:w-28 flex-shrink-0 flex md:flex-col items-center justify-center border-b md:border-b-0 md:border-r border-[var(--color-border)]/50 gap-2 text-center bg-slate-50/50 dark:bg-slate-800/10">
+                      <div className="flex flex-col items-center justify-center w-full">
+                        <span className={`text-3xl font-black ${textClass} tracking-tight leading-none`}>
                           {riskScore}
                         </span>
                         <span className="text-[9px] font-black text-[var(--color-text-muted)] uppercase tracking-wider mt-1">
@@ -1290,8 +1317,18 @@ export default function AlertsPage() {
                             alert.severity.toLowerCase() === "high" ? t("alerts.page.riskHigh") :
                               alert.severity.toLowerCase() === "medium" ? t("alerts.page.riskMedium") : t("alerts.page.riskLow")}
                         </span>
+                        {/* Progress bar */}
+                        <div className="w-full mt-2 bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${
+                              alert.severity.toLowerCase() === "critical" ? "bg-red-500" :
+                              alert.severity.toLowerCase() === "high" ? "bg-orange-500" :
+                              alert.severity.toLowerCase() === "medium" ? "bg-yellow-500" : "bg-slate-400"
+                            }`}
+                            style={{ width: `${Math.min(100, riskScore)}%` }}
+                          />
+                        </div>
                       </div>
-                      <div className={`w-2 h-2 rounded-full ${dotClass} animate-pulse md:mt-2`}></div>
                     </div>
 
                     {/* Middle panel showing metadata & text preview */}
@@ -1380,34 +1417,35 @@ export default function AlertsPage() {
                     </div>
 
                     {/* Right action controls */}
-                    <div className="p-4 md:p-5 flex md:flex-col justify-center items-center gap-2 flex-shrink-0 md:w-40 border-t md:border-t-0 md:border-l border-[var(--color-border)]/50 bg-slate-50/20 dark:bg-slate-800/10">
+                    <div className="p-4 flex md:flex-col justify-center items-center gap-2 flex-shrink-0 md:w-36 border-t md:border-t-0 md:border-l border-[var(--color-border)]/50 bg-slate-50/20 dark:bg-slate-800/10">
                       {isResolving || isPendingApproval || alert.status === "monitoring" ? (
                         <div className="w-full space-y-2 text-center">
-                          <div className="flex items-center gap-1.5 justify-center">
-                            <div className="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center overflow-hidden">
+                          {/* Assignee chip */}
+                          <div className="flex items-center gap-1.5 justify-center bg-white dark:bg-slate-800 border border-[var(--color-border)] rounded-lg px-2 py-1">
+                            <div className="w-4 h-4 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center overflow-hidden flex-shrink-0">
                               <span className="material-symbols-outlined text-[10px] text-slate-500">person</span>
                             </div>
-                            <span className="text-[10px] text-[var(--color-text-secondary)] font-bold truncate max-w-[120px]">
+                            <span className="text-[10px] text-[var(--color-text-secondary)] font-bold truncate max-w-[100px]">
                               {getResolverName(alert.being_resolved_by) || t("alerts.page.member")}
                             </span>
                           </div>
                           <button
                             onClick={() => router.push(`/alerts/${encodeURIComponent(alert.id)}`)}
-                            className={`w-full py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${isPendingApproval && isManager
+                            className={`w-full py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                              isPendingApproval && isManager
                                 ? "bg-orange-600 hover:bg-orange-700 text-white border-orange-600"
                                 : "bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[var(--color-text-primary)] border-[var(--color-border)]"
-                              }`}
+                            }`}
                           >
-                            {isPendingApproval && isManager ? "Xem duyet" : t("alerts.page.details")}
+                            {isPendingApproval && isManager ? "Xem duyệt" : t("alerts.page.details")}
                           </button>
                         </div>
                       ) : (
                         <div className="w-full space-y-2">
+                          {/* Primary CTA */}
                           <button
                             onClick={async () => {
                               try {
-                                // Nhận task: set status=resolving + lock người nhận ngay lập tức
-                                // Task sẽ biến khỏi danh sách chung, chỉ hiện trong "Của tôi"
                                 await updateAlertStatus(alert.id, "resolving", profile, { note: "Đã tiếp nhận xử lý" }, alert.brand);
                                 await lockAlertForResolution(alert.id, profile);
                                 triggerToast("✅ Đã tiếp nhận vụ việc. Vào mục 'Của tôi' để xem.");
@@ -1420,13 +1458,22 @@ export default function AlertsPage() {
                             {t("alerts.page.acceptTask")}
                           </button>
 
-
-                          <button
-                            onClick={() => router.push(`/alerts/${encodeURIComponent(alert.id)}`)}
-                            className="w-full py-1 text-center text-[var(--color-brand)] hover:underline text-xs font-bold cursor-pointer"
-                          >
-                            {t("alerts.page.viewDetails")}
-                          </button>
+                          {/* Secondary actions: detail link + escalate condensed */}
+                          <div className="flex gap-1.5">
+                            <button
+                              onClick={() => router.push(`/alerts/${encodeURIComponent(alert.id)}`)}
+                              className="flex-1 py-1.5 text-center text-[var(--color-brand)] hover:bg-[var(--color-brand)]/5 border border-[var(--color-brand)]/30 rounded-xl text-[10px] font-bold cursor-pointer transition-colors"
+                            >
+                              {t("alerts.page.viewDetails")}
+                            </button>
+                            <button
+                              onClick={() => setReportModalItem(alert)}
+                              title={t("alerts.page.escalateNow")}
+                              className="px-2 py-1.5 text-red-500 hover:bg-red-50 border border-red-200 dark:border-red-900/30 rounded-xl text-[10px] font-bold cursor-pointer transition-colors flex items-center gap-0.5"
+                            >
+                              <span className="material-symbols-outlined text-[13px]">priority_high</span>
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -1484,15 +1531,15 @@ export default function AlertsPage() {
         </div>
 
         {/* Right Column: Sidebar Widgets */}
-        <div className="space-y-6">
+        <div className="space-y-5">
 
           {/* Trending now tags */}
-          <div className="glass-card rounded-2xl p-5 md:p-6 bg-white dark:bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] shadow-sm space-y-4">
-            <h3 className="text-xs md:text-sm font-black text-[var(--color-text-primary)] uppercase tracking-wider flex items-center gap-1.5">
+          <div className="glass-card rounded-2xl p-5 bg-white dark:bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] shadow-sm space-y-3">
+            <h3 className="text-xs font-black text-[var(--color-text-primary)] uppercase tracking-wider flex items-center gap-1.5">
               <span className="material-symbols-outlined text-orange-500 text-lg">trending_up</span>
               {t("alerts.page.trendingTitle")}
             </h3>
-            <div className="space-y-3 pt-1">
+            <div className="space-y-2">
               {trendingTags.length === 0 && (
                 <p className="text-xs text-[var(--color-text-muted)] italic">{t("alerts.page.noTrending")}</p>
               )}
@@ -1553,60 +1600,56 @@ export default function AlertsPage() {
             </div>
           </div>
 
+          {/* Shift performance — compact, shown after trending */}
+          <div className="glass-card rounded-2xl p-4 bg-white dark:bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest flex items-center gap-1">
+                <span className="material-symbols-outlined text-indigo-500 text-base">insights</span>
+                {t("alerts.page.shiftPerformance")}
+              </span>
+              <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border ${
+                shiftPerformance === 0
+                  ? "bg-slate-50 dark:bg-slate-800 text-slate-500 border-slate-200/50 dark:border-slate-700/50"
+                  : shiftPerformance >= 90
+                  ? "bg-green-50 dark:bg-green-950/20 text-green-600 dark:text-green-400 border-green-100/50"
+                  : "bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border-amber-100/50"
+              }`}>
+                {shiftPerformance === 0 ? "Chưa có dữ liệu" : shiftPerformance >= 90 ? "Đạt KPI" : "Cần cải thiện"}
+              </span>
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-black text-[var(--color-text-primary)]">{shiftPerformance}%</span>
+              <span className="text-[10px] font-semibold text-[var(--color-text-muted)]">
+                {shiftPerformanceStats.resolved} / {shiftPerformanceStats.total} {t("alerts.page.processed")}
+              </span>
+            </div>
+            <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+              <div className="bg-gradient-to-r from-blue-500 to-indigo-500 h-full rounded-full transition-all duration-500" style={{ width: `${shiftPerformance}%` }}></div>
+            </div>
+          </div>
+
           {/* Team resolution log feed */}
-          <div className="glass-card rounded-2xl p-5 md:p-6 bg-white dark:bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] shadow-sm space-y-4">
-            <h3 className="text-xs md:text-sm font-black text-[var(--color-text-primary)] uppercase tracking-wider flex items-center gap-1.5">
+          <div className="glass-card rounded-2xl p-5 bg-white dark:bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] shadow-sm space-y-3">
+            <h3 className="text-xs font-black text-[var(--color-text-primary)] uppercase tracking-wider flex items-center gap-1.5">
               <span className="material-symbols-outlined text-blue-500 text-lg">group</span>
               {t("alerts.page.teamActivity")}
             </h3>
-            <div className="space-y-4 pt-1">
+            <div className="space-y-3">
               {teamActivities.map((act, i) => (
                 <div key={i} className="flex gap-3 text-xs items-start">
-                  <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-600 font-bold flex items-center justify-center flex-shrink-0">
+                  <div className="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-600 font-bold flex items-center justify-center flex-shrink-0 text-[10px]">
                     {act.author.slice(0, 2).toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-grow">
                     <p className="text-[var(--color-text-primary)] leading-snug">
                       <span className="font-bold">{act.author}</span> {act.action}
                     </p>
-                    <span className="text-[10px] text-[var(--color-text-muted)] font-semibold mt-1 block">
+                    <span className="text-[10px] text-[var(--color-text-muted)] font-semibold mt-0.5 block">
                       {getRelativeTime(act.timestamp, t)}
                     </span>
                   </div>
                 </div>
               ))}
-            </div>
-          </div>
-
-          {/* Shift performance resolution ratio */}
-          <div className="glass-card rounded-2xl p-5 md:p-6 bg-white dark:bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] shadow-sm space-y-4 relative overflow-hidden group">
-            <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-indigo-500/5 rounded-full blur-xl group-hover:scale-110 transition-transform"></div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[9px] font-black text-[var(--color-text-muted)] uppercase tracking-widest">{t("alerts.page.shiftPerformance")}</span>
-                <span className="material-symbols-outlined text-indigo-500 text-lg">insights</span>
-              </div>
-              <div className="flex items-baseline justify-between mt-1">
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-3xl font-black text-[var(--color-text-primary)]">{shiftPerformance}%</span>
-                  <span className="text-[10px] font-bold text-green-500">{t("alerts.page.processed")}</span>
-                </div>
-                <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${shiftPerformance >= 90
-                    ? "bg-green-50 dark:bg-green-950/20 text-green-600 dark:text-green-400 border border-green-100/50 dark:border-green-900/30"
-                    : "bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border border-amber-100/50 dark:border-amber-900/30"
-                  }`}>
-                  {shiftPerformance >= 90 ? "Đạt KPI" : "Cần cải thiện"}
-                </span>
-              </div>
-            </div>
-            <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
-              <div className="bg-gradient-to-r from-blue-500 to-indigo-500 h-full rounded-full transition-all duration-500" style={{ width: `${shiftPerformance}%` }}></div>
-            </div>
-            <div className="flex justify-between items-center text-[10px] text-[var(--color-text-secondary)] font-semibold pt-1.5 border-t border-[var(--color-border)]/40">
-              <span>Số vụ việc giải quyết:</span>
-              <span className="font-bold text-[var(--color-text-primary)]">
-                {shiftPerformanceStats.resolved} / {shiftPerformanceStats.total} sự vụ
-              </span>
             </div>
           </div>
 
@@ -1776,7 +1819,7 @@ function TrendModal({ alert, onClose }: TrendModalProps) {
 
       try {
         // 1. Fetch from Supabase.
-        const fetched = await fetchSupabaseAlerts({ since: getAlertReviewSinceIso() });
+        const fetched = useAlertStore.getState().rawAlerts;
 
         if (active) {
           // 2. Parse and filter docs in-memory
