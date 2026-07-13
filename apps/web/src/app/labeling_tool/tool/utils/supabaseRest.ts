@@ -326,11 +326,13 @@ export async function loadPendingAssignmentCounts(
     requestExactCount(config, 'posts', new URLSearchParams({
       select: 'post_id',
       platform: platformFilter,
+      crawl_status: 'eq.active',
       limit: '1',
     }).toString()),
     requestExactCount(config, 'comments', new URLSearchParams({
       select: 'comment_id',
       platform: platformFilter,
+      crawl_status: 'eq.active',
       limit: '1',
     }).toString()),
   ]);
@@ -671,7 +673,7 @@ export async function loadSupabaseThreads(
       ? await request<SupabasePost[]>(
           config,
           'posts',
-          `select=${POST_SELECT}&platform=${platformFilter}&post_id=in.(${uniquePostIds.map(encode).join(',')})`,
+          `select=${POST_SELECT}&platform=${platformFilter}&post_id=in.(${uniquePostIds.map(encode).join(',')})&crawl_status=eq.active`,
           { signal }
         )
       : [];
@@ -813,7 +815,7 @@ async function loadPostComments(
   let offset = 0;
   while (all.length < MAX_COMMENTS_PER_POST) {
     const currentPageSize = Math.min(pageSize, MAX_COMMENTS_PER_POST - all.length);
-    const commentsQuery = `select=${COMMENT_SELECT}&platform=eq.${encode(platform)}&post_id=eq.${encode(postId)}&order=comment_level.asc,posted_at.asc&limit=${currentPageSize}&offset=${offset}`;
+    const commentsQuery = `select=${COMMENT_SELECT}&platform=eq.${encode(platform)}&post_id=eq.${encode(postId)}&crawl_status=eq.active&order=comment_level.asc,posted_at.asc&limit=${currentPageSize}&offset=${offset}`;
     const page = await request<SupabaseComment[]>(config, 'comments', commentsQuery, { signal });
     all.push(...page);
     if (page.length < currentPageSize) break;
@@ -821,7 +823,7 @@ async function loadPostComments(
   }
 
   if (focusedCommentId && !all.some(comment => comment.comment_id === focusedCommentId)) {
-    const focusedQuery = `select=${COMMENT_SELECT}&platform=eq.${encode(platform)}&post_id=eq.${encode(postId)}&comment_id=eq.${encode(focusedCommentId)}&limit=1`;
+    const focusedQuery = `select=${COMMENT_SELECT}&platform=eq.${encode(platform)}&post_id=eq.${encode(postId)}&comment_id=eq.${encode(focusedCommentId)}&crawl_status=eq.active&limit=1`;
     const focused = await request<SupabaseComment[]>(config, 'comments', focusedQuery, { signal });
     all.push(...focused.filter(comment => !all.some(existing => existing.comment_id === comment.comment_id)));
   }
