@@ -41,6 +41,8 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { getDefaultRouteForRole } from "@/lib/rbac";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 type FormState = {
   fullName: string;
@@ -441,6 +443,8 @@ export default function BrandLandingPage() {
   const appRoute = profile?.defaultRoute || getDefaultRouteForRole(role);
   const [form, setForm] = useState<FormState>(initialFormState);
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
   const [selectedRole, setSelectedRole] = useState<RoleId>("brand");
   const activeRole = roleStories.find((story) => story.id === selectedRole) ?? roleStories[0];
 
@@ -451,9 +455,33 @@ export default function BrandLandingPage() {
 
   const updateForm = (field: keyof FormState, value: string) => setForm((current) => ({ ...current, [field]: value }));
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!missingRequired) setSubmitted(true);
+    if (missingRequired) return;
+    setSubmitting(true);
+    setSubmitError("");
+    try {
+      await addDoc(collection(db, "consultations"), {
+        fullName: form.fullName.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim(),
+        company: form.company.trim(),
+        industry: form.industry.trim() || "",
+        channels: form.channels || "",
+        need: form.need,
+        teamSize: form.teamSize || "",
+        status: "pending",
+        notes: "",
+        contactPlan: "",
+        createdAt: serverTimestamp(),
+      });
+      setSubmitted(true);
+    } catch (err: any) {
+      console.error("Error submitting consultation request:", err);
+      setSubmitError("Đã xảy ra lỗi khi gửi yêu cầu. Vui lòng thử lại sau.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const inputClass = "h-12 w-full rounded-[8px] border border-[#d8e2ec] bg-white px-4 text-[14px] font-medium text-[#1c2d40] outline-none transition placeholder:text-[#95a3b4] focus:border-[#0f766e] focus:ring-4 focus:ring-[#ccfbf1]";
@@ -1340,8 +1368,21 @@ export default function BrandLandingPage() {
                       <option>Tư vấn quy trình tổng thể</option>
                     </select>
                   </label>
-                  <button type="submit" disabled={missingRequired} className="mt-6 inline-flex h-[56px] w-full items-center justify-center gap-2 rounded-full bg-[#1B1B4A] hover:bg-[#2A2A6A] px-8 text-[16px] font-bold text-white shadow-[0_12px_24px_rgba(27,27,74,0.15)] transition-all hover:-translate-y-1 hover:shadow-[0_20px_40px_rgba(27,27,74,0.25)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none">
-                    Gửi thông tin để nhận tư vấn <Send className="h-5 w-5" />
+                  {submitError && (
+                    <div className="rounded-xl border border-red-500/20 bg-[#ef4444]/5 p-4 text-[14px] text-red-500 dark:text-red-400">
+                      {submitError}
+                    </div>
+                  )}
+                  <button type="submit" disabled={missingRequired || submitting} className="mt-6 inline-flex h-[56px] w-full items-center justify-center gap-2 rounded-full bg-[#1B1B4A] hover:bg-[#2A2A6A] px-8 text-[16px] font-bold text-white shadow-[0_12px_24px_rgba(27,27,74,0.15)] transition-all hover:-translate-y-1 hover:shadow-[0_20px_40px_rgba(27,27,74,0.25)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none">
+                    {submitting ? "Đang gửi yêu cầu..." : "Gửi thông tin để nhận tư vấn"}
+                    {submitting ? (
+                      <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                    ) : (
+                      <Send className="h-5 w-5" />
+                    )}
                   </button>
                   <p className="mt-3 text-center text-[13px] leading-[1.6] text-[#6B7090]">Khi gửi biểu mẫu, bạn đồng ý để InsightFlow liên hệ nhằm tư vấn về nhu cầu dùng thử và cách triển khai phù hợp.</p>
                 </form>
