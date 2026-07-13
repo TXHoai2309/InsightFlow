@@ -66,6 +66,13 @@ const initialFormState: FormState = {
 
 const channels = ["Facebook", "TikTok", "YouTube", "Review", "Tin tức", "Website"];
 
+const heatmapOpacities = [
+  0.72, 0.9, 1, 0.58, 0.66, 0.86, 0.62,
+  1, 0.88, 0.6, 0.68, 0.74, 1, 0.64,
+  1, 0.84, 0.7, 0.56, 0.76, 0.82, 1,
+  0.6, 0.9, 0.72, 0.66, 1, 0.78, 0.58,
+];
+
 const modules = [
   {
     icon: RadioTower,
@@ -294,7 +301,7 @@ function LiveIntelligenceSection() {
               </div>
 
               {/* Dashboard Body */}
-              <div className="flex flex-col md:flex-row flex-1 p-4 md:p-6 gap-6 bg-[url('/vercel-grid.svg')] bg-repeat opacity-[0.99] dark:opacity-90">
+              <div className="bg-vercel-grid flex flex-col md:flex-row flex-1 p-4 md:p-6 gap-6 opacity-[0.99] dark:opacity-90">
                 {/* Left: Glowing Line Chart & KPI */}
                 <div className="flex-1 flex flex-col gap-6">
                    <div className="flex gap-4">
@@ -352,7 +359,7 @@ function LiveIntelligenceSection() {
                      <p className="text-[14px] font-bold text-[#1B1B4A] dark:text-white mb-3">Activity Heatmap</p>
                      <div className="grid grid-cols-7 gap-1.5">
                        {Array.from({length: 28}).map((_, i) => (
-                         <div key={i} className={`h-4 md:h-5 rounded-[4px] ${[2,7,12,14,20,25].includes(i) ? 'bg-[#6D5EF6]' : [1,5,8,15,22,27].includes(i) ? 'bg-[#9B8CFF]' : 'bg-[#ECE9FF] dark:bg-white/10'}`} style={{ opacity: Math.random() * 0.5 + 0.5, animation: `pulse 3s infinite ${i * 0.15}s` }} />
+                         <div key={i} className={`h-4 md:h-5 rounded-[4px] ${[2,7,12,14,20,25].includes(i) ? 'bg-[#6D5EF6]' : [1,5,8,15,22,27].includes(i) ? 'bg-[#9B8CFF]' : 'bg-[#ECE9FF] dark:bg-white/10'}`} style={{ opacity: heatmapOpacities[i], animation: `pulse 3s infinite ${i * 0.15}s` }} />
                        ))}
                      </div>
                       <div className="grid grid-cols-7 gap-1.5 mt-1.5">
