@@ -561,16 +561,103 @@ export function LeadWorkbenchRow({
               </div>
             </div>
 
-            <button
-              type="button"
-              data-tour={rank === 1 ? "lead-row-primary-action" : undefined}
-              onClick={handlePrimaryAction}
-              disabled={isOpening}
-              className={`inline-flex min-h-10 w-full min-w-0 max-w-full items-center justify-center gap-1.5 overflow-hidden rounded-lg px-2.5 py-2 text-xs font-black tracking-tight shadow-sm transition-all duration-200 hover:-translate-y-0.5 disabled:pointer-events-none disabled:opacity-60 ${buttonStyle}`}
-            >
-              <span className="material-symbols-outlined shrink-0 text-[18px]">{ctaIcon}</span>
-              <span className="min-w-0 truncate">{isOpening ? "Đang mở..." : ctaLabel}</span>
-            </button>
+            <div className="flex items-center gap-2 relative min-w-0 w-full">
+              <button
+                type="button"
+                data-tour={rank === 1 ? "lead-row-primary-action" : undefined}
+                onClick={handlePrimaryAction}
+                disabled={isOpening}
+                className={`inline-flex min-h-10 w-full min-w-0 max-w-full items-center justify-center gap-1.5 overflow-hidden rounded-lg px-2.5 py-2 text-xs font-black tracking-tight shadow-sm transition-all duration-200 hover:-translate-y-0.5 disabled:pointer-events-none disabled:opacity-60 ${buttonStyle}`}
+              >
+                <span className="material-symbols-outlined shrink-0 text-[18px]">{ctaIcon}</span>
+                <span className="min-w-0 truncate">{isOpening ? "Đang mở..." : ctaLabel}</span>
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowMenu(!showMenu);
+                }}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-primary)] transition-all"
+                title="Phân công xử lý"
+              >
+                <span className="material-symbols-outlined text-[18px]">more_vert</span>
+              </button>
+
+              {showMenu && (
+                <div className="absolute right-0 bottom-full mb-2 z-50 w-52 rounded-xl bg-white py-1.5 shadow-xl ring-1 ring-black/5 border border-[#E9E7EE] max-h-48 overflow-y-auto">
+                  <div className="px-3 py-1.5 text-[10px] font-bold text-[#787585] uppercase tracking-wider border-b border-[#E9E7EE] mb-1">
+                    Phân công xử lý
+                  </div>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        setShowMenu(false);
+                        const ownerData: any = {
+                          owner_id: null,
+                          owner_name: null,
+                          owner_email: null,
+                          assigned_at: null,
+                          assigned_by: null,
+                          claimed_at: null,
+                        };
+                        try {
+                          await updateLeadDetails(lead.id, ownerData, profile);
+                          showToast("Đã hủy gán việc thành công!", "success");
+                          const updatedLead = { ...lead, ...ownerData };
+                          onStartedAction?.(updatedLead);
+                          onSelect?.(updatedLead);
+                        } catch (err: any) {
+                          console.error(err);
+                          showToast(`Không thể hủy gán việc: ${err?.message || "Lỗi kết nối"}`, "error");
+                        }
+                      }}
+                      className="w-full text-left px-3 py-2 text-xs text-[#BA1A1A] hover:bg-[#FFDAD6]/30 font-bold transition-colors"
+                    >
+                      -- Hủy gán --
+                    </button>
+                  )}
+                  {staffList.map((staff: any) => (
+                    <button
+                      key={staff.uid}
+                      type="button"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        setShowMenu(false);
+                        if (!canEdit || !profile) {
+                          showToast("Bạn không có quyền thực hiện thao tác này.", "error");
+                          return;
+                        }
+                        const nowIso = new Date().toISOString();
+                        const ownerData: any = {
+                          owner_id: staff.uid,
+                          owner_name: staff.displayName || staff.email || "Nhân viên xử lý",
+                          owner_email: staff.email,
+                          assigned_at: nowIso,
+                          assigned_by: profile.uid,
+                          claimed_at: nowIso,
+                        };
+                        try {
+                          await updateLeadDetails(lead.id, ownerData, profile);
+                          showToast(`Giao việc thành công cho ${staff.displayName || staff.email}!`, "success");
+                          const updatedLead = { ...lead, ...ownerData };
+                          onStartedAction?.(updatedLead);
+                          onSelect?.(updatedLead);
+                        } catch (err: any) {
+                          console.error(err);
+                          showToast(`Không thể giao việc: ${err?.message || "Lỗi kết nối"}`, "error");
+                        }
+                      }}
+                      className="w-full text-left px-3 py-2 text-xs text-[#1A1B20] hover:bg-[#F4F3FA] font-medium transition-colors border-t border-[#F4F3FA]"
+                    >
+                      {staff.displayName || staff.email}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex flex-col gap-2 rounded-lg bg-slate-50/90 p-3 dark:bg-slate-900/30 min-[1180px]:flex-row min-[1180px]:items-center min-[1180px]:justify-between">
@@ -625,138 +712,7 @@ export function LeadWorkbenchRow({
         </div>
       </div>
 
-      {/* Right Side: Score, SLA, CTA Action */}
-      <div className="flex flex-row flex-wrap items-center gap-4 lg:gap-6 shrink-0 justify-between lg:justify-end border-t lg:border-t-0 pt-3 lg:pt-0 border-[var(--color-border)]">
-        {/* Score & Intent */}
-        <div className="flex items-center gap-3">
-          <span className={`rounded-full border px-2.5 py-0.5 text-xs font-bold uppercase ${INTENT_STYLE[lead.intent]}`}>
-            {lead.intent === "none" ? "N/A" : lead.intent}
-          </span>
-          <div className="text-center">
-            <span className="block text-xl font-extrabold text-[var(--color-brand)] leading-none">
-              {meta.priorityScore}
-            </span>
-            <span className="text-[9px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">
-              Độ ưu tiên
-            </span>
-          </div>
-        </div>
 
-        {/* SLA countdown */}
-        <div className="flex flex-col gap-0.5 text-left lg:text-right min-w-[100px]">
-          <div className="flex items-center lg:justify-end gap-1">
-            <span className={`material-symbols-outlined text-[16px] ${meta.isOverdue || meta.isUrgent ? "text-[var(--color-error)] animate-pulse" : "text-[var(--color-text-secondary)]"
-              }`}>
-              {meta.needsResultCapture ? "task_alt" : "schedule"}
-            </span>
-            <span className={`text-sm font-extrabold tracking-tight ${meta.isOverdue || meta.isUrgent ? "text-[var(--color-error)]" : "text-[var(--color-text-secondary)]"
-              }`}>
-              {formatLeadSla(meta)}
-            </span>
-          </div>
-          <span className="text-[9px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">
-            {meta.needsResultCapture ? "Cần ghi nhận" : "SLA còn lại"}
-          </span>
-        </div>
-
-        {/* Action Button */}
-        <div className="min-w-[130px] flex items-center gap-2 relative">
-          <button
-            type="button"
-            onClick={handlePrimaryAction}
-            disabled={isOpening}
-            className={`inline-flex w-full items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-[13px] font-bold tracking-tight shadow-sm transition-all duration-200 hover:-translate-y-0.5 disabled:opacity-60 disabled:pointer-events-none ${buttonStyle}`}
-          >
-            <span className="material-symbols-outlined text-[16px]">{ctaIcon}</span>
-            <span>{isOpening ? "Đang mở..." : ctaLabel}</span>
-          </button>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowMenu(!showMenu);
-            }}
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-primary)] transition-all"
-            title="Phân công xử lý"
-          >
-            <span className="material-symbols-outlined text-[18px]">more_vert</span>
-          </button>
-
-          {showMenu && (
-            <div className="absolute right-0 bottom-full mb-2 z-50 w-52 rounded-xl bg-white py-1.5 shadow-xl ring-1 ring-black/5 border border-[#E9E7EE] max-h-48 overflow-y-auto">
-              <div className="px-3 py-1.5 text-[10px] font-bold text-[#787585] uppercase tracking-wider border-b border-[#E9E7EE] mb-1">
-                Phân công xử lý
-              </div>
-              {canEdit && (
-                <button
-                  type="button"
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    setShowMenu(false);
-                    const ownerData: any = {
-                      owner_id: null,
-                      owner_name: null,
-                      owner_email: null,
-                      assigned_at: null,
-                      assigned_by: null,
-                      claimed_at: null,
-                    };
-                    try {
-                      await updateLeadDetails(lead.id, ownerData, profile);
-                      showToast("Đã hủy gán việc thành công!", "success");
-                      const updatedLead = { ...lead, ...ownerData };
-                      onStartedAction?.(updatedLead);
-                      onSelect?.(updatedLead);
-                    } catch (err: any) {
-                      console.error(err);
-                      showToast(`Không thể hủy gán việc: ${err?.message || "Lỗi kết nối"}`, "error");
-                    }
-                  }}
-                  className="w-full text-left px-3 py-2 text-xs text-[#BA1A1A] hover:bg-[#FFDAD6]/30 font-bold transition-colors"
-                >
-                  -- Hủy gán --
-                </button>
-              )}
-              {staffList.map((staff: any) => (
-                <button
-                  key={staff.uid}
-                  type="button"
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    setShowMenu(false);
-                    if (!canEdit || !profile) {
-                      showToast("Bạn không có quyền thực hiện thao tác này.", "error");
-                      return;
-                    }
-                    const nowIso = new Date().toISOString();
-                    const ownerData: any = {
-                      owner_id: staff.uid,
-                      owner_name: staff.displayName || staff.email || "Nhân viên xử lý",
-                      owner_email: staff.email,
-                      assigned_at: nowIso,
-                      assigned_by: profile.uid,
-                      claimed_at: nowIso,
-                    };
-                    try {
-                      await updateLeadDetails(lead.id, ownerData, profile);
-                      showToast(`Giao việc thành công cho ${staff.displayName || staff.email}!`, "success");
-                      const updatedLead = { ...lead, ...ownerData };
-                      onStartedAction?.(updatedLead);
-                      onSelect?.(updatedLead);
-                    } catch (err: any) {
-                      console.error(err);
-                      showToast(`Không thể giao việc: ${err?.message || "Lỗi kết nối"}`, "error");
-                    }
-                  }}
-                  className="w-full text-left px-3 py-2 text-xs text-[#1A1B20] hover:bg-[#F4F3FA] font-medium transition-colors border-t border-[#F4F3FA]"
-                >
-                  {staff.displayName || staff.email}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
 
       {
     toast && (
