@@ -1,5 +1,7 @@
 import type { TFunction } from "i18next";
 import type { LeadReportData } from "@/lib/lead-report";
+import type { CrisisReportData } from "@/lib/crisis-report";
+import type { DualOperationsReportData } from "@/lib/dual-operations-report";
 
 type ReportLabels = {
   dashboard: string;
@@ -701,6 +703,234 @@ export function exportLeadReportExcel(report: LeadReportData, filename = "Lead_R
 
 export function exportLeadReportCsv(report: LeadReportData, filename = "Lead_Report") {
   const csv = rowsToCsv(getLeadReportDetailRows(report));
+  downloadBlob(
+    `${safeFilePart(filename)}.csv`,
+    `\uFEFF${csv}`,
+    "text/csv;charset=utf-8",
+  );
+}
+
+function getCrisisReportOverviewRows(report: CrisisReportData) {
+  const { kpis } = report;
+  return [
+    ["Chi so", "Gia tri"],
+    ["Thoi gian xuat", report.generatedAt],
+    ["Tong canh bao", kpis.total],
+    ["Moi", kpis.new],
+    ["Dang xu ly", kpis.resolving],
+    ["Dang theo doi", kpis.monitoring],
+    ["Cho duyet", kpis.pendingApproval],
+    ["Da xu ly", kpis.resolved],
+    ["Qua han/Tre SLA", kpis.overdue],
+    ["Escalate", kpis.escalated],
+    ["Critical", kpis.critical],
+    ["High", kpis.high],
+    ["Phan hoi dau tien TB (phut)", kpis.avgFirstResponseMinutes ?? ""],
+    ["Xu ly TB (phut)", kpis.avgResolutionMinutes ?? ""],
+    ["Ty le xu ly", `${kpis.resolvedRate}%`],
+    ["Ty le dung SLA", `${kpis.slaOnTimeRate}%`],
+    ["Tom tat", report.aiSummary],
+  ];
+}
+
+function getCrisisReportDetailRows(report: CrisisReportData) {
+  return [
+    [
+      "Case ID",
+      "Thuong hieu",
+      "Nen tang",
+      "Chu de",
+      "Muc do",
+      "Sentiment",
+      "Trang thai",
+      "Nhan vien phu trach",
+      "Tao luc",
+      "Phan hoi dau tien",
+      "Xu ly xong",
+      "Phan hoi (phut)",
+      "Xu ly (phut)",
+      "SLA",
+      "Diem tieu cuc",
+      "Reach",
+      "Engagement",
+      "Escalate",
+      "So ghi chu",
+      "Noi dung",
+      "URL",
+    ],
+    ...report.detailRows.map((row) => [
+      row.id,
+      row.brand,
+      row.platform,
+      row.topic,
+      row.severity,
+      row.sentiment,
+      row.status,
+      row.assigneeName,
+      row.createdAt,
+      row.firstResponseAt,
+      row.resolvedAt,
+      row.responseMinutes ?? "",
+      row.resolutionMinutes ?? "",
+      row.slaStatus,
+      row.negativityScore,
+      row.reach,
+      row.engagement,
+      row.escalated ? "Co" : "Khong",
+      row.notesCount,
+      row.content,
+      row.url,
+    ]),
+  ];
+}
+
+function getCrisisReportDistributionRows(title: string, rows: CrisisReportData["severityDistribution"]) {
+  return [
+    [title],
+    ["Nhom", "So luong", "Ty le"],
+    ...rows.map((row) => [row.label, row.count, `${row.percentage}%`]),
+  ];
+}
+
+function getCrisisReportStaffRows(report: CrisisReportData) {
+  return [
+    ["Nhan vien", "Tong case", "Da xu ly", "Qua han/Tre SLA", "Escalate", "Phan hoi TB (phut)", "Xu ly TB (phut)", "Ty le xu ly"],
+    ...report.staffPerformance.map((row) => [
+      row.ownerName,
+      row.total,
+      row.resolved,
+      row.overdue,
+      row.escalated,
+      row.avgFirstResponseMinutes ?? "",
+      row.avgResolutionMinutes ?? "",
+      `${row.resolvedRate}%`,
+    ]),
+  ];
+}
+
+export function exportCrisisReportExcel(report: CrisisReportData, filename = "Crisis_Report") {
+  downloadExcelSheets(`${safeFilePart(filename)}.xls`, [
+    { name: "Tong quan khung hoang", rows: getCrisisReportOverviewRows(report) },
+    { name: "Chi tiet case", rows: getCrisisReportDetailRows(report) },
+    {
+      name: "Phan tich",
+      rows: [
+        ...getCrisisReportDistributionRows("Phan bo muc do", report.severityDistribution),
+        [],
+        ...getCrisisReportDistributionRows("Trang thai xu ly", report.statusDistribution),
+        [],
+        ...getCrisisReportDistributionRows("Nguon canh bao", report.sourceDistribution),
+        [],
+        ...getCrisisReportDistributionRows("Chu de", report.topicDistribution),
+        [],
+        ["Ngay", "Case moi", "Da xu ly", "Escalate", "Phan hoi TB (phut)"],
+        ...report.responseTrend.map((row) => [
+          row.day,
+          row.created,
+          row.resolved,
+          row.escalated,
+          row.avgResponseMinutes,
+        ]),
+      ],
+    },
+    { name: "Qua han SLA", rows: [["Case qua han"], ...getCrisisReportDetailRows({ ...report, detailRows: report.overdueRows })] },
+    { name: "Escalation", rows: [["Case escalate"], ...getCrisisReportDetailRows({ ...report, detailRows: report.escalationRows })] },
+    { name: "Hieu suat nhan vien", rows: getCrisisReportStaffRows(report) },
+  ]);
+}
+
+export function exportCrisisReportCsv(report: CrisisReportData, filename = "Crisis_Report") {
+  const csv = rowsToCsv(getCrisisReportDetailRows(report));
+  downloadBlob(
+    `${safeFilePart(filename)}.csv`,
+    `\uFEFF${csv}`,
+    "text/csv;charset=utf-8",
+  );
+}
+
+function getDualOperationsOverviewRows(report: DualOperationsReportData) {
+  const { kpis } = report;
+  return [
+    ["Chi so", "Gia tri"],
+    ["Thoi gian xuat", report.generatedAt],
+    ["Tong viec", kpis.totalTasks],
+    ["Tong lead", kpis.leadTotal],
+    ["Tong case khung hoang", kpis.crisisTotal],
+    ["Da hoan tat", kpis.completedTasks],
+    ["Dang mo", kpis.pendingTasks],
+    ["Qua han/Tre SLA", kpis.overdueTasks],
+    ["Uu tien cao", kpis.priorityTasks],
+    ["Ty le chuyen doi lead", `${kpis.leadConversionRate}%`],
+    ["Ty le xu ly khung hoang", `${kpis.crisisResolvedRate}%`],
+    ["Ty le dung SLA tong hop", `${kpis.slaOnTimeRate}%`],
+    ["Lead hot", report.lead.kpis.hot],
+    ["Lead can ghi ket qua", report.lead.kpis.needResult],
+    ["Crisis critical/high", report.crisis.kpis.critical + report.crisis.kpis.high],
+    ["Crisis escalation", report.crisis.kpis.escalated],
+    ["Tom tat", report.aiSummary],
+  ];
+}
+
+function getDualOperationsWorkloadRows(report: DualOperationsReportData) {
+  return [
+    ["Nghiep vu", "So luong", "Ty le"],
+    ...report.workloadDistribution.map((row) => [
+      row.label,
+      row.count,
+      `${row.percentage}%`,
+    ]),
+  ];
+}
+
+function getDualOperationsPriorityRows(report: DualOperationsReportData) {
+  return [
+    [
+      "Loai",
+      "ID",
+      "Tieu de",
+      "Muc uu tien",
+      "Trang thai",
+      "SLA",
+      "Nguoi phu trach",
+      "Diem uu tien",
+      "Noi dung",
+      "Duong dan trong he thong",
+    ],
+    ...report.priorityRows.map((row) => [
+      row.typeLabel,
+      row.id,
+      row.title,
+      row.priority,
+      row.status,
+      row.slaStatus,
+      row.ownerName,
+      row.score,
+      row.content,
+      row.href,
+    ]),
+  ];
+}
+
+export function exportDualOperationsReportExcel(
+  report: DualOperationsReportData,
+  filename = "Dual_Operations_Report",
+) {
+  downloadExcelSheets(`${safeFilePart(filename)}.xls`, [
+    { name: "Tong quan 2 nghiep vu", rows: getDualOperationsOverviewRows(report) },
+    { name: "Phan bo khoi luong", rows: getDualOperationsWorkloadRows(report) },
+    { name: "Viec uu tien", rows: getDualOperationsPriorityRows(report) },
+    { name: "Tong quan Lead", rows: getLeadReportOverviewRows(report.lead) },
+    { name: "Chi tiet Lead", rows: getLeadReportDetailRows(report.lead) },
+    { name: "Tong quan Khung hoang", rows: getCrisisReportOverviewRows(report.crisis) },
+    { name: "Chi tiet Khung hoang", rows: getCrisisReportDetailRows(report.crisis) },
+  ]);
+}
+
+export function exportDualOperationsReportCsv(
+  report: DualOperationsReportData,
+  filename = "Dual_Operations_Report",
+) {
+  const csv = rowsToCsv(getDualOperationsPriorityRows(report));
   downloadBlob(
     `${safeFilePart(filename)}.csv`,
     `\uFEFF${csv}`,

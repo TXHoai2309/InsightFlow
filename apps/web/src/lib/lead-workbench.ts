@@ -64,7 +64,9 @@ export const EMPLOYEE_PRIORITY_WORKBENCH_VIEWS: Array<{
 }> = WORKBENCH_VIEWS;
 
 function isLeadEmployee(profile: UserRoleProfile | null | undefined) {
-  return profile?.role === "lead_employee";
+  if (!profile) return false;
+  if (profile.role === "lead_employee") return true;
+  return profile.role === "crisis_employee" && profile.permissions?.includes("leads");
 }
 
 export function getLeadWorkbenchViews(profile: UserRoleProfile | null | undefined) {

@@ -8,6 +8,9 @@ import { DashboardService } from "@/lib/services/dashboard";
 import { useAuth } from "@/hooks/useAuth";
 import { filterByBusinessPolicy, getScopedBrandKey, isRecordInBrandScope } from "@/lib/brandScope";
 import { LeadEmployeeReportPage } from "@/components/lead-monitoring/LeadEmployeeReportPage";
+import { CrisisEmployeeReportPage } from "@/components/crisis-monitoring/CrisisEmployeeReportPage";
+import { DualOperationsEmployeeReportPage } from "@/components/dual-operations-report/DualOperationsEmployeeReportPage";
+import { canPerformAction } from "@/lib/rbac";
 
 
 /**
@@ -1078,6 +1081,12 @@ function LanguageSelectModal({
 
 export default function ReportsPage() {
   const { profile, loading: authLoading } = useAuth();
+  const isEmployeeRole =
+    profile?.role === "crisis_employee" || profile?.role === "lead_employee";
+  const hasDualOperations =
+    isEmployeeRole &&
+    profile?.permissions?.includes("alerts") &&
+    profile?.permissions?.includes("leads");
 
   if (authLoading) {
     return (
@@ -1085,6 +1094,14 @@ export default function ReportsPage() {
         Dang tai bao cao...
       </div>
     );
+  }
+
+  if (!authLoading && hasDualOperations) {
+    return <DualOperationsEmployeeReportPage />;
+  }
+
+  if (!authLoading && profile?.role === "crisis_employee" && canPerformAction(profile, "view_crisis_queue")) {
+    return <CrisisEmployeeReportPage />;
   }
 
   if (!authLoading && profile?.role === "lead_employee") {
