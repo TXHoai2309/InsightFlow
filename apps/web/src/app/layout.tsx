@@ -155,7 +155,7 @@ export default function RootLayout({
         <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
       </head>
       <body
-        className={pathname === "/" ? "home-times-new-roman" : undefined}
+        className={`${pathname === "/" ? "home-times-new-roman" : ""} overflow-x-hidden`}
         style={{
           margin: 0,
           padding: 0,
