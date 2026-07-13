@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import { useDashboard } from "@/hooks/useDashboardData";
@@ -10,6 +10,7 @@ import type { DualOperationsBucket } from "@/lib/dual-operations-report";
 import { formatCrisisMinutes } from "@/lib/crisis-report";
 import { formatMinutes } from "@/lib/lead-report";
 import { normalizeBrandName } from "@/lib/services/dashboard";
+import { ReportExportPreviewModal } from "@/components/reports/ReportExportPreviewModal";
 import { getAlertReviewSinceIso, useAlertStore } from "@/stores/alert.store";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { useDualOperationsReport } from "./useDualOperationsReport";
@@ -106,6 +107,7 @@ function DistributionList({ items }: { items: DualOperationsBucket[] }) {
 export function DualOperationsEmployeeReportPage() {
   const { profile } = useAuth();
   const report = useDualOperationsReport();
+  const [pendingExport, setPendingExport] = useState<"excel" | "csv" | null>(null);
   const { filters, workspaces, isLoading: dashboardLoading, error: dashboardError, setFilters } = useDashboardStore();
   const {
     isLoading: alertLoading,
@@ -145,8 +147,56 @@ export function DualOperationsEmployeeReportPage() {
     fetchCorrectionRequests(scopedBrandKey, false);
   }, [fetchAlerts, fetchCorrectionRequests, profile]);
 
+  const exportFile = () => {
+    if (pendingExport === "excel") exportDualOperationsReportExcel(report, reportFilename());
+    if (pendingExport === "csv") exportDualOperationsReportCsv(report, reportFilename());
+    setPendingExport(null);
+  };
+
   return (
     <div data-tour="reports-center" className="space-y-6 p-4 md:p-8">
+      {pendingExport ? (
+        <ReportExportPreviewModal
+          title="Bao cao Lead + Khung hoang"
+          subtitle="Preview truoc khi xuat file cho nhan vien xu ly ca 2 nghiep vu."
+          generatedAt={report.generatedAt}
+          formatLabel={pendingExport.toUpperCase()}
+          stats={[
+            { label: "Tong viec", value: report.kpis.totalTasks },
+            { label: "Da hoan tat", value: report.kpis.completedTasks, tone: "good" },
+            { label: "Qua han/SLA", value: report.kpis.overdueTasks, tone: report.kpis.overdueTasks > 0 ? "warn" : "good" },
+            { label: "Uu tien cao", value: report.kpis.priorityTasks, tone: report.kpis.priorityTasks > 0 ? "danger" : "default" },
+          ]}
+          summary={report.aiSummary}
+          sections={[
+            {
+              title: "Pham vi file",
+              rows: [
+                { label: "Chi tiet Lead", value: `${report.lead.detailRows.length} dong` },
+                { label: "Chi tiet Khung hoang", value: `${report.crisis.detailRows.length} dong` },
+                { label: "Viec uu tien chung", value: report.priorityRows.length },
+              ],
+            },
+            {
+              title: "Ty le chinh",
+              rows: [
+                { label: "Chuyen doi lead", value: formatPercent(report.kpis.leadConversionRate) },
+                { label: "Xu ly crisis", value: formatPercent(report.kpis.crisisResolvedRate) },
+                { label: "Dung SLA tong hop", value: formatPercent(report.kpis.slaOnTimeRate) },
+              ],
+            },
+          ]}
+          sampleRows={report.priorityRows.slice(0, 6).map((row) => ({
+            label: row.title,
+            meta: `${row.typeLabel} · ${row.status} · ${row.slaStatus}`,
+            badge: row.priority,
+            description: row.content,
+          }))}
+          onClose={() => setPendingExport(null)}
+          onConfirm={exportFile}
+        />
+      ) : null}
+
       <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.28em] text-[var(--color-brand)]">
@@ -166,7 +216,7 @@ export function DualOperationsEmployeeReportPage() {
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => exportDualOperationsReportExcel(report, reportFilename())}
+            onClick={() => setPendingExport("excel")}
             className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-brand)] px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-[var(--color-brand-hover)]"
           >
             <span className="material-symbols-outlined text-base">table_view</span>
@@ -174,7 +224,7 @@ export function DualOperationsEmployeeReportPage() {
           </button>
           <button
             type="button"
-            onClick={() => exportDualOperationsReportCsv(report, reportFilename())}
+            onClick={() => setPendingExport("csv")}
             className="inline-flex items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-4 py-2.5 text-sm font-bold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-high)]"
           >
             <span className="material-symbols-outlined text-base">download</span>

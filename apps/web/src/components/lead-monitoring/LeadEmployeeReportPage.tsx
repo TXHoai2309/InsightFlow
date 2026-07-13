@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import { useDashboard } from "@/hooks/useDashboardData";
 import { normalizeBrandName } from "@/lib/services/dashboard";
 import { exportLeadReportCsv, exportLeadReportExcel } from "@/lib/excelExport";
 import { formatMinutes, type LeadReportBucket } from "@/lib/lead-report";
+import { ReportExportPreviewModal } from "@/components/reports/ReportExportPreviewModal";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { useLeadMonitoringReport } from "./useLeadMonitoringReport";
 
@@ -101,6 +102,7 @@ export function LeadEmployeeReportPage() {
   const { profile } = useAuth();
   const { filters, workspaces, isLoading, error, setFilters } = useDashboardStore();
   const report = useLeadMonitoringReport();
+  const [pendingExport, setPendingExport] = useState<"excel" | "csv" | null>(null);
 
   useDashboard({ autoFetch: true, refetchInterval: 60000 });
 
@@ -127,8 +129,56 @@ export function LeadEmployeeReportPage() {
     workspaces,
   ]);
 
+  const exportFile = () => {
+    if (pendingExport === "excel") exportLeadReportExcel(report, reportFilename());
+    if (pendingExport === "csv") exportLeadReportCsv(report, reportFilename());
+    setPendingExport(null);
+  };
+
   return (
     <div data-tour="reports-center" className="p-4 md:p-8 space-y-6">
+      {pendingExport ? (
+        <ReportExportPreviewModal
+          title="Bao cao xu ly khach hang tiem nang"
+          subtitle="Preview truoc khi xuat file cho nhan vien Lead."
+          generatedAt={report.generatedAt}
+          formatLabel={pendingExport.toUpperCase()}
+          stats={[
+            { label: "Tong lead", value: report.kpis.total },
+            { label: "Da lien he", value: formatPercent(report.kpis.contactRate), tone: "good" },
+            { label: "Can ghi ket qua", value: report.kpis.needResult, tone: report.kpis.needResult > 0 ? "warn" : "default" },
+            { label: "Tre SLA", value: report.kpis.slaBreached, tone: report.kpis.slaBreached > 0 ? "warn" : "good" },
+          ]}
+          summary={report.aiSummary}
+          sections={[
+            {
+              title: "Pham vi file",
+              rows: [
+                { label: "Chi tiet lead", value: `${report.detailRows.length} dong` },
+                { label: "Hieu suat nhan vien", value: `${report.staffPerformance.length} dong` },
+                { label: "Ty le chuyen doi", value: formatPercent(report.kpis.conversionRate) },
+              ],
+            },
+            {
+              title: "Uu tien nghiep vu",
+              rows: [
+                { label: "Hot lead", value: report.kpis.hot },
+                { label: "Follow-up qua han", value: report.kpis.followUpOverdue },
+                { label: "Cho chuyen sales", value: report.kpis.salesHandoff },
+              ],
+            },
+          ]}
+          sampleRows={report.detailRows.slice(0, 6).map((row) => ({
+            label: row.customer,
+            meta: `${row.platform} · ${row.status} · ${row.slaStatus}`,
+            badge: row.intent.toUpperCase(),
+            description: row.content,
+          }))}
+          onClose={() => setPendingExport(null)}
+          onConfirm={exportFile}
+        />
+      ) : null}
+
       <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.28em] text-[var(--color-brand)]">
@@ -145,7 +195,7 @@ export function LeadEmployeeReportPage() {
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => exportLeadReportExcel(report, reportFilename())}
+            onClick={() => setPendingExport("excel")}
             className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-brand)] px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-[var(--color-brand-hover)]"
           >
             <span className="material-symbols-outlined text-base">table_view</span>
@@ -153,7 +203,7 @@ export function LeadEmployeeReportPage() {
           </button>
           <button
             type="button"
-            onClick={() => exportLeadReportCsv(report, reportFilename())}
+            onClick={() => setPendingExport("csv")}
             className="inline-flex items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-4 py-2.5 text-sm font-bold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-high)]"
           >
             <span className="material-symbols-outlined text-base">download</span>

@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import { useDashboard } from "@/hooks/useDashboardData";
 import { getScopedBrandKey } from "@/lib/brandScope";
 import { exportCrisisReportCsv, exportCrisisReportExcel } from "@/lib/excelExport";
 import { formatCrisisMinutes, type CrisisReportBucket } from "@/lib/crisis-report";
+import { ReportExportPreviewModal } from "@/components/reports/ReportExportPreviewModal";
 import { getAlertReviewSinceIso, useAlertStore } from "@/stores/alert.store";
 import { useCrisisMonitoringReport } from "./useCrisisMonitoringReport";
 
@@ -102,6 +103,7 @@ function DistributionList({ items }: { items: CrisisReportBucket[] }) {
 export function CrisisEmployeeReportPage() {
   const { profile } = useAuth();
   const report = useCrisisMonitoringReport();
+  const [pendingExport, setPendingExport] = useState<"excel" | "csv" | null>(null);
   const {
     isLoading,
     error,
@@ -117,8 +119,56 @@ export function CrisisEmployeeReportPage() {
     fetchCorrectionRequests(scopedBrandKey, false);
   }, [fetchAlerts, fetchCorrectionRequests, profile]);
 
+  const exportFile = () => {
+    if (pendingExport === "excel") exportCrisisReportExcel(report, reportFilename());
+    if (pendingExport === "csv") exportCrisisReportCsv(report, reportFilename());
+    setPendingExport(null);
+  };
+
   return (
     <div data-tour="reports-center" className="space-y-6 p-4 md:p-8">
+      {pendingExport ? (
+        <ReportExportPreviewModal
+          title="Bao cao xu ly khung hoang"
+          subtitle="Preview truoc khi xuat file cho nhan vien Crisis."
+          generatedAt={report.generatedAt}
+          formatLabel={pendingExport.toUpperCase()}
+          stats={[
+            { label: "Tong canh bao", value: report.kpis.total },
+            { label: "Da xu ly", value: formatPercent(report.kpis.resolvedRate), tone: "good" },
+            { label: "Qua han SLA", value: report.kpis.overdue, tone: report.kpis.overdue > 0 ? "warn" : "good" },
+            { label: "Escalation", value: report.kpis.escalated, tone: report.kpis.escalated > 0 ? "warn" : "default" },
+          ]}
+          summary={report.aiSummary}
+          sections={[
+            {
+              title: "Pham vi file",
+              rows: [
+                { label: "Chi tiet case", value: `${report.detailRows.length} dong` },
+                { label: "Case qua han SLA", value: report.overdueRows.length },
+                { label: "Case escalation", value: report.escalationRows.length },
+              ],
+            },
+            {
+              title: "Uu tien nghiep vu",
+              rows: [
+                { label: "Critical", value: report.kpis.critical },
+                { label: "High", value: report.kpis.high },
+                { label: "Cho duyet", value: report.kpis.pendingApproval },
+              ],
+            },
+          ]}
+          sampleRows={report.detailRows.slice(0, 6).map((row) => ({
+            label: row.topic,
+            meta: `${row.platform} · ${row.status} · ${row.slaStatus}`,
+            badge: row.severity.toUpperCase(),
+            description: row.content,
+          }))}
+          onClose={() => setPendingExport(null)}
+          onConfirm={exportFile}
+        />
+      ) : null}
+
       <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.28em] text-[var(--color-error)]">
@@ -138,7 +188,7 @@ export function CrisisEmployeeReportPage() {
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => exportCrisisReportExcel(report, reportFilename())}
+            onClick={() => setPendingExport("excel")}
             className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-brand)] px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-[var(--color-brand-hover)]"
           >
             <span className="material-symbols-outlined text-base">table_view</span>
@@ -146,7 +196,7 @@ export function CrisisEmployeeReportPage() {
           </button>
           <button
             type="button"
-            onClick={() => exportCrisisReportCsv(report, reportFilename())}
+            onClick={() => setPendingExport("csv")}
             className="inline-flex items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-4 py-2.5 text-sm font-bold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-high)]"
           >
             <span className="material-symbols-outlined text-base">download</span>
