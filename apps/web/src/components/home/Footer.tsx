@@ -54,77 +54,33 @@ export default function Footer() {
   ];
 
   return (
-    <footer
-      className="font-sans mt-auto"
-      style={{
-        background: "linear-gradient(180deg, #1E1B4B 0%, #12103A 100%)",
-        borderTop: "1px solid rgba(109,76,255,0.3)",
-      }}
-    >
-      <style dangerouslySetInnerHTML={{__html: `
-        .footer-link {
-          color: rgba(255,255,255,0.65);
-          font-size: 14px;
-          display: inline-block;
-          transition: all 0.2s ease;
-        }
-        .footer-link:hover {
-          color: #ffffff;
-          transform: translateX(4px);
-        }
-        .social-icon-btn {
-          width: 36px;
-          height: 36px;
-          border-radius: 50%;
-          background: rgba(255,255,255,0.08);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: rgba(255,255,255,0.7);
-          transition: all 0.2s ease;
-          cursor: pointer;
-        }
-        .social-icon-btn:hover {
-          background: rgba(109,76,255,0.4);
-          color: white;
-          transform: scale(1.1);
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .footer-link, .social-icon-btn { transition: none !important; transform: none !important; }
-        }
-      `}} />
+    <footer className="relative mt-auto bg-[#1B1B4A] text-white overflow-hidden">
+      {/* Decorative Glow */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-[#6D5EF6] blur-[200px] opacity-[0.15] pointer-events-none" />
 
-      <div className="max-w-[1200px] mx-auto px-6 md:px-10 pt-[80px]">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-10 md:gap-8 pb-16">
+      <div className="relative z-10 mx-auto max-w-[1200px] px-6 pt-[64px] pb-[40px] md:px-10">
+        <div className="grid grid-cols-1 gap-10 sm:grid-cols-2 md:grid-cols-4 md:gap-8 pb-12">
           {/* Col 1 — Brand */}
           <div className="sm:col-span-2 md:col-span-1">
-            <div className="flex items-center gap-2 mb-4">
+            <div className="mb-6 flex items-center gap-3">
               <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
-                <circle cx="16" cy="16" r="16" fill="#6D4CFF" opacity="0.2"/>
-                <circle cx="16" cy="16" r="10" fill="#6D4CFF" opacity="0.4"/>
-                <circle cx="16" cy="16" r="5" fill="#A78BFA"/>
+                <circle cx="16" cy="16" r="16" fill="#6D5EF6" opacity="0.2"/>
+                <circle cx="16" cy="16" r="10" fill="#6D5EF6" opacity="0.4"/>
+                <circle cx="16" cy="16" r="5" fill="#34D399"/>
               </svg>
-              <span style={{ fontSize: "20px", fontWeight: 700, color: "white" }}>InsightFlow</span>
+              <span className="font-display text-[20px] font-bold text-white tracking-tight">InsightFlow</span>
             </div>
-            <p
-              className="leading-relaxed mb-6"
-              style={{
-                color: "rgba(255,255,255,0.55)",
-                fontSize: "14px",
-                lineHeight: 1.7,
-                maxWidth: "240px",
-              }}
-            >
+            <p className="mb-8 max-w-[280px] text-[15px] leading-[1.6] text-[#8C92B3]">
               {t("footer.tagline")}
             </p>
-            <div className="flex gap-2">
-              <a href="#" aria-label="LinkedIn" className="social-icon-btn">
+            <div className="flex gap-4">
+              <a href="#" aria-label="LinkedIn" className="flex h-10 w-10 items-center justify-center rounded-full bg-white/5 text-[#8C92B3] transition-all hover:-translate-y-1 hover:bg-[#6D5EF6] hover:text-white">
                 <LinkedInIcon />
               </a>
-              <a href="#" aria-label="Facebook" className="social-icon-btn">
+              <a href="#" aria-label="Facebook" className="flex h-10 w-10 items-center justify-center rounded-full bg-white/5 text-[#8C92B3] transition-all hover:-translate-y-1 hover:bg-[#6D5EF6] hover:text-white">
                 <FacebookIcon />
               </a>
-              <a href="#" aria-label="YouTube" className="social-icon-btn">
+              <a href="#" aria-label="YouTube" className="flex h-10 w-10 items-center justify-center rounded-full bg-white/5 text-[#8C92B3] transition-all hover:-translate-y-1 hover:bg-[#6D5EF6] hover:text-white">
                 <YouTubeIcon />
               </a>
             </div>
@@ -132,22 +88,15 @@ export default function Footer() {
 
           {/* Col 2 — Products */}
           <div>
-            <h6
-              className="mb-5"
-              style={{
-                color: "rgba(255,255,255,0.4)",
-                fontSize: "11px",
-                fontWeight: 700,
-                letterSpacing: "1.5px",
-                textTransform: "uppercase",
-              }}
-            >
+            <h6 className="mb-5 text-[12px] font-extrabold uppercase tracking-[0.16em] text-[#9B8CFF]">
               {t("footer.products")}
             </h6>
             <ul className="flex flex-col gap-3">
               {productLinks.map((l) => (
                 <li key={l.label}>
-                  <Link href={l.href} className="footer-link">{l.label}</Link>
+                  <Link href={l.href} className="text-[15px] font-medium text-[#8C92B3] transition-colors hover:text-white">
+                    {l.label}
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -155,22 +104,15 @@ export default function Footer() {
 
           {/* Col 3 — Company */}
           <div>
-            <h6
-              className="mb-5"
-              style={{
-                color: "rgba(255,255,255,0.4)",
-                fontSize: "11px",
-                fontWeight: 700,
-                letterSpacing: "1.5px",
-                textTransform: "uppercase",
-              }}
-            >
+            <h6 className="mb-5 text-[12px] font-extrabold uppercase tracking-[0.16em] text-[#9B8CFF]">
               {t("footer.company")}
             </h6>
             <ul className="flex flex-col gap-3">
               {companyLinks.map((l) => (
                 <li key={l.label}>
-                  <Link href={l.href} className="footer-link">{l.label}</Link>
+                  <Link href={l.href} className="text-[15px] font-medium text-[#8C92B3] transition-colors hover:text-white">
+                    {l.label}
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -178,25 +120,16 @@ export default function Footer() {
 
           {/* Col 4 — Contact */}
           <div>
-            <h6
-              className="mb-5"
-              style={{
-                color: "rgba(255,255,255,0.4)",
-                fontSize: "11px",
-                fontWeight: 700,
-                letterSpacing: "1.5px",
-                textTransform: "uppercase",
-              }}
-            >
+            <h6 className="mb-5 text-[12px] font-extrabold uppercase tracking-[0.16em] text-[#9B8CFF]">
               {t("footer.contact")}
             </h6>
             <ul className="flex flex-col gap-3">
               {contactItems.map((item) => (
                 <li key={item.text} className="flex items-start gap-3">
-                  <span style={{ color: "#A78BFA", fontSize: "15px", marginTop: "1px", flexShrink: 0 }}>
+                  <span className="mt-[2px] text-[16px] text-[#34D399]">
                     {item.icon}
                   </span>
-                  <span style={{ color: "rgba(255,255,255,0.65)", fontSize: "14px" }}>
+                  <span className="text-[15px] leading-[1.6] text-[#8C92B3]">
                     {item.text}
                   </span>
                 </li>
@@ -206,19 +139,16 @@ export default function Footer() {
         </div>
 
         {/* Copyright bar */}
-        <div
-          className="flex flex-col sm:flex-row justify-between items-center gap-3 py-6"
-          style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}
-        >
-          <p style={{ color: "rgba(255,255,255,0.35)", fontSize: "13px" }}>
+        <div className="flex flex-col items-center justify-between gap-6 border-t border-white/10 pt-6 sm:flex-row">
+          <p className="text-[14px] font-medium text-[#8C92B3]">
             {t("footer.copyright", { year: new Date().getFullYear() })}
           </p>
-          <div className="flex gap-4" style={{ color: "rgba(255,255,255,0.35)", fontSize: "13px" }}>
-            <a href="#" className="hover:text-white transition-colors">{t("footer.terms")}</a>
-            <span>·</span>
-            <a href="#" className="hover:text-white transition-colors">{t("footer.privacy")}</a>
-            <span>·</span>
-            <a href="#" className="hover:text-white transition-colors">{t("footer.cookie")}</a>
+          <div className="flex gap-6 text-[14px] font-medium text-[#8C92B3]">
+            <a href="#" className="transition-colors hover:text-white">{t("footer.terms")}</a>
+            <a href="#" className="transition-colors hover:text-white">{t("footer.privacy")}</a>
+            <a href="#" className="transition-colors hover:text-white">{t("footer.cookie")}</a>
+            <span className="hidden sm:inline-block text-[#8C92B3]/50">·</span>
+            <span className="text-[#8C92B3]">Made with ❤ in Vietnam</span>
           </div>
         </div>
       </div>

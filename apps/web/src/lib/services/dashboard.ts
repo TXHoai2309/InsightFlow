@@ -2141,6 +2141,9 @@ export class DashboardService {
       platform: string;
       contentType: string;
       parentId?: string | null;
+      entityKey?: string | null;
+      postId?: string | null;
+      commentId?: string | null;
     },
     leadId: string | undefined,
     reviewer: { uid: string; displayName?: string; email?: string },
@@ -2171,14 +2174,20 @@ export class DashboardService {
     );
 
     const isComment = mentionData.contentType === "comment" || mentionData.contentType === "reply";
-    const postId = isComment ? (mentionData.parentId || "") : mentionData.mentionId;
-    const commentId = isComment ? mentionData.mentionId : null;
-    const entityKeys = buildEntityKeys(mentionData.platform, postId, commentId);
-    if (entityKeys.length > 0) {
+    const postId = mentionData.postId || (isComment ? (mentionData.parentId || "") : mentionData.mentionId);
+    const commentId = mentionData.commentId || (isComment ? mentionData.mentionId : null);
+    const entityKeys = Array.from(
+      new Set([
+        mentionData.entityKey || mentionData.mentionId,
+        ...buildEntityKeys(mentionData.platform, postId, commentId),
+      ].filter(Boolean) as string[]),
+    );
+    const entityKey = entityKeys[0];
+    if (entityKey) {
       try {
         await upsertSupabaseAnnotation(
           config,
-          entityKeys[0],
+          entityKey,
           mentionData.platform,
           postId,
           commentId,
@@ -2207,6 +2216,31 @@ export class DashboardService {
         }
       } catch {
         // Lead row may not exist yet — ignore
+      }
+    }
+
+    for (const targetLeadId of Array.from(new Set([leadId, mentionData.mentionId, entityKey].filter(Boolean) as string[]))) {
+      if (targetLeadId === leadId) continue;
+      try {
+        await supabaseWrite(
+          config,
+          "leads",
+          "PATCH",
+          stripUndefinedFields({
+            labels: normalizedLabel,
+            current_labels: normalizedLabel,
+            intent: normalizedLabel.intent || "none",
+            label_correction_status: "approved",
+            pending_label_request_id: null,
+            last_label_corrected_at: nowIso,
+            updated_by: reviewer.uid,
+            updated_at: nowIso,
+          }),
+          `id=eq.${encodeURIComponent(targetLeadId)}`,
+          false,
+        );
+      } catch {
+        // Best-effort cleanup for legacy lead IDs.
       }
     }
 

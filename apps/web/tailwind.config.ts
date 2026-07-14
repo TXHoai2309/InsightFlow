@@ -10,6 +10,18 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        /* ── Linear Redesign Tokens ─────────────── */
+        "linear-primary": "#6D5DF6",
+        "linear-secondary": "#8B5CF6",
+        "linear-light": "#F5F3FF",
+        "linear-bg": "#FCFBFF",
+        "linear-text": "#1E1B4B",
+        "linear-border": "#E9E4FF",
+        "linear-success": "#10B981",
+        "linear-warning": "#F59E0B",
+        "linear-dark": "#161A35",
+        "linear-accent": "#B69DFF",
+        
         /* ── InsightFlow New Design System Tokens ─────────────── */
         primary: "#4234B6",
         "primary-container": "#5B4FCF",
@@ -92,6 +104,27 @@ const config: Config = {
         xl: "16px",
         lg: "12px",
         md: "8px",
+        "2xl": "24px",
+        "3xl": "28px",
+      },
+      keyframes: {
+        float: {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-10px)' },
+        },
+        'float-delayed': {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-15px)' },
+        },
+        ripple: {
+          '0%': { transform: 'scale(0.8)', opacity: '1' },
+          '100%': { transform: 'scale(2.4)', opacity: '0' },
+        }
+      },
+      animation: {
+        float: 'float 4s ease-in-out infinite',
+        'float-delayed': 'float-delayed 5s ease-in-out infinite 1s',
+        ripple: 'ripple 1.2s cubic-bezier(0, 0.2, 0.8, 1) infinite',
       }
     },
   },

@@ -61,15 +61,15 @@ export default function TopNavBar() {
               ? "rgba(28,28,36,0.92)"
               : "var(--color-bg-surface)"
             : scrolled
-              ? "rgba(255,255,255,0.92)"
-              : "#ffffff",
-          backdropFilter: scrolled ? "blur(12px)" : "none",
-          WebkitBackdropFilter: scrolled ? "blur(12px)" : "none",
-          borderBottom: `1px solid ${isDark ? "var(--color-border)" : scrolled ? "transparent" : "#F1F0FF"}`,
+              ? "rgba(255,255,255,0.75)"
+              : "rgba(255,255,255,0.3)",
+          backdropFilter: scrolled ? "blur(18px)" : "blur(8px)",
+          WebkitBackdropFilter: scrolled ? "blur(18px)" : "blur(8px)",
+          borderBottom: `1px solid ${isDark ? "var(--color-border)" : scrolled ? "#ececff" : "transparent"}`,
           boxShadow: scrolled
             ? isDark
               ? "0 2px 20px rgba(0,0,0,0.28)"
-              : "0 2px 20px rgba(0,0,0,0.08)"
+              : "0 4px 30px rgba(0,0,0,0.03)"
             : "none",
         }}
       >
