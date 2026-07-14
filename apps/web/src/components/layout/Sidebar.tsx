@@ -27,6 +27,7 @@ const navItems: NavItem[] = [
   { href: "/admin/brand-managers", label: "Danh sach brand", icon: "ti-building-store" },
   { href: "/labeling_tool", label: "Gan nhan du lieu", icon: "ti-tags" },
   { href: "/dashboard", label: "nav.dashboard", icon: "ti-layout-dashboard" },
+  { href: "/operations", label: "Tổng quan", icon: "ti-layout-dashboard" },
   { href: "/team", label: "Quản lý đội ngũ", icon: "ti-users" },
   { href: "/mentions", label: "nav.mentions", icon: "ti-message-circle" },
   { href: "/label-requests", label: "Duyệt yêu cầu", icon: "ti-clipboard-check" },

@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useDashboardStore } from "@/stores/dashboard.store";
+import { CustomSelect } from "@/components/ui/CustomSelect";
 import type { DashboardFilters, Workspace, Mention } from "@/types/dashboard";
 
 interface MentionFiltersProps {
@@ -22,17 +23,8 @@ const sentimentOptions = [
 
 const defaultPlatforms = ["facebook", "tiktok", "youtube", "thread", "be", "google_maps", "news"];
 const defaultTopics = [
-  "quality",
-  "price",
-  "service",
-  "staff",
-  "delivery",
-  "experience",
-  "legal",
-  "operation",
-  "marketing",
-  "competitor",
-  "other",
+  "quality", "price", "service", "staff", "delivery", "experience",
+  "legal", "operation", "marketing", "competitor", "other",
 ];
 
 const platformLabels: Record<string, string> = {
@@ -71,7 +63,6 @@ export function MentionFilters({ workspaces, filters, allMentions, contentMode, 
     { value: "custom", label: t("time.custom", "Tự chọn ngày") },
   ] as const, [t]);
 
-  // Keep the product scope fixed to the three tracked brands.
   const availableBrands = useMemo(() => {
     const order = ["highlandcoffee", "starbucks", "mixue"];
     return [...workspaces].sort((a, b) => {
@@ -87,7 +78,6 @@ export function MentionFilters({ workspaces, filters, allMentions, contentMode, 
     });
   }, [workspaces]);
 
-  // Derive available platforms from actual data
   const availablePlatforms = useMemo(() => {
     const platformSet = new Set<string>(defaultPlatforms);
     allMentions.forEach(m => {
@@ -96,7 +86,6 @@ export function MentionFilters({ workspaces, filters, allMentions, contentMode, 
     return Array.from(platformSet).sort();
   }, [allMentions]);
 
-  // Derive available topics from actual data
   const availableTopics = useMemo(() => {
     const topicSet = new Set<string>(defaultTopics);
     allMentions.forEach(m => {
@@ -119,7 +108,6 @@ export function MentionFilters({ workspaces, filters, allMentions, contentMode, 
     });
   };
 
-  // Get brand display name: check workspaces list, then fall back to raw value
   const getBrandName = (brandId: string) => {
     const ws = workspaces.find(w => w.id === brandId);
     if (!ws) return brandId;
@@ -129,252 +117,144 @@ export function MentionFilters({ workspaces, filters, allMentions, contentMode, 
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-4">
-      {/* Brand Filter */}
-      <div
-        className="p-4 rounded-2xl flex flex-col gap-3"
-        style={{
-          backgroundColor: "var(--color-bg-surface)",
-          border: "1px solid var(--color-border)",
-        }}
-      >
-        <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--color-text-muted)" }}>
-          {t("mentions.filters.brandLabel")}
-        </label>
-        <select
-          value={filters.workspace_id}
-          onChange={(event) =>
-            setFilters({ workspace_id: event.target.value })
-          }
-          className="bg-transparent border-none focus:ring-0 font-medium w-full p-0 text-sm outline-none cursor-pointer"
-          style={{ color: "var(--color-text-primary)" }}
-        >
-          <option value="all" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
-            {t("mentions.filters.allBrands")}
-          </option>
-          {availableBrands.map((brand) => (
-            <option key={brand.id} value={brand.id}>
-              {getBrandName(brand.id)}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Sentiment Filter */}
-      <div
-        className="p-4 rounded-2xl flex flex-col gap-3"
-        style={{
-          backgroundColor: "var(--color-bg-surface)",
-          border: "1px solid var(--color-border)",
-        }}
-      >
-        <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--color-text-muted)" }}>
-          {t("mentions.filters.sentimentLabel")}
-        </label>
-        <select
-          value={filters.sentiment}
-          onChange={(event) =>
-            setFilters({
-              sentiment: event.target.value as DashboardFilters["sentiment"],
-            })
-          }
-          className="bg-transparent border-none focus:ring-0 font-medium w-full p-0 text-sm outline-none cursor-pointer"
-          style={{ color: "var(--color-text-primary)" }}
-        >
-          {sentimentOptions.map((option) => (
-            <option key={option.value} value={option.value} style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Platform Filter */}
-      <div
-        className="p-4 rounded-2xl flex flex-col gap-3"
-        style={{
-          backgroundColor: "var(--color-bg-surface)",
-          border: "1px solid var(--color-border)",
-        }}
-      >
-        <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--color-text-muted)" }}>
-          {t("mentions.filters.platformLabel")}
-        </label>
-        <select
-          value={filters.platform}
-          onChange={(event) =>
-            setFilters({
-              platform: event.target.value as DashboardFilters["platform"],
-            })
-          }
-          className="bg-transparent border-none focus:ring-0 font-medium w-full p-0 text-sm outline-none cursor-pointer"
-          style={{ color: "var(--color-text-primary)" }}
-        >
-          <option value="all" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
-            {t("mentions.filters.allPlatforms")}
-          </option>
-          {availablePlatforms.map((platform) => (
-            <option key={platform} value={platform} style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
-              {getPlatformLabel(platform)}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Topic Filter */}
-      <div
-        className="p-4 rounded-2xl flex flex-col gap-3"
-        style={{
-          backgroundColor: "var(--color-bg-surface)",
-          border: "1px solid var(--color-border)",
-        }}
-      >
-        <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--color-text-muted)" }}>
-          {t("mentions.filters.topicLabel")}
-        </label>
-        <select
-          value={filters.topic || "all"}
-          onChange={(event) =>
-            setFilters({
-              topic: event.target.value as DashboardFilters["topic"],
-            })
-          }
-          className="bg-transparent border-none focus:ring-0 font-medium w-full p-0 text-sm outline-none cursor-pointer"
-          style={{ color: "var(--color-text-primary)" }}
-        >
-          <option value="all" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
-            {t("mentions.filters.allTopics")}
-          </option>
-          {availableTopics.map((topic) => (
-            <option key={topic} value={topic} style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
-              {getTopicLabel(topic)}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Content Display Filter */}
-      <div
-        className="p-4 rounded-2xl flex flex-col gap-3"
-        style={{
-          backgroundColor: "var(--color-bg-surface)",
-          border: "1px solid var(--color-border)",
-        }}
-      >
-        <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--color-text-muted)" }}>
-          {t("mentions.filters.contentModeLabel", { defaultValue: "Hiển thị" })}
-        </label>
-        <select
-          value={contentMode}
-          onChange={(event) => onContentModeChange(event.target.value as "all" | "post" | "comment")}
-          className="bg-transparent border-none focus:ring-0 font-medium w-full p-0 text-sm outline-none cursor-pointer"
-          style={{ color: "var(--color-text-primary)" }}
-        >
-          <option value="all" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
-            {t("mentions.filters.allContent", { defaultValue: "Tất cả nội dung" })}
-          </option>
-          <option value="post" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
-            {t("mentions.filters.postContent", { defaultValue: "Nội dung bài viết" })}
-          </option>
-          <option value="comment" style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
-            {t("mentions.filters.commentContent", { defaultValue: "Nội dung cmt" })}
-          </option>
-        </select>
-      </div>
-
-      {/* Time Range Filter */}
-      <div
-        className="p-4 rounded-2xl flex flex-col gap-3"
-        style={{
-          backgroundColor: "var(--color-bg-surface)",
-          border: "1px solid var(--color-border)",
-        }}
-      >
-        <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--color-text-muted)" }}>
-          {t("mentions.filters.timeRangeLabel")}
-        </label>
-        <select
-          value={filters.time_range}
-          onChange={(event) =>
-            setFilters({
-              time_range: event.target.value as DashboardFilters["time_range"],
-            })
-          }
-          className="bg-transparent border-none focus:ring-0 font-medium w-full p-0 text-sm outline-none cursor-pointer"
-          style={{ color: "var(--color-text-primary)" }}
-        >
-          {timeRangeOptions.map((option) => (
-            <option key={option.value} value={option.value} style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-text-primary)" }}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Single specific date filter field */}
-      {filters.time_range === "single" && (
-        <div
-          className="p-4 rounded-2xl flex flex-col gap-3 animate-fade-in"
-          style={{
-            backgroundColor: "var(--color-bg-surface)",
-            border: "1px solid var(--color-border)",
-          }}
-        >
-          <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--color-text-muted)" }}>
-            Chọn Ngày
+    <div className="flex flex-col gap-4">
+      <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-4 shadow-sm flex flex-wrap items-end gap-4">
+        
+        {/* Brand Filter */}
+        <div className="flex flex-col gap-1.5 flex-1 min-w-[160px]">
+          <label className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
+            {t("mentions.filters.brandLabel")}
           </label>
-          <input
-            type="date"
-            value={filters.single_date || ""}
-            onChange={(e) => setFilters({ single_date: e.target.value })}
-            className="bg-transparent border-none focus:ring-0 font-medium w-full p-0 text-sm outline-none cursor-pointer"
-            style={{ color: "var(--color-text-primary)" }}
+          <CustomSelect
+            value={filters.workspace_id || "all"}
+            onChange={(val) => setFilters({ workspace_id: val })}
+            options={[
+              { value: "all", label: t("mentions.filters.allBrands") },
+              ...availableBrands.map((brand) => ({
+                value: brand.id,
+                label: getBrandName(brand.id)
+              }))
+            ]}
+            minWidth="100%"
           />
         </div>
-      )}
 
-      {/* Custom Date Range fields */}
-      {filters.time_range === "custom" && (
-        <>
-          <div
-            className="p-4 rounded-2xl flex flex-col gap-3 animate-fade-in"
-            style={{
-              backgroundColor: "var(--color-bg-surface)",
-              border: "1px solid var(--color-border)",
-            }}
-          >
-            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--color-text-muted)" }}>
-              Từ ngày
-            </label>
-            <input
-              type="date"
-              value={filters.custom_start_date || ""}
-              onChange={(e) => setFilters({ custom_start_date: e.target.value })}
-              className="bg-transparent border-none focus:ring-0 font-medium w-full p-0 text-sm outline-none cursor-pointer"
-              style={{ color: "var(--color-text-primary)" }}
-            />
-          </div>
-          <div
-            className="p-4 rounded-2xl flex flex-col gap-3 animate-fade-in"
-            style={{
-              backgroundColor: "var(--color-bg-surface)",
-              border: "1px solid var(--color-border)",
-            }}
-          >
-            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--color-text-muted)" }}>
-              Đến ngày
-            </label>
-            <input
-              type="date"
-              value={filters.custom_end_date || ""}
-              onChange={(e) => setFilters({ custom_end_date: e.target.value })}
-              className="bg-transparent border-none focus:ring-0 font-medium w-full p-0 text-sm outline-none cursor-pointer"
-              style={{ color: "var(--color-text-primary)" }}
-            />
-          </div>
-        </>
+        {/* Sentiment Filter */}
+        <div className="flex flex-col gap-1.5 flex-1 min-w-[140px]">
+          <label className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
+            {t("mentions.filters.sentimentLabel")}
+          </label>
+          <CustomSelect
+            value={filters.sentiment || "all"}
+            onChange={(val) => setFilters({ sentiment: val as DashboardFilters["sentiment"] })}
+            options={sentimentOptions}
+            minWidth="100%"
+          />
+        </div>
+
+        {/* Platform Filter */}
+        <div className="flex flex-col gap-1.5 flex-1 min-w-[140px]">
+          <label className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
+            {t("mentions.filters.platformLabel")}
+          </label>
+          <CustomSelect
+            value={filters.platform || "all"}
+            onChange={(val) => setFilters({ platform: val as DashboardFilters["platform"] })}
+            options={[
+              { value: "all", label: t("mentions.filters.allPlatforms") },
+              ...availablePlatforms.map((platform) => ({
+                value: platform,
+                label: getPlatformLabel(platform)
+              }))
+            ]}
+            minWidth="100%"
+          />
+        </div>
+
+        {/* Topic Filter */}
+        <div className="flex flex-col gap-1.5 flex-1 min-w-[140px]">
+          <label className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
+            {t("mentions.filters.topicLabel")}
+          </label>
+          <CustomSelect
+            value={filters.topic || "all"}
+            onChange={(val) => setFilters({ topic: val as DashboardFilters["topic"] })}
+            options={[
+              { value: "all", label: t("mentions.filters.allTopics") },
+              ...availableTopics.map((topic) => ({
+                value: topic,
+                label: getTopicLabel(topic)
+              }))
+            ]}
+            minWidth="100%"
+          />
+        </div>
+
+        {/* Content Mode Filter */}
+        <div className="flex flex-col gap-1.5 flex-1 min-w-[160px]">
+          <label className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
+            {t("mentions.filters.contentModeLabel", { defaultValue: "Hiển thị" })}
+          </label>
+          <CustomSelect
+            value={contentMode}
+            onChange={(val) => onContentModeChange(val as "all" | "post" | "comment")}
+            options={[
+              { value: "all", label: t("mentions.filters.allContent", { defaultValue: "Tất cả nội dung" }) },
+              { value: "post", label: t("mentions.filters.postContent", { defaultValue: "Nội dung bài viết" }) },
+              { value: "comment", label: t("mentions.filters.commentContent", { defaultValue: "Nội dung bình luận" }) },
+            ]}
+            minWidth="100%"
+          />
+        </div>
+
+        {/* Time Range Filter */}
+        <div className="flex flex-col gap-1.5 flex-1 min-w-[150px]">
+          <label className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
+            {t("mentions.filters.timeRangeLabel")}
+          </label>
+          <CustomSelect
+            value={filters.time_range || "24h"}
+            onChange={(val) => setFilters({ time_range: val as DashboardFilters["time_range"] })}
+            options={[...timeRangeOptions]}
+            minWidth="100%"
+          />
+        </div>
+      </div>
+
+      {/* Conditional Date Pickers - Rendered below if needed */}
+      {(filters.time_range === "single" || filters.time_range === "custom") && (
+        <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-xl p-3 flex gap-4 animate-fade-in w-fit shadow-sm">
+          {filters.time_range === "single" && (
+            <div className="flex items-center gap-3">
+              <label className="text-[12px] font-bold uppercase text-[var(--color-text-muted)]">Chọn Ngày:</label>
+              <input
+                type="date"
+                value={filters.single_date || ""}
+                onChange={(e) => setFilters({ single_date: e.target.value })}
+                className="bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] rounded-md px-3 py-1.5 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]"
+              />
+            </div>
+          )}
+          {filters.time_range === "custom" && (
+            <div className="flex items-center gap-3">
+              <label className="text-[12px] font-bold uppercase text-[var(--color-text-muted)]">Từ ngày:</label>
+              <input
+                type="date"
+                value={filters.custom_start_date || ""}
+                onChange={(e) => setFilters({ custom_start_date: e.target.value })}
+                className="bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] rounded-md px-3 py-1.5 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]"
+              />
+              <label className="text-[12px] font-bold uppercase text-[var(--color-text-muted)] ml-2">Đến ngày:</label>
+              <input
+                type="date"
+                value={filters.custom_end_date || ""}
+                onChange={(e) => setFilters({ custom_end_date: e.target.value })}
+                className="bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] rounded-md px-3 py-1.5 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]"
+              />
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
 }
-

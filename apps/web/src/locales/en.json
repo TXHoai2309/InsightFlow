@@ -623,7 +623,7 @@
   "dashboard.filters.negative": "Negative",
   "dashboard.filters.neutral": "Neutral",
   "dashboard.filters.news": "News",
-  "dashboard.filters.platform": "Platform",
+  "dashboard.filters.platform": "PLATFORM",
   "dashboard.filters.platformLabel": "Platform:",
   "dashboard.filters.positive": "Positive",
   "dashboard.filters.sentimentLabel": "Sentiment:",
@@ -796,7 +796,6 @@
   "team.op.leads": "Lead handling",
   "dashboard.filters.brand": "BRAND",
   "dashboard.filters.time": "TIME",
-  "dashboard.filters.platform": "PLATFORM",
   "dashboard.filters.allBrandsOption": "All brands",
   "dashboard.filters.allPlatformsOption": "All platforms",
   "dashboard.topSources.negativeTitle": "Main Discussion Sources",
@@ -1169,7 +1168,6 @@
   "mentions.table.topic": "Topic",
   "mentions.table.unknownTime": "Unknown",
   "mentions.table.unknownTimeDesc": "Unknown time",
-  "mentions.table.yearsAgo": "{{count}} years ago",
   "metadata.about.desc": "Learn about the team, mission, and core values of InsightFlow.",
   "metadata.about.title": "About Us | InsightFlow",
   "metadata.alerts.title": "Alerts | InsightFlow",
@@ -1732,6 +1730,139 @@
       "detail.title": "Contact / Case Detail",
       "detail.source": "Source:",
       "detail.created": "Created at:"
+    }
+  },
+  "agentDashboard": {
+    "title": "Today's Tasks",
+    "subtitle": "Welcome back! Here is an overview of your tasks and schedule today.",
+    "stats": {
+      "todo": "Tasks to do",
+      "processing": "Processing",
+      "waiting": "Waiting for reply",
+      "overdue": "Almost overdue",
+      "completion": "Completion rate",
+      "vsYesterday": "+2 vs yesterday",
+      "onTrack": "On track",
+      "waitingTime": "1 waiting > 30m",
+      "dueBefore": "Due before 11:00",
+      "vsLastWeek": "+5% vs last week"
+    },
+    "progress": {
+      "title": "Today's Progress",
+      "subtitle": "You have successfully completed <1>{{completed}}/{{total}}</1> workload.",
+      "goodPerf": "Good Performance",
+      "start": "Start (0%)",
+      "celebrationTitle": "Completed all tasks today",
+      "celebrationSub": "{{completed}}/{{total}} tasks completed. You finished 1 hour 20 minutes early.",
+      "viewHistory": "View history",
+      "getNewTask": "Get new tasks"
+    },
+    "kanban": {
+      "urgent": "Need immediate action",
+      "processing": "Processing",
+      "waiting": "Waiting for reply",
+      "completed": "Completed log",
+      "emptyTitle": "No tasks left",
+      "emptySub": "Great, check other sections!",
+      "completedCount": "Completed {{count}} tasks",
+      "reply": "Reply",
+      "contact": "Contact",
+      "done": "Done"
+    },
+    "next": {
+      "title": "Next Tasks",
+      "priority": "PRIORITY",
+      "currentStreak": "Current streak:",
+      "streakVal": "{{count}} in a row",
+      "weeklyPerf": "Weekly performance:",
+      "start": "Start now"
+    },
+    "schedule": {
+      "title": "Today's Schedule"
+    },
+    "notifications": {
+      "title": "Notifications",
+      "new": "{{count}} New"
+    },
+    "mockData": {
+      "nextTasks": {
+        "t1": {
+          "title": "Negative video about Mixue",
+          "time": "20m left"
+        },
+        "t2": {
+          "title": "Delivery complaint",
+          "time": "45m left"
+        },
+        "t3": {
+          "title": "Promotion inquiry",
+          "time": "14:00"
+        }
+      },
+      "notifications": {
+        "n1": {
+          "title": "New customer",
+          "desc": "Nguyen Van A just registered for consultation.",
+          "time": "5 mins ago"
+        },
+        "n2": {
+          "title": "Task assigned",
+          "desc": "Manager assigned you a new task.",
+          "time": "30 mins ago"
+        },
+        "n3": {
+          "title": "Almost overdue",
+          "desc": "Task 'Confirm appointment' is expiring soon.",
+          "time": "1 hour ago"
+        },
+        "n4": {
+          "title": "New reply",
+          "desc": "Customer B just replied to your message.",
+          "time": "2 hours ago"
+        }
+      },
+      "kanban": {
+        "k1": {
+          "title": "Negative video about Mixue",
+          "trend": "Up 320% mentions in 2 hours",
+          "time": "20m left"
+        },
+        "k2": {
+          "title": "VIP customer complaint",
+          "trend": "No reply after 1 hour",
+          "time": "45m left"
+        },
+        "k5": {
+          "title": "Handle 1-star storm",
+          "time": "08:30"
+        },
+        "k6": {
+          "title": "Reply to VIP message",
+          "time": "10:15"
+        },
+        "k7": {
+          "title": "Send service quote",
+          "time": "13:20"
+        }
+      },
+      "schedule": {
+        "s1": {
+          "title": "Reply morning customers",
+          "time": "09:00"
+        },
+        "s2": {
+          "title": "Handle rising complaints",
+          "time": "10:30"
+        },
+        "s3": {
+          "title": "Support promotion campaign",
+          "time": "14:00"
+        },
+        "s4": {
+          "title": "Compile daily report",
+          "time": "16:00"
+        }
+      }
     }
   }
 }
