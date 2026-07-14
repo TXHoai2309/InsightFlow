@@ -52,6 +52,7 @@ function getLeadListScrollTop() {
 export default function LeadsPage() {
   const { profile, loading: authLoading } = useAuth();
   const [staffList, setStaffList] = useState<any[]>([]);
+  const canLoadStaffList = canPerformAction(profile, "manage_staff");
 
   useEffect(() => {
     const fetchStaff = async () => {
@@ -64,15 +65,21 @@ export default function LeadsPage() {
         const data = await res.json();
         if (res.ok) {
           setStaffList(data.data || []);
+        } else if (res.status === 403) {
+          setStaffList([]);
+        } else {
+          console.warn("Failed to fetch staff list in LeadsPage:", data?.error || res.statusText);
         }
       } catch (e) {
         console.warn("Failed to fetch staff list in LeadsPage:", e);
       }
     };
-    if (profile && !authLoading) {
+    if (profile && !authLoading && canLoadStaffList) {
       fetchStaff();
+    } else if (profile && !authLoading) {
+      setStaffList([]);
     }
-  }, [profile, authLoading]);
+  }, [profile, authLoading, canLoadStaffList]);
 
   const [activeView, setActiveView] = useState<LeadWorkbenchView>("priority");
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
@@ -196,7 +203,10 @@ export default function LeadsPage() {
     const returnToken = params.get("returnToken");
     const returnContext = loadLeadReturnContext(returnToken);
     const requestedFilters = returnContext?.filters;
-    const requestedPanelTab = returnContext?.panelTab;
+    const requestedPanelTab = returnContext?.panelTab as
+      | LeadDetailPanelTab
+      | "suggestion"
+      | undefined;
     const requestedView = params.get("view") as LeadWorkbenchView | null;
     const requestedPage = Number(params.get("page") || "1");
     const requestedLeadId = params.get("leadId");
@@ -213,7 +223,7 @@ export default function LeadsPage() {
     }
 
     if (requestedPanelTab) {
-      setDetailTab(requestedPanelTab);
+      setDetailTab(requestedPanelTab === "suggestion" ? "action" : requestedPanelTab);
     }
 
     if (nextView && workbenchViews.some((view) => view.id === nextView)) {
@@ -494,7 +504,7 @@ export default function LeadsPage() {
     );
 
     if (remainingNeedResult.length > 0) {
-      setActiveView("priority");
+      setActiveView("active");
       setSelectedLeadId(remainingNeedResult[0].id);
       return;
     }
@@ -585,16 +595,21 @@ export default function LeadsPage() {
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                setActiveView("priority");
-                setSelectedLeadId(pendingResultLead.id);
-              }}
-              className="rounded-lg border border-[var(--color-warning)]/40 bg-[var(--color-bg-surface)] px-3 py-2 text-sm font-bold text-[var(--color-text-primary)]"
-            >
-              Ghi nhận ngay
-            </button>
+            <div className="flex w-fit flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  skipNextPageReset.current = true;
+                  setActiveView("active");
+                  setSelectedLeadId(pendingResultLead.id);
+                  setDetailTab("action");
+                  setIsPanelCollapsed(false);
+                }}
+                className="rounded-lg border border-[var(--color-warning)]/40 bg-[var(--color-bg-surface)] px-3 py-2 text-sm font-bold text-[var(--color-text-primary)]"
+              >
+                Ghi nhận ngay
+              </button>
+            </div>
           </section>
         )}
 
@@ -621,6 +636,7 @@ export default function LeadsPage() {
                 </button>
               ))}
             </div>
+            <div className="flex w-fit flex-wrap items-center gap-2">
             <button
               type="button"
               data-tour="lead-refresh-button"
@@ -635,7 +651,7 @@ export default function LeadsPage() {
               type="button"
               data-tour="lead-filter-button"
               onClick={() => setShowFilters((value) => !value)}
-              className="inline-flex w-fit items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-2.5 py-1.5 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)]"
+              className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-2.5 py-1.5 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)]"
             >
               <span className="material-symbols-outlined text-base">tune</span>
               Bộ lọc
@@ -650,6 +666,7 @@ export default function LeadsPage() {
                 Xem chi tiết
               </button>
             )}
+            </div>
           </div>
 
           {showFilters && (

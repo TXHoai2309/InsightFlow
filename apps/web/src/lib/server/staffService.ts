@@ -20,15 +20,19 @@ const roleAllowedPermissions: Record<StaffRole, string[]> = {
   lead_employee: ["dashboard", "mentions", "leads", "reports"],
 };
 
+const assignableStaffPermissions = ["dashboard", "mentions", "alerts", "leads", "reports"];
+
 const defaultRoutePriority: Record<StaffRole, Array<{ permission: string; route: string }>> = {
   crisis_employee: [
     { permission: "alerts", route: "/alerts" },
+    { permission: "leads", route: "/leads" },
     { permission: "mentions", route: "/mentions" },
     { permission: "reports", route: "/reports" },
     { permission: "dashboard", route: "/dashboard" },
   ],
   lead_employee: [
     { permission: "leads", route: "/leads" },
+    { permission: "alerts", route: "/alerts" },
     { permission: "mentions", route: "/mentions" },
     { permission: "reports", route: "/reports" },
     { permission: "dashboard", route: "/dashboard" },
@@ -55,15 +59,18 @@ function normalizeStaffRole(role: unknown): StaffRole | null {
 }
 
 function resolvePermissions(staffRole: StaffRole, operations: unknown) {
-  const requested = Array.isArray(operations) ? operations : [];
+  const requested = Array.isArray(operations) ? operations : roleAllowedPermissions[staffRole];
   const permissions = requested
     .map((item) => operationPermissions[item as keyof typeof operationPermissions])
     .filter(Boolean);
-  const allowed = roleAllowedPermissions[staffRole];
-  const scoped = permissions.filter((permission) => allowed.includes(permission));
+  const scoped = permissions.filter((permission) => assignableStaffPermissions.includes(permission));
 
   if (!scoped.includes("dashboard")) {
     scoped.unshift("dashboard");
+  }
+
+  if (!scoped.includes("alerts") && !scoped.includes("leads")) {
+    throw new StaffServiceError("Vui lòng gán ít nhất một nghiệp vụ xử lý: Tiềm năng hoặc Khủng hoảng.");
   }
 
   return Array.from(new Set(scoped));

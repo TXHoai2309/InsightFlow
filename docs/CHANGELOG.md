@@ -11,6 +11,50 @@
 >   Tất cả các thay đổi đáng chú ý đối với dự án này sẽ được ghi lại trong file này.
 >   Định dạng dựa trên [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) và dự án này tuân thủ [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-07-13
+
+### Added
+
+- **Phân quyền nhân viên xử lý cả hai nghiệp vụ**:
+  - Bổ sung khả năng để Brand Manager phân công một nhân viên xử lý đồng thời `Khách hàng tiềm năng` và `Khủng hoảng`.
+  - Cập nhật luồng nghiệp vụ để nhân viên được gán cả hai quyền có thể truy cập và thao tác trên cả hai trang xử lý tương ứng.
+  - Bổ sung cách hiển thị nhân viên xử lý cả hai nghiệp vụ trong danh sách nhân viên, giúp người quản lý nhận biết nhanh phạm vi phụ trách của từng tài khoản.
+
+- **Báo cáo dành riêng theo vai trò nhân viên**:
+  - Xây dựng báo cáo riêng cho nhân viên xử lý khủng hoảng, tham chiếu cấu trúc báo cáo của nhân viên xử lý khách hàng tiềm năng.
+  - Xây dựng báo cáo riêng cho nhân viên xử lý cả hai nghiệp vụ, gồm góc nhìn tổng hợp giữa xử lý lead và xử lý khủng hoảng.
+  - Bổ sung bộ lọc cho các trang báo cáo của nhân viên tiềm năng, khủng hoảng và nhân viên xử lý cả hai nghiệp vụ.
+  - Chuẩn hóa luồng xuất báo cáo theo định dạng Excel.
+
+- **Preview báo cáo trước khi xuất file**:
+  - Bổ sung chức năng xem trước báo cáo trước khi xuất file cho các trang báo cáo quản lý, nhân viên tiềm năng, nhân viên khủng hoảng và nhân viên xử lý cả hai nghiệp vụ.
+  - Giúp người dùng kiểm tra lại nội dung, bộ lọc và phạm vi dữ liệu trước khi tải file Excel.
+
+### Changed
+
+- **Quản lý nhân viên và bộ lọc nghiệp vụ**:
+  - Cập nhật giao diện thêm nhân viên và chỉnh sửa nhân viên để có thể gán vai trò xử lý `Khách hàng tiềm năng`, `Khủng hoảng` hoặc cả hai.
+  - Cập nhật bộ lọc danh sách nhân viên để hỗ trợ lọc theo từng nghiệp vụ riêng lẻ và nhóm nhân viên xử lý cả hai nghiệp vụ.
+  - Điều chỉnh cột vai trò trong danh sách nhân viên để hiển thị rõ hơn các trường hợp nhân viên phụ trách nhiều nghiệp vụ.
+
+- **Trang Khách hàng tiềm năng**:
+  - Điều chỉnh luồng giao diện theo hướng tập trung vào thao tác thủ công của nhân viên, phù hợp với định hướng không tự động hóa việc xử lý nghiệp vụ với khách hàng.
+  - Đưa nút `Làm mới` về gần nút `Bộ lọc` để cụm thao tác dữ liệu nằm cùng một khu vực, giảm khoảng trống thừa trên thanh công cụ.
+  - Chia đều chiều rộng ba tab trong panel chi tiết lead: `Xử lý`, `Hồ sơ`, `Lịch sử`, tránh để khoảng trống thừa bên phải.
+
+### Removed
+
+- **Gợi ý AI trong trang Khách hàng tiềm năng**:
+  - Loại bỏ tab/khu vực gợi ý AI khỏi panel chi tiết lead.
+  - Loại bỏ điều hướng quay lại tab gợi ý AI để đảm bảo trang Khách hàng tiềm năng chỉ giữ các khu vực thao tác nghiệp vụ cần thiết.
+
+### Verification
+
+- Đã chạy `npm.cmd run build -w @insightflow/web` thành công sau các thay đổi giao diện gần nhất.
+- Build còn cảnh báo môi trường về việc không tải được Google Fonts và warning hiện có trong `firebaseAdmin.ts`, không chặn quá trình build.
+
+---
+
 ## [Unreleased] - 2026-07-09
 
 ### Added
