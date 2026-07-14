@@ -3,16 +3,32 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
-import { useAlertStore, type AlertData, type EscalationData } from "@/stores/alert.store";
+import { useAlertStore, type AlertData, type CustomerContactAttempt } from "@/stores/alert.store";
 import { useAuth } from "@/hooks/useAuth";
 import { PlatformLogo } from "@/components/platform/PlatformLogo";
-import { dbSecond, auth } from "@/lib/firebase";
-import { doc, onSnapshot, updateDoc, arrayUnion, collection, addDoc } from "firebase/firestore";
 import { canPerformAction } from "@/lib/rbac";
 import { getScopedBrandKey } from "@/lib/brandScope";
 import { fetchSingleSupabaseAlert, updateSupabaseAlertLabel, fetchCommentsForPost, type PostComment } from "@/lib/supabase";
 import { supabaseClient } from "@/lib/supabaseClient";
-import { QuickReplyHelper } from "@/components/ui/QuickReplyHelper";
+import { getAlertWorkflowStatus } from "@/lib/alertWorkflow";
+
+type CustomerResponseResult = NonNullable<AlertData["customer_response_result"]>;
+
+const CUSTOMER_RESPONSE_OPTIONS: Array<{
+  value: CustomerResponseResult;
+  label: string;
+  icon: string;
+  tone: string;
+}> = [
+  { value: "positive", label: "Khách hàng phản hồi tích cực", icon: "sentiment_satisfied", tone: "border-green-300 bg-green-50 text-green-700" },
+  { value: "no_response", label: "Chưa phản hồi", icon: "schedule", tone: "border-blue-300 bg-blue-50 text-blue-700" },
+  { value: "still_upset", label: "Khách hàng vẫn bức xúc", icon: "sentiment_dissatisfied", tone: "border-red-300 bg-red-50 text-red-700" },
+  { value: "not_suitable", label: "Không phù hợp", icon: "block", tone: "border-slate-300 bg-slate-50 text-slate-700" },
+];
+
+function createDefaultContactTemplate(customerName: string, brand: string): string {
+  return `Xin chào ${customerName || "Anh/Chị"}, ${formatBrandName(brand)} thành thật xin lỗi về trải nghiệm chưa tốt của Anh/Chị. Anh/Chị vui lòng nhắn tin trực tiếp hoặc để lại thông tin liên hệ để chúng tôi kiểm tra và hỗ trợ giải quyết vấn đề sớm nhất. Cảm ơn Anh/Chị đã phản hồi.`;
+}
 // Helper function to format brand display names
 function formatBrandName(brand: string): string {
   if (!brand) return "";
@@ -170,101 +186,6 @@ function IncidentReportModal({ item, onClose, triggerToast }: IncidentReportModa
   );
 }
 
-// ── Monitoring Transition Modal ──
-interface MonitoringTransitionModalProps {
-  onClose: () => void;
-  onConfirm: (note: string, durationHours: number) => Promise<void>;
-}
-
-function MonitoringTransitionModal({ onClose, onConfirm }: MonitoringTransitionModalProps) {
-  const [note, setNote] = useState("Đã hoàn tất các bước xử lý theo SOP. Chuyển sang trạng thái theo dõi thêm.");
-  const [duration, setDuration] = useState("72");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-
-  const handleConfirm = async () => {
-    if (!note.trim()) {
-      setError("Vui lòng nhập ghi chú hoàn tất.");
-      return;
-    }
-    setBusy(true);
-    setError("");
-    try {
-      await onConfirm(note.trim(), parseFloat(duration));
-      onClose();
-    } catch (e: any) {
-      setError("Lỗi: " + (e.message || "Không thể chuyển trạng thái."));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white dark:bg-slate-900 border border-[var(--color-border)] rounded-2xl shadow-xl max-w-md w-full p-6 z-10 space-y-4 text-xs">
-        <div className="flex justify-between items-center pb-2 border-b border-[var(--color-border)]">
-          <h3 className="text-sm font-bold text-[var(--color-text-primary)]">
-            Hoàn tất xử lý &amp; Bắt đầu theo dõi
-          </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            <span className="material-symbols-outlined text-sm">close</span>
-          </button>
-        </div>
-
-        <div className="space-y-2">
-          <label className="font-bold text-[var(--color-text-secondary)] uppercase text-[10px]">
-            Ghi chú xử lý / Bằng chứng
-          </label>
-          <textarea
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            rows={3}
-            className="w-full p-2.5 border border-[var(--color-border)] rounded-xl bg-white dark:bg-slate-800 focus:ring-2 focus:ring-purple-500/20 text-[var(--color-text-primary)] focus:outline-none"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <label className="font-bold text-[var(--color-text-secondary)] uppercase text-[10px]">
-            Thời gian theo dõi thêm
-          </label>
-          <select
-            value={duration}
-            onChange={(e) => setDuration(e.target.value)}
-            className="w-full p-2.5 border border-[var(--color-border)] rounded-xl bg-white dark:bg-slate-800 focus:ring-2 focus:ring-purple-500/20 text-[var(--color-text-primary)] focus:outline-none"
-          >
-            <option value="72">72 giờ (Khuyên dùng)</option>
-            <option value="24">24 giờ</option>
-            <option value="1">1 giờ</option>
-            <option value="0.166">10 phút</option>
-            <option value="0.033">2 phút (Để test nhanh)</option>
-            <option value="0">Đóng ngay (Không theo dõi)</option>
-          </select>
-        </div>
-
-        {error && <p className="text-red-500 font-bold">{error}</p>}
-
-        <div className="flex gap-3 pt-2">
-          <button
-            onClick={onClose}
-            disabled={busy}
-            className="flex-1 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-[var(--color-text-primary)] border border-[var(--color-border)] transition-all font-bold cursor-pointer"
-          >
-            Hủy
-          </button>
-          <button
-            onClick={handleConfirm}
-            disabled={busy}
-            className="flex-1 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold transition-all shadow-sm cursor-pointer"
-          >
-            {busy ? "Đang xử lý..." : "Xác nhận"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // Helper: map email/uid to display name for resolvers
 const getResolverName = (emailOrId: string | null | undefined): string => {
   if (!emailOrId) return "";
@@ -329,8 +250,6 @@ export default function AlertDetailPage() {
   const isManager = profile?.role === "admin" || profile?.role === "brand_manager";
   const {
     updateAlertStatus,
-    lockAlertForResolution,
-    unlockAlertForResolution,
     createCorrectionRequest,
     fetchCorrectionRequests,
     correctionRequests,
@@ -343,14 +262,15 @@ export default function AlertDetailPage() {
 
   // Left column active tab state ("content" | "history")
   const [activeLeftTab, setActiveLeftTab] = useState<"content" | "history">("content");
-  const [brandTemplates, setBrandTemplates] = useState<any[]>([]);
 
   // Note text input states
   const [timelineNote, setTimelineNote] = useState("");
-  const [internalNoteInput, setInternalNoteInput] = useState("");
-  const [showMonitoringModal, setShowMonitoringModal] = useState(false);
   const [timeLeftStr, setTimeLeftStr] = useState<string>("");
   const [newActivityDetails, setNewActivityDetails] = useState<{ comments: number; likes: number; shares: number } | null>(null);
+  const [contactEvidenceNote, setContactEvidenceNote] = useState("");
+  const [contactEvidenceImage, setContactEvidenceImage] = useState<string | null>(null);
+  const [previewEvidenceImage, setPreviewEvidenceImage] = useState<string | null>(null);
+  const [savingContactEvidence, setSavingContactEvidence] = useState(false);
 
   // Edit severity mode states
   const [editSeverityMode, setEditSeverityMode] = useState(false);
@@ -393,7 +313,13 @@ export default function AlertDetailPage() {
   }, [alert]);
 
   useEffect(() => {
-    if (!alert || alert.status !== "monitoring") {
+    if (!alert) return;
+    setContactEvidenceNote(alert.customer_contact_note || "");
+    setContactEvidenceImage(alert.customer_contact_evidence_image || null);
+  }, [alert?.id, alert?.customer_contact_note, alert?.customer_contact_evidence_image]);
+
+  useEffect(() => {
+    if (!alert || (alert.status !== "monitoring" && !alert.monitoring_started_at)) {
       setTimeLeftStr("");
       setNewActivityDetails(null);
       return;
@@ -461,13 +387,6 @@ export default function AlertDetailPage() {
 
   // Toast status states
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [showReportModal, setShowReportModal] = useState(false);
-  const [draftResponse, setDraftResponse] = useState("");
-  const [proposedCompensation, setProposedCompensation] = useState("");
-  const [approvalResponse, setApprovalResponse] = useState("");
-  const [approvalCompensation, setApprovalCompensation] = useState("");
-  const [approvalNote, setApprovalNote] = useState("");
-  const [escalationBusy, setEscalationBusy] = useState(false);
 
   const riskScore = useMemo(() => {
     if (!alert) return 0;
@@ -479,119 +398,200 @@ export default function AlertDetailPage() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  useEffect(() => {
-    if (!alert?.escalation) return;
-    setDraftResponse(alert.escalation.draft_response || "");
-    setProposedCompensation(alert.escalation.compensation || "");
-    setApprovalResponse(alert.escalation.approved_response || alert.escalation.draft_response || "");
-    setApprovalCompensation(alert.escalation.compensation_approved || alert.escalation.compensation || "");
-    setApprovalNote(alert.escalation.approval_note || "");
-  }, [alert?.id, alert?.escalation]);
-
-  const createEscalationNotification = async (payload: {
-    title: string;
-    message: string;
-    recipient_role: "brand_manager" | "crisis_employee";
-    recipient_email?: string | null;
-  }) => {
-    if (!dbSecond || !alert) return;
-
-    await addDoc(collection(dbSecond, "notifications"), {
-      title: payload.title,
-      message: payload.message,
-      type: "escalation",
-      alert_id: alert.id,
-      brand: alert.brand,
-      created_at: new Date().toISOString(),
-      read: false,
-      recipient_role: payload.recipient_role,
-      recipient_email: payload.recipient_email || null,
-      sender_email: profile?.email || "",
-    });
-  };
-
-  const handleSubmitEscalation = async () => {
-    if (!alert || !draftResponse.trim() || !proposedCompensation.trim()) {
-      triggerToast("Vui lòng nhập dự thảo phản hồi và mức đền bù đề xuất.");
+  const handleOpenCustomerContact = async () => {
+    if (!alert) return;
+    const contactUrl = [alert.social_profile_url, alert.url, alert.post_url]
+      .find((url) => Boolean(url && url !== "#"));
+    if (!contactUrl) {
+      triggerToast("Cảnh báo này chưa có liên kết để liên hệ khách hàng.");
       return;
     }
 
-    const escalation: EscalationData = {
-      draft_response: draftResponse.trim(),
-      compensation: proposedCompensation.trim(),
-      submitted_by_email: profile?.email || "unknown",
-      submitted_by_name: profile?.displayName || getResolverName(profile?.email) || "Crisis Officer",
-      submitted_at: new Date().toISOString(),
-      status: "pending",
-      approved_by_email: null,
-      approved_by_name: null,
-      approved_at: null,
-      approved_response: null,
-      compensation_approved: null,
-      approval_note: "",
-    };
+    const template = createDefaultContactTemplate(alert.author || "Anh/Chị", alert.brand);
+    const openedAt = new Date().toISOString();
 
-    setEscalationBusy(true);
+    // Open immediately from the click event so browsers do not block the tab.
+    window.open(contactUrl, "_blank", "noopener,noreferrer");
     try {
-      await updateAlertStatus(alert.id, "pending_approval", profile, {
-        note: "Đã gửi phương án phản hồi và đền bù lên Brand Manager duyệt.",
-        escalation,
+      await navigator.clipboard.writeText(template);
+    } catch (error) {
+      console.warn("Could not copy the default contact template:", error);
+    }
+
+    try {
+      await updateAlertStatus(alert.id, "resolving", profile, {
+        note: "Đã mở liên kết liên hệ khách hàng và tạo mẫu phản hồi xin lỗi mặc định.",
+        customer_contact_opened_at: openedAt,
+        customer_contact_opened_by: profile?.email || profile?.uid || "unknown",
+        customer_contact_template: template,
       }, alert.brand);
-      await createEscalationNotification({
-        title: `Yêu cầu duyệt phương án: Vụ việc #${alert.id.slice(-4)}`,
-        message: `${escalation.submitted_by_name} đã gửi phương án phản hồi cho ${formatBrandName(alert.brand)}.`,
-        recipient_role: "brand_manager",
+      setAlert({
+        ...alert,
+        status: "resolving",
+        customer_contact_opened_at: openedAt,
+        customer_contact_opened_by: profile?.email || profile?.uid || "unknown",
+        customer_contact_template: template,
       });
-      setAlert({ ...alert, status: "pending_approval", escalation });
-      triggerToast("Đã gửi phương án lên Brand Manager duyệt.");
-    } catch (e) {
-      console.error(e);
-      triggerToast("Không thể gửi duyệt phương án: " + (e instanceof Error ? e.message : String(e)));
-    } finally {
-      setEscalationBusy(false);
+      triggerToast("Đã sao chép mẫu xin lỗi và mở liên kết liên hệ.");
+    } catch (error) {
+      triggerToast("Đã mở liên kết nhưng chưa lưu được dấu vết liên hệ.");
+      console.error(error);
     }
   };
 
-  const handleResolveEscalation = async (decision: "approved" | "rejected") => {
-    if (!alert?.escalation) return;
-
-    const nextStatus = decision === "approved" ? "responded" : "resolving";
-    const escalation: EscalationData = {
-      ...alert.escalation,
-      status: decision,
-      approved_by_email: profile?.email || null,
-      approved_by_name: profile?.displayName || getResolverName(profile?.email) || null,
-      approved_at: new Date().toISOString(),
-      approved_response: approvalResponse.trim() || alert.escalation.draft_response,
-      compensation_approved: approvalCompensation.trim() || alert.escalation.compensation,
-      approval_note: approvalNote.trim(),
-    };
-
-    setEscalationBusy(true);
+  const handleCustomerResponseResult = async (result: CustomerResponseResult) => {
+    if (!alert?.customer_contact_opened_at || !alert.customer_contact_note || !alert.customer_contact_evidence_image) return;
+    const resultLabel = CUSTOMER_RESPONSE_OPTIONS.find((option) => option.value === result)?.label || result;
     try {
-      await updateAlertStatus(alert.id, nextStatus, profile, {
-        note: decision === "approved"
-          ? "Brand Manager đã phê duyệt phương án phản hồi."
-          : `Brand Manager yêu cầu chỉnh sửa phương án.${approvalNote.trim() ? ` Ghi chú: ${approvalNote.trim()}` : ""}`,
-        escalation,
+      await updateAlertStatus(alert.id, "resolving", profile, {
+        note: `Đã ghi nhận kết quả liên hệ: ${resultLabel}.`,
+        customer_response_result: result,
       }, alert.brand);
-      await createEscalationNotification({
-        title: decision === "approved" ? `Phương án đã được duyệt: #${alert.id.slice(-4)}` : `Cần chỉnh sửa phương án: #${alert.id.slice(-4)}`,
-        message: decision === "approved"
-          ? "Brand Manager đã duyệt phương án phản hồi và mức đền bù."
-          : "Brand Manager yêu cầu chỉnh sửa phương án phản hồi.",
-        recipient_role: "crisis_employee",
-        recipient_email: alert.escalation.submitted_by_email,
-      });
-      setAlert({ ...alert, status: nextStatus, escalation });
-      triggerToast(decision === "approved" ? "Đã phê duyệt phương án." : "Đã gửi yêu cầu chỉnh sửa.");
-    } catch (e) {
-      console.error(e);
-      triggerToast("Không thể xử lý phê duyệt: " + (e instanceof Error ? e.message : String(e)));
-    } finally {
-      setEscalationBusy(false);
+      setAlert({ ...alert, status: "resolving", customer_response_result: result });
+      triggerToast(`Đã lưu: ${resultLabel}.`);
+    } catch (error) {
+      triggerToast("Không thể lưu kết quả phản hồi. Vui lòng thử lại.");
+      console.error(error);
     }
   };
+
+  const handleContactEvidenceImage = (file?: File) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      triggerToast("Vui lòng chọn một tệp hình ảnh.");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      triggerToast("Ảnh minh chứng phải nhỏ hơn 2MB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const image = new Image();
+      image.onload = () => {
+        const maxSize = 900;
+        const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(image.width * scale);
+        canvas.height = Math.round(image.height * scale);
+        canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
+        setContactEvidenceImage(canvas.toDataURL("image/jpeg", 0.72));
+      };
+      image.src = String(reader.result || "");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveContactEvidence = async () => {
+    if (!alert?.customer_contact_opened_at) {
+      triggerToast("Hãy bấm ‘Xem trên nền tảng’ trước.");
+      return;
+    }
+    if (!contactEvidenceNote.trim() || !contactEvidenceImage) {
+      triggerToast("Cần nhập ghi chú và thêm ảnh minh chứng.");
+      return;
+    }
+
+    setSavingContactEvidence(true);
+    try {
+      await updateAlertStatus(alert.id, "resolving", profile, {
+        note: `Đã bổ sung minh chứng liên hệ: ${contactEvidenceNote.trim()}`,
+        customer_contact_note: contactEvidenceNote.trim(),
+        customer_contact_evidence_image: contactEvidenceImage,
+      }, alert.brand);
+      setAlert({
+        ...alert,
+        status: "resolving",
+        customer_contact_note: contactEvidenceNote.trim(),
+        customer_contact_evidence_image: contactEvidenceImage,
+      });
+      triggerToast("Đã lưu minh chứng liên hệ.");
+    } catch (error) {
+      triggerToast("Không thể lưu minh chứng. Vui lòng thử lại.");
+      console.error(error);
+    } finally {
+      setSavingContactEvidence(false);
+    }
+  };
+
+  const buildContactHistory = (
+    outcomeStatus: CustomerContactAttempt["outcome_status"]
+  ): CustomerContactAttempt[] => {
+    if (!alert?.customer_contact_opened_at || !alert.customer_contact_note || !alert.customer_contact_evidence_image || !alert.customer_response_result) {
+      return alert?.customer_contact_history || [];
+    }
+    return [
+      ...(alert.customer_contact_history || []),
+      {
+        opened_at: alert.customer_contact_opened_at,
+        opened_by: alert.customer_contact_opened_by,
+        template: alert.customer_contact_template,
+        note: alert.customer_contact_note,
+        evidence_image: alert.customer_contact_evidence_image,
+        response_result: alert.customer_response_result,
+        completed_at: new Date().toISOString(),
+        outcome_status: outcomeStatus,
+      },
+    ];
+  };
+
+  const handleCompleteAction = async () => {
+    if (!alert) return;
+    if (!alert.customer_contact_opened_at || !alert.customer_contact_note || !alert.customer_contact_evidence_image || !alert.customer_response_result) {
+      triggerToast("Chưa đủ liên kết, ghi chú, ảnh minh chứng và kết quả phản hồi.");
+      return;
+    }
+
+    const resultLabel = CUSTOMER_RESPONSE_OPTIONS.find(
+      (option) => option.value === alert.customer_response_result
+    )?.label;
+    const contactEvidencePayload = {
+      customer_contact_opened_at: alert.customer_contact_opened_at,
+      customer_contact_opened_by: alert.customer_contact_opened_by,
+      customer_contact_template: alert.customer_contact_template,
+      customer_contact_note: alert.customer_contact_note,
+      customer_contact_evidence_image: alert.customer_contact_evidence_image,
+      customer_response_result: alert.customer_response_result,
+    };
+
+    try {
+      if (alert.customer_response_result === "no_response") {
+        await updateAlertStatus(alert.id, "contact_waiting", profile, {
+          note: `Đã liên hệ khách hàng nhưng chưa nhận được phản hồi.${resultLabel ? ` Kết quả: ${resultLabel}.` : ""}`,
+          ...contactEvidencePayload,
+          customer_contact_history: buildContactHistory("contact_waiting"),
+          reset_customer_contact: true,
+        }, alert.brand);
+        router.push("/alerts");
+        return;
+      }
+
+      if (alert.customer_response_result === "still_upset") {
+        await updateAlertStatus(alert.id, "contact_failed", profile, {
+          note: `Liên hệ trao đổi không thành; khách hàng vẫn bức xúc.${resultLabel ? ` Kết quả: ${resultLabel}.` : ""}`,
+          ...contactEvidencePayload,
+          customer_contact_history: buildContactHistory("contact_failed"),
+          reset_customer_contact: true,
+        }, alert.brand);
+        router.push("/alerts");
+        return;
+      }
+
+      await updateAlertStatus(alert.id, "resolved", profile, {
+        note: resultLabel
+          ? `Hoàn tất xử lý sau khi liên hệ khách hàng. Kết quả: ${resultLabel}.`
+          : "Hoàn tất xử lý sau khi liên hệ khách hàng.",
+        ...contactEvidencePayload,
+        customer_contact_history: buildContactHistory("resolved"),
+      }, alert.brand);
+      router.push("/alerts");
+    } catch (error) {
+      triggerToast("Không thể cập nhật trạng thái liên hệ. Vui lòng thử lại.");
+      console.error(error);
+    }
+  };
+
 
   const loadAlertDetail = useCallback(async (showGlobalLoading = false) => {
     if (!id) return;
@@ -676,30 +676,6 @@ export default function AlertDetailPage() {
   }, [id, loadAlertDetail]);
 
 
-  // Fetch brand response templates
-  useEffect(() => {
-    const loadTemplates = async () => {
-      try {
-        const token = await auth.currentUser?.getIdToken();
-        if (!token) return;
-        const res = await fetch("/api/templates", {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          // Filter by active and category === "crisis"
-          const list = (data.data || []).filter((t: any) => t.isActive && t.category === "crisis");
-          setBrandTemplates(list);
-        }
-      } catch (err) {
-        console.error("Error loading brand templates:", err);
-      }
-    };
-    if (alert) {
-      loadTemplates();
-    }
-  }, [alert]);
-
   // NOTE: Detail page does NOT auto-lock on mount.
   // Locking only happens when the Crisis Officer clicks "Nhận xử lý" on the list page.
   // This prevents Brand Managers or observers from accidentally overwriting the lock.
@@ -716,32 +692,6 @@ export default function AlertDetailPage() {
     } catch (e) {
       console.error(e);
       triggerToast("Lỗi thêm ghi chú. Vui lòng thử lại!");
-    }
-  };
-
-  // Handler: Add Internal Note
-  const handleAddInternalNote = async () => {
-    if (!alert || !internalNoteInput.trim()) return;
-    try {
-      const authorName = profile?.displayName || getResolverName(profile?.email) || "Admin Officer";
-      const newNote = {
-        note: internalNoteInput.trim(),
-        author: authorName,
-        timestamp: new Date().toISOString()
-      };
-      await updateSupabaseAlertLabel(alert.id, (existingLabel) => {
-        const notes = existingLabel.internal_notes ? [...existingLabel.internal_notes] : [];
-        notes.push(newNote);
-        return {
-          ...existingLabel,
-          internal_notes: notes
-        };
-      });
-      setInternalNoteInput("");
-      triggerToast("Đã thêm ghi chú nội bộ!");
-    } catch (e) {
-      console.error(e);
-      triggerToast("Không thể lưu ghi chú nội bộ!");
     }
   };
 
@@ -827,12 +777,6 @@ export default function AlertDetailPage() {
     }
   };
 
-  // Handle template selection
-  const selectTemplateText = (text: string) => {
-    setTimelineNote(text);
-    setDraftResponse(text);
-  };
-
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center p-24 space-y-4">
@@ -863,6 +807,13 @@ export default function AlertDetailPage() {
 
   const isLockedByOthers = alert.being_resolved_by && alert.being_resolved_by !== profile?.email;
   const isMine = alert.being_resolved_by === profile?.email;
+  const workflowStatus = getAlertWorkflowStatus(alert);
+  const hasContactProof = Boolean(
+    alert.customer_contact_opened_at &&
+    alert.customer_contact_note?.trim() &&
+    alert.customer_contact_evidence_image
+  );
+  const canComplete = Boolean(hasContactProof && alert.customer_response_result);
 
   // Sentiment Color Mapping
   let sentimentBadge = "bg-slate-50 text-slate-600 border-slate-100";
@@ -873,16 +824,18 @@ export default function AlertDetailPage() {
   }
 
   // Progress step helpers
-  const statusSteps = ["new", "resolving", "pending_approval", "responded", "monitoring", "resolved"];
+  const statusSteps = ["new", "resolving", "resolved"];
   const statusLabels: Record<string, string> = {
     new: "Mới",
     resolving: "Đang xử lý",
-    pending_approval: "Chờ duyệt",
-    responded: "Đã phản hồi",
-    monitoring: "Theo dõi",
-    resolved: "Đã đóng",
+    resolved: "Đã giải quyết",
   };
-  const currentStepIdx = statusSteps.indexOf(alert.status ?? "new");
+  const normalizedStatus = workflowStatus === "pending"
+    ? "new"
+    : workflowStatus === "processing" || workflowStatus === "contact_failed"
+      ? "resolving"
+      : "resolved";
+  const currentStepIdx = Math.max(0, statusSteps.indexOf(normalizedStatus));
   const progressPct = Math.round((currentStepIdx / (statusSteps.length - 1)) * 100);
 
   return (
@@ -913,20 +866,17 @@ export default function AlertDetailPage() {
                   }
                 </span>
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold flex-shrink-0 ${
-                  alert.status === "new" ? "bg-blue-100 text-blue-600" :
-                  alert.status === "resolving" ? "bg-amber-100 text-amber-600" :
-                  alert.status === "pending_approval" ? "bg-orange-100 text-orange-700 animate-pulse" :
-                  alert.status === "responded" ? "bg-indigo-100 text-indigo-700" :
-                  alert.status === "monitoring" ? "bg-cyan-100 text-cyan-700" :
-                  alert.status === "resolved" ? "bg-green-100 text-green-600" : "bg-slate-100 text-slate-600"
+                  workflowStatus === "pending" ? "bg-blue-100 text-blue-600" :
+                  workflowStatus === "contact_failed" ? "bg-red-100 text-red-700" :
+                  workflowStatus === "processing" ? "bg-amber-100 text-amber-700" :
+                  "bg-green-100 text-green-700"
                 }`}>
                   {
-                    alert.status === "new" ? "Mới phát hiện" :
-                    alert.status === "resolving" ? "Đang xử lý" :
-                    alert.status === "pending_approval" ? "Chờ duyệt" :
-                    alert.status === "responded" ? "Đã phản hồi" :
-                    alert.status === "monitoring" ? "Theo dõi thêm" :
-                    "Đã đóng"
+                    workflowStatus === "pending" ? "Chờ xử lý" :
+                    workflowStatus === "contact_failed" ? "Liên hệ không thành" :
+                    alert.status === "contact_waiting" ? "Đã liên hệ – Chờ phản hồi" :
+                    workflowStatus === "processing" ? "Đang xử lý" :
+                    "Đã giải quyết"
                   }
                 </span>
               </h1>
@@ -959,38 +909,43 @@ export default function AlertDetailPage() {
               Chia sẻ
             </button>
 
-            {!isMine && !isLockedByOthers && (
+            {workflowStatus !== "resolved" && !isMine && !isLockedByOthers && (
               <button
-                onClick={() => { lockAlertForResolution(alert.id, profile); triggerToast("Đã nhận xử lý!"); }}
+                onClick={async () => {
+                  try {
+                    await updateAlertStatus(alert.id, "resolving", profile, { note: "Đã tiếp nhận xử lý" }, alert.brand);
+                    setAlert({
+                      ...alert,
+                      status: "resolving",
+                      being_resolved_by: profile?.email || null,
+                      being_resolved_at: new Date().toISOString(),
+                    });
+                    triggerToast("Đã tiếp nhận và chuyển sang Đang xử lý.");
+                  } catch (error) {
+                    triggerToast("Không thể tiếp nhận: " + (error instanceof Error ? error.message : String(error)));
+                  }
+                }}
                 className="px-4 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all cursor-pointer"
               >
                 Nhận xử lý
               </button>
             )}
 
-            {isMine && alert.status !== "resolved" && alert.status !== "monitoring" && (
+            {isMine && (workflowStatus === "processing" || workflowStatus === "contact_failed") && (
               <button
-                onClick={() => setShowMonitoringModal(true)}
-                className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all cursor-pointer"
+                onClick={handleCompleteAction}
+                disabled={!canComplete}
+                title={!hasContactProof
+                  ? "Hãy mở liên kết, nhập ghi chú và thêm ảnh minh chứng"
+                  : !alert.customer_response_result
+                    ? "Hãy ghi nhận kết quả phản hồi của khách hàng"
+                    : "Hoàn tất xử lý"}
+                className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all cursor-pointer disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none"
               >
                 Hoàn tất
               </button>
             )}
 
-            {isMine && alert.status === "monitoring" && (
-              <button
-                onClick={async () => {
-                  try {
-                    await updateAlertStatus(alert.id, "resolved", profile, { note: "Đã đóng hẳn vụ việc." }, alert.brand);
-                    setAlert({ ...alert, status: "resolved" });
-                    triggerToast("Đã đóng hẳn!");
-                  } catch (e) { triggerToast("Lỗi!"); }
-                }}
-                className="px-4 py-1.5 bg-green-700 hover:bg-green-800 text-white font-bold text-xs rounded-xl shadow-sm transition-all cursor-pointer"
-              >
-                Đóng hẳn
-              </button>
-            )}
           </div>
         </div>
 
@@ -999,7 +954,7 @@ export default function AlertDetailPage() {
           <div className="flex items-center gap-1.5">
             {statusSteps.map((step, idx) => {
               const isCompleted = idx <= currentStepIdx;
-              const isCurrent = alert.status === step;
+              const isCurrent = normalizedStatus === step;
               return (
                 <React.Fragment key={step}>
                   <div className="flex flex-col items-center">
@@ -1066,7 +1021,7 @@ export default function AlertDetailPage() {
           {activeLeftTab === "content" && (
             <div className="space-y-6">
               {/* Widget: Real-time Monitoring Countdown & Activity Alert */}
-              {alert.status === "monitoring" && (
+              {(alert.status === "monitoring" || alert.monitoring_started_at) && (
                 <div className="bg-gradient-to-br from-cyan-50 to-indigo-50 dark:from-slate-900 dark:to-slate-800 border border-cyan-200 dark:border-cyan-800 rounded-2xl p-5 shadow-sm space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -1132,32 +1087,15 @@ export default function AlertDetailPage() {
                         {alert.content_type === "comment" ? "Bình luận cảnh báo" : "Bài viết cảnh báo"}
                       </h3>
                       <div className="flex items-center gap-3.5 mt-1">
-                        <a
-                          href={alert.url !== "#" ? alert.url : undefined}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-indigo-600 hover:underline text-[10px] font-bold flex items-center gap-0.5"
+                        <button
+                          type="button"
+                          onClick={handleOpenCustomerContact}
+                          disabled={![alert.social_profile_url, alert.url, alert.post_url].some((url) => Boolean(url && url !== "#"))}
+                          className="text-indigo-600 hover:underline text-[10px] font-bold flex items-center gap-0.5 disabled:cursor-not-allowed disabled:text-slate-400"
                         >
                           Xem trên {alert.source ? String(alert.source).toUpperCase() : "nền tảng gốc"}
                           <span className="material-symbols-outlined text-[10px]">open_in_new</span>
-                        </a>
-                        {alert.url && alert.url !== "#" && (
-                          <button
-                            onClick={async () => {
-                              try {
-                                await navigator.clipboard.writeText(alert.text || "");
-                                triggerToast("Đã sao chép nội dung cảnh báo!");
-                                window.open(alert.url, "_blank", "noopener,noreferrer");
-                              } catch (err) {
-                                console.warn("Failed to copy source text:", err);
-                              }
-                            }}
-                            className="text-purple-600 hover:underline text-[10px] font-bold flex items-center gap-0.5 cursor-pointer bg-transparent border-none p-0"
-                          >
-                            <span className="material-symbols-outlined text-[11px]">content_copy</span>
-                            Sao chép &amp; Mở nguồn
-                          </button>
-                        )}
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -1338,6 +1276,67 @@ export default function AlertDetailPage() {
                       </div>
                     </div>
                   ))}
+
+                  {/* Completed customer-contact attempts with their own proof */}
+                  {alert.customer_contact_history?.map((contactAttempt, index) => {
+                    const resultLabel = CUSTOMER_RESPONSE_OPTIONS.find(
+                      (option) => option.value === contactAttempt.response_result
+                    )?.label || contactAttempt.response_result;
+                    const outcomeLabel = contactAttempt.outcome_status === "resolved"
+                      ? "Đã giải quyết"
+                      : contactAttempt.outcome_status === "contact_waiting"
+                        ? "Đã liên hệ – Chờ phản hồi"
+                        : "Liên hệ không thành";
+                    return (
+                      <div key={`contact-history-${contactAttempt.completed_at}-${index}`} className="relative">
+                        <div className="absolute -left-[23px] top-0.5 h-[14px] w-[14px] rounded-full border-4 border-[var(--color-bg-surface)] bg-green-500 ring-1 ring-[var(--color-border)]" />
+                        <div>
+                          <div className="flex flex-wrap items-start justify-between gap-2 text-xs">
+                            <div>
+                              <p className="font-bold text-[var(--color-text-primary)]">
+                                Liên hệ khách hàng lần {index + 1}
+                              </p>
+                              <p className="mt-0.5 text-[9px] text-[var(--color-text-muted)]">
+                                {contactAttempt.opened_by ? getResolverName(contactAttempt.opened_by) : "Nhân viên xử lý"}
+                              </p>
+                            </div>
+                            <span className="text-[10px] font-semibold text-[var(--color-text-muted)]">
+                              {getRelativeTime(contactAttempt.completed_at)}
+                            </span>
+                          </div>
+                          <div className="mt-2 space-y-2 rounded-xl border border-green-200 bg-green-50/50 p-3 text-[11px] text-[var(--color-text-secondary)]">
+                            <div className="flex flex-wrap gap-1.5">
+                              <span className="rounded-full bg-white px-2 py-1 text-[9px] font-bold text-green-700 border border-green-200">
+                                {outcomeLabel}
+                              </span>
+                              <span className="rounded-full bg-white px-2 py-1 text-[9px] font-bold text-purple-700 border border-purple-200">
+                                {resultLabel}
+                              </span>
+                            </div>
+                            <div>
+                              <p className="text-[9px] font-black uppercase tracking-wider text-[var(--color-text-muted)]">Ghi chú</p>
+                              <p className="mt-1 whitespace-pre-wrap leading-relaxed">{contactAttempt.note}</p>
+                            </div>
+                            <div>
+                              <p className="mb-1 text-[9px] font-black uppercase tracking-wider text-[var(--color-text-muted)]">Ảnh minh chứng</p>
+                              <button
+                                type="button"
+                                onClick={() => setPreviewEvidenceImage(contactAttempt.evidence_image)}
+                                className="block max-w-sm cursor-zoom-in overflow-hidden rounded-lg border border-[var(--color-border)] bg-white p-1 shadow-sm"
+                                title="Bấm để xem ảnh đầy đủ"
+                              >
+                                <img
+                                  src={contactAttempt.evidence_image}
+                                  alt={`Minh chứng liên hệ lần ${index + 1}`}
+                                  className="max-h-64 w-full object-contain"
+                                />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {/* Quick add processing log (timeline note) */}
@@ -1369,129 +1368,214 @@ export default function AlertDetailPage() {
 
 
 
-            {/* Widget: Quick Reply + Draft (khi đang xử lý và là người phụ trách) */}
-            {isMine && alert.status === "resolving" && (
+            {/* Customer contact and response result */}
+            {isMine && (workflowStatus === "processing" || workflowStatus === "contact_failed") && (
               <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl shadow-sm p-5 space-y-4">
-                <h3 className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-wider flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-purple-500 text-base">quickreply</span>
-                  Soạn phản hồi
-                </h3>
+                <div>
+                  <h3 className="text-xs font-black text-[var(--color-text-primary)] uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-purple-500 text-base">support_agent</span>
+                    Liên hệ và ghi nhận phản hồi
+                  </h3>
+                  <p className="mt-1 text-[10px] text-[var(--color-text-muted)]">
+                    Phải mở liên kết liên hệ và chọn kết quả trước khi hoàn tất vụ việc.
+                  </p>
+                </div>
 
-                {brandTemplates.length > 0 && (
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider block">Mẫu phản hồi của Brand</label>
-                    <select
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (val) setDraftResponse(val);
-                      }}
-                      className="w-full text-xs p-2 border border-[var(--color-border)] rounded-xl bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] focus:outline-none"
-                    >
-                      <option value="">-- Chọn mẫu phản hồi đã lưu --</option>
-                      {brandTemplates.map((t) => (
-                        <option key={t.id} value={t.templateText}>
-                          {t.name} ({t.sentiment === "all" ? "Tất cả" : t.sentiment})
-                        </option>
-                      ))}
-                    </select>
+                {alert.customer_contact_history && alert.customer_contact_history.length > 0 && (
+                  <div className="space-y-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)]/50 p-3">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-[var(--color-text-secondary)] flex items-center gap-1">
+                      <span className="material-symbols-outlined text-sm">history</span>
+                      Lịch sử liên hệ trước ({alert.customer_contact_history.length})
+                    </p>
+                    <div className="max-h-80 space-y-3 overflow-y-auto pr-1">
+                      {[...alert.customer_contact_history].reverse().map((contactAttempt, reverseIndex) => {
+                        const attemptNumber = alert.customer_contact_history!.length - reverseIndex;
+                        const resultLabel = CUSTOMER_RESPONSE_OPTIONS.find(
+                          (option) => option.value === contactAttempt.response_result
+                        )?.label || contactAttempt.response_result;
+                        const outcomeLabel = contactAttempt.outcome_status === "resolved"
+                          ? "Đã giải quyết"
+                          : contactAttempt.outcome_status === "contact_waiting"
+                            ? "Đã liên hệ – Chờ phản hồi"
+                            : "Liên hệ không thành";
+                        return (
+                          <article key={`${contactAttempt.completed_at}-${attemptNumber}`} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-3 space-y-2">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-[11px] font-black text-[var(--color-text-primary)]">Lần liên hệ {attemptNumber}</p>
+                                <p className="text-[9px] text-[var(--color-text-muted)]">
+                                  {new Date(contactAttempt.completed_at).toLocaleString("vi-VN")}
+                                </p>
+                              </div>
+                              <span className="rounded-full bg-slate-100 px-2 py-1 text-[9px] font-bold text-slate-700">
+                                {outcomeLabel}
+                              </span>
+                            </div>
+                            <p className="text-[11px] leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap">
+                              {contactAttempt.note}
+                            </p>
+                            <p className="text-[10px] font-bold text-purple-700">Kết quả: {resultLabel}</p>
+                            <button
+                              type="button"
+                              onClick={() => setPreviewEvidenceImage(contactAttempt.evidence_image)}
+                              className="block w-full cursor-zoom-in rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/30"
+                              title="Bấm để xem ảnh lớn ngay trong InsightFlow"
+                            >
+                              <img
+                                src={contactAttempt.evidence_image}
+                                alt={`Minh chứng lần liên hệ ${attemptNumber}`}
+                                className="max-h-52 w-full rounded-lg border border-[var(--color-border)] object-contain bg-slate-50"
+                              />
+                            </button>
+                          </article>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
 
-                <QuickReplyHelper
-                  mentionContent={alert.text || ""}
-                  customerName={alert.author || "Khách hàng"}
-                  sentiment={(alert.sentiment === "positive" || alert.sentiment === "negative") ? alert.sentiment : "neutral"}
-                  category="crisis"
-                  onSelectReply={(text) => setDraftResponse(text)}
-                  primaryActionLabel="Mở nguồn gốc"
-                  onCopyAndOpenContact={alert.url && alert.url !== "#" ? () => {
-                    window.open(alert.url, "_blank", "noopener,noreferrer");
-                  } : undefined}
-                />
-                <textarea
-                  value={draftResponse}
-                  onChange={(e) => setDraftResponse(e.target.value)}
-                  placeholder="Nhập nội dung phản hồi công khai..."
-                  className="w-full text-xs p-3 border border-[var(--color-border)] rounded-xl bg-[var(--color-bg-surface-raised)] focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-[var(--color-text-primary)] h-28 resize-none"
-                />
-              </div>
-            )}
-
-            {/* Widget: Internal Notes */}
-            <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl shadow-sm p-5 space-y-4">
-              <h3 className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-wider flex items-center gap-1.5">
-                <span className="material-symbols-outlined text-slate-400 text-base">sticky_note_2</span>
-                Ghi chú nội bộ
-              </h3>
-
-              {alert.internal_notes && alert.internal_notes.length > 0 && (
-                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                  {alert.internal_notes.map((noteObj: any, i: number) => (
-                    <div key={i} className="p-3 bg-slate-50 dark:bg-slate-800/40 border border-[var(--color-border)]/50 rounded-xl text-[11px] space-y-1">
-                      <div className="flex justify-between font-bold text-[var(--color-text-primary)]">
-                        <span>{noteObj.author}</span>
-                        <span className="text-[9px] text-[var(--color-text-muted)]">{getRelativeTime(noteObj.timestamp)}</span>
-                      </div>
-                      <p className="text-[var(--color-text-secondary)] leading-normal">{noteObj.note}</p>
-                    </div>
-                  ))}
+                <div className={`rounded-xl border p-3 text-[11px] font-bold flex items-start gap-2 ${
+                  alert.customer_contact_opened_at
+                    ? "border-green-200 bg-green-50 text-green-700"
+                    : "border-amber-200 bg-amber-50 text-amber-700"
+                }`}>
+                  <span className="material-symbols-outlined text-base">
+                    {alert.customer_contact_opened_at ? "check_circle" : "info"}
+                  </span>
+                  <span>
+                    {alert.customer_contact_opened_at
+                      ? "Đã mở nguồn để liên hệ. Hãy bổ sung ghi chú và ảnh minh chứng bên dưới."
+                      : "Hãy bấm ‘Xem trên nền tảng’ tại nội dung cảnh báo trước."}
+                  </span>
                 </div>
-              )}
 
-              <textarea
-                value={internalNoteInput}
-                onChange={(e) => setInternalNoteInput(e.target.value)}
-                placeholder="Nhập ghi chú quan trọng cho team..."
-                className="w-full text-xs p-2.5 border border-[var(--color-border)] rounded-xl bg-[var(--color-bg-surface-raised)] focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-[var(--color-text-primary)] h-20"
-              />
-              <button
-                onClick={handleAddInternalNote}
-                className="w-full py-2 bg-slate-900 dark:bg-slate-700 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-sm active:scale-95 transition-all cursor-pointer"
-              >
-                Lưu ghi chú nội bộ
-              </button>
-            </div>
+                {alert.customer_contact_opened_at && (
+                  <div className="rounded-xl border border-green-200 bg-green-50/60 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[10px] font-black uppercase tracking-wider text-green-700">Mẫu đã sao chép</p>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await navigator.clipboard.writeText(alert.customer_contact_template || createDefaultContactTemplate(alert.author || "Anh/Chị", alert.brand));
+                          triggerToast("Đã sao chép lại mẫu phản hồi.");
+                        }}
+                        className="text-[10px] font-bold text-green-700 hover:underline"
+                      >
+                        Sao chép lại
+                      </button>
+                    </div>
+                    <p className="text-[11px] leading-relaxed text-[var(--color-text-secondary)]">
+                      {alert.customer_contact_template || createDefaultContactTemplate(alert.author || "Anh/Chị", alert.brand)}
+                    </p>
+                  </div>
+                )}
 
-            {/* Widget: Escalate Button (Báo cáo cấp cao) */}
-            {isMine && (
-              <button
-                onClick={() => setShowReportModal(true)}
-                className="w-full py-3.5 bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-md transition-all active:scale-[0.98] cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-base">bolt</span>
-                ESCALATE — Báo cáo cấp cao
-              </button>
+                <div className={`space-y-3 rounded-xl border border-[var(--color-border)] p-3 ${!alert.customer_contact_opened_at ? "opacity-50" : ""}`}>
+                  <p className="text-[10px] font-black uppercase tracking-wider text-[var(--color-text-secondary)]">
+                    Minh chứng liên hệ <span className="text-red-500">*</span>
+                  </p>
+                  <textarea
+                    value={contactEvidenceNote}
+                    onChange={(event) => setContactEvidenceNote(event.target.value)}
+                    disabled={!alert.customer_contact_opened_at}
+                    rows={3}
+                    placeholder="Ghi rõ đã phản hồi ở đâu, nội dung trao đổi và thời điểm liên hệ..."
+                    className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-2.5 text-xs text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-purple-500/20 disabled:cursor-not-allowed"
+                  />
+                  <div className="space-y-2">
+                    <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-dashed border-purple-300 bg-purple-50 px-3 py-2 text-[11px] font-bold text-purple-700 hover:bg-purple-100">
+                      <span className="material-symbols-outlined text-base">add_photo_alternate</span>
+                      {contactEvidenceImage ? "Đổi ảnh minh chứng" : "Thêm ảnh minh chứng"}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        disabled={!alert.customer_contact_opened_at}
+                        onChange={(event) => handleContactEvidenceImage(event.target.files?.[0])}
+                        className="hidden"
+                      />
+                    </label>
+                    {contactEvidenceImage && (
+                      <div className="relative overflow-hidden rounded-xl border border-[var(--color-border)] bg-slate-50 p-2">
+                        <img src={contactEvidenceImage} alt="Minh chứng liên hệ khách hàng" className="max-h-44 w-full object-contain" />
+                        <button
+                          type="button"
+                          onClick={() => setContactEvidenceImage(null)}
+                          className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-full bg-black/70 text-white"
+                        >
+                          <span className="material-symbols-outlined text-sm">close</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!alert.customer_contact_opened_at || !contactEvidenceNote.trim() || !contactEvidenceImage || savingContactEvidence}
+                    onClick={handleSaveContactEvidence}
+                    className="w-full rounded-xl bg-slate-900 py-2.5 text-xs font-bold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
+                  >
+                    {savingContactEvidence ? "Đang lưu..." : hasContactProof ? "Cập nhật minh chứng" : "Lưu minh chứng"}
+                  </button>
+                </div>
+
+                <fieldset disabled={!hasContactProof} className="space-y-2 disabled:opacity-50">
+                  <legend className="mb-2 text-[10px] font-black uppercase tracking-wider text-[var(--color-text-secondary)]">
+                    Kết quả phản hồi của khách hàng
+                  </legend>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {CUSTOMER_RESPONSE_OPTIONS.map((option) => {
+                      const selected = alert.customer_response_result === option.value;
+                      return (
+                        <button
+                          type="button"
+                          key={option.value}
+                          disabled={!hasContactProof}
+                          onClick={() => handleCustomerResponseResult(option.value)}
+                          aria-pressed={selected}
+                          className={`rounded-xl border p-2.5 text-left text-[11px] font-bold flex items-center gap-2 transition-all disabled:cursor-not-allowed ${
+                            selected ? `${option.tone} ring-2 ring-offset-1 ring-current` : "border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)] hover:border-purple-300"
+                          }`}
+                        >
+                          <span className="material-symbols-outlined text-base">{option.icon}</span>
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+              </div>
             )}
 
           </div>
         </div>
       </div>
 
-      {/* Modals */}
-      {showReportModal && (
-        <IncidentReportModal item={alert} onClose={() => setShowReportModal(false)} triggerToast={triggerToast} />
-      )}
-      {showMonitoringModal && alert && (
-        <MonitoringTransitionModal
-          onClose={() => setShowMonitoringModal(false)}
-          onConfirm={async (note, durationHours) => {
-            const finalStatus = durationHours > 0 ? "monitoring" : "resolved";
-            await updateAlertStatus(alert.id, finalStatus, profile, {
-              note,
-              monitoring_duration_hours: durationHours > 0 ? durationHours : undefined
-            }, alert.brand);
-            setAlert({
-              ...alert,
-              status: finalStatus,
-              monitoring_started_at: durationHours > 0 ? new Date().toISOString() : undefined,
-              monitoring_duration_hours: durationHours > 0 ? durationHours : undefined,
-              monitoring_initial_comments: alert.comments || 0,
-              monitoring_initial_likes: alert.likes || 0,
-              monitoring_initial_shares: alert.shares || 0,
-            });
-            triggerToast(durationHours > 0 ? "Đã chuyển sang theo dõi thêm!" : "Đã hoàn tất!");
-          }}
-        />
+      {previewEvidenceImage && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Xem ảnh minh chứng"
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+          onClick={() => setPreviewEvidenceImage(null)}
+        >
+          <div
+            className="relative flex max-h-[92vh] w-full max-w-5xl items-center justify-center overflow-hidden rounded-2xl border border-white/20 bg-slate-950 p-3 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <img
+              src={previewEvidenceImage}
+              alt="Ảnh minh chứng xử lý"
+              className="max-h-[86vh] max-w-full object-contain"
+            />
+            <button
+              type="button"
+              onClick={() => setPreviewEvidenceImage(null)}
+              aria-label="Đóng ảnh minh chứng"
+              className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full bg-black/70 text-white transition-colors hover:bg-black"
+            >
+              <span className="material-symbols-outlined">close</span>
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Toast */}

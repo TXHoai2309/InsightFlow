@@ -16,6 +16,7 @@ InsightFlow không chỉ là dashboard hiển thị số liệu. Mục tiêu s�
 | `docs/DEPLOYMENT.md` | Hướng dẫn triển khai |
 | `docs/CHANGELOG.md` | Nhật ký thay đổi |
 | `docs/sprint-2-crisis-management-center.md` | Tài liệu tính năng Trung tâm Xử lý Khẩn cấp & Đồng bộ Realtime cho Nhân viên xử lý khủng hoảng |
+| `docs/sprint-3-role-based-daily-work-dashboard.md` | User Story Sprint 3 cho trang tổng quan công việc trong ngày theo vai trò nhân viên khủng hoảng và nhân viên lead |
 
 Nếu có xung đột, ưu tiên tài liệu theo thứ tự:
 

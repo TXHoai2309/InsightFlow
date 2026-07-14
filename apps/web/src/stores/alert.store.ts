@@ -10,6 +10,7 @@ import { supabaseClient } from "@/lib/supabaseClient";
 import { calculateNegativityScore } from "@/lib/negativityScore";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import type { Mention } from "@/types/dashboard";
+import { getPersistedAlertStatus } from "@/lib/alertWorkflow";
 
 function getResolverName(emailOrId: string | null | undefined): string {
   if (!emailOrId) return "";
@@ -51,6 +52,17 @@ export interface InternalNote {
   note: string;
   author: string;
   timestamp: string;
+}
+
+export interface CustomerContactAttempt {
+  opened_at: string;
+  opened_by?: string;
+  template?: string;
+  note: string;
+  evidence_image: string;
+  response_result: "positive" | "no_response" | "still_upset" | "not_suitable";
+  completed_at: string;
+  outcome_status: "resolved" | "contact_waiting" | "contact_failed";
 }
 
 export interface EscalationData {
@@ -115,6 +127,13 @@ export interface AlertData {
   monitoring_initial_comments?: number;
   monitoring_initial_likes?: number;
   monitoring_initial_shares?: number;
+  customer_contact_opened_at?: string;
+  customer_contact_opened_by?: string;
+  customer_contact_template?: string;
+  customer_contact_note?: string;
+  customer_contact_evidence_image?: string;
+  customer_response_result?: "positive" | "no_response" | "still_upset" | "not_suitable";
+  customer_contact_history?: CustomerContactAttempt[];
 }
 
 export interface AlertFilters {
@@ -170,6 +189,14 @@ interface AlertState {
       image_url?: string;
       escalation?: EscalationData | null;
       monitoring_duration_hours?: number;
+      customer_contact_opened_at?: string;
+      customer_contact_opened_by?: string;
+      customer_contact_template?: string;
+      customer_contact_note?: string;
+      customer_contact_evidence_image?: string;
+      customer_response_result?: AlertData["customer_response_result"];
+      customer_contact_history?: CustomerContactAttempt[];
+      reset_customer_contact?: boolean;
     },
     brandFallback?: string
   ) => Promise<void>;
@@ -317,7 +344,7 @@ function mentionToAlertData(m: Mention): AlertData {
     severity,
     negativity_score: negativity.score,
     created_at: m.posted_at || m.created_at,
-    status: String(labelObj.resolution_status || "new"),
+    status: resolveAlertStatusFromLabel(labelObj),
     resolved_at: labelObj.resolved_at,
     collectionName: "annotations",
     url: m.url || "",
@@ -350,7 +377,29 @@ function mentionToAlertData(m: Mention): AlertData {
     monitoring_initial_comments: labelObj.monitoring_initial_comments,
     monitoring_initial_likes: labelObj.monitoring_initial_likes,
     monitoring_initial_shares: labelObj.monitoring_initial_shares,
+    customer_contact_opened_at: labelObj.customer_contact_opened_at,
+    customer_contact_opened_by: labelObj.customer_contact_opened_by,
+    customer_contact_template: labelObj.customer_contact_template,
+    customer_contact_note: labelObj.customer_contact_note,
+    customer_contact_evidence_image: labelObj.customer_contact_evidence_image,
+    customer_response_result: labelObj.customer_response_result,
+    customer_contact_history: Array.isArray(labelObj.customer_contact_history)
+      ? labelObj.customer_contact_history
+      : [],
   };
+}
+
+function isSameAlertRecord(alert: AlertData, id: string): boolean {
+  return (
+    alert.id === id ||
+    alert.source_id === id ||
+    alert.post_id === id ||
+    alert.comment_id === id
+  );
+}
+
+function resolveAlertStatusFromLabel(labelObj: any): string {
+  return getPersistedAlertStatus(labelObj);
 }
 
 function buildAlertsFromMentions(mentions: Mention[], scopedBrandKey?: string | null): AlertData[] {
@@ -422,17 +471,76 @@ function setAlertsFromDashboardCache(
     alerts: applyFilters(fetched, state.filters),
     brands: scopedBrands.length ? scopedBrands : fallbackBrands,
     error: null,
-    isLoading: false,
-    lastFetchedAt: Date.now(),
   }));
   return fetched.length > 0;
+}
+
+function applyRealtimeAnnotationUpdate(
+  setState: typeof useAlertStore.setState,
+  getState: typeof useAlertStore.getState,
+  row: Record<string, any> | null | undefined,
+) {
+  if (!row) return;
+
+  let labelObj: Record<string, any> = {};
+  try {
+    labelObj = typeof row.label === "string" ? JSON.parse(row.label) : (row.label || {});
+  } catch {
+    return;
+  }
+
+  const lookupIds = [row.entity_key, row.annotation_id, row.comment_id, row.post_id]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+  if (lookupIds.length === 0) return;
+
+  setState((state) => {
+    let changed = false;
+    const nextRecentLocks = { ...state.recentLocks };
+    const nextRawAlerts = state.rawAlerts.map((alert) => {
+      if (!lookupIds.some((lookupId) => isSameAlertRecord(alert, lookupId))) return alert;
+      changed = true;
+      nextRecentLocks[alert.id] = {
+        email: labelObj.being_resolved_by || null,
+        timestamp: Date.now(),
+      };
+      return {
+        ...alert,
+        status: resolveAlertStatusFromLabel(labelObj),
+        resolved_at: labelObj.resolved_at || undefined,
+        being_resolved_by: labelObj.being_resolved_by || null,
+        being_resolved_at: labelObj.being_resolved_at || null,
+        resolved_by_email: labelObj.resolved_by_email || null,
+        resolved_by_name: labelObj.resolved_by_name || null,
+        resolution_history: Array.isArray(labelObj.resolution_history)
+          ? labelObj.resolution_history
+          : alert.resolution_history,
+        customer_contact_opened_at: labelObj.customer_contact_opened_at || undefined,
+        customer_contact_opened_by: labelObj.customer_contact_opened_by || undefined,
+        customer_contact_template: labelObj.customer_contact_template || undefined,
+        customer_contact_note: labelObj.customer_contact_note || undefined,
+        customer_contact_evidence_image: labelObj.customer_contact_evidence_image || undefined,
+        customer_response_result: labelObj.customer_response_result || undefined,
+        customer_contact_history: Array.isArray(labelObj.customer_contact_history)
+          ? labelObj.customer_contact_history
+          : alert.customer_contact_history,
+      };
+    });
+
+    if (!changed) return state;
+    return {
+      rawAlerts: nextRawAlerts,
+      alerts: applyFilters(nextRawAlerts, state.filters),
+      recentLocks: nextRecentLocks,
+    };
+  });
 }
 
 let activeUnsubscribe: (() => void) | null = null;
 let activeRequestsUnsubscribe: (() => void) | null = null;
 const ALERT_REVIEW_WINDOW_DAYS = 30;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
-const ALERT_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
+const ALERT_REFRESH_INTERVAL_MS = 60 * 1000;
 
 export function getAlertReviewSinceIso(days = ALERT_REVIEW_WINDOW_DAYS): string {
   return new Date(Date.now() - days * MS_PER_DAY).toISOString();
@@ -484,8 +592,11 @@ export const useAlertStore = create<AlertState>()(
         return;
       }
 
-      if (!force && setAlertsFromDashboardCache(set, get, scopedBrandKey)) {
-        return;
+      // Dashboard cache is only an immediate visual fallback. Always continue
+      // to the authoritative Supabase load because older cached mentions may
+      // not contain workflow fields such as resolution_status/resolved_at.
+      if (!force) {
+        setAlertsFromDashboardCache(set, get, scopedBrandKey);
       }
 
       // Clean up any existing subscription/interval
@@ -527,51 +638,6 @@ export const useAlertStore = create<AlertState>()(
             return fetchedAlert;
           });
 
-          // Auto-closure check
-          const monitoringAlerts = merged.filter(a => a.status === "monitoring");
-          if (monitoringAlerts.length > 0) {
-            monitoringAlerts.forEach((alert) => {
-              const startedAt = alert.monitoring_started_at ? new Date(alert.monitoring_started_at).getTime() : new Date(alert.created_at).getTime();
-              const durationMs = (alert.monitoring_duration_hours ?? 72) * 60 * 60 * 1000;
-              const now = Date.now();
-              if (now - startedAt >= durationMs) {
-                const initialComments = alert.monitoring_initial_comments ?? 0;
-                const initialLikes = alert.monitoring_initial_likes ?? 0;
-                const initialShares = alert.monitoring_initial_shares ?? 0;
-
-                const currentComments = alert.comments ?? 0;
-                const currentLikes = alert.likes ?? 0;
-                const currentShares = alert.shares ?? 0;
-
-                const hasNewActivity = currentComments > initialComments || currentLikes > (initialLikes + 5) || currentShares > initialShares;
-
-                if (!hasNewActivity) {
-                  console.log(`[AlertStore] Auto-closing alert ${alert.id}`);
-                  updateSupabaseAlertLabel(alert.id, (existingLabel) => {
-                    return {
-                      ...existingLabel,
-                      resolution_status: "resolved",
-                      resolved_at: new Date().toISOString(),
-                      resolved_by_email: "system@insightflow.ai",
-                      resolved_by_name: "Hệ thống tự động",
-                      resolution_history: [
-                        ...(existingLabel.resolution_history || []),
-                        {
-                          attempt_number: (existingLabel.resolution_history?.length || 0) + 1,
-                          timestamp: new Date().toISOString(),
-                          note: "Hệ thống tự động đóng vụ việc sau thời gian theo dõi không phát sinh hoạt động bất thường.",
-                          resolved_by_email: "system@insightflow.ai",
-                          resolved_by_name: "Hệ thống tự động"
-                        }
-                      ],
-                      updated_at: new Date().toISOString()
-                    };
-                  }).catch(err => console.error("[AlertStore] Auto-close failed:", err));
-                }
-              }
-            });
-          }
-
           set({
             rawAlerts: merged,
             alerts: applyFilters(merged, get().filters),
@@ -598,21 +664,31 @@ export const useAlertStore = create<AlertState>()(
         // This gives sub-second updates to ALL connected clients simultaneously.
         if (supabaseClient) {
           try {
+            let realtimeReloadTimer: ReturnType<typeof setTimeout> | null = null;
             const channel = supabaseClient
               .channel("alert-annotations-global")
               .on(
                 "postgres_changes",
-                { event: "UPDATE", schema: "public", table: "annotations" },
-                () => {
-                  // Push notification received — reload full list
-                  loadAlerts();
+                { event: "*", schema: "public", table: "annotations" },
+                (payload: any) => {
+                  // Reflect ownership/status immediately in every open session,
+                  // then reconcile the full row from the authoritative REST data.
+                  applyRealtimeAnnotationUpdate(set, get, payload?.new);
+                  if (realtimeReloadTimer) clearTimeout(realtimeReloadTimer);
+                  realtimeReloadTimer = setTimeout(() => {
+                    loadAlerts();
+                    realtimeReloadTimer = null;
+                  }, 250);
                 }
               )
               .subscribe((status: any) => {
                 console.log("[AlertStore] Realtime subscription status:", status);
               });
 
-            cleanupFns.push(() => { if (supabaseClient) supabaseClient.removeChannel(channel); });
+            cleanupFns.push(() => {
+              if (realtimeReloadTimer) clearTimeout(realtimeReloadTimer);
+              if (supabaseClient) supabaseClient.removeChannel(channel);
+            });
 
             console.log("[AlertStore] ✅ Supabase Realtime active — instant cross-client sync enabled");
           } catch (realtimeErr) {
@@ -620,7 +696,7 @@ export const useAlertStore = create<AlertState>()(
           }
         }
 
-        // ===== STRATEGY 2: Fallback polling (30 min) =====
+        // ===== STRATEGY 2: Fallback polling (60 sec) =====
         const intervalId = setInterval(loadAlerts, ALERT_REFRESH_INTERVAL_MS);
         cleanupFns.push(() => clearInterval(intervalId));
 
@@ -634,13 +710,51 @@ export const useAlertStore = create<AlertState>()(
     },
 
     updateAlertStatus: async (id, newStatus, profile, attempt, brandFallback) => {
+      // Persist only the three-state workflow, even when an older screen sends
+      // a legacy value such as pending_approval, responded, or monitoring.
+      newStatus = getPersistedAlertStatus({ resolution_status: newStatus });
       console.log("[AlertStore] updateAlertStatus called:", { id, newStatus, profileEmail: profile?.email, profileRole: profile?.role });
-      const currentAlert = get().rawAlerts.find((alert) => alert.id === id);
+      const currentAlert = get().rawAlerts.find((alert) => isSameAlertRecord(alert, id));
       console.log("[AlertStore] currentAlert found:", currentAlert);
+
+      if (
+        newStatus === "resolving" &&
+        currentAlert?.being_resolved_by &&
+        currentAlert.being_resolved_by !== profile?.email
+      ) {
+        throw new Error(`Vụ việc đã được ${getResolverName(currentAlert.being_resolved_by)} nhận xử lý.`);
+      }
 
       if (!profile || !canPerformAction(profile, "update_crisis_status")) {
         console.error("[AlertStore] Permission check failed:", { profileExists: !!profile, hasPermission: profile ? canPerformAction(profile, "update_crisis_status") : false });
         throw new Error("User is not allowed to update crisis status.");
+      }
+
+      if (["resolved", "contact_waiting", "contact_failed"].includes(newStatus)) {
+        const hasOpenedContact = Boolean(
+          attempt?.customer_contact_opened_at || currentAlert?.customer_contact_opened_at
+        );
+        const hasContactNote = Boolean(
+          attempt?.customer_contact_note?.trim() || currentAlert?.customer_contact_note?.trim()
+        );
+        const hasContactEvidence = Boolean(
+          attempt?.customer_contact_evidence_image || currentAlert?.customer_contact_evidence_image
+        );
+        const hasResponseResult = Boolean(
+          attempt?.customer_response_result || currentAlert?.customer_response_result
+        );
+        if (!hasOpenedContact || !hasContactNote || !hasContactEvidence || !hasResponseResult) {
+          throw new Error(
+            "Phải mở liên kết liên hệ, nhập ghi chú, thêm ảnh minh chứng và ghi nhận kết quả phản hồi."
+          );
+        }
+        const responseResult = attempt?.customer_response_result || currentAlert?.customer_response_result;
+        if (newStatus === "contact_waiting" && responseResult !== "no_response") {
+          throw new Error("Chỉ kết quả ‘Chưa phản hồi’ mới được chuyển sang chờ phản hồi.");
+        }
+        if (newStatus === "contact_failed" && responseResult !== "still_upset") {
+          throw new Error("Chỉ kết quả ‘Khách hàng vẫn bức xúc’ mới được chuyển sang liên hệ không thành.");
+        }
       }
 
       const resolvedBrand = currentAlert?.brand || brandFallback;
@@ -672,7 +786,7 @@ export const useAlertStore = create<AlertState>()(
 
       set((state) => {
         const nextRawAlerts = state.rawAlerts.map((alert) => {
-          if (alert.id === id) {
+          if (isSameAlertRecord(alert, id)) {
             // When restoring to 'new' (Khôi phục), clear history so the alert starts fresh
             if (newStatus === "new") {
               return {
@@ -683,6 +797,18 @@ export const useAlertStore = create<AlertState>()(
                 resolved_by_email: null,
                 resolved_by_name: null,
                 escalation: null,
+                monitoring_started_at: undefined,
+                monitoring_duration_hours: undefined,
+                monitoring_initial_comments: undefined,
+                monitoring_initial_likes: undefined,
+                monitoring_initial_shares: undefined,
+                customer_contact_opened_at: undefined,
+                customer_contact_opened_by: undefined,
+                customer_contact_template: undefined,
+                customer_contact_note: undefined,
+                customer_contact_evidence_image: undefined,
+                customer_response_result: undefined,
+                customer_contact_history: undefined,
               };
             }
 
@@ -706,6 +832,13 @@ export const useAlertStore = create<AlertState>()(
               resolved_by_email: resolvedAt ? profile.email : null,
               resolved_by_name: resolvedAt ? profile.displayName : null,
               escalation: attempt?.escalation !== undefined ? attempt.escalation : alert.escalation,
+              customer_contact_opened_at: attempt?.reset_customer_contact ? undefined : attempt?.customer_contact_opened_at ?? alert.customer_contact_opened_at,
+              customer_contact_opened_by: attempt?.reset_customer_contact ? undefined : attempt?.customer_contact_opened_by ?? alert.customer_contact_opened_by,
+              customer_contact_template: attempt?.reset_customer_contact ? undefined : attempt?.customer_contact_template ?? alert.customer_contact_template,
+              customer_contact_note: attempt?.reset_customer_contact ? undefined : attempt?.customer_contact_note ?? alert.customer_contact_note,
+              customer_contact_evidence_image: attempt?.reset_customer_contact ? undefined : attempt?.customer_contact_evidence_image ?? alert.customer_contact_evidence_image,
+              customer_response_result: attempt?.reset_customer_contact ? undefined : attempt?.customer_response_result ?? alert.customer_response_result,
+              customer_contact_history: attempt?.customer_contact_history ?? alert.customer_contact_history,
               // When claiming a task, set being_resolved_by immediately in local state
               // so the filter hides it from other officers instantly
               ...(newStatus === "resolving" ? {
@@ -716,13 +849,13 @@ export const useAlertStore = create<AlertState>()(
               ...(newStatus === "resolved" ? {
                 being_resolved_by: null,
                 being_resolved_at: null,
-              } : {}),
-              ...(newStatus === "monitoring" ? {
-                monitoring_started_at: new Date().toISOString(),
-                monitoring_duration_hours: attempt?.monitoring_duration_hours ?? 72,
-                monitoring_initial_comments: alert.comments || 0,
-                monitoring_initial_likes: alert.likes || 0,
-                monitoring_initial_shares: alert.shares || 0,
+                ...(attempt?.monitoring_duration_hours ? {
+                  monitoring_started_at: new Date().toISOString(),
+                  monitoring_duration_hours: attempt.monitoring_duration_hours,
+                  monitoring_initial_comments: alert.comments || 0,
+                  monitoring_initial_likes: alert.likes || 0,
+                  monitoring_initial_shares: alert.shares || 0,
+                } : {}),
               } : {}),
             };
           }
@@ -737,6 +870,14 @@ export const useAlertStore = create<AlertState>()(
 
       try {
         await updateSupabaseAlertLabel(id, (existingLabel) => {
+          if (
+            newStatus === "resolving" &&
+            existingLabel.being_resolved_by &&
+            existingLabel.being_resolved_by !== profile.email
+          ) {
+            throw new Error(`Vụ việc đã được ${getResolverName(existingLabel.being_resolved_by)} nhận xử lý.`);
+          }
+
           let nextHistory = existingLabel.resolution_history ? [...existingLabel.resolution_history] : [];
           if (attempt) {
             nextHistory.push({
@@ -757,6 +898,20 @@ export const useAlertStore = create<AlertState>()(
               resolved_at: null,
               resolved_by_email: null,
               resolved_by_name: null,
+              being_resolved_by: null,
+              being_resolved_at: null,
+              monitoring_started_at: null,
+              monitoring_duration_hours: null,
+              monitoring_initial_comments: null,
+              monitoring_initial_likes: null,
+              monitoring_initial_shares: null,
+              customer_contact_opened_at: null,
+              customer_contact_opened_by: null,
+              customer_contact_template: null,
+              customer_contact_note: null,
+              customer_contact_evidence_image: null,
+              customer_response_result: null,
+              customer_contact_history: [],
               updated_by: profile.uid,
               updated_by_role: profile.role,
               updated_at: new Date().toISOString(),
@@ -773,12 +928,28 @@ export const useAlertStore = create<AlertState>()(
             resolved_by_email: resolvedAt ? profile.email : null,
             resolved_by_name: resolvedAt ? profile.displayName : null,
             escalation: attempt?.escalation !== undefined ? attempt.escalation : existingLabel.escalation ?? null,
+            customer_contact_opened_at: attempt?.customer_contact_opened_at ?? existingLabel.customer_contact_opened_at ?? null,
+            customer_contact_opened_by: attempt?.customer_contact_opened_by ?? existingLabel.customer_contact_opened_by ?? null,
+            customer_contact_template: attempt?.customer_contact_template ?? existingLabel.customer_contact_template ?? null,
+            customer_contact_note: attempt?.customer_contact_note ?? existingLabel.customer_contact_note ?? null,
+            customer_contact_evidence_image: attempt?.customer_contact_evidence_image ?? existingLabel.customer_contact_evidence_image ?? null,
+            customer_response_result: attempt?.customer_response_result ?? existingLabel.customer_response_result ?? null,
+            customer_contact_history: attempt?.customer_contact_history ?? existingLabel.customer_contact_history ?? [],
             updated_by: profile.uid,
             updated_by_role: profile.role,
             updated_at: new Date().toISOString(),
           };
 
-          if (newStatus === "monitoring") {
+          if (attempt?.reset_customer_contact) {
+            updateObj.customer_contact_opened_at = null;
+            updateObj.customer_contact_opened_by = null;
+            updateObj.customer_contact_template = null;
+            updateObj.customer_contact_note = null;
+            updateObj.customer_contact_evidence_image = null;
+            updateObj.customer_response_result = null;
+          }
+
+          if (newStatus === "resolved" && attempt?.monitoring_duration_hours) {
             updateObj.monitoring_started_at = new Date().toISOString();
             updateObj.monitoring_duration_hours = attempt?.monitoring_duration_hours ?? 72;
             updateObj.monitoring_initial_comments = currentAlert?.comments || 0;
@@ -786,14 +957,31 @@ export const useAlertStore = create<AlertState>()(
             updateObj.monitoring_initial_shares = currentAlert?.shares || 0;
           }
 
+          if (newStatus === "resolved") {
+            updateObj.being_resolved_by = null;
+            updateObj.being_resolved_at = null;
+          } else if (newStatus === "resolving") {
+            // Persist ownership together with the workflow status. The Alert
+            // list and detail page then agree after a single "Nhận xử lý" click.
+            updateObj.being_resolved_by = existingLabel.being_resolved_by || profile.email;
+            updateObj.being_resolved_at = existingLabel.being_resolved_at || new Date().toISOString();
+          }
+
           return updateObj;
         });
+
+        // Terminal/contact outcome changes affect the summary counters. Reload
+        // from Supabase before returning so the Alert page never renders a
+        // stale cached queue after navigation from the detail screen.
+        if (["resolved", "contact_waiting", "contact_failed"].includes(newStatus)) {
+          await get().fetchAlerts(getScopedBrandKey(profile), true);
+        }
       } catch (error) {
         console.error("[AlertStore] Failed to persist alert status:", error);
         // Revert local state update
         set((state) => {
           const nextRawAlerts = state.rawAlerts.map((alert) => {
-            if (alert.id === id && currentAlert) {
+            if (isSameAlertRecord(alert, id) && currentAlert) {
               return currentAlert;
             }
             return alert;
@@ -1044,7 +1232,7 @@ export const useAlertStore = create<AlertState>()(
       // Update local state immediately
       set((state) => {
         const nextRawAlerts = state.rawAlerts.map((alert) => {
-          if (alert.id === id) {
+          if (isSameAlertRecord(alert, id)) {
             return {
               ...alert,
               being_resolved_by: profile.email,
@@ -1079,7 +1267,7 @@ export const useAlertStore = create<AlertState>()(
       // Update local state immediately
       set((state) => {
         const nextRawAlerts = state.rawAlerts.map((alert) => {
-          if (alert.id === id) {
+          if (isSameAlertRecord(alert, id)) {
             return {
               ...alert,
               being_resolved_by: null,

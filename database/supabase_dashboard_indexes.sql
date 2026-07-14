@@ -5,6 +5,12 @@
 CREATE INDEX IF NOT EXISTS posts_posted_at_desc_idx
   ON public.posts (posted_at DESC);
 
+CREATE INDEX IF NOT EXISTS posts_brand_slug_posted_at_desc_idx
+  ON public.posts (brand_slug, posted_at DESC) INCLUDE (post_id);
+
+CREATE INDEX IF NOT EXISTS posts_brand_posted_at_desc_idx
+  ON public.posts (brand, posted_at DESC) INCLUDE (post_id);
+
 CREATE INDEX IF NOT EXISTS annotations_created_at_desc_idx
   ON public.annotations (created_at DESC);
 
@@ -35,6 +41,9 @@ CREATE INDEX IF NOT EXISTS annotations_comment_id_idx
 
 CREATE INDEX IF NOT EXISTS annotations_platform_post_assignee_idx
   ON public.annotations (platform, post_id, assignee);
+
+CREATE INDEX IF NOT EXISTS annotations_platform_status_updated_at_desc_idx
+  ON public.annotations (platform, status, updated_at DESC) INCLUDE (post_id, comment_id, entity_key);
 
 CREATE INDEX IF NOT EXISTS labeling_assignments_platform_status_updated_idx
   ON public.labeling_assignments (platform, status, updated_at DESC);
