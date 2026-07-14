@@ -52,6 +52,7 @@ function getLeadListScrollTop() {
 export default function LeadsPage() {
   const { profile, loading: authLoading } = useAuth();
   const [staffList, setStaffList] = useState<any[]>([]);
+  const canLoadStaffList = canPerformAction(profile, "manage_staff");
 
   useEffect(() => {
     const fetchStaff = async () => {
@@ -64,15 +65,21 @@ export default function LeadsPage() {
         const data = await res.json();
         if (res.ok) {
           setStaffList(data.data || []);
+        } else if (res.status === 403) {
+          setStaffList([]);
+        } else {
+          console.warn("Failed to fetch staff list in LeadsPage:", data?.error || res.statusText);
         }
       } catch (e) {
         console.warn("Failed to fetch staff list in LeadsPage:", e);
       }
     };
-    if (profile && !authLoading) {
+    if (profile && !authLoading && canLoadStaffList) {
       fetchStaff();
+    } else if (profile && !authLoading) {
+      setStaffList([]);
     }
-  }, [profile, authLoading]);
+  }, [profile, authLoading, canLoadStaffList]);
 
   const [activeView, setActiveView] = useState<LeadWorkbenchView>("priority");
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
