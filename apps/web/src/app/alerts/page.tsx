@@ -228,6 +228,7 @@ export default function AlertsPage() {
   const [resolvingAlert, setResolvingAlert] = useState<any>(null);
   const [viewingHistoryAlert, setViewingHistoryAlert] = useState<any>(null);
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
+  const [correctionModalItem, setCorrectionModalItem] = useState<any>(null);
 
   const hasLoadedRef = useRef(false);
   // New states for the redesigned Priority Process List
