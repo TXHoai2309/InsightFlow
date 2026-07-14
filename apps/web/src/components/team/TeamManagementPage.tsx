@@ -36,13 +36,6 @@ const roleOptions: RoleAssignmentOption[] = [
     descriptionKey: "team.roles.lead.description",
     defaultOperations: ["dashboard", "mentions", "leads", "reports"],
   },
-  {
-    value: "dual_employee",
-    staffRole: "crisis_employee",
-    labelKey: "team.roles.dual.label",
-    descriptionKey: "team.roles.dual.description",
-    defaultOperations: ["dashboard", "mentions", "alerts", "leads", "reports"],
-  },
 ];
 
 const operationOptions: OperationOption[] = [
@@ -125,8 +118,14 @@ export function TeamManagementPage({ initialTab = "list" }: TeamManagementPagePr
 
   const availableOperations = useMemo(() => operationOptions, []);
   const availableEditOperations = useMemo(() => operationOptions, []);
-  const selectedRoleOption = getStaffBusinessRole(operations, staffRole);
-  const selectedEditRoleOption = getStaffBusinessRole(editOperations, editStaffRole);
+  const selectedRoleOptions = useMemo<StaffRole[]>(() => [
+    ...(operations.includes("alerts") ? ["crisis_employee" as const] : []),
+    ...(operations.includes("leads") ? ["lead_employee" as const] : []),
+  ], [operations]);
+  const selectedEditRoleOptions = useMemo<StaffRole[]>(() => [
+    ...(editOperations.includes("alerts") ? ["crisis_employee" as const] : []),
+    ...(editOperations.includes("leads") ? ["lead_employee" as const] : []),
+  ], [editOperations]);
 
   const brandEmailDomain = getBrandEmailDomain(profile?.brandName, profile?.companyDomain);
   const fullEmail = buildBrandEmail(emailLocalPart, brandEmailDomain);
@@ -188,18 +187,42 @@ export function TeamManagementPage({ initialTab = "list" }: TeamManagementPagePr
   const toggleOperation = (op: string) => setOperations((curr) => curr.includes(op) ? curr.filter(i => i !== op) : [...curr, op]);
   const toggleEditOperation = (op: string) => setEditOperations((curr) => curr.includes(op) ? curr.filter(i => i !== op) : [...curr, op]);
 
-  const applyRoleAssignment = (value: RoleAssignmentOption["value"]) => {
+  useEffect(() => {
+    const hasCrisis = operations.includes("alerts");
+    const hasLead = operations.includes("leads");
+    if (hasCrisis && !hasLead && staffRole !== "crisis_employee") {
+      setStaffRole("crisis_employee");
+    } else if (hasLead && !hasCrisis && staffRole !== "lead_employee") {
+      setStaffRole("lead_employee");
+    }
+  }, [operations, staffRole]);
+
+  useEffect(() => {
+    const hasCrisis = editOperations.includes("alerts");
+    const hasLead = editOperations.includes("leads");
+    if (hasCrisis && !hasLead && editStaffRole !== "crisis_employee") {
+      setEditStaffRole("crisis_employee");
+    } else if (hasLead && !hasCrisis && editStaffRole !== "lead_employee") {
+      setEditStaffRole("lead_employee");
+    }
+  }, [editOperations, editStaffRole]);
+
+  const toggleRoleAssignment = (value: RoleAssignmentOption["value"]) => {
     const option = roleOptions.find((item) => item.value === value);
     if (!option) return;
-    setStaffRole(option.staffRole);
-    setOperations(option.defaultOperations);
+    const accessOperation = value === "crisis_employee" ? "alerts" : "leads";
+    setOperations((current) => current.includes(accessOperation)
+      ? current.filter((operation) => operation !== accessOperation)
+      : Array.from(new Set([...current, ...option.defaultOperations])));
   };
 
-  const applyEditRoleAssignment = (value: RoleAssignmentOption["value"]) => {
+  const toggleEditRoleAssignment = (value: RoleAssignmentOption["value"]) => {
     const option = roleOptions.find((item) => item.value === value);
     if (!option) return;
-    setEditStaffRole(option.staffRole);
-    setEditOperations(option.defaultOperations);
+    const accessOperation = value === "crisis_employee" ? "alerts" : "leads";
+    setEditOperations((current) => current.includes(accessOperation)
+      ? current.filter((operation) => operation !== accessOperation)
+      : Array.from(new Set([...current, ...option.defaultOperations])));
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -415,8 +438,8 @@ export function TeamManagementPage({ initialTab = "list" }: TeamManagementPagePr
             setEmailLocalPart={setEmailLocalPart}
             brandEmailDomain={brandEmailDomain}
             fullEmail={fullEmail}
-            selectedRoleOption={selectedRoleOption}
-            onSelectRoleOption={applyRoleAssignment}
+            selectedRoleOptions={selectedRoleOptions}
+            onToggleRoleOption={toggleRoleAssignment}
             operations={operations}
             toggleOperation={toggleOperation}
             availableOperations={availableOperations}
@@ -508,10 +531,10 @@ export function TeamManagementPage({ initialTab = "list" }: TeamManagementPagePr
 
             <div className="mt-6">
               <span className="text-[14px] font-semibold text-gray-900">Vai trò</span>
-              <div className="mt-3 grid gap-3 lg:grid-cols-3">
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 {roleOptions.map((opt) => (
-                  <label key={opt.value} className={`cursor-pointer rounded-xl border-2 p-4 transition-all ${selectedEditRoleOption === opt.value ? "border-[#6C5CE7] bg-[#6C5CE7]/5" : "border-gray-200 hover:border-gray-300"}`}>
-                    <input type="radio" className="sr-only" checked={selectedEditRoleOption === opt.value} onChange={() => applyEditRoleAssignment(opt.value)} />
+                  <label key={opt.value} className={`cursor-pointer rounded-xl border-2 p-4 transition-all ${selectedEditRoleOptions.includes(opt.value) ? "border-[#6C5CE7] bg-[#6C5CE7]/5" : "border-gray-200 hover:border-gray-300"}`}>
+                    <input type="checkbox" className="sr-only" checked={selectedEditRoleOptions.includes(opt.value)} onChange={() => toggleEditRoleAssignment(opt.value)} />
                     <span className="block text-[14px] font-semibold text-gray-900">{t(opt.labelKey)}</span>
                     <span className="mt-1 block text-[12px] text-gray-500">{t(opt.descriptionKey)}</span>
                   </label>

@@ -4,7 +4,7 @@ export type StaffRoleValue = StaffRole | LegacyStaffRole;
 export type StaffBusinessRole = StaffRole | "dual_employee" | "unassigned";
 
 export interface RoleAssignmentOption {
-  value: StaffRole | "dual_employee";
+  value: StaffRole;
   staffRole: StaffRole;
   labelKey: string;
   descriptionKey: string;
