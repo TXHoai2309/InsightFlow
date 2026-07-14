@@ -638,7 +638,7 @@ async function loadSupabaseRows<T extends SupabaseRow>(
   params: Record<string, string>,
   maxRows = 10000,
 ): Promise<T[]> {
-  const pageSize = 1000;
+  const pageSize = 500;
   const rows: T[] = [];
   let offset = 0;
 
@@ -700,6 +700,28 @@ function chunkValues<T>(values: T[], size: number): T[][] {
   return chunks;
 }
 
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let nextIndex = 0;
+  const workerCount = Math.max(1, Math.min(concurrency, items.length));
+
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < items.length) {
+        const currentIndex = nextIndex;
+        nextIndex += 1;
+        results[currentIndex] = await mapper(items[currentIndex], currentIndex);
+      }
+    }),
+  );
+
+  return results;
+}
+
 async function loadSupabaseRowsByPostIds<T extends SupabaseRow>(
   config: SupabaseConfig,
   table: string,
@@ -738,13 +760,12 @@ async function loadSupabaseRowsByIds<T extends SupabaseRow>(
 ): Promise<T[]> {
   if (!ids || ids.length === 0) return [];
   const unique = Array.from(new Set(ids.filter(Boolean)));
-  const pageSize = 100;
-  const promises: Promise<T[]>[] = [];
-
+  const pageSize = 50;
   const isAnnotationTable = table === "annotations";
-  for (let i = 0; i < unique.length; i += pageSize) {
-    if (isAnnotationTable && i >= 1000) break; // Limit to top 1000 IDs to avoid excessive parallel queries
-    const chunk = unique.slice(i, i + pageSize);
+  const cappedUnique = isAnnotationTable ? unique.slice(0, 1000) : unique;
+  const chunks = chunkValues(cappedUnique, pageSize);
+
+  const results = await mapWithConcurrency(chunks, 3, async (chunk) => {
     const formattedIds = chunk.map((id) => `"${id.replace(/"/g, '\\"')}"`);
     const requestParams = new URLSearchParams({
       ...extraParams,
@@ -752,10 +773,8 @@ async function loadSupabaseRowsByIds<T extends SupabaseRow>(
       select: columns.join(","),
       limit: String(maxRows), // Fetch up to maxRows to ensure complete candidate list
     });
-    promises.push(supabaseRequest<T[]>(config, table, requestParams.toString()));
-  }
-
-  const results = await Promise.all(promises);
+    return supabaseRequest<T[]>(config, table, requestParams.toString());
+  });
   let finalResults = results.flat();
 
   // If order is updated_at desc, sort in JS to ensure true top results across chunks
@@ -1010,7 +1029,7 @@ function supabaseCommentToMention(
 
 async function fetchSupabaseMentionsUncached(opts: FetchOptions): Promise<Mention[]> {
   const config = getSupabaseConfig();
-  const maxMentions = opts.maxMentions || 30000;
+  const maxMentions = opts.maxMentions || 2500;
   const brandKey = opts.brandKey ? opts.brandKey.toLowerCase().replace(/[\s\-_.]/g, "").trim() : "";
   const postColumns = [
     "post_id",
@@ -1074,7 +1093,7 @@ async function fetchSupabaseMentionsUncached(opts: FetchOptions): Promise<Mentio
       const fetchBrandPosts = (column: "brand_slug" | "brand", value: string) => {
         const query = new URLSearchParams({
           select: "post_id",
-          limit: "1000",
+          limit: String(Math.min(500, maxMentions)),
         });
         query.set(column, `eq.${value}`);
         return supabaseRequest<SupabaseRow[]>(config, "posts", query.toString());
@@ -1099,8 +1118,8 @@ async function fetchSupabaseMentionsUncached(opts: FetchOptions): Promise<Mentio
     // 2. Fetch completed annotations corresponding to these post IDs per platform
     try {
       const platforms = ["facebook", "tiktok", "youtube", "thread", "be", "google_maps", "news"];
-      const perPlatformLimit = Math.max(500, Math.floor(maxMentions / platforms.length));
-      const promises = platforms.map((p) =>
+      const perPlatformLimit = Math.min(400, Math.max(120, Math.ceil(maxMentions / platforms.length)));
+      const results = await mapWithConcurrency(platforms, 2, (p) =>
         loadSupabaseRowsByIds<SupabaseRow>(
           config,
           "annotations",
@@ -1114,7 +1133,6 @@ async function fetchSupabaseMentionsUncached(opts: FetchOptions): Promise<Mentio
           return [] as SupabaseRow[];
         })
       );
-      const results = await Promise.all(promises);
       annotationRows = results.flat();
     } catch (error: any) {
       console.error("[DashboardService] Failed to fetch annotations for brand:", error);
@@ -1124,8 +1142,8 @@ async function fetchSupabaseMentionsUncached(opts: FetchOptions): Promise<Mentio
     // ── Global Strategy (Fallback) ───────────────────────────────────
     try {
       const platforms = ["facebook", "tiktok", "youtube", "thread", "be", "google_maps", "news"];
-      const perPlatformLimit = Math.max(500, Math.floor(maxMentions / platforms.length));
-      const promises = platforms.map((p) =>
+      const perPlatformLimit = Math.min(400, Math.max(120, Math.ceil(maxMentions / platforms.length)));
+      const results = await mapWithConcurrency(platforms, 2, (p) =>
         loadSupabaseRows<SupabaseRow>(
           config,
           "annotations",
@@ -1136,7 +1154,6 @@ async function fetchSupabaseMentionsUncached(opts: FetchOptions): Promise<Mentio
           return [] as SupabaseRow[];
         })
       );
-      const results = await Promise.all(promises);
       annotationRows = results.flat();
     } catch (error: any) {
       console.error("[DashboardService] Failed to fetch annotations:", error);

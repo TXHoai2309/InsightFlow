@@ -19,7 +19,6 @@ import {
   getLeadOwnershipMeta,
   getLeadWorkbenchMeta,
   getPrimaryLeadAction,
-  getLeadSourceAction,
 } from "@/lib/lead-workbench";
 
 interface LeadWorkbenchRowProps {
@@ -31,6 +30,7 @@ interface LeadWorkbenchRowProps {
   labelRequest?: LabelChangeRequest;
   staffList?: any[];
   detailPanelOpen?: boolean;
+  compact?: boolean;
   onSelect: (lead: Lead) => void;
   onStartedAction?: (lead: Lead) => void;
 }
@@ -80,6 +80,7 @@ export function LeadWorkbenchRow({
   labelRequest,
   staffList = [],
   detailPanelOpen = false,
+  compact = false,
   onSelect,
   onStartedAction,
 }: LeadWorkbenchRowProps) {
@@ -96,7 +97,6 @@ export function LeadWorkbenchRow({
   const meta = getLeadWorkbenchMeta(lead, nowMs);
   const ownership = getLeadOwnershipMeta(lead, profile);
   const primaryAction = getPrimaryLeadAction(lead);
-  const sourceAction = getLeadSourceAction(lead);
   const platformMeta = PLATFORM_META[lead.platform];
   const isLeadWorkflowBlocked = isPendingLeadRerouteRequest(labelRequest);
   const canEdit =
@@ -132,7 +132,7 @@ export function LeadWorkbenchRow({
         ? "visibility"
         : meta.needsResultCapture
           ? "task_alt"
-          : primaryAction?.icon || sourceAction?.icon || "open_in_new";
+          : primaryAction?.icon || "open_in_new";
 
   const getOwnerName = () =>
     profile?.displayName || profile?.email || "Nhân viên xử lý";
@@ -271,6 +271,93 @@ export function LeadWorkbenchRow({
 
   const leadTimeAgo = formatLeadTimeAgo(lead.posted_at || lead.created_at, nowMs);
   const intentLabel = lead.intent === "none" ? "N/A" : lead.intent.toUpperCase();
+
+  if (compact) {
+    return (
+      <div
+        id={`lead-row-${lead.id}`}
+        data-lead-id={lead.id}
+        data-tour={rank === 1 ? "lead-row-first" : undefined}
+        role="button"
+        tabIndex={0}
+        aria-current={selected ? "true" : undefined}
+        onClick={() => onSelect(lead)}
+        onKeyDown={handleRowKeyDown}
+        className={`relative w-full cursor-pointer overflow-hidden rounded-lg border bg-[var(--color-bg-surface)] p-[4%] text-left transition duration-200 hover:border-[var(--color-brand-border)] hover:bg-[var(--color-bg-surface-raised)] ${cardStateClass}`}
+      >
+        <span className={`absolute inset-y-0 left-0 w-[1.25%] min-w-1 ${accentClass}`} />
+
+        <div className="flex min-w-0 items-start gap-[3%] pl-[1%]">
+          <div className="relative shrink-0">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-sm font-black text-[var(--color-brand)]">
+              {(lead.author || "KH").slice(0, 2).toUpperCase()}
+            </div>
+            <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border border-[var(--color-bg-surface)] bg-[var(--color-bg-surface)] shadow-sm">
+              <PlatformLogo platform={lead.platform} size="xs" />
+            </span>
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-[3%]">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-black text-[var(--color-text-primary)]">
+                  {lead.author || "Khách hàng"}
+                </p>
+                <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
+                  <span className="rounded-md bg-[var(--color-bg-surface-high)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--color-brand)]">
+                    {platformMeta?.label || lead.platform}
+                  </span>
+                  <span className={`max-w-full truncate rounded-full border px-2 py-0.5 text-[10px] font-bold ${ownerChipClass}`}>
+                    {ownership.label}
+                  </span>
+                </div>
+              </div>
+              <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black ${INTENT_STYLE[lead.intent]}`}>
+                {intentLabel}
+              </span>
+            </div>
+
+            <p className="mt-[3%] line-clamp-2 text-xs font-semibold leading-5 text-[var(--color-text-primary)]">
+              {leadReason}
+            </p>
+            <p className="mt-[2%] line-clamp-2 text-xs leading-5 text-[var(--color-text-secondary)]">
+              {lead.content}
+            </p>
+
+            <div className="mt-[3%] flex items-end justify-between gap-[4%] border-t border-[var(--color-border)] pt-[3%]">
+              <div className="min-w-0">
+                <p className={`truncate text-xs font-black ${meta.isOverdue || meta.isUrgent ? "text-[var(--color-error)]" : "text-[var(--color-text-primary)]"}`}>
+                  {formatLeadSla(meta)}
+                </p>
+                <p className="mt-0.5 truncate text-[10px] font-semibold text-[var(--color-text-muted)]">
+                  {meta.needsResultCapture ? "Cần ghi nhận kết quả" : leadTimeAgo || "SLA xử lý"}
+                </p>
+              </div>
+              <div className="shrink-0 text-right">
+                <p className="text-lg font-black leading-none text-[var(--color-brand)]">
+                  {meta.priorityScore}
+                </p>
+                <p className="mt-0.5 text-[10px] font-semibold text-[var(--color-text-muted)]">
+                  Điểm ưu tiên
+                </p>
+              </div>
+            </div>
+
+            {labelRequest && (
+              <p className="mt-[3%] truncate rounded-md bg-[var(--color-brand-subtle)] px-2 py-1 text-[10px] font-bold text-[var(--color-brand)]">
+                {getLabelRequestStatusLabel(labelRequest.status)} · {getLabelRequestWorkflowLabel(labelRequest)}
+              </p>
+            )}
+            {error && (
+              <p className="mt-2 text-xs font-semibold text-[var(--color-error)]">
+                {error}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!detailPanelOpen) {
     return (
@@ -674,18 +761,6 @@ export function LeadWorkbenchRow({
                 <span className="text-[var(--color-text-muted)]">
                   {leadTimeAgo}
                 </span>
-              )}
-              {sourceAction && (
-                <a
-                  href={sourceAction.href}
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={(event) => event.stopPropagation()}
-                  className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-blue-600 transition hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-950/20"
-                >
-                  Xem trên {platformMeta?.label || lead.platform}
-                  <span className="material-symbols-outlined text-[16px]">open_in_new</span>
-                </a>
               )}
             </div>
           </div>

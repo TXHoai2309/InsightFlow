@@ -21,3 +21,4 @@ export const supabaseClient = supabaseUrl && supabaseAnonKey
       },
     })
   : null;
+

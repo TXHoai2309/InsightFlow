@@ -8,6 +8,10 @@ import { DashboardService } from "@/lib/services/dashboard";
 import { useAuth } from "@/hooks/useAuth";
 import { filterByBusinessPolicy, getScopedBrandKey, isRecordInBrandScope } from "@/lib/brandScope";
 import { LeadEmployeeReportPage } from "@/components/lead-monitoring/LeadEmployeeReportPage";
+import { CrisisEmployeeReportPage } from "@/components/crisis-monitoring/CrisisEmployeeReportPage";
+import { DualOperationsEmployeeReportPage } from "@/components/dual-operations-report/DualOperationsEmployeeReportPage";
+import { ReportExportPreviewModal } from "@/components/reports/ReportExportPreviewModal";
+import { canPerformAction } from "@/lib/rbac";
 
 
 /**
@@ -214,6 +218,19 @@ interface ArchivedReport {
     score: number;
   };
   mentions?: Mention[];
+}
+
+type ManagerExportConfig = {
+  type: "periodic" | "range" | "custom" | "archive";
+  data: any;
+};
+
+function getMentionStatsForPreview(items: Mention[]) {
+  const positive = items.filter((item) => item.sentiment.toLowerCase().includes("pos")).length;
+  const negative = items.filter((item) => item.sentiment.toLowerCase().includes("neg")).length;
+  const neutral = Math.max(0, items.length - positive - negative);
+  const net = items.length > 0 ? Math.round(((positive - negative) / items.length) * 100) : 0;
+  return { positive, negative, neutral, net };
 }
 
 function ArchivedReportDetailModal({
@@ -1095,6 +1112,12 @@ function LanguageSelectModal({
 
 export default function ReportsPage() {
   const { profile, loading: authLoading } = useAuth();
+  const isEmployeeRole =
+    profile?.role === "crisis_employee" || profile?.role === "lead_employee";
+  const hasDualOperations =
+    isEmployeeRole &&
+    profile?.permissions?.includes("alerts") &&
+    profile?.permissions?.includes("leads");
 
   if (authLoading) {
     return (
@@ -1102,6 +1125,14 @@ export default function ReportsPage() {
         Dang tai bao cao...
       </div>
     );
+  }
+
+  if (!authLoading && hasDualOperations) {
+    return <DualOperationsEmployeeReportPage />;
+  }
+
+  if (!authLoading && profile?.role === "crisis_employee" && canPerformAction(profile, "view_crisis_queue")) {
+    return <CrisisEmployeeReportPage />;
   }
 
   if (!authLoading && profile?.role === "lead_employee") {
@@ -1127,10 +1158,9 @@ function LegacyReportsPage() {
 
   const [generatingPdfId, setGeneratingPdfId] = useState<string | null>(null);
   const [previewReport, setPreviewReport] = useState<DailyReport | null>(null);
-  const [exportConfig, setExportConfig] = useState<{
-    type: "periodic" | "range" | "custom" | "archive";
-    data: any;
-  } | null>(null);
+  const [pendingExportConfig, setPendingExportConfig] =
+    useState<ManagerExportConfig | null>(null);
+  const [exportConfig, setExportConfig] = useState<ManagerExportConfig | null>(null);
   const [exportFormat, setExportFormat] = useState<"pdf" | "excel">("pdf");
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -1508,7 +1538,15 @@ function LegacyReportsPage() {
     };
   }, [mentions, reportsList]);
 
-  const openExport = (format: "pdf" | "excel", config: { type: "periodic" | "range" | "custom" | "archive"; data: any }) => {
+  const openExport = (format: "pdf" | "excel", config: ManagerExportConfig) => {
+    setExportFormat(format);
+    setPendingExportConfig(config);
+  };
+
+  const confirmExportWithoutPreview = (
+    format: "pdf" | "excel",
+    config: ManagerExportConfig,
+  ) => {
     setExportFormat(format);
     setExportConfig(config);
   };
@@ -1862,6 +1900,156 @@ function LegacyReportsPage() {
     });
   }, [archivedReports, archiveSearchQuery, archiveBrandFilter, scopedBrandKey]);
 
+  const pendingExportPreview = useMemo(() => {
+    if (!pendingExportConfig) return null;
+
+    const { type, data } = pendingExportConfig;
+    const reportMentions: Mention[] = data.mentions || [];
+    const mentionStats = getMentionStatsForPreview(reportMentions);
+    const formatLabel = exportFormat === "excel" ? "Excel" : "PDF";
+    const baseStats = [
+      { label: "Tong mention", value: reportMentions.length },
+      { label: "Tich cuc", value: mentionStats.positive, tone: "good" as const },
+      { label: "Tieu cuc", value: mentionStats.negative, tone: mentionStats.negative > 0 ? "danger" as const : "default" as const },
+      { label: "Net sentiment", value: `${mentionStats.net >= 0 ? "+" : ""}${mentionStats.net}%` },
+    ];
+
+    if (type === "periodic") {
+      const dateFormatted = new Date(data.dateObj || new Date()).toLocaleDateString("vi-VN");
+      return {
+        title: `Bao cao ngay - ${data.brand}`,
+        subtitle: `File ${formatLabel} cho ngay ${dateFormatted}`,
+        generatedAt: new Date().toISOString(),
+        stats: baseStats,
+        summary: generateAIInsights(data.brand, reportMentions, "", i18n.language),
+        sections: [
+          {
+            title: "Pham vi",
+            rows: [
+              { label: "Thuong hieu", value: data.brand },
+              { label: "Ngay bao cao", value: dateFormatted },
+              { label: "Dinh dang", value: formatLabel },
+            ],
+          },
+        ],
+        sampleRows: reportMentions.slice(0, 6).map((mention) => ({
+          label: mention.author || mention.source || "Mention",
+          meta: `${mention.source} · ${mention.sentiment} · ${mention.topic}`,
+          badge: mention.content_type,
+          description: mention.content,
+        })),
+      };
+    }
+
+    if (type === "range") {
+      const startFormatted = new Date(data.startDate).toLocaleDateString("vi-VN");
+      const endFormatted = new Date(data.endDate).toLocaleDateString("vi-VN");
+      return {
+        title: `Bao cao ${data.rangeLabel}`,
+        subtitle: `${data.brand} · ${startFormatted} - ${endFormatted}`,
+        generatedAt: new Date().toISOString(),
+        stats: baseStats,
+        summary: generateAIInsights(data.brand, reportMentions, "", i18n.language),
+        sections: [
+          {
+            title: "Pham vi",
+            rows: [
+              { label: "Thuong hieu", value: data.brand },
+              { label: "Khoang thoi gian", value: data.rangeLabel },
+              { label: "Dinh dang", value: formatLabel },
+            ],
+          },
+        ],
+        sampleRows: reportMentions.slice(0, 6).map((mention) => ({
+          label: mention.author || mention.source || "Mention",
+          meta: `${mention.source} · ${mention.sentiment} · ${mention.topic}`,
+          badge: mention.content_type,
+          description: mention.content,
+        })),
+      };
+    }
+
+    if (type === "custom") {
+      return {
+        title: customBrand === "all" ? "Bao cao tuy chinh - Tat ca nhan hang" : `Bao cao tuy chinh - ${customBrand}`,
+        subtitle: `${new Date(customStartDate).toLocaleDateString("vi-VN")} - ${new Date(customEndDate).toLocaleDateString("vi-VN")}`,
+        generatedAt: new Date().toISOString(),
+        stats: [
+          { label: "Tong mention", value: reportMentions.length },
+          { label: "Tich cuc", value: data.stats?.positive ?? mentionStats.positive, tone: "good" as const },
+          { label: "Tieu cuc", value: data.stats?.negative ?? mentionStats.negative, tone: (data.stats?.negative ?? mentionStats.negative) > 0 ? "danger" as const : "default" as const },
+          { label: "Diem cam xuc", value: `${data.stats?.score ?? mentionStats.net}%` },
+        ],
+        summary: data.aiInsights || generateAIInsights(customBrand, reportMentions, customPrompt, i18n.language),
+        sections: [
+          {
+            title: "Bo loc",
+            rows: [
+              { label: "Nguon", value: customPlatforms.length },
+              { label: "Chu de", value: customTopics.length },
+              { label: "Sac thai", value: customSentiments.length },
+            ],
+          },
+          {
+            title: "Dinh dang",
+            rows: [
+              { label: "File", value: formatLabel },
+              { label: "Thuong hieu", value: customBrand === "all" ? "Tat ca" : customBrand },
+            ],
+          },
+        ],
+        sampleRows: reportMentions.slice(0, 6).map((mention) => ({
+          label: mention.author || mention.source || "Mention",
+          meta: `${mention.source} · ${mention.sentiment} · ${mention.topic}`,
+          badge: mention.content_type,
+          description: mention.content,
+        })),
+      };
+    }
+
+    const archiveMentions: Mention[] = data.mentions || [];
+    const archiveStats = getMentionStatsForPreview(archiveMentions);
+    return {
+      title: data.title || `Bao cao luu tru - ${data.brand}`,
+      subtitle: data.filtersSummary || "Bao cao da luu tru",
+      generatedAt: new Date().toISOString(),
+      stats: [
+        { label: "Tong mention", value: data.mentionsCount ?? archiveMentions.length },
+        { label: "Tich cuc", value: data.stats?.positive ?? archiveStats.positive, tone: "good" as const },
+        { label: "Tieu cuc", value: data.stats?.negative ?? archiveStats.negative, tone: (data.stats?.negative ?? archiveStats.negative) > 0 ? "danger" as const : "default" as const },
+        { label: "Net sentiment", value: `${data.stats?.score ?? archiveStats.net}%` },
+      ],
+      summary: data.insights || generateAIInsights(data.brand, archiveMentions, "", i18n.language),
+      sections: [
+        {
+          title: "Pham vi",
+          rows: [
+            { label: "Thuong hieu", value: data.brand },
+            { label: "Ngay luu", value: data.dateStr || "--" },
+            { label: "Dinh dang", value: formatLabel },
+          ],
+        },
+      ],
+      sampleRows: archiveMentions.slice(0, 6).map((mention) => ({
+        label: mention.author || mention.source || "Mention",
+        meta: `${mention.source} · ${mention.sentiment} · ${mention.topic}`,
+        badge: mention.content_type,
+        description: mention.content,
+      })),
+    };
+  }, [
+    customBrand,
+    customEndDate,
+    customPlatforms.length,
+    customPrompt,
+    customSentiments.length,
+    customStartDate,
+    customTopics.length,
+    exportFormat,
+    i18n.language,
+    pendingExportConfig,
+  ]);
+
   const loadingMessages = [
     "Đang phân tích các bộ lọc và tìm kiếm đề cập tương thích...",
     "Đang tính toán chỉ số sắc thái và xu hướng cảm xúc...",
@@ -1881,11 +2069,33 @@ function LegacyReportsPage() {
         />
       )}
 
+      {pendingExportConfig && pendingExportPreview ? (
+        <ReportExportPreviewModal
+          title={pendingExportPreview.title}
+          subtitle={pendingExportPreview.subtitle}
+          generatedAt={pendingExportPreview.generatedAt}
+          formatLabel={exportFormat === "excel" ? "Excel" : "PDF"}
+          stats={pendingExportPreview.stats}
+          summary={pendingExportPreview.summary}
+          sections={pendingExportPreview.sections}
+          sampleRows={pendingExportPreview.sampleRows}
+          isExporting={!!generatingPdfId}
+          onClose={() => setPendingExportConfig(null)}
+          onConfirm={() => {
+            setExportConfig(pendingExportConfig);
+            setPendingExportConfig(null);
+          }}
+        />
+      ) : null}
+
       {previewArchiveReport && (
         <ArchivedReportDetailModal
           report={previewArchiveReport}
           onClose={() => setPreviewArchiveReport(null)}
-          onExport={() => setExportConfig({ type: "archive", data: previewArchiveReport })}
+          onExport={() => {
+            confirmExportWithoutPreview("pdf", { type: "archive", data: previewArchiveReport });
+            setPreviewArchiveReport(null);
+          }}
           isExporting={generatingPdfId === previewArchiveReport.id}
           onDelete={() => handleDeleteArchive(previewArchiveReport.id)}
         />

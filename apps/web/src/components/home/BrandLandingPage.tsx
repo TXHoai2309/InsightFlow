@@ -68,6 +68,13 @@ const initialFormState: FormState = {
 
 const channels = ["Facebook", "TikTok", "YouTube", "Review", "Tin tức", "Website"];
 
+const heatmapOpacities = [
+  0.72, 0.9, 1, 0.58, 0.66, 0.86, 0.62,
+  1, 0.88, 0.6, 0.68, 0.74, 1, 0.64,
+  1, 0.84, 0.7, 0.56, 0.76, 0.82, 1,
+  0.6, 0.9, 0.72, 0.66, 1, 0.78, 0.58,
+];
+
 const modules = [
   {
     icon: RadioTower,
@@ -296,7 +303,7 @@ function LiveIntelligenceSection() {
               </div>
 
               {/* Dashboard Body */}
-              <div className="flex flex-col md:flex-row flex-1 p-4 md:p-6 gap-6 bg-[url('/vercel-grid.svg')] bg-repeat opacity-[0.99] dark:opacity-90">
+              <div className="bg-vercel-grid flex flex-col md:flex-row flex-1 p-4 md:p-6 gap-6 opacity-[0.99] dark:opacity-90">
                 {/* Left: Glowing Line Chart & KPI */}
                 <div className="flex-1 flex flex-col gap-6">
                    <div className="flex gap-4">
@@ -354,7 +361,7 @@ function LiveIntelligenceSection() {
                      <p className="text-[14px] font-bold text-[#1B1B4A] dark:text-white mb-3">Activity Heatmap</p>
                      <div className="grid grid-cols-7 gap-1.5">
                        {Array.from({length: 28}).map((_, i) => (
-                         <div key={i} className={`h-4 md:h-5 rounded-[4px] ${[2,7,12,14,20,25].includes(i) ? 'bg-[#6D5EF6]' : [1,5,8,15,22,27].includes(i) ? 'bg-[#9B8CFF]' : 'bg-[#ECE9FF] dark:bg-white/10'}`} style={{ opacity: Math.random() * 0.5 + 0.5, animation: `pulse 3s infinite ${i * 0.15}s` }} />
+                         <div key={i} className={`h-4 md:h-5 rounded-[4px] ${[2,7,12,14,20,25].includes(i) ? 'bg-[#6D5EF6]' : [1,5,8,15,22,27].includes(i) ? 'bg-[#9B8CFF]' : 'bg-[#ECE9FF] dark:bg-white/10'}`} style={{ opacity: heatmapOpacities[i], animation: `pulse 3s infinite ${i * 0.15}s` }} />
                        ))}
                      </div>
                       <div className="grid grid-cols-7 gap-1.5 mt-1.5">
@@ -1170,18 +1177,18 @@ export default function BrandLandingPage() {
           
           <div className="mt-20 grid gap-8 lg:grid-cols-[320px_1fr]">
             <Reveal>
-              <div className="flex flex-col gap-2 rounded-[24px] border border-[#ECE9FF] bg-white p-4 shadow-[0_18px_50px_rgba(109,94,246,0.04)]">
+              <div className="flex flex-col gap-2 rounded-[24px] border border-[#ECE9FF] bg-white p-4 shadow-[0_18px_50px_rgba(109,94,246,0.04)] dark:border-white/10 dark:bg-white/5">
                 {roleStories.map((story) => {
                   const Icon = story.icon;
                   const active = story.id === selectedRole;
                   return (
-                    <button key={story.id} type="button" onClick={() => setSelectedRole(story.id)} className={`group relative flex w-full items-center gap-4 rounded-[16px] px-5 py-5 text-left transition-all duration-300 ${active ? "bg-gradient-to-r from-[#F5F3FF] to-white shadow-sm border border-[#ECE9FF]" : "hover:bg-[#F5F3FF]/50 border border-transparent"}`}>
+                    <button key={story.id} type="button" onClick={() => setSelectedRole(story.id)} className={`group relative flex w-full items-center gap-4 rounded-[16px] px-5 py-5 text-left transition-all duration-300 ${active ? "border border-[#ECE9FF] bg-gradient-to-r from-[#F5F3FF] to-white text-[#111827] shadow-sm dark:from-white dark:to-white dark:text-[#111827]" : "border border-transparent text-[#6B7090] hover:bg-[#F5F3FF]/50 hover:text-[#111827] dark:text-slate-200 dark:hover:bg-white dark:hover:text-[#111827]"}`}>
                       {active && <span className="absolute left-0 top-1/2 h-8 w-1 -translate-y-1/2 rounded-r-full bg-[#6D5EF6]" />}
-                      <div className={`flex h-12 w-12 items-center justify-center rounded-[12px] transition-colors ${active ? "bg-[#6D5EF6] text-white shadow-md" : "bg-[#F5F3FF] text-[#6D5EF6] group-hover:bg-[#6D5EF6]/10"}`}>
+                      <div className={`flex h-12 w-12 items-center justify-center rounded-[12px] transition-colors ${active ? "bg-[#6D5EF6] text-white shadow-md" : "bg-[#F5F3FF] text-[#6D5EF6] group-hover:bg-[#6D5EF6]/10 dark:bg-black/40 dark:text-[#9B8CFF] dark:group-hover:bg-[#6D5EF6]/10 dark:group-hover:text-[#6D5EF6]"}`}>
                         <Icon className="h-5 w-5" />
                       </div>
-                      <span className={`text-[17px] font-extrabold transition-colors ${active ? "text-[#1B1B4A]" : "text-[#6B7090] group-hover:text-[#1B1B4A]"}`}>{story.label}</span>
-                      {active && <ChevronRight className="ml-auto h-5 w-5 text-[#6D5EF6]" />}
+                      <span className="text-[17px] font-extrabold text-current transition-colors">{story.label}</span>
+                      {active && <ChevronRight className="ml-auto h-5 w-5 text-[#6D5EF6] dark:text-[#6D5EF6]" />}
                     </button>
                   );
                 })}

@@ -52,6 +52,7 @@ function getLeadListScrollTop() {
 export default function LeadsPage() {
   const { profile, loading: authLoading } = useAuth();
   const [staffList, setStaffList] = useState<any[]>([]);
+  const canLoadStaffList = canPerformAction(profile, "manage_staff");
 
   useEffect(() => {
     const fetchStaff = async () => {
@@ -64,15 +65,21 @@ export default function LeadsPage() {
         const data = await res.json();
         if (res.ok) {
           setStaffList(data.data || []);
+        } else if (res.status === 403) {
+          setStaffList([]);
+        } else {
+          console.warn("Failed to fetch staff list in LeadsPage:", data?.error || res.statusText);
         }
       } catch (e) {
         console.warn("Failed to fetch staff list in LeadsPage:", e);
       }
     };
-    if (profile && !authLoading) {
+    if (profile && !authLoading && canLoadStaffList) {
       fetchStaff();
+    } else if (profile && !authLoading) {
+      setStaffList([]);
     }
-  }, [profile, authLoading]);
+  }, [profile, authLoading, canLoadStaffList]);
 
   const [activeView, setActiveView] = useState<LeadWorkbenchView>("priority");
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
@@ -196,7 +203,10 @@ export default function LeadsPage() {
     const returnToken = params.get("returnToken");
     const returnContext = loadLeadReturnContext(returnToken);
     const requestedFilters = returnContext?.filters;
-    const requestedPanelTab = returnContext?.panelTab;
+    const requestedPanelTab = returnContext?.panelTab as
+      | LeadDetailPanelTab
+      | "suggestion"
+      | undefined;
     const requestedView = params.get("view") as LeadWorkbenchView | null;
     const requestedPage = Number(params.get("page") || "1");
     const requestedLeadId = params.get("leadId");
@@ -213,7 +223,7 @@ export default function LeadsPage() {
     }
 
     if (requestedPanelTab) {
-      setDetailTab(requestedPanelTab);
+      setDetailTab(requestedPanelTab === "suggestion" ? "action" : requestedPanelTab);
     }
 
     if (nextView && workbenchViews.some((view) => view.id === nextView)) {
@@ -494,7 +504,7 @@ export default function LeadsPage() {
     );
 
     if (remainingNeedResult.length > 0) {
-      setActiveView("priority");
+      setActiveView("active");
       setSelectedLeadId(remainingNeedResult[0].id);
       return;
     }
@@ -538,24 +548,14 @@ export default function LeadsPage() {
   return (
     <div
       data-tour="leads-page"
-      className={`grid min-h-full max-w-[100vw] gap-[clamp(6px,0.55vw,10px)] overflow-hidden p-[clamp(6px,0.6vw,12px)] ${selectedLead && !isPanelCollapsed
-          ? "xl:grid-cols-[minmax(0,var(--lead-main-ratio))_minmax(0,var(--lead-detail-ratio))]"
-          : "grid-cols-1"
-        }`}
-      style={
-        {
-          "--lead-main-ratio": "72fr",
-          "--lead-detail-ratio": "28fr",
-        } as React.CSSProperties
-      }
+      className="min-h-full max-w-full space-y-[clamp(6px,0.55vw,10px)] overflow-x-hidden p-[clamp(6px,0.6vw,12px)]"
     >
-      <main className="min-w-0 space-y-[clamp(6px,0.55vw,10px)] overflow-hidden">
-        <LeadStats
-          leads={brandPlatformFilteredLeads}
-          isLoading={isLoading}
-          profile={profile}
-          onSelectView={(view) => setActiveView(view)}
-        />
+      <LeadStats
+        leads={brandPlatformFilteredLeads}
+        isLoading={isLoading}
+        profile={profile}
+        onSelectView={(view) => setActiveView(view)}
+      />
 
         {restoreNotice && (
           <section className="flex items-center justify-between gap-3 rounded-xl border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] px-3 py-2 text-sm font-semibold text-[var(--color-text-primary)]">
@@ -585,16 +585,21 @@ export default function LeadsPage() {
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                setActiveView("priority");
-                setSelectedLeadId(pendingResultLead.id);
-              }}
-              className="rounded-lg border border-[var(--color-warning)]/40 bg-[var(--color-bg-surface)] px-3 py-2 text-sm font-bold text-[var(--color-text-primary)]"
-            >
-              Ghi nhận ngay
-            </button>
+            <div className="flex w-fit flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  skipNextPageReset.current = true;
+                  setActiveView("active");
+                  setSelectedLeadId(pendingResultLead.id);
+                  setDetailTab("action");
+                  setIsPanelCollapsed(false);
+                }}
+                className="rounded-lg border border-[var(--color-warning)]/40 bg-[var(--color-bg-surface)] px-3 py-2 text-sm font-bold text-[var(--color-text-primary)]"
+              >
+                Ghi nhận ngay
+              </button>
+            </div>
           </section>
         )}
 
@@ -621,6 +626,7 @@ export default function LeadsPage() {
                 </button>
               ))}
             </div>
+            <div className="flex w-fit flex-wrap items-center gap-2">
             <button
               type="button"
               data-tour="lead-refresh-button"
@@ -635,7 +641,7 @@ export default function LeadsPage() {
               type="button"
               data-tour="lead-filter-button"
               onClick={() => setShowFilters((value) => !value)}
-              className="inline-flex w-fit items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-2.5 py-1.5 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)]"
+              className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-2.5 py-1.5 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)]"
             >
               <span className="material-symbols-outlined text-base">tune</span>
               Bộ lọc
@@ -650,6 +656,7 @@ export default function LeadsPage() {
                 Xem chi tiết
               </button>
             )}
+            </div>
           </div>
 
           {showFilters && (
@@ -659,111 +666,138 @@ export default function LeadsPage() {
             />
           )}
 
-          <div className="space-y-[clamp(6px,0.55vw,10px)]">
-            {error && (
-              <div className="flex items-center gap-2 rounded-xl border border-[var(--color-error)]/20 bg-[var(--color-error-subtle)] p-3 text-sm font-medium text-[var(--color-error)]">
-                <span className="material-symbols-outlined">error</span>
-                <span>{error}</span>
-              </div>
-            )}
+          {error && (
+            <div className="flex items-center gap-2 rounded-xl border border-[var(--color-error)]/20 bg-[var(--color-error-subtle)] p-3 text-sm font-medium text-[var(--color-error)]">
+              <span className="material-symbols-outlined">error</span>
+              <span>{error}</span>
+            </div>
+          )}
 
-            {isLoading && visibleLeads.length === 0 ? (
-              [0, 1, 2].map((item) => (
-                <div
-                  key={item}
-                  className="h-[88px] animate-pulse rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)]"
-                />
-              ))
-            ) : visibleLeads.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-bg-surface)] p-8 text-center">
-                <span className="material-symbols-outlined text-4xl text-[var(--color-text-muted)]">
-                  inbox
-                </span>
-                <h3 className="mt-3 text-base font-bold text-[var(--color-text-primary)]">
-                  Không có lead trong nhóm này
-                </h3>
-                <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-                  Chuyển quick view hoặc mở bộ lọc để xem nhóm lead khác.
-                </p>
-              </div>
-            ) : (
-              paginatedLeads.map((lead, index) => (
-                <LeadWorkbenchRow
-                  key={lead.id}
-                  lead={lead}
-                  rank={(currentPage - 1) * LEADS_PAGE_SIZE + index + 1}
-                  nowMs={currentTime}
-                  selected={selectedLeadId === lead.id}
-                  highlighted={highlightedLeadId === lead.id}
-                  labelRequest={pendingLabelRequestByLeadId.get(lead.id)}
-                  staffList={staffList}
-                  detailPanelOpen={isDetailPanelOpen}
-                  onSelect={(nextLead: Lead) => {
-                    clearPendingRestore(true);
-                    rememberOptimisticLead(nextLead);
-                    setSelectedLeadId(nextLead.id);
-                    setDetailTab("action");
-                    setRestoreNotice("");
-                    setIsPanelCollapsed(false);
-                  }}
-                  onStartedAction={handleStartedAction}
-                />
-              ))
-            )}
-
-            {visibleLeads.length > 0 && (
-              <div className="flex flex-col gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm text-[var(--color-text-secondary)] md:flex-row md:items-center md:justify-between">
-                <span>
-                  Hiển thị {firstLeadNumber}-{lastLeadNumber} trong {visibleLeads.length} lead
-                </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-                    disabled={currentPage === 1}
-                    className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 font-semibold text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Trước
-                  </button>
-                  <span className="min-w-12 text-center font-bold text-[var(--color-text-primary)]">
-                    {currentPage}/{totalPages}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
-                    disabled={currentPage === totalPages}
-                    className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 font-semibold text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Sau
-                  </button>
+          <div
+            className={`grid w-full items-start gap-y-[1vh] ${isDetailPanelOpen
+                ? "min-[1100px]:grid-cols-[32%_minmax(0,1fr)] min-[1100px]:gap-x-[0.75%]"
+                : "grid-cols-1"
+              }`}
+          >
+            <main className="flex min-w-0 flex-col self-start rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm">
+              <header className="flex shrink-0 items-center justify-between gap-[4%] border-b border-[var(--color-border)] px-[4%] py-[3%]">
+                <div className="min-w-0">
+                  <h2 className="text-sm font-black text-[var(--color-text-primary)]">
+                    Danh sách khách hàng
+                  </h2>
+                  <p className="mt-0.5 truncate text-xs text-[var(--color-text-secondary)]">
+                    {workbenchViews.find((view) => view.id === activeView)?.label || "Hàng chờ hiện tại"}
+                  </p>
                 </div>
+                <span className="shrink-0 rounded-full bg-[var(--color-bg-surface-raised)] px-2.5 py-1 text-xs font-black text-[var(--color-text-primary)]">
+                  {visibleLeads.length}
+                </span>
+              </header>
+
+              <div className="space-y-[2.5%] p-[3%]">
+                {isLoading && visibleLeads.length === 0 ? (
+                  [0, 1, 2].map((item) => (
+                    <div
+                      key={item}
+                      className="h-[18vh] animate-pulse rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)]"
+                    />
+                  ))
+                ) : visibleLeads.length === 0 ? (
+                  <div className="flex min-h-[50vh] flex-col items-center justify-center rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-bg-surface)] p-[8%] text-center">
+                    <span className="material-symbols-outlined text-4xl text-[var(--color-text-muted)]">
+                      inbox
+                    </span>
+                    <h3 className="mt-3 text-base font-bold text-[var(--color-text-primary)]">
+                      Không có lead trong nhóm này
+                    </h3>
+                    <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+                      Chuyển quick view hoặc mở bộ lọc để xem nhóm lead khác.
+                    </p>
+                  </div>
+                ) : (
+                  paginatedLeads.map((lead, index) => (
+                    <LeadWorkbenchRow
+                      key={lead.id}
+                      lead={lead}
+                      rank={(currentPage - 1) * LEADS_PAGE_SIZE + index + 1}
+                      nowMs={currentTime}
+                      selected={selectedLeadId === lead.id}
+                      highlighted={highlightedLeadId === lead.id}
+                      labelRequest={pendingLabelRequestByLeadId.get(lead.id)}
+                      staffList={staffList}
+                      detailPanelOpen={isDetailPanelOpen}
+                      compact={isDetailPanelOpen}
+                      onSelect={(nextLead: Lead) => {
+                        clearPendingRestore(true);
+                        rememberOptimisticLead(nextLead);
+                        setSelectedLeadId(nextLead.id);
+                        setDetailTab("action");
+                        setRestoreNotice("");
+                        setIsPanelCollapsed(false);
+                      }}
+                      onStartedAction={handleStartedAction}
+                    />
+                  ))
+                )}
               </div>
+
+              {visibleLeads.length > 0 && (
+                <footer className="flex shrink-0 flex-col gap-2 border-t border-[var(--color-border)] px-[4%] py-[3%] text-xs text-[var(--color-text-secondary)] sm:flex-row sm:items-center sm:justify-between">
+                  <span>
+                    {firstLeadNumber}-{lastLeadNumber} / {visibleLeads.length} lead
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                      disabled={currentPage === 1}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--color-border)] text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-40"
+                      aria-label="Trang trước"
+                      title="Trang trước"
+                    >
+                      <span className="material-symbols-outlined text-base">chevron_left</span>
+                    </button>
+                    <span className="min-w-10 text-center font-bold text-[var(--color-text-primary)]">
+                      {currentPage}/{totalPages}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                      disabled={currentPage === totalPages}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--color-border)] text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-40"
+                      aria-label="Trang sau"
+                      title="Trang sau"
+                    >
+                      <span className="material-symbols-outlined text-base">chevron_right</span>
+                    </button>
+                  </div>
+                </footer>
+              )}
+            </main>
+
+            {selectedLead && !isPanelCollapsed && (
+              <LeadDetailPanel
+                lead={selectedLead}
+                mentions={mentions}
+                nowMs={currentTime}
+                onClose={() => setIsPanelCollapsed(true)}
+                onAfterResult={handleAfterResult}
+                onStartedAction={handleStartedAction}
+                returnContext={{
+                  view: activeView,
+                  page: currentPage,
+                  selectedLeadId,
+                  filters,
+                  listScrollTop: getLeadListScrollTop(),
+                }}
+                activeTab={detailTab}
+                onTabChange={setDetailTab}
+                isCollapsed={isPanelCollapsed}
+                onCollapseToggle={() => setIsPanelCollapsed(true)}
+              />
             )}
           </div>
         </section>
-      </main>
-
-      {selectedLead && !isPanelCollapsed && (
-        <LeadDetailPanel
-          lead={selectedLead}
-          mentions={mentions}
-          nowMs={currentTime}
-          onClose={() => setSelectedLeadId(null)}
-          onAfterResult={handleAfterResult}
-          onStartedAction={handleStartedAction}
-          returnContext={{
-            view: activeView,
-            page: currentPage,
-            selectedLeadId,
-            filters,
-            listScrollTop: getLeadListScrollTop(),
-          }}
-          activeTab={detailTab}
-          onTabChange={setDetailTab}
-          isCollapsed={isPanelCollapsed}
-          onCollapseToggle={() => setIsPanelCollapsed(true)}
-        />
-      )}
     </div>
   );
 }

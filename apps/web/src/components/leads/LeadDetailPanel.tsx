@@ -34,7 +34,6 @@ import {
   isPendingLeadRerouteRequest,
   isClassificationLabelComplete,
 } from "@/lib/label-change";
-import { QuickReplyHelper } from "@/components/ui/QuickReplyHelper";
 import type {
   ClassificationLabel,
   DashboardFilters,
@@ -255,7 +254,7 @@ export function LeadDetailPanel({
 
   if (!lead || !meta) {
     return (
-      <aside className="sticky top-0 hidden h-[calc(100dvh-16px)] min-h-0 shrink-0 flex-col rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-bg-surface)] p-4 text-sm text-[var(--color-text-secondary)] xl:flex">
+      <aside className="flex min-w-0 shrink-0 flex-col self-start rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-bg-surface)] p-[3%] text-sm text-[var(--color-text-secondary)]">
         Chọn một lead để xem thao tác xử lý.
       </aside>
     );
@@ -702,15 +701,14 @@ export function LeadDetailPanel({
     { id: "action", label: "Xử lý" },
     { id: "profile", label: "Hồ sơ" },
     { id: "history", label: "Lịch sử" },
-    { id: "suggestion", label: "Gợi ý" },
   ];
 
   return (
     <aside
       data-tour="lead-detail-panel"
-      className="sticky top-0 hidden h-[calc(100dvh-16px)] min-h-0 shrink-0 flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm xl:flex"
+      className="flex min-w-0 shrink-0 flex-col self-start rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm"
     >
-      <div className="shrink-0 border-b border-[var(--color-border)] p-3">
+      <div className="shrink-0 border-b border-[var(--color-border)] p-[2%]">
         <div className="flex items-start justify-between gap-2.5">
           <div className="flex min-w-0 items-center gap-2.5">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-sm font-bold text-[var(--color-brand)]">
@@ -755,14 +753,14 @@ export function LeadDetailPanel({
           </div>
         </div>
 
-        <div className="mt-3 grid grid-cols-4 gap-1">
+        <div className="mt-3 grid grid-cols-3 gap-1">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               type="button"
               data-tour={tab.id === "action" ? "lead-detail-tab-action" : undefined}
               onClick={() => handleTabChange(tab.id)}
-              className={`rounded-lg px-2 py-1.5 text-xs font-semibold transition ${
+              className={`w-full rounded-lg px-2 py-1.5 text-xs font-semibold transition ${
                 activeTab === tab.id
                   ? "bg-[var(--color-brand-subtle)] text-[var(--color-brand)]"
                   : "text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)]"
@@ -776,7 +774,7 @@ export function LeadDetailPanel({
 
       <div
         id={LEAD_DETAIL_PANEL_SCROLL_ID}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3"
+        className="flex-1 p-[2%]"
       >
         {activeTab === "action" && (
           <div className="space-y-2">
@@ -1516,50 +1514,6 @@ export function LeadDetailPanel({
           </div>
         )}
 
-        {activeTab === "suggestion" && (
-          <div className="space-y-3">
-            <section className="rounded-xl border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)]/30 p-3">
-              <p className="text-sm font-bold text-[var(--color-brand)]">
-                Gợi ý hành động tiếp theo
-              </p>
-              <p className="mt-3 text-base font-bold leading-7 text-[var(--color-text-primary)]">
-                {meta.nextActionLabel} vì {priorityText.toLowerCase()}.
-              </p>
-            </section>
-            <section className="rounded-xl border border-[var(--color-border)] p-4 space-y-3">
-              <p className="text-sm font-bold text-[var(--color-text-primary)]">
-                Gợi ý phản hồi thông minh (AI)
-              </p>
-              <QuickReplyHelper
-                mentionContent={lead.content}
-                customerName={lead.author || "Khách hàng"}
-                sentiment={(currentLabels.sentiment === "positive" || currentLabels.sentiment === "negative") ? currentLabels.sentiment : "neutral"}
-                topic={currentLabels.topic[0] || "other"}
-                intent={currentLabels.intent || lead.intent}
-                urgency={currentLabels.urgency || "none"}
-                relevance={currentLabels.relevance}
-                leadStatus={lead.status}
-                resultType={lead.result_type}
-                lastActionType={lead.last_action_type}
-                lastContactChannel={lead.last_contact_channel}
-                category="lead"
-                primaryActionLabel={sourceAction?.label}
-                onCopyAndOpenContact={sourceAction ? () => handleOpenAction({ ...sourceAction, isContact: true }) : undefined}
-              />
-            </section>
-            <section className="rounded-xl border border-[var(--color-border)] p-3">
-              <p className="text-sm font-bold text-[var(--color-text-primary)]">
-                Căn cứ đưa ra gợi ý
-              </p>
-              <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-[var(--color-text-secondary)]">
-                {meta.priorityReasons.map((reason) => (
-                  <li key={reason}>{reason}</li>
-                ))}
-                <li>Lead score hiện tại {meta.priorityScore}/100.</li>
-              </ul>
-            </section>
-          </div>
-        )}
       </div>
 
       {toast && (
