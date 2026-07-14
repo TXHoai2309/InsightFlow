@@ -8,6 +8,7 @@ import { useDashboardStore } from "@/stores/dashboard.store";
 import { useAlertStore } from "@/stores/alert.store";
 import { getScopedBrandKey } from "@/lib/brandScope";
 import { getAlertWorkflowStatus } from "@/lib/alertWorkflow";
+import { isIntentLead } from "@/lib/lead-intent";
 import type { Alert, Lead, Mention } from "@/types/dashboard";
 
 type DashboardRole = "crisis" | "lead";
@@ -214,8 +215,9 @@ export function EmployeeOverviewDashboard() {
     const negativeCount = todayMentions.filter((mention) => mention.sentiment === "negative").length;
 
     if (role === "lead") {
-      const currentItems = leads.filter((lead) => isSameDay(leadDate(lead), selectedDate));
-      const unfinished = leads.filter((lead) => isBeforeDay(leadDate(lead), selectedDate) && !isLeadDone(lead));
+      const leadQueueItems = leads.filter(isIntentLead);
+      const currentItems = leadQueueItems.filter((lead) => isSameDay(leadDate(lead), selectedDate));
+      const unfinished = leadQueueItems.filter((lead) => isBeforeDay(leadDate(lead), selectedDate) && !isLeadDone(lead));
       const actionable = [...currentItems.filter((lead) => !isLeadDone(lead)), ...unfinished]
         .filter((lead, index, list) => list.findIndex((item) => item.id === lead.id) === index)
         .filter((lead) => {
@@ -232,7 +234,7 @@ export function EmployeeOverviewDashboard() {
         total: currentItems.length + unfinished.length,
         completed: currentItems.filter(isLeadDone).length,
         carryOver: unfinished.length,
-        waiting: leads.filter((lead) => !isLeadDone(lead) && leadNeedsReply(lead)).length,
+        waiting: leadQueueItems.filter((lead) => !isLeadDone(lead) && leadNeedsReply(lead)).length,
         positiveCount,
         negativeCount,
       };

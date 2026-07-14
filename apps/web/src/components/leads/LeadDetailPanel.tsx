@@ -1,9 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useDashboardStore } from "@/stores/dashboard.store";
-import { PLATFORM_META } from "@/lib/services/dashboard";
+import {
+  getLeadOperationErrorMessage,
+  isOperationalRoutingSchemaError,
+  PLATFORM_META,
+} from "@/lib/services/dashboard";
 import { useAuth } from "@/hooks/useAuth";
 import { canPerformAction } from "@/lib/rbac";
 import { isSameBrandScope } from "@/lib/brandScope";
@@ -14,39 +18,13 @@ import {
   saveLeadReturnContext,
   type LeadDetailPanelTab,
 } from "@/lib/lead-return-context";
-import {
-  LABEL_CHANGE_REASON_OPTIONS,
-  LABEL_TOPICS,
-  SENTIMENT_LABELS,
-  TOPIC_LABELS,
-  URGENCY_LABELS,
-  INTENT_LABELS,
-  EMPTY_CLASSIFICATION_LABEL,
-  areClassificationLabelsEqual,
-  formatClassificationLabelSummary,
-  getLabelRequestStatusLabel,
-  getLabelRequestWorkflowLabel,
-  getPendingRerouteMessage,
-  getChangedLabelFields,
-  getLeadCurrentLabels,
-  getQueueLabel,
-  inferQueueFromLabels,
-  isPendingLeadRerouteRequest,
-  isClassificationLabelComplete,
-} from "@/lib/label-change";
 import type {
-  ClassificationLabel,
   DashboardFilters,
-  LabelIntent,
-  LabelSentiment,
-  LabelUrgency,
   Lead,
   Mention,
 } from "@/types/dashboard";
 import {
-  formatFollowUpTime,
   formatLeadSla,
-  getLeadContactActions,
   getLeadOwnershipMeta,
   getLeadSourceAction,
   getLeadWorkbenchMeta,
@@ -95,16 +73,6 @@ const RESULT_OPTIONS: Array<{
   { id: "not_fit", label: "Không phù hợp", icon: "block", status: "skipped" },
   { id: "converted", label: "Đã chuyển đổi", icon: "emoji_events", status: "completed" },
 ];
-
-function getPipelineLabel(lead: Lead, needsResult: boolean) {
-  if (needsResult) return "Cần ghi nhận kết quả";
-  if (lead.sales_status === "ready_to_transfer") return "Chờ chuyển sales";
-  if (lead.follow_up_at) return `Follow-up ${formatFollowUpTime(lead)}`;
-  if (lead.status === "new") return "Mới phát hiện";
-  if (lead.status === "processing") return "Đang tiếp cận";
-  if (lead.status === "completed") return "Đã chuyển đổi";
-  return "Không tiềm năng";
-}
 
 function toDateInputValue(dateIso?: string) {
   if (!dateIso) return "";
@@ -156,27 +124,19 @@ export function LeadDetailPanel({
   onCollapseToggle,
 }: LeadDetailPanelProps) {
   const { profile } = useAuth();
-  const {
-    updateLeadDetails,
-    createLabelChangeRequest,
-    updateLabelChangeRequest,
-    cancelLabelChangeRequest,
-    labelChangeRequests,
-  } = useDashboardStore();
+  const { updateLeadDetails } = useDashboardStore();
   const [internalActiveTab, setInternalActiveTab] = useState<PanelTab>("action");
   const [selectedResult, setSelectedResult] = useState<ResultAction | null>(null);
-  const [showLabelRequestForm, setShowLabelRequestForm] = useState(false);
-  const [requestedLabels, setRequestedLabels] =
-    useState<ClassificationLabel>(EMPTY_CLASSIFICATION_LABEL);
-  const [labelReason, setLabelReason] = useState("wrong_queue");
-  const [labelReasonNote, setLabelReasonNote] = useState("");
-  const [hasCheckedOriginal, setHasCheckedOriginal] = useState(false);
-  const [isSubmittingLabelRequest, setIsSubmittingLabelRequest] = useState(false);
-  const [cancelLabelRequestReason, setCancelLabelRequestReason] = useState("");
-  const [isCancellingLabelRequest, setIsCancellingLabelRequest] = useState(false);
-  const [showCancelLabelRequest, setShowCancelLabelRequest] = useState(false);
-  const [labelRequestMessage, setLabelRequestMessage] = useState("");
-  const [labelRequestError, setLabelRequestError] = useState("");
+  const [showTransferForm, setShowTransferForm] = useState(false);
+  const [transferReason, setTransferReason] = useState("");
+  const [transferNote, setTransferNote] = useState("");
+  const [isTransferring, setIsTransferring] = useState(false);
+  const [transferError, setTransferError] = useState("");
+  const [showSkipForm, setShowSkipForm] = useState(false);
+  const [skipReason, setSkipReason] = useState("");
+  const [skipNote, setSkipNote] = useState("");
+  const [isSkipping, setIsSkipping] = useState(false);
+  const [skipError, setSkipError] = useState("");
   const [note, setNote] = useState("");
   const [followUpDate, setFollowUpDate] = useState("");
   const [followUpTime, setFollowUpTime] = useState("");
@@ -218,40 +178,6 @@ export function LeadDetailPanel({
     [lead, mentionTarget, returnContext, returnToken],
   );
 
-  const currentLabels = useMemo(
-    () =>
-      lead
-        ? getLeadCurrentLabels(lead, mentionTarget?.matchedMention)
-        : EMPTY_CLASSIFICATION_LABEL,
-    [lead, mentionTarget?.matchedMention],
-  );
-
-  useEffect(() => {
-    if (!lead) return;
-    setRequestedLabels(currentLabels);
-    setShowLabelRequestForm(false);
-    setShowCancelLabelRequest(false);
-    setCancelLabelRequestReason("");
-    setLabelReason("wrong_queue");
-    setLabelReasonNote("");
-    setHasCheckedOriginal(false);
-    setLabelRequestMessage("");
-    setLabelRequestError("");
-  }, [currentLabels, lead?.id]);
-
-  const currentQueue = useMemo(
-    () => inferQueueFromLabels(currentLabels),
-    [currentLabels],
-  );
-  const requestedQueue = useMemo(
-    () => inferQueueFromLabels(requestedLabels),
-    [requestedLabels],
-  );
-  const changedLabelFields = useMemo(
-    () => getChangedLabelFields(currentLabels, requestedLabels),
-    [currentLabels, requestedLabels],
-  );
-
   if (!lead || !meta) {
     return (
       <aside className="flex min-w-0 shrink-0 flex-col self-start rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-bg-surface)] p-[3%] text-sm text-[var(--color-text-secondary)]">
@@ -260,66 +186,29 @@ export function LeadDetailPanel({
     );
   }
 
-  const pendingLabelRequest = labelChangeRequests.find(
-    (request) =>
-      request.status === "pending" &&
-      (request.lead_id === lead.id ||
-        request.source_id === lead.id ||
-        request.id === lead.pending_label_request_id ||
-        Boolean(
-          lead.mention_id && request.mention_id === lead.mention_id,
-        ) ||
-        Boolean(
-          lead.source_mention_id &&
-            request.mention_id === lead.source_mention_id,
-        )),
-  );
-  const latestRejectedLabelRequest = labelChangeRequests.find(
-    (request) =>
-      request.status === "rejected" &&
-      (request.lead_id === lead.id || request.source_id === lead.id),
-  );
-  const canCreateLabelRequestForBrand =
-    canPerformAction(profile, "create_label_request") &&
-    isSameBrandScope(profile, lead);
   const canEdit =
     isSameBrandScope(profile, lead) &&
     canPerformAction(profile, "update_lead_details");
   const ownership = getLeadOwnershipMeta(lead, profile);
-  const canRequestLabelChange =
-    canCreateLabelRequestForBrand && ownership.canWork;
-  const canRevisePendingLabelRequest =
-    canRequestLabelChange && pendingLabelRequest?.requested_by === profile?.uid;
-  const labelRequestUnavailableMessage = !canCreateLabelRequestForBrand
-    ? "Vai trò hiện tại chưa được cấp quyền gửi yêu cầu sửa nhãn."
-    : ownership.canClaim
-      ? "Hãy nhận xử lý lead này trước khi gửi yêu cầu sửa nhãn."
-      : "Chỉ người đang phụ trách lead này mới được gửi yêu cầu sửa nhãn.";
-  const isLeadWorkflowBlocked = isPendingLeadRerouteRequest(pendingLabelRequest);
-  const leadWorkflowBlockMessage =
-    getPendingRerouteMessage(pendingLabelRequest);
-  const canClaimLead = canEdit && !isLeadWorkflowBlocked;
-  const canOpenContactAction = ownership.canWork && !isLeadWorkflowBlocked;
+  const canClaimLead = canEdit;
   const canRecordResult =
     canEdit &&
     ownership.canWork &&
-    meta.needsResultCapture &&
-    !isLeadWorkflowBlocked;
-  const contactActions = getLeadContactActions(lead);
+    meta.needsResultCapture;
+  const canTransferBusiness =
+    canEdit &&
+    ownership.canWork &&
+    lead.status !== "completed" &&
+    lead.status !== "skipped";
+  const canSkipLead =
+    canEdit &&
+    (ownership.canClaim || ownership.canWork) &&
+    lead.status !== "completed" &&
+    lead.status !== "skipped";
   const sourceAction = getLeadSourceAction(lead);
   const platformMeta = PLATFORM_META[lead.platform];
   const priorityText =
     meta.priorityReasons.join(", ") || "Có tín hiệu quan tâm cần kiểm tra.";
-  const pendingLabelRequestKeepsLeadQueue =
-    Boolean(pendingLabelRequest) && !isLeadWorkflowBlocked;
-  const labelRequestPreview =
-    pendingLabelRequest && !showLabelRequestForm
-      ? pendingLabelRequest.requested_labels
-      : requestedLabels;
-  const labelRequestPreviewQueue =
-    pendingLabelRequest && !showLabelRequestForm
-      ? pendingLabelRequest.requested_queue
-      : requestedQueue;
 
   const getOwnerName = () =>
     profile?.displayName || profile?.email || "Nhân viên xử lý";
@@ -349,201 +238,154 @@ export function LeadDetailPanel({
     });
   };
 
-  const updateRequestedLabels = <K extends keyof ClassificationLabel>(
-    key: K,
-    value: ClassificationLabel[K],
-  ) => {
-    setRequestedLabels((current) => ({
-      ...current,
-      [key]: value,
-    }));
+  const handleOpenTransferForm = () => {
+    setShowTransferForm(true);
+    setShowSkipForm(false);
+    setTransferError("");
   };
 
-  const toggleRequestedTopic = (topic: ClassificationLabel["topic"][number]) => {
-    setRequestedLabels((current) => ({
-      ...current,
-      topic: current.topic.includes(topic)
-        ? current.topic.filter((item) => item !== topic)
-        : [...current.topic, topic],
-    }));
-  };
-
-  const openCreateLabelRequestForm = () => {
-    setRequestedLabels(currentLabels);
-    setLabelReason("wrong_queue");
-    setLabelReasonNote("");
-    setHasCheckedOriginal(false);
-    setShowCancelLabelRequest(false);
-    setLabelRequestError("");
-    setLabelRequestMessage("");
-    setShowLabelRequestForm(true);
-  };
-
-  const openEditLabelRequestForm = () => {
-    if (!pendingLabelRequest) return;
-    setRequestedLabels(pendingLabelRequest.requested_labels);
-    setLabelReason(pendingLabelRequest.reason_code || "wrong_queue");
-    setLabelReasonNote(pendingLabelRequest.reason_note || "");
-    setHasCheckedOriginal(pendingLabelRequest.evidence_checked);
-    setShowCancelLabelRequest(false);
-    setLabelRequestError("");
-    setLabelRequestMessage("");
-    setShowLabelRequestForm(true);
-  };
-
-  const closeLabelRequestForm = () => {
-    setShowLabelRequestForm(false);
-    setRequestedLabels(pendingLabelRequest?.requested_labels || currentLabels);
-    setLabelReason(pendingLabelRequest?.reason_code || "wrong_queue");
-    setLabelReasonNote(pendingLabelRequest?.reason_note || "");
-    setHasCheckedOriginal(Boolean(pendingLabelRequest?.evidence_checked));
-  };
-
-  const handleSubmitLabelRequest = async () => {
-    if (!canCreateLabelRequestForBrand || !profile) {
-      setLabelRequestError("Bạn không có quyền gửi yêu cầu sửa nhãn.");
+  const handleTransferToCrisis = async () => {
+    if (!profile || !canTransferBusiness) {
+      setTransferError(
+        ownership.canClaim
+          ? "Hãy nhận xử lý trước khi chuyển nghiệp vụ."
+          : "Chỉ người đang phụ trách mới có thể chuyển nghiệp vụ.",
+      );
       return;
     }
-
-    if (!ownership.canWork) {
-      setLabelRequestError(labelRequestUnavailableMessage);
-      return;
-    }
-
-    if (pendingLabelRequest && !canRevisePendingLabelRequest) {
-      setLabelRequestError("Lead này đang có yêu cầu sửa nhãn chờ duyệt.");
-      return;
-    }
-
-    if (areClassificationLabelsEqual(currentLabels, requestedLabels)) {
-      setLabelRequestError("Vui lòng thay đổi ít nhất một trường nhãn.");
-      return;
-    }
-
-    if (!isClassificationLabelComplete(requestedLabels)) {
-      setLabelRequestError("Vui lòng chọn đủ cảm xúc, liên quan, mức độ và intent.");
-      return;
-    }
-
-    if (!hasCheckedOriginal) {
-      setLabelRequestError("Vui lòng xác nhận đã kiểm tra bài viết gốc.");
-      return;
-    }
-
-    if (labelReason === "other" && labelReasonNote.trim().length < 8) {
-      setLabelRequestError("Vui lòng mô tả rõ lý do sửa nhãn.");
+    if (!transferReason) {
+      setTransferError("Vui lòng chọn lý do chuyển nghiệp vụ.");
       return;
     }
 
     try {
-      setIsSubmittingLabelRequest(true);
-      setLabelRequestError("");
-      setLabelRequestMessage("");
+      setIsTransferring(true);
+      setTransferError("");
+      const nowIso = new Date().toISOString();
+      const transferEvent: NonNullable<Lead["transfer_history"]>[number] = {
+        from: lead.operational_queue || "lead",
+        to: "crisis",
+        reason: transferReason,
+        note: transferNote.trim() || undefined,
+        transferred_by: profile.uid,
+        transferred_by_name: getOwnerName(),
+        transferred_at: nowIso,
+        owner_before: lead.owner_name || lead.owner_email || undefined,
+        owner_after: undefined,
+      };
+      const transferData: Partial<Lead> = {
+        operational_queue: "crisis",
+        previous_operational_queue: lead.operational_queue || "lead",
+        transfer_reason: transferReason,
+        transfer_note: transferNote.trim() || undefined,
+        transferred_by: profile.uid,
+        transferred_by_name: getOwnerName(),
+        transferred_at: nowIso,
+        transfer_count: (lead.transfer_count || 0) + 1,
+        transfer_history: [...(lead.transfer_history || []), transferEvent],
+        last_action_at: nowIso,
+        last_action_type: "transfer_business",
+        pending_result: false,
+        owner_id: null,
+        owner_name: null,
+        owner_email: null,
+        assigned_at: null,
+        assigned_by: null,
+        claimed_at: null,
+      };
 
-      if (pendingLabelRequest) {
-        await updateLabelChangeRequest(
-          pendingLabelRequest.id,
-          {
-            requested_labels: requestedLabels,
-            changed_fields: changedLabelFields,
-            requested_queue: requestedQueue,
-            reason_code: labelReason,
-            reason_note: labelReasonNote.trim(),
-            evidence_checked: true,
-          },
-          profile,
+      await updateLeadDetails(lead.id, transferData, profile);
+      onStartedAction?.({ ...lead, ...transferData });
+      setShowTransferForm(false);
+      setTransferReason("");
+      setTransferNote("");
+      showToast("Đã chuyển item sang nghiệp vụ khủng hoảng.", "success");
+      window.setTimeout(() => {
+        window.location.assign("/alerts?tab=priority");
+      }, 700);
+    } catch (error: any) {
+      console.error(error);
+      if (isOperationalRoutingSchemaError(error)) {
+        setTransferError(
+          "Hệ thống chưa hoàn tất cấu hình chuyển nghiệp vụ. Vui lòng liên hệ quản trị viên.",
         );
-      } else {
-        await createLabelChangeRequest(
-          {
-            source_type: "lead",
-            source_id: lead.id,
-            lead_id: lead.id,
-            mention_id:
-              mentionTarget?.matchedMention?.id ||
-              lead.mention_id ||
-              lead.source_mention_id ||
-              mentionTarget?.detailId ||
-              undefined,
-            workspace_id: lead.workspace_id,
-            platform: lead.platform,
-            author: lead.author,
-            content_preview: lead.content.slice(0, 300),
-            source_url:
-              lead.source_url ||
-              lead.url ||
-              mentionTarget?.fallbackUrl ||
-              undefined,
-            current_labels: currentLabels,
-            requested_labels: requestedLabels,
-            changed_fields: changedLabelFields,
-            current_queue: currentQueue,
-            requested_queue: requestedQueue,
-            reason_code: labelReason,
-            reason_note: labelReasonNote.trim(),
-            evidence_checked: true,
-          },
-          profile,
-        );
+        return;
       }
-
-      setShowLabelRequestForm(false);
-      setHasCheckedOriginal(false);
-      setLabelReasonNote("");
-      setLabelRequestMessage(
-        pendingLabelRequest
-          ? "Đã cập nhật yêu cầu sửa nhãn đang chờ duyệt."
-          : requestedQueue !== currentQueue
-          ? "Đã gửi yêu cầu sửa nhãn. Nếu quản lý duyệt, item sẽ được chuyển sang queue phù hợp."
-          : "Đã gửi yêu cầu sửa nhãn cho quản lý duyệt.",
+      setTransferError(
+        getLeadOperationErrorMessage(
+          error,
+          "Không thể chuyển nghiệp vụ. Vui lòng thử lại.",
+        ),
       );
-    } catch (error) {
-      console.error(error);
-      setLabelRequestError("Không thể gửi yêu cầu sửa nhãn. Vui lòng thử lại.");
     } finally {
-      setIsSubmittingLabelRequest(false);
+      setIsTransferring(false);
     }
   };
 
-  const handleCancelLabelRequest = async () => {
-    if (!pendingLabelRequest || !profile) return;
-    if (!canRevisePendingLabelRequest) {
-      setLabelRequestError("Chỉ người tạo yêu cầu mới được gỡ yêu cầu này.");
+  const handleSkipLead = async () => {
+    if (!profile || !canSkipLead) {
+      setSkipError("Bạn không có quyền bỏ qua item này.");
       return;
     }
-    if (cancelLabelRequestReason.trim().length < 5) {
-      setLabelRequestError("Vui lòng nhập lý do gỡ yêu cầu.");
+    if (!skipReason) {
+      setSkipError("Vui lòng chọn lý do bỏ qua.");
       return;
     }
 
     try {
-      setIsCancellingLabelRequest(true);
-      setLabelRequestError("");
-      setLabelRequestMessage("");
-      await cancelLabelChangeRequest(
-        pendingLabelRequest.id,
-        cancelLabelRequestReason.trim(),
-        profile,
-      );
-      setShowCancelLabelRequest(false);
-      setShowLabelRequestForm(false);
-      setCancelLabelRequestReason("");
-      setRequestedLabels(currentLabels);
-      setLabelRequestMessage("Đã gỡ yêu cầu sửa nhãn.");
+      setIsSkipping(true);
+      setSkipError("");
+      const nowIso = new Date().toISOString();
+      const reasonLabel =
+        {
+          not_relevant: "Không liên quan",
+          spam: "Spam/quảng cáo",
+          duplicate: "Trùng lặp",
+          not_a_lead: "Không phải khách hàng tiềm năng",
+          other: "Lý do khác",
+        }[skipReason] || skipReason;
+      const nextNote = [
+        lead.notes,
+        `[Bỏ qua] ${new Date().toLocaleString("vi-VN")} - ${reasonLabel}${skipNote.trim() ? `: ${skipNote.trim()}` : ""}`,
+      ]
+        .filter(Boolean)
+        .join("\n");
+      const skipData: Partial<Lead> = {
+        status: "skipped",
+        result_type: "not_fit",
+        notes: nextNote,
+        pending_result: false,
+        result_recorded_at: nowIso,
+        closed_at: nowIso,
+        last_action_at: nowIso,
+        last_action_type: "skip",
+        owner_id: lead.owner_id || profile.uid,
+        owner_name: lead.owner_name || getOwnerName(),
+        owner_email: lead.owner_email || profile.email,
+      };
+
+      await updateLeadDetails(lead.id, skipData, profile);
+      onStartedAction?.({ ...lead, ...skipData });
+      setShowSkipForm(false);
+      setSkipReason("");
+      setSkipNote("");
+      onAfterResult?.();
+      showToast("Đã bỏ qua item và lưu lý do.", "success");
     } catch (error) {
       console.error(error);
-      setLabelRequestError("Không thể gỡ yêu cầu sửa nhãn. Vui lòng thử lại.");
+      setSkipError(
+        getLeadOperationErrorMessage(
+          error,
+          "Không thể bỏ qua item này. Vui lòng thử lại.",
+        ),
+      );
     } finally {
-      setIsCancellingLabelRequest(false);
+      setIsSkipping(false);
     }
   };
 
   const handleClaim = async () => {
     if (!canEdit || !profile) return;
-    if (isLeadWorkflowBlocked) {
-      setSaveError(leadWorkflowBlockMessage);
-      return;
-    }
 
     try {
       setSaveError("");
@@ -562,22 +404,19 @@ export function LeadDetailPanel({
       showToast("Nhận xử lý lead thành công!", "success");
     } catch (error: any) {
       console.error(error);
-      setSaveError("Không thể nhận xử lý lead này.");
-      showToast(`Nhận xử lý thất bại: ${error?.message || "Lỗi kết nối"}`, "error");
+      const message = getLeadOperationErrorMessage(
+        error,
+        "Không thể nhận xử lý lead này.",
+      );
+      setSaveError(message);
+      showToast(message, "error");
     }
   };
 
-  const handleOpenAction = async (action: LeadActionLink) => {
-    if (isLeadWorkflowBlocked) {
-      if (action.isContact) {
-        setSaveError(leadWorkflowBlockMessage);
-        return;
-      }
-
-      window.open(action.href, "_blank", "noopener,noreferrer");
-      return;
-    }
-
+  const handleOpenAction = async (
+    action: LeadActionLink,
+    countAsContact = action.isContact,
+  ) => {
     if (!ownership.canWork) {
       setSaveError(
         ownership.canClaim
@@ -592,19 +431,19 @@ export function LeadDetailPanel({
       setIsOpening(action.label);
 
       const actionData: Partial<Lead> = {
-        status: action.isContact && lead.status === "new" ? "processing" : lead.status,
+        status: countAsContact && lead.status === "new" ? "processing" : lead.status,
         last_action_at: new Date().toISOString(),
         last_action_type: action.actionType,
         last_contact_channel: action.channel,
       };
 
-      if (action.isContact) {
+      if (countAsContact) {
         actionData.pending_result = true;
       } else if (lead.pending_result !== undefined) {
         actionData.pending_result = lead.pending_result;
       }
 
-      if (action.isContact) {
+      if (countAsContact) {
         actionData.contact_attempts = (lead.contact_attempts || 0) + 1;
         actionData.last_contact_at = new Date().toISOString();
         actionData.first_contacted_at =
@@ -620,7 +459,12 @@ export function LeadDetailPanel({
       window.open(action.href, "_blank", "noopener,noreferrer");
     } catch (error) {
       console.error(error);
-      setSaveError("Không thể ghi nhận thao tác trước khi mở nguồn/liên hệ.");
+      setSaveError(
+        getLeadOperationErrorMessage(
+          error,
+          "Không thể ghi nhận thao tác trước khi mở nguồn/liên hệ.",
+        ),
+      );
     } finally {
       setIsOpening("");
     }
@@ -632,11 +476,7 @@ export function LeadDetailPanel({
     if (!option) return;
 
     if (!canRecordResult) {
-      setSaveError(
-        isLeadWorkflowBlocked
-          ? leadWorkflowBlockMessage
-          : "Hãy liên hệ khách trước khi ghi nhận kết quả.",
-      );
+      setSaveError("Hãy liên hệ khách trước khi ghi nhận kết quả.");
       return;
     }
 
@@ -690,8 +530,12 @@ export function LeadDetailPanel({
       showToast("Ghi nhận kết quả thành công!", "success");
     } catch (error: any) {
       console.error(error);
-      setSaveError("Không thể lưu kết quả xử lý.");
-      showToast(`Không thể ghi nhận kết quả: ${error?.message || "Lỗi kết nối"}`, "error");
+      const message = getLeadOperationErrorMessage(
+        error,
+        "Không thể lưu kết quả xử lý.",
+      );
+      setSaveError(message);
+      showToast(message, "error");
     } finally {
       setIsSaving(false);
     }
@@ -777,662 +621,163 @@ export function LeadDetailPanel({
         className="flex-1 p-[2%]"
       >
         {activeTab === "action" && (
-          <div className="space-y-2">
-            <section data-tour="lead-detail-owner" className="rounded-xl border border-[var(--color-border)] p-2.5">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <p className="text-[13px] font-bold text-[var(--color-text-primary)]">
-                    Người phụ trách
-                  </p>
-                  <p className="mt-0.5 truncate text-sm text-[var(--color-text-secondary)]">
-                    {ownership.ownerName}
-                  </p>
+          <div className="space-y-2.5">
+            <section data-tour="lead-detail-owner" className="rounded-lg border border-[var(--color-border)] p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-bold uppercase text-[var(--color-text-muted)]">Người phụ trách</p>
+                  <p className="mt-1 truncate text-sm font-semibold text-[var(--color-text-primary)]">{ownership.ownerName}</p>
                 </div>
-                <span
-                  className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-bold ${
-                    ownership.status === "assigned_to_me"
-                      ? "border-[var(--color-success)]/30 bg-[var(--color-success-subtle)] text-[var(--color-success)]"
-                      : ownership.status === "unassigned"
-                        ? "border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] text-[var(--color-warning)]"
-                        : "border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]"
-                  }`}
-                >
-                  {ownership.label}
-                </span>
+                <span className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-bold ${
+                  ownership.status === "assigned_to_me"
+                    ? "border-[var(--color-success)]/30 bg-[var(--color-success-subtle)] text-[var(--color-success)]"
+                    : ownership.status === "unassigned"
+                      ? "border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] text-[var(--color-warning)]"
+                      : "border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]"
+                }`}>{ownership.label}</span>
               </div>
               {ownership.canClaim && (
-                <button
-                  type="button"
-                  data-tour="lead-detail-claim-button"
-                  onClick={handleClaim}
-                  disabled={!canClaimLead}
-                  className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-3 py-1.5 text-sm font-bold text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <span className="material-symbols-outlined text-base">
-                    person_add
-                  </span>
+                <button type="button" data-tour="lead-detail-claim-button" onClick={handleClaim} disabled={!canClaimLead} className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50">
+                  <span className="material-symbols-outlined text-lg">person_add</span>
                   Nhận xử lý lead này
                 </button>
               )}
             </section>
 
-            {isLeadWorkflowBlocked && (
-              <section className="rounded-xl border border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] p-2.5">
-                <div className="flex items-start gap-2">
-                  <span className="material-symbols-outlined text-base text-[var(--color-warning)]">
-                    lock_clock
-                  </span>
-                  <div>
-                    <p className="text-[13px] font-bold text-[var(--color-text-primary)]">
-                      Tạm khóa xử lý lead
-                    </p>
-                    <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--color-text-secondary)]">
-                      {leadWorkflowBlockMessage}
-                    </p>
-                    <p className="mt-1 line-clamp-1 text-xs font-semibold text-[var(--color-text-secondary)]">
-                      Bạn vẫn có thể xem chi tiết đề cập, mở bài gốc và theo dõi lịch sử duyệt nhãn.
-                    </p>
-                  </div>
+            <section className="rounded-lg border border-amber-300 bg-amber-50/70 p-3 dark:border-amber-800 dark:bg-amber-950/20">
+              <div className="flex items-start gap-2.5">
+                <span className="material-symbols-outlined text-xl text-amber-500">star</span>
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-[var(--color-text-primary)]">Lý do ưu tiên</p>
+                  <p className="mt-1 text-sm leading-6 text-[var(--color-text-secondary)]">{priorityText}</p>
                 </div>
-              </section>
-            )}
-
-            {pendingLabelRequestKeepsLeadQueue && (
-              <section className="rounded-xl border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)]/30 p-2.5">
-                <div className="flex items-start gap-2">
-                  <span className="material-symbols-outlined text-base text-[var(--color-brand)]">
-                    pending_actions
-                  </span>
-                  <div>
-                    <p className="text-[13px] font-bold text-[var(--color-text-primary)]">
-                      Có yêu cầu sửa nhãn chờ duyệt
-                    </p>
-                    <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--color-text-secondary)]">
-                      Request này vẫn giữ item trong queue tiềm năng, nên bạn có thể tiếp tục chăm sóc và ghi nhận kết quả.
-                    </p>
-                  </div>
-                </div>
-              </section>
-            )}
-
-            {meta.needsResultCapture && (
-              <section className="rounded-xl border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)]/40 p-2.5">
-                <div className="flex items-start gap-2">
-                  <span className="material-symbols-outlined text-base text-[var(--color-brand)]">
-                    assignment_turned_in
-                  </span>
-                  <div>
-                    <p className="text-[13px] font-bold text-[var(--color-text-primary)]">
-                      Đang chờ ghi nhận kết quả
-                    </p>
-                    <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--color-text-secondary)]">
-                      Bạn đã mở nguồn/liên hệ với khách này. Hãy chọn kết quả bên dưới để hệ thống chuyển lead sang đúng nhóm.
-                    </p>
-                  </div>
-                </div>
-              </section>
-            )}
-
-            <section className="rounded-xl border border-[var(--color-border)] p-2.5">
-              <p className="text-[13px] font-bold text-[var(--color-text-primary)]">
-                Lý do ưu tiên
-              </p>
-              <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--color-text-secondary)]">
-                {priorityText}
-              </p>
+              </div>
             </section>
 
-            <section data-tour="lead-detail-label-request" className="rounded-xl border border-[var(--color-border)] p-2.5">
-              <div className="flex items-start justify-between gap-2">
+            <section className="rounded-lg border border-[var(--color-border)] p-3">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-xl text-[var(--color-brand)]">chat_bubble</span>
+                <p className="text-sm font-bold text-[var(--color-text-primary)]">Nội dung cần xử lý</p>
+              </div>
+              <p className="mt-2 whitespace-pre-wrap break-words rounded-lg bg-[var(--color-bg-surface-raised)] p-3 text-sm leading-6 text-[var(--color-text-primary)]">{lead.content}</p>
+              <p className="mt-2 text-xs text-[var(--color-text-muted)]">{new Date(lead.created_at).toLocaleString("vi-VN")}</p>
+            </section>
+
+            <section data-tour="lead-detail-source-actions" className="rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)]/20 p-3">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-xl text-[var(--color-brand)]">call</span>
                 <div>
-                  <p className="text-[13px] font-bold text-[var(--color-text-primary)]">
-                    Kiểm tra nhãn
-                  </p>
-                  <p className="mt-0.5 line-clamp-1 text-xs text-[var(--color-text-secondary)]">
-                    Gửi yêu cầu cho quản lý khi phát hiện sai nhãn hoặc sai queue.
-                  </p>
+                  <p className="text-sm font-bold text-[var(--color-text-primary)]">Cách thức liên hệ / xử lý</p>
+                  <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">Mở đúng nguồn để xử lý, hoặc xem thêm bối cảnh của khách hàng.</p>
                 </div>
-                {pendingLabelRequest ? (
-                  <span className="shrink-0 rounded-full border border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] px-2.5 py-1 text-xs font-bold text-[var(--color-warning)]">
-                    Chờ duyệt
-                  </span>
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {sourceAction ? (
+                  <button type="button" disabled={!ownership.canWork || Boolean(isOpening)} onClick={() => handleOpenAction(sourceAction, true)} className="inline-flex min-w-0 items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-2 py-2.5 text-sm font-bold text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50">
+                    <span className="material-symbols-outlined shrink-0 text-lg">open_in_new</span>
+                    <span className="truncate">{isOpening === sourceAction.label ? "Đang mở..." : "Mở nguồn"}</span>
+                  </button>
+                ) : mentionDetailHref ? (
+                  <Link href={mentionDetailHref} onClick={handleOpenMentionDetail} className="inline-flex min-w-0 items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-2 py-2.5 text-sm font-bold text-white transition hover:bg-[var(--color-brand-hover)]">
+                    <span className="material-symbols-outlined shrink-0 text-lg">open_in_new</span>
+                    <span className="truncate">Mở nguồn</span>
+                  </Link>
                 ) : (
-                  <span className="shrink-0 rounded-full border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-2.5 py-1 text-xs font-bold text-[var(--color-text-secondary)]">
-                    {canRequestLabelChange ? "Có thể yêu cầu" : "Cần nhận xử lý"}
-                  </span>
+                  <button type="button" disabled className="inline-flex min-w-0 items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-2 py-2.5 text-sm font-bold text-white opacity-40">
+                    <span className="material-symbols-outlined shrink-0 text-lg">open_in_new</span>
+                    <span className="truncate">Mở nguồn</span>
+                  </button>
                 )}
-              </div>
-
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                <div className="min-w-0 rounded-lg bg-[var(--color-bg-surface-raised)] p-2">
-                  <p className="text-[11px] font-bold uppercase text-[var(--color-text-muted)]">
-                    Nhãn hiện tại
-                  </p>
-                  <p className="mt-1 line-clamp-3 text-xs font-bold leading-5 text-[var(--color-text-primary)]">
-                    {formatClassificationLabelSummary(currentLabels)}
-                  </p>
-                  <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
-                    Queue: {getQueueLabel(currentQueue)}
-                  </p>
-                </div>
-                <div className="min-w-0 rounded-lg bg-[var(--color-bg-surface-raised)] p-2">
-                  <p className="text-[11px] font-bold uppercase text-[var(--color-text-muted)]">
-                    Nếu duyệt
-                  </p>
-                  <p className="mt-1 line-clamp-3 text-xs font-bold leading-5 text-[var(--color-text-primary)]">
-                    {formatClassificationLabelSummary(labelRequestPreview)}
-                  </p>
-                  <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
-                    Queue: {getQueueLabel(labelRequestPreviewQueue)}
-                  </p>
-                </div>
-              </div>
-
-              {pendingLabelRequest && (
-                <details className="mt-2 rounded-lg bg-[var(--color-warning-subtle)] p-2.5 text-xs text-[var(--color-text-primary)]">
-                  <summary className="cursor-pointer font-bold text-[var(--color-text-primary)]">
-                    Chi tiết yêu cầu chờ duyệt
-                  </summary>
-                  <p className="mt-2 line-clamp-3 leading-5">
-                    {isLeadWorkflowBlocked
-                      ? leadWorkflowBlockMessage
-                      : `Yêu cầu sửa thành ${formatClassificationLabelSummary(pendingLabelRequest.requested_labels)} đang chờ quản lý duyệt. Lead vẫn có thể được xử lý vì queue không đổi khỏi tiềm năng.`}
-                  </p>
-                  <dl className="mt-2 grid grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <dt className="font-bold text-[var(--color-text-muted)]">
-                        Trạng thái
-                      </dt>
-                      <dd className="mt-1 font-semibold text-[var(--color-text-primary)]">
-                        {getLabelRequestStatusLabel(pendingLabelRequest.status)} · {getLabelRequestWorkflowLabel(pendingLabelRequest)}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="font-bold text-[var(--color-text-muted)]">
-                        Queue
-                      </dt>
-                      <dd className="mt-1 font-semibold text-[var(--color-text-primary)]">
-                        {getQueueLabel(pendingLabelRequest.current_queue)} → {getQueueLabel(pendingLabelRequest.requested_queue)}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="font-bold text-[var(--color-text-muted)]">
-                        Người gửi
-                      </dt>
-                      <dd className="mt-1 font-semibold text-[var(--color-text-primary)]">
-                        {pendingLabelRequest.requested_by_name || "Không rõ"}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="font-bold text-[var(--color-text-muted)]">
-                        Thời điểm gửi
-                      </dt>
-                      <dd className="mt-1 font-semibold text-[var(--color-text-primary)]">
-                        {new Date(pendingLabelRequest.requested_at).toLocaleString("vi-VN")}
-                      </dd>
-                    </div>
-                  </dl>
-                  {canRevisePendingLabelRequest && (
-                    <div className="mt-2 grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={openEditLabelRequestForm}
-                        className="rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-bg-surface)] px-2 py-1.5 text-xs font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-brand-subtle)]"
-                      >
-                        Chỉnh sửa yêu cầu
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowLabelRequestForm(false);
-                          setShowCancelLabelRequest((current) => !current);
-                          setLabelRequestError("");
-                          setLabelRequestMessage("");
-                        }}
-                        className="rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-bg-surface)] px-2 py-1.5 text-xs font-bold text-[var(--color-error)] transition hover:bg-[var(--color-error-subtle)]"
-                      >
-                        Gỡ yêu cầu
-                      </button>
-                    </div>
-                  )}
-                </details>
-              )}
-
-              {showCancelLabelRequest && pendingLabelRequest && canRevisePendingLabelRequest && (
-                <div className="mt-3 space-y-3 rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-error-subtle)]/40 p-3">
-                  <p className="text-sm font-bold text-[var(--color-text-primary)]">
-                    Gỡ yêu cầu sửa nhãn
-                  </p>
-                  <textarea
-                    value={cancelLabelRequestReason}
-                    onChange={(event) => setCancelLabelRequestReason(event.target.value)}
-                    placeholder="Nhập lý do gỡ yêu cầu, ví dụ: gửi nhầm lead hoặc đã kiểm tra lại bài gốc..."
-                    className="min-h-[72px] w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-3 text-sm text-[var(--color-text-primary)] outline-none focus:border-[var(--color-error)]"
-                  />
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowCancelLabelRequest(false);
-                        setCancelLabelRequestReason("");
-                      }}
-                      className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm font-bold text-[var(--color-text-primary)]"
-                    >
-                      Không gỡ
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleCancelLabelRequest}
-                      disabled={isCancellingLabelRequest}
-                      className="rounded-lg bg-[var(--color-error)] px-3 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {isCancellingLabelRequest ? "Đang gỡ..." : "Xác nhận gỡ"}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {!pendingLabelRequest && latestRejectedLabelRequest && (
-                <p className="mt-3 rounded-lg bg-[var(--color-error-subtle)] p-3 text-sm text-[var(--color-text-primary)]">
-                  Yêu cầu gần nhất đã bị từ chối{latestRejectedLabelRequest.review_note ? `: ${latestRejectedLabelRequest.review_note}` : "."}
-                </p>
-              )}
-
-              {labelRequestMessage && (
-                <p className="mt-3 rounded-lg bg-[var(--color-success-subtle)] p-3 text-sm font-semibold text-[var(--color-success)]">
-                  {labelRequestMessage}
-                </p>
-              )}
-
-              {labelRequestError && (
-                <p className="mt-3 rounded-lg bg-[var(--color-error-subtle)] p-3 text-sm font-semibold text-[var(--color-error)]">
-                  {labelRequestError}
-                </p>
-              )}
-
-              {!pendingLabelRequest && canRequestLabelChange && !showLabelRequestForm && (
-                <button
-                  type="button"
-                  onClick={openCreateLabelRequestForm}
-                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--color-brand-border)] px-3 py-2 text-sm font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-brand-subtle)]"
-                >
-                  <span className="material-symbols-outlined text-base">
-                    new_label
-                  </span>
-                  Yêu cầu sửa nhãn
+                <button type="button" onClick={() => handleTabChange("profile")} className="inline-flex min-w-0 items-center justify-center gap-2 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-bg-surface)] px-2 py-2.5 text-sm font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-brand-subtle)]">
+                  <span className="material-symbols-outlined shrink-0 text-lg">person</span>
+                  <span className="truncate">Xem hồ sơ</span>
                 </button>
-              )}
-
-              {!pendingLabelRequest && !canRequestLabelChange && (
-                <p className="mt-3 rounded-lg bg-[var(--color-bg-surface-raised)] p-3 text-sm text-[var(--color-text-secondary)]">
-                  {labelRequestUnavailableMessage}
-                </p>
-              )}
-
-              {showLabelRequestForm && (!pendingLabelRequest || canRevisePendingLabelRequest) && (
-                <div className="mt-3 space-y-3 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)]/20 p-3">
-                  <label className="block text-xs font-bold text-[var(--color-text-secondary)]">
-                    Cảm xúc
-                    <select
-                      value={requestedLabels.sentiment || ""}
-                      onChange={(event) =>
-                        updateRequestedLabels(
-                          "sentiment",
-                          (event.target.value || null) as LabelSentiment | null,
-                        )
-                      }
-                      className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]"
-                    >
-                      <option value="">-- Cảm xúc</option>
-                      {Object.entries(SENTIMENT_LABELS).map(([value, label]) => (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <div>
-                    <p className="text-xs font-bold text-[var(--color-text-secondary)]">
-                      Chủ đề
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {LABEL_TOPICS.map((topic) => (
-                        <button
-                          key={topic}
-                          type="button"
-                          onClick={() => toggleRequestedTopic(topic)}
-                          className={`rounded-full border px-3 py-1 text-xs font-bold ${
-                            requestedLabels.topic.includes(topic)
-                              ? "border-[var(--color-brand)] bg-[var(--color-brand-subtle)] text-[var(--color-brand)]"
-                              : "border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)]"
-                          }`}
-                        >
-                          {TOPIC_LABELS[topic]}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <label className="block text-xs font-bold text-[var(--color-text-secondary)]">
-                    Liên quan thương hiệu
-                    <select
-                      value={
-                        requestedLabels.relevance === null
-                          ? ""
-                          : requestedLabels.relevance
-                            ? "yes"
-                            : "no"
-                      }
-                      onChange={(event) => {
-                        const value = event.target.value;
-                        updateRequestedLabels(
-                          "relevance",
-                          value === "" ? null : value === "yes",
-                        );
-                      }}
-                      className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]"
-                    >
-                      <option value="">-- Liên quan</option>
-                      <option value="yes">Có</option>
-                      <option value="no">Không</option>
-                    </select>
-                  </label>
-
-                  <label className="block text-xs font-bold text-[var(--color-text-secondary)]">
-                    Mức độ
-                    <select
-                      value={requestedLabels.urgency || ""}
-                      onChange={(event) =>
-                        updateRequestedLabels(
-                          "urgency",
-                          (event.target.value || null) as LabelUrgency | null,
-                        )
-                      }
-                      className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]"
-                    >
-                      <option value="">-- Mức độ</option>
-                      {Object.entries(URGENCY_LABELS).map(([value, label]) => (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="block text-xs font-bold text-[var(--color-text-secondary)]">
-                    Intent
-                    <select
-                      value={requestedLabels.intent || ""}
-                      onChange={(event) =>
-                        updateRequestedLabels(
-                          "intent",
-                          (event.target.value || null) as LabelIntent | null,
-                        )
-                      }
-                      className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]"
-                    >
-                      <option value="">-- Intent</option>
-                      {Object.entries(INTENT_LABELS).map(([value, label]) => (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  {changedLabelFields.length > 0 && (
-                    <p className="rounded-lg bg-[var(--color-bg-surface)] p-3 text-xs leading-5 text-[var(--color-text-secondary)]">
-                      Trường đã sửa: {changedLabelFields.join(", ")}
-                    </p>
-                  )}
-
-                  <label className="block text-xs font-bold text-[var(--color-text-secondary)]">
-                    Lý do
-                    <select
-                      value={labelReason}
-                      onChange={(event) => setLabelReason(event.target.value)}
-                      className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]"
-                    >
-                      {LABEL_CHANGE_REASON_OPTIONS.map((reason) => (
-                        <option key={reason.value} value={reason.value}>
-                          {reason.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <textarea
-                    value={labelReasonNote}
-                    onChange={(event) => setLabelReasonNote(event.target.value)}
-                    placeholder="Mô tả ngắn căn cứ sửa nhãn..."
-                    className="min-h-[72px] w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-3 text-sm text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]"
-                  />
-
-                  <label className="flex items-start gap-2 text-sm font-medium text-[var(--color-text-primary)]">
-                    <input
-                      type="checkbox"
-                      checked={hasCheckedOriginal}
-                      onChange={(event) =>
-                        setHasCheckedOriginal(event.target.checked)
-                      }
-                      className="mt-1"
-                    />
-                    <span>
-                      Tôi đã kiểm tra bài viết gốc/chi tiết đề cập trước khi gửi yêu cầu.
-                    </span>
-                  </label>
-
-                  {requestedQueue !== currentQueue && (
-                    <p className="rounded-lg bg-[var(--color-warning-subtle)] p-3 text-xs leading-5 text-[var(--color-text-primary)]">
-                      Yêu cầu này có thể chuyển item từ queue {getQueueLabel(currentQueue)} sang {getQueueLabel(requestedQueue)} sau khi quản lý duyệt.
-                    </p>
-                  )}
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={closeLabelRequestForm}
-                      className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm font-bold text-[var(--color-text-primary)]"
-                    >
-                      Hủy
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSubmitLabelRequest}
-                      disabled={isSubmittingLabelRequest}
-                      className="rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {isSubmittingLabelRequest
-                        ? "Đang gửi..."
-                        : pendingLabelRequest
-                          ? "Cập nhật yêu cầu"
-                          : "Gửi quản lý"}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </section>
-
-            <details data-tour="lead-detail-extra-actions" className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-2.5">
-              <summary className="cursor-pointer text-[13px] font-bold text-[var(--color-text-primary)]">
-                Thông tin & thao tác bổ sung
-              </summary>
-              <div className="mt-2 space-y-2">
-            <section className="rounded-xl border border-[var(--color-border)] p-2.5">
-              <p className="text-sm font-bold text-[var(--color-text-primary)]">
-                Nội dung gần nhất
-              </p>
-              <p className="mt-2 line-clamp-3 rounded-lg bg-[var(--color-bg-surface-raised)] p-2.5 text-xs leading-5 text-[var(--color-text-primary)]">
-                {lead.content}
-              </p>
-            </section>
-
-            <section data-tour="lead-detail-source-actions" className="rounded-xl border border-[var(--color-border)] p-2.5">
-              <p className="text-sm font-bold text-[var(--color-text-primary)]">
-                Nguồn lead
-              </p>
-              {mentionTarget?.canOpenMentionDetail && mentionDetailHref ? (
-                <Link
-                  href={mentionDetailHref}
-                  onClick={handleOpenMentionDetail}
-                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold text-white transition hover:bg-[var(--color-brand-hover)]"
-                >
-                  <span className="material-symbols-outlined text-base">
-                    article
-                  </span>
-                  Xem chi tiết đề cập
-                </Link>
-              ) : (
-                <p className="mt-3 rounded-lg bg-[var(--color-bg-surface-raised)] p-3 text-sm text-[var(--color-text-secondary)]">
-                  Chưa tìm thấy bản ghi đề cập trong hệ thống.
-                </p>
-              )}
-
-              {sourceAction ? (
-                <button
-                  type="button"
-                  onClick={() => handleOpenAction(sourceAction)}
-                  className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-brand-subtle)]"
-                >
-                  <span className="material-symbols-outlined text-base">
-                    {sourceAction.icon}
-                  </span>
-                  {isOpening === sourceAction.label ? "Đang mở..." : "Mở nguồn bên ngoài"}
+                <button type="button" onClick={() => handleTabChange("history")} className="inline-flex min-w-0 items-center justify-center gap-2 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-bg-surface)] px-2 py-2.5 text-sm font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-brand-subtle)]">
+                  <span className="material-symbols-outlined shrink-0 text-lg">history</span>
+                  <span className="truncate">Xem lịch sử</span>
                 </button>
-              ) : (
-                !mentionTarget?.canOpenMentionDetail && (
-                  <p className="mt-2 rounded-lg bg-[var(--color-bg-surface-raised)] p-3 text-sm text-[var(--color-text-secondary)]">
-                    Lead này chưa có đường dẫn nguồn.
-                  </p>
-                )
-              )}
-            </section>
-
-            <section data-tour="lead-detail-contact-actions" className="rounded-xl border border-[var(--color-border)] p-2.5">
-              <p className="text-sm font-bold text-[var(--color-text-primary)]">
-                Kênh liên hệ
-              </p>
-              {contactActions.length > 0 ? (
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  {contactActions.map((action, index) => (
-                    <button
-                      key={action.label}
-                      type="button"
-                      disabled={!canOpenContactAction}
-                      onClick={() => handleOpenAction(action)}
-                      className={`inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-bold transition ${
-                        index === 0
-                          ? "bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand-hover)]"
-                          : "border border-[var(--color-border)] text-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)]"
-                      } disabled:cursor-not-allowed disabled:opacity-50`}
-                    >
-                      <span className="material-symbols-outlined text-base">
-                        {action.icon}
-                      </span>
-                      {isOpening === action.label ? "Đang mở..." : action.label}
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-2 rounded-lg bg-[var(--color-bg-surface-raised)] p-3 text-sm text-[var(--color-text-secondary)]">
-                  Chưa có kênh liên hệ trực tiếp. Hãy mở nguồn lead để kiểm tra thêm.
-                </p>
-              )}
-            </section>
-
-            <section className="rounded-xl border border-[var(--color-border)] p-2.5">
-              <p className="text-sm font-bold text-[var(--color-text-primary)]">
-                Trạng thái hiện tại
-              </p>
-              <div className="mt-3 rounded-lg bg-[var(--color-bg-surface-raised)] px-3 py-2 text-sm font-semibold text-[var(--color-text-primary)]">
-                {getPipelineLabel(lead, meta.needsResultCapture)}
               </div>
+              {!ownership.canWork && (
+                <p className="mt-2 text-xs text-[var(--color-text-secondary)]">Hãy nhận xử lý item trước khi mở nguồn.</p>
+              )}
             </section>
 
-            <section data-tour="lead-detail-result-actions" className="rounded-xl border border-[var(--color-brand-border)] p-2.5">
-              <p className="text-sm font-bold text-[var(--color-text-primary)]">
-                Ghi nhận kết quả nhanh
-              </p>
-              {!canRecordResult && (
-                <p className="mt-2 rounded-lg bg-[var(--color-bg-surface-raised)] p-3 text-sm text-[var(--color-text-secondary)]">
-                  {isLeadWorkflowBlocked
-                    ? leadWorkflowBlockMessage
-                    : "Hãy nhận xử lý và liên hệ khách trước khi ghi nhận kết quả."}
-                </p>
-              )}
-              <div className="mt-3 grid grid-cols-2 gap-2">
+            <section data-tour="lead-detail-result-actions" className="rounded-lg border border-[var(--color-border)] p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-bold text-[var(--color-text-primary)]">Ghi nhận kết quả nhanh</p>
+                  <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">Chọn kết quả sau khi đã xử lý yêu cầu của khách hàng.</p>
+                </div>
+                {meta.needsResultCapture && <span className="rounded-full bg-[var(--color-brand-subtle)] px-2 py-1 text-[10px] font-bold uppercase text-[var(--color-brand)]">Chờ kết quả</span>}
+              </div>
+              {!canRecordResult && <p className="mt-2 rounded-lg bg-[var(--color-bg-surface-raised)] p-2.5 text-xs text-[var(--color-text-secondary)]">Hãy nhận xử lý và mở nguồn trước khi ghi nhận kết quả.</p>}
+              <div className="mt-3 grid grid-cols-2 gap-2 xl:grid-cols-5">
                 {RESULT_OPTIONS.map((option) => (
-                  <button
-                    key={option.id}
-                    type="button"
-                    disabled={!canRecordResult}
-                    onClick={() => {
-                      setSelectedResult(option.id);
-                      if (option.id === "follow_up" && !followUpDate) {
-                        const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
-                        setFollowUpDate(toDateInputValue(tomorrow.toISOString()));
-                        setFollowUpTime(toTimeInputValue(tomorrow.toISOString()) || "09:00");
-                      }
-                    }}
-                    className={`inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition ${
-                      selectedResult === option.id
-                        ? "border-[var(--color-brand)] bg-[var(--color-brand-subtle)] text-[var(--color-brand)]"
-                        : "border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)] disabled:cursor-not-allowed disabled:opacity-50"
-                    }`}
-                  >
-                    <span className="material-symbols-outlined text-base">
-                      {option.icon}
-                    </span>
-                    {option.label}
+                  <button key={option.id} type="button" disabled={!canRecordResult} onClick={() => {
+                    setSelectedResult(option.id);
+                    if (option.id === "follow_up" && !followUpDate) {
+                      const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+                      setFollowUpDate(toDateInputValue(tomorrow.toISOString()));
+                      setFollowUpTime(toTimeInputValue(tomorrow.toISOString()) || "09:00");
+                    }
+                  }} className={`inline-flex min-w-0 items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-xs font-semibold transition ${
+                    selectedResult === option.id
+                      ? "border-[var(--color-brand)] bg-[var(--color-brand-subtle)] text-[var(--color-brand)]"
+                      : "border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)] disabled:cursor-not-allowed disabled:opacity-50"
+                  }`}>
+                    <span className="material-symbols-outlined shrink-0 text-base">{option.icon}</span>
+                    <span className="truncate">{option.label}</span>
                   </button>
                 ))}
               </div>
               {selectedResult === "follow_up" && (
                 <div data-tour="lead-detail-followup" className="mt-3 grid grid-cols-2 gap-2">
-                  <label className="text-xs font-semibold text-[var(--color-text-secondary)]">
-                    Ngày follow-up
-                    <input
-                      type="date"
-                      value={followUpDate}
-                      onChange={(event) => setFollowUpDate(event.target.value)}
-                      className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]"
-                    />
-                  </label>
-                  <label className="text-xs font-semibold text-[var(--color-text-secondary)]">
-                    Giờ follow-up
-                    <input
-                      type="time"
-                      value={followUpTime}
-                      onChange={(event) => setFollowUpTime(event.target.value)}
-                      className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]"
-                    />
-                  </label>
+                  <label className="text-xs font-semibold text-[var(--color-text-secondary)]">Ngày follow-up<input type="date" value={followUpDate} onChange={(event) => setFollowUpDate(event.target.value)} className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]" /></label>
+                  <label className="text-xs font-semibold text-[var(--color-text-secondary)]">Giờ follow-up<input type="time" value={followUpTime} onChange={(event) => setFollowUpTime(event.target.value)} className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]" /></label>
                 </div>
               )}
-              <textarea
-                value={note}
-                onChange={(event) => setNote(event.target.value)}
-                disabled={isLeadWorkflowBlocked}
-                placeholder="Ghi chú nhanh..."
-                className="mt-3 min-h-[76px] w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-3 text-sm text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)] disabled:cursor-not-allowed disabled:opacity-60"
-              />
-              {saveError && (
-                <p className="mt-2 text-xs font-semibold text-[var(--color-error)]">
-                  {saveError}
-                </p>
-              )}
-              <button
-                type="button"
-                disabled={!selectedResult || isSaving || !canRecordResult}
-                onClick={handleSaveResult}
-                className="mt-3 w-full rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {isSaving ? "Đang lưu..." : "Lưu kết quả"}
-              </button>
+              <textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Ghi chú nhanh..." className="mt-3 min-h-[72px] w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-3 text-sm text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]" />
+              {saveError && <p className="mt-2 text-xs font-semibold text-[var(--color-error)]">{saveError}</p>}
+              <button type="button" disabled={!selectedResult || isSaving || !canRecordResult} onClick={handleSaveResult} className="mt-3 w-full rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50">{isSaving ? "Đang lưu..." : "Lưu kết quả"}</button>
             </section>
+
+            <section className="rounded-lg border border-[var(--color-brand-border)] p-3">
+              <div className="flex items-start gap-2.5">
+                <span className="material-symbols-outlined text-xl text-[var(--color-brand)]">swap_horiz</span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold text-[var(--color-text-primary)]">Chuyển nghiệp vụ</p>
+                  <p className="mt-0.5 text-xs leading-5 text-[var(--color-text-secondary)]">Chuyển cho đội khủng hoảng khi item vượt phạm vi xử lý tiềm năng.</p>
+                </div>
               </div>
-            </details>
+              {!showTransferForm ? (
+                <button type="button" onClick={handleOpenTransferForm} disabled={!canTransferBusiness} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--color-brand-border)] px-3 py-2 text-sm font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-brand-subtle)] disabled:cursor-not-allowed disabled:opacity-50">Chuyển sang xử lý khủng hoảng<span className="material-symbols-outlined text-lg">arrow_forward</span></button>
+              ) : (
+                <div className="mt-3 space-y-3 border-t border-[var(--color-border)] pt-3">
+                  <label className="block text-xs font-bold text-[var(--color-text-secondary)]">Lý do chuyển<select value={transferReason} onChange={(event) => setTransferReason(event.target.value)} className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]"><option value="">Chọn lý do</option><option value="crisis_signal">Có dấu hiệu khủng hoảng/khiếu nại</option><option value="reputation_risk">Có nguy cơ ảnh hưởng uy tín thương hiệu</option><option value="urgent_escalation">Cần đội khủng hoảng xử lý khẩn cấp</option><option value="wrong_workflow">Không thuộc nghiệp vụ tiềm năng</option></select></label>
+                  <label className="block text-xs font-bold text-[var(--color-text-secondary)]">Ghi chú bàn giao <span className="font-normal">(không bắt buộc)</span><textarea value={transferNote} onChange={(event) => setTransferNote(event.target.value)} placeholder="Bổ sung bối cảnh để đội tiếp nhận xử lý nhanh hơn..." className="mt-1 min-h-[72px] w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-3 text-sm text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]" /></label>
+                  <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800 dark:border-amber-900/30 dark:bg-amber-950/20 dark:text-amber-300">Item sẽ rời hàng chờ Tiềm năng và trở về trạng thái chưa phân công tại hàng chờ Khủng hoảng.</p>
+                  {transferError && <p className="text-xs font-semibold text-[var(--color-error)]">{transferError}</p>}
+                  <div className="flex justify-end gap-2"><button type="button" onClick={() => { setShowTransferForm(false); setTransferError(""); }} className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm font-bold text-[var(--color-text-primary)]">Hủy</button><button type="button" onClick={handleTransferToCrisis} disabled={isTransferring || !transferReason} className="rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{isTransferring ? "Đang chuyển..." : "Xác nhận chuyển"}</button></div>
+                </div>
+              )}
+            </section>
+
+            <section className="rounded-lg border border-red-200 bg-red-50/40 p-3 dark:border-red-900/40 dark:bg-red-950/10">
+              <div className="flex items-start gap-2.5">
+                <span className="material-symbols-outlined text-xl text-red-500">block</span>
+                <div className="min-w-0 flex-1"><p className="text-sm font-bold text-[var(--color-text-primary)]">Bỏ qua / Không liên quan</p><p className="mt-0.5 text-xs leading-5 text-[var(--color-text-secondary)]">Đóng item không thuộc phạm vi xử lý và lưu lý do để tra cứu.</p></div>
+              </div>
+              {!showSkipForm ? (
+                <button type="button" onClick={() => { setShowSkipForm(true); setShowTransferForm(false); setSkipError(""); }} disabled={!canSkipLead} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-red-300 px-3 py-2 text-sm font-bold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50">Bỏ qua item này<span className="material-symbols-outlined text-lg">arrow_forward</span></button>
+              ) : (
+                <div className="mt-3 space-y-3 border-t border-red-200 pt-3">
+                  <label className="block text-xs font-bold text-[var(--color-text-secondary)]">Lý do bỏ qua<select value={skipReason} onChange={(event) => setSkipReason(event.target.value)} className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus:border-red-400"><option value="">Chọn lý do</option><option value="not_relevant">Không liên quan</option><option value="spam">Spam/quảng cáo</option><option value="duplicate">Trùng lặp</option><option value="not_a_lead">Không phải khách hàng tiềm năng</option><option value="other">Lý do khác</option></select></label>
+                  <label className="block text-xs font-bold text-[var(--color-text-secondary)]">Ghi chú <span className="font-normal">(không bắt buộc)</span><textarea value={skipNote} onChange={(event) => setSkipNote(event.target.value)} placeholder="Bổ sung lý do để tra cứu sau..." className="mt-1 min-h-[64px] w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-3 text-sm text-[var(--color-text-primary)] outline-none focus:border-red-400" /></label>
+                  {skipError && <p className="text-xs font-semibold text-[var(--color-error)]">{skipError}</p>}
+                  <div className="flex justify-end gap-2"><button type="button" onClick={() => { setShowSkipForm(false); setSkipError(""); }} className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm font-bold text-[var(--color-text-primary)]">Hủy</button><button type="button" onClick={handleSkipLead} disabled={isSkipping || !skipReason} className="rounded-lg bg-red-600 px-3 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{isSkipping ? "Đang xử lý..." : "Xác nhận bỏ qua"}</button></div>
+                </div>
+              )}
+            </section>
           </div>
         )}
 

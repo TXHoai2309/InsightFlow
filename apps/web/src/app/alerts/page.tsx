@@ -228,7 +228,6 @@ export default function AlertsPage() {
   const [resolvingAlert, setResolvingAlert] = useState<any>(null);
   const [viewingHistoryAlert, setViewingHistoryAlert] = useState<any>(null);
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
-  const [correctionModalItem, setCorrectionModalItem] = useState<any>(null);
   const [reportModalItem, setReportModalItem] = useState<any>(null);
 
   const hasLoadedRef = useRef(false);
@@ -312,11 +311,6 @@ export default function AlertsPage() {
     updateAlertStatus,
     lockAlertForResolution,
     unlockAlertForResolution,
-    fetchCorrectionRequests,
-    createCorrectionRequest,
-    resolveCorrectionRequest,
-    correctionRequests,
-    isLoadingRequests,
   } = useAlertStore();
   // Filter alerts by currently selected brand filter for dashboard overview calculations
   const brandFilteredAlerts = useMemo(() => {
@@ -946,8 +940,7 @@ export default function AlertsPage() {
     if (authLoading || !canViewCrisisQueue) return;
     setFilters({ status: "all" });
     fetchAlerts(scopedBrandKey, true);
-    fetchCorrectionRequests(scopedBrandKey);
-  }, [authLoading, canViewCrisisQueue, scopedBrandKey, fetchAlerts, fetchCorrectionRequests, setFilters]);
+  }, [authLoading, canViewCrisisQueue, scopedBrandKey, fetchAlerts, setFilters]);
 
   // Auto-switch view Mode once based on high-risk counts
   useEffect(() => {
@@ -1208,17 +1201,16 @@ export default function AlertsPage() {
                 onClick={async () => {
                   try {
                     await fetchAlerts(scopedBrandKey, true);
-                    await fetchCorrectionRequests(scopedBrandKey, true);
                     triggerToast("Đã làm mới dữ liệu!");
                   } catch (e) {
                     triggerToast("Lỗi làm mới dữ liệu!");
                   }
                 }}
-                disabled={isLoading || isLoadingRequests}
+                disabled={isLoading}
                 title="Làm mới dữ liệu"
                 className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold border border-[var(--color-border)] text-[var(--color-text-secondary)] bg-white dark:bg-[var(--color-bg-surface-raised)] hover:bg-slate-50 transition-all cursor-pointer disabled:opacity-50"
               >
-                <span className={`material-symbols-outlined text-sm ${(isLoading || isLoadingRequests) ? 'animate-spin' : ''}`}>refresh</span>
+                <span className={`material-symbols-outlined text-sm ${isLoading ? 'animate-spin' : ''}`}>refresh</span>
                 <span className="hidden sm:inline">Làm mới</span>
               </button>
             </div>
@@ -1466,6 +1458,15 @@ export default function AlertsPage() {
                             <span className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/20 px-1.5 py-0.5 rounded border border-indigo-100 dark:border-indigo-900/30 flex-shrink-0">
                               {formatBrandName(alert.brand)}
                             </span>
+                            {alert.operational_queue === "crisis" && (
+                              <span
+                                title={alert.transfer_note || alert.transfer_reason || "Được bàn giao từ nghiệp vụ tiềm năng"}
+                                className="inline-flex flex-shrink-0 items-center gap-1 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold text-amber-700 dark:border-amber-900/30 dark:bg-amber-950/20 dark:text-amber-300"
+                              >
+                                <span className="material-symbols-outlined text-[11px]">swap_horiz</span>
+                                Từ Tiềm năng
+                              </span>
+                            )}
                           </div>
                           <p className="text-[9px] text-[var(--color-text-muted)] font-semibold mt-0.5">
                             {getRelativeTime(alert.created_at, t)}
@@ -1875,16 +1876,6 @@ export default function AlertsPage() {
           item={reportModalItem}
           onClose={() => setReportModalItem(null)}
           triggerToast={triggerToast}
-        />
-      )}
-
-      {correctionModalItem && (
-        <CorrectionRequestModal
-          item={correctionModalItem}
-          onClose={() => setCorrectionModalItem(null)}
-          triggerToast={triggerToast}
-          createCorrectionRequest={createCorrectionRequest}
-          profile={profile}
         />
       )}
 

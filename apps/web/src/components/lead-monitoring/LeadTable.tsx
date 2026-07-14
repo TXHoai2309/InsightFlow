@@ -15,6 +15,7 @@ import { useLeadMonitoringLeads } from "./useLeadMonitoringLeads";
 import { auth } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
 import { useDashboardStore } from "@/stores/dashboard.store";
+import { getLeadOperationErrorMessage } from "@/lib/services/dashboard";
 
 const filterChips = [
   { id: "all", label: "Tất cả" },
@@ -174,7 +175,10 @@ export function LeadTable() {
     } catch (err: any) {
       console.error("[LeadTable] Failed to assign lead:", err);
       showToast(
-        `Giao việc thất bại: ${err?.message || "Không thể lưu thông tin vào cơ sở dữ liệu."}`,
+        getLeadOperationErrorMessage(
+          err,
+          "Giao việc thất bại. Không thể lưu thông tin vào cơ sở dữ liệu.",
+        ),
         "error"
       );
     }
@@ -401,7 +405,13 @@ export function LeadTable() {
                               showToast("Đã đánh dấu hoàn thành lead thành công!", "success");
                             } catch (err: any) {
                               console.error("[LeadTable] Failed to complete lead:", err);
-                              showToast(`Không thể hoàn thành lead: ${err?.message || "Lỗi kết nối"}`, "error");
+                              showToast(
+                                getLeadOperationErrorMessage(
+                                  err,
+                                  "Không thể hoàn thành lead.",
+                                ),
+                                "error",
+                              );
                             }
                           }}
                           className={`flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#E9E7EE] hover:bg-[#F3FCF6] transition-all ${

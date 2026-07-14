@@ -31,11 +31,6 @@ import {
 } from "@/lib/lead-return-context";
 import { normalizeBrandName } from "@/lib/services/dashboard";
 import { isIntentLead } from "@/lib/lead-intent";
-import {
-  isLabelRequestForLead,
-  isPendingLeadLabelRequest,
-  isPendingLeadRerouteRequest,
-} from "@/lib/label-change";
 
 const LEADS_PAGE_SIZE = 5;
 const APP_SCROLL_ROOT_SELECTOR = '[data-app-scroll-root="true"]';
@@ -117,7 +112,6 @@ export default function LeadsPage() {
     filters,
     leads,
     mentions,
-    labelChangeRequests,
     isLoading,
     error,
     setFilters,
@@ -257,32 +251,6 @@ export default function LeadsPage() {
     () => sortLeadsForWorkbench(visibleBaseLeads, currentTime, profile),
     [visibleBaseLeads, currentTime, profile],
   );
-
-  const pendingLabelRequestByLeadId = useMemo(() => {
-    const sortedRequests = [...labelChangeRequests]
-      .filter(isPendingLeadLabelRequest)
-      .sort((a, b) => {
-        const aBlocks = isPendingLeadRerouteRequest(a);
-        const bBlocks = isPendingLeadRerouteRequest(b);
-        if (aBlocks !== bBlocks) return aBlocks ? -1 : 1;
-        return (
-          new Date(b.requested_at).getTime() -
-          new Date(a.requested_at).getTime()
-        );
-      });
-
-    return visibleBaseLeads.reduce((map, lead) => {
-      const request = sortedRequests.find((item) =>
-        isLabelRequestForLead(item, lead),
-      );
-      if (request) map.set(lead.id, request);
-      return map;
-    }, new Map<string, (typeof sortedRequests)[number]>());
-  }, [labelChangeRequests, visibleBaseLeads]);
-
-  const labelReviewLeads = useMemo(() => {
-    return sortedLeads.filter((lead) => pendingLabelRequestByLeadId.has(lead.id));
-  }, [pendingLabelRequestByLeadId, sortedLeads]);
 
   const viewCounts = useMemo(() => {
     const allViews: LeadWorkbenchView[] = ["unassigned", "priority", "active", "closed", "need_result"];
@@ -723,7 +691,6 @@ export default function LeadsPage() {
                       nowMs={currentTime}
                       selected={selectedLeadId === lead.id}
                       highlighted={highlightedLeadId === lead.id}
-                      labelRequest={pendingLabelRequestByLeadId.get(lead.id)}
                       staffList={staffList}
                       detailPanelOpen={isDetailPanelOpen}
                       compact={isDetailPanelOpen}
