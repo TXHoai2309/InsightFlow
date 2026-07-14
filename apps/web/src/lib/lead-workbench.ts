@@ -155,17 +155,55 @@ export function getLeadOwnershipMeta(
   };
 }
 
+function getOptionalLeadUrl(lead: Lead, field: string) {
+  const value = (lead as Lead & Record<string, unknown>)[field];
+  return typeof value === "string" && value.trim() ? value.trim() : "";
+}
+
+function getLeadOriginUrl(lead: Lead) {
+  return (
+    getOptionalLeadUrl(lead, "comment_url") ||
+    getOptionalLeadUrl(lead, "source_comment_url") ||
+    getOptionalLeadUrl(lead, "original_comment_url") ||
+    getOptionalLeadUrl(lead, "source_url") ||
+    getOptionalLeadUrl(lead, "post_url") ||
+    getOptionalLeadUrl(lead, "url")
+  );
+}
+
+function getLeadPlatformLabel(platform: Lead["platform"]) {
+  switch (platform) {
+    case "facebook":
+      return "Facebook";
+    case "tiktok":
+      return "TikTok";
+    case "youtube":
+      return "YouTube";
+    case "thread":
+      return "Threads";
+    case "be":
+      return "BeFood";
+    case "google_maps":
+      return "Google Maps";
+    case "news":
+      return "nguồn";
+    default:
+      return platform || "nguồn";
+  }
+}
+
 export function getLeadSourceAction(lead: Lead): LeadActionLink | null {
-  if (!lead.url) return null;
+  const sourceUrl = getLeadOriginUrl(lead);
+  if (!sourceUrl) return null;
 
   if (lead.platform === "google_maps") {
     return {
       label: "Mở Google Maps",
       icon: "map",
-      href: lead.url,
+      href: sourceUrl,
       channel: "google_maps",
       actionType: "open_source",
-      isContact: false,
+      isContact: true,
     };
   }
 
@@ -173,10 +211,10 @@ export function getLeadSourceAction(lead: Lead): LeadActionLink | null {
     return {
       label: "Mở video",
       icon: "play_circle",
-      href: lead.url,
+      href: sourceUrl,
       channel: "youtube",
       actionType: "open_source",
-      isContact: false,
+      isContact: true,
     };
   }
 
@@ -184,20 +222,20 @@ export function getLeadSourceAction(lead: Lead): LeadActionLink | null {
     return {
       label: "Mở bài viết",
       icon: "article",
-      href: lead.url,
+      href: sourceUrl,
       channel: "news",
       actionType: "open_source",
-      isContact: false,
+      isContact: true,
     };
   }
 
   return {
-    label: "Mở bài gốc",
+    label: `Mở trên ${getLeadPlatformLabel(lead.platform)}`,
     icon: "open_in_new",
-    href: lead.url,
+    href: sourceUrl,
     channel: lead.platform,
     actionType: "open_source",
-    isContact: false,
+    isContact: true,
   };
 }
 
@@ -243,25 +281,15 @@ export function getLeadContactActions(lead: Lead): LeadActionLink[] {
           isContact: true,
         }
       : null,
-    lead.social_profile_url
-      ? {
-          label: "Mở profile",
-          icon: "person",
-          href: lead.social_profile_url,
-          channel: "profile",
-          actionType: "open_profile",
-          isContact: true,
-        }
-      : null,
   ].filter((item): item is LeadActionLink => Boolean(item));
 }
 
 export function getPrimaryLeadAction(lead: Lead) {
-  return getLeadContactActions(lead)[0] || getLeadSourceAction(lead);
+  return getLeadSourceAction(lead) || getLeadContactActions(lead)[0];
 }
 
 function hasContactChannel(lead: Lead) {
-  return getLeadContactActions(lead).length > 0;
+  return getLeadContactActions(lead).length > 0 || Boolean(getLeadSourceAction(lead));
 }
 
 function hasFollowUpSignal(lead: Lead) {

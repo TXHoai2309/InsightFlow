@@ -19,7 +19,6 @@ import {
   getLeadOwnershipMeta,
   getLeadWorkbenchMeta,
   getPrimaryLeadAction,
-  getLeadSourceAction,
 } from "@/lib/lead-workbench";
 
 interface LeadWorkbenchRowProps {
@@ -96,7 +95,6 @@ export function LeadWorkbenchRow({
   const meta = getLeadWorkbenchMeta(lead, nowMs);
   const ownership = getLeadOwnershipMeta(lead, profile);
   const primaryAction = getPrimaryLeadAction(lead);
-  const sourceAction = getLeadSourceAction(lead);
   const platformMeta = PLATFORM_META[lead.platform];
   const isLeadWorkflowBlocked = isPendingLeadRerouteRequest(labelRequest);
   const canEdit =
@@ -132,7 +130,7 @@ export function LeadWorkbenchRow({
         ? "visibility"
         : meta.needsResultCapture
           ? "task_alt"
-          : primaryAction?.icon || sourceAction?.icon || "open_in_new";
+          : primaryAction?.icon || "open_in_new";
 
   const getOwnerName = () =>
     profile?.displayName || profile?.email || "Nhân viên xử lý";
@@ -674,18 +672,6 @@ export function LeadWorkbenchRow({
                 <span className="text-[var(--color-text-muted)]">
                   {leadTimeAgo}
                 </span>
-              )}
-              {sourceAction && (
-                <a
-                  href={sourceAction.href}
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={(event) => event.stopPropagation()}
-                  className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-blue-600 transition hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-950/20"
-                >
-                  Xem trên {platformMeta?.label || lead.platform}
-                  <span className="material-symbols-outlined text-[16px]">open_in_new</span>
-                </a>
               )}
             </div>
           </div>
