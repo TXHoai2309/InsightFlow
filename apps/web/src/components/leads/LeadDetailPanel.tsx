@@ -254,7 +254,7 @@ export function LeadDetailPanel({
 
   if (!lead || !meta) {
     return (
-      <aside className="sticky top-0 hidden h-[calc(100dvh-16px)] min-h-0 shrink-0 flex-col rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-bg-surface)] p-4 text-sm text-[var(--color-text-secondary)] xl:flex">
+      <aside className="flex min-w-0 shrink-0 flex-col self-start rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-bg-surface)] p-[3%] text-sm text-[var(--color-text-secondary)]">
         Chọn một lead để xem thao tác xử lý.
       </aside>
     );
@@ -706,9 +706,9 @@ export function LeadDetailPanel({
   return (
     <aside
       data-tour="lead-detail-panel"
-      className="sticky top-0 hidden h-[calc(100dvh-16px)] min-h-0 shrink-0 flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm xl:flex"
+      className="flex min-w-0 shrink-0 flex-col self-start rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm"
     >
-      <div className="shrink-0 border-b border-[var(--color-border)] p-3">
+      <div className="shrink-0 border-b border-[var(--color-border)] p-[2%]">
         <div className="flex items-start justify-between gap-2.5">
           <div className="flex min-w-0 items-center gap-2.5">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-sm font-bold text-[var(--color-brand)]">
@@ -774,7 +774,7 @@ export function LeadDetailPanel({
 
       <div
         id={LEAD_DETAIL_PANEL_SCROLL_ID}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3"
+        className="flex-1 p-[2%]"
       >
         {activeTab === "action" && (
           <div className="space-y-2">
