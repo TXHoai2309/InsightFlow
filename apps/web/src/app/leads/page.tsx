@@ -504,7 +504,7 @@ export default function LeadsPage() {
     );
 
     if (remainingNeedResult.length > 0) {
-      setActiveView("priority");
+      setActiveView("active");
       setSelectedLeadId(remainingNeedResult[0].id);
       return;
     }
@@ -596,16 +596,19 @@ export default function LeadsPage() {
               </div>
             </div>
             <div className="flex w-fit flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setActiveView("priority");
-                setSelectedLeadId(pendingResultLead.id);
-              }}
-              className="rounded-lg border border-[var(--color-warning)]/40 bg-[var(--color-bg-surface)] px-3 py-2 text-sm font-bold text-[var(--color-text-primary)]"
-            >
-              Ghi nhận ngay
-            </button>
+              <button
+                type="button"
+                onClick={() => {
+                  skipNextPageReset.current = true;
+                  setActiveView("active");
+                  setSelectedLeadId(pendingResultLead.id);
+                  setDetailTab("action");
+                  setIsPanelCollapsed(false);
+                }}
+                className="rounded-lg border border-[var(--color-warning)]/40 bg-[var(--color-bg-surface)] px-3 py-2 text-sm font-bold text-[var(--color-text-primary)]"
+              >
+                Ghi nhận ngay
+              </button>
             </div>
           </section>
         )}
