@@ -424,7 +424,7 @@ function buildEvidenceSheet(mentions: any[], t: TFunction, lang: string) {
   `;
 }
 
-function downloadExcel(filename: string, dashboardHtml: string, evidenceHtml: string) {
+function createExcelReport(filename: string, dashboardHtml: string, evidenceHtml: string, download = true) {
   const workbook = `
     <!doctype html>
     <html xmlns:o="urn:schemas-microsoft-com:office:office"
@@ -464,14 +464,18 @@ function downloadExcel(filename: string, dashboardHtml: string, evidenceHtml: st
   `;
 
   const blob = new Blob(["\ufeff", workbook], { type: "application/vnd.ms-excel;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename.endsWith(".xls") ? filename : `${filename}.xls`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  const normalizedFilename = filename.endsWith(".xls") ? filename : `${filename}.xls`;
+  if (download) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = normalizedFilename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+  return { blob, filename: normalizedFilename, dashboardHtml, evidenceHtml };
 }
 
 export async function generateWeeklyBrandReportExcel({
@@ -483,6 +487,7 @@ export async function generateWeeklyBrandReportExcel({
   insights,
   t,
   lang,
+  download = true,
 }: {
   brandName: string;
   startDate: string;
@@ -492,6 +497,7 @@ export async function generateWeeklyBrandReportExcel({
   insights?: string;
   t: TFunction;
   lang: string;
+  download?: boolean;
 }) {
   if (mentions.length === 0) {
     alert(t("reports.errorNoData"));
@@ -500,10 +506,11 @@ export async function generateWeeklyBrandReportExcel({
 
   const dashboard = buildDashboardSheet({ brandName, startDate, endDate, mentions, filtersSummary, insights, t, lang });
   const evidence = buildEvidenceSheet(mentions, t, lang);
-  downloadExcel(
+  return createExcelReport(
     `Brand_Management_Report_${safeFilePart(brandName)}_${safeFilePart(startDate)}_to_${safeFilePart(endDate)}.xls`,
     dashboard,
     evidence,
+    download,
   );
 }
 

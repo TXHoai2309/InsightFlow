@@ -830,16 +830,16 @@ function readFirstText(...values: unknown[]): string {
   return normalizeText(values.find((value) => String(value || "").trim()) || "").trim();
 }
 
-function parseAnnotationLabel(row: SupabaseRow | undefined): Partial<ClassificationLabel> {
+function parseAnnotationLabel(row: SupabaseRow | undefined): Record<string, any> {
   if (!row) return {};
   const raw = row.label;
   if (!raw) return {};
   try {
     if (typeof raw === "string") {
       const parsed = JSON.parse(raw);
-      return parsed && typeof parsed === "object" ? (parsed as Partial<ClassificationLabel>) : {};
+      return parsed && typeof parsed === "object" ? (parsed as Record<string, any>) : {};
     }
-    return raw && typeof raw === "object" ? (raw as Partial<ClassificationLabel>) : {};
+    return raw && typeof raw === "object" ? (raw as Record<string, any>) : {};
   } catch {
     return {};
   }
@@ -892,31 +892,38 @@ function getSupabaseLabel(
       row.intent_type,
     );
 
-  return normalizeClassificationLabel(
-    {
-      ...rowLabels,
-      ...annotationLabel,
-      intent:
-        hasAnnotationIntent || hasRowLabelIntent || inferredIntent !== "none"
-          ? inferredIntent
-          : rowLabels.intent,
-      sentiment:
-        annotationLabel.sentiment ??
-        rowLabels.sentiment ??
-        row.baseline_sentiment ??
-        row.sentiment ??
-        payload.baseline_sentiment ??
-        payload.sentiment,
-      topic:
-        annotationLabel.topic ??
-        rowLabels.topic ??
-        row.baseline_topic ??
-        row.topic ??
-        payload.baseline_topic ??
-        payload.topic,
-    },
-    fallback,
-  );
+  const rawLabel = {
+    ...rowLabels,
+    ...annotationLabel,
+    intent:
+      hasAnnotationIntent || hasRowLabelIntent || inferredIntent !== "none"
+        ? inferredIntent
+        : rowLabels.intent,
+    sentiment:
+      annotationLabel.sentiment ??
+      rowLabels.sentiment ??
+      row.baseline_sentiment ??
+      row.sentiment ??
+      payload.baseline_sentiment ??
+      payload.sentiment,
+    topic:
+      annotationLabel.topic ??
+      rowLabels.topic ??
+      row.baseline_topic ??
+      row.topic ??
+      payload.baseline_topic ??
+      payload.topic,
+  };
+  const normalizedClassification = normalizeClassificationLabel(rawLabel, fallback);
+
+  // Keep crisis/lead workflow metadata from the annotation label. Previously
+  // normalization returned only five classification fields and silently
+  // removed resolution_status/resolved_at, so the Alert list rebuilt every
+  // completed mention as "new" even though the detail page read it correctly.
+  return {
+    ...rawLabel,
+    ...normalizedClassification,
+  } as ClassificationLabel;
 }
 
 function supabasePostToMention(row: SupabaseRow, annotationByKey: Map<string, SupabaseRow>): Mention {
@@ -1020,7 +1027,7 @@ function supabaseCommentToMention(
   };
 }
 
-async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
+async function fetchSupabaseMentionsUncached(opts: FetchOptions): Promise<Mention[]> {
   const config = getSupabaseConfig();
   const maxMentions = opts.maxMentions || 2500;
   const brandKey = opts.brandKey ? opts.brandKey.toLowerCase().replace(/[\s\-_.]/g, "").trim() : "";
@@ -1083,13 +1090,24 @@ async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
         searchTerm = "mixue";
         displayBrandName = "Mixue";
       }
-      const query = new URLSearchParams({
-        or: `(brand_slug.eq.${searchTerm},brand.eq.${encodeURIComponent(displayBrandName)})`,
-        select: "post_id",
-        order: "posted_at.desc.nullslast",
-        limit: String(Math.min(500, maxMentions)),
-      });
-      const brandPosts = await supabaseRequest<SupabaseRow[]>(config, "posts", query.toString());
+      const fetchBrandPosts = (column: "brand_slug" | "brand", value: string) => {
+        const query = new URLSearchParams({
+          select: "post_id",
+          limit: String(Math.min(500, maxMentions)),
+        });
+        query.set(column, `eq.${value}`);
+        return supabaseRequest<SupabaseRow[]>(config, "posts", query.toString());
+      };
+
+      // Avoid both cross-column `OR` and `ORDER BY` during the ID lookup. The
+      // current production table does not yet have the composite brand/time
+      // index, so sorting this scan exceeds Supabase's statement timeout.
+      // Mention details are sorted by posted_at after they have been loaded.
+      // Brand slug is canonical; display name is a legacy fallback.
+      let brandPosts = await fetchBrandPosts("brand_slug", searchTerm);
+      if (brandPosts.length === 0) {
+        brandPosts = await fetchBrandPosts("brand", displayBrandName);
+      }
       postIds = brandPosts.map((p) => String(p.post_id || "").trim()).filter(Boolean);
     } catch (err: any) {
       console.error("[DashboardService] Failed to fetch brand posts:", err);
@@ -1167,14 +1185,27 @@ async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
   ]);
 
   const annotationByKey = new Map<string, SupabaseRow>();
+  const setNewestAnnotation = (key: string, row: SupabaseRow) => {
+    if (!key) return;
+    const current = annotationByKey.get(key);
+    if (!current) {
+      annotationByKey.set(key, row);
+      return;
+    }
+
+    const currentUpdatedAt = new Date(String(current.updated_at || current.created_at || 0)).getTime();
+    const candidateUpdatedAt = new Date(String(row.updated_at || row.created_at || 0)).getTime();
+    if (candidateUpdatedAt >= currentUpdatedAt) annotationByKey.set(key, row);
+  };
+
   for (const row of annotationRows) {
     const entityKey = String(row.entity_key || "");
-    if (entityKey && !annotationByKey.has(entityKey)) annotationByKey.set(entityKey, row);
+    setNewestAnnotation(entityKey, row);
     const platform = String(row.platform || "");
     const postId = String(row.post_id || "");
     const commentId = normalizeOptionalText(row.comment_id);
     for (const key of buildEntityKeys(platform, postId, commentId)) {
-      if (key && !annotationByKey.has(key)) annotationByKey.set(key, row);
+      setNewestAnnotation(key, row);
     }
   }
 
@@ -1189,6 +1220,28 @@ async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
   return [...posts, ...comments].sort(
     (a, b) => new Date(b.posted_at).getTime() - new Date(a.posted_at).getTime(),
   );
+}
+
+const supabaseMentionCache = new Map<
+  string,
+  { expiresAt: number; promise: Promise<Mention[]> }
+>();
+const SUPABASE_MENTION_CACHE_MS = 15_000;
+
+async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
+  const cacheKey = `${normalizeBrandName(opts.brandKey || "global")}:${opts.maxMentions || 30000}`;
+  const cached = supabaseMentionCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.promise;
+
+  const promise = fetchSupabaseMentionsUncached(opts).catch((error) => {
+    supabaseMentionCache.delete(cacheKey);
+    throw error;
+  });
+  supabaseMentionCache.set(cacheKey, {
+    expiresAt: Date.now() + SUPABASE_MENTION_CACHE_MS,
+    promise,
+  });
+  return promise;
 }
 
 // ─── Date parser ─────────────────────────────────────────────────────────────
@@ -2105,6 +2158,9 @@ export class DashboardService {
       platform: string;
       contentType: string;
       parentId?: string | null;
+      entityKey?: string | null;
+      postId?: string | null;
+      commentId?: string | null;
     },
     leadId: string | undefined,
     reviewer: { uid: string; displayName?: string; email?: string },
@@ -2135,14 +2191,20 @@ export class DashboardService {
     );
 
     const isComment = mentionData.contentType === "comment" || mentionData.contentType === "reply";
-    const postId = isComment ? (mentionData.parentId || "") : mentionData.mentionId;
-    const commentId = isComment ? mentionData.mentionId : null;
-    const entityKeys = buildEntityKeys(mentionData.platform, postId, commentId);
-    if (entityKeys.length > 0) {
+    const postId = mentionData.postId || (isComment ? (mentionData.parentId || "") : mentionData.mentionId);
+    const commentId = mentionData.commentId || (isComment ? mentionData.mentionId : null);
+    const entityKeys = Array.from(
+      new Set([
+        mentionData.entityKey || mentionData.mentionId,
+        ...buildEntityKeys(mentionData.platform, postId, commentId),
+      ].filter(Boolean) as string[]),
+    );
+    const entityKey = entityKeys[0];
+    if (entityKey) {
       try {
         await upsertSupabaseAnnotation(
           config,
-          entityKeys[0],
+          entityKey,
           mentionData.platform,
           postId,
           commentId,
@@ -2171,6 +2233,31 @@ export class DashboardService {
         }
       } catch {
         // Lead row may not exist yet — ignore
+      }
+    }
+
+    for (const targetLeadId of Array.from(new Set([leadId, mentionData.mentionId, entityKey].filter(Boolean) as string[]))) {
+      if (targetLeadId === leadId) continue;
+      try {
+        await supabaseWrite(
+          config,
+          "leads",
+          "PATCH",
+          stripUndefinedFields({
+            labels: normalizedLabel,
+            current_labels: normalizedLabel,
+            intent: normalizedLabel.intent || "none",
+            label_correction_status: "approved",
+            pending_label_request_id: null,
+            last_label_corrected_at: nowIso,
+            updated_by: reviewer.uid,
+            updated_at: nowIso,
+          }),
+          `id=eq.${encodeURIComponent(targetLeadId)}`,
+          false,
+        );
+      } catch {
+        // Best-effort cleanup for legacy lead IDs.
       }
     }
 

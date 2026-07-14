@@ -1,5 +1,6 @@
 import type { AlertData, ResolutionAttempt, InternalNote } from "@/stores/alert.store";
 import { calculateNegativityScore } from "@/lib/negativityScore";
+import { getPersistedAlertStatus } from "@/lib/alertWorkflow";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
@@ -123,6 +124,10 @@ function normalizeTopic(topic: unknown): string {
   return validTopics.has(normalized) ? normalized : "other";
 }
 
+function resolveAlertStatusFromLabel(labelObj: any): string {
+  return getPersistedAlertStatus(labelObj);
+}
+
 function computeNegativity(params: {
   labelObj: any;
   text: string;
@@ -197,6 +202,55 @@ interface SupabaseCommentRow {
   star_count: number | null;
   comment_level: number;
   payload_json: Record<string, any> | null;
+}
+
+function pickBestAnnotationMatch(
+  rows: SupabaseAnnotationRow[],
+  lookupKey: string
+): SupabaseAnnotationRow | null {
+  if (rows.length === 0) return null;
+  return (
+    rows.find((row) => row.entity_key === lookupKey) ||
+    rows.find((row) => row.annotation_id === lookupKey) ||
+    rows.find((row) => row.comment_id === lookupKey) ||
+    rows.find((row) => row.post_id === lookupKey && row.entity_type === "post") ||
+    rows[0]
+  );
+}
+
+async function fetchAnnotationByAnyKey(key: string): Promise<SupabaseAnnotationRow | null> {
+  let normalizedKey = key;
+  try {
+    if (normalizedKey.includes("%")) {
+      normalizedKey = decodeURIComponent(normalizedKey);
+    }
+  } catch {
+    // Keep the original value if it is not a valid encoded URI component.
+  }
+
+  const lookupKeys = Array.from(new Set([key, normalizedKey].filter(Boolean)));
+  const exactColumns = ["entity_key", "annotation_id", "comment_id"] as const;
+
+  for (const lookupKey of lookupKeys) {
+    const encodedKey = encodeURIComponent(lookupKey);
+    for (const column of exactColumns) {
+      const annotations = await supabaseRequest<SupabaseAnnotationRow[]>(
+        "annotations",
+        `${column}=eq.${encodedKey}&order=updated_at.desc.nullslast&limit=1`
+      );
+      const match = pickBestAnnotationMatch(annotations || [], lookupKey);
+      if (match) return match;
+    }
+
+    const postMatches = await supabaseRequest<SupabaseAnnotationRow[]>(
+      "annotations",
+      `post_id=eq.${encodedKey}&order=updated_at.desc.nullslast&limit=10`
+    );
+    const postMatch = pickBestAnnotationMatch(postMatches || [], lookupKey);
+    if (postMatch) return postMatch;
+  }
+
+  return null;
 }
 
 const ALERT_POST_SELECT = [
@@ -387,7 +441,7 @@ export async function fetchSupabaseAlerts(options: {
         severity,
         negativity_score,
         created_at: parseDate(postedAtStr),
-        status: String(labelObj.resolution_status || "new"),
+        status: resolveAlertStatusFromLabel(labelObj),
         resolved_at: labelObj.resolved_at ? parseDate(labelObj.resolved_at) : undefined,
         collectionName: "annotations",
         url: String(comment?.url || commentPayload.url || post?.url || postPayload.url || ""),
@@ -425,6 +479,13 @@ export async function fetchSupabaseAlerts(options: {
         monitoring_initial_comments: labelObj.monitoring_initial_comments || undefined,
         monitoring_initial_likes: labelObj.monitoring_initial_likes || undefined,
         monitoring_initial_shares: labelObj.monitoring_initial_shares || undefined,
+        customer_contact_opened_at: labelObj.customer_contact_opened_at || undefined,
+        customer_contact_opened_by: labelObj.customer_contact_opened_by || undefined,
+        customer_contact_template: labelObj.customer_contact_template || undefined,
+        customer_contact_note: labelObj.customer_contact_note || undefined,
+        customer_contact_evidence_image: labelObj.customer_contact_evidence_image || undefined,
+        customer_response_result: labelObj.customer_response_result || undefined,
+        customer_contact_history: Array.isArray(labelObj.customer_contact_history) ? labelObj.customer_contact_history : [],
       };
 
       alerts.push(alert);
@@ -442,20 +503,7 @@ export async function fetchSupabaseAlerts(options: {
 }
 
 export async function fetchSingleSupabaseAlert(entityKey: string): Promise<AlertData | null> {
-  let normalizedKey = entityKey;
-  try {
-    if (normalizedKey.includes('%')) {
-      normalizedKey = decodeURIComponent(normalizedKey);
-    }
-  } catch { /* already decoded */ }
-
-  const encodedKey = encodeURIComponent(normalizedKey);
-  const annotations = await supabaseRequest<SupabaseAnnotationRow[]>(
-    "annotations",
-    `entity_key=eq.${encodedKey}&limit=1`
-  );
-
-  const anno = annotations?.[0];
+  const anno = await fetchAnnotationByAnyKey(entityKey);
   if (!anno) return null;
 
   const labelObj = typeof anno.label === "string" ? JSON.parse(anno.label) : anno.label || {};
@@ -530,7 +578,7 @@ export async function fetchSingleSupabaseAlert(entityKey: string): Promise<Alert
     severity,
     negativity_score,
     created_at: parseDate(comment?.posted_at || commentPayload.posted_at || post?.posted_at || postPayload.posted_at || anno.updated_at),
-    status: String(labelObj.resolution_status || "new"),
+    status: resolveAlertStatusFromLabel(labelObj),
     resolved_at: labelObj.resolved_at ? parseDate(labelObj.resolved_at) : undefined,
     collectionName: "annotations",
     url: String(comment?.url || commentPayload.url || post?.url || postPayload.url || ""),
@@ -568,6 +616,13 @@ export async function fetchSingleSupabaseAlert(entityKey: string): Promise<Alert
     monitoring_initial_comments: labelObj.monitoring_initial_comments || undefined,
     monitoring_initial_likes: labelObj.monitoring_initial_likes || undefined,
     monitoring_initial_shares: labelObj.monitoring_initial_shares || undefined,
+    customer_contact_opened_at: labelObj.customer_contact_opened_at || undefined,
+    customer_contact_opened_by: labelObj.customer_contact_opened_by || undefined,
+    customer_contact_template: labelObj.customer_contact_template || undefined,
+    customer_contact_note: labelObj.customer_contact_note || undefined,
+    customer_contact_evidence_image: labelObj.customer_contact_evidence_image || undefined,
+    customer_response_result: labelObj.customer_response_result || undefined,
+    customer_contact_history: Array.isArray(labelObj.customer_contact_history) ? labelObj.customer_contact_history : [],
   };
 }
 
@@ -575,13 +630,7 @@ export async function updateSupabaseAlertLabel(
   entityKey: string,
   updateFn: (existingLabel: any) => any
 ): Promise<void> {
-  const encodedKey = encodeURIComponent(entityKey);
-  const annotations = await supabaseRequest<SupabaseAnnotationRow[]>(
-    "annotations",
-    `entity_key=eq.${encodedKey}&limit=1`
-  );
-
-  const anno = annotations?.[0];
+  const anno = await fetchAnnotationByAnyKey(entityKey);
   if (!anno) {
     throw new Error(`Annotation with entity key ${entityKey} not found.`);
   }

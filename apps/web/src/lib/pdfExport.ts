@@ -252,6 +252,7 @@ export async function generateWeeklyBrandReportPDF({
   insights,
   t,
   lang,
+  download = true,
 }: {
   brandName: string;
   startDate: string;
@@ -261,6 +262,7 @@ export async function generateWeeklyBrandReportPDF({
   insights?: string;
   t: TFunction;
   lang: string;
+  download?: boolean;
 }) {
   try {
     if (mentions.length === 0) {
@@ -424,7 +426,10 @@ export async function generateWeeklyBrandReportPDF({
       doc.text(`InsightFlow - ${page}/${pageCount}`, margin, 290);
     }
 
-    doc.save(`Brand_Management_Report_${safeFilePart(displayBrand)}_${safeFilePart(startDate)}_to_${safeFilePart(endDate)}.pdf`);
+    const filename = `Brand_Management_Report_${safeFilePart(displayBrand)}_${safeFilePart(startDate)}_to_${safeFilePart(endDate)}.pdf`;
+    const blob = doc.output("blob");
+    if (download) doc.save(filename);
+    return { blob, filename };
   } catch (error) {
     console.error("Error generating PDF report:", error);
     alert(t("reports.errorGenerate"));
