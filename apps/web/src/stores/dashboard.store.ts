@@ -453,6 +453,23 @@ export const useDashboardStore = create<DashboardState>()(
             }
             return lead;
           }),
+          mentions: state.mentions.map((mention) => {
+            const isMatch =
+              request &&
+              (mention.id === request.mention_id ||
+                mention.id === request.source_id ||
+                mention.id === request.lead_id ||
+                (mention.parent_id && mention.parent_id === request.mention_id));
+            if (isMatch) {
+              return {
+                ...mention,
+                sentiment: normLabel.sentiment || mention.sentiment,
+                topic: (normLabel.topic[0] as any) || mention.topic,
+                labels: normLabel,
+              };
+            }
+            return mention;
+          }),
         };
       });
     },
