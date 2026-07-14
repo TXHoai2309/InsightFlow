@@ -3,7 +3,26 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
-import { useAlertStore, type AlertData, type EscalationData } from "@/stores/alert.store";
+import { useAlertStore, type AlertData, type EscalationData, type CustomerContactAttempt } from "@/stores/alert.store";
+
+type CustomerResponseResult = NonNullable<AlertData["customer_response_result"]>;
+
+const CUSTOMER_RESPONSE_OPTIONS: Array<{
+  value: CustomerResponseResult;
+  label: string;
+  icon: string;
+  tone: string;
+}> = [
+  { value: "positive", label: "Khách hàng phản hồi tích cực", icon: "sentiment_satisfied", tone: "border-green-300 bg-green-50 text-green-700" },
+  { value: "no_response", label: "Chưa phản hồi", icon: "schedule", tone: "border-blue-300 bg-blue-50 text-blue-700" },
+  { value: "still_upset", label: "Khách hàng vẫn bức xúc", icon: "sentiment_dissatisfied", tone: "border-red-300 bg-red-50 text-red-700" },
+  { value: "not_suitable", label: "Không phù hợp", icon: "block", tone: "border-slate-300 bg-slate-50 text-slate-700" },
+];
+
+function createDefaultContactTemplate(customerName: string, brand: string): string {
+  return `Xin chào ${customerName || "Anh/Chị"}, ${formatBrandName(brand)} thành thật xin lỗi về trải nghiệm chưa tốt của Anh/Chị. Anh/Chị vui lòng nhắn tin trực tiếp hoặc để lại thông tin liên hệ để chúng tôi kiểm tra và hỗ trợ giải quyết vấn đề sớm nhất. Cảm ơn Anh/Chị đã phản hồi.`;
+}
+
 import { useAuth } from "@/hooks/useAuth";
 import { PlatformLogo } from "@/components/platform/PlatformLogo";
 import { dbSecond, auth } from "@/lib/firebase";
@@ -13,6 +32,7 @@ import { getScopedBrandKey } from "@/lib/brandScope";
 import { fetchSingleSupabaseAlert, updateSupabaseAlertLabel, fetchCommentsForPost, type PostComment } from "@/lib/supabase";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { QuickReplyHelper } from "@/components/ui/QuickReplyHelper";
+import { getAlertWorkflowStatus } from "@/lib/alertWorkflow";
 // Helper function to format brand display names
 function formatBrandName(brand: string): string {
   if (!brand) return "";
@@ -28,10 +48,10 @@ function formatBrandName(brand: string): string {
 
 // Inline helper for calculating relative time
 function getRelativeTime(isoString: string | undefined): string {
-  if (!isoString) return "Không rõ";
+  if (!isoString) return "Kh├┤ng r├╡";
   try {
     const date = new Date(isoString);
-    if (isNaN(date.getTime())) return "Không rõ";
+    if (isNaN(date.getTime())) return "Kh├┤ng r├╡";
 
     // Format helper: dd/mm/yyyy
     const formatted = `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`;
@@ -39,27 +59,27 @@ function getRelativeTime(isoString: string | undefined): string {
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
 
-    // Future date → show formatted date
+    // Future date ΓåÆ show formatted date
     if (diffMs < 0) return formatted;
 
     const diffMins = Math.floor(diffMs / 60000);
-    if (diffMins < 1) return "Vừa xong";
-    if (diffMins < 60) return `${diffMins} phút trước`;
+    if (diffMins < 1) return "Vß╗½a xong";
+    if (diffMins < 60) return `${diffMins} ph├║t tr╞░ß╗¢c`;
     const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `${diffHours} giờ trước`;
+    if (diffHours < 24) return `${diffHours} giß╗¥ tr╞░ß╗¢c`;
     const diffDays = Math.floor(diffHours / 24);
-    if (diffDays < 30) return `${diffDays} ngày trước`;
+    if (diffDays < 30) return `${diffDays} ng├áy tr╞░ß╗¢c`;
     const diffMonths = Math.floor(diffDays / 30);
-    if (diffMonths < 12) return `${diffMonths} tháng trước`;
+    if (diffMonths < 12) return `${diffMonths} th├íng tr╞░ß╗¢c`;
 
-    // Older than a year → show formatted date
+    // Older than a year ΓåÆ show formatted date
     return formatted;
   } catch (e) {
-    return "Không rõ";
+    return "Kh├┤ng r├╡";
   }
 }
 
-// ── Incident Report Modal (Escalate) ──
+// ΓöÇΓöÇ Incident Report Modal (Escalate) ΓöÇΓöÇ
 interface IncidentReportModalProps {
   item: AlertData;
   onClose: () => void;
@@ -68,11 +88,11 @@ interface IncidentReportModalProps {
 
 function IncidentReportModal({ item, onClose, triggerToast }: IncidentReportModalProps) {
   const [impactAssessment, setImpactAssessment] = useState(
-    `Sự việc liên quan đến ${formatBrandName(item.brand)} trên nguồn ${(item.source || "").toUpperCase()} đang thu hút phản hồi tiêu cực từ dư luận. Nguy cơ gây tổn hại uy tín thương hiệu trung/dài hạn nếu không được giải quyết ngay.`
+    `Sß╗▒ viß╗çc li├¬n quan ─æß║┐n ${formatBrandName(item.brand)} tr├¬n nguß╗ôn ${(item.source || "").toUpperCase()} ─æang thu h├║t phß║ún hß╗ôi ti├¬u cß╗▒c tß╗½ d╞░ luß║¡n. Nguy c╞í g├óy tß╗òn hß║íi uy t├¡n th╞░╞íng hiß╗çu trung/d├ái hß║ín nß║┐u kh├┤ng ─æ╞░ß╗úc giß║úi quyß║┐t ngay.`
   );
 
   const [sopActions, setSopActions] = useState(
-    `1. Tiếp cận trực tiếp chủ sở hữu bài đăng để đối thoại giải quyết mâu thuẫn.\n2. Báo cáo Ban Giám đốc tình hình diễn biến và kịch bản ứng phó.\n3. Rà soát chất lượng vận hành nội bộ tại điểm chạm phát sinh sự cố.`
+    `1. Tiß║┐p cß║¡n trß╗▒c tiß║┐p chß╗º sß╗ƒ hß╗»u b├ái ─æ─âng ─æß╗â ─æß╗æi thoß║íi giß║úi quyß║┐t m├óu thuß║½n.\n2. B├ío c├ío Ban Gi├ím ─æß╗æc t├¼nh h├¼nh diß╗àn biß║┐n v├á kß╗ïch bß║ún ß╗⌐ng ph├│.\n3. R├á so├ít chß║Ñt l╞░ß╗úng vß║¡n h├ánh nß╗Öi bß╗Ö tß║íi ─æiß╗âm chß║ím ph├ít sinh sß╗▒ cß╗æ.`
   );
 
   const brandName = formatBrandName(item.brand);
@@ -82,12 +102,12 @@ function IncidentReportModal({ item, onClose, triggerToast }: IncidentReportModa
 
   const handleExport = () => {
     const reportData = {
-      title: `Báo cáo Sự cố Khẩn cấp - ${brandName} - ${sourceName}`,
+      title: `B├ío c├ío Sß╗▒ cß╗æ Khß║⌐n cß║Ñp - ${brandName} - ${sourceName}`,
       brand: brandName,
       source: sourceName,
       severity: severityText,
       created_at: dateStr,
-      reporter: item.author || "Ẩn danh",
+      reporter: item.author || "ß║¿n danh",
       description: item.text || "",
       impact_assessment: impactAssessment,
       recommended_sop_actions: sopActions,
@@ -105,7 +125,7 @@ function IncidentReportModal({ item, onClose, triggerToast }: IncidentReportModa
   };
 
   const handleSend = () => {
-    triggerToast("Đã gửi báo cáo khẩn cấp đến Ban giám đốc!");
+    triggerToast("─É├ú gß╗¡i b├ío c├ío khß║⌐n cß║Ñp ─æß║┐n Ban gi├ím ─æß╗æc!");
     onClose();
   };
 
@@ -115,7 +135,7 @@ function IncidentReportModal({ item, onClose, triggerToast }: IncidentReportModa
       <div className="relative bg-white dark:bg-slate-900 border border-[var(--color-border)] rounded-2xl shadow-xl max-w-lg w-full overflow-hidden p-6 z-10 space-y-4">
         <div className="flex justify-between items-center pb-2 border-b border-[var(--color-border)]">
           <h3 className="text-base font-bold text-[var(--color-text-primary)]">
-            Báo cáo sự cố khẩn cấp (Escalate)
+            B├ío c├ío sß╗▒ cß╗æ khß║⌐n cß║Ñp (Escalate)
           </h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
             <span className="material-symbols-outlined">close</span>
@@ -123,15 +143,15 @@ function IncidentReportModal({ item, onClose, triggerToast }: IncidentReportModa
         </div>
 
         <div className="text-xs space-y-1.5 text-[var(--color-text-secondary)] bg-slate-50 dark:bg-slate-800/40 p-3 rounded-xl border border-[var(--color-border)]/50">
-          <p><strong>Thương hiệu:</strong> {brandName}</p>
-          <p><strong>Nguồn phát hiện:</strong> {sourceName}</p>
-          <p><strong>Mức độ:</strong> <span className="text-red-500 font-bold">{severityText}</span></p>
-          <p><strong>Thời gian:</strong> {dateStr}</p>
+          <p><strong>Th╞░╞íng hiß╗çu:</strong> {brandName}</p>
+          <p><strong>Nguß╗ôn ph├ít hiß╗çn:</strong> {sourceName}</p>
+          <p><strong>Mß╗⌐c ─æß╗Ö:</strong> <span className="text-red-500 font-bold">{severityText}</span></p>
+          <p><strong>Thß╗¥i gian:</strong> {dateStr}</p>
         </div>
 
         <div className="space-y-2">
           <label className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase">
-            Đánh giá tác động ảnh hưởng
+            ─É├ính gi├í t├íc ─æß╗Öng ß║únh h╞░ß╗ƒng
           </label>
           <textarea
             value={impactAssessment}
@@ -142,7 +162,7 @@ function IncidentReportModal({ item, onClose, triggerToast }: IncidentReportModa
 
         <div className="space-y-2">
           <label className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase">
-            Biện pháp ứng phó khuyến nghị (SOP)
+            Biß╗çn ph├íp ß╗⌐ng ph├│ khuyß║┐n nghß╗ï (SOP)
           </label>
           <textarea
             value={sopActions}
@@ -156,13 +176,13 @@ function IncidentReportModal({ item, onClose, triggerToast }: IncidentReportModa
             onClick={handleExport}
             className="flex-1 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-[var(--color-text-primary)] border border-[var(--color-border)] transition-all cursor-pointer flex items-center justify-center gap-1"
           >
-            <span className="material-symbols-outlined text-sm">download</span> Xuất Báo Cáo
+            <span className="material-symbols-outlined text-sm">download</span> Xuß║Ñt B├ío C├ío
           </button>
           <button
             onClick={handleSend}
             className="flex-1 py-2 rounded-xl text-xs font-bold bg-orange-600 hover:bg-orange-700 text-white shadow-sm transition-all cursor-pointer"
           >
-            Gửi Escalate
+            Gß╗¡i Escalate
           </button>
         </div>
       </div>
@@ -170,21 +190,21 @@ function IncidentReportModal({ item, onClose, triggerToast }: IncidentReportModa
   );
 }
 
-// ── Monitoring Transition Modal ──
+// ΓöÇΓöÇ Monitoring Transition Modal ΓöÇΓöÇ
 interface MonitoringTransitionModalProps {
   onClose: () => void;
   onConfirm: (note: string, durationHours: number) => Promise<void>;
 }
 
 function MonitoringTransitionModal({ onClose, onConfirm }: MonitoringTransitionModalProps) {
-  const [note, setNote] = useState("Đã hoàn tất các bước xử lý theo SOP. Chuyển sang trạng thái theo dõi thêm.");
+  const [note, setNote] = useState("─É├ú ho├án tß║Ñt c├íc b╞░ß╗¢c xß╗¡ l├╜ theo SOP. Chuyß╗ân sang trß║íng th├íi theo d├╡i th├¬m.");
   const [duration, setDuration] = useState("72");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const handleConfirm = async () => {
     if (!note.trim()) {
-      setError("Vui lòng nhập ghi chú hoàn tất.");
+      setError("Vui l├▓ng nhß║¡p ghi ch├║ ho├án tß║Ñt.");
       return;
     }
     setBusy(true);
@@ -193,7 +213,7 @@ function MonitoringTransitionModal({ onClose, onConfirm }: MonitoringTransitionM
       await onConfirm(note.trim(), parseFloat(duration));
       onClose();
     } catch (e: any) {
-      setError("Lỗi: " + (e.message || "Không thể chuyển trạng thái."));
+      setError("Lß╗ùi: " + (e.message || "Kh├┤ng thß╗â chuyß╗ân trß║íng th├íi."));
     } finally {
       setBusy(false);
     }
@@ -205,7 +225,7 @@ function MonitoringTransitionModal({ onClose, onConfirm }: MonitoringTransitionM
       <div className="relative bg-white dark:bg-slate-900 border border-[var(--color-border)] rounded-2xl shadow-xl max-w-md w-full p-6 z-10 space-y-4 text-xs">
         <div className="flex justify-between items-center pb-2 border-b border-[var(--color-border)]">
           <h3 className="text-sm font-bold text-[var(--color-text-primary)]">
-            Hoàn tất xử lý &amp; Bắt đầu theo dõi
+            Ho├án tß║Ñt xß╗¡ l├╜ &amp; Bß║»t ─æß║ºu theo d├╡i
           </h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
             <span className="material-symbols-outlined text-sm">close</span>
@@ -214,7 +234,7 @@ function MonitoringTransitionModal({ onClose, onConfirm }: MonitoringTransitionM
 
         <div className="space-y-2">
           <label className="font-bold text-[var(--color-text-secondary)] uppercase text-[10px]">
-            Ghi chú xử lý / Bằng chứng
+            Ghi ch├║ xß╗¡ l├╜ / Bß║▒ng chß╗⌐ng
           </label>
           <textarea
             value={note}
@@ -226,19 +246,19 @@ function MonitoringTransitionModal({ onClose, onConfirm }: MonitoringTransitionM
 
         <div className="space-y-2">
           <label className="font-bold text-[var(--color-text-secondary)] uppercase text-[10px]">
-            Thời gian theo dõi thêm
+            Thß╗¥i gian theo d├╡i th├¬m
           </label>
           <select
             value={duration}
             onChange={(e) => setDuration(e.target.value)}
             className="w-full p-2.5 border border-[var(--color-border)] rounded-xl bg-white dark:bg-slate-800 focus:ring-2 focus:ring-purple-500/20 text-[var(--color-text-primary)] focus:outline-none"
           >
-            <option value="72">72 giờ (Khuyên dùng)</option>
-            <option value="24">24 giờ</option>
-            <option value="1">1 giờ</option>
-            <option value="0.166">10 phút</option>
-            <option value="0.033">2 phút (Để test nhanh)</option>
-            <option value="0">Đóng ngay (Không theo dõi)</option>
+            <option value="72">72 giß╗¥ (Khuy├¬n d├╣ng)</option>
+            <option value="24">24 giß╗¥</option>
+            <option value="1">1 giß╗¥</option>
+            <option value="0.166">10 ph├║t</option>
+            <option value="0.033">2 ph├║t (─Éß╗â test nhanh)</option>
+            <option value="0">─É├│ng ngay (Kh├┤ng theo d├╡i)</option>
           </select>
         </div>
 
@@ -250,14 +270,14 @@ function MonitoringTransitionModal({ onClose, onConfirm }: MonitoringTransitionM
             disabled={busy}
             className="flex-1 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-[var(--color-text-primary)] border border-[var(--color-border)] transition-all font-bold cursor-pointer"
           >
-            Hủy
+            Hß╗ºy
           </button>
           <button
             onClick={handleConfirm}
             disabled={busy}
             className="flex-1 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold transition-all shadow-sm cursor-pointer"
           >
-            {busy ? "Đang xử lý..." : "Xác nhận"}
+            {busy ? "─Éang xß╗¡ l├╜..." : "X├íc nhß║¡n"}
           </button>
         </div>
       </div>
@@ -284,37 +304,37 @@ const getResolverName = (emailOrId: string | null | undefined): string => {
 };
 
 const getSentimentLabel = (val: string) => {
-  if (val === "positive" || val === "tích cực") return "Tích cực";
-  if (val === "negative" || val === "tiêu cực") return "Tiêu cực";
-  return "Trung lập";
+  if (val === "positive" || val === "t├¡ch cß╗▒c") return "T├¡ch cß╗▒c";
+  if (val === "negative" || val === "ti├¬u cß╗▒c") return "Ti├¬u cß╗▒c";
+  return "Trung lß║¡p";
 };
 
 const getSeverityLabel = (val: string) => {
-  if (val === "low") return "Thấp";
-  if (val === "medium") return "Trung bình";
+  if (val === "low") return "Thß║Ñp";
+  if (val === "medium") return "Trung b├¼nh";
   if (val === "high") return "Cao";
-  if (val === "critical") return "Khẩn cấp";
-  return val || "Trung bình";
+  if (val === "critical") return "Khß║⌐n cß║Ñp";
+  return val || "Trung b├¼nh";
 };
 
 const getTopicLabel = (val: string) => {
   const map: Record<string, string> = {
-    quality: "Chất lượng",
-    price: "Giá cả",
-    service: "Dịch vụ",
-    staff: "Nhân viên",
-    delivery: "Giao hàng",
-    experience: "Trải nghiệm",
-    legal: "Pháp lý",
-    operation: "Vận hành",
-    competitor: "Đối thủ",
-    other: "Khác",
-    "chất lượng dịch vụ": "Dịch vụ",
-    "chất lượng sản phẩm": "Chất lượng",
-    "truyền thông & pr": "Truyền thông & PR",
-    "pháp lý": "Pháp lý",
+    quality: "Chß║Ñt l╞░ß╗úng",
+    price: "Gi├í cß║ú",
+    service: "Dß╗ïch vß╗Ñ",
+    staff: "Nh├ón vi├¬n",
+    delivery: "Giao h├áng",
+    experience: "Trß║úi nghiß╗çm",
+    legal: "Ph├íp l├╜",
+    operation: "Vß║¡n h├ánh",
+    competitor: "─Éß╗æi thß╗º",
+    other: "Kh├íc",
+    "chß║Ñt l╞░ß╗úng dß╗ïch vß╗Ñ": "Dß╗ïch vß╗Ñ",
+    "chß║Ñt l╞░ß╗úng sß║ún phß║⌐m": "Chß║Ñt l╞░ß╗úng",
+    "truyß╗ün th├┤ng & pr": "Truyß╗ün th├┤ng & PR",
+    "ph├íp l├╜": "Ph├íp l├╜",
   };
-  return map[String(val).toLowerCase()] || val || "Khác";
+  return map[String(val).toLowerCase()] || val || "Kh├íc";
 };
 
 export default function AlertDetailPage() {
@@ -340,6 +360,12 @@ export default function AlertDetailPage() {
   const [alert, setAlert] = useState<AlertData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+
+  const [contactEvidenceNote, setContactEvidenceNote] = useState("");
+  const [contactEvidenceImage, setContactEvidenceImage] = useState<string | null>(null);
+  const [previewEvidenceImage, setPreviewEvidenceImage] = useState<string | null>(null);
+  const [savingContactEvidence, setSavingContactEvidence] = useState(false);
 
   // Left column active tab state ("content" | "history")
   const [activeLeftTab, setActiveLeftTab] = useState<"content" | "history">("content");
@@ -393,7 +419,7 @@ export default function AlertDetailPage() {
   }, [alert]);
 
   useEffect(() => {
-    if (!alert || alert.status !== "monitoring") {
+    if (!alert || (alert.status !== "monitoring" && !alert.monitoring_started_at)) {
       setTimeLeftStr("");
       setNewActivityDetails(null);
       return;
@@ -429,13 +455,13 @@ export default function AlertDetailPage() {
       }
 
       if (diff <= 0) {
-        setTimeLeftStr("Hết thời gian theo dõi");
+        setTimeLeftStr("Hß║┐t thß╗¥i gian theo d├╡i");
         clearInterval(timer);
       } else {
         const hours = Math.floor(diff / (3600 * 1000));
         const mins = Math.floor((diff % (3600 * 1000)) / (60 * 1000));
         const secs = Math.floor((diff % (60 * 1000)) / 1000);
-        setTimeLeftStr(`${hours} giờ ${mins} phút ${secs} giây`);
+        setTimeLeftStr(`${hours} giß╗¥ ${mins} ph├║t ${secs} gi├óy`);
       }
     }, 1000);
 
@@ -468,6 +494,201 @@ export default function AlertDetailPage() {
   const [approvalCompensation, setApprovalCompensation] = useState("");
   const [approvalNote, setApprovalNote] = useState("");
   const [escalationBusy, setEscalationBusy] = useState(false);
+
+
+  const handleOpenCustomerContact = async () => {
+    if (!alert) return;
+    const contactUrl = [alert.social_profile_url, alert.url, alert.post_url]
+      .find((url) => Boolean(url && url !== "#"));
+    if (!contactUrl) {
+      triggerToast("Cảnh báo này chưa có liên kết để liên hệ khách hàng.");
+      return;
+    }
+
+    const template = createDefaultContactTemplate(alert.author || "Anh/Chị", alert.brand);
+    const openedAt = new Date().toISOString();
+
+    window.open(contactUrl, "_blank", "noopener,noreferrer");
+    try {
+      await navigator.clipboard.writeText(template);
+    } catch (error) {
+      console.warn("Could not copy the default contact template:", error);
+    }
+
+    try {
+      await updateAlertStatus(alert.id, "resolving", profile, {
+        note: "Đã mở liên kết liên hệ khách hàng và tạo mẫu phản hồi xin lỗi mặc định.",
+        customer_contact_opened_at: openedAt,
+        customer_contact_opened_by: profile?.email || profile?.uid || "unknown",
+        customer_contact_template: template,
+      }, alert.brand);
+      setAlert({
+        ...alert,
+        status: "resolving",
+        customer_contact_opened_at: openedAt,
+        customer_contact_opened_by: profile?.email || profile?.uid || "unknown",
+        customer_contact_template: template,
+      });
+      triggerToast("Đã sao chép mẫu xin lỗi và mở liên kết liên hệ.");
+    } catch (error) {
+      triggerToast("Đã mở liên kết nhưng chưa lưu được dấu vết liên hệ.");
+      console.error(error);
+    }
+  };
+
+  const handleCustomerResponseResult = async (result: CustomerResponseResult) => {
+    if (!alert?.customer_contact_opened_at || !alert.customer_contact_note || !alert.customer_contact_evidence_image) return;
+    const resultLabel = CUSTOMER_RESPONSE_OPTIONS.find((option) => option.value === result)?.label || result;
+    try {
+      await updateAlertStatus(alert.id, "resolving", profile, {
+        note: `Đã ghi nhận kết quả liên hệ: ${resultLabel}.`,
+        customer_response_result: result,
+      }, alert.brand);
+      setAlert({ ...alert, status: "resolving", customer_response_result: result });
+      triggerToast(`Đã lưu: ${resultLabel}.`);
+    } catch (error) {
+      triggerToast("Không thể lưu kết quả phản hồi. Vui lòng thử lại.");
+      console.error(error);
+    }
+  };
+
+  const handleContactEvidenceImage = (file?: File) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      triggerToast("Vui lòng chọn một tệp hình ảnh.");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      triggerToast("Ảnh minh chứng phải nhỏ hơn 2MB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const image = new Image();
+      image.onload = () => {
+        const maxSize = 900;
+        const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(image.width * scale);
+        canvas.height = Math.round(image.height * scale);
+        canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
+        setContactEvidenceImage(canvas.toDataURL("image/jpeg", 0.72));
+      };
+      image.src = String(reader.result || "");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveContactEvidence = async () => {
+    if (!alert?.customer_contact_opened_at) {
+      triggerToast("Hãy bấm ‘Xem trên nền tảng’ trước.");
+      return;
+    }
+    if (!contactEvidenceNote.trim() || !contactEvidenceImage) {
+      triggerToast("Cần nhập ghi chú và thêm ảnh minh chứng.");
+      return;
+    }
+
+    setSavingContactEvidence(true);
+    try {
+      await updateAlertStatus(alert.id, "resolving", profile, {
+        note: `Đã bổ sung minh chứng liên hệ: ${contactEvidenceNote.trim()}`,
+        customer_contact_note: contactEvidenceNote.trim(),
+        customer_contact_evidence_image: contactEvidenceImage,
+      }, alert.brand);
+      setAlert({
+        ...alert,
+        status: "resolving",
+        customer_contact_note: contactEvidenceNote.trim(),
+        customer_contact_evidence_image: contactEvidenceImage,
+      });
+      triggerToast("Đã lưu minh chứng liên hệ.");
+    } catch (error) {
+      triggerToast("Không thể lưu minh chứng. Vui lòng thử lại.");
+      console.error(error);
+    } finally {
+      setSavingContactEvidence(false);
+    }
+  };
+
+  const buildContactHistory = (
+    outcomeStatus: CustomerContactAttempt["outcome_status"]
+  ): CustomerContactAttempt[] => {
+    if (!alert?.customer_contact_opened_at || !alert.customer_contact_note || !alert.customer_contact_evidence_image || !alert.customer_response_result) {
+      return alert?.customer_contact_history || [];
+    }
+    return [
+      ...(alert.customer_contact_history || []),
+      {
+        opened_at: alert.customer_contact_opened_at,
+        opened_by: alert.customer_contact_opened_by,
+        template: alert.customer_contact_template,
+        note: alert.customer_contact_note,
+        evidence_image: alert.customer_contact_evidence_image,
+        response_result: alert.customer_response_result,
+        completed_at: new Date().toISOString(),
+        outcome_status: outcomeStatus,
+      },
+    ];
+  };
+
+  const handleCompleteAction = async () => {
+    if (!alert) return;
+    if (!alert.customer_contact_opened_at || !alert.customer_contact_note || !alert.customer_contact_evidence_image || !alert.customer_response_result) {
+      triggerToast("Chưa đủ liên kết, ghi chú, ảnh minh chứng và kết quả phản hồi.");
+      return;
+    }
+
+    const resultLabel = CUSTOMER_RESPONSE_OPTIONS.find(
+      (option) => option.value === alert.customer_response_result
+    )?.label;
+    const contactEvidencePayload = {
+      customer_contact_opened_at: alert.customer_contact_opened_at,
+      customer_contact_opened_by: alert.customer_contact_opened_by,
+      customer_contact_template: alert.customer_contact_template,
+      customer_contact_note: alert.customer_contact_note,
+      customer_contact_evidence_image: alert.customer_contact_evidence_image,
+      customer_response_result: alert.customer_response_result,
+    };
+
+    try {
+      if (alert.customer_response_result === "no_response") {
+        await updateAlertStatus(alert.id, "contact_waiting", profile, {
+          note: `Đã liên hệ khách hàng nhưng chưa nhận được phản hồi.${resultLabel ? ` Kết quả: ${resultLabel}.` : ""}`,
+          ...contactEvidencePayload,
+          customer_contact_history: buildContactHistory("contact_waiting"),
+          reset_customer_contact: true,
+        }, alert.brand);
+        router.push("/alerts");
+        return;
+      }
+
+      if (alert.customer_response_result === "still_upset") {
+        await updateAlertStatus(alert.id, "contact_failed", profile, {
+          note: `Liên hệ trao đổi không thành; khách hàng vẫn bức xúc.${resultLabel ? ` Kết quả: ${resultLabel}.` : ""}`,
+          ...contactEvidencePayload,
+          customer_contact_history: buildContactHistory("contact_failed"),
+          reset_customer_contact: true,
+        }, alert.brand);
+        router.push("/alerts");
+        return;
+      }
+
+      await updateAlertStatus(alert.id, "resolved", profile, {
+        note: resultLabel
+          ? `Hoàn tất xử lý sau khi liên hệ khách hàng. Kết quả: ${resultLabel}.`
+          : "Hoàn tất xử lý sau khi liên hệ khách hàng.",
+        ...contactEvidencePayload,
+        customer_contact_history: buildContactHistory("resolved"),
+      }, alert.brand);
+      router.push("/alerts");
+    } catch (error) {
+      triggerToast("Không thể cập nhật trạng thái liên hệ. Vui lòng thử lại.");
+      console.error(error);
+    }
+  };
+
 
   const riskScore = useMemo(() => {
     if (!alert) return 0;
@@ -512,7 +733,7 @@ export default function AlertDetailPage() {
 
   const handleSubmitEscalation = async () => {
     if (!alert || !draftResponse.trim() || !proposedCompensation.trim()) {
-      triggerToast("Vui lòng nhập dự thảo phản hồi và mức đền bù đề xuất.");
+      triggerToast("Vui l├▓ng nhß║¡p dß╗▒ thß║úo phß║ún hß╗ôi v├á mß╗⌐c ─æß╗ün b├╣ ─æß╗ü xuß║Ñt.");
       return;
     }
 
@@ -534,19 +755,19 @@ export default function AlertDetailPage() {
     setEscalationBusy(true);
     try {
       await updateAlertStatus(alert.id, "pending_approval", profile, {
-        note: "Đã gửi phương án phản hồi và đền bù lên Brand Manager duyệt.",
+        note: "─É├ú gß╗¡i ph╞░╞íng ├ín phß║ún hß╗ôi v├á ─æß╗ün b├╣ l├¬n Brand Manager duyß╗çt.",
         escalation,
       }, alert.brand);
       await createEscalationNotification({
-        title: `Yêu cầu duyệt phương án: Vụ việc #${alert.id.slice(-4)}`,
-        message: `${escalation.submitted_by_name} đã gửi phương án phản hồi cho ${formatBrandName(alert.brand)}.`,
+        title: `Y├¬u cß║ºu duyß╗çt ph╞░╞íng ├ín: Vß╗Ñ viß╗çc #${alert.id.slice(-4)}`,
+        message: `${escalation.submitted_by_name} ─æ├ú gß╗¡i ph╞░╞íng ├ín phß║ún hß╗ôi cho ${formatBrandName(alert.brand)}.`,
         recipient_role: "brand_manager",
       });
       setAlert({ ...alert, status: "pending_approval", escalation });
-      triggerToast("Đã gửi phương án lên Brand Manager duyệt.");
+      triggerToast("─É├ú gß╗¡i ph╞░╞íng ├ín l├¬n Brand Manager duyß╗çt.");
     } catch (e) {
       console.error(e);
-      triggerToast("Không thể gửi duyệt phương án: " + (e instanceof Error ? e.message : String(e)));
+      triggerToast("Kh├┤ng thß╗â gß╗¡i duyß╗çt ph╞░╞íng ├ín: " + (e instanceof Error ? e.message : String(e)));
     } finally {
       setEscalationBusy(false);
     }
@@ -571,23 +792,23 @@ export default function AlertDetailPage() {
     try {
       await updateAlertStatus(alert.id, nextStatus, profile, {
         note: decision === "approved"
-          ? "Brand Manager đã phê duyệt phương án phản hồi."
-          : `Brand Manager yêu cầu chỉnh sửa phương án.${approvalNote.trim() ? ` Ghi chú: ${approvalNote.trim()}` : ""}`,
+          ? "Brand Manager ─æ├ú ph├¬ duyß╗çt ph╞░╞íng ├ín phß║ún hß╗ôi."
+          : `Brand Manager y├¬u cß║ºu chß╗ënh sß╗¡a ph╞░╞íng ├ín.${approvalNote.trim() ? ` Ghi ch├║: ${approvalNote.trim()}` : ""}`,
         escalation,
       }, alert.brand);
       await createEscalationNotification({
-        title: decision === "approved" ? `Phương án đã được duyệt: #${alert.id.slice(-4)}` : `Cần chỉnh sửa phương án: #${alert.id.slice(-4)}`,
+        title: decision === "approved" ? `Ph╞░╞íng ├ín ─æ├ú ─æ╞░ß╗úc duyß╗çt: #${alert.id.slice(-4)}` : `Cß║ºn chß╗ënh sß╗¡a ph╞░╞íng ├ín: #${alert.id.slice(-4)}`,
         message: decision === "approved"
-          ? "Brand Manager đã duyệt phương án phản hồi và mức đền bù."
-          : "Brand Manager yêu cầu chỉnh sửa phương án phản hồi.",
+          ? "Brand Manager ─æ├ú duyß╗çt ph╞░╞íng ├ín phß║ún hß╗ôi v├á mß╗⌐c ─æß╗ün b├╣."
+          : "Brand Manager y├¬u cß║ºu chß╗ënh sß╗¡a ph╞░╞íng ├ín phß║ún hß╗ôi.",
         recipient_role: "crisis_employee",
         recipient_email: alert.escalation.submitted_by_email,
       });
       setAlert({ ...alert, status: nextStatus, escalation });
-      triggerToast(decision === "approved" ? "Đã phê duyệt phương án." : "Đã gửi yêu cầu chỉnh sửa.");
+      triggerToast(decision === "approved" ? "─É├ú ph├¬ duyß╗çt ph╞░╞íng ├ín." : "─É├ú gß╗¡i y├¬u cß║ºu chß╗ënh sß╗¡a.");
     } catch (e) {
       console.error(e);
-      triggerToast("Không thể xử lý phê duyệt: " + (e instanceof Error ? e.message : String(e)));
+      triggerToast("Kh├┤ng thß╗â xß╗¡ l├╜ ph├¬ duyß╗çt: " + (e instanceof Error ? e.message : String(e)));
     } finally {
       setEscalationBusy(false);
     }
@@ -661,7 +882,7 @@ export default function AlertDetailPage() {
 
     const cleanupFns: (() => void)[] = [];
 
-    // Strategy 1: Supabase Realtime — push updates when this specific annotation changes
+    // Strategy 1: Supabase Realtime ΓÇö push updates when this specific annotation changes
     if (supabaseClient) {
       try {
         const channelName = `alert-detail-${id.replace(/[^a-zA-Z0-9]/g, "-")}`;
@@ -671,7 +892,7 @@ export default function AlertDetailPage() {
             "postgres_changes",
             { event: "UPDATE", schema: "public", table: "annotations" },
             () => {
-              // Any annotation update — reload this detail
+              // Any annotation update ΓÇö reload this detail
               loadAlertDetail(false);
             }
           )
@@ -684,7 +905,7 @@ export default function AlertDetailPage() {
     }
 
     // Strategy 2: Fallback polling is disabled to reduce server load.
-    // Relying on manual "Làm mới" button and realtime push instead.
+    // Relying on manual "L├ám mß╗¢i" button and realtime push instead.
 
     return () => cleanupFns.forEach((fn) => fn());
   }, [id, loadAlertDetail]);
@@ -715,7 +936,7 @@ export default function AlertDetailPage() {
   }, [alert]);
 
   // NOTE: Detail page does NOT auto-lock on mount.
-  // Locking only happens when the Crisis Officer clicks "Nhận xử lý" on the list page.
+  // Locking only happens when the Crisis Officer clicks "Nhß║¡n xß╗¡ l├╜" on the list page.
   // This prevents Brand Managers or observers from accidentally overwriting the lock.
 
   const handleAddTimelineNote = async () => {
@@ -733,7 +954,7 @@ export default function AlertDetailPage() {
       );
       
       const nextHistory = alert.resolution_history ? [...alert.resolution_history] : [];
-      const authorName = profile?.displayName || getResolverName(profile?.email) || "Nhân viên trực";
+      const authorName = profile?.displayName || getResolverName(profile?.email) || "Nh├ón vi├¬n trß╗▒c";
       nextHistory.push({
         attempt_number: nextHistory.length + 1,
         timestamp: new Date().toISOString(),
@@ -747,10 +968,10 @@ export default function AlertDetailPage() {
       });
 
       setTimelineNote("");
-      triggerToast("Đã thêm ghi chú xử lý!");
+      triggerToast("─É├ú th├¬m ghi ch├║ xß╗¡ l├╜!");
     } catch (e) {
       console.error(e);
-      triggerToast("Lỗi thêm ghi chú. Vui lòng thử lại!");
+      triggerToast("Lß╗ùi th├¬m ghi ch├║. Vui l├▓ng thß╗¡ lß║íi!");
     }
   };
 
@@ -773,10 +994,10 @@ export default function AlertDetailPage() {
         };
       });
       setInternalNoteInput("");
-      triggerToast("Đã thêm ghi chú nội bộ!");
+      triggerToast("─É├ú th├¬m ghi ch├║ nß╗Öi bß╗Ö!");
     } catch (e) {
       console.error(e);
-      triggerToast("Không thể lưu ghi chú nội bộ!");
+      triggerToast("Kh├┤ng thß╗â l╞░u ghi ch├║ nß╗Öi bß╗Ö!");
     }
   };
 
@@ -784,7 +1005,7 @@ export default function AlertDetailPage() {
   const handleSaveSeverity = async () => {
     if (!alert) return;
     if (!severityReason.trim()) {
-      triggerToast("Vui lòng điền lý do thay đổi mức độ!");
+      triggerToast("Vui l├▓ng ─æiß╗ün l├╜ do thay ─æß╗òi mß╗⌐c ─æß╗Ö!");
       return;
     }
 
@@ -796,7 +1017,7 @@ export default function AlertDetailPage() {
       nextHistory.push({
         attempt_number: nextHistory.length + 1,
         timestamp: new Date().toISOString(),
-        note: `Thay đổi mức độ rủi ro thành ${newSeverity.toUpperCase()}. Lý do: ${severityReason.trim()}`,
+        note: `Thay ─æß╗òi mß╗⌐c ─æß╗Ö rß╗ºi ro th├ánh ${newSeverity.toUpperCase()}. L├╜ do: ${severityReason.trim()}`,
         resolved_by_email: profile?.email || "unknown",
         resolved_by_name: authorName
       } as any);
@@ -812,17 +1033,17 @@ export default function AlertDetailPage() {
 
       setEditSeverityMode(false);
       setSeverityReason("");
-      triggerToast("Cập nhật mức độ rủi ro thành công!");
+      triggerToast("Cß║¡p nhß║¡t mß╗⌐c ─æß╗Ö rß╗ºi ro th├ánh c├┤ng!");
     } catch (e) {
       console.error(e);
-      triggerToast("Không thể cập nhật mức độ rủi ro.");
+      triggerToast("Kh├┤ng thß╗â cß║¡p nhß║¡t mß╗⌐c ─æß╗Ö rß╗ºi ro.");
     }
   };
 
-  // Handler: Submit Correction Request (Gửi yêu cầu chỉnh sửa)
+  // Handler: Submit Correction Request (Gß╗¡i y├¬u cß║ºu chß╗ënh sß╗¡a)
   const handleSendCorrectionRequest = async () => {
     if (!alert || !correctionReason.trim()) {
-      triggerToast("Vui lòng điền nội dung yêu cầu chỉnh sửa!");
+      triggerToast("Vui l├▓ng ─æiß╗ün nß╗Öi dung y├¬u cß║ºu chß╗ënh sß╗¡a!");
       return;
     }
 
@@ -856,10 +1077,10 @@ export default function AlertDetailPage() {
       await createCorrectionRequest(payload);
       setCorrectionReason("");
       setLabelTab("pending");
-      triggerToast("Gửi yêu cầu chỉnh sửa thành công!");
+      triggerToast("Gß╗¡i y├¬u cß║ºu chß╗ënh sß╗¡a th├ánh c├┤ng!");
     } catch (e) {
       console.error(e);
-      triggerToast("Gửi yêu cầu thất bại. Vui lòng thử lại!");
+      triggerToast("Gß╗¡i y├¬u cß║ºu thß║Ñt bß║íi. Vui l├▓ng thß╗¡ lß║íi!");
     }
   };
 
@@ -876,7 +1097,7 @@ export default function AlertDetailPage() {
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
         </svg>
-        <p className="text-sm text-[var(--color-text-secondary)] font-bold">Đang tải chi tiết vụ việc...</p>
+        <p className="text-sm text-[var(--color-text-secondary)] font-bold">─Éang tß║úi chi tiß║┐t vß╗Ñ viß╗çc...</p>
       </div>
     );
   }
@@ -885,13 +1106,13 @@ export default function AlertDetailPage() {
     return (
       <div className="p-12 text-center space-y-4 max-w-md mx-auto">
         <span className="material-symbols-outlined text-red-500 text-6xl">warning</span>
-        <h2 className="text-xl font-bold text-[var(--color-text-primary)]">Vụ việc không tồn tại</h2>
-        <p className="text-sm text-[var(--color-text-secondary)]">Tài liệu cảnh báo này có thể đã bị xóa hoặc bạn không có quyền truy cập.</p>
+        <h2 className="text-xl font-bold text-[var(--color-text-primary)]">Vß╗Ñ viß╗çc kh├┤ng tß╗ôn tß║íi</h2>
+        <p className="text-sm text-[var(--color-text-secondary)]">T├ái liß╗çu cß║únh b├ío n├áy c├│ thß╗â ─æ├ú bß╗ï x├│a hoß║╖c bß║ín kh├┤ng c├│ quyß╗ün truy cß║¡p.</p>
         <button
           onClick={() => router.push("/alerts")}
           className="px-6 py-2 bg-primary text-white font-bold rounded-xl active:scale-95 transition-all text-xs"
         >
-          Quay lại danh sách
+          Quay lß║íi danh s├ích
         </button>
       </div>
     );
@@ -900,23 +1121,32 @@ export default function AlertDetailPage() {
   const isLockedByOthers = alert.being_resolved_by && alert.being_resolved_by !== profile?.email;
   const isMine = alert.being_resolved_by === profile?.email;
 
+  const workflowStatus = getAlertWorkflowStatus(alert);
+  const hasContactProof = Boolean(
+    alert.customer_contact_opened_at &&
+    alert.customer_contact_note?.trim() &&
+    alert.customer_contact_evidence_image
+  );
+  const canComplete = Boolean(hasContactProof && alert.customer_response_result);
+
+
   // Sentiment Color Mapping
   let sentimentBadge = "bg-slate-50 text-slate-600 border-slate-100";
-  if (alert.sentiment === "negative" || alert.sentiment === "tiêu cực") {
+  if (alert.sentiment === "negative" || alert.sentiment === "ti├¬u cß╗▒c") {
     sentimentBadge = "bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-900/30";
-  } else if (alert.sentiment === "positive" || alert.sentiment === "tích cực") {
+  } else if (alert.sentiment === "positive" || alert.sentiment === "t├¡ch cß╗▒c") {
     sentimentBadge = "bg-green-50 dark:bg-green-950/20 text-green-600 dark:text-green-400 border border-green-100 dark:border-green-900/30";
   }
 
   // Progress step helpers
   const statusSteps = ["new", "resolving", "pending_approval", "responded", "monitoring", "resolved"];
   const statusLabels: Record<string, string> = {
-    new: "Mới",
-    resolving: "Đang xử lý",
-    pending_approval: "Chờ duyệt",
-    responded: "Đã phản hồi",
-    monitoring: "Theo dõi",
-    resolved: "Đã đóng",
+    new: "Mß╗¢i",
+    resolving: "─Éang xß╗¡ l├╜",
+    pending_approval: "Chß╗¥ duyß╗çt",
+    responded: "─É├ú phß║ún hß╗ôi",
+    monitoring: "Theo d├╡i",
+    resolved: "─É├ú ─æ├│ng",
   };
   const currentStepIdx = statusSteps.indexOf(alert.status ?? "new");
   const progressPct = Math.round((currentStepIdx / (statusSteps.length - 1)) * 100);
@@ -936,16 +1166,16 @@ export default function AlertDetailPage() {
             </button>
             <div className="min-w-0">
               <h1 className="text-base md:text-lg font-black text-[var(--color-text-primary)] uppercase flex items-center gap-2 flex-wrap">
-                Vụ việc #{alert.id.slice(-4)}
+                Vß╗Ñ viß╗çc #{alert.id.slice(-4)}
                 <span className={`px-2 py-0.5 rounded text-[10px] font-bold text-white flex items-center gap-1 flex-shrink-0 ${
                   alert.severity === "critical" ? "bg-red-600" :
                   alert.severity === "high" ? "bg-orange-500" :
                   alert.severity === "medium" ? "bg-yellow-500" : "bg-slate-500"
                 }`}>
-                  {riskScore} · {
-                    alert.severity === "critical" ? "Khẩn cấp" :
-                    alert.severity === "high" ? "Rủi ro cao" :
-                    alert.severity === "medium" ? "Trung bình" : "Thấp"
+                  {riskScore} ┬╖ {
+                    alert.severity === "critical" ? "Khß║⌐n cß║Ñp" :
+                    alert.severity === "high" ? "Rß╗ºi ro cao" :
+                    alert.severity === "medium" ? "Trung b├¼nh" : "Thß║Ñp"
                   }
                 </span>
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold flex-shrink-0 ${
@@ -957,21 +1187,21 @@ export default function AlertDetailPage() {
                   alert.status === "resolved" ? "bg-green-100 text-green-600" : "bg-slate-100 text-slate-600"
                 }`}>
                   {
-                    alert.status === "new" ? "Mới phát hiện" :
-                    alert.status === "resolving" ? "Đang xử lý" :
-                    alert.status === "pending_approval" ? "Chờ duyệt" :
-                    alert.status === "responded" ? "Đã phản hồi" :
-                    alert.status === "monitoring" ? "Theo dõi thêm" :
-                    "Đã đóng"
+                    alert.status === "new" ? "Mß╗¢i ph├ít hiß╗çn" :
+                    alert.status === "resolving" ? "─Éang xß╗¡ l├╜" :
+                    alert.status === "pending_approval" ? "Chß╗¥ duyß╗çt" :
+                    alert.status === "responded" ? "─É├ú phß║ún hß╗ôi" :
+                    alert.status === "monitoring" ? "Theo d├╡i th├¬m" :
+                    "─É├ú ─æ├│ng"
                   }
                 </span>
               </h1>
               <div className="flex items-center gap-2 mt-0.5 text-[11px] text-[var(--color-text-muted)] font-semibold">
                 <span className="material-symbols-outlined text-[11px]">person</span>
-                {alert.being_resolved_by ? getResolverName(alert.being_resolved_by) : "Chưa có người phụ trách"}
+                {alert.being_resolved_by ? getResolverName(alert.being_resolved_by) : "Ch╞░a c├│ ng╞░ß╗¥i phß╗Ñ tr├ích"}
                 {isLockedByOthers && (
                   <span className="text-red-500 font-bold bg-red-50 px-1.5 py-0.5 rounded text-[10px] flex items-center gap-0.5 animate-pulse">
-                    ⚠️ Đang được xử lý
+                    ΓÜá∩╕Å ─Éang ─æ╞░ß╗úc xß╗¡ l├╜
                   </span>
                 )}
               </div>
@@ -980,27 +1210,27 @@ export default function AlertDetailPage() {
 
           <div className="flex gap-2 self-end sm:self-auto flex-shrink-0">
             <button
-              onClick={() => { loadAlertDetail(false); triggerToast("Đã làm mới!"); }}
+              onClick={() => { loadAlertDetail(false); triggerToast("─É├ú l├ám mß╗¢i!"); }}
               disabled={refreshing}
               className="flex items-center gap-1 px-3 py-1.5 border border-[var(--color-border)] text-[var(--color-text-secondary)] font-bold text-xs rounded-xl hover:bg-[var(--color-bg-surface-raised)] transition-all cursor-pointer disabled:opacity-50"
             >
               <span className={`material-symbols-outlined text-sm ${refreshing ? 'animate-spin' : ''}`}>refresh</span>
-              <span className="hidden sm:inline">Làm mới</span>
+              <span className="hidden sm:inline">L├ám mß╗¢i</span>
             </button>
 
             <button
-              onClick={() => { navigator.clipboard.writeText(window.location.href); triggerToast("Đã sao chép!"); }}
+              onClick={() => { navigator.clipboard.writeText(window.location.href); triggerToast("─É├ú sao ch├⌐p!"); }}
               className="px-3 py-1.5 border border-[var(--color-border)] text-[var(--color-text-secondary)] font-bold text-xs rounded-xl hover:bg-[var(--color-bg-surface-raised)] transition-all cursor-pointer"
             >
-              Chia sẻ
+              Chia sß║╗
             </button>
 
             {!isMine && !isLockedByOthers && (
               <button
-                onClick={() => { lockAlertForResolution(alert.id, profile); triggerToast("Đã nhận xử lý!"); }}
+                onClick={() => { lockAlertForResolution(alert.id, profile); triggerToast("─É├ú nhß║¡n xß╗¡ l├╜!"); }}
                 className="px-4 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all cursor-pointer"
               >
-                Nhận xử lý
+                Nhß║¡n xß╗¡ l├╜
               </button>
             )}
 
@@ -1009,7 +1239,7 @@ export default function AlertDetailPage() {
                 onClick={() => setShowMonitoringModal(true)}
                 className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all cursor-pointer"
               >
-                Hoàn tất
+                Ho├án tß║Ñt
               </button>
             )}
 
@@ -1017,20 +1247,20 @@ export default function AlertDetailPage() {
               <button
                 onClick={async () => {
                   try {
-                    await updateAlertStatus(alert.id, "resolved", profile, { note: "Đã đóng hẳn vụ việc." }, alert.brand);
+                    await updateAlertStatus(alert.id, "resolved", profile, { note: "─É├ú ─æ├│ng hß║│n vß╗Ñ viß╗çc." }, alert.brand);
                     setAlert({ ...alert, status: "resolved" });
-                    triggerToast("Đã đóng hẳn!");
-                  } catch (e) { triggerToast("Lỗi!"); }
+                    triggerToast("─É├ú ─æ├│ng hß║│n!");
+                  } catch (e) { triggerToast("Lß╗ùi!"); }
                 }}
                 className="px-4 py-1.5 bg-green-700 hover:bg-green-800 text-white font-bold text-xs rounded-xl shadow-sm transition-all cursor-pointer"
               >
-                Đóng hẳn
+                ─É├│ng hß║│n
               </button>
             )}
           </div>
         </div>
 
-        {/* Progress Bar — tiến độ xử lý */}
+        {/* Progress Bar ΓÇö tiß║┐n ─æß╗Ö xß╗¡ l├╜ */}
         <div className="px-4 md:px-8 pb-3">
           <div className="flex items-center gap-1.5">
             {statusSteps.map((step, idx) => {
@@ -1078,7 +1308,7 @@ export default function AlertDetailPage() {
                   : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
               }`}
             >
-              Nội dung cảnh báo
+              Nß╗Öi dung cß║únh b├ío
               {activeLeftTab === "content" && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-600 dark:bg-purple-400 rounded-full" />
               )}
@@ -1091,7 +1321,7 @@ export default function AlertDetailPage() {
                   : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
               }`}
             >
-              Lịch sử xử lý ({alert.resolution_history?.length || 0})
+              Lß╗ïch sß╗¡ xß╗¡ l├╜ ({alert.resolution_history?.length || 0})
               {activeLeftTab === "history" && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-600 dark:bg-purple-400 rounded-full" />
               )}
@@ -1108,7 +1338,7 @@ export default function AlertDetailPage() {
                     <div className="flex items-center gap-2">
                       <span className="material-symbols-outlined text-cyan-600 dark:text-cyan-400 animate-pulse text-lg">visibility</span>
                       <span className="font-bold text-xs text-[var(--color-text-primary)] uppercase tracking-wider">
-                        Giai đoạn theo dõi khủng hoảng
+                        Giai ─æoß║ín theo d├╡i khß╗ºng hoß║úng
                       </span>
                     </div>
                     <span className="bg-cyan-100 text-cyan-700 dark:bg-cyan-950 text-[10px] font-bold px-2 py-0.5 rounded-full">
@@ -1117,9 +1347,9 @@ export default function AlertDetailPage() {
                   </div>
 
                   <div className="bg-white dark:bg-slate-900 border border-[var(--color-border)] rounded-xl p-4 text-center space-y-1">
-                    <p className="text-[10px] text-[var(--color-text-muted)] font-semibold uppercase">Thời gian theo dõi còn lại</p>
+                    <p className="text-[10px] text-[var(--color-text-muted)] font-semibold uppercase">Thß╗¥i gian theo d├╡i c├▓n lß║íi</p>
                     <p className="text-lg md:text-xl font-black text-cyan-600 dark:text-cyan-400 font-mono tracking-tight">
-                      {timeLeftStr || "Đang tính toán..."}
+                      {timeLeftStr || "─Éang t├¡nh to├ín..."}
                     </p>
                   </div>
 
@@ -1128,14 +1358,14 @@ export default function AlertDetailPage() {
                     <div className="p-4 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 rounded-xl space-y-2 animate-pulse">
                       <div className="flex items-center gap-2 text-red-700 dark:text-red-400 font-bold text-xs">
                         <span className="material-symbols-outlined text-sm">warning</span>
-                        <span>CẢNH BÁO HOẠT ĐỘNG BẤT THƯỜNG</span>
+                        <span>Cß║óNH B├üO HOß║áT ─Éß╗ÿNG Bß║ñT TH╞»ß╗£NG</span>
                       </div>
                       <p className="text-[11px] text-[var(--color-text-secondary)] leading-relaxed">
-                        Hệ thống ghi nhận có tương tác mới phát sinh so với thời điểm bắt đầu theo dõi:
+                        Hß╗ç thß╗æng ghi nhß║¡n c├│ t╞░╞íng t├íc mß╗¢i ph├ít sinh so vß╗¢i thß╗¥i ─æiß╗âm bß║»t ─æß║ºu theo d├╡i:
                       </p>
                       <div className="flex gap-4 text-[10px] font-bold text-red-600 dark:text-red-400 pt-1">
                         {newActivityDetails.likes > 0 && (
-                          <span>+ {newActivityDetails.likes} Likes (Ngưỡng an toàn: &le; 5)</span>
+                          <span>+ {newActivityDetails.likes} Likes (Ng╞░ß╗íng an to├án: &le; 5)</span>
                         )}
                         {newActivityDetails.comments > 0 && (
                           <span>+ {newActivityDetails.comments} Comments</span>
@@ -1146,9 +1376,9 @@ export default function AlertDetailPage() {
                     <div className="p-4 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900/30 rounded-xl flex items-start gap-2.5">
                       <span className="material-symbols-outlined text-green-600 dark:text-green-400 text-sm mt-0.5">verified_user</span>
                       <div className="space-y-0.5">
-                        <p className="text-green-700 dark:text-green-400 font-bold text-xs">Trạng thái an toàn</p>
+                        <p className="text-green-700 dark:text-green-400 font-bold text-xs">Trß║íng th├íi an to├án</p>
                         <p className="text-[11px] text-[var(--color-text-secondary)] leading-normal">
-                          Chưa phát hiện hành vi tương tác đột biến nào. Hệ thống sẽ tự động đóng vụ việc khi hết thời gian.
+                          Ch╞░a ph├ít hiß╗çn h├ánh vi t╞░╞íng t├íc ─æß╗Öt biß║┐n n├áo. Hß╗ç thß╗æng sß║╜ tß╗▒ ─æß╗Öng ─æ├│ng vß╗Ñ viß╗çc khi hß║┐t thß╗¥i gian.
                         </p>
                       </div>
                     </div>
@@ -1165,7 +1395,7 @@ export default function AlertDetailPage() {
                     <PlatformLogo platform={alert.source} size="sm" />
                     <div>
                       <h3 className="font-black text-xs text-[var(--color-text-primary)] uppercase leading-none">
-                        {alert.content_type === "comment" ? "Bình luận cảnh báo" : "Bài viết cảnh báo"}
+                        {alert.content_type === "comment" ? "B├¼nh luß║¡n cß║únh b├ío" : "B├ái viß║┐t cß║únh b├ío"}
                       </h3>
                       <div className="flex items-center gap-3.5 mt-1">
                         <a
@@ -1174,7 +1404,7 @@ export default function AlertDetailPage() {
                           rel="noreferrer"
                           className="text-indigo-600 hover:underline text-[10px] font-bold flex items-center gap-0.5"
                         >
-                          Xem trên {alert.source ? String(alert.source).toUpperCase() : "nền tảng gốc"}
+                          Xem tr├¬n {alert.source ? String(alert.source).toUpperCase() : "nß╗ün tß║úng gß╗æc"}
                           <span className="material-symbols-outlined text-[10px]">open_in_new</span>
                         </a>
                         {alert.url && alert.url !== "#" && (
@@ -1182,7 +1412,7 @@ export default function AlertDetailPage() {
                             onClick={async () => {
                               try {
                                 await navigator.clipboard.writeText(alert.text || "");
-                                triggerToast("Đã sao chép nội dung cảnh báo!");
+                                triggerToast("─É├ú sao ch├⌐p nß╗Öi dung cß║únh b├ío!");
                                 window.open(alert.url, "_blank", "noopener,noreferrer");
                               } catch (err) {
                                 console.warn("Failed to copy source text:", err);
@@ -1191,15 +1421,15 @@ export default function AlertDetailPage() {
                             className="text-purple-600 hover:underline text-[10px] font-bold flex items-center gap-0.5 cursor-pointer bg-transparent border-none p-0"
                           >
                             <span className="material-symbols-outlined text-[11px]">content_copy</span>
-                            Sao chép &amp; Mở nguồn
+                            Sao ch├⌐p &amp; Mß╗ƒ nguß╗ôn
                           </button>
                         )}
                       </div>
                     </div>
                   </div>
                   <div className="text-right text-[10px] text-[var(--color-text-muted)] font-semibold">
-                    <p>Đăng: {getRelativeTime(alert.created_at)}</p>
-                    <p className="text-red-500 font-bold mt-0.5">Phát hiện: {getRelativeTime(alert.created_at)}</p>
+                    <p>─É─âng: {getRelativeTime(alert.created_at)}</p>
+                    <p className="text-red-500 font-bold mt-0.5">Ph├ít hiß╗çn: {getRelativeTime(alert.created_at)}</p>
                   </div>
                 </div>
 
@@ -1208,7 +1438,7 @@ export default function AlertDetailPage() {
                   <div className="p-3 bg-slate-50 dark:bg-slate-800/10 border border-[var(--color-border)]/50 rounded-xl text-xs space-y-1.5">
                     <div className="flex justify-between items-center text-[10px] font-bold text-[var(--color-text-secondary)] uppercase">
                       <span className="flex items-center gap-1">
-                        <span className="material-symbols-outlined text-[12px]">article</span> Bài viết gốc
+                        <span className="material-symbols-outlined text-[12px]">article</span> B├ái viß║┐t gß╗æc
                       </span>
                       {alert.post_url && alert.post_url !== "#" && (
                         <a
@@ -1217,7 +1447,7 @@ export default function AlertDetailPage() {
                           rel="noreferrer"
                           className="text-indigo-600 hover:underline flex items-center gap-0.5"
                         >
-                          Truy cập bài gốc <span className="material-symbols-outlined text-[10px]">open_in_new</span>
+                          Truy cß║¡p b├ái gß╗æc <span className="material-symbols-outlined text-[10px]">open_in_new</span>
                         </a>
                       )}
                     </div>
@@ -1256,15 +1486,15 @@ export default function AlertDetailPage() {
                       )}
                     </div>
                     <div>
-                      <h4 className="font-bold text-xs text-[var(--color-text-primary)]">@{alert.author || "Ẩn danh"}</h4>
+                      <h4 className="font-bold text-xs text-[var(--color-text-primary)]">@{alert.author || "ß║¿n danh"}</h4>
                       <div className="flex items-center gap-2 mt-0.5">
                         {alert.reach && alert.reach > 50000 && (
                           <span className="bg-pink-50 dark:bg-pink-950/20 text-pink-600 text-[9px] font-bold px-1.5 py-0.2 rounded-lg border border-pink-100 dark:border-pink-900/30">
-                            KOL lớn
+                            KOL lß╗¢n
                           </span>
                         )}
                         <span className="text-[9px] text-[var(--color-text-secondary)] font-medium">
-                          {(alert.reach || 0).toLocaleString("vi-VN")} lượt tiếp cận
+                          {(alert.reach || 0).toLocaleString("vi-VN")} l╞░ß╗út tiß║┐p cß║¡n
                         </span>
                       </div>
                     </div>
@@ -1297,31 +1527,31 @@ export default function AlertDetailPage() {
                 {/* Quick case details strip (metadata badge block) */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-[var(--color-border)]/50 text-[10px] text-[var(--color-text-secondary)] font-semibold">
                   <div>
-                    <span className="text-[var(--color-text-muted)] block text-[9px] uppercase tracking-wider mb-0.5">Chủ đề</span>
+                    <span className="text-[var(--color-text-muted)] block text-[9px] uppercase tracking-wider mb-0.5">Chß╗º ─æß╗ü</span>
                     <span className="font-bold text-blue-600 bg-blue-50 dark:bg-blue-950/20 px-1.5 py-0.5 rounded">
                       {getTopicLabel(Array.isArray(alert.topic) ? alert.topic[0] : alert.topic)}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[var(--color-text-muted)] block text-[9px] uppercase tracking-wider mb-0.5">Cảm xúc</span>
+                    <span className="text-[var(--color-text-muted)] block text-[9px] uppercase tracking-wider mb-0.5">Cß║úm x├║c</span>
                     <span className={`font-bold px-1.5 py-0.5 rounded border ${
                       alert.sentiment === "negative" ? "bg-red-50 text-red-600 border-red-100" :
                       alert.sentiment === "positive" ? "bg-green-50 text-green-600 border-green-100" :
                       "bg-slate-50 text-slate-500 border-slate-200"
                     }`}>
-                      {alert.sentiment === "negative" ? "Tiêu cực" : alert.sentiment === "positive" ? "Tích cực" : "Trung lập"}
+                      {alert.sentiment === "negative" ? "Ti├¬u cß╗▒c" : alert.sentiment === "positive" ? "T├¡ch cß╗▒c" : "Trung lß║¡p"}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[var(--color-text-muted)] block text-[9px] uppercase tracking-wider mb-0.5">Thương hiệu</span>
+                    <span className="text-[var(--color-text-muted)] block text-[9px] uppercase tracking-wider mb-0.5">Th╞░╞íng hiß╗çu</span>
                     <span className="font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-950/20 px-1.5 py-0.5 rounded">
                       {formatBrandName(alert.brand)}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[var(--color-text-muted)] block text-[9px] uppercase tracking-wider mb-0.5">Người xử lý</span>
+                    <span className="text-[var(--color-text-muted)] block text-[9px] uppercase tracking-wider mb-0.5">Ng╞░ß╗¥i xß╗¡ l├╜</span>
                     <span className="font-bold text-[var(--color-text-primary)]">
-                      {alert.being_resolved_by ? getResolverName(alert.being_resolved_by) : <span className="text-slate-400 italic">Chưa có</span>}
+                      {alert.being_resolved_by ? getResolverName(alert.being_resolved_by) : <span className="text-slate-400 italic">Ch╞░a c├│</span>}
                     </span>
                   </div>
                 </div>
@@ -1334,7 +1564,7 @@ export default function AlertDetailPage() {
               {/* Processing History (Timeline Log) */}
               <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl shadow-sm p-6 space-y-6">
                 <h3 className="font-black text-xs md:text-sm text-[var(--color-text-primary)] uppercase tracking-wider pb-3 border-b border-[var(--color-border)]">
-                  Lịch sử xử lý sự vụ
+                  Lß╗ïch sß╗¡ xß╗¡ l├╜ sß╗▒ vß╗Ñ
                 </h3>
 
                 <div className="relative space-y-6 pl-6 before:absolute before:inset-y-1 before:left-[11px] before:w-0.5 before:bg-[var(--color-border)]">
@@ -1343,11 +1573,11 @@ export default function AlertDetailPage() {
                      <div className="absolute -left-[23px] top-0.5 w-[14px] h-[14px] bg-indigo-600 rounded-full border-4 border-[var(--color-bg-surface)] ring-1 ring-[var(--color-border)]"></div>
                      <div>
                        <div className="flex items-center justify-between text-xs">
-                         <p className="font-bold text-[var(--color-text-primary)]">Hệ thống phát hiện tự động</p>
+                         <p className="font-bold text-[var(--color-text-primary)]">Hß╗ç thß╗æng ph├ít hiß╗çn tß╗▒ ─æß╗Öng</p>
                          <span className="text-[10px] text-[var(--color-text-muted)] font-semibold">{getRelativeTime(alert.created_at)}</span>
                        </div>
                        <p className="text-[11px] text-[var(--color-text-secondary)] mt-1">
-                         Hệ thống đã tự động gán nhãn rủi ro khẩn cấp dựa trên từ khóa nhạy cảm.
+                         Hß╗ç thß╗æng ─æ├ú tß╗▒ ─æß╗Öng g├ín nh├ún rß╗ºi ro khß║⌐n cß║Ñp dß╗▒a tr├¬n tß╗½ kh├│a nhß║íy cß║úm.
                        </p>
                      </div>
                   </div>
@@ -1359,7 +1589,7 @@ export default function AlertDetailPage() {
                       <div>
                         <div className="flex items-center justify-between text-xs">
                           <p className="font-bold text-[var(--color-text-primary)]">
-                            {h.resolved_by_name || getResolverName(h.resolved_by_email) || "Nhân viên trực"}
+                            {h.resolved_by_name || getResolverName(h.resolved_by_email) || "Nh├ón vi├¬n trß╗▒c"}
                           </p>
                           <span className="text-[10px] text-[var(--color-text-muted)] font-semibold">{getRelativeTime(h.timestamp)}</span>
                         </div>
@@ -1367,7 +1597,7 @@ export default function AlertDetailPage() {
                           {h.note}
                           {h.image_url && (
                             <div className="mt-2.5 max-w-[200px] border border-[var(--color-border)] rounded-lg overflow-hidden shadow-sm">
-                              <img src={h.image_url} alt="Bằng chứng xử lý" className="w-full h-auto" />
+                              <img src={h.image_url} alt="Bß║▒ng chß╗⌐ng xß╗¡ l├╜" className="w-full h-auto" />
                             </div>
                           )}
                         </div>
@@ -1381,7 +1611,7 @@ export default function AlertDetailPage() {
                   <div className="mt-4 flex gap-2">
                     <input
                       type="text"
-                      placeholder="Nhập ghi chú xử lý mới vào timeline..."
+                      placeholder="Nhß║¡p ghi ch├║ xß╗¡ l├╜ mß╗¢i v├áo timeline..."
                       value={timelineNote}
                       onChange={(e) => setTimelineNote(e.target.value)}
                       className="flex-1 text-xs px-3 py-2 border border-[var(--color-border)] rounded-xl bg-[var(--color-bg-surface-raised)] focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-[var(--color-text-primary)] font-medium"
@@ -1405,51 +1635,180 @@ export default function AlertDetailPage() {
 
 
 
-            {/* Widget: Quick Reply + Draft (khi đang xử lý và là người phụ trách) */}
-            {isMine && alert.status === "resolving" && (
+            {/* Widget: Quick Reply + Draft (khi ─æang xß╗¡ l├╜ v├á l├á ng╞░ß╗¥i phß╗Ñ tr├ích) */}
+                        {isMine && (workflowStatus === "processing" || workflowStatus === "contact_failed") && (
               <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl shadow-sm p-5 space-y-4">
-                <h3 className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-wider flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-purple-500 text-base">quickreply</span>
-                  Soạn phản hồi
-                </h3>
+                <div>
+                  <h3 className="text-xs font-black text-[var(--color-text-primary)] uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-purple-500 text-base">support_agent</span>
+                    Li├¬n hß╗ç v├á ghi nhß║¡n phß║ún hß╗ôi
+                  </h3>
+                  <p className="mt-1 text-[10px] text-[var(--color-text-muted)]">
+                    Phß║úi mß╗ƒ li├¬n kß║┐t li├¬n hß╗ç v├á chß╗ìn kß║┐t quß║ú tr╞░ß╗¢c khi ho├án tß║Ñt vß╗Ñ viß╗çc.
+                  </p>
+                </div>
 
-                {brandTemplates.length > 0 && (
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider block">Mẫu phản hồi của Brand</label>
-                    <select
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (val) setDraftResponse(val);
-                      }}
-                      className="w-full text-xs p-2 border border-[var(--color-border)] rounded-xl bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] focus:outline-none"
-                    >
-                      <option value="">-- Chọn mẫu phản hồi đã lưu --</option>
-                      {brandTemplates.map((t) => (
-                        <option key={t.id} value={t.templateText}>
-                          {t.name} ({t.sentiment === "all" ? "Tất cả" : t.sentiment})
-                        </option>
-                      ))}
-                    </select>
+                {alert.customer_contact_history && alert.customer_contact_history.length > 0 && (
+                  <div className="space-y-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)]/50 p-3">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-[var(--color-text-secondary)] flex items-center gap-1">
+                      <span className="material-symbols-outlined text-sm">history</span>
+                      Lß╗ïch sß╗¡ li├¬n hß╗ç tr╞░ß╗¢c ({alert.customer_contact_history.length})
+                    </p>
+                    <div className="max-h-80 space-y-3 overflow-y-auto pr-1">
+                      {[...alert.customer_contact_history].reverse().map((contactAttempt, reverseIndex) => {
+                        const attemptNumber = alert.customer_contact_history!.length - reverseIndex;
+                        const resultLabel = CUSTOMER_RESPONSE_OPTIONS.find(
+                          (option) => option.value === contactAttempt.response_result
+                        )?.label || contactAttempt.response_result;
+                        const outcomeLabel = contactAttempt.outcome_status === "resolved"
+                          ? "─É├ú giß║úi quyß║┐t"
+                          : contactAttempt.outcome_status === "contact_waiting"
+                            ? "─É├ú li├¬n hß╗ç ΓÇô Chß╗¥ phß║ún hß╗ôi"
+                            : "Li├¬n hß╗ç kh├┤ng th├ánh";
+                        return (
+                          <article key={`${contactAttempt.completed_at}-${attemptNumber}`} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-3 space-y-2">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-[11px] font-black text-[var(--color-text-primary)]">Lß║ºn li├¬n hß╗ç {attemptNumber}</p>
+                                <p className="text-[9px] text-[var(--color-text-muted)]">
+                                  {new Date(contactAttempt.completed_at).toLocaleString("vi-VN")}
+                                </p>
+                              </div>
+                              <span className="rounded-full bg-slate-100 px-2 py-1 text-[9px] font-bold text-slate-700">
+                                {outcomeLabel}
+                              </span>
+                            </div>
+                            <p className="text-[11px] leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap">
+                              {contactAttempt.note}
+                            </p>
+                            <p className="text-[10px] font-bold text-purple-700">Kß║┐t quß║ú: {resultLabel}</p>
+                            <button
+                              type="button"
+                              onClick={() => setPreviewEvidenceImage(contactAttempt.evidence_image)}
+                              className="block w-full cursor-zoom-in rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/30"
+                              title="Bß║Ñm ─æß╗â xem ß║únh lß╗¢n ngay trong InsightFlow"
+                            >
+                              <img
+                                src={contactAttempt.evidence_image}
+                                alt={`Minh chß╗⌐ng lß║ºn li├¬n hß╗ç ${attemptNumber}`}
+                                className="max-h-52 w-full rounded-lg border border-[var(--color-border)] object-contain bg-slate-50"
+                              />
+                            </button>
+                          </article>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
 
-                <QuickReplyHelper
-                  mentionContent={alert.text || ""}
-                  customerName={alert.author || "Khách hàng"}
-                  sentiment={(alert.sentiment === "positive" || alert.sentiment === "negative") ? alert.sentiment : "neutral"}
-                  category="crisis"
-                  onSelectReply={(text) => setDraftResponse(text)}
-                  primaryActionLabel="Mở nguồn gốc"
-                  onCopyAndOpenContact={alert.url && alert.url !== "#" ? () => {
-                    window.open(alert.url, "_blank", "noopener,noreferrer");
-                  } : undefined}
-                />
-                <textarea
-                  value={draftResponse}
-                  onChange={(e) => setDraftResponse(e.target.value)}
-                  placeholder="Nhập nội dung phản hồi công khai..."
-                  className="w-full text-xs p-3 border border-[var(--color-border)] rounded-xl bg-[var(--color-bg-surface-raised)] focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-[var(--color-text-primary)] h-28 resize-none"
-                />
+                <div className={`rounded-xl border p-3 text-[11px] font-bold flex items-start gap-2 ${
+                  alert.customer_contact_opened_at
+                    ? "border-green-200 bg-green-50 text-green-700"
+                    : "border-amber-200 bg-amber-50 text-amber-700"
+                }`}>
+                  <span className="material-symbols-outlined text-base">
+                    {alert.customer_contact_opened_at ? "check_circle" : "info"}
+                  </span>
+                  <span>
+                    {alert.customer_contact_opened_at
+                      ? "─É├ú mß╗ƒ nguß╗ôn ─æß╗â li├¬n hß╗ç. H├úy bß╗ò sung ghi ch├║ v├á ß║únh minh chß╗⌐ng b├¬n d╞░ß╗¢i."
+                      : "H├úy bß║Ñm ΓÇÿXem tr├¬n nß╗ün tß║úngΓÇÖ tß║íi nß╗Öi dung cß║únh b├ío tr╞░ß╗¢c."}
+                  </span>
+                </div>
+
+                {alert.customer_contact_opened_at && (
+                  <div className="rounded-xl border border-green-200 bg-green-50/60 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[10px] font-black uppercase tracking-wider text-green-700">Mß║½u ─æ├ú sao ch├⌐p</p>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await navigator.clipboard.writeText(alert.customer_contact_template || createDefaultContactTemplate(alert.author || "Anh/Chß╗ï", alert.brand));
+                          triggerToast("─É├ú sao ch├⌐p lß║íi mß║½u phß║ún hß╗ôi.");
+                        }}
+                        className="text-[10px] font-bold text-green-700 hover:underline"
+                      >
+                        Sao ch├⌐p lß║íi
+                      </button>
+                    </div>
+                    <p className="text-[11px] leading-relaxed text-[var(--color-text-secondary)]">
+                      {alert.customer_contact_template || createDefaultContactTemplate(alert.author || "Anh/Chß╗ï", alert.brand)}
+                    </p>
+                  </div>
+                )}
+
+                <div className={`space-y-3 rounded-xl border border-[var(--color-border)] p-3 ${!alert.customer_contact_opened_at ? "opacity-50" : ""}`}>
+                  <p className="text-[10px] font-black uppercase tracking-wider text-[var(--color-text-secondary)]">
+                    Minh chß╗⌐ng li├¬n hß╗ç <span className="text-red-500">*</span>
+                  </p>
+                  <textarea
+                    value={contactEvidenceNote}
+                    onChange={(event) => setContactEvidenceNote(event.target.value)}
+                    disabled={!alert.customer_contact_opened_at}
+                    rows={3}
+                    placeholder="Ghi r├╡ ─æ├ú phß║ún hß╗ôi ß╗ƒ ─æ├óu, nß╗Öi dung trao ─æß╗òi v├á thß╗¥i ─æiß╗âm li├¬n hß╗ç..."
+                    className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-2.5 text-xs text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-purple-500/20 disabled:cursor-not-allowed"
+                  />
+                  <div className="space-y-2">
+                    <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-dashed border-purple-300 bg-purple-50 px-3 py-2 text-[11px] font-bold text-purple-700 hover:bg-purple-100">
+                      <span className="material-symbols-outlined text-base">add_photo_alternate</span>
+                      {contactEvidenceImage ? "─Éß╗òi ß║únh minh chß╗⌐ng" : "Th├¬m ß║únh minh chß╗⌐ng"}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        disabled={!alert.customer_contact_opened_at}
+                        onChange={(event) => handleContactEvidenceImage(event.target.files?.[0])}
+                        className="hidden"
+                      />
+                    </label>
+                    {contactEvidenceImage && (
+                      <div className="relative overflow-hidden rounded-xl border border-[var(--color-border)] bg-slate-50 p-2">
+                        <img src={contactEvidenceImage} alt="Minh chß╗⌐ng li├¬n hß╗ç kh├ích h├áng" className="max-h-44 w-full object-contain" />
+                        <button
+                          type="button"
+                          onClick={() => setContactEvidenceImage(null)}
+                          className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-full bg-black/70 text-white"
+                        >
+                          <span className="material-symbols-outlined text-sm">close</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!alert.customer_contact_opened_at || !contactEvidenceNote.trim() || !contactEvidenceImage || savingContactEvidence}
+                    onClick={handleSaveContactEvidence}
+                    className="w-full rounded-xl bg-slate-900 py-2.5 text-xs font-bold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
+                  >
+                    {savingContactEvidence ? "─Éang l╞░u..." : hasContactProof ? "Cß║¡p nhß║¡t minh chß╗⌐ng" : "L╞░u minh chß╗⌐ng"}
+                  </button>
+                </div>
+
+                <fieldset disabled={!hasContactProof} className="space-y-2 disabled:opacity-50">
+                  <legend className="mb-2 text-[10px] font-black uppercase tracking-wider text-[var(--color-text-secondary)]">
+                    Kß║┐t quß║ú phß║ún hß╗ôi cß╗ºa kh├ích h├áng
+                  </legend>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {CUSTOMER_RESPONSE_OPTIONS.map((option) => {
+                      const selected = alert.customer_response_result === option.value;
+                      return (
+                        <button
+                          type="button"
+                          key={option.value}
+                          disabled={!hasContactProof}
+                          onClick={() => handleCustomerResponseResult(option.value)}
+                          aria-pressed={selected}
+                          className={`rounded-xl border p-2.5 text-left text-[11px] font-bold flex items-center gap-2 transition-all disabled:cursor-not-allowed ${
+                            selected ? `${option.tone} ring-2 ring-offset-1 ring-current` : "border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)] hover:border-purple-300"
+                          }`}
+                        >
+                          <span className="material-symbols-outlined text-base">{option.icon}</span>
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </fieldset>
               </div>
             )}
 
@@ -1457,14 +1816,14 @@ export default function AlertDetailPage() {
             <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl shadow-sm p-6 space-y-4">
               <div className="flex items-center justify-between">
                 <label className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider">
-                  Mức độ rủi ro thương hiệu
+                  Mß╗⌐c ─æß╗Ö rß╗ºi ro th╞░╞íng hiß╗çu
                 </label>
                 {!editSeverityMode && isManager && (
                   <button
                     onClick={() => setEditSeverityMode(true)}
                     className="text-xs text-indigo-600 hover:underline font-bold flex items-center gap-0.5 cursor-pointer"
                   >
-                    <span className="material-symbols-outlined text-xs">edit</span> Sửa nhãn
+                    <span className="material-symbols-outlined text-xs">edit</span> Sß╗¡a nh├ún
                   </button>
                 )}
               </div>
@@ -1476,19 +1835,19 @@ export default function AlertDetailPage() {
                   }`}>
                   <span className="material-symbols-outlined text-[18px]">priority_high</span>
                   <span className="font-bold text-xs uppercase tracking-wider">
-                    {alert.severity === "critical" ? "Khẩn cấp" :
-                      alert.severity === "high" ? "Rủi ro cao" :
-                        alert.severity === "medium" ? "Trung bình" : "Thấp"}
+                    {alert.severity === "critical" ? "Khß║⌐n cß║Ñp" :
+                      alert.severity === "high" ? "Rß╗ºi ro cao" :
+                        alert.severity === "medium" ? "Trung b├¼nh" : "Thß║Ñp"}
                   </span>
                 </div>
               ) : (
                 <div className="space-y-4 p-4 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-[var(--color-border)]/50">
                   <div className="grid grid-cols-4 gap-1">
                     {[
-                      { key: "low", label: "Thấp", class: "border-slate-500 text-slate-600", activeClass: "bg-slate-500 text-white" },
-                      { key: "medium", label: "Trung bình", class: "border-yellow-500 text-yellow-600", activeClass: "bg-yellow-500 text-white" },
+                      { key: "low", label: "Thß║Ñp", class: "border-slate-500 text-slate-600", activeClass: "bg-slate-500 text-white" },
+                      { key: "medium", label: "Trung b├¼nh", class: "border-yellow-500 text-yellow-600", activeClass: "bg-yellow-500 text-white" },
                       { key: "high", label: "Cao", class: "border-orange-500 text-orange-600", activeClass: "bg-orange-500 text-white" },
-                      { key: "critical", label: "Khẩn cấp", class: "border-red-600 text-red-600", activeClass: "bg-red-600 text-white" }
+                      { key: "critical", label: "Khß║⌐n cß║Ñp", class: "border-red-600 text-red-600", activeClass: "bg-red-600 text-white" }
                     ].map((btn) => (
                       <button
                         key={btn.key}
@@ -1502,11 +1861,11 @@ export default function AlertDetailPage() {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-[var(--color-text-secondary)] uppercase">Lý do thay đổi</label>
+                    <label className="text-[9px] font-bold text-[var(--color-text-secondary)] uppercase">L├╜ do thay ─æß╗òi</label>
                     <textarea
                       value={severityReason}
                       onChange={(e) => setSeverityReason(e.target.value)}
-                      placeholder="Nhập lý do đổi mức độ rủi ro..."
+                      placeholder="Nhß║¡p l├╜ do ─æß╗òi mß╗⌐c ─æß╗Ö rß╗ºi ro..."
                       className="w-full text-xs p-2 border border-[var(--color-border)] rounded-xl bg-white dark:bg-slate-800 focus:ring-2 focus:ring-purple-500/20 text-[var(--color-text-primary)] h-16"
                     />
                   </div>
@@ -1516,7 +1875,7 @@ export default function AlertDetailPage() {
                       onClick={handleSaveSeverity}
                       className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg text-xs font-bold transition-all cursor-pointer"
                     >
-                      Lưu
+                      L╞░u
                     </button>
                     <button
                       onClick={() => {
@@ -1525,7 +1884,7 @@ export default function AlertDetailPage() {
                       }}
                       className="px-4 py-2 text-[var(--color-text-secondary)] text-xs font-bold hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-all cursor-pointer"
                     >
-                      Hủy
+                      Hß╗ºy
                     </button>
                   </div>
                 </div>
@@ -1570,7 +1929,7 @@ export default function AlertDetailPage() {
                   )}
                   <QuickReplyHelper
                     mentionContent={alert.text || ""}
-                    customerName={alert.author || "Khách hàng"}
+                    customerName={alert.author || "Kh├ích h├áng"}
                     sentiment={(alert.sentiment === "positive" || alert.sentiment === "negative") ? alert.sentiment : "neutral"}
                     category="crisis"
                     onSelectReply={(text) => {
@@ -1669,7 +2028,7 @@ export default function AlertDetailPage() {
                       onClick={() => setShowMonitoringModal(true)}
                       className="w-full py-3 rounded-xl bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-xs font-bold cursor-pointer"
                     >
-                      Đăng phản hồi &amp; Hoàn tất
+                      ─É─âng phß║ún hß╗ôi &amp; Ho├án tß║Ñt
                     </button>
                   )}
                 </div>
@@ -1679,7 +2038,7 @@ export default function AlertDetailPage() {
             {/* Widget: Status Stepper */}
             <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl shadow-sm p-6 space-y-4">
               <label className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider">
-                Trạng thái vụ việc
+                Trß║íng th├íi vß╗Ñ viß╗çc
               </label>
 
               <div className="relative flex justify-between px-2 pt-6 pb-2">
@@ -1699,12 +2058,12 @@ export default function AlertDetailPage() {
 
                 {/* Steps */}
                 {[
-                  { key: "new", label: "Mới" },
-                  { key: "resolving", label: "Đang xử lý" },
-                  { key: "pending_approval", label: "Chờ duyệt" },
-                  { key: "responded", label: "Đã phản hồi" },
-                  { key: "monitoring", label: "Theo dõi" },
-                  { key: "resolved", label: "Đã đóng" }
+                  { key: "new", label: "Mß╗¢i" },
+                  { key: "resolving", label: "─Éang xß╗¡ l├╜" },
+                  { key: "pending_approval", label: "Chß╗¥ duyß╗çt" },
+                  { key: "responded", label: "─É├ú phß║ún hß╗ôi" },
+                  { key: "monitoring", label: "Theo d├╡i" },
+                  { key: "resolved", label: "─É├ú ─æ├│ng" }
                 ].map((step, index) => {
                   const statuses = ["new", "resolving", "pending_approval", "responded", "monitoring", "resolved"];
                   const currentIdx = statuses.indexOf(alert.status);
@@ -1722,12 +2081,12 @@ export default function AlertDetailPage() {
                         }
                         try {
                           await updateAlertStatus(alert.id, step.key, profile, {
-                            note: `Thay đổi trạng thái xử lý thành: ${step.label}`
+                            note: `Thay ─æß╗òi trß║íng th├íi xß╗¡ l├╜ th├ánh: ${step.label}`
                           }, alert.brand);
                           setAlert({ ...alert, status: step.key });
-                          triggerToast(`Chuyển trạng thái thành ${step.label}!`);
+                          triggerToast(`Chuyß╗ân trß║íng th├íi th├ánh ${step.label}!`);
                         } catch (e) {
-                          triggerToast("Không thể thay đổi trạng thái.");
+                          triggerToast("Kh├┤ng thß╗â thay ─æß╗òi trß║íng th├íi.");
                         }
                       }}
                       className={`relative flex flex-col items-center z-10 focus:outline-none ${isMine ? "cursor-pointer" : "cursor-default"}`}
@@ -1746,14 +2105,14 @@ export default function AlertDetailPage() {
               </div>
             </div>
 
-            {/* Widget: Merged Label Management Widget (Gộp trong 1 form có Tab) */}
+            {/* Widget: Merged Label Management Widget (Gß╗Öp trong 1 form c├│ Tab) */}
             <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl shadow-sm p-6 space-y-4">
 
               {/* Header with Tabs */}
               <div className="border-b border-[var(--color-border)] pb-2">
                 <h4 className="font-bold text-xs text-[var(--color-text-primary)] flex items-center gap-2 uppercase tracking-wider mb-3">
                   <span className="material-symbols-outlined text-base text-indigo-600">sell</span>
-                  Quản lý &amp; Sửa nhãn vụ việc
+                  Quß║ún l├╜ &amp; Sß╗¡a nh├ún vß╗Ñ viß╗çc
                 </h4>
 
                 {/* Tab buttons */}
@@ -1766,7 +2125,7 @@ export default function AlertDetailPage() {
                           : "border-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
                         }`}
                     >
-                      Sửa nhãn
+                      Sß╗¡a nh├ún
                     </button>
                   )}
                   <button
@@ -1776,7 +2135,7 @@ export default function AlertDetailPage() {
                         : "border-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
                       }`}
                   >
-                    Chờ duyệt
+                    Chß╗¥ duyß╗çt
                     <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-black ${labelTab === "pending" ? "bg-indigo-100 text-indigo-600" : "bg-slate-100 dark:bg-slate-800 text-slate-500"
                       }`}>
                       {pendingRequests.length}
@@ -1789,7 +2148,7 @@ export default function AlertDetailPage() {
                         : "border-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
                       }`}
                   >
-                    Lịch sử
+                    Lß╗ïch sß╗¡
                     <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-black ${labelTab === "history" ? "bg-indigo-100 text-indigo-600" : "bg-slate-100 dark:bg-slate-800 text-slate-500"
                       }`}>
                       {historyRequests.length}
@@ -1800,62 +2159,62 @@ export default function AlertDetailPage() {
 
               {/* Tab contents */}
 
-              {/* Tab 1: Sửa nhãn (Edit Form) */}
+              {/* Tab 1: Sß╗¡a nh├ún (Edit Form) */}
               {!isManager && labelTab === "edit" && (
                 <div className="space-y-4 animate-fade-in">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-50 dark:bg-slate-800/40 p-4 rounded-xl border border-[var(--color-border)]/50">
 
                     {/* Sentiment */}
                     <div className="space-y-1">
-                      <label className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">1. Cảm xúc (Sentiment)</label>
+                      <label className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">1. Cß║úm x├║c (Sentiment)</label>
                       <select
                         value={correctionSentiment}
                         onChange={(e) => setCorrectionSentiment(e.target.value)}
                         className="w-full text-xs p-2 border border-[var(--color-border)] rounded-lg bg-white dark:bg-slate-800 text-[var(--color-text-primary)] font-bold focus:outline-none"
                       >
-                        <option value="positive">🟢 Tích cực</option>
-                        <option value="neutral">🟡 Trung tính</option>
-                        <option value="negative">🔴 Tiêu cực</option>
+                        <option value="positive">≡ƒƒó T├¡ch cß╗▒c</option>
+                        <option value="neutral">≡ƒƒí Trung t├¡nh</option>
+                        <option value="negative">≡ƒö┤ Ti├¬u cß╗▒c</option>
                       </select>
                     </div>
 
                     {/* Severity / Urgency */}
                     <div className="space-y-1">
-                      <label className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">2. Mức độ (Urgency)</label>
+                      <label className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">2. Mß╗⌐c ─æß╗Ö (Urgency)</label>
                       <select
                         value={correctionSeverity}
                         onChange={(e) => setCorrectionSeverity(e.target.value)}
                         className="w-full text-xs p-2 border border-[var(--color-border)] rounded-lg bg-white dark:bg-slate-800 text-[var(--color-text-primary)] font-bold focus:outline-none"
                       >
-                        <option value="none">⚪ None</option>
-                        <option value="low">🟢 Thấp</option>
-                        <option value="medium">🟡 Trung bình</option>
-                        <option value="high">🟠 Cao</option>
-                        <option value="critical">🔴 Khẩn cấp</option>
+                        <option value="none">ΓÜ¬ None</option>
+                        <option value="low">≡ƒƒó Thß║Ñp</option>
+                        <option value="medium">≡ƒƒí Trung b├¼nh</option>
+                        <option value="high">≡ƒƒá Cao</option>
+                        <option value="critical">≡ƒö┤ Khß║⌐n cß║Ñp</option>
                       </select>
                     </div>
 
                     {/* Topic */}
                     <div className="space-y-1">
-                      <label className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">3. Chủ đề (Topic)</label>
+                      <label className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">3. Chß╗º ─æß╗ü (Topic)</label>
                       <select
                         value={correctionTopic}
                         onChange={(e) => setCorrectionTopic(e.target.value)}
                         className="w-full text-xs p-2 border border-[var(--color-border)] rounded-lg bg-white dark:bg-slate-800 text-[var(--color-text-primary)] font-bold focus:outline-none"
                       >
-                        <option value="quality">Chất lượng</option>
-                        <option value="price">Giá cả</option>
-                        <option value="service">Dịch vụ</option>
-                        <option value="location">Vị trí</option>
-                        <option value="promotion">Khuyến mãi</option>
-                        <option value="recruitment">Tuyển dụng</option>
-                        <option value="other">Khác</option>
+                        <option value="quality">Chß║Ñt l╞░ß╗úng</option>
+                        <option value="price">Gi├í cß║ú</option>
+                        <option value="service">Dß╗ïch vß╗Ñ</option>
+                        <option value="location">Vß╗ï tr├¡</option>
+                        <option value="promotion">Khuyß║┐n m├úi</option>
+                        <option value="recruitment">Tuyß╗ân dß╗Ñng</option>
+                        <option value="other">Kh├íc</option>
                       </select>
                     </div>
 
                     {/* Relevance */}
                     <div className="space-y-1">
-                      <label className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">4. Liên quan (Relevance)</label>
+                      <label className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">4. Li├¬n quan (Relevance)</label>
                       <select
                         value={correctionRelevance === null ? "" : correctionRelevance ? "yes" : "no"}
                         onChange={(e) => {
@@ -1864,36 +2223,36 @@ export default function AlertDetailPage() {
                         }}
                         className="w-full text-xs p-2 border border-[var(--color-border)] rounded-lg bg-white dark:bg-slate-800 text-[var(--color-text-primary)] font-bold focus:outline-none"
                       >
-                        <option value="">-- Chọn --</option>
-                        <option value="yes">🔵 Có</option>
-                        <option value="no">⚪ Không</option>
+                        <option value="">-- Chß╗ìn --</option>
+                        <option value="yes">≡ƒö╡ C├│</option>
+                        <option value="no">ΓÜ¬ Kh├┤ng</option>
                       </select>
                     </div>
 
                     {/* Intent */}
                     <div className="col-span-1 md:col-span-2 space-y-1">
-                      <label className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">5. Ý định mua hàng (Intent)</label>
+                      <label className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">5. ├¥ ─æß╗ïnh mua h├áng (Intent)</label>
                       <select
                         value={correctionIntent || ""}
                         onChange={(e) => setCorrectionIntent(e.target.value || null)}
                         className="w-full text-xs p-2 border border-[var(--color-border)] rounded-lg bg-white dark:bg-slate-800 text-[var(--color-text-primary)] font-bold focus:outline-none"
                       >
-                        <option value="">-- Chọn --</option>
-                        <option value="hot">🔴 Hot</option>
-                        <option value="warm">🟡 Warm</option>
-                        <option value="cold">🔵 Cold</option>
-                        <option value="none">⚪ None</option>
+                        <option value="">-- Chß╗ìn --</option>
+                        <option value="hot">≡ƒö┤ Hot</option>
+                        <option value="warm">≡ƒƒí Warm</option>
+                        <option value="cold">≡ƒö╡ Cold</option>
+                        <option value="none">ΓÜ¬ None</option>
                       </select>
                     </div>
 
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">Lý do gửi yêu cầu điều chỉnh</label>
+                    <label className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">L├╜ do gß╗¡i y├¬u cß║ºu ─æiß╗üu chß╗ënh</label>
                     <textarea
                       value={correctionReason}
                       onChange={(e) => setCorrectionReason(e.target.value)}
-                      placeholder="Nhập lý do chi tiết để gửi lên quản lý..."
+                      placeholder="Nhß║¡p l├╜ do chi tiß║┐t ─æß╗â gß╗¡i l├¬n quß║ún l├╜..."
                       className="w-full text-xs p-2.5 border border-[var(--color-border)] rounded-xl bg-white dark:bg-slate-800 focus:ring-2 focus:ring-purple-500/20 text-[var(--color-text-primary)] h-16 resize-none"
                     />
                   </div>
@@ -1902,17 +2261,17 @@ export default function AlertDetailPage() {
                     onClick={handleSendCorrectionRequest}
                     className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5"
                   >
-                    <span className="material-symbols-outlined text-sm">send</span> Gửi yêu cầu sửa nhãn
+                    <span className="material-symbols-outlined text-sm">send</span> Gß╗¡i y├¬u cß║ºu sß╗¡a nh├ún
                   </button>
                 </div>
               )}
 
-              {/* Tab 2: Chờ xử lý (Pending) */}
+              {/* Tab 2: Chß╗¥ xß╗¡ l├╜ (Pending) */}
               {labelTab === "pending" && (
                 <div className="space-y-3 animate-fade-in">
                   {pendingRequests.length === 0 ? (
                     <p className="text-[11px] text-[var(--color-text-muted)] italic text-center py-6">
-                      Không có yêu cầu nào đang chờ duyệt.
+                      Kh├┤ng c├│ y├¬u cß║ºu n├áo ─æang chß╗¥ duyß╗çt.
                     </p>
                   ) : (
                     <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
@@ -1930,7 +2289,7 @@ export default function AlertDetailPage() {
                           >
                             <div className="flex justify-between items-center text-[10px] text-[var(--color-text-muted)]">
                               <span className="font-bold text-[var(--color-text-primary)]">
-                                Gửi bởi: {getResolverName(req.requester_email)}
+                                Gß╗¡i bß╗ƒi: {getResolverName(req.requester_email)}
                               </span>
                               <span>{getRelativeTime(req.created_at)}</span>
                             </div>
@@ -1938,44 +2297,44 @@ export default function AlertDetailPage() {
                             <div className="text-[10px] space-y-1 bg-white dark:bg-slate-900 p-2 rounded-lg border border-[var(--color-border)]/50">
                               {/* Sentiment */}
                               <div className="flex justify-between">
-                                <span className="text-[var(--color-text-muted)]">Cảm xúc:</span>
+                                <span className="text-[var(--color-text-muted)]">Cß║úm x├║c:</span>
                                 <span>
-                                  {getSentimentLabel(req.original_sentiment)} ➔ <strong className={sentimentChanged ? "text-indigo-600 dark:text-indigo-400" : ""}>{getSentimentLabel(req.new_sentiment)}</strong>
+                                  {getSentimentLabel(req.original_sentiment)} Γ₧ö <strong className={sentimentChanged ? "text-indigo-600 dark:text-indigo-400" : ""}>{getSentimentLabel(req.new_sentiment)}</strong>
                                 </span>
                               </div>
                               {/* Severity / Urgency */}
                               <div className="flex justify-between">
-                                <span className="text-[var(--color-text-muted)]">Mức độ:</span>
+                                <span className="text-[var(--color-text-muted)]">Mß╗⌐c ─æß╗Ö:</span>
                                 <span>
-                                  {getSeverityLabel(req.original_severity)} ➔ <strong className={severityChanged ? "text-indigo-600 dark:text-indigo-400" : ""}>{getSeverityLabel(req.new_severity)}</strong>
+                                  {getSeverityLabel(req.original_severity)} Γ₧ö <strong className={severityChanged ? "text-indigo-600 dark:text-indigo-400" : ""}>{getSeverityLabel(req.new_severity)}</strong>
                                 </span>
                               </div>
                               {/* Topic */}
                               <div className="flex justify-between">
-                                <span className="text-[var(--color-text-muted)]">Chủ đề:</span>
+                                <span className="text-[var(--color-text-muted)]">Chß╗º ─æß╗ü:</span>
                                 <span>
-                                  {getTopicLabel(req.original_topic)} ➔ <strong className={topicChanged ? "text-indigo-600 dark:text-indigo-400" : ""}>{getTopicLabel(req.new_topic)}</strong>
+                                  {getTopicLabel(req.original_topic)} Γ₧ö <strong className={topicChanged ? "text-indigo-600 dark:text-indigo-400" : ""}>{getTopicLabel(req.new_topic)}</strong>
                                 </span>
                               </div>
                               {/* Relevance */}
                               <div className="flex justify-between">
-                                <span className="text-[var(--color-text-muted)]">Liên quan:</span>
+                                <span className="text-[var(--color-text-muted)]">Li├¬n quan:</span>
                                 <span>
-                                  {req.original_relevance === null ? "Chưa rõ" : req.original_relevance ? "Có" : "Không"} ➔ <strong className={relevanceChanged ? "text-indigo-600 dark:text-indigo-400" : ""}>{req.new_relevance === null ? "Chưa rõ" : req.new_relevance ? "Có" : "Không"}</strong>
+                                  {req.original_relevance === null ? "Ch╞░a r├╡" : req.original_relevance ? "C├│" : "Kh├┤ng"} Γ₧ö <strong className={relevanceChanged ? "text-indigo-600 dark:text-indigo-400" : ""}>{req.new_relevance === null ? "Ch╞░a r├╡" : req.new_relevance ? "C├│" : "Kh├┤ng"}</strong>
                                 </span>
                               </div>
                               {/* Intent */}
                               <div className="flex justify-between">
-                                <span className="text-[var(--color-text-muted)]">Ý định:</span>
+                                <span className="text-[var(--color-text-muted)]">├¥ ─æß╗ïnh:</span>
                                 <span>
-                                  {req.original_intent || "None"} ➔ <strong className={intentChanged ? "text-indigo-600 dark:text-indigo-400" : ""}>{req.new_intent || "None"}</strong>
+                                  {req.original_intent || "None"} Γ₧ö <strong className={intentChanged ? "text-indigo-600 dark:text-indigo-400" : ""}>{req.new_intent || "None"}</strong>
                                 </span>
                               </div>
                             </div>
 
                             {req.reason && (
                               <p className="text-[10px] text-[var(--color-text-secondary)] italic bg-amber-500/5 p-2 rounded border border-amber-500/10">
-                                <strong>Lý do:</strong> {req.reason}
+                                <strong>L├╜ do:</strong> {req.reason}
                               </p>
                             )}
 
@@ -1985,11 +2344,11 @@ export default function AlertDetailPage() {
                                 className="block text-[10px] py-1.5 bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-400 rounded-lg text-center font-bold border border-indigo-200/50 hover:bg-indigo-100 dark:hover:bg-indigo-950/40 transition-colors"
                               >
                                 <span className="material-symbols-outlined text-[12px] align-middle mr-0.5">open_in_new</span>
-                                Xem tại trang Duyệt yêu cầu
+                                Xem tß║íi trang Duyß╗çt y├¬u cß║ºu
                               </a>
                             ) : (
                               <div className="text-[10px] py-1 bg-amber-100/50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 rounded-lg text-center font-bold border border-amber-200/50">
-                                Đang chờ quản lý duyệt
+                                ─Éang chß╗¥ quß║ún l├╜ duyß╗çt
                               </div>
                             )}
                           </div>
@@ -2000,12 +2359,12 @@ export default function AlertDetailPage() {
                 </div>
               )}
 
-              {/* Tab 3: Lịch sử xử lý nhãn (History) */}
+              {/* Tab 3: Lß╗ïch sß╗¡ xß╗¡ l├╜ nh├ún (History) */}
               {labelTab === "history" && (
                 <div className="space-y-3 animate-fade-in">
                   {historyRequests.length === 0 ? (
                     <p className="text-[11px] text-[var(--color-text-muted)] italic text-center py-6">
-                      Chưa có lịch sử điều chỉnh nhãn.
+                      Ch╞░a c├│ lß╗ïch sß╗¡ ─æiß╗üu chß╗ënh nh├ún.
                     </p>
                   ) : (
                     <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
@@ -2022,22 +2381,22 @@ export default function AlertDetailPage() {
                           >
                             <div className="flex justify-between items-center text-[10px] text-[var(--color-text-muted)]">
                               <span className="font-bold text-[var(--color-text-primary)]">
-                                Gửi bởi: {getResolverName(req.requester_email)}
+                                Gß╗¡i bß╗ƒi: {getResolverName(req.requester_email)}
                               </span>
                               <span>{getRelativeTime(req.created_at)}</span>
                             </div>
 
                             <div className="text-[10px] space-y-0.5 bg-white/60 dark:bg-slate-900/60 p-2 rounded-lg border border-[var(--color-border)]/40">
-                              <div>Cảm xúc: {getSentimentLabel(req.original_sentiment)} ➔ <strong>{getSentimentLabel(req.new_sentiment)}</strong></div>
-                              <div>Mức độ: {getSeverityLabel(req.original_severity)} ➔ <strong>{getSeverityLabel(req.new_severity)}</strong></div>
-                              <div>Chủ đề: {getTopicLabel(req.original_topic)} ➔ <strong>{getTopicLabel(req.new_topic)}</strong></div>
-                              <div>Liên quan: {req.original_relevance === null ? "Chưa rõ" : req.original_relevance ? "Có" : "Không"} ➔ <strong>{req.new_relevance === null ? "Chưa rõ" : req.new_relevance ? "Có" : "Không"}</strong></div>
-                              <div>Ý định: {req.original_intent || "None"} ➔ <strong>{req.new_intent || "None"}</strong></div>
+                              <div>Cß║úm x├║c: {getSentimentLabel(req.original_sentiment)} Γ₧ö <strong>{getSentimentLabel(req.new_sentiment)}</strong></div>
+                              <div>Mß╗⌐c ─æß╗Ö: {getSeverityLabel(req.original_severity)} Γ₧ö <strong>{getSeverityLabel(req.new_severity)}</strong></div>
+                              <div>Chß╗º ─æß╗ü: {getTopicLabel(req.original_topic)} Γ₧ö <strong>{getTopicLabel(req.new_topic)}</strong></div>
+                              <div>Li├¬n quan: {req.original_relevance === null ? "Ch╞░a r├╡" : req.original_relevance ? "C├│" : "Kh├┤ng"} Γ₧ö <strong>{req.new_relevance === null ? "Ch╞░a r├╡" : req.new_relevance ? "C├│" : "Kh├┤ng"}</strong></div>
+                              <div>├¥ ─æß╗ïnh: {req.original_intent || "None"} Γ₧ö <strong>{req.new_intent || "None"}</strong></div>
                             </div>
 
                             {req.reason && (
                               <p className="text-[10px] text-[var(--color-text-secondary)] italic border-l-2 border-slate-300 dark:border-slate-700 pl-1.5">
-                                Lý do: {req.reason}
+                                L├╜ do: {req.reason}
                               </p>
                             )}
 
@@ -2046,11 +2405,11 @@ export default function AlertDetailPage() {
                                   ? "bg-green-100 text-green-700 dark:bg-green-950/20 dark:text-green-400"
                                   : "bg-red-100 text-red-700 dark:bg-red-950/20 dark:text-red-400"
                                 }`}>
-                                {isApproved ? "Đã duyệt" : "Đã từ chối"}
+                                {isApproved ? "─É├ú duyß╗çt" : "─É├ú tß╗½ chß╗æi"}
                               </span>
                               {req.resolved_by && (
                                 <span className="text-[9px] text-[var(--color-text-muted)] italic">
-                                  Duyệt bởi Ban quản lý
+                                  Duyß╗çt bß╗ƒi Ban quß║ún l├╜
                                 </span>
                               )}
                             </div>
@@ -2068,7 +2427,7 @@ export default function AlertDetailPage() {
             <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl shadow-sm p-5 space-y-4">
               <h3 className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-wider flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-slate-400 text-base">sticky_note_2</span>
-                Ghi chú nội bộ
+                Ghi ch├║ nß╗Öi bß╗Ö
               </h3>
 
               {alert.internal_notes && alert.internal_notes.length > 0 && (
@@ -2088,31 +2447,61 @@ export default function AlertDetailPage() {
               <textarea
                 value={internalNoteInput}
                 onChange={(e) => setInternalNoteInput(e.target.value)}
-                placeholder="Nhập ghi chú quan trọng cho team..."
+                placeholder="Nhß║¡p ghi ch├║ quan trß╗ìng cho team..."
                 className="w-full text-xs p-2.5 border border-[var(--color-border)] rounded-xl bg-[var(--color-bg-surface-raised)] focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-[var(--color-text-primary)] h-20"
               />
               <button
                 onClick={handleAddInternalNote}
                 className="w-full py-2 bg-slate-900 dark:bg-slate-700 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-sm active:scale-95 transition-all cursor-pointer"
               >
-                Lưu ghi chú nội bộ
+                L╞░u ghi ch├║ nß╗Öi bß╗Ö
               </button>
             </div>
 
-            {/* Widget: Escalate Button (Báo cáo cấp cao) */}
+            {/* Widget: Escalate Button (B├ío c├ío cß║Ñp cao) */}
             {isMine && (
               <button
                 onClick={() => setShowReportModal(true)}
                 className="w-full py-3.5 bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-md transition-all active:scale-[0.98] cursor-pointer"
               >
                 <span className="material-symbols-outlined text-base">bolt</span>
-                ESCALATE — Báo cáo cấp cao
+                ESCALATE ΓÇö B├ío c├ío cß║Ñp cao
               </button>
             )}
 
           </div>
         </div>
       </div>
+
+      
+      {previewEvidenceImage && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Xem ảnh minh chứng"
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+          onClick={() => setPreviewEvidenceImage(null)}
+        >
+          <div
+            className="relative flex max-h-[92vh] w-full max-w-5xl items-center justify-center overflow-hidden rounded-2xl border border-white/20 bg-slate-950 p-3 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <img
+              src={previewEvidenceImage}
+              alt="Ảnh minh chứng xử lý"
+              className="max-h-[86vh] max-w-full object-contain"
+            />
+            <button
+              type="button"
+              onClick={() => setPreviewEvidenceImage(null)}
+              aria-label="Đóng ảnh minh chứng"
+              className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full bg-black/70 text-white transition-colors hover:bg-black"
+            >
+              <span className="material-symbols-outlined">close</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Modals */}
       {showReportModal && (
@@ -2136,7 +2525,7 @@ export default function AlertDetailPage() {
               monitoring_initial_likes: alert.likes || 0,
               monitoring_initial_shares: alert.shares || 0,
             });
-            triggerToast(durationHours > 0 ? "Đã chuyển sang theo dõi thêm!" : "Đã hoàn tất!");
+            triggerToast(durationHours > 0 ? "─É├ú chuyß╗ân sang theo d├╡i th├¬m!" : "─É├ú ho├án tß║Ñt!");
           }}
         />
       )}

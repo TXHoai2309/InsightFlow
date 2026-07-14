@@ -19,6 +19,9 @@ import {
   isRecordInBrandScope,
 } from "@/lib/brandScope";
 import { canPerformAction } from "@/lib/rbac";
+import { getAlertWorkflowStatus, isResolvedAlert } from "@/lib/alertWorkflow";
+
+const ALERTS_PER_PAGE = 10;
 import { collection, getDocs, doc, getDoc } from "firebase/firestore";
 import {
   Chart as ChartJS,
@@ -224,9 +227,9 @@ export default function AlertsPage() {
   const [activeTab, setActiveTab] = useState<"priority" | "new" | "resolving" | "resolved">("priority");
   const [resolvingAlert, setResolvingAlert] = useState<any>(null);
   const [viewingHistoryAlert, setViewingHistoryAlert] = useState<any>(null);
-  const [reportModalItem, setReportModalItem] = useState<any>(null);
-  const [showReportToast, setShowReportToast] = useState(false);
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
+  const [correctionModalItem, setCorrectionModalItem] = useState<any>(null);
+  const [reportModalItem, setReportModalItem] = useState<any>(null);
 
   const hasLoadedRef = useRef(false);
   // New states for the redesigned Priority Process List
@@ -234,8 +237,11 @@ export default function AlertsPage() {
   const [severityFilter, setSeverityFilter] = useState<string>("all");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [contentTypeFilter, setContentTypeFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "processing" | "contact_failed" | "resolved">("all");
   const [showMineOnly, setShowMineOnly] = useState(false);
   const [sortBy, setSortBy] = useState<"risk" | "newest" | "reach">("risk");
+  const [alertPage, setAlertPage] = useState(1);
+  const alertQueueRef = useRef<HTMLDivElement>(null);
   const [isResolvedExpanded, setIsResolvedExpanded] = useState(false);
   const [isRequestsExpanded, setIsRequestsExpanded] = useState(false);
   const [timeFilter, setTimeFilter] = useState<string>("all");
@@ -307,6 +313,9 @@ export default function AlertsPage() {
     lockAlertForResolution,
     unlockAlertForResolution,
     fetchCorrectionRequests,
+    createCorrectionRequest,
+    resolveCorrectionRequest,
+    correctionRequests,
     isLoadingRequests,
   } = useAlertStore();
   // Filter alerts by currently selected brand filter for dashboard overview calculations
@@ -330,6 +339,22 @@ export default function AlertsPage() {
         return aKey === tKey;
       });
     }
+
+    // Hàng đợi và lịch sử chỉ giữ các vụ việc trong cửa sổ 30 ngày.
+    // Vụ việc đang mở tính theo ngày phát hiện; vụ việc hoàn tất tính theo
+    // thời điểm giải quyết gần nhất.
+    const activeCutoffMs = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    result = result.filter((alert) => {
+      const isCompleted = isResolvedAlert(alert);
+      const lastHistoryAt = Array.isArray(alert.resolution_history) && alert.resolution_history.length > 0
+        ? alert.resolution_history[alert.resolution_history.length - 1]?.timestamp
+        : undefined;
+      const relevantAt = isCompleted
+        ? alert.resolved_at || alert.monitoring_started_at || lastHistoryAt || alert.created_at
+        : alert.created_at;
+      const relevantAtMs = new Date(relevantAt).getTime();
+      return Number.isFinite(relevantAtMs) && relevantAtMs >= activeCutoffMs && relevantAtMs <= Date.now();
+    });
 
     if (timeFilter !== "all") {
       const now = new Date();
@@ -373,11 +398,20 @@ export default function AlertsPage() {
 
       if (startDate || endDate) {
         result = result.filter(a => {
-          const alertDate = new Date(a.created_at);
-          // Exclude alerts with invalid/missing date when filtering by time
-          if (!a.created_at || isNaN(alertDate.getTime())) return false;
-          if (startDate && alertDate < startDate) return false;
-          if (endDate && alertDate > endDate) return false;
+          const isCompleted = isResolvedAlert(a);
+          // Việc còn mở trong 30 ngày luôn hiện; bộ lọc ngày chỉ áp dụng
+          // cho lịch sử cảnh báo đã hoàn tất.
+          if (!isCompleted) return true;
+
+          const lastHistoryAt = Array.isArray(a.resolution_history) && a.resolution_history.length > 0
+            ? a.resolution_history[a.resolution_history.length - 1]?.timestamp
+            : undefined;
+          const completedAt = a.resolved_at || a.monitoring_started_at || lastHistoryAt || a.created_at;
+          const completedDate = new Date(completedAt);
+          if (!completedAt || isNaN(completedDate.getTime())) return false;
+
+          if (startDate && completedDate < startDate) return false;
+          if (endDate && completedDate > endDate) return false;
           return true;
         });
       }
@@ -404,30 +438,35 @@ export default function AlertsPage() {
     return alert.negativity_score ?? 0;
   };
 
-  // Filter alerts into active, resolved, and requests
-  // Tasks being handled by OTHERS are hidden from the shared list
-  // They only appear in the "Mine Only" view of the assigned person
+  // Everyone can see the shared queue; ownership only controls who may update it.
   const activeAlerts = useMemo(() => {
     return brandFilteredAlerts.filter(a => {
-      if (a.status.toLowerCase() === "resolved") return false;
-      // Hide from shared list if someone ELSE already claimed this task
-      if (
-        a.being_resolved_by &&
-        a.being_resolved_by !== profile?.email &&
-        (a.status.toLowerCase() === "resolving" || a.status.toLowerCase() === "pending_approval" || a.status.toLowerCase() === "monitoring")
-      ) {
-        return false;
-      }
+      const status = getAlertWorkflowStatus(a);
+      if (status === "resolved") return false;
       return true;
     });
-  }, [brandFilteredAlerts, profile?.email]);
+  }, [brandFilteredAlerts]);
 
   const resolvedAlerts = useMemo(() => {
-    return brandFilteredAlerts.filter(a => a.status.toLowerCase() === "resolved");
+    return brandFilteredAlerts.filter(isResolvedAlert);
   }, [brandFilteredAlerts]);
 
   const processedActiveAlerts = useMemo(() => {
-    let result = [...activeAlerts];
+    let result = statusFilter === "resolved" ? [...resolvedAlerts] : [...activeAlerts];
+
+    // Lọc theo trạng thái nghiệp vụ. "all" là toàn bộ hàng đợi đang mở;
+    // cảnh báo đã giải quyết chỉ xuất hiện khi chọn riêng trạng thái resolved.
+    if (statusFilter === "pending") {
+      result = result.filter((alert) => {
+        return getAlertWorkflowStatus(alert) === "pending";
+      });
+    } else if (statusFilter === "processing") {
+      result = result.filter((alert) => getAlertWorkflowStatus(alert) === "processing");
+    } else if (statusFilter === "contact_failed") {
+      result = result.filter((alert) => getAlertWorkflowStatus(alert) === "contact_failed");
+    } else if (statusFilter === "resolved") {
+      result = result.filter(isResolvedAlert);
+    }
 
     // 1. Search text filter
     if (searchText.trim()) {
@@ -458,10 +497,24 @@ export default function AlertsPage() {
       result = result.filter(a => a.being_resolved_by === profile.email);
     }
 
-    // 5. Sorting
+    // 5. Sorting. Risk priority is severity first, then the detailed risk
+    // score, then recency so urgent mentions are always at the top.
     result.sort((a, b) => {
       if (sortBy === "risk") {
-        return getRiskScore(b) - getRiskScore(a);
+        const severityRank: Record<string, number> = {
+          critical: 4,
+          high: 3,
+          medium: 2,
+          low: 1,
+        };
+        const severityDelta =
+          (severityRank[String(b.severity || "").toLowerCase()] || 0) -
+          (severityRank[String(a.severity || "").toLowerCase()] || 0);
+        if (severityDelta !== 0) return severityDelta;
+
+        const riskDelta = getRiskScore(b) - getRiskScore(a);
+        if (riskDelta !== 0) return riskDelta;
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       }
       if (sortBy === "reach") {
         return (b.reach || 0) - (a.reach || 0);
@@ -471,7 +524,34 @@ export default function AlertsPage() {
     });
 
     return result;
-  }, [activeAlerts, searchText, severityFilter, sourceFilter, contentTypeFilter, showMineOnly, sortBy, profile]);
+  }, [activeAlerts, resolvedAlerts, statusFilter, searchText, severityFilter, sourceFilter, contentTypeFilter, showMineOnly, sortBy, profile]);
+
+  const totalAlertPages = Math.max(1, Math.ceil(processedActiveAlerts.length / ALERTS_PER_PAGE));
+  const paginatedActiveAlerts = useMemo(() => {
+    const startIndex = (alertPage - 1) * ALERTS_PER_PAGE;
+    return processedActiveAlerts.slice(startIndex, startIndex + ALERTS_PER_PAGE);
+  }, [processedActiveAlerts, alertPage]);
+
+  const visibleAlertPages = useMemo(() => {
+    const startPage = Math.max(1, Math.min(alertPage - 2, totalAlertPages - 4));
+    const endPage = Math.min(totalAlertPages, startPage + 4);
+    return Array.from({ length: endPage - startPage + 1 }, (_, index) => startPage + index);
+  }, [alertPage, totalAlertPages]);
+
+  useEffect(() => {
+    setAlertPage(1);
+  }, [statusFilter, searchText, severityFilter, sourceFilter, contentTypeFilter, showMineOnly, sortBy, filters.brand]);
+
+  useEffect(() => {
+    setAlertPage((current) => Math.min(current, totalAlertPages));
+  }, [totalAlertPages]);
+
+  const goToAlertPage = (pageNumber: number) => {
+    setAlertPage(Math.max(1, Math.min(totalAlertPages, pageNumber)));
+    window.requestAnimationFrame(() => {
+      alertQueueRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
 
   // Helper: map email/uid to display name for resolvers
   const getResolverName = (emailOrId: string | null | undefined): string => {
@@ -534,7 +614,7 @@ export default function AlertsPage() {
 
   // Shift Performance resolved ratio calculation
   const shiftPerformanceStats = useMemo(() => {
-    const resolved = brandFilteredAlerts.filter(a => a.status === "resolved").length;
+    const resolved = brandFilteredAlerts.filter(isResolvedAlert).length;
     const total = brandFilteredAlerts.length;
     // We default to 100% KPI completion if there are no alerts to handle
     const percentage = total === 0 ? 100 : Math.round((resolved / total) * 100);
@@ -793,7 +873,7 @@ export default function AlertsPage() {
   const highRiskIncidents = useMemo(() => {
     // 1. Get unresolved critical/high alerts
     const activeAlerts = alerts.filter(
-      a => (a.severity.toLowerCase() === "critical" || a.severity.toLowerCase() === "high") && a.status.toLowerCase() !== "resolved"
+      a => (a.severity.toLowerCase() === "critical" || a.severity.toLowerCase() === "high") && !isResolvedAlert(a)
     );
 
     // 2. Enrich with lead contact details if author or content matches
@@ -865,8 +945,9 @@ export default function AlertsPage() {
   useEffect(() => {
     if (authLoading || !canViewCrisisQueue) return;
     setFilters({ status: "all" });
-    fetchAlerts(scopedBrandKey);
-  }, [authLoading, canViewCrisisQueue, scopedBrandKey, fetchAlerts, setFilters]);
+    fetchAlerts(scopedBrandKey, true);
+    fetchCorrectionRequests(scopedBrandKey);
+  }, [authLoading, canViewCrisisQueue, scopedBrandKey, fetchAlerts, fetchCorrectionRequests, setFilters]);
 
   // Auto-switch view Mode once based on high-risk counts
   useEffect(() => {
@@ -929,8 +1010,7 @@ export default function AlertsPage() {
     } else if (signalFilter === "sensitive") {
       matchSignal = alert.sentiment === "negative" || alert.severity === "critical" || alert.severity === "high";
     }
-    const status = alert.status.toLowerCase();
-    return status !== "resolving" && status !== "resolved" && matchSignal;
+    return getAlertWorkflowStatus(alert) === "pending" && matchSignal;
   }).length;
 
   const resolvingCountForTab = alerts.filter((alert) => {
@@ -950,7 +1030,7 @@ export default function AlertsPage() {
     } else if (signalFilter === "sensitive") {
       matchSignal = alert.sentiment === "negative" || alert.severity === "critical" || alert.severity === "high";
     }
-    return alert.status.toLowerCase() === "resolving" && matchSignal;
+    return getAlertWorkflowStatus(alert) === "processing" && matchSignal;
   }).length;
 
   const resolvedCountForTab = alerts.filter((alert) => {
@@ -970,22 +1050,21 @@ export default function AlertsPage() {
     } else if (signalFilter === "sensitive") {
       matchSignal = alert.sentiment === "negative" || alert.severity === "critical" || alert.severity === "high";
     }
-    return alert.status.toLowerCase() === "resolved" && matchSignal;
+    return isResolvedAlert(alert) && matchSignal;
   }).length;
 
   // Filter alerts locally based on both Tab status and "Tín hiệu" (signal) dropdown
   const filteredAlerts = alerts.filter((alert) => {
     // 1. Tab filtering
     if (activeTab === "new") {
-      const status = alert.status.toLowerCase();
-      if (status === "resolving" || status === "resolved") {
+      if (getAlertWorkflowStatus(alert) !== "pending") {
         return false;
       }
     }
-    if (activeTab === "resolving" && alert.status.toLowerCase() !== "resolving") {
+    if (activeTab === "resolving" && getAlertWorkflowStatus(alert) !== "processing") {
       return false;
     }
-    if (activeTab === "resolved" && alert.status.toLowerCase() !== "resolved") {
+    if (activeTab === "resolved" && !isResolvedAlert(alert)) {
       return false;
     }
 
@@ -1146,48 +1225,81 @@ export default function AlertsPage() {
           </div>
 
           {/* ── STATS SUMMARY BAR ── */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-wider text-[var(--color-text-primary)]">Luồng xử lý cảnh báo</p>
+              <p className="mt-0.5 text-[10px] text-[var(--color-text-muted)]">Nhận việc → cập nhật tiến độ → ghi bằng chứng và hoàn tất. Bấm trạng thái để lọc.</p>
+            </div>
+            {statusFilter !== "all" && (
+              <button
+                type="button"
+                onClick={() => setStatusFilter("all")}
+                className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-1.5 text-xs font-bold text-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)]"
+              >
+                <span className="material-symbols-outlined text-sm">filter_alt_off</span>
+                Bỏ lọc
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
             {[
               {
-                label: "Chưa xử lý",
-                value: brandFilteredAlerts.filter(a => a.status !== "resolving" && a.status !== "resolved" && a.status !== "pending_approval" && a.status !== "monitoring").length,
+                id: "pending" as const,
+                label: "Chờ xử lý",
+                description: "Chưa có người nhận",
+                value: brandFilteredAlerts.filter(a => {
+                  return getAlertWorkflowStatus(a) === "pending";
+                }).length,
                 icon: "warning",
                 colorClass: "text-red-600 dark:text-red-400",
                 bgClass: "bg-red-50 dark:bg-red-950/30",
                 borderClass: "border-red-100 dark:border-red-900/30",
               },
               {
+                id: "processing" as const,
                 label: "Đang xử lý",
-                value: brandFilteredAlerts.filter(a => a.status === "resolving" || a.status === "monitoring").length,
+                description: "Đã có người phụ trách",
+                value: brandFilteredAlerts.filter(a => getAlertWorkflowStatus(a) === "processing").length,
                 icon: "autorenew",
                 colorClass: "text-orange-600 dark:text-orange-400",
                 bgClass: "bg-orange-50 dark:bg-orange-950/30",
                 borderClass: "border-orange-100 dark:border-orange-900/30",
               },
               {
-                label: "Chờ duyệt",
-                value: brandFilteredAlerts.filter(a => a.status === "pending_approval").length,
-                icon: "pending_actions",
-                colorClass: "text-amber-600 dark:text-amber-400",
-                bgClass: "bg-amber-50 dark:bg-amber-950/30",
-                borderClass: "border-amber-100 dark:border-amber-900/30",
+                id: "contact_failed" as const,
+                label: "Liên hệ không thành",
+                description: "Khách hàng vẫn bức xúc",
+                value: brandFilteredAlerts.filter(a => getAlertWorkflowStatus(a) === "contact_failed").length,
+                icon: "phone_disabled",
+                colorClass: "text-red-700 dark:text-red-400",
+                bgClass: "bg-red-50 dark:bg-red-950/30",
+                borderClass: "border-red-200 dark:border-red-900/40",
               },
               {
+                id: "resolved" as const,
                 label: "Đã giải quyết",
-                value: brandFilteredAlerts.filter(a => a.status === "resolved").length,
+                description: "Đã lưu kết quả xử lý",
+                value: brandFilteredAlerts.filter(isResolvedAlert).length,
                 icon: "check_circle",
                 colorClass: "text-green-600 dark:text-green-400",
                 bgClass: "bg-green-50 dark:bg-green-950/30",
                 borderClass: "border-green-100 dark:border-green-900/30",
               },
             ].map(stat => (
-              <div key={stat.label} className={`flex items-center gap-3 p-3 rounded-xl border ${stat.bgClass} ${stat.borderClass}`}>
+              <button
+                type="button"
+                key={stat.id}
+                onClick={() => setStatusFilter((current) => current === stat.id ? "all" : stat.id)}
+                aria-pressed={statusFilter === stat.id}
+                className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all hover:-translate-y-0.5 hover:shadow-md ${stat.bgClass} ${statusFilter === stat.id ? "ring-2 ring-[var(--color-brand)] ring-offset-2 dark:ring-offset-slate-950" : stat.borderClass}`}
+              >
                 <span className={`material-symbols-outlined text-xl ${stat.colorClass}`}>{stat.icon}</span>
                 <div>
                   <p className={`text-xl font-black leading-none ${stat.colorClass}`}>{stat.value}</p>
-                  <p className="text-[10px] text-[var(--color-text-muted)] font-semibold mt-0.5">{stat.label}</p>
+                  <p className="text-[11px] text-[var(--color-text-primary)] font-bold mt-0.5">{stat.label}</p>
+                  <p className="text-[9px] text-[var(--color-text-muted)] mt-0.5">{stat.description}</p>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
 
@@ -1261,7 +1373,7 @@ export default function AlertsPage() {
           </div>
 
           {/* Alert Queue Cards list */}
-          <div data-tour="alerts-queue-list" className="space-y-4">
+          <div ref={alertQueueRef} data-tour="alerts-queue-list" className="scroll-mt-28 space-y-4">
             {isLoading ? (
               <div data-tour="alerts-card-actions" className="flex flex-col items-center justify-center p-12 space-y-3">
                 <svg className="animate-spin h-8 w-8 text-[var(--color-brand)]" fill="none" viewBox="0 0 24 24">
@@ -1276,10 +1388,12 @@ export default function AlertsPage() {
                 <p className="text-xs text-[var(--color-text-secondary)] font-bold">{t("alerts.page.emptyFilter")}</p>
               </div>
             ) : (
-              processedActiveAlerts.map(alert => {
+              paginatedActiveAlerts.map(alert => {
                 const riskScore = getRiskScore(alert);
-                const isResolving = alert.status === "resolving";
-                const isPendingApproval = alert.status === "pending_approval";
+                const workflowStatus = getAlertWorkflowStatus(alert);
+                const isResolving = workflowStatus === "processing";
+                const isContactFailed = workflowStatus === "contact_failed";
+                const isResolved = workflowStatus === "resolved";
 
                 // Card severity aesthetics mapping
                 let borderClass = "border-l-4 border-slate-300";
@@ -1390,23 +1504,33 @@ export default function AlertsPage() {
                             {t("alerts.page.fastSpread")}
                           </span>
                         )}
-                        {isResolving && (
+                        {isResolving && alert.status !== "contact_waiting" && (
                           <span className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[9px] font-bold px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
                             {t("alerts.page.statusResolving")}
                           </span>
                         )}
-                        {isPendingApproval && (
-                          <span className="bg-orange-50 dark:bg-orange-950/20 text-orange-700 dark:text-orange-300 text-[9px] font-bold px-1.5 py-0.5 rounded border border-orange-100 dark:border-orange-900/30 animate-pulse">
-                            Cho duyet phuong an
+                        {isResolving && alert.status === "contact_waiting" && (
+                          <span className="bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-300 text-[9px] font-bold px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-900/30">
+                            Đã liên hệ – Chờ phản hồi
                           </span>
                         )}
-                        {!isResolving && !isPendingApproval && alert.status !== "monitoring" && alert.status !== "resolved" && (
+                        {!isResolving && !isContactFailed && !isResolved && (
                           <span className="bg-red-50 dark:bg-red-950/20 text-red-600 text-[9px] font-bold px-1.5 py-0.5 rounded border border-red-100 dark:border-red-900/30">
                             {t("alerts.page.statusPending")}
                           </span>
                         )}
-                        {alert.status === "monitoring" && (
+                        {isResolved && alert.monitoring_started_at && (
                           <MonitoringCountdown alert={alert} />
+                        )}
+                        {isContactFailed && (
+                          <span className="bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-300 text-[9px] font-bold px-1.5 py-0.5 rounded border border-red-200 dark:border-red-900/30">
+                            Liên hệ không thành
+                          </span>
+                        )}
+                        {isResolved && !alert.monitoring_started_at && (
+                          <span className="bg-green-50 dark:bg-green-950/20 text-green-600 dark:text-green-400 text-[9px] font-bold px-1.5 py-0.5 rounded border border-green-100 dark:border-green-900/30">
+                            Đã giải quyết
+                          </span>
                         )}
                       </div>
 
@@ -1418,26 +1542,48 @@ export default function AlertsPage() {
 
                     {/* Right action controls */}
                     <div className="p-4 flex md:flex-col justify-center items-center gap-2 flex-shrink-0 md:w-36 border-t md:border-t-0 md:border-l border-[var(--color-border)]/50 bg-slate-50/20 dark:bg-slate-800/10">
-                      {isResolving || isPendingApproval || alert.status === "monitoring" ? (
+                      {isResolving || isContactFailed || isResolved ? (
                         <div className="w-full space-y-2 text-center">
-                          {/* Assignee chip */}
-                          <div className="flex items-center gap-1.5 justify-center bg-white dark:bg-slate-800 border border-[var(--color-border)] rounded-lg px-2 py-1">
-                            <div className="w-4 h-4 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center overflow-hidden flex-shrink-0">
-                              <span className="material-symbols-outlined text-[10px] text-slate-500">person</span>
+                          {(isResolving || isContactFailed) && (
+                            <div className="flex items-center gap-1.5 justify-center bg-white dark:bg-slate-800 border border-[var(--color-border)] rounded-lg px-2 py-1">
+                              <div className="w-4 h-4 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center overflow-hidden flex-shrink-0">
+                                <span className="material-symbols-outlined text-[10px] text-slate-500">person</span>
+                              </div>
+                              <span className="text-[10px] text-[var(--color-text-secondary)] font-bold truncate max-w-[100px]">
+                                {getResolverName(alert.being_resolved_by) || t("alerts.page.member")}
+                              </span>
                             </div>
-                            <span className="text-[10px] text-[var(--color-text-secondary)] font-bold truncate max-w-[100px]">
-                              {getResolverName(alert.being_resolved_by) || t("alerts.page.member")}
-                            </span>
-                          </div>
+                          )}
+                          {(isResolving || isContactFailed) && alert.being_resolved_by === profile?.email && (
+                            <button
+                              type="button"
+                              onClick={() => router.push(`/alerts/${encodeURIComponent(alert.id)}`)}
+                              className="w-full py-2 rounded-xl text-xs font-bold bg-green-600 hover:bg-green-700 text-white transition-all cursor-pointer"
+                            >
+                              {isContactFailed ? "Liên hệ lại" : "Tiếp tục xử lý"}
+                            </button>
+                          )}
+                          {(isResolving || isContactFailed) && !alert.being_resolved_by && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  await updateAlertStatus(alert.id, "resolving", profile, { note: "Đã tiếp nhận xử lý" }, alert.brand);
+                                  router.push(`/alerts/${encodeURIComponent(alert.id)}`);
+                                } catch (err) {
+                                  triggerToast("Không thể tiếp nhận: " + (err instanceof Error ? err.message : String(err)));
+                                }
+                              }}
+                              className="w-full py-2 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white transition-all cursor-pointer"
+                            >
+                              Nhận tiếp tục xử lý
+                            </button>
+                          )}
                           <button
                             onClick={() => router.push(`/alerts/${encodeURIComponent(alert.id)}`)}
-                            className={`w-full py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
-                              isPendingApproval && isManager
-                                ? "bg-orange-600 hover:bg-orange-700 text-white border-orange-600"
-                                : "bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[var(--color-text-primary)] border-[var(--color-border)]"
-                            }`}
+                            className="w-full py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[var(--color-text-primary)] border-[var(--color-border)]"
                           >
-                            {isPendingApproval && isManager ? "Xem duyệt" : t("alerts.page.details")}
+                            {t("alerts.page.details")}
                           </button>
                         </div>
                       ) : (
@@ -1447,8 +1593,7 @@ export default function AlertsPage() {
                             onClick={async () => {
                               try {
                                 await updateAlertStatus(alert.id, "resolving", profile, { note: "Đã tiếp nhận xử lý" }, alert.brand);
-                                await lockAlertForResolution(alert.id, profile);
-                                triggerToast("✅ Đã tiếp nhận vụ việc. Vào mục 'Của tôi' để xem.");
+                                router.push(`/alerts/${encodeURIComponent(alert.id)}`);
                               } catch (err: any) {
                                 triggerToast("❌ " + (err?.message || "Không thể tiếp nhận vụ việc."));
                               }
@@ -1458,20 +1603,13 @@ export default function AlertsPage() {
                             {t("alerts.page.acceptTask")}
                           </button>
 
-                          {/* Secondary actions: detail link + escalate condensed */}
-                          <div className="flex gap-1.5">
+                          {/* Secondary action: detail link */}
+                          <div className="flex">
                             <button
                               onClick={() => router.push(`/alerts/${encodeURIComponent(alert.id)}`)}
                               className="flex-1 py-1.5 text-center text-[var(--color-brand)] hover:bg-[var(--color-brand)]/5 border border-[var(--color-brand)]/30 rounded-xl text-[10px] font-bold cursor-pointer transition-colors"
                             >
                               {t("alerts.page.viewDetails")}
-                            </button>
-                            <button
-                              onClick={() => setReportModalItem(alert)}
-                              title={t("alerts.page.escalateNow")}
-                              className="px-2 py-1.5 text-red-500 hover:bg-red-50 border border-red-200 dark:border-red-900/30 rounded-xl text-[10px] font-bold cursor-pointer transition-colors flex items-center gap-0.5"
-                            >
-                              <span className="material-symbols-outlined text-[13px]">priority_high</span>
                             </button>
                           </div>
                         </div>
@@ -1483,8 +1621,61 @@ export default function AlertsPage() {
             )}
           </div>
 
+          {!isLoading && processedActiveAlerts.length > 0 && (
+            <nav
+              aria-label="Phân trang cảnh báo"
+              className="flex flex-col items-center justify-between gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-4 py-3 sm:flex-row"
+            >
+              <p className="text-[11px] font-semibold text-[var(--color-text-muted)]">
+                Hiển thị {(alertPage - 1) * ALERTS_PER_PAGE + 1}–{Math.min(alertPage * ALERTS_PER_PAGE, processedActiveAlerts.length)} trong {processedActiveAlerts.length} cảnh báo
+              </p>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => goToAlertPage(alertPage - 1)}
+                  disabled={alertPage === 1}
+                  className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)] disabled:cursor-not-allowed disabled:opacity-40"
+                  aria-label="Trang trước"
+                >
+                  <span className="material-symbols-outlined text-base">chevron_left</span>
+                </button>
+
+                {visibleAlertPages.map((pageNumber) => (
+                  <button
+                    type="button"
+                    key={pageNumber}
+                    onClick={() => goToAlertPage(pageNumber)}
+                    aria-current={alertPage === pageNumber ? "page" : undefined}
+                    className={`h-8 min-w-8 rounded-lg px-2 text-xs font-black transition-colors ${
+                      alertPage === pageNumber
+                        ? "bg-[var(--color-brand)] text-white"
+                        : "border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)]"
+                    }`}
+                  >
+                    {pageNumber}
+                  </button>
+                ))}
+
+                <button
+                  type="button"
+                  onClick={() => goToAlertPage(alertPage + 1)}
+                  disabled={alertPage === totalAlertPages}
+                  className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)] disabled:cursor-not-allowed disabled:opacity-40"
+                  aria-label="Trang sau"
+                >
+                  <span className="material-symbols-outlined text-base">chevron_right</span>
+                </button>
+              </div>
+
+              <span className="text-[11px] font-bold text-[var(--color-text-secondary)]">
+                Trang {alertPage}/{totalAlertPages}
+              </span>
+            </nav>
+          )}
+
           {/* Accordion list: RECENTLY RESOLVED */}
-          <div className="glass-card rounded-2xl border border-[var(--color-border)] overflow-hidden shadow-sm bg-white dark:bg-[var(--color-bg-surface-raised)]">
+          {statusFilter !== "resolved" && <div className="glass-card rounded-2xl border border-[var(--color-border)] overflow-hidden shadow-sm bg-white dark:bg-[var(--color-bg-surface-raised)]">
             <button
               onClick={() => setIsResolvedExpanded(!isResolvedExpanded)}
               className="w-full p-4 flex items-center justify-between font-black text-xs md:text-sm uppercase tracking-wider text-[var(--color-text-primary)] hover:bg-slate-50 transition-colors cursor-pointer"
@@ -1524,7 +1715,7 @@ export default function AlertsPage() {
                 )}
               </div>
             )}
-          </div>
+          </div>}
 
 
 
@@ -1667,10 +1858,6 @@ export default function AlertsPage() {
           }}
           onSave={async (id, note, imageUrl, targetStatus = "resolving", monitoringDurationHours) => {
             await updateAlertStatus(id, targetStatus, profile, { note, image_url: imageUrl, monitoring_duration_hours: monitoringDurationHours }, resolvingAlert.brand);
-            // Chỉ unlock khi đã resolved hoàn toàn
-            if (targetStatus === "resolved") {
-              unlockAlertForResolution(id);
-            }
             setResolvingAlert(null);
           }}
         />
@@ -1688,6 +1875,16 @@ export default function AlertsPage() {
           item={reportModalItem}
           onClose={() => setReportModalItem(null)}
           triggerToast={triggerToast}
+        />
+      )}
+
+      {correctionModalItem && (
+        <CorrectionRequestModal
+          item={correctionModalItem}
+          onClose={() => setCorrectionModalItem(null)}
+          triggerToast={triggerToast}
+          createCorrectionRequest={createCorrectionRequest}
+          profile={profile}
         />
       )}
 
@@ -2153,13 +2350,12 @@ function ResolutionModal({ alert, onClose, onSave }: ResolutionModalProps) {
     setError(null);
 
     try {
-      let finalStatus: string = targetStatus;
+      const finalStatus: string = targetStatus;
       let finalDuration: number | undefined = undefined;
 
       if (targetStatus === "resolved") {
         const parsedDuration = parseFloat(duration);
         if (parsedDuration > 0) {
-          finalStatus = "monitoring";
           finalDuration = parsedDuration;
         }
       }
@@ -2702,6 +2898,397 @@ function IncidentReportModal({ item, onClose, triggerToast }: IncidentReportModa
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Correction Request Modal Component ──
+interface CorrectionRequestModalProps {
+  item: any;
+  onClose: () => void;
+  triggerToast: (msg: string) => void;
+  createCorrectionRequest: (data: any) => Promise<void>;
+  profile: any;
+}
+
+function CorrectionRequestModal({ item, onClose, triggerToast, createCorrectionRequest, profile }: CorrectionRequestModalProps) {
+  const { t } = useTranslation();
+  const [sentiment, setSentiment] = useState(item.sentiment || "neutral");
+  const [severity, setSeverity] = useState(item.severity || "medium");
+  const [topic, setTopic] = useState(item.topic || "other");
+  const [reason, setReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reason.trim()) {
+      triggerToast(t("alerts.correction.reasonRequired"));
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await createCorrectionRequest({
+        alert_id: item.id,
+        brand: item.brand,
+        requester_uid: profile?.uid || "unknown",
+        requester_email: profile?.email || "unknown",
+        original_sentiment: item.sentiment || "neutral",
+        new_sentiment: sentiment,
+        original_severity: item.severity || "medium",
+        new_severity: severity,
+        original_topic: item.topic || "other",
+        new_topic: topic,
+        reason: reason.trim(),
+        alert_text: item.text || item.content || "",
+      });
+      triggerToast(t("alerts.correction.success"));
+      onClose();
+    } catch (err) {
+      console.error(err);
+      triggerToast(t("alerts.correction.error"));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
+
+      {/* Modal Container */}
+      <form
+        onSubmit={handleSubmit}
+        className="glass-card w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl relative z-10 border border-app/30 flex flex-col max-h-[90vh] bg-[var(--color-bg-surface)] text-[var(--color-text-primary)]"
+      >
+        {/* Header */}
+        <div className="p-4 md:p-6 border-b border-[var(--color-border)] flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-[var(--color-brand)] text-xl">edit_square</span>
+            <h3 className="font-bold text-base md:text-lg">{t("alerts.correction.title")}</h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)] transition-colors"
+          >
+            <span className="material-symbols-outlined text-base">close</span>
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-4 md:p-6 space-y-4 overflow-y-auto">
+          <div className="p-3 bg-[var(--color-bg-surface-raised)] rounded-xl border border-[var(--color-border)] text-xs text-[var(--color-text-secondary)] italic">
+            "{item.text || item.content}"
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {/* Sentiment */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">{t("alerts.correction.sentimentLabel")}</label>
+              <select
+                value={sentiment}
+                onChange={(e) => setSentiment(e.target.value)}
+                className="w-full bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] rounded-xl text-xs py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 font-medium text-[var(--color-text-primary)] select-app"
+              >
+                <option value="positive">{t("alerts.correction.sentimentPositive")}</option>
+                <option value="neutral">{t("alerts.correction.sentimentNeutral")}</option>
+                <option value="negative">{t("alerts.correction.sentimentNegative")}</option>
+              </select>
+            </div>
+
+            {/* Severity */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">{t("alerts.correction.severityLabel")}</label>
+              <select
+                value={severity}
+                onChange={(e) => setSeverity(e.target.value)}
+                className="w-full bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] rounded-xl text-xs py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 font-medium text-[var(--color-text-primary)] select-app"
+              >
+                <option value="low">{t("alerts.correction.severityLow")}</option>
+                <option value="medium">{t("alerts.correction.severityMedium")}</option>
+                <option value="high">{t("alerts.correction.severityHigh")}</option>
+                <option value="critical">{t("alerts.correction.severityCritical")}</option>
+              </select>
+            </div>
+
+            {/* Topic */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">{t("alerts.correction.topicLabel")}</label>
+              <select
+                value={topic}
+                onChange={(e) => setTopic(e.target.value)}
+                className="w-full bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] rounded-xl text-xs py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 font-medium text-[var(--color-text-primary)] select-app"
+              >
+                <option value="quality">{t("alerts.correction.topicQuality")}</option>
+                <option value="price">{t("alerts.correction.topicPrice")}</option>
+                <option value="service">{t("alerts.correction.topicService")}</option>
+                <option value="staff">{t("alerts.correction.topicStaff")}</option>
+                <option value="delivery">{t("alerts.correction.topicDelivery")}</option>
+                <option value="experience">{t("alerts.correction.topicExperience")}</option>
+                <option value="legal">{t("alerts.correction.topicLegal")}</option>
+                <option value="operation">{t("alerts.correction.topicOperation")}</option>
+                <option value="competitor">{t("alerts.correction.topicCompetitor")}</option>
+                <option value="other">{t("alerts.correction.topicOther")}</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Reason */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-[var(--color-text-primary)] flex items-center gap-1">
+              <span className="material-symbols-outlined text-[14px] text-[var(--color-error)]">rate_review</span>
+              {t("alerts.correction.reasonLabel")}
+            </label>
+            <textarea
+              rows={3}
+              required
+              placeholder={t("alerts.correction.reasonPlaceholder")}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              className="w-full bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] rounded-xl text-xs py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 text-[var(--color-text-primary)]"
+            />
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 border-t border-[var(--color-border)] flex justify-end gap-2 bg-[var(--color-bg-surface-raised)]/20">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2.5 rounded-xl text-xs font-bold text-[var(--color-text-secondary)] bg-[var(--color-bg-surface-raised)] hover:bg-[var(--color-bg-surface-high)] border border-[var(--color-border)] transition-all cursor-pointer"
+          >
+            {t("alerts.correction.close")}
+          </button>
+          <button
+            type="submit"
+            disabled={submitting}
+            className="px-4 py-2.5 rounded-xl text-xs font-bold bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand-hover)] active:scale-95 transition-all shadow-sm flex items-center gap-1 cursor-pointer"
+          >
+            {submitting ? t("alerts.correction.submitting") : t("alerts.correction.submit")}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+// ── Correction Requests List Component ──
+interface CorrectionRequestsListProps {
+  requests: any[];
+  resolveCorrectionRequest: (requestId: string, alertId: string, decision: "approved" | "rejected", profile: any) => Promise<void>;
+  isLoadingRequests: boolean;
+  profile: any;
+  triggerToast: (msg: string) => void;
+}
+
+function CorrectionRequestsList({ requests, resolveCorrectionRequest, isLoadingRequests, profile, triggerToast }: CorrectionRequestsListProps) {
+  const { t } = useTranslation();
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [subFilter, setSubFilter] = useState<"pending" | "resolved">("pending");
+
+  const isManager = profile?.role === "brand_manager" || profile?.role === "admin";
+
+  const handleResolve = async (requestId: string, alertId: string, decision: "approved" | "rejected") => {
+    setResolvingId(requestId);
+    try {
+      await resolveCorrectionRequest(requestId, alertId, decision, profile);
+      triggerToast(decision === "approved" ? t("alerts.correctionList.approvedToast") : t("alerts.correctionList.rejectedToast"));
+    } catch (err) {
+      console.error(err);
+      triggerToast(t("alerts.correctionList.errorToast"));
+    } finally {
+      setResolvingId(null);
+    }
+  };
+
+  const filteredRequests = useMemo(() => {
+    if (subFilter === "pending") {
+      return requests.filter((r) => r.status === "pending");
+    } else {
+      return requests.filter((r) => r.status === "approved" || r.status === "rejected");
+    }
+  }, [requests, subFilter]);
+
+  if (isLoadingRequests) {
+    return (
+      <div className="flex flex-col items-center justify-center p-12 space-y-4 glass-card rounded-2xl">
+        <svg className="animate-spin h-8 w-8 text-primary" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+        </svg>
+        <p className="text-sm font-medium animate-pulse text-[var(--color-text-secondary)]">
+          {t("alerts.correctionList.loading")}
+        </p>
+      </div>
+    );
+  }
+
+  const pendingCount = requests.filter(r => r.status === "pending").length;
+  const resolvedCount = requests.filter(r => r.status !== "pending").length;
+
+  return (
+    <div className="space-y-4">
+      {/* Sub-tabs header */}
+      <div className="flex gap-2 border-b border-[var(--color-border)]/50 pb-3">
+        <button
+          onClick={() => setSubFilter("pending")}
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${subFilter === "pending"
+            ? "bg-[var(--color-brand)] text-white border-[var(--color-brand)] shadow-sm"
+            : "text-[var(--color-text-secondary)] bg-[var(--color-bg-surface-raised)] border-[var(--color-border)] hover:bg-[var(--color-bg-surface-high)]"
+            }`}
+        >
+          <span className="material-symbols-outlined text-[15px]">pending_actions</span>
+          {t("alerts.correctionList.pendingTab")} ({pendingCount})
+        </button>
+
+        <button
+          onClick={() => setSubFilter("resolved")}
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${subFilter === "resolved"
+            ? "bg-[var(--color-brand)] text-white border-[var(--color-brand)] shadow-sm"
+            : "text-[var(--color-text-secondary)] bg-[var(--color-bg-surface-raised)] border-[var(--color-border)] hover:bg-[var(--color-bg-surface-high)]"
+            }`}
+        >
+          <span className="material-symbols-outlined text-[15px]">history</span>
+          {t("alerts.correctionList.resolvedTab")} ({resolvedCount})
+        </button>
+      </div>
+
+      {filteredRequests.length === 0 ? (
+        <div className="flex flex-col items-center justify-center p-12 space-y-3 glass-card rounded-2xl">
+          <span className="material-symbols-outlined text-[var(--color-text-secondary)] text-4xl">folder_off</span>
+          <p className="text-sm font-bold text-[var(--color-text-primary)]">
+            {subFilter === "pending" ? t("alerts.correctionList.emptyPending") : t("alerts.correctionList.emptyResolved")}
+          </p>
+          <p className="text-xs text-[var(--color-text-secondary)] text-center">
+            {subFilter === "pending"
+              ? t("alerts.correctionList.emptyPendingDesc")
+              : t("alerts.correctionList.emptyResolvedDesc")}
+          </p>
+        </div>
+      ) : (
+        filteredRequests.map((req) => {
+          const dateText = new Date(req.created_at).toLocaleString("vi-VN");
+          const statusColors =
+            req.status === "approved"
+              ? "bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-400 border-green-200/50"
+              : req.status === "rejected"
+                ? "bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400 border-red-200/50"
+                : "bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200/50";
+
+          const statusLabel =
+            req.status === "approved"
+              ? t("alerts.correctionList.approved")
+              : req.status === "rejected"
+                ? t("alerts.correctionList.rejected")
+                : t("alerts.correctionList.pending");
+
+          return (
+            <div
+              key={req.id}
+              className="glass-card rounded-2xl overflow-hidden border border-[var(--color-border)] p-4 md:p-6 space-y-4 hover:shadow-md transition-shadow bg-[var(--color-bg-surface-raised)]/20"
+            >
+              {/* Header row */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[var(--color-border)] pb-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-black text-[var(--color-text-primary)]">@{req.requester_email.split("@")[0]}</span>
+                    <span className="text-[10px] text-[var(--color-text-secondary)]">({req.requester_email})</span>
+                  </div>
+                  <p className="text-[10px] text-[var(--color-text-secondary)] font-medium">
+                    {t("alerts.correctionList.sentAt", { date: dateText })}
+                  </p>
+                </div>
+                <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider border ${statusColors}`}>
+                  {statusLabel}
+                </span>
+              </div>
+
+              {/* Alert context */}
+              <div className="space-y-1">
+                <span className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">{t("alerts.correctionList.contentLabel")}</span>
+                <div className="p-3 bg-[var(--color-bg-surface-raised)] rounded-xl border border-[var(--color-border)] text-xs text-[var(--color-text-secondary)] italic">
+                  "{req.alert_text}"
+                </div>
+              </div>
+
+              {/* Changes Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-[var(--color-bg-surface-raised)]/50 p-4 rounded-xl border border-[var(--color-border)]">
+                {/* Sentiment */}
+                <div>
+                  <p className="text-[9px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">{t("alerts.correctionList.sentiment")}</p>
+                  <div className="flex items-center gap-1.5 mt-1 text-xs font-bold">
+                    <span className="text-red-500 font-bold uppercase">{req.original_sentiment}</span>
+                    <span className="material-symbols-outlined text-[12px] text-[var(--color-text-secondary)]">arrow_forward</span>
+                    <span className="text-green-500 font-black uppercase">{req.new_sentiment}</span>
+                  </div>
+                </div>
+
+                {/* Severity */}
+                <div>
+                  <p className="text-[9px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">{t("alerts.correctionList.severity")}</p>
+                  <div className="flex items-center gap-1.5 mt-1 text-xs font-bold">
+                    <span className="text-amber-600 font-bold uppercase">{req.original_severity}</span>
+                    <span className="material-symbols-outlined text-[12px] text-[var(--color-text-secondary)]">arrow_forward</span>
+                    <span className="text-red-600 font-black uppercase">{req.new_severity}</span>
+                  </div>
+                </div>
+
+                {/* Topic */}
+                <div>
+                  <p className="text-[9px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">{t("alerts.correctionList.topic")}</p>
+                  <div className="flex items-center gap-1.5 mt-1 text-xs font-bold">
+                    <span className="text-[var(--color-text-secondary)] font-bold uppercase">{req.original_topic}</span>
+                    <span className="material-symbols-outlined text-[12px] text-[var(--color-text-secondary)]">arrow_forward</span>
+                    <span className="text-[var(--color-brand)] font-black uppercase">{req.new_topic}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Reason */}
+              <div className="space-y-1">
+                <span className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">{t("alerts.correctionList.reason")}</span>
+                <p className="text-xs text-[var(--color-text-primary)] font-medium bg-[var(--color-bg-surface-raised)]/30 p-2.5 rounded-lg border border-[var(--color-border)]/50">
+                  {req.reason}
+                </p>
+              </div>
+
+              {/* Decision Log / Management Actions */}
+              {req.status === "pending" ? (
+                isManager ? (
+                  <div className="flex justify-end gap-2 pt-3 border-t border-[var(--color-border)]">
+                    <button
+                      type="button"
+                      disabled={resolvingId !== null}
+                      onClick={() => handleResolve(req.id, req.alert_id, "rejected")}
+                      className="px-4 py-2 rounded-xl text-xs font-bold border border-red-500/30 text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
+                    >
+                      {resolvingId === req.id ? t("alerts.correctionList.processing") : t("alerts.correctionList.rejectBtn")}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={resolvingId !== null}
+                      onClick={() => handleResolve(req.id, req.alert_id, "approved")}
+                      className="px-4 py-2 rounded-xl text-xs font-bold bg-green-600 text-white hover:bg-green-700 active:scale-95 transition-all shadow-sm cursor-pointer"
+                    >
+                      {resolvingId === req.id ? t("alerts.correctionList.processing") : t("alerts.correctionList.approveBtn")}
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-amber-600 font-bold text-right italic">
+                    {t("alerts.correctionList.waitingApproval")}
+                  </p>
+                )
+              ) : (
+                <div className="pt-2 border-t border-[var(--color-border)]/50 flex items-center justify-between text-[10px] text-[var(--color-text-secondary)] font-medium">
+                  <span>{t("alerts.correctionList.reviewer", { uid: req.resolved_by?.slice(0, 8) })}</span>
+                  <span>{t("alerts.correctionList.resolvedTime", { time: req.resolved_at ? new Date(req.resolved_at).toLocaleString("vi-VN") : "" })}</span>
+                </div>
+              )}
+            </div>
+          );
+        })
+      )}
     </div>
   );
 }

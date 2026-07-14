@@ -45,113 +45,128 @@ interface DailyReport {
 function ReportPreviewModal({
   report,
   onClose,
-  onExport,
+  onExportPDF,
+  onExportExcel,
   isExporting,
 }: {
   report: DailyReport;
   onClose: () => void;
-  onExport: () => void;
+  onExportPDF: () => void;
+  onExportExcel: () => void;
   isExporting: boolean;
 }) {
-  const { t } = useTranslation();
-  // Calculate basic stats for the preview
-  const total = report.mentions.length;
-  let pos = 0,
-    neu = 0,
-    neg = 0;
-  const topics: Record<string, number> = {};
+  const { t, i18n } = useTranslation();
+  const [format, setFormat] = useState<"pdf" | "excel">("pdf");
+  const [excelSheet, setExcelSheet] = useState<"dashboard" | "evidence">("dashboard");
+  const [pdfUrl, setPdfUrl] = useState("");
+  const [excelSheets, setExcelSheets] = useState<{ dashboardHtml: string; evidenceHtml: string } | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+  const lang = i18n.resolvedLanguage || i18n.language || "vi";
 
-  report.mentions.forEach((m) => {
-    const s = m.sentiment.toLowerCase();
-    if (s.includes("pos")) pos++;
-    else if (s.includes("neg")) neg++;
-    else neu++;
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl = "";
+    setIsLoading(true);
+    setError("");
 
-    const topicKey = m.topic.toLowerCase();
-    topics[topicKey] = (topics[topicKey] || 0) + 1;
-  });
+    const buildPreview = async () => {
+      const params = {
+        brandName: report.brand,
+        startDate: report.dateStr,
+        endDate: report.dateStr,
+        mentions: report.mentions,
+        filtersSummary: lang.startsWith("vi") ? "Báo cáo theo ngày" : "Daily report",
+        insights: "",
+        t,
+        lang,
+        download: false,
+      };
 
-  const topTopics = Object.entries(topics)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3);
+      try {
+        if (format === "pdf") {
+          const result = await generateWeeklyBrandReportPDF(params);
+          if (!result || cancelled) return;
+          objectUrl = URL.createObjectURL(result.blob);
+          setPdfUrl(objectUrl);
+        } else {
+          const result = await generateWeeklyBrandReportExcel(params);
+          if (!result || cancelled) return;
+          setExcelSheets({ dashboardHtml: result.dashboardHtml, evidenceHtml: result.evidenceHtml });
+        }
+      } catch (previewError) {
+        console.error("Error previewing report:", previewError);
+        if (!cancelled) setError("Không thể tạo bản xem trước. Vui lòng thử lại.");
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+
+    void buildPreview();
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [format, lang, report, t]);
+
+  const excelBody = excelSheet === "dashboard" ? excelSheets?.dashboardHtml : excelSheets?.evidenceHtml;
+  const excelDocument = excelBody
+    ? `<!doctype html><html><head><meta charset="utf-8"><style>
+        body{font-family:Arial,sans-serif;color:#172033;margin:0;padding:22px;background:#fff}
+        h1{font-size:22px;margin:0 0 4px;color:#1f2937}.subtitle{color:#64748b;margin:0 0 14px}
+        table{border-collapse:collapse;margin:12px 0 18px;width:100%}th,td{border:1px solid #cbd5e1;padding:7px 8px;vertical-align:top;font-size:12px}
+        th,.section-title{background:#3730a3;color:#fff;font-weight:700;text-align:left}.header-row td,.header-row th{background:#eef2ff;color:#1e1b4b;font-weight:700}
+        .kpi-row td:nth-child(odd){background:#f8fafc;font-weight:700;color:#475569;width:160px}.wrap td{white-space:normal}
+        .bar-wrap{position:relative;width:220px;height:18px;background:#e2e8f0;border-radius:3px;overflow:hidden}.bar{height:18px}.bar-wrap span{position:absolute;left:8px;top:1px;font-size:11px;color:#111827;font-weight:700}
+      </style></head><body>${excelBody}</body></html>`
+    : "";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] p-6 rounded-2xl shadow-xl w-full max-w-lg flex flex-col gap-5">
-        <div className="flex justify-between items-center border-b border-[var(--color-border)] pb-3">
-          <h2 className="text-xl font-bold text-[var(--color-text-primary)]">
-            Xem trước Báo cáo
-          </h2>
+      <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl shadow-xl w-full max-w-6xl h-[92vh] flex flex-col overflow-hidden">
+        <div className="flex justify-between items-center border-b border-[var(--color-border)] px-5 py-4">
+          <div>
+            <h2 className="text-xl font-bold text-[var(--color-text-primary)]">Xem trước Báo cáo</h2>
+            <p className="text-sm text-[var(--color-text-muted)] mt-0.5">{report.brand} · {report.dateStr} · {report.mentions.length} mention</p>
+          </div>
           <button
             onClick={onClose}
+            aria-label="Đóng xem trước"
             className="p-2 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-raised)] rounded-full"
           >
             <span className="material-symbols-outlined">close</span>
           </button>
         </div>
 
-        <div className="flex flex-col gap-4">
-          <div>
-            <p className="text-sm text-[var(--color-text-muted)] font-medium">
-              Thương hiệu
-            </p>
-            <p className="font-bold text-lg text-[var(--color-brand)] capitalize">
-              {report.brand}
-            </p>
-          </div>
-          <div>
-            <p className="text-sm text-[var(--color-text-muted)] font-medium">
-              Ngày báo cáo
-            </p>
-            <p className="font-bold text-lg text-[var(--color-text-primary)]">
-              {report.dateStr}
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-[var(--color-bg-surface-raised)] p-4 rounded-xl border border-[var(--color-border)]">
-              <p className="text-xs text-[var(--color-text-muted)] font-bold uppercase">
-                Tổng lượt đề cập
-              </p>
-              <p className="text-2xl font-bold text-[var(--color-text-primary)] mt-1">
-                {total}
-              </p>
-            </div>
-            <div className="bg-[var(--color-bg-surface-raised)] p-4 rounded-xl border border-[var(--color-border)]">
-              <p className="text-xs text-[var(--color-text-muted)] font-bold uppercase">
-                Chỉ số Cảm xúc
-              </p>
-              <div className="flex gap-2 text-sm mt-1 font-medium">
-                <span className="text-[var(--color-success)]">
-                  {pos} {t("reports.preview.pos", { defaultValue: "Tốt" })}
-                </span>
-                <span className="text-[var(--color-error)]">
-                  {neg} {t("reports.preview.neg", { defaultValue: "Xấu" })}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {topTopics.length > 0 && (
-            <div className="bg-[var(--color-bg-surface-raised)] p-4 rounded-xl border border-[var(--color-border)]">
-              <p className="text-xs text-[var(--color-text-muted)] font-bold uppercase mb-2">
-                Chủ đề nổi bật
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {topTopics.map(([t, count]) => (
-                  <span
-                    key={t}
-                    className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] px-2 py-1 rounded text-xs font-semibold capitalize text-[var(--color-text-primary)]"
-                  >
-                    {t}: {count}
-                  </span>
-                ))}
-              </div>
+        <div className="px-5 pt-3 flex flex-wrap items-center gap-2 border-b border-[var(--color-border)]">
+          {(["pdf", "excel"] as const).map((item) => (
+            <button key={item} onClick={() => setFormat(item)} className={`px-4 py-2.5 text-sm font-bold border-b-2 ${format === item ? "border-[var(--color-brand)] text-[var(--color-brand)]" : "border-transparent text-[var(--color-text-muted)]"}`}>
+              {item === "pdf" ? "Bản PDF" : "Bản Excel"}
+            </button>
+          ))}
+          {format === "excel" && !isLoading && excelSheets && (
+            <div className="ml-auto flex gap-1 pb-2">
+              <button onClick={() => setExcelSheet("dashboard")} className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${excelSheet === "dashboard" ? "bg-[var(--color-brand)] text-white" : "bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]"}`}>Tổng quan</button>
+              <button onClick={() => setExcelSheet("evidence")} className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${excelSheet === "evidence" ? "bg-[var(--color-brand)] text-white" : "bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]"}`}>Dữ liệu mention</button>
             </div>
           )}
         </div>
 
-        <div className="flex justify-end gap-3 mt-2">
+        <div className="flex-1 min-h-0 bg-slate-100 dark:bg-slate-950 p-3 md:p-5">
+          {isLoading ? (
+            <div className="h-full flex flex-col items-center justify-center gap-3 text-[var(--color-text-muted)]"><span className="w-8 h-8 border-4 border-[var(--color-brand)] border-t-transparent rounded-full animate-spin"/><p>Đang tạo bản xem trước...</p></div>
+          ) : error ? (
+            <div className="h-full flex items-center justify-center text-[var(--color-error)]">{error}</div>
+          ) : format === "pdf" && pdfUrl ? (
+            <iframe src={pdfUrl} title="Bản xem trước báo cáo PDF" className="w-full h-full rounded-lg bg-white border border-slate-300" />
+          ) : format === "excel" && excelDocument ? (
+            <iframe srcDoc={excelDocument} title={`Bản xem trước Excel - ${excelSheet}`} className="w-full h-full rounded-lg bg-white border border-slate-300" />
+          ) : (
+            <div className="h-full flex items-center justify-center text-[var(--color-text-muted)]">Không có dữ liệu để xem trước.</div>
+          )}
+        </div>
+
+        <div className="flex flex-wrap justify-end gap-3 px-5 py-4 border-t border-[var(--color-border)]">
           <button
             onClick={onClose}
             className="px-4 py-2 rounded-xl text-[var(--color-text-secondary)] font-bold hover:bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)]"
@@ -159,17 +174,19 @@ function ReportPreviewModal({
             Đóng
           </button>
           <button
-            onClick={onExport}
+            onClick={onExportExcel}
+            disabled={isExporting}
+            className="flex items-center gap-2 px-5 py-2 border border-[var(--color-brand)] text-[var(--color-brand)] rounded-xl font-bold disabled:opacity-50"
+          >
+            <span className="material-symbols-outlined text-lg">download</span>
+            Tải Excel
+          </button>
+          <button
+            onClick={onExportPDF}
             disabled={isExporting}
             className="flex items-center gap-2 px-5 py-2 bg-[var(--color-brand)] text-white rounded-xl font-bold shadow-sm hover:bg-[var(--color-brand-hover)] disabled:opacity-50"
           >
-            {isExporting ? (
-              <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
-            ) : (
-              <span className="material-symbols-outlined text-lg">
-                download
-              </span>
-            )}
+            {isExporting ? <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <span className="material-symbols-outlined text-lg">download</span>}
             Tải PDF
           </button>
         </div>
@@ -1858,9 +1875,8 @@ function LegacyReportsPage() {
         <ReportPreviewModal
           report={previewReport}
           onClose={() => setPreviewReport(null)}
-          onExport={() => {
-            handleExportPDF(previewReport);
-          }}
+          onExportPDF={() => handleExportPDF(previewReport)}
+          onExportExcel={() => handleExportExcel(previewReport)}
           isExporting={generatingPdfId === previewReport.id}
         />
       )}
