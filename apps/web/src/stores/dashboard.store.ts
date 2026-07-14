@@ -224,9 +224,13 @@ export const useDashboardStore = create<DashboardState>()(
     setTrendData: (trendData) => set({ trendData }),
 
     setFilters: (newFilters) =>
-      set((state) => ({
-        filters: { ...state.filters, ...newFilters },
-      })),
+      set((state) => {
+        const hasChanges = Object.keys(newFilters).some(
+          (key) => newFilters[key as keyof DashboardFilters] !== state.filters[key as keyof DashboardFilters]
+        );
+        if (!hasChanges) return state; // Prevent infinite re-renders
+        return { filters: { ...state.filters, ...newFilters } };
+      }),
 
     resetFilters: () => set({ filters: defaultFilters }),
 
