@@ -340,10 +340,13 @@ export async function loadPendingAssignmentCounts(
   // Assignments and annotations overlap while a labeler is running. Keep the
   // dashboard categories mutually exclusive by deriving remaining work from
   // the crawled entity totals instead of adding queue rows to annotation rows.
-  const safeLabeledPosts = Math.min(labeledPosts, totalPosts);
-  const safeLabeledComments = Math.min(labeledComments, totalComments);
-  const safeAiPendingPosts = Math.min(aiPendingPosts, Math.max(0, totalPosts - safeLabeledPosts));
-  const safeAiPendingComments = Math.min(aiPendingComments, Math.max(0, totalComments - safeLabeledComments));
+  // Preserve the exact AI review queue first. Historical completed annotations
+  // can outnumber the currently active crawler rows (for example after a purge),
+  // and must not force a real ai_pending count back to zero.
+  const safeAiPendingPosts = Math.min(aiPendingPosts, totalPosts);
+  const safeAiPendingComments = Math.min(aiPendingComments, totalComments);
+  const safeLabeledPosts = Math.min(labeledPosts, Math.max(0, totalPosts - safeAiPendingPosts));
+  const safeLabeledComments = Math.min(labeledComments, Math.max(0, totalComments - safeAiPendingComments));
   const unassignedPosts = Math.max(0, totalPosts - safeLabeledPosts - safeAiPendingPosts);
   const unassignedComments = Math.max(0, totalComments - safeLabeledComments - safeAiPendingComments);
 
