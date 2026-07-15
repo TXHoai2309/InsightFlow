@@ -193,8 +193,8 @@ function MonitoringCountdown({ alert }: MonitoringCountdownProps) {
 
   return (
     <span className={`text-[10px] font-bold px-2 py-0.5 rounded border flex items-center gap-1 ${hasActivity
-        ? "bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900/30 animate-pulse font-black"
-        : "bg-cyan-50 dark:bg-cyan-950/20 text-cyan-600 dark:text-cyan-400 border-cyan-200 dark:border-cyan-900/30"
+      ? "bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900/30 animate-pulse font-black"
+      : "bg-cyan-50 dark:bg-cyan-950/20 text-cyan-600 dark:text-cyan-400 border-cyan-200 dark:border-cyan-900/30"
       }`}>
       <span className="material-symbols-outlined text-[12px]">{hasActivity ? "warning" : "visibility"}</span>
       {text}
@@ -229,6 +229,7 @@ export default function AlertsPage() {
   const [trendAlert, setTrendAlert] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<"priority" | "new" | "resolving" | "resolved">("priority");
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
+  const [correctionModalItem, setCorrectionModalItem] = useState<any>(null);
   const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
   const [pendingClaimSelectionId, setPendingClaimSelectionId] = useState<string | null>(null);
   const [isDetailPanelCollapsed, setIsDetailPanelCollapsed] = useState(false);

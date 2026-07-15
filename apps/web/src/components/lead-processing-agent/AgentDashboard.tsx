@@ -5,7 +5,6 @@ import { useTranslation } from "react-i18next";
 import { AgentStatsBar } from "./AgentStatsBar";
 import { AgentProgressSection } from "./AgentProgressSection";
 import { AgentKanbanBoard } from "./AgentKanbanBoard";
-import { AgentSchedule } from "./AgentSchedule";
 import { AgentNotifications } from "./AgentNotifications";
 
 export function AgentDashboard() {
@@ -49,11 +48,6 @@ export function AgentDashboard() {
           <div className="xl:col-span-1 space-y-6 flex flex-col max-h-[800px] overflow-y-auto custom-scrollbar pr-1">
             
 
-            {/* Schedule */}
-            <div className="shrink-0">
-              <AgentSchedule />
-            </div>
-            
             {/* Notifications */}
             <div className="shrink-0">
               <AgentNotifications />
