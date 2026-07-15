@@ -1,7 +1,7 @@
 import type { DashboardFilters } from "@/types/dashboard";
 import type { LeadWorkbenchView } from "@/lib/lead-workbench";
 
-export type LeadDetailPanelTab = "action" | "profile" | "history" | "suggestion";
+export type LeadDetailPanelTab = "action" | "profile" | "history";
 
 export interface LeadReturnContext {
   token: string;

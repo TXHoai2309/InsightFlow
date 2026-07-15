@@ -440,6 +440,87 @@ function stripUndefinedFields<T extends Record<string, unknown>>(value: T): T {
 
 type SupabaseRow = Record<string, unknown>;
 
+export class SupabaseServiceError extends Error {
+  status: number;
+  code?: string;
+  details?: string | null;
+  hint?: string | null;
+  missingColumn?: string;
+
+  constructor(options: {
+    table: string;
+    operation: string;
+    status: number;
+    responseBody: string;
+  }) {
+    let parsed: Record<string, unknown> = {};
+    try {
+      parsed = JSON.parse(options.responseBody) as Record<string, unknown>;
+    } catch {
+      // Keep the raw response when Supabase does not return JSON.
+    }
+
+    const responseMessage =
+      typeof parsed.message === "string" ? parsed.message : options.responseBody;
+    super(
+      `Supabase ${options.table} ${options.operation} ${options.status}: ${responseMessage}`,
+    );
+    this.name = "SupabaseServiceError";
+    this.status = options.status;
+    this.code = typeof parsed.code === "string" ? parsed.code : undefined;
+    this.details = typeof parsed.details === "string" ? parsed.details : null;
+    this.hint = typeof parsed.hint === "string" ? parsed.hint : null;
+    this.missingColumn = responseMessage.match(
+      /Could not find the '([^']+)' column/i,
+    )?.[1];
+  }
+}
+
+const OPERATIONAL_ROUTING_COLUMNS = new Set([
+  "operational_queue",
+  "previous_operational_queue",
+  "transfer_reason",
+  "transfer_note",
+  "transferred_by",
+  "transferred_by_name",
+  "transferred_at",
+  "transfer_count",
+  "transfer_history",
+]);
+
+export function isOperationalRoutingSchemaError(error: unknown): boolean {
+  if (error instanceof SupabaseServiceError) {
+    return (
+      error.code === "PGRST204" &&
+      Boolean(error.missingColumn && OPERATIONAL_ROUTING_COLUMNS.has(error.missingColumn))
+    );
+  }
+
+  const message = error instanceof Error ? error.message : String(error || "");
+  return (
+    message.includes("PGRST204") &&
+    Array.from(OPERATIONAL_ROUTING_COLUMNS).some((column) =>
+      message.includes(`'${column}'`),
+    )
+  );
+}
+
+export function getLeadOperationErrorMessage(
+  error: unknown,
+  fallback = "Không thể cập nhật dữ liệu lead. Vui lòng thử lại.",
+): string {
+  if (isOperationalRoutingSchemaError(error)) {
+    return "Hệ thống chưa hoàn tất cấu hình chuyển nghiệp vụ. Vui lòng liên hệ quản trị viên.";
+  }
+  if (error instanceof SupabaseServiceError && error.code === "PGRST204") {
+    return "Cấu hình dữ liệu chưa được đồng bộ. Vui lòng liên hệ quản trị viên.";
+  }
+  if (error instanceof SupabaseServiceError && error.status >= 500) {
+    return "Dịch vụ dữ liệu đang tạm thời gián đoạn. Vui lòng thử lại sau.";
+  }
+  return fallback;
+}
+
 interface SupabaseConfig {
   url: string;
   anonKey: string;
@@ -470,8 +551,12 @@ async function supabaseRequest<T>(config: SupabaseConfig, table: string, request
     },
   });
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(`Supabase ${table} ${response.status}: ${message}`);
+    throw new SupabaseServiceError({
+      table,
+      operation: "GET",
+      status: response.status,
+      responseBody: await response.text(),
+    });
   }
   return (await response.json()) as T;
 }
@@ -494,8 +579,12 @@ async function supabaseWrite<T = unknown>(
   headers["Prefer"] = prefer || (returnRows ? "return=representation" : "return=minimal");
   const response = await fetch(url, { method, headers, body: JSON.stringify(body) });
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(`Supabase ${table} ${method} ${response.status}: ${message}`);
+    throw new SupabaseServiceError({
+      table,
+      operation: method,
+      status: response.status,
+      responseBody: await response.text(),
+    });
   }
   if (!returnRows) return undefined as T;
   return (await response.json()) as T;
@@ -515,6 +604,43 @@ async function upsertSupabaseLead(
     false,
     "resolution=merge-duplicates,return=minimal",
   );
+}
+
+let operationalRoutingSchemaCache: {
+  ready: boolean;
+  expiresAt: number;
+} | null = null;
+
+export async function checkOperationalRoutingSchema(
+  force = false,
+): Promise<boolean> {
+  if (
+    !force &&
+    operationalRoutingSchemaCache &&
+    operationalRoutingSchemaCache.expiresAt > Date.now()
+  ) {
+    return operationalRoutingSchemaCache.ready;
+  }
+
+  try {
+    await supabaseRequest<SupabaseRow[]>(
+      getSupabaseConfig(),
+      "leads",
+      "select=operational_queue,previous_operational_queue,transfer_count,transfer_history&limit=1",
+    );
+    operationalRoutingSchemaCache = {
+      ready: true,
+      expiresAt: Date.now() + 5 * 60 * 1000,
+    };
+    return true;
+  } catch (error) {
+    if (!isOperationalRoutingSchemaError(error)) throw error;
+    operationalRoutingSchemaCache = {
+      ready: false,
+      expiresAt: Date.now() + 10 * 1000,
+    };
+    return false;
+  }
 }
 
 async function deleteSupabaseLead(config: SupabaseConfig, id: string) {
@@ -638,7 +764,7 @@ async function loadSupabaseRows<T extends SupabaseRow>(
   params: Record<string, string>,
   maxRows = 10000,
 ): Promise<T[]> {
-  const pageSize = 1000;
+  const pageSize = 500;
   const rows: T[] = [];
   let offset = 0;
 
@@ -700,6 +826,28 @@ function chunkValues<T>(values: T[], size: number): T[][] {
   return chunks;
 }
 
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let nextIndex = 0;
+  const workerCount = Math.max(1, Math.min(concurrency, items.length));
+
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < items.length) {
+        const currentIndex = nextIndex;
+        nextIndex += 1;
+        results[currentIndex] = await mapper(items[currentIndex], currentIndex);
+      }
+    }),
+  );
+
+  return results;
+}
+
 async function loadSupabaseRowsByPostIds<T extends SupabaseRow>(
   config: SupabaseConfig,
   table: string,
@@ -738,13 +886,12 @@ async function loadSupabaseRowsByIds<T extends SupabaseRow>(
 ): Promise<T[]> {
   if (!ids || ids.length === 0) return [];
   const unique = Array.from(new Set(ids.filter(Boolean)));
-  const pageSize = 100;
-  const promises: Promise<T[]>[] = [];
-
+  const pageSize = 50;
   const isAnnotationTable = table === "annotations";
-  for (let i = 0; i < unique.length; i += pageSize) {
-    if (isAnnotationTable && i >= 1000) break; // Limit to top 1000 IDs to avoid excessive parallel queries
-    const chunk = unique.slice(i, i + pageSize);
+  const cappedUnique = isAnnotationTable ? unique.slice(0, 1000) : unique;
+  const chunks = chunkValues(cappedUnique, pageSize);
+
+  const results = await mapWithConcurrency(chunks, 3, async (chunk) => {
     const formattedIds = chunk.map((id) => `"${id.replace(/"/g, '\\"')}"`);
     const requestParams = new URLSearchParams({
       ...extraParams,
@@ -752,10 +899,8 @@ async function loadSupabaseRowsByIds<T extends SupabaseRow>(
       select: columns.join(","),
       limit: String(maxRows), // Fetch up to maxRows to ensure complete candidate list
     });
-    promises.push(supabaseRequest<T[]>(config, table, requestParams.toString()));
-  }
-
-  const results = await Promise.all(promises);
+    return supabaseRequest<T[]>(config, table, requestParams.toString());
+  });
   let finalResults = results.flat();
 
   // If order is updated_at desc, sort in JS to ensure true top results across chunks
@@ -1010,7 +1155,7 @@ function supabaseCommentToMention(
 
 async function fetchSupabaseMentionsUncached(opts: FetchOptions): Promise<Mention[]> {
   const config = getSupabaseConfig();
-  const maxMentions = opts.maxMentions || 30000;
+  const maxMentions = opts.maxMentions || 2500;
   const brandKey = opts.brandKey ? opts.brandKey.toLowerCase().replace(/[\s\-_.]/g, "").trim() : "";
   const postColumns = [
     "post_id",
@@ -1074,7 +1219,7 @@ async function fetchSupabaseMentionsUncached(opts: FetchOptions): Promise<Mentio
       const fetchBrandPosts = (column: "brand_slug" | "brand", value: string) => {
         const query = new URLSearchParams({
           select: "post_id",
-          limit: "1000",
+          limit: String(Math.min(500, maxMentions)),
         });
         query.set(column, `eq.${value}`);
         return supabaseRequest<SupabaseRow[]>(config, "posts", query.toString());
@@ -1099,8 +1244,8 @@ async function fetchSupabaseMentionsUncached(opts: FetchOptions): Promise<Mentio
     // 2. Fetch completed annotations corresponding to these post IDs per platform
     try {
       const platforms = ["facebook", "tiktok", "youtube", "thread", "be", "google_maps", "news"];
-      const perPlatformLimit = Math.max(500, Math.floor(maxMentions / platforms.length));
-      const promises = platforms.map((p) =>
+      const perPlatformLimit = Math.min(400, Math.max(120, Math.ceil(maxMentions / platforms.length)));
+      const results = await mapWithConcurrency(platforms, 2, (p) =>
         loadSupabaseRowsByIds<SupabaseRow>(
           config,
           "annotations",
@@ -1114,7 +1259,6 @@ async function fetchSupabaseMentionsUncached(opts: FetchOptions): Promise<Mentio
           return [] as SupabaseRow[];
         })
       );
-      const results = await Promise.all(promises);
       annotationRows = results.flat();
     } catch (error: any) {
       console.error("[DashboardService] Failed to fetch annotations for brand:", error);
@@ -1124,8 +1268,8 @@ async function fetchSupabaseMentionsUncached(opts: FetchOptions): Promise<Mentio
     // ── Global Strategy (Fallback) ───────────────────────────────────
     try {
       const platforms = ["facebook", "tiktok", "youtube", "thread", "be", "google_maps", "news"];
-      const perPlatformLimit = Math.max(500, Math.floor(maxMentions / platforms.length));
-      const promises = platforms.map((p) =>
+      const perPlatformLimit = Math.min(400, Math.max(120, Math.ceil(maxMentions / platforms.length)));
+      const results = await mapWithConcurrency(platforms, 2, (p) =>
         loadSupabaseRows<SupabaseRow>(
           config,
           "annotations",
@@ -1136,7 +1280,6 @@ async function fetchSupabaseMentionsUncached(opts: FetchOptions): Promise<Mentio
           return [] as SupabaseRow[];
         })
       );
-      const results = await Promise.all(promises);
       annotationRows = results.flat();
     } catch (error: any) {
       console.error("[DashboardService] Failed to fetch annotations:", error);
@@ -1273,6 +1416,72 @@ function getProfileDisplayName(profile: UserRoleProfile) {
   return profile.displayName || profile.email || "Nhan vien xu ly";
 }
 
+const LEAD_CONTEXT_FIELDS: ReadonlyArray<keyof Lead> = [
+  "mention_id",
+  "source_mention_id",
+  "parent_id",
+  "content_type",
+  "post_id",
+  "workspace_id",
+  "platform",
+  "author",
+  "content",
+  "intent",
+  "current_label",
+  "labels",
+  "intent_signals",
+  "created_at",
+  "expiry_at",
+  "posted_at",
+  "url",
+  "source_url",
+  "phone",
+  "email",
+  "zalo_id",
+  "messenger_id",
+  "social_profile_url",
+];
+
+const LEAD_PERSISTED_FIELDS = new Set<keyof Lead>([
+  ...LEAD_CONTEXT_FIELDS,
+  "status",
+  "label_correction_status",
+  "pending_label_request_id",
+  "last_label_corrected_at",
+  "operational_queue",
+  "previous_operational_queue",
+  "transfer_reason",
+  "transfer_note",
+  "transferred_by",
+  "transferred_by_name",
+  "transferred_at",
+  "transfer_count",
+  "transfer_history",
+  "owner_id",
+  "owner_name",
+  "owner_email",
+  "assigned_at",
+  "assigned_by",
+  "claimed_at",
+  "first_contacted_at",
+  "contact_attempts",
+  "last_contact_at",
+  "pending_result",
+  "last_action_at",
+  "last_action_type",
+  "last_contact_channel",
+  "result_type",
+  "result_recorded_at",
+  "follow_up_at",
+  "closed_at",
+  "sales_status",
+  "sales_owner_id",
+  "sales_owner_name",
+  "sales_transferred_at",
+  "crm_deal_id",
+  "notes",
+]);
+
 function buildLeadWorkflowPayload(
   lead: Lead | undefined,
   data: Partial<Lead>,
@@ -1283,17 +1492,27 @@ function buildLeadWorkflowPayload(
   const ownerId = data.owner_id === null ? null : (data.owner_id || lead?.owner_id || profile.uid);
   const ownerEmail = data.owner_email === null ? null : (data.owner_email || lead?.owner_email || profile.email);
   const ownerName = data.owner_name === null ? null : (data.owner_name || lead?.owner_name || getProfileDisplayName(profile));
-  const cleanLead = stripUndefinedFields({
-    ...mergedLead,
-    ...data,
+
+  const fieldsToPersist = new Set<keyof Lead>(LEAD_CONTEXT_FIELDS);
+  (Object.keys(data) as Array<keyof Lead>).forEach((field) => {
+    if (LEAD_PERSISTED_FIELDS.has(field)) fieldsToPersist.add(field);
+  });
+
+  const requestedPayload: Record<string, unknown> = {};
+  fieldsToPersist.forEach((field) => {
+    if (LEAD_PERSISTED_FIELDS.has(field)) {
+      requestedPayload[field] = mergedLead[field];
+    }
+  });
+
+  return stripUndefinedFields({
+    ...requestedPayload,
     firebase_uid: ownerId,
     owner_id: ownerId,
     owner_email: ownerEmail,
     owner_name: ownerName,
     ...auditFields,
   });
-  const { id: _id, ...payload } = cleanLead;
-  return payload;
 }
 
 // ─── Fetch options ────────────────────────────────────────────────────────────
@@ -1557,6 +1776,15 @@ export class DashboardService {
           label_correction_status: undefined,
           pending_label_request_id: undefined,
           last_label_corrected_at: undefined,
+          operational_queue: undefined,
+          previous_operational_queue: undefined,
+          transfer_reason: undefined,
+          transfer_note: undefined,
+          transferred_by: undefined,
+          transferred_by_name: undefined,
+          transferred_at: undefined,
+          transfer_count: 0,
+          transfer_history: [],
           phone: parsed.phone,
           email: parsed.email,
           zalo_id: parsed.zalo_id,
@@ -1615,6 +1843,17 @@ export class DashboardService {
             label_correction_status: mapLabelCorrectionStatus(d.label_correction_status as string | undefined),
             pending_label_request_id: normalizeOptionalText(d.pending_label_request_id),
             last_label_corrected_at: d.last_label_corrected_at ? parseDate(d.last_label_corrected_at) : undefined,
+            operational_queue: normalizeOptionalText(d.operational_queue) as Lead["operational_queue"],
+            previous_operational_queue: normalizeOptionalText(d.previous_operational_queue) as Lead["previous_operational_queue"],
+            transfer_reason: normalizeOptionalText(d.transfer_reason),
+            transfer_note: normalizeOptionalText(d.transfer_note),
+            transferred_by: normalizeOptionalText(d.transferred_by),
+            transferred_by_name: normalizeOptionalText(d.transferred_by_name),
+            transferred_at: d.transferred_at ? parseDate(d.transferred_at) : undefined,
+            transfer_count: typeof d.transfer_count === "number" ? d.transfer_count : 0,
+            transfer_history: Array.isArray(d.transfer_history)
+              ? (d.transfer_history as Lead["transfer_history"])
+              : [],
             phone: normalizeOptionalText(d.phone) || parsed.phone,
             email: normalizeOptionalText(d.email) || parsed.email,
             zalo_id: normalizeOptionalText(d.zalo_id) || parsed.zalo_id,
@@ -1649,7 +1888,7 @@ export class DashboardService {
         }
       });
 
-      let leads: Lead[] = Array.from(derivedLeadById.values()).filter(isIntentLead);
+      let leads: Lead[] = Array.from(derivedLeadById.values());
       leads.sort(
         (a, b) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),

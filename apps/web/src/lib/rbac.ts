@@ -93,7 +93,6 @@ const ROLE_BUSINESS_ACTIONS: Record<UserRole, BusinessAction[]> = {
     "view_crisis_queue",
     "update_crisis_status",
     "view_reports",
-    "create_label_request",
   ],
   lead_employee: [
     "view_mentions",
@@ -101,8 +100,23 @@ const ROLE_BUSINESS_ACTIONS: Record<UserRole, BusinessAction[]> = {
     "update_lead_status",
     "update_lead_details",
     "view_reports",
-    "create_label_request",
   ],
+};
+
+const ACTION_PERMISSION_MAP: Partial<Record<BusinessAction, string>> = {
+  view_dashboard: "dashboard",
+  view_mentions: "mentions",
+  view_crisis_queue: "alerts",
+  update_crisis_status: "alerts",
+  view_leads: "leads",
+  update_lead_status: "leads",
+  update_lead_details: "leads",
+  view_reports: "reports",
+  manage_staff: "staff_management",
+  manage_brand_settings: "brand_settings",
+  review_labels: "label_request_review",
+  create_label_request: "label_request_create",
+  label_request_review: "label_request_review",
 };
 
 export const ROLE_CONFIG: Record<UserRole, RoleConfig> = {
@@ -139,7 +153,6 @@ export const ROLE_CONFIG: Record<UserRole, RoleConfig> = {
       "mentions",
       "alerts",
       "reports",
-      "label_request_create",
     ],
     defaultRoute: "/alerts",
   },
@@ -184,22 +197,22 @@ const ROUTE_POLICIES: RoutePolicy[] = [
   },
   {
     route: "/alerts",
-    roles: ["brand_manager", "crisis_employee"],
+    roles: ["brand_manager", "crisis_employee", "lead_employee"],
     permission: "alerts",
   },
   {
     route: "/crisis-monitoring",
-    roles: ["brand_manager", "crisis_employee"],
+    roles: ["brand_manager", "crisis_employee", "lead_employee"],
     permission: "alerts",
   },
   {
     route: "/leads",
-    roles: ["brand_manager", "lead_employee"],
+    roles: ["brand_manager", "crisis_employee", "lead_employee"],
     permission: "leads",
   },
   {
     route: "/lead-monitoring",
-    roles: ["brand_manager", "lead_employee"],
+    roles: ["brand_manager", "crisis_employee", "lead_employee"],
     permission: "leads",
   },
   {
@@ -246,10 +259,12 @@ export function getDefaultRouteForRole(role?: RoleInput | null) {
 }
 
 export function canPerformAction(
-  profile: Pick<UserRoleProfile, "role"> | null | undefined,
+  profile: Pick<UserRoleProfile, "role" | "permissions"> | null | undefined,
   action: BusinessAction,
 ) {
   if (!profile) return false;
+  const permission = ACTION_PERMISSION_MAP[action];
+  if (permission && profile.permissions?.includes(permission)) return true;
   return ROLE_BUSINESS_ACTIONS[profile.role]?.includes(action) ?? false;
 }
 

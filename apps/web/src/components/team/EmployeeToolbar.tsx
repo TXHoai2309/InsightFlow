@@ -45,9 +45,10 @@ export function EmployeeToolbar({
           onChange={(e) => onRoleChange(e.target.value)}
           className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-[14px] text-gray-700 outline-none focus:border-[#6C5CE7] sm:w-auto"
         >
-          <option value="all">Tất cả vai trò</option>
-          <option value="crisis_employee">Crisis Employee</option>
-          <option value="lead_employee">Lead Employee</option>
+          <option value="all">Tất cả nghiệp vụ</option>
+          <option value="crisis_employee">Xử lý khủng hoảng</option>
+          <option value="lead_employee">Xử lý tiềm năng</option>
+          <option value="dual_employee">Cả 2 nghiệp vụ</option>
         </select>
 
         <select

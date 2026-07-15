@@ -1862,16 +1862,6 @@ export default function AlertsPage() {
         />
       )}
 
-      {correctionModalItem && (
-        <CorrectionRequestModal
-          item={correctionModalItem}
-          onClose={() => setCorrectionModalItem(null)}
-          triggerToast={triggerToast}
-          createCorrectionRequest={createCorrectionRequest}
-          profile={profile}
-        />
-      )}
-
       {selectedEvidence && (
         <TrendModal
           alert={selectedEvidence}

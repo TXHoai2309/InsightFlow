@@ -10,7 +10,7 @@ import { supabaseClient } from "@/lib/supabaseClient";
 import { normalizeClassificationLabel } from "@/lib/label-change";
 import { calculateNegativityScore } from "@/lib/negativityScore";
 import { useDashboardStore } from "@/stores/dashboard.store";
-import type { Mention } from "@/types/dashboard";
+import type { Lead, Mention } from "@/types/dashboard";
 import { getPersistedAlertStatus } from "@/lib/alertWorkflow";
 
 function getResolverName(emailOrId: string | null | undefined): string {
@@ -135,6 +135,10 @@ export interface AlertData {
   customer_contact_evidence_image?: string;
   customer_response_result?: "positive" | "no_response" | "still_upset" | "not_suitable";
   customer_contact_history?: CustomerContactAttempt[];
+  operational_queue?: Lead["operational_queue"];
+  transferred_at?: string;
+  transfer_reason?: string;
+  transfer_note?: string;
 }
 
 export interface AlertFilters {
@@ -314,7 +318,7 @@ function applyFilters(rawAlerts: AlertData[], filters: AlertFilters): AlertData[
   return result;
 }
 
-function mentionToAlertData(m: Mention): AlertData {
+function mentionToAlertData(m: Mention, routedLead?: Lead): AlertData {
   const labelObj = (m.labels || {}) as any;
   const negativity = calculateNegativityScore({
     sentiment: m.sentiment || "negative",
@@ -387,6 +391,10 @@ function mentionToAlertData(m: Mention): AlertData {
     customer_contact_history: Array.isArray(labelObj.customer_contact_history)
       ? labelObj.customer_contact_history
       : [],
+    operational_queue: routedLead?.operational_queue,
+    transferred_at: routedLead?.transferred_at,
+    transfer_reason: routedLead?.transfer_reason,
+    transfer_note: routedLead?.transfer_note,
   };
 }
 
@@ -403,10 +411,24 @@ function resolveAlertStatusFromLabel(labelObj: any): string {
   return getPersistedAlertStatus(labelObj);
 }
 
-function buildAlertsFromMentions(mentions: Mention[], scopedBrandKey?: string | null): AlertData[] {
+function buildAlertsFromMentions(
+  mentions: Mention[],
+  scopedBrandKey?: string | null,
+  routedLeads: Lead[] = [],
+): AlertData[] {
+  const routedLeadByMentionId = new Map<string, Lead>();
+  routedLeads.forEach((lead) => {
+    [lead.id, lead.mention_id, lead.source_mention_id]
+      .filter(Boolean)
+      .forEach((id) => routedLeadByMentionId.set(String(id), lead));
+  });
+
   return mentions
-    .filter((m) => m.sentiment === "negative")
-    .map(mentionToAlertData)
+    .filter((mention) => {
+      const routedLead = routedLeadByMentionId.get(mention.id);
+      return mention.sentiment === "negative" || routedLead?.operational_queue === "crisis";
+    })
+    .map((mention) => mentionToAlertData(mention, routedLeadByMentionId.get(mention.id)))
     .filter((alert) =>
       isWithinAlertReviewWindow(alert.created_at) &&
       isRecordInBrandScope({ brand: alert.brand }, scopedBrandKey ?? null)
@@ -442,13 +464,14 @@ function setAlertsFromDashboardCache(
   scopedBrandKey?: string | null,
 ): boolean {
   const dashboardMentions = useDashboardStore.getState().mentions;
+  const dashboardLeads = useDashboardStore.getState().leads;
   const mentions = dashboardMentions.length > 0
     ? dashboardMentions
     : loadDashboardCachedMentions(scopedBrandKey);
   if (mentions.length === 0) return false;
 
   const recentLocks = getState().recentLocks || {};
-  const fetched = buildAlertsFromMentions(mentions, scopedBrandKey).map((alert) => {
+  const fetched = buildAlertsFromMentions(mentions, scopedBrandKey, dashboardLeads).map((alert) => {
     const recent = recentLocks[alert.id];
     if (recent && Date.now() - recent.timestamp < 15000) {
       return {
@@ -616,7 +639,7 @@ export const useAlertStore = create<AlertState>()(
         try {
           const rawBrandKey = (scopedBrandKey === "global" || !scopedBrandKey) ? undefined : scopedBrandKey;
           const rawData = await DashboardService.fetchRawData({ brandKey: rawBrandKey });
-          const filtered = buildAlertsFromMentions(rawData.mentions, scopedBrandKey);
+          const filtered = buildAlertsFromMentions(rawData.mentions, scopedBrandKey, rawData.leads);
 
           const scopedBrands = Array.from(new Set(filtered.map((alert) => alert.brand))).sort();
           const fallbackBrands = ["Highlands Coffee", "Starbucks", "Mixue"].filter((brand) => {
