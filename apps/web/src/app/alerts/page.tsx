@@ -228,7 +228,6 @@ export default function AlertsPage() {
   const [resolvingAlert, setResolvingAlert] = useState<any>(null);
   const [viewingHistoryAlert, setViewingHistoryAlert] = useState<any>(null);
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
-  const [reportModalItem, setReportModalItem] = useState<any>(null);
 
   const hasLoadedRef = useRef(false);
   // New states for the redesigned Priority Process List
@@ -309,8 +308,11 @@ export default function AlertsPage() {
     setFilters,
     fetchAlerts,
     updateAlertStatus,
-    lockAlertForResolution,
-    unlockAlertForResolution,
+    fetchCorrectionRequests,
+    createCorrectionRequest,
+    resolveCorrectionRequest,
+    correctionRequests,
+    isLoadingRequests,
   } = useAlertStore();
   // Filter alerts by currently selected brand filter for dashboard overview calculations
   const brandFilteredAlerts = useMemo(() => {
@@ -940,7 +942,8 @@ export default function AlertsPage() {
     if (authLoading || !canViewCrisisQueue) return;
     setFilters({ status: "all" });
     fetchAlerts(scopedBrandKey, true);
-  }, [authLoading, canViewCrisisQueue, scopedBrandKey, fetchAlerts, setFilters]);
+    fetchCorrectionRequests(scopedBrandKey);
+  }, [authLoading, canViewCrisisQueue, scopedBrandKey, fetchAlerts, fetchCorrectionRequests, setFilters]);
 
   // Auto-switch view Mode once based on high-risk counts
   useEffect(() => {
@@ -1201,16 +1204,17 @@ export default function AlertsPage() {
                 onClick={async () => {
                   try {
                     await fetchAlerts(scopedBrandKey, true);
+                    await fetchCorrectionRequests(scopedBrandKey, true);
                     triggerToast("Đã làm mới dữ liệu!");
                   } catch (e) {
                     triggerToast("Lỗi làm mới dữ liệu!");
                   }
                 }}
-                disabled={isLoading}
+                disabled={isLoading || isLoadingRequests}
                 title="Làm mới dữ liệu"
                 className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold border border-[var(--color-border)] text-[var(--color-text-secondary)] bg-white dark:bg-[var(--color-bg-surface-raised)] hover:bg-slate-50 transition-all cursor-pointer disabled:opacity-50"
               >
-                <span className={`material-symbols-outlined text-sm ${isLoading ? 'animate-spin' : ''}`}>refresh</span>
+                <span className={`material-symbols-outlined text-sm ${(isLoading || isLoadingRequests) ? 'animate-spin' : ''}`}>refresh</span>
                 <span className="hidden sm:inline">Làm mới</span>
               </button>
             </div>
@@ -1458,15 +1462,6 @@ export default function AlertsPage() {
                             <span className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/20 px-1.5 py-0.5 rounded border border-indigo-100 dark:border-indigo-900/30 flex-shrink-0">
                               {formatBrandName(alert.brand)}
                             </span>
-                            {alert.operational_queue === "crisis" && (
-                              <span
-                                title={alert.transfer_note || alert.transfer_reason || "Được bàn giao từ nghiệp vụ tiềm năng"}
-                                className="inline-flex flex-shrink-0 items-center gap-1 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold text-amber-700 dark:border-amber-900/30 dark:bg-amber-950/20 dark:text-amber-300"
-                              >
-                                <span className="material-symbols-outlined text-[11px]">swap_horiz</span>
-                                Từ Tiềm năng
-                              </span>
-                            )}
                           </div>
                           <p className="text-[9px] text-[var(--color-text-muted)] font-semibold mt-0.5">
                             {getRelativeTime(alert.created_at, t)}
@@ -1868,14 +1863,6 @@ export default function AlertsPage() {
         <HistoryModal
           alert={viewingHistoryAlert}
           onClose={() => setViewingHistoryAlert(null)}
-        />
-      )}
-
-      {reportModalItem && (
-        <IncidentReportModal
-          item={reportModalItem}
-          onClose={() => setReportModalItem(null)}
-          triggerToast={triggerToast}
         />
       )}
 
@@ -2889,397 +2876,6 @@ function IncidentReportModal({ item, onClose, triggerToast }: IncidentReportModa
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-// ── Correction Request Modal Component ──
-interface CorrectionRequestModalProps {
-  item: any;
-  onClose: () => void;
-  triggerToast: (msg: string) => void;
-  createCorrectionRequest: (data: any) => Promise<void>;
-  profile: any;
-}
-
-function CorrectionRequestModal({ item, onClose, triggerToast, createCorrectionRequest, profile }: CorrectionRequestModalProps) {
-  const { t } = useTranslation();
-  const [sentiment, setSentiment] = useState(item.sentiment || "neutral");
-  const [severity, setSeverity] = useState(item.severity || "medium");
-  const [topic, setTopic] = useState(item.topic || "other");
-  const [reason, setReason] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!reason.trim()) {
-      triggerToast(t("alerts.correction.reasonRequired"));
-      return;
-    }
-    setSubmitting(true);
-    try {
-      await createCorrectionRequest({
-        alert_id: item.id,
-        brand: item.brand,
-        requester_uid: profile?.uid || "unknown",
-        requester_email: profile?.email || "unknown",
-        original_sentiment: item.sentiment || "neutral",
-        new_sentiment: sentiment,
-        original_severity: item.severity || "medium",
-        new_severity: severity,
-        original_topic: item.topic || "other",
-        new_topic: topic,
-        reason: reason.trim(),
-        alert_text: item.text || item.content || "",
-      });
-      triggerToast(t("alerts.correction.success"));
-      onClose();
-    } catch (err) {
-      console.error(err);
-      triggerToast(t("alerts.correction.error"));
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
-
-      {/* Modal Container */}
-      <form
-        onSubmit={handleSubmit}
-        className="glass-card w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl relative z-10 border border-app/30 flex flex-col max-h-[90vh] bg-[var(--color-bg-surface)] text-[var(--color-text-primary)]"
-      >
-        {/* Header */}
-        <div className="p-4 md:p-6 border-b border-[var(--color-border)] flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-[var(--color-brand)] text-xl">edit_square</span>
-            <h3 className="font-bold text-base md:text-lg">{t("alerts.correction.title")}</h3>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)] transition-colors"
-          >
-            <span className="material-symbols-outlined text-base">close</span>
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="p-4 md:p-6 space-y-4 overflow-y-auto">
-          <div className="p-3 bg-[var(--color-bg-surface-raised)] rounded-xl border border-[var(--color-border)] text-xs text-[var(--color-text-secondary)] italic">
-            "{item.text || item.content}"
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {/* Sentiment */}
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">{t("alerts.correction.sentimentLabel")}</label>
-              <select
-                value={sentiment}
-                onChange={(e) => setSentiment(e.target.value)}
-                className="w-full bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] rounded-xl text-xs py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 font-medium text-[var(--color-text-primary)] select-app"
-              >
-                <option value="positive">{t("alerts.correction.sentimentPositive")}</option>
-                <option value="neutral">{t("alerts.correction.sentimentNeutral")}</option>
-                <option value="negative">{t("alerts.correction.sentimentNegative")}</option>
-              </select>
-            </div>
-
-            {/* Severity */}
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">{t("alerts.correction.severityLabel")}</label>
-              <select
-                value={severity}
-                onChange={(e) => setSeverity(e.target.value)}
-                className="w-full bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] rounded-xl text-xs py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 font-medium text-[var(--color-text-primary)] select-app"
-              >
-                <option value="low">{t("alerts.correction.severityLow")}</option>
-                <option value="medium">{t("alerts.correction.severityMedium")}</option>
-                <option value="high">{t("alerts.correction.severityHigh")}</option>
-                <option value="critical">{t("alerts.correction.severityCritical")}</option>
-              </select>
-            </div>
-
-            {/* Topic */}
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">{t("alerts.correction.topicLabel")}</label>
-              <select
-                value={topic}
-                onChange={(e) => setTopic(e.target.value)}
-                className="w-full bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] rounded-xl text-xs py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 font-medium text-[var(--color-text-primary)] select-app"
-              >
-                <option value="quality">{t("alerts.correction.topicQuality")}</option>
-                <option value="price">{t("alerts.correction.topicPrice")}</option>
-                <option value="service">{t("alerts.correction.topicService")}</option>
-                <option value="staff">{t("alerts.correction.topicStaff")}</option>
-                <option value="delivery">{t("alerts.correction.topicDelivery")}</option>
-                <option value="experience">{t("alerts.correction.topicExperience")}</option>
-                <option value="legal">{t("alerts.correction.topicLegal")}</option>
-                <option value="operation">{t("alerts.correction.topicOperation")}</option>
-                <option value="competitor">{t("alerts.correction.topicCompetitor")}</option>
-                <option value="other">{t("alerts.correction.topicOther")}</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Reason */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-[var(--color-text-primary)] flex items-center gap-1">
-              <span className="material-symbols-outlined text-[14px] text-[var(--color-error)]">rate_review</span>
-              {t("alerts.correction.reasonLabel")}
-            </label>
-            <textarea
-              rows={3}
-              required
-              placeholder={t("alerts.correction.reasonPlaceholder")}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              className="w-full bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] rounded-xl text-xs py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 text-[var(--color-text-primary)]"
-            />
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="p-4 border-t border-[var(--color-border)] flex justify-end gap-2 bg-[var(--color-bg-surface-raised)]/20">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2.5 rounded-xl text-xs font-bold text-[var(--color-text-secondary)] bg-[var(--color-bg-surface-raised)] hover:bg-[var(--color-bg-surface-high)] border border-[var(--color-border)] transition-all cursor-pointer"
-          >
-            {t("alerts.correction.close")}
-          </button>
-          <button
-            type="submit"
-            disabled={submitting}
-            className="px-4 py-2.5 rounded-xl text-xs font-bold bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand-hover)] active:scale-95 transition-all shadow-sm flex items-center gap-1 cursor-pointer"
-          >
-            {submitting ? t("alerts.correction.submitting") : t("alerts.correction.submit")}
-          </button>
-        </div>
-      </form>
-    </div>
-  );
-}
-
-// ── Correction Requests List Component ──
-interface CorrectionRequestsListProps {
-  requests: any[];
-  resolveCorrectionRequest: (requestId: string, alertId: string, decision: "approved" | "rejected", profile: any) => Promise<void>;
-  isLoadingRequests: boolean;
-  profile: any;
-  triggerToast: (msg: string) => void;
-}
-
-function CorrectionRequestsList({ requests, resolveCorrectionRequest, isLoadingRequests, profile, triggerToast }: CorrectionRequestsListProps) {
-  const { t } = useTranslation();
-  const [resolvingId, setResolvingId] = useState<string | null>(null);
-  const [subFilter, setSubFilter] = useState<"pending" | "resolved">("pending");
-
-  const isManager = profile?.role === "brand_manager" || profile?.role === "admin";
-
-  const handleResolve = async (requestId: string, alertId: string, decision: "approved" | "rejected") => {
-    setResolvingId(requestId);
-    try {
-      await resolveCorrectionRequest(requestId, alertId, decision, profile);
-      triggerToast(decision === "approved" ? t("alerts.correctionList.approvedToast") : t("alerts.correctionList.rejectedToast"));
-    } catch (err) {
-      console.error(err);
-      triggerToast(t("alerts.correctionList.errorToast"));
-    } finally {
-      setResolvingId(null);
-    }
-  };
-
-  const filteredRequests = useMemo(() => {
-    if (subFilter === "pending") {
-      return requests.filter((r) => r.status === "pending");
-    } else {
-      return requests.filter((r) => r.status === "approved" || r.status === "rejected");
-    }
-  }, [requests, subFilter]);
-
-  if (isLoadingRequests) {
-    return (
-      <div className="flex flex-col items-center justify-center p-12 space-y-4 glass-card rounded-2xl">
-        <svg className="animate-spin h-8 w-8 text-primary" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-        </svg>
-        <p className="text-sm font-medium animate-pulse text-[var(--color-text-secondary)]">
-          {t("alerts.correctionList.loading")}
-        </p>
-      </div>
-    );
-  }
-
-  const pendingCount = requests.filter(r => r.status === "pending").length;
-  const resolvedCount = requests.filter(r => r.status !== "pending").length;
-
-  return (
-    <div className="space-y-4">
-      {/* Sub-tabs header */}
-      <div className="flex gap-2 border-b border-[var(--color-border)]/50 pb-3">
-        <button
-          onClick={() => setSubFilter("pending")}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${subFilter === "pending"
-            ? "bg-[var(--color-brand)] text-white border-[var(--color-brand)] shadow-sm"
-            : "text-[var(--color-text-secondary)] bg-[var(--color-bg-surface-raised)] border-[var(--color-border)] hover:bg-[var(--color-bg-surface-high)]"
-            }`}
-        >
-          <span className="material-symbols-outlined text-[15px]">pending_actions</span>
-          {t("alerts.correctionList.pendingTab")} ({pendingCount})
-        </button>
-
-        <button
-          onClick={() => setSubFilter("resolved")}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${subFilter === "resolved"
-            ? "bg-[var(--color-brand)] text-white border-[var(--color-brand)] shadow-sm"
-            : "text-[var(--color-text-secondary)] bg-[var(--color-bg-surface-raised)] border-[var(--color-border)] hover:bg-[var(--color-bg-surface-high)]"
-            }`}
-        >
-          <span className="material-symbols-outlined text-[15px]">history</span>
-          {t("alerts.correctionList.resolvedTab")} ({resolvedCount})
-        </button>
-      </div>
-
-      {filteredRequests.length === 0 ? (
-        <div className="flex flex-col items-center justify-center p-12 space-y-3 glass-card rounded-2xl">
-          <span className="material-symbols-outlined text-[var(--color-text-secondary)] text-4xl">folder_off</span>
-          <p className="text-sm font-bold text-[var(--color-text-primary)]">
-            {subFilter === "pending" ? t("alerts.correctionList.emptyPending") : t("alerts.correctionList.emptyResolved")}
-          </p>
-          <p className="text-xs text-[var(--color-text-secondary)] text-center">
-            {subFilter === "pending"
-              ? t("alerts.correctionList.emptyPendingDesc")
-              : t("alerts.correctionList.emptyResolvedDesc")}
-          </p>
-        </div>
-      ) : (
-        filteredRequests.map((req) => {
-          const dateText = new Date(req.created_at).toLocaleString("vi-VN");
-          const statusColors =
-            req.status === "approved"
-              ? "bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-400 border-green-200/50"
-              : req.status === "rejected"
-                ? "bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400 border-red-200/50"
-                : "bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200/50";
-
-          const statusLabel =
-            req.status === "approved"
-              ? t("alerts.correctionList.approved")
-              : req.status === "rejected"
-                ? t("alerts.correctionList.rejected")
-                : t("alerts.correctionList.pending");
-
-          return (
-            <div
-              key={req.id}
-              className="glass-card rounded-2xl overflow-hidden border border-[var(--color-border)] p-4 md:p-6 space-y-4 hover:shadow-md transition-shadow bg-[var(--color-bg-surface-raised)]/20"
-            >
-              {/* Header row */}
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[var(--color-border)] pb-3">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-black text-[var(--color-text-primary)]">@{req.requester_email.split("@")[0]}</span>
-                    <span className="text-[10px] text-[var(--color-text-secondary)]">({req.requester_email})</span>
-                  </div>
-                  <p className="text-[10px] text-[var(--color-text-secondary)] font-medium">
-                    {t("alerts.correctionList.sentAt", { date: dateText })}
-                  </p>
-                </div>
-                <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider border ${statusColors}`}>
-                  {statusLabel}
-                </span>
-              </div>
-
-              {/* Alert context */}
-              <div className="space-y-1">
-                <span className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">{t("alerts.correctionList.contentLabel")}</span>
-                <div className="p-3 bg-[var(--color-bg-surface-raised)] rounded-xl border border-[var(--color-border)] text-xs text-[var(--color-text-secondary)] italic">
-                  "{req.alert_text}"
-                </div>
-              </div>
-
-              {/* Changes Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-[var(--color-bg-surface-raised)]/50 p-4 rounded-xl border border-[var(--color-border)]">
-                {/* Sentiment */}
-                <div>
-                  <p className="text-[9px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">{t("alerts.correctionList.sentiment")}</p>
-                  <div className="flex items-center gap-1.5 mt-1 text-xs font-bold">
-                    <span className="text-red-500 font-bold uppercase">{req.original_sentiment}</span>
-                    <span className="material-symbols-outlined text-[12px] text-[var(--color-text-secondary)]">arrow_forward</span>
-                    <span className="text-green-500 font-black uppercase">{req.new_sentiment}</span>
-                  </div>
-                </div>
-
-                {/* Severity */}
-                <div>
-                  <p className="text-[9px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">{t("alerts.correctionList.severity")}</p>
-                  <div className="flex items-center gap-1.5 mt-1 text-xs font-bold">
-                    <span className="text-amber-600 font-bold uppercase">{req.original_severity}</span>
-                    <span className="material-symbols-outlined text-[12px] text-[var(--color-text-secondary)]">arrow_forward</span>
-                    <span className="text-red-600 font-black uppercase">{req.new_severity}</span>
-                  </div>
-                </div>
-
-                {/* Topic */}
-                <div>
-                  <p className="text-[9px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">{t("alerts.correctionList.topic")}</p>
-                  <div className="flex items-center gap-1.5 mt-1 text-xs font-bold">
-                    <span className="text-[var(--color-text-secondary)] font-bold uppercase">{req.original_topic}</span>
-                    <span className="material-symbols-outlined text-[12px] text-[var(--color-text-secondary)]">arrow_forward</span>
-                    <span className="text-[var(--color-brand)] font-black uppercase">{req.new_topic}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Reason */}
-              <div className="space-y-1">
-                <span className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">{t("alerts.correctionList.reason")}</span>
-                <p className="text-xs text-[var(--color-text-primary)] font-medium bg-[var(--color-bg-surface-raised)]/30 p-2.5 rounded-lg border border-[var(--color-border)]/50">
-                  {req.reason}
-                </p>
-              </div>
-
-              {/* Decision Log / Management Actions */}
-              {req.status === "pending" ? (
-                isManager ? (
-                  <div className="flex justify-end gap-2 pt-3 border-t border-[var(--color-border)]">
-                    <button
-                      type="button"
-                      disabled={resolvingId !== null}
-                      onClick={() => handleResolve(req.id, req.alert_id, "rejected")}
-                      className="px-4 py-2 rounded-xl text-xs font-bold border border-red-500/30 text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
-                    >
-                      {resolvingId === req.id ? t("alerts.correctionList.processing") : t("alerts.correctionList.rejectBtn")}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={resolvingId !== null}
-                      onClick={() => handleResolve(req.id, req.alert_id, "approved")}
-                      className="px-4 py-2 rounded-xl text-xs font-bold bg-green-600 text-white hover:bg-green-700 active:scale-95 transition-all shadow-sm cursor-pointer"
-                    >
-                      {resolvingId === req.id ? t("alerts.correctionList.processing") : t("alerts.correctionList.approveBtn")}
-                    </button>
-                  </div>
-                ) : (
-                  <p className="text-[10px] text-amber-600 font-bold text-right italic">
-                    {t("alerts.correctionList.waitingApproval")}
-                  </p>
-                )
-              ) : (
-                <div className="pt-2 border-t border-[var(--color-border)]/50 flex items-center justify-between text-[10px] text-[var(--color-text-secondary)] font-medium">
-                  <span>{t("alerts.correctionList.reviewer", { uid: req.resolved_by?.slice(0, 8) })}</span>
-                  <span>{t("alerts.correctionList.resolvedTime", { time: req.resolved_at ? new Date(req.resolved_at).toLocaleString("vi-VN") : "" })}</span>
-                </div>
-              )}
-            </div>
-          );
-        })
-      )}
     </div>
   );
 }
