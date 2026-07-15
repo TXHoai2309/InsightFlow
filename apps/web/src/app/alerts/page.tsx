@@ -7,7 +7,10 @@ import { useDashboardStore } from "@/stores/dashboard.store";
 import {
   getAlertReviewSinceIso,
   useAlertStore,
+  type CustomerContactAttempt,
 } from "@/stores/alert.store";
+import { AlertWorkbench } from "@/components/alerts/AlertWorkbench";
+import type { AlertDetailPanelTab } from "@/components/alerts/AlertDetailPanel";
 import { useDashboard } from "@/hooks/useDashboardData";
 import { dbSecond } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
@@ -21,7 +24,7 @@ import {
 import { canPerformAction } from "@/lib/rbac";
 import { getAlertWorkflowStatus, isResolvedAlert } from "@/lib/alertWorkflow";
 
-const ALERTS_PER_PAGE = 10;
+const ALERTS_PER_PAGE = 5;
 import { collection, getDocs, doc, getDoc } from "firebase/firestore";
 import {
   Chart as ChartJS,
@@ -225,10 +228,15 @@ export default function AlertsPage() {
   const [copied, setCopied] = useState(false);
   const [trendAlert, setTrendAlert] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<"priority" | "new" | "resolving" | "resolved">("priority");
-  const [resolvingAlert, setResolvingAlert] = useState<any>(null);
-  const [viewingHistoryAlert, setViewingHistoryAlert] = useState<any>(null);
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
+<<<<<<< HEAD
   const [correctionModalItem, setCorrectionModalItem] = useState<any>(null);
+=======
+  const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
+  const [pendingClaimSelectionId, setPendingClaimSelectionId] = useState<string | null>(null);
+  const [isDetailPanelCollapsed, setIsDetailPanelCollapsed] = useState(false);
+  const [detailPanelTab, setDetailPanelTab] = useState<AlertDetailPanelTab>("action");
+>>>>>>> d6b43ff0c760abc581a742038993c7cd60f63860
 
   const hasLoadedRef = useRef(false);
   // New states for the redesigned Priority Process List
@@ -240,7 +248,6 @@ export default function AlertsPage() {
   const [showMineOnly, setShowMineOnly] = useState(false);
   const [sortBy, setSortBy] = useState<"risk" | "newest" | "reach">("risk");
   const [alertPage, setAlertPage] = useState(1);
-  const alertQueueRef = useRef<HTMLDivElement>(null);
   const [isResolvedExpanded, setIsResolvedExpanded] = useState(false);
   const [isRequestsExpanded, setIsRequestsExpanded] = useState(false);
   const [timeFilter, setTimeFilter] = useState<string>("all");
@@ -529,6 +536,41 @@ export default function AlertsPage() {
     return processedActiveAlerts.slice(startIndex, startIndex + ALERTS_PER_PAGE);
   }, [processedActiveAlerts, alertPage]);
 
+  const selectedAlert = useMemo(() => {
+    if (!selectedAlertId) return null;
+    return processedActiveAlerts.find((alert) => alert.id === selectedAlertId) || null;
+  }, [processedActiveAlerts, selectedAlertId]);
+
+  useEffect(() => {
+    if (!pendingClaimSelectionId) return;
+    const claimedAlertIndex = processedActiveAlerts.findIndex((alert) => alert.id === pendingClaimSelectionId);
+    if (claimedAlertIndex < 0) return;
+
+    const claimedAlertPage = Math.floor(claimedAlertIndex / ALERTS_PER_PAGE) + 1;
+    setSelectedAlertId(pendingClaimSelectionId);
+    if (alertPage !== claimedAlertPage) {
+      setAlertPage(claimedAlertPage);
+      return;
+    }
+
+    setPendingClaimSelectionId(null);
+    window.requestAnimationFrame(() => {
+      document.querySelector('[data-tour="alert-detail-panel"]')?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [alertPage, pendingClaimSelectionId, processedActiveAlerts]);
+
+  useEffect(() => {
+    if (pendingClaimSelectionId) return;
+    if (paginatedActiveAlerts.length === 0) {
+      setSelectedAlertId(null);
+      return;
+    }
+    if (!selectedAlertId || !paginatedActiveAlerts.some((alert) => alert.id === selectedAlertId)) {
+      setSelectedAlertId(paginatedActiveAlerts[0].id);
+      setDetailPanelTab("action");
+    }
+  }, [paginatedActiveAlerts, pendingClaimSelectionId, selectedAlertId]);
+
   const visibleAlertPages = useMemo(() => {
     const startPage = Math.max(1, Math.min(alertPage - 2, totalAlertPages - 4));
     const endPage = Math.min(totalAlertPages, startPage + 4);
@@ -546,7 +588,7 @@ export default function AlertsPage() {
   const goToAlertPage = (pageNumber: number) => {
     setAlertPage(Math.max(1, Math.min(totalAlertPages, pageNumber)));
     window.requestAnimationFrame(() => {
-      alertQueueRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      document.querySelector('[data-tour="alerts-queue-list"]')?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   };
 
@@ -989,142 +1031,119 @@ export default function AlertsPage() {
     );
   }
 
-  // Calculate counts for tabs based on current filters (brand, severity, signal)
-  const newCountForTab = alerts.filter((alert) => {
-    let matchSignal = true;
-    if (signalFilter === "spike") {
-      matchSignal = (
-        alert.text.toLowerCase().includes("đột biến") ||
-        alert.text.toLowerCase().includes("tăng") ||
-        alert.text.toLowerCase().includes("spike")
-      );
-    } else if (signalFilter === "reach") {
-      matchSignal = (
-        alert.text.toLowerCase().includes("tiếp cận") ||
-        alert.text.toLowerCase().includes("reach") ||
-        alert.text.toLowerCase().includes("người")
-      );
-    } else if (signalFilter === "sensitive") {
-      matchSignal = alert.sentiment === "negative" || alert.severity === "critical" || alert.severity === "high";
-    }
-    return getAlertWorkflowStatus(alert) === "pending" && matchSignal;
-  }).length;
-
-  const resolvingCountForTab = alerts.filter((alert) => {
-    let matchSignal = true;
-    if (signalFilter === "spike") {
-      matchSignal = (
-        alert.text.toLowerCase().includes("đột biến") ||
-        alert.text.toLowerCase().includes("tăng") ||
-        alert.text.toLowerCase().includes("spike")
-      );
-    } else if (signalFilter === "reach") {
-      matchSignal = (
-        alert.text.toLowerCase().includes("tiếp cận") ||
-        alert.text.toLowerCase().includes("reach") ||
-        alert.text.toLowerCase().includes("người")
-      );
-    } else if (signalFilter === "sensitive") {
-      matchSignal = alert.sentiment === "negative" || alert.severity === "critical" || alert.severity === "high";
-    }
-    return getAlertWorkflowStatus(alert) === "processing" && matchSignal;
-  }).length;
-
-  const resolvedCountForTab = alerts.filter((alert) => {
-    let matchSignal = true;
-    if (signalFilter === "spike") {
-      matchSignal = (
-        alert.text.toLowerCase().includes("đột biến") ||
-        alert.text.toLowerCase().includes("tăng") ||
-        alert.text.toLowerCase().includes("spike")
-      );
-    } else if (signalFilter === "reach") {
-      matchSignal = (
-        alert.text.toLowerCase().includes("tiếp cận") ||
-        alert.text.toLowerCase().includes("reach") ||
-        alert.text.toLowerCase().includes("người")
-      );
-    } else if (signalFilter === "sensitive") {
-      matchSignal = alert.sentiment === "negative" || alert.severity === "critical" || alert.severity === "high";
-    }
-    return isResolvedAlert(alert) && matchSignal;
-  }).length;
-
-  // Filter alerts locally based on both Tab status and "Tín hiệu" (signal) dropdown
-  const filteredAlerts = alerts.filter((alert) => {
-    // 1. Tab filtering
-    if (activeTab === "new") {
-      if (getAlertWorkflowStatus(alert) !== "pending") {
-        return false;
-      }
-    }
-    if (activeTab === "resolving" && getAlertWorkflowStatus(alert) !== "processing") {
-      return false;
-    }
-    if (activeTab === "resolved" && !isResolvedAlert(alert)) {
-      return false;
-    }
-
-    // 2. Signal filtering
-    if (signalFilter === "spike") {
-      return (
-        alert.text.toLowerCase().includes("đột biến") ||
-        alert.text.toLowerCase().includes("tăng") ||
-        alert.text.toLowerCase().includes("spike")
-      );
-    }
-    if (signalFilter === "reach") {
-      return (
-        alert.text.toLowerCase().includes("tiếp cận") ||
-        alert.text.toLowerCase().includes("reach") ||
-        alert.text.toLowerCase().includes("người")
-      );
-    }
-    if (signalFilter === "sensitive") {
-      return alert.sentiment === "negative" || alert.severity === "critical" || alert.severity === "high";
-    }
-    return true;
-  });
-
-  // Sort alerts:
-  // - resolved tab: resolved_at descending (most recently resolved first)
-  // - resolving tab: timestamp of last resolution attempt descending (most recently updated first)
-  // - new tab: created_at descending (newest first)
-  const sortedAlerts = useMemo(() => {
-    return [...filteredAlerts].sort((a, b) => {
-      if (activeTab === "resolved") {
-        const timeA = a.resolved_at ? new Date(a.resolved_at).getTime() : 0;
-        const timeB = b.resolved_at ? new Date(b.resolved_at).getTime() : 0;
-        if (timeA !== timeB) {
-          return timeB - timeA;
-        }
-      }
-      if (activeTab === "resolving") {
-        const lastAttemptA = a.resolution_history && a.resolution_history.length > 0
-          ? new Date(a.resolution_history[a.resolution_history.length - 1].timestamp).getTime()
-          : new Date(a.created_at).getTime();
-        const lastAttemptB = b.resolution_history && b.resolution_history.length > 0
-          ? new Date(b.resolution_history[b.resolution_history.length - 1].timestamp).getTime()
-          : new Date(b.created_at).getTime();
-        if (lastAttemptA !== lastAttemptB) {
-          return lastAttemptB - lastAttemptA;
-        }
-      }
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-    });
-  }, [filteredAlerts, activeTab]);
-
-
-
   return (
     <div data-tour="alerts-page" className="p-4 md:p-6 lg:p-8 space-y-6 bg-[var(--color-bg-base)] text-[var(--color-text-primary)] animate-fade-in">
 
       {/* Redesigned Grid Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+      <AlertWorkbench
+        alerts={brandFilteredAlerts}
+        pageAlerts={paginatedActiveAlerts}
+        selectedAlert={selectedAlert}
+        selectedAlertId={selectedAlertId}
+        panelCollapsed={isDetailPanelCollapsed}
+        detailTab={detailPanelTab}
+        isLoading={isLoading}
+        isRefreshing={isLoading || isLoadingRequests}
+        error={error}
+        statusFilter={statusFilter}
+        searchText={searchText}
+        severityFilter={severityFilter}
+        sourceFilter={sourceFilter}
+        contentTypeFilter={contentTypeFilter}
+        showMineOnly={showMineOnly}
+        sortBy={sortBy}
+        timeFilter={timeFilter}
+        singleDate={singleDate}
+        customStartDate={customStartDate}
+        customEndDate={customEndDate}
+        brandFilterLocked={brandFilterLocked}
+        brands={brands}
+        filters={filters}
+        currentPage={alertPage}
+        totalPages={totalAlertPages}
+        totalFiltered={processedActiveAlerts.length}
+        profileEmail={profile?.email}
+        canUpdate={canUpdateCrisisStatus}
+        getResolverName={getResolverName}
+        onRefresh={async () => {
+          try {
+            await fetchAlerts(scopedBrandKey, true);
+            await fetchCorrectionRequests(scopedBrandKey, true);
+            triggerToast("Đã làm mới dữ liệu.");
+          } catch (refreshError) {
+            triggerToast("Không thể làm mới dữ liệu.");
+          }
+        }}
+        onSelectAlert={(alert) => {
+          setSelectedAlertId(alert.id);
+          setDetailPanelTab("action");
+          setIsDetailPanelCollapsed(false);
+        }}
+        onCollapsePanel={() => setIsDetailPanelCollapsed(true)}
+        onOpenPanel={() => setIsDetailPanelCollapsed(false)}
+        onDetailTabChange={setDetailPanelTab}
+        onClaim={async (alert) => {
+          const previousStatusFilter = statusFilter;
+          try {
+            setPendingClaimSelectionId(alert.id);
+            const claimRequest = updateAlertStatus(alert.id, "resolving", profile, { note: "Đã tiếp nhận xử lý" }, alert.brand);
+            setStatusFilter("processing");
+            setSelectedAlertId(alert.id);
+            setDetailPanelTab("action");
+            setIsDetailPanelCollapsed(false);
+            await claimRequest;
+            triggerToast("Đã nhận xử lý cảnh báo.");
+          } catch (claimError) {
+            setPendingClaimSelectionId(null);
+            setStatusFilter(previousStatusFilter);
+            triggerToast(claimError instanceof Error ? claimError.message : "Không thể nhận xử lý cảnh báo.");
+            throw claimError;
+          }
+        }}
+        onRecordResult={async (alert) => {
+          if (
+            !alert.customer_contact_opened_at ||
+            !alert.customer_contact_note?.trim() ||
+            !alert.customer_contact_evidence_image ||
+            !alert.customer_response_result
+          ) {
+            const missingEvidenceError = new Error("Cần có minh chứng liên hệ và kết quả phản hồi của khách hàng.");
+            triggerToast(missingEvidenceError.message);
+            throw missingEvidenceError;
+          }
 
-        {/* Left Column: Priority Process Queue List */}
-        <div className="lg:col-span-2 space-y-6">
+          const outcomeStatus: CustomerContactAttempt["outcome_status"] = alert.customer_response_result === "no_response"
+            ? "contact_waiting"
+            : alert.customer_response_result === "still_upset"
+              ? "contact_failed"
+              : "resolved";
+          const nextContactHistory: CustomerContactAttempt[] = [
+            ...(alert.customer_contact_history || []),
+            {
+              opened_at: alert.customer_contact_opened_at,
+              opened_by: alert.customer_contact_opened_by,
+              template: alert.customer_contact_template,
+              note: alert.customer_contact_note,
+              evidence_image: alert.customer_contact_evidence_image,
+              response_result: alert.customer_response_result,
+              completed_at: new Date().toISOString(),
+              outcome_status: outcomeStatus,
+            },
+          ];
+          const targetStatus = outcomeStatus === "contact_waiting"
+            ? "contact_waiting"
+            : outcomeStatus === "contact_failed"
+              ? "contact_failed"
+              : "resolved";
+          const resultLabel = alert.customer_response_result === "positive"
+            ? "Khách hàng phản hồi tích cực"
+            : alert.customer_response_result === "no_response"
+              ? "Chưa phản hồi"
+              : alert.customer_response_result === "still_upset"
+                ? "Khách hàng vẫn bức xúc"
+                : "Không phù hợp";
 
+<<<<<<< HEAD
           {/* ── HEADER ROW ── */}
           <div data-tour="alerts-queue-header" className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             {/* Title + Critical badge */}
@@ -1839,29 +1858,49 @@ export default function AlertsPage() {
         </div>
 
       </div>
+=======
+          try {
+            await updateAlertStatus(alert.id, targetStatus, profile, {
+              note: `Hoàn tất ghi nhận kết quả liên hệ: ${resultLabel}.`,
+              customer_contact_opened_at: alert.customer_contact_opened_at,
+              customer_contact_opened_by: alert.customer_contact_opened_by,
+              customer_contact_template: alert.customer_contact_template,
+              customer_contact_note: alert.customer_contact_note,
+              customer_contact_evidence_image: alert.customer_contact_evidence_image,
+              customer_response_result: alert.customer_response_result,
+              customer_contact_history: nextContactHistory,
+              reset_customer_contact: outcomeStatus !== "resolved",
+            }, alert.brand);
+            triggerToast(
+              outcomeStatus === "resolved"
+                ? "Đã ghi nhận và hoàn tất xử lý cảnh báo."
+                : outcomeStatus === "contact_failed"
+                  ? "Đã chuyển cảnh báo sang luồng Giải quyết thất bại."
+                  : "Đã ghi nhận liên hệ và chuyển sang chờ phản hồi."
+            );
+          } catch (recordError) {
+            triggerToast(recordError instanceof Error ? recordError.message : "Không thể ghi nhận kết quả cảnh báo.");
+            throw recordError;
+          }
+        }}
+        onOpenSource={(alert) => void handleAccessSource(alert.url || "#", alert.text || alert.comment_content || "")}
+        onStatusFilterChange={setStatusFilter}
+        onSearchTextChange={setSearchText}
+        onSeverityFilterChange={setSeverityFilter}
+        onSourceFilterChange={setSourceFilter}
+        onContentTypeFilterChange={setContentTypeFilter}
+        onMineOnlyChange={setShowMineOnly}
+        onSortChange={setSortBy}
+        onTimeFilterChange={setTimeFilter}
+        onSingleDateChange={setSingleDate}
+        onCustomStartDateChange={setCustomStartDate}
+        onCustomEndDateChange={setCustomEndDate}
+        onFiltersChange={setFilters}
+        onPageChange={goToAlertPage}
+      />
+>>>>>>> d6b43ff0c760abc581a742038993c7cd60f63860
 
       {/* Modals rendering at root level */}
-      {resolvingAlert && (
-        <ResolutionModal
-          alert={resolvingAlert}
-          onClose={() => {
-            // KHÔNG unlock khi đóng modal — task vẫn được gán cho người nhận
-            setResolvingAlert(null);
-          }}
-          onSave={async (id, note, imageUrl, targetStatus = "resolving", monitoringDurationHours) => {
-            await updateAlertStatus(id, targetStatus, profile, { note, image_url: imageUrl, monitoring_duration_hours: monitoringDurationHours }, resolvingAlert.brand);
-            setResolvingAlert(null);
-          }}
-        />
-      )}
-
-      {viewingHistoryAlert && (
-        <HistoryModal
-          alert={viewingHistoryAlert}
-          onClose={() => setViewingHistoryAlert(null)}
-        />
-      )}
-
       {selectedEvidence && (
         <TrendModal
           alert={selectedEvidence}
@@ -2223,450 +2262,6 @@ function TrendModal({ alert, onClose }: TrendModalProps) {
           >
             <span className="material-symbols-outlined text-[14px]">search</span>
             {t("alerts.modal.discover")}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Resolution Modal Component ──
-interface ResolutionModalProps {
-  alert: any;
-  onClose: () => void;
-  onSave: (id: string, note: string, imageUrl?: string, targetStatus?: string, monitoringDurationHours?: number) => Promise<void>;
-}
-
-function ResolutionModal({ alert, onClose, onSave }: ResolutionModalProps) {
-  const { t } = useTranslation();
-  const [note, setNote] = useState("");
-  const [duration, setDuration] = useState("72");
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Profile link search fallbacks if alert.social_profile_url is empty
-  const profileUrl = alert.social_profile_url?.trim() || (() => {
-    const authorName = alert.author || "";
-    const source = alert.source?.toLowerCase() || "";
-    if (source === "facebook" || source === "fb") {
-      return `https://www.facebook.com/search/top/?q=${encodeURIComponent(authorName)}`;
-    }
-    if (source === "tiktok" || source === "tt") {
-      return `https://www.tiktok.com/search?q=${encodeURIComponent(authorName)}`;
-    }
-    if (source === "youtube" || source === "yt") {
-      return `https://www.youtube.com/results?search_query=${encodeURIComponent(authorName)}`;
-    }
-    return `https://www.google.com/search?q=${encodeURIComponent(authorName)}`;
-  })();
-
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith("image/")) {
-      setError(t("alerts.resolution.errorInvalidImage", { defaultValue: "Vui lòng chọn tệp hình ảnh hợp lệ." }));
-      return;
-    }
-
-    if (file.size > 2 * 1024 * 1024) {
-      setError(t("alerts.resolution.errorImageSize", { defaultValue: "Hình ảnh quá lớn. Vui lòng chọn tệp nhỏ hơn 2MB." }));
-      return;
-    }
-
-    setError(null);
-    setImageFile(file);
-
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const ctx = canvas.getContext("2d");
-
-        const MAX_DIM = 600;
-        let width = img.width;
-        let height = img.height;
-
-        if (width > height) {
-          if (width > MAX_DIM) {
-            height *= MAX_DIM / width;
-            width = MAX_DIM;
-          }
-        } else {
-          if (height > MAX_DIM) {
-            width *= MAX_DIM / height;
-            height = MAX_DIM;
-          }
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        ctx?.drawImage(img, 0, 0, width, height);
-
-        const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7);
-        setImagePreview(compressedBase64);
-      };
-      img.src = reader.result as string;
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleAction = async (targetStatus: "resolving" | "resolved") => {
-    if (!note.trim()) {
-      setError(t("alerts.resolution.errorEmptyNote", { defaultValue: "Vui lòng nhập ghi chú hoặc bằng chứng giải quyết." }));
-      return;
-    }
-
-    setIsSaving(true);
-    setError(null);
-
-    try {
-      const finalStatus: string = targetStatus;
-      let finalDuration: number | undefined = undefined;
-
-      if (targetStatus === "resolved") {
-        const parsedDuration = parseFloat(duration);
-        if (parsedDuration > 0) {
-          finalDuration = parsedDuration;
-        }
-      }
-
-      await onSave(alert.id, note.trim(), imagePreview || undefined, finalStatus, finalDuration);
-      onClose();
-    } catch (err: any) {
-      setError(t("alerts.resolution.errorSaveFailed", { defaultValue: "Không thể lưu bằng chứng giải quyết. Vui lòng thử lại." }));
-      console.error("[ResolutionModal] Save error:", err);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const attemptNumber = (alert.resolution_history?.length || 0) + 1;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
-        onClick={onClose}
-      />
-
-      <div className="glass-card w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl relative z-10 border border-app/30 flex flex-col max-h-[90vh] bg-app-surface">
-        {/* Header */}
-        <div className="p-4 md:p-6 border-b border-app/30 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-app-brand text-xl">pending_actions</span>
-            <h3 className="font-bold text-app text-base md:text-lg">
-              {t("alerts.resolution.title", { attempt: attemptNumber, defaultValue: `Giải quyết Cảnh báo (Lần ${attemptNumber})` })}
-            </h3>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-app-text-secondary hover:bg-app-surface-raised transition-colors"
-          >
-            <span className="material-symbols-outlined text-base">close</span>
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="p-4 md:p-6 space-y-4 overflow-y-auto">
-          {/* Author contact section */}
-          <div className="bg-[var(--color-bg-surface-raised)]/50 p-4 rounded-xl border border-[var(--color-border)] space-y-2">
-            <p className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-wider">
-              {t("alerts.resolution.authorContact", { defaultValue: "Thông tin liên hệ tác giả" })}
-            </p>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[var(--color-brand)] text-base">person</span>
-                <span className="text-sm font-bold text-[var(--color-text-primary)]">{alert.author || t("alerts.card.anonymous", { defaultValue: "Ẩn danh" })}</span>
-                <span className="text-xs text-[var(--color-text-secondary)]">({alert.source})</span>
-              </div>
-              <a
-                href={profileUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[var(--color-brand)] font-bold text-xs bg-[var(--color-brand-subtle)] px-3 py-1.5 rounded-lg flex items-center gap-1 hover:bg-[var(--color-brand-border)] transition-colors cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-sm">open_in_new</span>
-                {t("alerts.resolution.contactProfile", { defaultValue: "Liên hệ Profile" })}
-              </a>
-            </div>
-          </div>
-
-          {/* Previous attempts history (if any) */}
-          {alert.resolution_history && alert.resolution_history.length > 0 && (
-            <div className="space-y-3 bg-[var(--color-bg-surface-raised)]/30 p-4 rounded-xl border border-[var(--color-border)]/50">
-              <p className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-wider flex items-center gap-1">
-                <span className="material-symbols-outlined text-xs">history</span>
-                {t("alerts.resolution.previousHistory", { count: alert.resolution_history.length, defaultValue: `Lịch sử giải quyết cũ (${alert.resolution_history.length} lần)` })}
-              </p>
-              <div className="space-y-4 max-h-48 overflow-y-auto pr-1">
-                {alert.resolution_history.map((item: any, idx: number) => {
-                  const dateText = new Date(item.timestamp).toLocaleString("vi-VN", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    day: "2-digit",
-                    month: "2-digit",
-                  });
-                  return (
-                    <div key={idx} className="text-xs border-l-2 border-[var(--color-brand)]/40 pl-3 py-0.5 space-y-1">
-                      <div className="flex items-center justify-between text-[10px]">
-                        <span className="font-bold text-[var(--color-brand)]">
-                          {t("alerts.resolution.attemptTitle", { attempt: item.attempt_number || (idx + 1), defaultValue: `Lần ${item.attempt_number || (idx + 1)}` })}
-                        </span>
-                        <span className="text-[var(--color-text-muted)]">{dateText}</span>
-                      </div>
-                      <p className="text-[var(--color-text-secondary)] whitespace-pre-wrap">{item.note}</p>
-                      {item.image_url && (
-                        <div className="mt-1 w-24 h-16 rounded overflow-hidden border border-[var(--color-border)] bg-black/5 flex items-center justify-center">
-                          <img
-                            src={item.image_url}
-                            alt={`Attempt ${idx + 1}`}
-                            className="max-h-full max-w-full object-contain cursor-zoom-in"
-                            onClick={() => window.open(item.image_url, '_blank')}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* New resolution attempt input */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-[var(--color-text-primary)]">
-              {t("alerts.resolution.noteLabel", { defaultValue: "Mô tả / Ghi chú bằng chứng" })} <span className="text-[var(--color-error)]">*</span>
-            </label>
-            <textarea
-              rows={3}
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder={t("alerts.resolution.notePlaceholder", { defaultValue: "Nhập ghi chú chi tiết hoặc bằng chứng xử lý tại đây..." })}
-              className="w-full bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] rounded-xl text-xs py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 text-[var(--color-text-primary)]"
-            />
-          </div>
-
-          {/* Image Upload */}
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-[var(--color-text-primary)]">
-              {t("alerts.resolution.imageLabel", { defaultValue: "Hình ảnh bằng chứng (Tùy chọn)" })}
-            </label>
-
-            <div className="flex items-center gap-3">
-              <label className="flex items-center justify-center gap-1.5 px-4 py-2 border border-dashed border-[var(--color-brand)]/40 rounded-xl bg-[var(--color-brand-subtle)]/10 text-[var(--color-brand)] text-xs font-bold hover:bg-[var(--color-brand-subtle)]/20 transition-all cursor-pointer">
-                <span className="material-symbols-outlined text-sm">upload_file</span>
-                {t("alerts.resolution.chooseImage", { defaultValue: "Chọn ảnh chụp màn hình" })}
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleImageChange}
-                />
-              </label>
-
-              {imageFile && (
-                <span className="text-xs text-[var(--color-text-secondary)] truncate max-w-[200px]">
-                  {imageFile.name}
-                </span>
-              )}
-            </div>
-
-            {imagePreview && (
-              <div className="relative w-full max-h-48 overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] flex items-center justify-center p-2">
-                <img
-                  src={imagePreview}
-                  alt="Evidence preview"
-                  className="max-h-40 max-w-full object-contain rounded-lg"
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setImageFile(null);
-                    setImagePreview(null);
-                  }}
-                  className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full w-6 h-6 flex items-center justify-center transition-colors cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-sm">close</span>
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Monitoring Duration Select */}
-          <div className="space-y-1.5 mt-3">
-            <label className="text-xs font-bold text-[var(--color-text-primary)]">
-              Thời gian theo dõi thêm sau khi giải quyết
-            </label>
-            <select
-              value={duration}
-              onChange={(e) => setDuration(e.target.value)}
-              className="w-full bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] rounded-xl text-xs py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 text-[var(--color-text-primary)] font-medium select-app"
-            >
-              <option value="72">72 giờ (Khuyên dùng)</option>
-              <option value="24">24 giờ</option>
-              <option value="1">1 giờ</option>
-              <option value="0.166">10 phút</option>
-              <option value="0.033">2 phút (Để test nhanh)</option>
-              <option value="0">Đóng ngay (Không theo dõi)</option>
-            </select>
-          </div>
-
-          {error && (
-            <div className="text-xs text-[var(--color-error)] bg-[var(--color-error)]/5 border border-[var(--color-error)]/20 p-3 rounded-xl flex items-start gap-1.5">
-              <span className="material-symbols-outlined text-sm mt-0.5">error</span>
-              <span>{error}</span>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="p-4 border-t border-app/30 flex justify-end gap-2 bg-app-surface-raised/20">
-          <button
-            type="button"
-            disabled={isSaving}
-            onClick={onClose}
-            className="px-4 py-2.5 rounded-xl text-xs font-bold text-app-text-secondary bg-app-surface-raised hover:bg-app-surface-high transition-all cursor-pointer"
-          >
-            {t("alerts.resolution.close", { defaultValue: "Đóng" })}
-          </button>
-
-          <button
-            type="button"
-            disabled={isSaving}
-            onClick={() => handleAction("resolving")}
-            className="px-4 py-2.5 rounded-xl text-xs font-bold bg-[var(--color-bg-surface-raised)] border border-[var(--color-brand)]/30 text-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)] active:scale-95 transition-all flex items-center gap-1 shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isSaving
-              ? t("alerts.resolution.saving", { defaultValue: "Đang lưu..." })
-              : t("alerts.resolution.saveProgress", { defaultValue: "Lưu tiến độ" })}
-          </button>
-
-          <button
-            type="button"
-            disabled={isSaving}
-            onClick={() => handleAction("resolved")}
-            className="px-5 py-2.5 rounded-xl text-xs font-bold bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand-hover)] active:scale-95 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isSaving
-              ? t("alerts.resolution.saving", { defaultValue: "Đang lưu..." })
-              : t("alerts.resolution.complete", { defaultValue: "Giải quyết xong" })}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── History Modal Component ──
-interface HistoryModalProps {
-  alert: any;
-  onClose: () => void;
-}
-
-function HistoryModal({ alert, onClose }: HistoryModalProps) {
-  const { t } = useTranslation();
-
-  const historyList = alert.resolution_history || [];
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
-        onClick={onClose}
-      />
-
-      <div className="glass-card w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl relative z-10 border border-app/30 flex flex-col max-h-[90vh] bg-app-surface">
-        <div className="p-4 md:p-6 border-b border-app/30 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-app-brand text-xl">history</span>
-            <h3 className="font-bold text-app text-base md:text-lg">
-              {t("alerts.history.title", { defaultValue: "Lịch sử giải quyết" })}
-            </h3>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-app-text-secondary hover:bg-app-surface-raised transition-colors"
-          >
-            <span className="material-symbols-outlined text-base">close</span>
-          </button>
-        </div>
-
-        <div className="p-4 md:p-6 space-y-4 overflow-y-auto">
-          <div className="space-y-1 bg-[var(--color-bg-surface-raised)]/30 p-3 rounded-xl border border-[var(--color-border)]/50">
-            <p className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider font-bold">
-              {t("alerts.history.incidentInfo", { defaultValue: "Thông tin sự cố" })}
-            </p>
-            <p className="text-sm font-bold text-[var(--color-text-primary)]">
-              {formatBrandName(alert.brand)} - {alert.topic}
-            </p>
-            <p className="text-xs text-[var(--color-text-secondary)] italic">
-              "{alert.text}"
-            </p>
-          </div>
-
-          {historyList.length === 0 ? (
-            <div className="flex flex-col items-center justify-center p-8 space-y-2 text-center">
-              <span className="material-symbols-outlined text-[var(--color-text-muted)] text-3xl">info</span>
-              <p className="text-xs text-[var(--color-text-secondary)]">
-                {t("alerts.history.noHistory", { defaultValue: "Không tìm thấy nhật ký ghi nhận giải quyết." })}
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-6 relative before:absolute before:top-2 before:bottom-2 before:left-[17px] before:w-[2px] before:bg-[var(--color-border)]">
-              {historyList.map((item: any, idx: number) => {
-                const dateText = new Date(item.timestamp).toLocaleString("vi-VN", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  day: "2-digit",
-                  month: "2-digit",
-                  year: "numeric",
-                });
-                return (
-                  <div key={idx} className="relative pl-10 flex flex-col gap-1">
-                    <div className="absolute left-2.5 top-1.5 w-4 h-4 rounded-full bg-[var(--color-brand)] border-2 border-white dark:border-[var(--color-bg-surface)] flex items-center justify-center">
-                      <div className="w-1.5 h-1.5 rounded-full bg-white" />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-black text-[var(--color-brand)] uppercase tracking-wider">
-                        {t("alerts.history.attemptTitle", { attempt: item.attempt_number || (idx + 1), defaultValue: `Giải quyết lần ${item.attempt_number || (idx + 1)}` })}
-                      </span>
-                      <span className="text-[10px] text-[var(--color-text-secondary)] font-bold bg-[var(--color-bg-surface-raised)] px-2 py-0.5 rounded">
-                        {dateText}
-                      </span>
-                    </div>
-
-                    <p className="text-xs text-[var(--color-text-primary)] leading-relaxed mt-1 whitespace-pre-wrap bg-[var(--color-bg-surface-raised)] p-3 rounded-xl border border-[var(--color-border)]">
-                      {item.note}
-                    </p>
-
-                    {item.image_url && (
-                      <div className="mt-2 w-full max-h-48 overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] flex items-center justify-center p-2">
-                        <img
-                          src={item.image_url}
-                          alt={`Evidence attempt ${idx + 1}`}
-                          className="max-h-40 max-w-full object-contain rounded-lg"
-                        />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        <div className="p-4 border-t border-app/30 flex justify-end bg-app-surface-raised/20">
-          <button
-            onClick={onClose}
-            className="px-5 py-2 rounded-xl text-xs font-bold text-app-text-secondary bg-app-surface-raised hover:bg-app-surface-high transition-all active:scale-95 cursor-pointer"
-          >
-            {t("alerts.history.close", { defaultValue: "Đóng" })}
           </button>
         </div>
       </div>
