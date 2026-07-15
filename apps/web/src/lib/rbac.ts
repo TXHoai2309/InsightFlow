@@ -179,10 +179,7 @@ const ROUTE_POLICIES: RoutePolicy[] = [
   },
   { route: "/admin", roles: ["admin"], permission: "admin_panel" },
   { route: "/labeling_tool", roles: ["admin"] },
-  {
-    route: "/overview",
-    roles: ["crisis_employee", "lead_employee"],
-  },
+
   { route: "/team", roles: ["brand_manager"], permission: "staff_management" },
   { route: "/label-requests", roles: ["brand_manager"] },
   {

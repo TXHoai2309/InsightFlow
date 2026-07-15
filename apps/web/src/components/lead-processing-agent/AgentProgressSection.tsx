@@ -6,8 +6,8 @@ import { Sparkles, CheckCircle2, History, RefreshCw } from "lucide-react";
 
 export function AgentProgressSection() {
   const { t } = useTranslation();
-  const completed = 8; // Reset to 8 for normal state
-  const total = 12;
+  const completed: number = 8; // Reset to 8 for normal state
+  const total: number = 12;
   const percentage = Math.round((completed / total) * 100);
   const isFinished = completed === total;
 
@@ -56,7 +56,7 @@ export function AgentProgressSection() {
           </div>
           <p className="text-[13px] text-slate-500 dark:text-gray-400 font-medium">
             <Trans i18nKey="agentDashboard.progress.subtitle" values={{ completed, total }}>
-              Bạn đã xuất sắc hoàn thành <span className="font-bold text-indigo-600 dark:text-indigo-400 text-base">{{completed}}/{{total}}</span> khối lượng công việc.
+              Bạn đã xuất sắc hoàn thành <span className="font-bold text-indigo-600 dark:text-indigo-400 text-base">{completed}/{total}</span> khối lượng công việc.
             </Trans>
           </p>
         </div>
