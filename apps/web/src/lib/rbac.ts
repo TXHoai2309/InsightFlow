@@ -221,6 +221,10 @@ const ROUTE_POLICIES: RoutePolicy[] = [
     permission: "reports",
   },
   {
+    route: "/operations",
+    roles: ["crisis_employee", "lead_employee"],
+  },
+  {
     route: "/settings",
     roles: ["brand_manager"],
     permission: "brand_settings",

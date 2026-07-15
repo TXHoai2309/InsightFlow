@@ -625,7 +625,7 @@
   "dashboard.filters.negative": "Tiêu cực",
   "dashboard.filters.neutral": "Trung lập",
   "dashboard.filters.news": "Báo chí",
-  "dashboard.filters.platform": "Nền tảng",
+  "dashboard.filters.platform": "NỀN TẢNG",
   "dashboard.filters.platformLabel": "Nền tảng:",
   "dashboard.filters.positive": "Tích cực",
   "dashboard.filters.sentimentLabel": "Sắc thái:",
@@ -799,7 +799,6 @@
   "team.op.leads": "Xử lý khách hàng tiềm năng",
   "dashboard.filters.brand": "THƯƠNG HIỆU",
   "dashboard.filters.time": "THỜI GIAN",
-  "dashboard.filters.platform": "NỀN TẢNG",
   "dashboard.filters.allBrandsOption": "Tất cả thương hiệu",
   "dashboard.filters.allPlatformsOption": "Tất cả nền tảng",
   "dashboard.topSources.negativeTitle": "Nguồn Thảo Luận Chính",
@@ -1172,7 +1171,6 @@
   "mentions.table.topic": "Chủ đề",
   "mentions.table.unknownTime": "Không rõ",
   "mentions.table.unknownTimeDesc": "Thời gian không xác định",
-  "mentions.table.yearsAgo": "{{count}} năm trước",
   "metadata.about.desc": "Tìm hiểu về đội ngũ, sứ mệnh và các giá trị cốt lõi của InsightFlow.",
   "metadata.about.title": "Về chúng tôi | InsightFlow",
   "metadata.alerts.title": "Cảnh báo | InsightFlow",
@@ -1735,6 +1733,139 @@
       "detail.title": "Chi tiết Contact / Case",
       "detail.source": "Nguồn:",
       "detail.created": "Được tạo lúc:"
+    }
+  },
+  "agentDashboard": {
+    "title": "Công việc hôm nay",
+    "subtitle": "Chào mừng trở lại! Dưới đây là tổng quan các nhiệm vụ và lịch trình của bạn.",
+    "stats": {
+      "todo": "Việc cần xử lý hôm nay",
+      "processing": "Đang xử lý",
+      "waiting": "Khách hàng đang chờ",
+      "overdue": "Sắp quá hạn",
+      "completion": "Tỷ lệ hoàn thành",
+      "vsYesterday": "+2 so với hôm qua",
+      "onTrack": "Đúng tiến độ",
+      "waitingTime": "1 chờ hơn 30p",
+      "dueBefore": "Cần xử lý trước 11:00",
+      "vsLastWeek": "+5% so với tuần trước"
+    },
+    "progress": {
+      "title": "Tiến độ hôm nay",
+      "subtitle": "Bạn đã xuất sắc hoàn thành <1>{{completed}}/{{total}}</1> khối lượng công việc.",
+      "goodPerf": "Hiệu suất Tốt",
+      "start": "Khởi động (0%)",
+      "celebrationTitle": "Hoàn thành toàn bộ công việc hôm nay",
+      "celebrationSub": "{{completed}}/{{total}} nhiệm vụ đã hoàn thành. Bạn hoàn thành sớm hơn 1 giờ 20 phút.",
+      "viewHistory": "Xem lịch sử",
+      "getNewTask": "Nhận nhiệm vụ mới"
+    },
+    "kanban": {
+      "urgent": "Cần xử lý ngay",
+      "processing": "Đang xử lý",
+      "waiting": "Chờ khách phản hồi",
+      "completed": "Nhật ký hoàn thành",
+      "emptyTitle": "Không còn công việc",
+      "emptySub": "Tuyệt vời, hãy xem mục khác!",
+      "completedCount": "Đã hoàn thành {{count}} nhiệm vụ",
+      "reply": "Trả lời",
+      "contact": "Liên hệ",
+      "done": "Xong"
+    },
+    "next": {
+      "title": "Việc tiếp theo",
+      "priority": "ƯU TIÊN",
+      "currentStreak": "Chuỗi hiện tại:",
+      "streakVal": "{{count}} liên tiếp",
+      "weeklyPerf": "Hiệu suất tuần này:",
+      "start": "Bắt đầu xử lý ngay"
+    },
+    "schedule": {
+      "title": "Lịch làm việc"
+    },
+    "notifications": {
+      "title": "Thông báo",
+      "new": "{{count}} Mới"
+    },
+    "mockData": {
+      "nextTasks": {
+        "t1": {
+          "title": "Video tiêu cực Mixue",
+          "time": "Còn 20 phút"
+        },
+        "t2": {
+          "title": "Khiếu nại giao hàng",
+          "time": "Còn 45 phút"
+        },
+        "t3": {
+          "title": "Câu hỏi khuyến mãi",
+          "time": "14:00"
+        }
+      },
+      "notifications": {
+        "n1": {
+          "title": "Khách hàng mới",
+          "desc": "Nguyễn Văn A vừa đăng ký tư vấn.",
+          "time": "5 phút trước"
+        },
+        "n2": {
+          "title": "Công việc được giao",
+          "desc": "Quản lý đã giao cho bạn 1 công việc mới.",
+          "time": "30 phút trước"
+        },
+        "n3": {
+          "title": "Sắp quá hạn",
+          "desc": "Nhiệm vụ 'Xác nhận lịch hẹn' sắp hết hạn.",
+          "time": "1 giờ trước"
+        },
+        "n4": {
+          "title": "Phản hồi mới",
+          "desc": "Khách hàng B vừa trả lời tin nhắn của bạn.",
+          "time": "2 giờ trước"
+        }
+      },
+      "kanban": {
+        "k1": {
+          "title": "Video tiêu cực về Mixue",
+          "trend": "Tăng 320% lượt đề cập trong 2 giờ",
+          "time": "Còn 20 phút"
+        },
+        "k2": {
+          "title": "Khách hàng VIP khiếu nại",
+          "trend": "Chưa có phản hồi sau 1 tiếng",
+          "time": "Còn 45 phút"
+        },
+        "k5": {
+          "title": "Xử lý bão 1 sao",
+          "time": "08:30"
+        },
+        "k6": {
+          "title": "Trả lời tin nhắn khách VIP",
+          "time": "10:15"
+        },
+        "k7": {
+          "title": "Gửi báo giá dịch vụ",
+          "time": "13:20"
+        }
+      },
+      "schedule": {
+        "s1": {
+          "title": "Trả lời khách hàng ca sáng",
+          "time": "09:00"
+        },
+        "s2": {
+          "title": "Xử lý khiếu nại phát sinh",
+          "time": "10:30"
+        },
+        "s3": {
+          "title": "Hỗ trợ chương trình khuyến mãi",
+          "time": "14:00"
+        },
+        "s4": {
+          "title": "Tổng hợp báo cáo ngày",
+          "time": "16:00"
+        }
+      }
     }
   }
 }
