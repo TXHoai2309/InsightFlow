@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -190,8 +190,8 @@ function MonitoringCountdown({ alert }: MonitoringCountdownProps) {
 
   return (
     <span className={`text-[10px] font-bold px-2 py-0.5 rounded border flex items-center gap-1 ${hasActivity
-        ? "bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900/30 animate-pulse font-black"
-        : "bg-cyan-50 dark:bg-cyan-950/20 text-cyan-600 dark:text-cyan-400 border-cyan-200 dark:border-cyan-900/30"
+      ? "bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900/30 animate-pulse font-black"
+      : "bg-cyan-50 dark:bg-cyan-950/20 text-cyan-600 dark:text-cyan-400 border-cyan-200 dark:border-cyan-900/30"
       }`}>
       <span className="material-symbols-outlined text-[12px]">{hasActivity ? "warning" : "visibility"}</span>
       {text}
@@ -1314,9 +1314,8 @@ export default function AlertsPage() {
                 <button
                   key={pill.id}
                   onClick={() => setSeverityFilter(pill.id)}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    severityFilter === pill.id ? pill.activeClass : "text-slate-500 dark:text-slate-400 hover:text-slate-800"
-                  }`}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${severityFilter === pill.id ? pill.activeClass : "text-slate-500 dark:text-slate-400 hover:text-slate-800"
+                    }`}
                 >
                   {pill.label}
                 </button>
@@ -1349,11 +1348,10 @@ export default function AlertsPage() {
 
             {/* Mine only */}
             <button onClick={() => setShowMineOnly(!showMineOnly)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                showMineOnly
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${showMineOnly
                   ? "bg-[var(--color-brand)]/10 border-[var(--color-brand)] text-[var(--color-brand)]"
                   : "border-[var(--color-border)] text-[var(--color-text-secondary)] bg-white dark:bg-[var(--color-bg-surface-raised)] hover:bg-slate-50"
-              }`}>
+                }`}>
               {t("alerts.page.mineOnly")}
             </button>
 
@@ -1431,11 +1429,10 @@ export default function AlertsPage() {
                         {/* Progress bar */}
                         <div className="w-full mt-2 bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
                           <div
-                            className={`h-full rounded-full transition-all duration-500 ${
-                              alert.severity.toLowerCase() === "critical" ? "bg-red-500" :
-                              alert.severity.toLowerCase() === "high" ? "bg-orange-500" :
-                              alert.severity.toLowerCase() === "medium" ? "bg-yellow-500" : "bg-slate-400"
-                            }`}
+                            className={`h-full rounded-full transition-all duration-500 ${alert.severity.toLowerCase() === "critical" ? "bg-red-500" :
+                                alert.severity.toLowerCase() === "high" ? "bg-orange-500" :
+                                  alert.severity.toLowerCase() === "medium" ? "bg-yellow-500" : "bg-slate-400"
+                              }`}
                             style={{ width: `${Math.min(100, riskScore)}%` }}
                           />
                         </div>
@@ -1644,11 +1641,10 @@ export default function AlertsPage() {
                     key={pageNumber}
                     onClick={() => goToAlertPage(pageNumber)}
                     aria-current={alertPage === pageNumber ? "page" : undefined}
-                    className={`h-8 min-w-8 rounded-lg px-2 text-xs font-black transition-colors ${
-                      alertPage === pageNumber
+                    className={`h-8 min-w-8 rounded-lg px-2 text-xs font-black transition-colors ${alertPage === pageNumber
                         ? "bg-[var(--color-brand)] text-white"
                         : "border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)]"
-                    }`}
+                      }`}
                   >
                     {pageNumber}
                   </button>
@@ -1736,8 +1732,8 @@ export default function AlertsPage() {
                   key={i}
                   onClick={() => setActiveTrending(activeTrending?.name === tag.name ? null : { name: tag.name, matchIds: tag.matchIds })}
                   className={`w-full p-3 rounded-xl flex items-center justify-between transition-all cursor-pointer hover:scale-[1.02] hover:shadow-md active:scale-[0.99] text-left ${activeTrending?.name === tag.name
-                      ? `${tag.bg} ring-2 ring-current ring-offset-1`
-                      : tag.bg
+                    ? `${tag.bg} ring-2 ring-current ring-offset-1`
+                    : tag.bg
                     }`}
                 >
                   <span className="text-xs font-black flex items-center gap-1">
@@ -1772,8 +1768,8 @@ export default function AlertsPage() {
                       >
                         <div className="flex items-center gap-1.5 mb-1">
                           <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${a.severity?.toLowerCase() === "critical" ? "bg-red-100 text-red-600" :
-                              a.severity?.toLowerCase() === "high" ? "bg-orange-100 text-orange-600" :
-                                "bg-slate-100 text-slate-500"
+                            a.severity?.toLowerCase() === "high" ? "bg-orange-100 text-orange-600" :
+                              "bg-slate-100 text-slate-500"
                             }`}>{a.severity?.toUpperCase()}</span>
                           <span className="text-[10px] text-[var(--color-text-muted)] font-semibold">{formatBrandName(a.brand)}</span>
                         </div>
@@ -1795,13 +1791,12 @@ export default function AlertsPage() {
                 <span className="material-symbols-outlined text-indigo-500 text-base">insights</span>
                 {t("alerts.page.shiftPerformance")}
               </span>
-              <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border ${
-                shiftPerformance === 0
+              <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border ${shiftPerformance === 0
                   ? "bg-slate-50 dark:bg-slate-800 text-slate-500 border-slate-200/50 dark:border-slate-700/50"
                   : shiftPerformance >= 90
-                  ? "bg-green-50 dark:bg-green-950/20 text-green-600 dark:text-green-400 border-green-100/50"
-                  : "bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border-amber-100/50"
-              }`}>
+                    ? "bg-green-50 dark:bg-green-950/20 text-green-600 dark:text-green-400 border-green-100/50"
+                    : "bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border-amber-100/50"
+                }`}>
                 {shiftPerformance === 0 ? "Chưa có dữ liệu" : shiftPerformance >= 90 ? "Đạt KPI" : "Cần cải thiện"}
               </span>
             </div>
