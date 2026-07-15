@@ -1,13 +1,11 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
-  ArrowUpRight,
   CheckCircle2,
   Clock3,
   ExternalLink,
-  FileText,
-  History,
   MessageSquareText,
   PanelRightClose,
   ShieldAlert,
@@ -17,6 +15,7 @@ import {
 import { PlatformLogo } from "@/components/platform/PlatformLogo";
 import { getAlertWorkflowStatus } from "@/lib/alertWorkflow";
 import type { AlertData } from "@/stores/alert.store";
+import { AlertContactWorkflow } from "./AlertContactWorkflow";
 
 export type AlertDetailPanelTab = "action" | "profile" | "history";
 
@@ -29,9 +28,8 @@ interface AlertDetailPanelProps {
   getResolverName: (value: string | null | undefined) => string;
   onClose: () => void;
   onClaim: (alert: AlertData) => Promise<void>;
-  onRecordResult: (alert: AlertData) => void;
+  onRecordResult: (alert: AlertData) => Promise<void>;
   onOpenSource: (alert: AlertData) => void;
-  onOpenFullDetails: (alert: AlertData) => void;
 }
 
 function formatDate(value?: string) {
@@ -60,6 +58,29 @@ function getPriorityReason(alert: AlertData) {
   return reasons.length > 0 ? reasons.join(" · ") : "Nội dung tiêu cực cần nhân viên đánh giá và xử lý.";
 }
 
+type AlertHistoryViewEntry = {
+  key: string;
+  timestamp: string;
+  title: string;
+  detail: string;
+  badge?: string;
+  imageUrl?: string;
+  kind: "detected" | "resolution" | "contact" | "note" | "escalation";
+};
+
+const CONTACT_RESULT_LABELS: Record<string, string> = {
+  positive: "Khách hàng phản hồi tích cực",
+  no_response: "Chưa phản hồi",
+  still_upset: "Khách hàng vẫn bức xúc",
+  not_suitable: "Không phù hợp",
+};
+
+const CONTACT_OUTCOME_LABELS: Record<string, string> = {
+  resolved: "Đã giải quyết",
+  contact_waiting: "Đã liên hệ – Chờ phản hồi",
+  contact_failed: "Giải quyết thất bại",
+};
+
 export function AlertDetailPanel({
   alert,
   activeTab,
@@ -71,13 +92,157 @@ export function AlertDetailPanel({
   onClaim,
   onRecordResult,
   onOpenSource,
-  onOpenFullDetails,
 }: AlertDetailPanelProps) {
   const workflowStatus = getAlertWorkflowStatus(alert);
-  const isMine = Boolean(profileEmail && alert.being_resolved_by === profileEmail);
-  const ownerName = getResolverName(alert.being_resolved_by) || "Chưa có người phụ trách";
-  const canClaim = canUpdate && workflowStatus === "pending" && !alert.being_resolved_by;
-  const canRecord = canUpdate && isMine && (workflowStatus === "processing" || workflowStatus === "contact_failed");
+  const [optimisticClaimId, setOptimisticClaimId] = useState<string | null>(null);
+  const [isRecordingResult, setIsRecordingResult] = useState(false);
+  const [previewHistoryImage, setPreviewHistoryImage] = useState<string | null>(null);
+  const claimedOptimistically = optimisticClaimId === alert.id;
+  const normalizedOwner = String(alert.being_resolved_by || "").trim().toLowerCase();
+  const normalizedProfileEmail = String(profileEmail || "").trim().toLowerCase();
+  const isMine = claimedOptimistically || Boolean(normalizedProfileEmail && normalizedOwner === normalizedProfileEmail);
+  const effectiveWorkflowStatus = claimedOptimistically ? "processing" : workflowStatus;
+  const effectiveOwner = claimedOptimistically ? profileEmail : alert.being_resolved_by;
+  const ownerName = getResolverName(effectiveOwner) || "Chưa có người phụ trách";
+  const canClaim = canUpdate && !claimedOptimistically && workflowStatus === "pending" && !alert.being_resolved_by;
+  const canRecord = canUpdate && isMine && (effectiveWorkflowStatus === "processing" || effectiveWorkflowStatus === "contact_failed");
+  const hasRequiredResultEvidence = Boolean(
+    alert.customer_contact_opened_at &&
+    alert.customer_contact_note?.trim() &&
+    alert.customer_contact_evidence_image &&
+    alert.customer_response_result
+  );
+  const historyEntries = useMemo<AlertHistoryViewEntry[]>(() => {
+    const entries: AlertHistoryViewEntry[] = [
+      {
+        key: `detected-${alert.id}`,
+        timestamp: alert.created_at,
+        title: "Hệ thống phát hiện cảnh báo",
+        detail: "Nội dung được đưa vào hàng chờ xử lý khủng hoảng.",
+        badge: "Khởi tạo",
+        kind: "detected",
+      },
+    ];
+
+    (alert.resolution_history || []).forEach((entry, index) => {
+      entries.push({
+        key: `resolution-${entry.timestamp}-${index}`,
+        timestamp: entry.timestamp,
+        title: entry.resolved_by_name || getResolverName(entry.resolved_by_email) || "Nhân viên xử lý",
+        detail: entry.note || "Đã cập nhật trạng thái xử lý.",
+        badge: `Cập nhật ${entry.attempt_number || index + 1}`,
+        imageUrl: entry.image_url,
+        kind: "resolution",
+      });
+    });
+
+    (alert.customer_contact_history || []).forEach((entry, index) => {
+      const detail = [
+        entry.note,
+        entry.template ? `Mẫu liên hệ: ${entry.template}` : "",
+      ].filter(Boolean).join("\n\n");
+      entries.push({
+        key: `contact-${entry.completed_at}-${index}`,
+        timestamp: entry.completed_at,
+        title: `Liên hệ khách hàng lần ${index + 1} · ${getResolverName(entry.opened_by) || "Nhân viên xử lý"}`,
+        detail,
+        badge: `${CONTACT_OUTCOME_LABELS[entry.outcome_status] || entry.outcome_status} · ${CONTACT_RESULT_LABELS[entry.response_result] || entry.response_result}`,
+        imageUrl: entry.evidence_image,
+        kind: "contact",
+      });
+    });
+
+    const currentContactAlreadyArchived = (alert.customer_contact_history || []).some((entry) =>
+      entry.opened_at === alert.customer_contact_opened_at &&
+      entry.note === alert.customer_contact_note &&
+      entry.evidence_image === alert.customer_contact_evidence_image
+    );
+    if (
+      alert.customer_contact_opened_at &&
+      !currentContactAlreadyArchived &&
+      (alert.customer_contact_note || alert.customer_contact_evidence_image || alert.customer_response_result)
+    ) {
+      const currentResult = alert.customer_response_result
+        ? CONTACT_RESULT_LABELS[alert.customer_response_result] || alert.customer_response_result
+        : "Chưa chọn kết quả phản hồi";
+      entries.push({
+        key: `contact-current-${alert.customer_contact_opened_at}`,
+        timestamp: alert.customer_contact_opened_at,
+        title: `Lần liên hệ đang xử lý · ${getResolverName(alert.customer_contact_opened_by) || "Nhân viên xử lý"}`,
+        detail: alert.customer_contact_note || "Đã mở nguồn liên hệ, chưa bổ sung ghi chú.",
+        badge: `Đang ghi nhận · ${currentResult}`,
+        imageUrl: alert.customer_contact_evidence_image,
+        kind: "contact",
+      });
+    }
+
+    (alert.internal_notes || []).forEach((entry, index) => {
+      entries.push({
+        key: `note-${entry.timestamp}-${index}`,
+        timestamp: entry.timestamp,
+        title: entry.author || "Ghi chú nội bộ",
+        detail: entry.note,
+        badge: "Ghi chú nội bộ",
+        kind: "note",
+      });
+    });
+
+    if (alert.escalation) {
+      const escalationDetail = [
+        alert.escalation.draft_response ? `Phản hồi đề xuất: ${alert.escalation.draft_response}` : "",
+        alert.escalation.compensation ? `Phương án bồi thường: ${alert.escalation.compensation}` : "",
+        alert.escalation.approval_note ? `Ghi chú duyệt: ${alert.escalation.approval_note}` : "",
+      ].filter(Boolean).join("\n\n");
+      entries.push({
+        key: `escalation-${alert.escalation.submitted_at}`,
+        timestamp: alert.escalation.submitted_at,
+        title: `Escalation bởi ${alert.escalation.submitted_by_name || getResolverName(alert.escalation.submitted_by_email) || "Nhân viên xử lý"}`,
+        detail: escalationDetail || "Đã gửi yêu cầu escalation.",
+        badge: alert.escalation.status === "approved" ? "Đã duyệt" : alert.escalation.status === "rejected" ? "Từ chối" : "Chờ duyệt",
+        kind: "escalation",
+      });
+    }
+
+    return entries.sort((left, right) => {
+      const leftTime = new Date(left.timestamp).getTime();
+      const rightTime = new Date(right.timestamp).getTime();
+      return (Number.isFinite(leftTime) ? leftTime : 0) - (Number.isFinite(rightTime) ? rightTime : 0);
+    });
+  }, [alert, getResolverName]);
+
+  useEffect(() => {
+    setOptimisticClaimId(null);
+    setIsRecordingResult(false);
+    setPreviewHistoryImage(null);
+  }, [alert.id]);
+
+  useEffect(() => {
+    if (claimedOptimistically && workflowStatus !== "pending" && normalizedOwner === normalizedProfileEmail) {
+      setOptimisticClaimId(null);
+    }
+  }, [claimedOptimistically, normalizedOwner, normalizedProfileEmail, workflowStatus]);
+
+  const handlePrimaryAction = async () => {
+    if (canClaim) {
+      setOptimisticClaimId(alert.id);
+      try {
+        await onClaim(alert);
+      } catch {
+        setOptimisticClaimId(null);
+      }
+      return;
+    }
+
+    if (!canRecord || !hasRequiredResultEvidence || isRecordingResult) return;
+    setIsRecordingResult(true);
+    try {
+      await onRecordResult(alert);
+    } catch {
+      // The page-level handler already reports the failure to the user.
+    } finally {
+      setIsRecordingResult(false);
+    }
+  };
   const tabs: Array<{ id: AlertDetailPanelTab; label: string }> = [
     { id: "action", label: "Xử lý" },
     { id: "profile", label: "Hồ sơ" },
@@ -97,7 +262,7 @@ export function AlertDetailPanel({
               </div>
               <div className="mt-1 flex items-center gap-1.5 text-xs text-[var(--color-text-secondary)]">
                 <PlatformLogo platform={alert.source} size="sm" />
-                <span>{alert.source || "Nền tảng khác"}</span><span>·</span><span>{getStatusLabel(alert)}</span>
+                <span>{alert.source || "Nền tảng khác"}</span><span>·</span><span>{claimedOptimistically ? "Đang xử lý" : getStatusLabel(alert)}</span>
               </div>
             </div>
           </div>
@@ -120,7 +285,7 @@ export function AlertDetailPanel({
                 <p className="text-xs font-bold uppercase text-[var(--color-text-muted)]">Người phụ trách</p>
                 <div className="mt-2 flex items-center justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-sm font-black text-[var(--color-brand)]">{alert.being_resolved_by ? ownerName.slice(0, 2).toUpperCase() : "--"}</span>
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-sm font-black text-[var(--color-brand)]">{effectiveOwner ? ownerName.slice(0, 2).toUpperCase() : "--"}</span>
                     <div className="min-w-0"><p className="truncate text-sm font-bold text-[var(--color-text-primary)]">{ownerName}</p><p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">Đội xử lý khủng hoảng</p></div>
                   </div>
                   <span className="shrink-0 rounded-full border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-2.5 py-1 text-xs font-bold text-[var(--color-text-secondary)]">{isMine ? "Của tôi" : workflowStatus === "pending" ? "Chưa phân công" : getStatusLabel(alert)}</span>
@@ -129,9 +294,9 @@ export function AlertDetailPanel({
 
               {(canClaim || canRecord) && (
                 <section className="flex flex-col justify-between rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)]/20 p-3">
-                  <div className="flex items-start gap-2.5"><ShieldAlert className="mt-0.5 shrink-0 text-[var(--color-brand)]" size={19} /><div><p className="text-sm font-bold text-[var(--color-brand)]">Hành động chính</p><p className="mt-0.5 text-xs leading-5 text-[var(--color-text-secondary)]">{canClaim ? "Nhận cảnh báo để bắt đầu xử lý." : "Cập nhật kết quả sau khi liên hệ và xử lý."}</p></div></div>
-                  <button type="button" onClick={() => canClaim ? void onClaim(alert) : onRecordResult(alert)} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold text-white hover:bg-[var(--color-brand-hover)]">
-                    {canClaim ? <UserPlus size={18} /> : <CheckCircle2 size={18} />}{canClaim ? "Nhận xử lý" : "Ghi nhận kết quả"}
+                  <div className="flex items-start gap-2.5"><ShieldAlert className="mt-0.5 shrink-0 text-[var(--color-brand)]" size={19} /><div><p className="text-sm font-bold text-[var(--color-brand)]">Hành động chính</p><p className="mt-0.5 text-xs leading-5 text-[var(--color-text-secondary)]">{canClaim ? "Nhận cảnh báo để bắt đầu xử lý." : hasRequiredResultEvidence ? "Đã đủ minh chứng và kết quả phản hồi để hoàn tất." : "Cần lưu minh chứng liên hệ và kết quả phản hồi trước."}</p></div></div>
+                  <button type="button" onClick={() => void handlePrimaryAction()} disabled={canRecord && (!hasRequiredResultEvidence || isRecordingResult)} title={canRecord && !hasRequiredResultEvidence ? "Cần có ghi chú, ảnh minh chứng và kết quả phản hồi của khách hàng" : undefined} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold text-white hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500">
+                    {canClaim ? <UserPlus size={18} /> : <CheckCircle2 size={18} />}{canClaim ? "Nhận xử lý" : isRecordingResult ? "Đang ghi nhận..." : "Ghi nhận kết quả"}
                   </button>
                 </section>
               )}
@@ -147,19 +312,9 @@ export function AlertDetailPanel({
               <p className="mt-2 text-[10px] font-medium text-[var(--color-text-muted)]">Phát hiện lúc {formatDate(alert.created_at)}</p>
             </section>
 
-            <section className="rounded-lg border border-[var(--color-brand-border)] p-3">
-              <div className="flex items-center gap-2"><Activity size={17} className="text-[var(--color-brand)]" /><div><h3 className="text-sm font-black text-[var(--color-text-primary)]">Cách thức liên hệ / xử lý</h3><p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">Mở đúng nguồn hoặc xem thêm bối cảnh trước khi xử lý.</p></div></div>
-              <div className="mt-3 grid grid-cols-3 gap-2">
-                <button type="button" onClick={() => onOpenSource(alert)} disabled={!alert.url || alert.url === "#"} className="inline-flex min-w-0 items-center justify-center gap-1.5 rounded-lg border border-[var(--color-brand-border)] px-2 py-2 text-xs font-bold text-[var(--color-brand)] disabled:opacity-40"><ExternalLink size={16} /><span className="truncate">Mở nguồn</span></button>
-                <button type="button" onClick={() => onTabChange("profile")} className="inline-flex min-w-0 items-center justify-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2 py-2 text-xs font-bold text-[var(--color-text-primary)]"><UserRound size={16} /><span className="truncate">Xem hồ sơ</span></button>
-                <button type="button" onClick={() => onTabChange("history")} className="inline-flex min-w-0 items-center justify-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2 py-2 text-xs font-bold text-[var(--color-text-primary)]"><History size={16} /><span className="truncate">Xem lịch sử</span></button>
-              </div>
-            </section>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <section className="rounded-lg border border-[var(--color-border)] p-3"><p className="text-xs font-bold uppercase text-[var(--color-text-muted)]">Tình trạng xử lý</p><p className="mt-2 text-sm font-black text-[var(--color-text-primary)]">{getStatusLabel(alert)}</p><p className="mt-1 text-xs text-[var(--color-text-secondary)]">{alert.resolution_history?.length || 0} cập nhật nghiệp vụ</p></section>
-              <section className="rounded-lg border border-[var(--color-border)] p-3"><p className="text-xs font-bold uppercase text-[var(--color-text-muted)]">Quy trình chuyên sâu</p><button type="button" onClick={() => onOpenFullDetails(alert)} className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--color-border)] px-3 py-2 text-xs font-bold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)]"><FileText size={16} />Liên hệ, minh chứng và escalation<ArrowUpRight size={15} /></button></section>
-            </div>
+            {isMine && (effectiveWorkflowStatus === "processing" || effectiveWorkflowStatus === "contact_failed") && (
+              <AlertContactWorkflow alert={alert} getResolverName={getResolverName} />
+            )}
           </div>
         )}
 
@@ -188,15 +343,32 @@ export function AlertDetailPanel({
             <section className="rounded-lg border border-[var(--color-border)] p-3">
               <h3 className="text-sm font-black text-[var(--color-text-primary)]">Timeline xử lý</h3>
               <div className="mt-3">
-                <TimelineRow time={formatDate(alert.created_at)} icon={<Activity size={12} />} title="Hệ thống phát hiện cảnh báo" detail="Nội dung được đưa vào hàng chờ xử lý khủng hoảng." />
-                {(alert.resolution_history || []).map((entry, index) => <TimelineRow key={`${entry.timestamp}-${index}`} time={formatDate(entry.timestamp)} icon={<UserRound size={12} />} title={entry.resolved_by_name || getResolverName(entry.resolved_by_email) || "Nhân viên xử lý"} detail={entry.note || "Đã cập nhật trạng thái."} />)}
-                {(alert.resolution_history || []).length === 0 && <p className="py-5 text-center text-xs text-[var(--color-text-muted)]">Chưa có hoạt động xử lý bổ sung.</p>}
+                {historyEntries.map((entry) => (
+                  <TimelineRow
+                    key={entry.key}
+                    time={formatDate(entry.timestamp)}
+                    icon={entry.kind === "detected" ? <Activity size={12} /> : entry.kind === "contact" ? <MessageSquareText size={12} /> : entry.kind === "escalation" ? <ShieldAlert size={12} /> : <UserRound size={12} />}
+                    title={entry.title}
+                    detail={entry.detail}
+                    badge={entry.badge}
+                    imageUrl={entry.imageUrl}
+                    onPreviewImage={setPreviewHistoryImage}
+                  />
+                ))}
               </div>
-              <button type="button" onClick={() => onOpenFullDetails(alert)} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--color-border)] px-3 py-2 text-xs font-bold text-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)]">Xem toàn bộ lịch sử và minh chứng<ArrowUpRight size={15} /></button>
             </section>
           </div>
         )}
       </div>
+
+      {previewHistoryImage && (
+        <div role="dialog" aria-modal="true" aria-label="Xem ảnh minh chứng lịch sử" className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm" onClick={() => setPreviewHistoryImage(null)}>
+          <button type="button" onClick={() => setPreviewHistoryImage(null)} className="absolute right-5 top-5 grid h-10 w-10 place-items-center rounded-full bg-white/15 text-white hover:bg-white/25" aria-label="Đóng ảnh minh chứng">
+            <span className="material-symbols-outlined">close</span>
+          </button>
+          <img src={previewHistoryImage} alt="Ảnh minh chứng trong lịch sử xử lý" className="max-h-[90vh] max-w-[92vw] rounded-xl bg-white object-contain shadow-2xl" onClick={(event) => event.stopPropagation()} />
+        </div>
+      )}
     </aside>
   );
 }
@@ -209,6 +381,6 @@ function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; 
   return <div className="rounded-lg border border-[var(--color-border)] p-3"><span className="text-[var(--color-brand)]">{icon}</span><p className="mt-2 text-[10px] font-bold uppercase text-[var(--color-text-muted)]">{label}</p><p className="mt-1 text-sm font-black text-[var(--color-text-primary)]">{value}</p></div>;
 }
 
-function TimelineRow({ time, icon, title, detail }: { time: string; icon: React.ReactNode; title: string; detail: string }) {
-  return <article className="grid grid-cols-[72px_24px_minmax(0,1fr)] gap-2 border-b border-[var(--color-border)] py-3 last:border-b-0"><time className="text-[10px] font-semibold text-[var(--color-text-muted)]">{time}</time><span className="mt-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-[var(--color-brand)]">{icon}</span><div><p className="text-xs font-bold text-[var(--color-text-primary)]">{title}</p><p className="mt-1 whitespace-pre-wrap text-xs text-[var(--color-text-secondary)]">{detail}</p></div></article>;
+function TimelineRow({ time, icon, title, detail, badge, imageUrl, onPreviewImage }: { time: string; icon: React.ReactNode; title: string; detail: string; badge?: string; imageUrl?: string; onPreviewImage: (imageUrl: string) => void }) {
+  return <article className="grid grid-cols-[72px_24px_minmax(0,1fr)] gap-2 border-b border-[var(--color-border)] py-3 last:border-b-0"><time className="text-[10px] font-semibold text-[var(--color-text-muted)]">{time}</time><span className="mt-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-[var(--color-brand)]">{icon}</span><div className="min-w-0"><div className="flex flex-wrap items-start justify-between gap-2"><p className="text-xs font-bold text-[var(--color-text-primary)]">{title}</p>{badge && <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-2 py-0.5 text-[9px] font-bold text-[var(--color-text-secondary)]">{badge}</span>}</div><p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-[var(--color-text-secondary)]">{detail}</p>{imageUrl && <button type="button" onClick={() => onPreviewImage(imageUrl)} className="mt-2 block w-full cursor-zoom-in overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-1 text-left focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/30" title="Bấm để xem ảnh đầy đủ"><img src={imageUrl} alt={`Minh chứng: ${title}`} className="max-h-64 w-full rounded-md object-contain" /></button>}</div></article>;
 }

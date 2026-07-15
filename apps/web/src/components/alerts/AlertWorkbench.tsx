@@ -46,9 +46,8 @@ interface AlertWorkbenchProps {
   onOpenPanel: () => void;
   onDetailTabChange: (tab: AlertDetailPanelTab) => void;
   onClaim: (alert: AlertData) => Promise<void>;
-  onRecordResult: (alert: AlertData) => void;
+  onRecordResult: (alert: AlertData) => Promise<void>;
   onOpenSource: (alert: AlertData) => void;
-  onOpenFullDetails: (alert: AlertData) => void;
   onStatusFilterChange: (value: StatusFilter) => void;
   onSearchTextChange: (value: string) => void;
   onSeverityFilterChange: (value: string) => void;
@@ -103,18 +102,16 @@ export function AlertWorkbench(props: AlertWorkbenchProps) {
         </div>
       </header>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <KpiButton label="Tất cả đang mở" value={counts.pending + counts.processing + counts.contact_failed} hint={`${urgentCount} cảnh báo Critical/High`} tone="red" active={props.statusFilter === "all"} onClick={() => props.onStatusFilterChange("all")} />
         <KpiButton label="Chưa phân công" value={counts.pending} hint="Chưa có người nhận" tone="amber" active={props.statusFilter === "pending"} onClick={() => props.onStatusFilterChange("pending")} />
         <KpiButton label="Đang xử lý" value={counts.processing} hint="Đã có người phụ trách" tone="blue" active={props.statusFilter === "processing"} onClick={() => props.onStatusFilterChange("processing")} />
+        <KpiButton label="Giải quyết thất bại" value={counts.contact_failed} hint="Cần liên hệ lại" tone="red" active={props.statusFilter === "contact_failed"} onClick={() => props.onStatusFilterChange("contact_failed")} />
         <KpiButton label="Đã giải quyết" value={counts.resolved} hint="Đã lưu kết quả" tone="green" active={props.statusFilter === "resolved"} onClick={() => props.onStatusFilterChange("resolved")} />
       </section>
 
       <section className="space-y-2">
-        <div className="flex flex-col gap-2 min-[1180px]:flex-row min-[1180px]:items-center min-[1180px]:justify-between">
-          <div className="flex flex-wrap gap-2">
-            {STATUS_VIEWS.map((view) => <button key={view.id} type="button" onClick={() => props.onStatusFilterChange(view.id)} className={`inline-flex items-center rounded-xl border px-3.5 py-2 text-sm font-bold transition ${props.statusFilter === view.id ? "border-[var(--color-brand)] bg-[var(--color-brand)] text-white shadow-md" : "border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)]"}`}><span>{view.label}</span><span className={`ml-2 rounded-full px-2 py-0.5 text-[11px] font-black ${props.statusFilter === view.id ? "bg-white/20 text-white" : "bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]"}`}>{counts[view.id]}</span></button>)}
-          </div>
+        <div className="flex justify-end">
           <select value={props.sortBy} onChange={(event) => props.onSortChange(event.target.value as AlertWorkbenchProps["sortBy"])} className="w-fit rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm font-bold text-[var(--color-text-primary)]"><option value="risk">Rủi ro cao trước</option><option value="newest">Mới nhất</option><option value="reach">Tiếp cận cao nhất</option></select>
         </div>
 
@@ -130,7 +127,7 @@ export function AlertWorkbench(props: AlertWorkbenchProps) {
             {props.totalFiltered > 0 && <footer className="flex items-center justify-between border-t border-[var(--color-border)] px-[4%] py-[3%] text-xs text-[var(--color-text-secondary)]"><span>{props.totalFiltered} cảnh báo</span><div className="flex items-center gap-2"><button type="button" onClick={() => props.onPageChange(props.currentPage - 1)} disabled={props.currentPage === 1} className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--color-border)] disabled:opacity-40" title="Trang trước"><ChevronLeft size={16} /></button><span className="min-w-10 text-center font-black text-[var(--color-text-primary)]">{props.currentPage}/{props.totalPages}</span><button type="button" onClick={() => props.onPageChange(props.currentPage + 1)} disabled={props.currentPage === props.totalPages} className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--color-border)] disabled:opacity-40" title="Trang sau"><ChevronRight size={16} /></button></div></footer>}
           </main>
 
-          {props.selectedAlert && !props.panelCollapsed && <AlertDetailPanel alert={props.selectedAlert} activeTab={props.detailTab} onTabChange={props.onDetailTabChange} profileEmail={props.profileEmail} canUpdate={props.canUpdate} getResolverName={props.getResolverName} onClose={props.onCollapsePanel} onClaim={props.onClaim} onRecordResult={props.onRecordResult} onOpenSource={props.onOpenSource} onOpenFullDetails={props.onOpenFullDetails} />}
+          {props.selectedAlert && !props.panelCollapsed && <AlertDetailPanel alert={props.selectedAlert} activeTab={props.detailTab} onTabChange={props.onDetailTabChange} profileEmail={props.profileEmail} canUpdate={props.canUpdate} getResolverName={props.getResolverName} onClose={props.onCollapsePanel} onClaim={props.onClaim} onRecordResult={props.onRecordResult} onOpenSource={props.onOpenSource} />}
         </div>
       </section>
     </div>
