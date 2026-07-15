@@ -93,7 +93,6 @@ const ROLE_BUSINESS_ACTIONS: Record<UserRole, BusinessAction[]> = {
     "view_crisis_queue",
     "update_crisis_status",
     "view_reports",
-    "create_label_request",
   ],
   lead_employee: [
     "view_mentions",
@@ -101,7 +100,6 @@ const ROLE_BUSINESS_ACTIONS: Record<UserRole, BusinessAction[]> = {
     "update_lead_status",
     "update_lead_details",
     "view_reports",
-    "create_label_request",
   ],
 };
 
@@ -155,7 +153,6 @@ export const ROLE_CONFIG: Record<UserRole, RoleConfig> = {
       "mentions",
       "alerts",
       "reports",
-      "label_request_create",
     ],
     defaultRoute: "/alerts",
   },

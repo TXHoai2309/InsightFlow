@@ -34,7 +34,7 @@ const tourSteps: TourStep[] = [
     title: "Bắt đầu từ hàng chờ khủng hoảng",
     body:
       "Đây là màn hình chính của nhân viên xử lý khủng hoảng. Bạn dùng khu vực này để tìm sự vụ, giới hạn theo brand được phân công và nắm nhanh số lượng tình huống khẩn cấp.",
-    actionHint: "Kiểm tra brand trước, sau đó ưu tiên các sự vụ có nhãn khẩn cấp hoặc rủi ro cao.",
+    actionHint: "Kiểm tra brand trước, sau đó ưu tiên các sự vụ có SLA gấp hoặc rủi ro cao.",
   },
   {
     route: "/alerts",
@@ -61,14 +61,6 @@ const tourSteps: TourStep[] = [
     actionHint: "Bấm Nhận xử lý để khóa sự vụ theo ca của bạn. Dùng Escalate ngay khi có nguy cơ pháp lý, viral mạnh hoặc ảnh hưởng an toàn.",
   },
   {
-    route: "/alerts",
-    selector: '[data-tour="alerts-label-requests"]',
-    title: "Theo dõi yêu cầu sửa nhãn",
-    body:
-      "Nếu nhãn khủng hoảng hoặc mức độ nghiêm trọng chưa đúng, bạn có thể gửi yêu cầu sửa nhãn. Khu vực này giúp xem các request liên quan và trạng thái duyệt.",
-    actionHint: "Chỉ gửi yêu cầu sửa nhãn khi đã kiểm tra ngữ cảnh gốc và có lý do rõ ràng.",
-  },
-  {
     route: "/mentions",
     selector: '[data-tour="mentions-filters"]',
     title: "Kiểm tra nguồn trên Mentions",
@@ -82,7 +74,7 @@ const tourSteps: TourStep[] = [
     title: "Đọc ngữ cảnh trước khi phản hồi",
     body:
       "Bảng mentions chứa nội dung gốc, nguồn, tác giả và nhãn hiện tại. Đây là điểm kiểm chứng trước khi xử lý công khai hoặc ghi nhận kết quả.",
-    actionHint: "Đọc đủ ngữ cảnh trước khi quyết định phản hồi, escalate hoặc đề xuất sửa nhãn.",
+    actionHint: "Đọc đủ ngữ cảnh trước khi quyết định phản hồi, chuyển nghiệp vụ hoặc escalate.",
   },
   {
     route: "/reports",
