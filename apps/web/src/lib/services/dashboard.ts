@@ -476,42 +476,10 @@ export class SupabaseServiceError extends Error {
   }
 }
 
-const OPERATIONAL_ROUTING_COLUMNS = new Set([
-  "operational_queue",
-  "previous_operational_queue",
-  "transfer_reason",
-  "transfer_note",
-  "transferred_by",
-  "transferred_by_name",
-  "transferred_at",
-  "transfer_count",
-  "transfer_history",
-]);
-
-export function isOperationalRoutingSchemaError(error: unknown): boolean {
-  if (error instanceof SupabaseServiceError) {
-    return (
-      error.code === "PGRST204" &&
-      Boolean(error.missingColumn && OPERATIONAL_ROUTING_COLUMNS.has(error.missingColumn))
-    );
-  }
-
-  const message = error instanceof Error ? error.message : String(error || "");
-  return (
-    message.includes("PGRST204") &&
-    Array.from(OPERATIONAL_ROUTING_COLUMNS).some((column) =>
-      message.includes(`'${column}'`),
-    )
-  );
-}
-
 export function getLeadOperationErrorMessage(
   error: unknown,
   fallback = "Không thể cập nhật dữ liệu lead. Vui lòng thử lại.",
 ): string {
-  if (isOperationalRoutingSchemaError(error)) {
-    return "Hệ thống chưa hoàn tất cấu hình chuyển nghiệp vụ. Vui lòng liên hệ quản trị viên.";
-  }
   if (error instanceof SupabaseServiceError && error.code === "PGRST204") {
     return "Cấu hình dữ liệu chưa được đồng bộ. Vui lòng liên hệ quản trị viên.";
   }
@@ -604,43 +572,6 @@ async function upsertSupabaseLead(
     false,
     "resolution=merge-duplicates,return=minimal",
   );
-}
-
-let operationalRoutingSchemaCache: {
-  ready: boolean;
-  expiresAt: number;
-} | null = null;
-
-export async function checkOperationalRoutingSchema(
-  force = false,
-): Promise<boolean> {
-  if (
-    !force &&
-    operationalRoutingSchemaCache &&
-    operationalRoutingSchemaCache.expiresAt > Date.now()
-  ) {
-    return operationalRoutingSchemaCache.ready;
-  }
-
-  try {
-    await supabaseRequest<SupabaseRow[]>(
-      getSupabaseConfig(),
-      "leads",
-      "select=operational_queue,previous_operational_queue,transfer_count,transfer_history&limit=1",
-    );
-    operationalRoutingSchemaCache = {
-      ready: true,
-      expiresAt: Date.now() + 5 * 60 * 1000,
-    };
-    return true;
-  } catch (error) {
-    if (!isOperationalRoutingSchemaError(error)) throw error;
-    operationalRoutingSchemaCache = {
-      ready: false,
-      expiresAt: Date.now() + 10 * 1000,
-    };
-    return false;
-  }
 }
 
 async function deleteSupabaseLead(config: SupabaseConfig, id: string) {
@@ -1448,15 +1379,6 @@ const LEAD_PERSISTED_FIELDS = new Set<keyof Lead>([
   "label_correction_status",
   "pending_label_request_id",
   "last_label_corrected_at",
-  "operational_queue",
-  "previous_operational_queue",
-  "transfer_reason",
-  "transfer_note",
-  "transferred_by",
-  "transferred_by_name",
-  "transferred_at",
-  "transfer_count",
-  "transfer_history",
   "owner_id",
   "owner_name",
   "owner_email",
@@ -1776,15 +1698,6 @@ export class DashboardService {
           label_correction_status: undefined,
           pending_label_request_id: undefined,
           last_label_corrected_at: undefined,
-          operational_queue: undefined,
-          previous_operational_queue: undefined,
-          transfer_reason: undefined,
-          transfer_note: undefined,
-          transferred_by: undefined,
-          transferred_by_name: undefined,
-          transferred_at: undefined,
-          transfer_count: 0,
-          transfer_history: [],
           phone: parsed.phone,
           email: parsed.email,
           zalo_id: parsed.zalo_id,
@@ -1833,6 +1746,8 @@ export class DashboardService {
           }
           const mergedIntent = mapIntent(mergedLabels?.intent);
           if (!isQualifiedLeadIntent(mergedIntent)) return;
+          const persistedLastAction = normalizeOptionalText(d.last_action_type);
+          const lastActionWasLegacyTransfer = persistedLastAction === "transfer_business";
 
           derivedLeadById.set(m.id, {
             ...baseLead,
@@ -1843,17 +1758,6 @@ export class DashboardService {
             label_correction_status: mapLabelCorrectionStatus(d.label_correction_status as string | undefined),
             pending_label_request_id: normalizeOptionalText(d.pending_label_request_id),
             last_label_corrected_at: d.last_label_corrected_at ? parseDate(d.last_label_corrected_at) : undefined,
-            operational_queue: normalizeOptionalText(d.operational_queue) as Lead["operational_queue"],
-            previous_operational_queue: normalizeOptionalText(d.previous_operational_queue) as Lead["previous_operational_queue"],
-            transfer_reason: normalizeOptionalText(d.transfer_reason),
-            transfer_note: normalizeOptionalText(d.transfer_note),
-            transferred_by: normalizeOptionalText(d.transferred_by),
-            transferred_by_name: normalizeOptionalText(d.transferred_by_name),
-            transferred_at: d.transferred_at ? parseDate(d.transferred_at) : undefined,
-            transfer_count: typeof d.transfer_count === "number" ? d.transfer_count : 0,
-            transfer_history: Array.isArray(d.transfer_history)
-              ? (d.transfer_history as Lead["transfer_history"])
-              : [],
             phone: normalizeOptionalText(d.phone) || parsed.phone,
             email: normalizeOptionalText(d.email) || parsed.email,
             zalo_id: normalizeOptionalText(d.zalo_id) || parsed.zalo_id,
@@ -1869,8 +1773,12 @@ export class DashboardService {
             contact_attempts: typeof d.contact_attempts === "number" ? d.contact_attempts : 0,
             last_contact_at: d.last_contact_at ? parseDate(d.last_contact_at) : undefined,
             pending_result: d.pending_result === true,
-            last_action_at: d.last_action_at ? parseDate(d.last_action_at) : undefined,
-            last_action_type: normalizeOptionalText(d.last_action_type) as Lead["last_action_type"],
+            last_action_at: !lastActionWasLegacyTransfer && d.last_action_at
+              ? parseDate(d.last_action_at)
+              : undefined,
+            last_action_type: lastActionWasLegacyTransfer
+              ? undefined
+              : (persistedLastAction as Lead["last_action_type"]),
             last_contact_channel: normalizeOptionalText(d.last_contact_channel),
             result_type: normalizeOptionalText(d.result_type) as Lead["result_type"],
             result_recorded_at: d.result_recorded_at ? parseDate(d.result_recorded_at) : undefined,

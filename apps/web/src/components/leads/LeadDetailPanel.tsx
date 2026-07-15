@@ -8,7 +8,6 @@ import { LeadProfileTab } from "@/components/leads/LeadProfileTab";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import {
   getLeadOperationErrorMessage,
-  isOperationalRoutingSchemaError,
   PLATFORM_META,
 } from "@/lib/services/dashboard";
 import { useAuth } from "@/hooks/useAuth";
@@ -132,11 +131,6 @@ export function LeadDetailPanel({
   const { updateLeadDetails } = useDashboardStore();
   const [internalActiveTab, setInternalActiveTab] = useState<PanelTab>("action");
   const [selectedResult, setSelectedResult] = useState<ResultAction | null>(null);
-  const [showTransferForm, setShowTransferForm] = useState(false);
-  const [transferReason, setTransferReason] = useState("");
-  const [transferNote, setTransferNote] = useState("");
-  const [isTransferring, setIsTransferring] = useState(false);
-  const [transferError, setTransferError] = useState("");
   const [showSkipForm, setShowSkipForm] = useState(false);
   const [skipReason, setSkipReason] = useState("");
   const [skipNote, setSkipNote] = useState("");
@@ -202,11 +196,6 @@ export function LeadDetailPanel({
     canEdit &&
     ownership.canWork &&
     meta.needsResultCapture;
-  const canTransferBusiness =
-    canEdit &&
-    ownership.canWork &&
-    lead.status !== "completed" &&
-    lead.status !== "skipped";
   const canSkipLead =
     canEdit &&
     (ownership.canClaim || ownership.canWork) &&
@@ -257,90 +246,6 @@ export function LeadDetailPanel({
       panelScrollTop: getPanelScrollTop(),
       openedAt: new Date().toISOString(),
     });
-  };
-
-  const handleOpenTransferForm = () => {
-    setShowTransferForm(true);
-    setShowSkipForm(false);
-    setTransferError("");
-  };
-
-  const handleTransferToCrisis = async () => {
-    if (!profile || !canTransferBusiness) {
-      setTransferError(
-        ownership.canClaim
-          ? "Hãy nhận xử lý trước khi chuyển nghiệp vụ."
-          : "Chỉ người đang phụ trách mới có thể chuyển nghiệp vụ.",
-      );
-      return;
-    }
-    if (!transferReason) {
-      setTransferError("Vui lòng chọn lý do chuyển nghiệp vụ.");
-      return;
-    }
-
-    try {
-      setIsTransferring(true);
-      setTransferError("");
-      const nowIso = new Date().toISOString();
-      const transferEvent: NonNullable<Lead["transfer_history"]>[number] = {
-        from: lead.operational_queue || "lead",
-        to: "crisis",
-        reason: transferReason,
-        note: transferNote.trim() || undefined,
-        transferred_by: profile.uid,
-        transferred_by_name: getOwnerName(),
-        transferred_at: nowIso,
-        owner_before: lead.owner_name || lead.owner_email || undefined,
-        owner_after: undefined,
-      };
-      const transferData: Partial<Lead> = {
-        operational_queue: "crisis",
-        previous_operational_queue: lead.operational_queue || "lead",
-        transfer_reason: transferReason,
-        transfer_note: transferNote.trim() || undefined,
-        transferred_by: profile.uid,
-        transferred_by_name: getOwnerName(),
-        transferred_at: nowIso,
-        transfer_count: (lead.transfer_count || 0) + 1,
-        transfer_history: [...(lead.transfer_history || []), transferEvent],
-        last_action_at: nowIso,
-        last_action_type: "transfer_business",
-        pending_result: false,
-        owner_id: null,
-        owner_name: null,
-        owner_email: null,
-        assigned_at: null,
-        assigned_by: null,
-        claimed_at: null,
-      };
-
-      await updateLeadDetails(lead.id, transferData, profile);
-      onStartedAction?.({ ...lead, ...transferData });
-      setShowTransferForm(false);
-      setTransferReason("");
-      setTransferNote("");
-      showToast("Đã chuyển item sang nghiệp vụ khủng hoảng.", "success");
-      window.setTimeout(() => {
-        window.location.assign("/alerts?tab=priority");
-      }, 700);
-    } catch (error: any) {
-      console.error(error);
-      if (isOperationalRoutingSchemaError(error)) {
-        setTransferError(
-          "Hệ thống chưa hoàn tất cấu hình chuyển nghiệp vụ. Vui lòng liên hệ quản trị viên.",
-        );
-        return;
-      }
-      setTransferError(
-        getLeadOperationErrorMessage(
-          error,
-          "Không thể chuyển nghiệp vụ. Vui lòng thử lại.",
-        ),
-      );
-    } finally {
-      setIsTransferring(false);
-    }
   };
 
   const handleSkipLead = async () => {
@@ -666,7 +571,7 @@ export function LeadDetailPanel({
                     <div className="min-w-0">
                       <p className="truncate text-sm font-bold text-[var(--color-text-primary)]">{ownership.ownerName}</p>
                       <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
-                        {lead.operational_queue === "crisis" ? "Đội xử lý khủng hoảng" : "Đội xử lý tiềm năng"}
+                        Đội xử lý tiềm năng
                       </p>
                     </div>
                   </div>
@@ -819,34 +724,13 @@ export function LeadDetailPanel({
               <button type="button" disabled={!selectedResult || isSaving || !canRecordResult} onClick={handleSaveResult} className="mt-3 w-full rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50">{isSaving ? "Đang lưu..." : "Lưu kết quả"}</button>
             </section>
 
-            <section className="rounded-lg border border-[var(--color-brand-border)] p-3">
-              <div className="flex items-start gap-2.5">
-                <span className="material-symbols-outlined text-xl text-[var(--color-brand)]">swap_horiz</span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold text-[var(--color-text-primary)]">Chuyển nghiệp vụ</p>
-                  <p className="mt-0.5 text-xs leading-5 text-[var(--color-text-secondary)]">Chuyển cho đội khủng hoảng khi item vượt phạm vi xử lý tiềm năng.</p>
-                </div>
-              </div>
-              {!showTransferForm ? (
-                <button type="button" onClick={handleOpenTransferForm} disabled={!canTransferBusiness} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--color-brand-border)] px-3 py-2 text-sm font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-brand-subtle)] disabled:cursor-not-allowed disabled:opacity-50">Chuyển sang xử lý khủng hoảng<span className="material-symbols-outlined text-lg">arrow_forward</span></button>
-              ) : (
-                <div className="mt-3 space-y-3 border-t border-[var(--color-border)] pt-3">
-                  <label className="block text-xs font-bold text-[var(--color-text-secondary)]">Lý do chuyển<select value={transferReason} onChange={(event) => setTransferReason(event.target.value)} className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]"><option value="">Chọn lý do</option><option value="crisis_signal">Có dấu hiệu khủng hoảng/khiếu nại</option><option value="reputation_risk">Có nguy cơ ảnh hưởng uy tín thương hiệu</option><option value="urgent_escalation">Cần đội khủng hoảng xử lý khẩn cấp</option><option value="wrong_workflow">Không thuộc nghiệp vụ tiềm năng</option></select></label>
-                  <label className="block text-xs font-bold text-[var(--color-text-secondary)]">Ghi chú bàn giao <span className="font-normal">(không bắt buộc)</span><textarea value={transferNote} onChange={(event) => setTransferNote(event.target.value)} placeholder="Bổ sung bối cảnh để đội tiếp nhận xử lý nhanh hơn..." className="mt-1 min-h-[72px] w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-3 text-sm text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]" /></label>
-                  <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800 dark:border-amber-900/30 dark:bg-amber-950/20 dark:text-amber-300">Item sẽ rời hàng chờ Tiềm năng và trở về trạng thái chưa phân công tại hàng chờ Khủng hoảng.</p>
-                  {transferError && <p className="text-xs font-semibold text-[var(--color-error)]">{transferError}</p>}
-                  <div className="flex justify-end gap-2"><button type="button" onClick={() => { setShowTransferForm(false); setTransferError(""); }} className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm font-bold text-[var(--color-text-primary)]">Hủy</button><button type="button" onClick={handleTransferToCrisis} disabled={isTransferring || !transferReason} className="rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{isTransferring ? "Đang chuyển..." : "Xác nhận chuyển"}</button></div>
-                </div>
-              )}
-            </section>
-
             <section className="rounded-lg border border-red-200 bg-red-50/40 p-3 dark:border-red-900/40 dark:bg-red-950/10">
               <div className="flex items-start gap-2.5">
                 <span className="material-symbols-outlined text-xl text-red-500">block</span>
                 <div className="min-w-0 flex-1"><p className="text-sm font-bold text-[var(--color-text-primary)]">Bỏ qua / Không liên quan</p><p className="mt-0.5 text-xs leading-5 text-[var(--color-text-secondary)]">Đóng item không thuộc phạm vi xử lý và lưu lý do để tra cứu.</p></div>
               </div>
               {!showSkipForm ? (
-                <button type="button" onClick={() => { setShowSkipForm(true); setShowTransferForm(false); setSkipError(""); }} disabled={!canSkipLead} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-red-300 px-3 py-2 text-sm font-bold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50">Bỏ qua item này<span className="material-symbols-outlined text-lg">arrow_forward</span></button>
+                <button type="button" onClick={() => { setShowSkipForm(true); setSkipError(""); }} disabled={!canSkipLead} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-red-300 px-3 py-2 text-sm font-bold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50">Bỏ qua item này<span className="material-symbols-outlined text-lg">arrow_forward</span></button>
               ) : (
                 <div className="mt-3 space-y-3 border-t border-red-200 pt-3">
                   <label className="block text-xs font-bold text-[var(--color-text-secondary)]">Lý do bỏ qua<select value={skipReason} onChange={(event) => setSkipReason(event.target.value)} className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus:border-red-400"><option value="">Chọn lý do</option><option value="not_relevant">Không liên quan</option><option value="spam">Spam/quảng cáo</option><option value="duplicate">Trùng lặp</option><option value="not_a_lead">Không phải khách hàng tiềm năng</option><option value="other">Lý do khác</option></select></label>

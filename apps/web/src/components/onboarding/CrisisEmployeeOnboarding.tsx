@@ -74,7 +74,7 @@ const tourSteps: TourStep[] = [
     title: "Đọc ngữ cảnh trước khi phản hồi",
     body:
       "Bảng mentions chứa nội dung gốc, nguồn, tác giả và nhãn hiện tại. Đây là điểm kiểm chứng trước khi xử lý công khai hoặc ghi nhận kết quả.",
-    actionHint: "Đọc đủ ngữ cảnh trước khi quyết định phản hồi, chuyển nghiệp vụ hoặc escalate.",
+    actionHint: "Đọc đủ ngữ cảnh trước khi quyết định phản hồi hoặc escalate.",
   },
   {
     route: "/reports",
