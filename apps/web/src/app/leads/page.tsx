@@ -747,6 +747,7 @@ export default function LeadsPage() {
                 lead={selectedLead}
                 mentions={mentions}
                 nowMs={currentTime}
+                workbenchView={activeView}
                 onClose={() => setIsPanelCollapsed(true)}
                 onAfterResult={handleAfterResult}
                 onStartedAction={handleStartedAction}

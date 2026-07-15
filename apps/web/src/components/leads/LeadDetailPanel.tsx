@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
+import { ClipboardCheck, Sparkles, UserPlus } from "lucide-react";
+import { LeadHistoryTab } from "@/components/leads/LeadHistoryTab";
+import { LeadProfileTab } from "@/components/leads/LeadProfileTab";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import {
   getLeadOperationErrorMessage,
@@ -37,6 +40,7 @@ interface LeadDetailPanelProps {
   lead: Lead | null;
   mentions?: Mention[];
   nowMs: number;
+  workbenchView: LeadWorkbenchView;
   onClose: () => void;
   onAfterResult?: () => void;
   onStartedAction?: (lead: Lead) => void;
@@ -114,6 +118,7 @@ export function LeadDetailPanel({
   lead,
   mentions = [],
   nowMs,
+  workbenchView,
   onClose,
   onAfterResult,
   onStartedAction,
@@ -143,6 +148,8 @@ export function LeadDetailPanel({
   const [isSaving, setIsSaving] = useState(false);
   const [isOpening, setIsOpening] = useState("");
   const [saveError, setSaveError] = useState("");
+  const [isResultSectionHighlighted, setIsResultSectionHighlighted] = useState(false);
+  const resultSectionRef = useRef<HTMLElement | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const showToast = (message: string, type: "success" | "error" = "success") => {
     setToast({ message, type });
@@ -206,6 +213,10 @@ export function LeadDetailPanel({
     lead.status !== "completed" &&
     lead.status !== "skipped";
   const sourceAction = getLeadSourceAction(lead);
+  const profileSourceHref = sourceAction?.href || mentionDetailHref;
+  const canOpenProfileSource = Boolean(
+    sourceAction ? ownership.canWork : mentionDetailHref,
+  );
   const platformMeta = PLATFORM_META[lead.platform];
   const priorityText =
     meta.priorityReasons.join(", ") || "Có tín hiệu quan tâm cần kiểm tra.";
@@ -219,6 +230,16 @@ export function LeadDetailPanel({
       return;
     }
     setInternalActiveTab(tab);
+  };
+
+  const handleScrollToResult = () => {
+    const resultSection = resultSectionRef.current;
+    if (!resultSection) return;
+
+    resultSection.scrollIntoView({ behavior: "smooth", block: "start" });
+    window.setTimeout(() => resultSection.focus({ preventScroll: true }), 350);
+    setIsResultSectionHighlighted(true);
+    window.setTimeout(() => setIsResultSectionHighlighted(false), 1800);
   };
 
   const handleOpenMentionDetail = () => {
@@ -470,6 +491,16 @@ export function LeadDetailPanel({
     }
   };
 
+  const handleProfileOpenSource = () => {
+    if (sourceAction) {
+      void handleOpenAction(sourceAction, true);
+      return;
+    }
+    if (!mentionDetailHref) return;
+    handleOpenMentionDetail();
+    window.location.assign(mentionDetailHref);
+  };
+
   const handleSaveResult = async () => {
     if (!selectedResult) return;
     const option = RESULT_OPTIONS.find((item) => item.id === selectedResult);
@@ -622,27 +653,65 @@ export function LeadDetailPanel({
       >
         {activeTab === "action" && (
           <div className="space-y-2.5">
-            <section data-tour="lead-detail-owner" className="rounded-lg border border-[var(--color-border)] p-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-xs font-bold uppercase text-[var(--color-text-muted)]">Người phụ trách</p>
-                  <p className="mt-1 truncate text-sm font-semibold text-[var(--color-text-primary)]">{ownership.ownerName}</p>
+            <div className={workbenchView === "unassigned" || workbenchView === "active" ? "grid gap-2.5 md:grid-cols-[0.96fr_1.04fr]" : "block"}>
+              <section data-tour="lead-detail-owner" className="rounded-lg border border-[var(--color-border)] p-3">
+                <p className="text-xs font-bold uppercase text-[var(--color-text-muted)]">Người phụ trách</p>
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-sm font-black text-[var(--color-brand)]">
+                      {ownership.status === "unassigned"
+                        ? "--"
+                        : ownership.ownerName.slice(0, 2).toUpperCase()}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold text-[var(--color-text-primary)]">{ownership.ownerName}</p>
+                      <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
+                        {lead.operational_queue === "crisis" ? "Đội xử lý khủng hoảng" : "Đội xử lý tiềm năng"}
+                      </p>
+                    </div>
+                  </div>
+                  <span className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-bold ${
+                    ownership.status === "assigned_to_me"
+                      ? "border-[var(--color-success)]/30 bg-[var(--color-success-subtle)] text-[var(--color-success)]"
+                      : ownership.status === "unassigned"
+                        ? "border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] text-[var(--color-warning)]"
+                        : "border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]"
+                  }`}>{ownership.label}</span>
                 </div>
-                <span className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-bold ${
-                  ownership.status === "assigned_to_me"
-                    ? "border-[var(--color-success)]/30 bg-[var(--color-success-subtle)] text-[var(--color-success)]"
-                    : ownership.status === "unassigned"
-                      ? "border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] text-[var(--color-warning)]"
-                      : "border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]"
-                }`}>{ownership.label}</span>
-              </div>
-              {ownership.canClaim && (
-                <button type="button" data-tour="lead-detail-claim-button" onClick={handleClaim} disabled={!canClaimLead} className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50">
-                  <span className="material-symbols-outlined text-lg">person_add</span>
-                  Nhận xử lý lead này
-                </button>
+              </section>
+
+              {workbenchView === "unassigned" && (
+                <section className="flex flex-col justify-between rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)]/20 p-3">
+                  <div className="flex items-start gap-2.5">
+                    <Sparkles className="mt-0.5 shrink-0 text-[var(--color-brand)]" size={19} aria-hidden="true" />
+                    <div>
+                      <p className="text-sm font-bold text-[var(--color-brand)]">Hành động chính</p>
+                      <p className="mt-0.5 text-xs leading-5 text-[var(--color-text-secondary)]">Nhận item để bắt đầu xử lý nghiệp vụ.</p>
+                    </div>
+                  </div>
+                  <button type="button" data-tour="lead-detail-claim-button" onClick={handleClaim} disabled={!canClaimLead || !ownership.canClaim} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50">
+                    <UserPlus size={18} aria-hidden="true" />
+                    Nhận xử lý
+                  </button>
+                </section>
               )}
-            </section>
+
+              {workbenchView === "active" && (
+                <section className="flex flex-col justify-between rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)]/20 p-3">
+                  <div className="flex items-start gap-2.5">
+                    <Sparkles className="mt-0.5 shrink-0 text-[var(--color-brand)]" size={19} aria-hidden="true" />
+                    <div>
+                      <p className="text-sm font-bold text-[var(--color-brand)]">Hành động chính</p>
+                      <p className="mt-0.5 text-xs leading-5 text-[var(--color-text-secondary)]">Hoàn tất bước xử lý bằng cách ghi nhận kết quả.</p>
+                    </div>
+                  </div>
+                  <button type="button" onClick={handleScrollToResult} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold text-white transition hover:bg-[var(--color-brand-hover)]">
+                    <ClipboardCheck size={18} aria-hidden="true" />
+                    Ghi nhận kết quả
+                  </button>
+                </section>
+              )}
+            </div>
 
             <section className="rounded-lg border border-amber-300 bg-amber-50/70 p-3 dark:border-amber-800 dark:bg-amber-950/20">
               <div className="flex items-start gap-2.5">
@@ -702,7 +771,16 @@ export function LeadDetailPanel({
               )}
             </section>
 
-            <section data-tour="lead-detail-result-actions" className="rounded-lg border border-[var(--color-border)] p-3">
+            <section
+              ref={resultSectionRef}
+              tabIndex={-1}
+              data-tour="lead-detail-result-actions"
+              className={`scroll-mt-4 rounded-lg border p-3 outline-none transition-shadow duration-300 ${
+                isResultSectionHighlighted
+                  ? "border-[var(--color-brand)] ring-2 ring-[var(--color-brand)]/25"
+                  : "border-[var(--color-border)]"
+              }`}
+            >
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <p className="text-sm font-bold text-[var(--color-text-primary)]">Ghi nhận kết quả nhanh</p>
@@ -782,81 +860,26 @@ export function LeadDetailPanel({
         )}
 
         {activeTab === "profile" && (
-          <div className="space-y-3">
-            <section className="rounded-xl border border-[var(--color-border)] p-3">
-              <p className="text-sm font-bold text-[var(--color-text-primary)]">
-                Thông tin cơ bản
-              </p>
-              <dl className="mt-3 space-y-3 text-sm">
-                <div className="flex justify-between gap-3">
-                  <dt className="text-[var(--color-text-secondary)]">Tên</dt>
-                  <dd className="font-semibold text-[var(--color-text-primary)]">
-                    {lead.author || "Khách hàng"}
-                  </dd>
-                </div>
-                <div className="flex justify-between gap-3">
-                  <dt className="text-[var(--color-text-secondary)]">Kênh</dt>
-                  <dd className="font-semibold text-[var(--color-text-primary)]">
-                    {platformMeta?.label || lead.platform}
-                  </dd>
-                </div>
-                <div className="flex justify-between gap-3">
-                  <dt className="text-[var(--color-text-secondary)]">Liên hệ</dt>
-                  <dd className="text-right font-semibold text-[var(--color-text-primary)]">
-                    {lead.phone || lead.email || lead.social_profile_url || "Chưa có"}
-                  </dd>
-                </div>
-                <div className="flex justify-between gap-3">
-                  <dt className="text-[var(--color-text-secondary)]">Score</dt>
-                  <dd className="font-bold text-[var(--color-brand)]">
-                    {meta.priorityScore}/100
-                  </dd>
-                </div>
-              </dl>
-            </section>
-          </div>
+          <LeadProfileTab
+            lead={lead}
+            meta={meta}
+            ownership={ownership}
+            platformLabel={platformMeta?.label || lead.platform}
+            slaLabel={formatLeadSla(meta)}
+            sourceHref={profileSourceHref}
+            canOpenSource={canOpenProfileSource}
+            onOpenSource={handleProfileOpenSource}
+            onFeedback={showToast}
+          />
         )}
 
         {activeTab === "history" && (
-          <div className="space-y-3">
-            <section className="rounded-xl border border-[var(--color-border)] p-3">
-              <p className="text-sm font-bold text-[var(--color-text-primary)]">
-                Timeline tương tác
-              </p>
-              <div className="mt-3 space-y-3 border-l border-[var(--color-border)] pl-3">
-                <div>
-                  <p className="text-xs text-[var(--color-text-muted)]">
-                    {new Date(lead.created_at).toLocaleString("vi-VN")}
-                  </p>
-                  <p className="text-sm font-semibold text-[var(--color-text-primary)]">
-                    {lead.content}
-                  </p>
-                  <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
-                    Intent: {lead.intent} · Kênh: {platformMeta?.label || lead.platform}
-                  </p>
-                </div>
-                {lead.last_action_at && (
-                  <div>
-                    <p className="text-xs text-[var(--color-text-muted)]">
-                      {new Date(lead.last_action_at).toLocaleString("vi-VN")}
-                    </p>
-                    <p className="text-sm font-semibold text-[var(--color-text-primary)]">
-                      Đã mở {lead.last_contact_channel || "nguồn/liên hệ"}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </section>
-
-            <section className="rounded-xl border border-[var(--color-border)] p-3">
-              <p className="text-sm font-bold text-[var(--color-text-primary)]">
-                Activity log xử lý
-              </p>
-              <p className="mt-3 whitespace-pre-line text-sm leading-6 text-[var(--color-text-secondary)]">
-                {lead.notes || "Chưa có ghi chú xử lý."}
-              </p>
-            </section>
-          </div>
+          <LeadHistoryTab
+            lead={lead}
+            meta={meta}
+            platformLabel={platformMeta?.label || lead.platform}
+            slaLabel={formatLeadSla(meta)}
+          />
         )}
 
       </div>
