@@ -12,6 +12,7 @@ import { calculateNegativityScore } from "@/lib/negativityScore";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import type { Mention } from "@/types/dashboard";
 import { getPersistedAlertStatus } from "@/lib/alertWorkflow";
+import { canAlertBeVisibleToUser } from "@/lib/alert-visibility";
 
 function getResolverName(emailOrId: string | null | undefined): string {
   if (!emailOrId) return "";
@@ -732,6 +733,10 @@ export const useAlertStore = create<AlertState>()(
       if (!profile || !canPerformAction(profile, "update_crisis_status")) {
         console.error("[AlertStore] Permission check failed:", { profileExists: !!profile, hasPermission: profile ? canPerformAction(profile, "update_crisis_status") : false });
         throw new Error("User is not allowed to update crisis status.");
+      }
+
+      if (currentAlert && !canAlertBeVisibleToUser(currentAlert, profile)) {
+        throw new Error("Cảnh báo không thuộc phạm vi xử lý của bạn.");
       }
 
       if (["resolved", "contact_waiting", "contact_failed"].includes(newStatus)) {

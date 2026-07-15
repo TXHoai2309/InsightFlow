@@ -6,11 +6,11 @@ import { useTranslation } from "react-i18next";
 import { useAlertStore, type AlertData, type CustomerContactAttempt } from "@/stores/alert.store";
 import { useAuth } from "@/hooks/useAuth";
 import { PlatformLogo } from "@/components/platform/PlatformLogo";
-import { canPerformAction } from "@/lib/rbac";
 import { getScopedBrandKey } from "@/lib/brandScope";
 import { fetchSingleSupabaseAlert, updateSupabaseAlertLabel, fetchCommentsForPost, type PostComment } from "@/lib/supabase";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { getAlertWorkflowStatus } from "@/lib/alertWorkflow";
+import { canAccessAlertQueue, canAlertBeVisibleToUser } from "@/lib/alert-visibility";
 
 type CustomerResponseResult = NonNullable<AlertData["customer_response_result"]>;
 
@@ -246,8 +246,8 @@ export default function AlertDetailPage() {
     try { return decodeURIComponent(raw); } catch { return raw; }
   })();
 
-  const { profile } = useAuth();
-  const isManager = profile?.role === "admin" || profile?.role === "brand_manager";
+  const { profile, loading: authLoading } = useAuth();
+  const isManager = profile?.role === "brand_manager";
   const {
     updateAlertStatus,
     createCorrectionRequest,
@@ -259,6 +259,7 @@ export default function AlertDetailPage() {
   const [alert, setAlert] = useState<AlertData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [accessDenied, setAccessDenied] = useState(false);
 
   // Left column active tab state ("content" | "history")
   const [activeLeftTab, setActiveLeftTab] = useState<"content" | "history">("content");
@@ -594,7 +595,16 @@ export default function AlertDetailPage() {
 
 
   const loadAlertDetail = useCallback(async (showGlobalLoading = false) => {
-    if (!id) return;
+    if (!id || authLoading) return;
+    if (!canAccessAlertQueue(profile)) {
+      setAlert(null);
+      setAccessDenied(true);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
+    setAccessDenied(false);
 
     const readStoreAlert = () => useAlertStore.getState().rawAlerts.find((a) =>
       a.id === id ||
@@ -609,6 +619,13 @@ export default function AlertDetailPage() {
     }
 
     if (storeAlert) {
+      if (!canAlertBeVisibleToUser(storeAlert, profile)) {
+        setAlert(null);
+        setAccessDenied(true);
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
       setAlert(storeAlert);
       setNewSeverity(storeAlert.severity || "medium");
       setLoading(false);
@@ -622,6 +639,11 @@ export default function AlertDetailPage() {
     try {
       const detail = await fetchSingleSupabaseAlert(id);
       if (detail) {
+        if (!canAlertBeVisibleToUser(detail, profile)) {
+          setAlert(null);
+          setAccessDenied(true);
+          return;
+        }
         setAlert(detail);
         setNewSeverity(detail.severity || "medium");
         // Sync to alert store to ensure store actions work correctly
@@ -650,11 +672,11 @@ export default function AlertDetailPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [id, profile]);
+  }, [authLoading, id, profile]);
 
   // Real-time detail sync: Supabase Realtime (push) + manual refresh
   useEffect(() => {
-    if (!id) return;
+    if (!id || authLoading) return;
 
     // Initial load with global loading state
     loadAlertDetail(true);
@@ -687,7 +709,7 @@ export default function AlertDetailPage() {
     // Relying on manual "Làm mới" button and realtime push instead.
 
     return () => cleanupFns.forEach((fn) => fn());
-  }, [id, loadAlertDetail]);
+  }, [authLoading, id, loadAlertDetail]);
 
 
   // NOTE: Detail page does NOT auto-lock on mount.
@@ -813,7 +835,7 @@ export default function AlertDetailPage() {
     }
   };
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="flex flex-col items-center justify-center p-24 space-y-4">
         <svg className="animate-spin h-10 w-10 text-[var(--color-brand)]" fill="none" viewBox="0 0 24 24">
@@ -821,6 +843,24 @@ export default function AlertDetailPage() {
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
         </svg>
         <p className="text-sm text-[var(--color-text-secondary)] font-bold">Đang tải chi tiết vụ việc...</p>
+      </div>
+    );
+  }
+
+  if (accessDenied) {
+    return (
+      <div className="p-12 text-center space-y-4 max-w-md mx-auto">
+        <span className="material-symbols-outlined text-red-500 text-6xl">lock</span>
+        <h2 className="text-xl font-bold text-[var(--color-text-primary)]">Không có quyền truy cập</h2>
+        <p className="text-sm text-[var(--color-text-secondary)]">
+          Cảnh báo này không thuộc phạm vi thương hiệu hoặc không được phân công cho bạn.
+        </p>
+        <button
+          onClick={() => router.push(profile?.role === "admin" ? "/admin" : "/alerts")}
+          className="px-6 py-2 bg-primary text-white font-bold rounded-xl active:scale-95 transition-all text-xs"
+        >
+          Quay lại
+        </button>
       </div>
     );
   }

@@ -8,6 +8,7 @@ import { useDashboardStore } from "@/stores/dashboard.store";
 import { useAlertStore } from "@/stores/alert.store";
 import { getScopedBrandKey } from "@/lib/brandScope";
 import { getAlertWorkflowStatus } from "@/lib/alertWorkflow";
+import { canAlertBeVisibleToUser } from "@/lib/alert-visibility";
 import { isIntentLead } from "@/lib/lead-intent";
 import type { Alert, Lead, Mention } from "@/types/dashboard";
 
@@ -185,18 +186,20 @@ export function EmployeeOverviewDashboard() {
   // về cấu trúc dashboard để Tổng quan luôn hiển thị cùng một hàng đợi.
   const alerts = useMemo<Alert[]>(() => {
     if (role !== "crisis") return dashboardAlerts;
-    return rawAlerts.map((alert) => ({
-      id: alert.id,
-      workspace_id: alert.brand,
-      severity: alert.severity as Alert["severity"],
-      signal_type: (alert.topic || alert.source || "sensitive_topic") as Alert["signal_type"],
-      message: alert.text || alert.title || "Cảnh báo cần xử lý",
-      created_at: alert.created_at,
-      resolved_at: alert.resolved_at,
-      assigned_to: alert.being_resolved_by,
-      status: alert.status as Alert["status"],
-    }));
-  }, [dashboardAlerts, rawAlerts, role]);
+    return rawAlerts
+      .filter((alert) => canAlertBeVisibleToUser(alert, profile))
+      .map((alert) => ({
+        id: alert.id,
+        workspace_id: alert.brand,
+        severity: alert.severity as Alert["severity"],
+        signal_type: (alert.topic || alert.source || "sensitive_topic") as Alert["signal_type"],
+        message: alert.text || alert.title || "Cảnh báo cần xử lý",
+        created_at: alert.created_at,
+        resolved_at: alert.resolved_at,
+        assigned_to: alert.being_resolved_by,
+        status: alert.status as Alert["status"],
+      }));
+  }, [dashboardAlerts, profile, rawAlerts, role]);
 
   const pageLoading = role === "crisis" ? isAlertLoading : isLoading;
   const pageError = role === "crisis" ? alertError : error;
