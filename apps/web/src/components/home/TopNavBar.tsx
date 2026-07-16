@@ -193,7 +193,7 @@ export default function TopNavBar() {
             {/* Theme Toggle */}
             <button
               onClick={toggleTheme}
-              title={isDark ? "Chế độ sáng" : "Chế độ tối"}
+              title="Chuyển đổi giao diện Sáng/Tối"
               className="hidden lg:flex theme-toggle"
               role="switch"
               aria-checked={isDark}
@@ -233,6 +233,7 @@ export default function TopNavBar() {
         <div className="p-5 flex justify-between items-center">
           <button
             onClick={toggleTheme}
+            title="Chuyển đổi giao diện Sáng/Tối"
             className="theme-toggle"
             role="switch"
             aria-checked={isDark}
