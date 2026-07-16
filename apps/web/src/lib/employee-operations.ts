@@ -1,5 +1,5 @@
 import { getAlertWorkflowStatus } from "@/lib/alertWorkflow";
-import { canAlertBeVisibleToUser } from "@/lib/crisis-report";
+import { canAlertBeVisibleToUser } from "@/lib/alert-visibility";
 import { isIntentLead } from "@/lib/lead-intent";
 import {
   canLeadBeVisibleToUser,
@@ -305,13 +305,11 @@ export function buildEmployeeOperationsData({
 
   if (role === "crisis_employee") {
     tasks = alerts
-      .filter((alert) => alert.operational_queue !== "lead")
       .filter((alert) => canAlertBeVisibleToUser(alert, profile))
       .map((alert) => alertToTask(alert, nowMs));
   } else {
     tasks = leads
       .filter(isIntentLead)
-      .filter((lead) => lead.operational_queue !== "crisis")
       .filter((lead) => canLeadBeVisibleToUser(lead, profile))
       .map((lead) => leadToTask(lead, nowMs));
   }
