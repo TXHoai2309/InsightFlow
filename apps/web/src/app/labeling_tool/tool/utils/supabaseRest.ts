@@ -937,6 +937,93 @@ export async function approveSupabaseAiAnnotations(
   return Number(approved) || 0;
 }
 
+export interface BulkAiApprovalResult {
+  total: number;
+  approved: number;
+}
+
+function approvalLabelFromAnnotation(
+  row: SupabaseAnnotation,
+): Label & { skipped?: boolean } {
+  const value = typeof row.label === 'string' ? JSON.parse(row.label) : row.label;
+  if (!value || typeof value !== 'object') {
+    throw new Error(`Nhãn AI không hợp lệ: ${row.entity_key}`);
+  }
+  const candidate = value as Partial<Label> & { skipped?: boolean };
+  const label: Label & { skipped?: boolean } = {
+    sentiment: candidate.sentiment ?? null,
+    topic: Array.isArray(candidate.topic) ? candidate.topic : [],
+    relevance: candidate.relevance ?? null,
+    urgency: candidate.urgency ?? null,
+    intent: candidate.intent ?? null,
+    skipped: candidate.skipped === true || row.status === 'skipped',
+  };
+  if (!label.skipped && !isLabelComplete(label)) {
+    throw new Error(`Nhãn AI chưa đầy đủ: ${row.entity_key}`);
+  }
+  return label;
+}
+
+/**
+ * Approve every AI-pending annotation for one selected platform.
+ *
+ * Rows are read and validated in full before the first mutation, then sent to
+ * the existing transactional RPC in small batches. This avoids silently
+ * approving only the currently loaded UI page and keeps large queues from
+ * exceeding the request-size limit.
+ */
+export async function approveAllSupabaseAiAnnotations(
+  config: SupabaseConfig,
+  platform: PlatformFilter,
+  reviewer = 'InsightFlow Admin',
+  onProgress?: (approved: number, total: number) => void,
+): Promise<BulkAiApprovalResult> {
+  const platformFilter = platform === 'news'
+    ? 'in.(news,news_html)'
+    : platform === 'befood'
+      ? 'in.(be,befood)'
+      : `eq.${platform}`;
+  const pageSize = 1000;
+  const rows: SupabaseAnnotation[] = [];
+  let offset = 0;
+
+  while (true) {
+    const params = new URLSearchParams({
+      select: ANNOTATION_SELECT,
+      platform: platformFilter,
+      status: 'eq.ai_pending',
+      order: 'entity_key.asc',
+      limit: String(pageSize),
+      offset: String(offset),
+    });
+    const page = await request<SupabaseAnnotation[]>(
+      config,
+      'annotations',
+      params.toString(),
+    );
+    rows.push(...page);
+    if (page.length < pageSize) break;
+    offset += page.length;
+  }
+
+  const items = rows.map(row => ({
+    entityKey: row.entity_key,
+    label: approvalLabelFromAnnotation(row),
+  }));
+  const batchSize = 250;
+  let approved = 0;
+  onProgress?.(approved, items.length);
+  for (let index = 0; index < items.length; index += batchSize) {
+    approved += await approveSupabaseAiAnnotations(
+      config,
+      items.slice(index, index + batchSize),
+      reviewer,
+    );
+    onProgress?.(approved, items.length);
+  }
+  return { total: items.length, approved };
+}
+
 export async function updateSupabaseAssignment(
   config: SupabaseConfig,
   assignmentId: string,
