@@ -2,86 +2,104 @@
 
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { 
-  CheckCircle2, 
-  Clock, 
-  AlertCircle, 
-  UserPlus, 
-  TrendingUp 
+import {
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  TrendingUp,
+  UserPlus,
 } from "lucide-react";
+import type { EmployeeOperationsStats } from "@/lib/employee-operations";
 
-export function AgentStatsBar() {
+interface AgentStatsBarProps {
+  stats: EmployeeOperationsStats;
+}
+
+export function AgentStatsBar({ stats }: AgentStatsBarProps) {
   const { t } = useTranslation();
 
-  const stats = [
+  const cards = [
     {
       title: t("agentDashboard.stats.todo"),
-      value: "12",
+      value: stats.todo.toLocaleString("vi-VN"),
       icon: CheckCircle2,
-      trend: t("agentDashboard.stats.vsYesterday"),
-      trendColor: "text-emerald-500",
+      detail: t("agentDashboard.stats.urgentCount", {
+        count: stats.urgent,
+        defaultValue: `${stats.urgent} việc cần ưu tiên`,
+      }),
+      detailColor: stats.urgent > 0 ? "text-rose-500" : "text-emerald-500",
       iconColor: "text-indigo-500 dark:text-indigo-400",
       bgIcon: "bg-indigo-50 dark:bg-indigo-500/10",
     },
     {
       title: t("agentDashboard.stats.processing"),
-      value: "3",
+      value: stats.processing.toLocaleString("vi-VN"),
       icon: Clock,
-      trend: t("agentDashboard.stats.onTrack"),
-      trendColor: "text-slate-500 dark:text-gray-400",
+      detail: t("agentDashboard.stats.fromSupabase", {
+        defaultValue: "Đồng bộ từ Supabase",
+      }),
+      detailColor: "text-slate-500 dark:text-gray-400",
       iconColor: "text-blue-500 dark:text-blue-400",
       bgIcon: "bg-blue-50 dark:bg-blue-500/10",
     },
     {
       title: t("agentDashboard.stats.waiting"),
-      value: "2",
+      value: stats.waiting.toLocaleString("vi-VN"),
       icon: UserPlus,
-      trend: t("agentDashboard.stats.waitingTime"),
-      trendColor: "text-rose-500 dark:text-rose-400",
-      iconColor: "text-rose-500 dark:text-rose-400",
-      bgIcon: "bg-rose-50 dark:bg-rose-500/10",
-    },
-    {
-      title: t("agentDashboard.stats.overdue"),
-      value: "1",
-      icon: AlertCircle,
-      trend: t("agentDashboard.stats.dueBefore"),
-      trendColor: "text-amber-500 dark:text-amber-400",
+      detail: t("agentDashboard.stats.waitingDetail", {
+        count: stats.waiting,
+        defaultValue: `${stats.waiting} việc đang chờ phản hồi`,
+      }),
+      detailColor: "text-amber-600 dark:text-amber-400",
       iconColor: "text-amber-500 dark:text-amber-400",
       bgIcon: "bg-amber-50 dark:bg-amber-500/10",
     },
     {
+      title: t("agentDashboard.stats.overdue", { defaultValue: "Đã quá hạn" }),
+      value: stats.overdue.toLocaleString("vi-VN"),
+      icon: AlertCircle,
+      detail: t("agentDashboard.stats.overdueDetail", {
+        defaultValue: "Theo SLA hoặc lịch follow-up",
+      }),
+      detailColor: stats.overdue > 0 ? "text-rose-500" : "text-emerald-500",
+      iconColor: "text-rose-500 dark:text-rose-400",
+      bgIcon: "bg-rose-50 dark:bg-rose-500/10",
+    },
+    {
       title: t("agentDashboard.stats.completion"),
-      value: "67%",
+      value: `${stats.completionRate}%`,
       icon: TrendingUp,
-      trend: t("agentDashboard.stats.vsLastWeek"),
-      trendColor: "text-emerald-500 dark:text-emerald-400",
+      detail: t("agentDashboard.stats.completedRatio", {
+        completed: stats.completedToday,
+        total: stats.totalToday,
+        defaultValue: `${stats.completedToday}/${stats.totalToday} việc hôm nay`,
+      }),
+      detailColor: "text-emerald-500 dark:text-emerald-400",
       iconColor: "text-emerald-500 dark:text-emerald-400",
       bgIcon: "bg-emerald-50 dark:bg-emerald-500/10",
     },
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-      {stats.map((stat, index) => (
-        <div 
-          key={index} 
-          className="bg-[#ffffff] dark:bg-[#13111C] border border-gray-100 dark:border-[#262338] rounded-[20px] p-5 flex flex-col justify-between shadow-[0_2px_10px_rgba(0,0,0,0.02)] dark:shadow-none hover:shadow-md transition-shadow"
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      {cards.map((card) => (
+        <div
+          key={card.title}
+          className="flex flex-col justify-between rounded-[20px] border border-gray-100 bg-white p-5 shadow-[0_2px_10px_rgba(0,0,0,0.02)] transition-shadow hover:shadow-md dark:border-[#262338] dark:bg-[#13111C] dark:shadow-none"
         >
-          <div className="flex justify-between items-start mb-4">
-            <p className="text-[12px] font-bold text-slate-500 dark:text-gray-400 tracking-wide uppercase">{stat.title}</p>
-            <div className={`p-1.5 rounded-full ${stat.bgIcon}`}>
-              <stat.icon className={`w-4 h-4 ${stat.iconColor}`} strokeWidth={2.5} />
+          <div className="mb-4 flex items-start justify-between">
+            <p className="text-[12px] font-bold uppercase tracking-wide text-slate-500 dark:text-gray-400">
+              {card.title}
+            </p>
+            <div className={`rounded-full p-1.5 ${card.bgIcon}`}>
+              <card.icon className={`h-4 w-4 ${card.iconColor}`} strokeWidth={2.5} />
             </div>
           </div>
-          
           <div>
-            <h3 className="text-3xl font-black text-slate-800 dark:text-gray-100 mb-1">
-              {stat.value}
+            <h3 className="mb-1 text-3xl font-black text-slate-800 dark:text-gray-100">
+              {card.value}
             </h3>
-            <p className={`text-[12px] font-bold ${stat.trendColor}`}>
-              {stat.trend}
-            </p>
+            <p className={`text-[12px] font-bold ${card.detailColor}`}>{card.detail}</p>
           </div>
         </div>
       ))}

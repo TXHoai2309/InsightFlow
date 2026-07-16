@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
-export default function LegacyAgentDashboardPage() {
+export default function LegacyOverviewPage() {
   redirect("/operations");
 }

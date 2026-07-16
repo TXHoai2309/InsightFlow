@@ -44,7 +44,6 @@ const KIND_ICONS: Record<LeadHistoryKind, typeof Clock3> = {
   status: RefreshCw,
   result: CheckCircle2,
   follow_up: CalendarClock,
-  transfer: Flag,
   closed: FileText,
 };
 

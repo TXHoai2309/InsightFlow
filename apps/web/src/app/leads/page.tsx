@@ -436,8 +436,9 @@ export default function LeadsPage() {
     );
   }, [sortedLeads, currentTime, profile]);
 
-  const handleStartedAction = (lead: Lead) => {
+  const handleStartedAction = (lead: Lead, preventJump = false) => {
     rememberOptimisticLead(lead);
+    if (preventJump) return;
     setSelectedLeadId(lead.id);
     setDetailTab("action");
     setIsPanelCollapsed(false);
@@ -647,7 +648,7 @@ export default function LeadsPage() {
                 : "grid-cols-1"
               }`}
           >
-            <main className="flex min-w-0 flex-col self-start rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm">
+            <main className="flex min-w-0 flex-col self-start rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm min-[1100px]:sticky min-[1100px]:top-4 min-[1100px]:max-h-[calc(100vh-100px)]">
               <header className="flex shrink-0 items-center justify-between gap-[4%] border-b border-[var(--color-border)] px-[4%] py-[3%]">
                 <div className="min-w-0">
                   <h2 className="text-sm font-black text-[var(--color-text-primary)]">
@@ -662,7 +663,7 @@ export default function LeadsPage() {
                 </span>
               </header>
 
-              <div className="space-y-[2.5%] p-[3%]">
+              <div className="flex-1 space-y-[2.5%] overflow-y-auto p-[3%] min-h-0">
                 {isLoading && visibleLeads.length === 0 ? (
                   [0, 1, 2].map((item) => (
                     <div

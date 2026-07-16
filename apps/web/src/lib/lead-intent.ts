@@ -19,9 +19,7 @@ export function isQualifiedLeadIntent(
 }
 
 export function isIntentLead(
-  lead: Pick<Lead, "intent" | "operational_queue"> | null | undefined,
+  lead: Pick<Lead, "intent"> | null | undefined,
 ) {
-  if (lead?.operational_queue === "crisis") return false;
-  if (lead?.operational_queue === "lead") return true;
   return isQualifiedLeadIntent(lead?.intent);
 }
