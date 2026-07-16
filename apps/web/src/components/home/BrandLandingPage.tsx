@@ -43,6 +43,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { getDefaultRouteForRole } from "@/lib/rbac";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { TrialRegistrationFlow } from "./trial-registration";
 
 type FormState = {
   fullName: string;
@@ -519,16 +520,16 @@ export default function BrandLandingPage() {
             
             <div className="mt-10 flex flex-col gap-4 sm:flex-row">
               {!loading && user ? (
-                <Link href={appRoute} className="inline-flex h-[52px] px-8 items-center justify-center gap-2 rounded-[24px] bg-gradient-to-br from-[#6D5EF6] to-[#5B4FE0] text-[16px] font-bold text-white shadow-[0_18px_50px_rgba(109,94,246,0.08)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_30px_60px_rgba(109,94,246,0.12)]">
-                  Vào Dashboard <ArrowRight className="h-5 w-5" />
+                <Link href={appRoute} className="inline-flex h-[52px] px-8 items-center justify-center gap-2 rounded-[24px] bg-gradient-to-br from-[#6D5EF6] to-[#5B4FE0] text-[16px] font-bold text-white whitespace-nowrap shadow-[0_18px_50px_rgba(109,94,246,0.08)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_30px_60px_rgba(109,94,246,0.12)]">
+                  Vào Dashboard <ArrowRight className="h-5 w-5 shrink-0" />
                 </Link>
               ) : (
-                <Link href="#consultation" className="inline-flex h-[52px] px-8 items-center justify-center gap-2 rounded-[24px] bg-gradient-to-br from-[#6D5EF6] to-[#5B4FE0] text-[16px] font-bold text-white shadow-[0_18px_50px_rgba(109,94,246,0.08)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_30px_60px_rgba(109,94,246,0.12)]">
-                  Đăng ký tư vấn dùng thử <ArrowRight className="h-5 w-5" />
+                <Link href="#consultation" className="inline-flex h-[52px] px-8 items-center justify-center gap-2 rounded-[24px] bg-gradient-to-br from-[#6D5EF6] to-[#5B4FE0] text-[16px] font-bold text-white whitespace-nowrap shadow-[0_18px_50px_rgba(109,94,246,0.08)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_30px_60px_rgba(109,94,246,0.12)]">
+                  Đăng ký tư vấn dùng thử <ArrowRight className="h-5 w-5 shrink-0" />
                 </Link>
               )}
-              <Link href="#workflow" className="inline-flex h-[52px] px-8 items-center justify-center gap-2 rounded-[24px] bg-white/80 border border-[#ECE9FF] text-[16px] font-bold text-[#1B1B4A] backdrop-blur-sm shadow-[0_18px_50px_rgba(109,94,246,0.04)] transition-all duration-300 hover:-translate-y-1 hover:border-[#6D5EF6]/30">
-                Xem Demo <ChevronRight className="h-5 w-5" />
+              <Link href="#workflow" className="inline-flex h-[52px] px-8 items-center justify-center gap-2 rounded-[24px] bg-white/80 border border-[#ECE9FF] text-[16px] font-bold text-[#1B1B4A] whitespace-nowrap backdrop-blur-sm shadow-[0_18px_50px_rgba(109,94,246,0.04)] transition-all duration-300 hover:-translate-y-1 hover:border-[#6D5EF6]/30">
+                Xem Demo <ChevronRight className="h-5 w-5 shrink-0" />
               </Link>
             </div>
 
@@ -1238,162 +1239,15 @@ export default function BrandLandingPage() {
         </div>
       </section>
 
-      <section id="consultation" className="relative border-y border-[#ECE9FF] dark:border-white/10 bg-gradient-to-b from-white to-[#F5F3FF] dark:from-[#0A0612] dark:to-[#0A0612]/50 px-6 pt-12 pb-24 md:pt-16 md:pb-32 overflow-hidden">
+      <section id="consultation" className="relative border-y border-[#ECE9FF] dark:border-white/10 bg-gradient-to-b from-[#F8F9FF] to-white dark:from-[#0A0612] dark:to-[#0A0612]/50 px-6 pt-12 pb-24 md:pt-16 md:pb-32 overflow-hidden">
         {/* Subtle Background Elements */}
         <div className="absolute top-[20%] left-[-100px] w-[600px] h-[600px] bg-[#9B8CFF] blur-[200px] opacity-[0.1] rounded-full pointer-events-none" />
         <div className="absolute bottom-[20%] right-[-100px] w-[600px] h-[600px] bg-[#6D5EF6] blur-[200px] opacity-[0.1] rounded-full pointer-events-none" />
 
-        <div className="mx-auto grid max-w-[1200px] gap-12 lg:grid-cols-[0.82fr_1.18fr] lg:items-start relative z-10">
-          <Reveal className="lg:sticky lg:top-28">
-            <p className="text-[13px] font-extrabold uppercase tracking-[0.16em] text-[#6D5EF6]">Dùng thử có định hướng</p>
-            <h2 className="mt-4 font-display text-[32px] md:text-[42px] font-bold leading-[1.1] text-[#1B1B4A] dark:text-white">Mỗi thương hiệu cần một cách bắt đầu riêng.</h2>
-            <p className="mt-6 max-w-[510px] text-[17px] leading-[1.7] text-[#6B7090] dark:text-slate-300">Để buổi demo thực sự hữu ích, đội InsightFlow sẽ đọc bài toán của bạn trước: kênh cần theo dõi, nhu cầu ưu tiên và cách triển khai phù hợp.</p>
-            <div className="mt-10 space-y-5">
-              {["Đề xuất quy trình theo ngành hàng và mô hình đội ngũ", "Chọn chỉ số, kênh theo dõi và tình huống ưu tiên", "Demo xoay quanh bài toán thật, không phải bản trình diễn chung chung"].map((item) => (
-                <div key={item} className="flex gap-4 text-[16px] font-medium leading-[1.6] text-[#1B1B4A] dark:text-white">
-                  <div className="flex-shrink-0 mt-1 h-6 w-6 rounded-full bg-[#34D399]/20 text-[#34D399] flex items-center justify-center">
-                    <CheckCircle2 className="h-4 w-4" />
-                  </div>
-                  {item}
-                </div>
-              ))}
-            </div>
-
-            {/* Enhanced Social Proof & Trust Signal */}
-            <div className="mt-12 rounded-[32px] bg-white dark:bg-white/5 p-8 border border-[#ECE9FF] dark:border-white/10 max-w-[460px] shadow-[0_30px_60px_rgba(109,94,246,0.08)] transition-all duration-500 hover:shadow-[0_40px_80px_rgba(109,94,246,0.12)]">
-              <div className="flex items-center gap-5 mb-6">
-                <div className="flex -space-x-4">
-                  {[
-                    "https://i.pravatar.cc/100?img=1",
-                    "https://i.pravatar.cc/100?img=2",
-                    "https://i.pravatar.cc/100?img=3",
-                    "https://i.pravatar.cc/100?img=4",
-                    "https://i.pravatar.cc/100?img=5"
-                  ].map((src, i) => (
-                    <img key={i} src={src} alt="User avatar" className="h-14 w-14 rounded-full border-[3px] border-white dark:border-[#0A0612] object-cover shadow-sm transition-transform hover:-translate-y-1 hover:z-10 relative" />
-                  ))}
-                </div>
-                <div className="flex flex-col justify-center">
-                  <div className="flex gap-1 text-[#f59e0b] text-[18px]">
-                    ★★★★★
-                  </div>
-                  <span className="text-[14px] font-bold text-[#1B1B4A] dark:text-white mt-1">Hơn 300+ thương hiệu</span>
-                  <span className="text-[12px] font-medium text-[#6B7090] dark:text-slate-400">đã tin tưởng sử dụng</span>
-                </div>
-              </div>
-              
-              <div className="pt-6 border-t border-[#ECE9FF] dark:border-white/10">
-                <p className="text-[12px] font-bold uppercase tracking-wider text-[#6B7090] dark:text-slate-400 mb-4">Các đối tác tiêu biểu</p>
-                <div className="flex items-center gap-6">
-                  {/* Generic Logos replacing real ones */}
-                  <div className="flex items-center gap-2 grayscale opacity-60 hover:grayscale-0 hover:opacity-100 transition-all cursor-default">
-                    <div className="w-6 h-6 bg-[#2563eb] rounded-md shadow-sm" />
-                    <span className="font-bold text-[#1B1B4A] dark:text-white text-[15px]">Techcom</span>
-                  </div>
-                  <div className="flex items-center gap-2 grayscale opacity-60 hover:grayscale-0 hover:opacity-100 transition-all cursor-default">
-                    <div className="w-6 h-6 bg-[#ef4444] rounded-full shadow-sm" />
-                    <span className="font-bold text-[#1B1B4A] dark:text-white text-[15px]">VinFast</span>
-                  </div>
-                  <div className="flex items-center gap-2 grayscale opacity-60 hover:grayscale-0 hover:opacity-100 transition-all cursor-default">
-                    <div className="w-6 h-6 bg-[#10b981] rounded-sm rotate-45 scale-75 shadow-sm" />
-                    <span className="font-bold text-[#1B1B4A] dark:text-white text-[15px]">Mobi</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </Reveal>
-
+        <div className="mx-auto max-w-[1400px] relative z-10">
           <Reveal delay={0.1}>
-            <div className="w-full max-w-[600px] mx-auto lg:ml-auto rounded-[28px] border border-white/80 dark:border-white/10 bg-white/70 dark:bg-[#0A0612]/60 p-8 shadow-[0_30px_60px_rgba(109,94,246,0.12)] backdrop-blur-xl md:p-10">
-              {submitted ? (
-                <div className="flex min-h-[500px] flex-col items-center justify-center text-center">
-                  <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#34D399]/10 text-[#34D399] mb-6">
-                    <CheckCircle2 className="h-10 w-10" />
-                  </div>
-                  <h3 className="font-display text-[32px] font-extrabold text-[#1B1B4A] dark:text-white">Thông tin của bạn đã đến nơi.</h3>
-                  <p className="mt-4 max-w-[440px] text-[17px] leading-[1.7] text-[#6B7090] dark:text-slate-300">Đội InsightFlow sẽ liên hệ để tìm hiểu bài toán và sắp xếp buổi tư vấn phù hợp.</p>
-                  <button type="button" onClick={() => { setSubmitted(false); setForm(initialFormState); }} className="mt-8 rounded-full border border-[#ECE9FF] dark:border-white/10 bg-white dark:bg-white/5 px-8 py-4 text-[15px] font-bold text-[#1B1B4A] dark:text-white transition-all hover:bg-[#F5F3FF] dark:hover:bg-white/10 hover:border-[#6D5EF6]/30 shadow-sm">Gửi một yêu cầu khác</button>
-                </div>
-              ) : (
-                <form onSubmit={handleSubmit} className="grid gap-6">
-                  <div className="grid gap-6 md:grid-cols-2">
-                    <label className="grid gap-2 text-[14px] font-extrabold text-[#1B1B4A] dark:text-white">
-                      Họ và tên *
-                      <input value={form.fullName} onChange={(event) => updateForm("fullName", event.target.value)} className="h-14 rounded-[16px] border border-[#ECE9FF] dark:border-white/10 bg-white dark:bg-[#0A0612]/50 px-4 text-[15px] text-[#1B1B4A] dark:text-white outline-none transition focus:border-[#6D5EF6] focus:ring-4 focus:ring-[#6D5EF6]/10 placeholder:text-slate-400" placeholder="Nguyễn Văn A" />
-                    </label>
-                    <label className="grid gap-2 text-[14px] font-extrabold text-[#1B1B4A] dark:text-white">
-                      Email công việc *
-                      <input type="email" value={form.email} onChange={(event) => updateForm("email", event.target.value)} className="h-14 rounded-[16px] border border-[#ECE9FF] dark:border-white/10 bg-white dark:bg-[#0A0612]/50 px-4 text-[15px] text-[#1B1B4A] dark:text-white outline-none transition focus:border-[#6D5EF6] focus:ring-4 focus:ring-[#6D5EF6]/10 placeholder:text-slate-400" placeholder="name@company.com" />
-                    </label>
-                  </div>
-                  <div className="grid gap-6 md:grid-cols-2">
-                    <label className="grid gap-2 text-[14px] font-extrabold text-[#1B1B4A] dark:text-white">
-                      Số điện thoại *
-                      <input value={form.phone} onChange={(event) => updateForm("phone", event.target.value)} className="h-14 rounded-[16px] border border-[#ECE9FF] dark:border-white/10 bg-white dark:bg-[#0A0612]/50 px-4 text-[15px] text-[#1B1B4A] dark:text-white outline-none transition focus:border-[#6D5EF6] focus:ring-4 focus:ring-[#6D5EF6]/10 placeholder:text-slate-400" placeholder="090..." />
-                    </label>
-                    <label className="grid gap-2 text-[14px] font-extrabold text-[#1B1B4A] dark:text-white">
-                      Thương hiệu / doanh nghiệp *
-                      <input value={form.company} onChange={(event) => updateForm("company", event.target.value)} className="h-14 rounded-[16px] border border-[#ECE9FF] dark:border-white/10 bg-white dark:bg-[#0A0612]/50 px-4 text-[15px] text-[#1B1B4A] dark:text-white outline-none transition focus:border-[#6D5EF6] focus:ring-4 focus:ring-[#6D5EF6]/10 placeholder:text-slate-400" placeholder="Tên doanh nghiệp" />
-                    </label>
-                  </div>
-                  <div className="grid gap-6 md:grid-cols-2">
-                    <label className="grid gap-2 text-[14px] font-extrabold text-[#1B1B4A] dark:text-white">
-                      Ngành hàng
-                      <input value={form.industry} onChange={(event) => updateForm("industry", event.target.value)} className="h-14 rounded-[16px] border border-[#ECE9FF] dark:border-white/10 bg-white dark:bg-[#0A0612]/50 px-4 text-[15px] text-[#1B1B4A] dark:text-white outline-none transition focus:border-[#6D5EF6] focus:ring-4 focus:ring-[#6D5EF6]/10 placeholder:text-slate-400" placeholder="F&B, bán lẻ..." />
-                    </label>
-                    <label className="grid gap-2 text-[14px] font-extrabold text-[#1B1B4A] dark:text-white">
-                      Quy mô đội ngũ
-                      <select value={form.teamSize} onChange={(event) => updateForm("teamSize", event.target.value)} className="h-14 rounded-[16px] border border-[#ECE9FF] dark:border-white/10 bg-white dark:bg-[#0A0612]/50 px-4 text-[15px] text-[#6B7090] dark:text-slate-300 outline-none transition focus:border-[#6D5EF6] focus:ring-4 focus:ring-[#6D5EF6]/10">
-                        <option value="">Chọn quy mô</option>
-                        <option value="1-10">1-10 người</option>
-                        <option value="11-50">11-50 người</option>
-                        <option value="51-200">51-200 người</option>
-                        <option value="200+">Trên 200 người</option>
-                      </select>
-                    </label>
-                  </div>
-                  <div className="grid gap-3">
-                    <span className="text-[14px] font-extrabold text-[#1B1B4A] dark:text-white">Kênh muốn theo dõi</span>
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      {channels.map((channel) => {
-                        const selected = form.channels.split(",").filter(Boolean).includes(channel);
-                        return (
-                          <button key={channel} type="button" onClick={() => { const current = form.channels.split(",").filter(Boolean); updateForm("channels", (selected ? current.filter((item) => item !== channel) : [...current, channel]).join(",")); }} className={`h-12 rounded-[12px] border text-[14px] font-bold transition-all ${selected ? "border-[#6D5EF6] bg-[#6D5EF6]/10 text-[#6D5EF6]" : "border-[#ECE9FF] dark:border-white/10 bg-white dark:bg-[#0A0612]/50 text-[#6B7090] dark:text-slate-300 hover:border-[#6D5EF6]/40"}`}>
-                            {channel}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  <label className="grid gap-2 text-[14px] font-extrabold text-[#1B1B4A] dark:text-white">
-                    Nhu cầu chính *
-                    <select value={form.need} onChange={(event) => updateForm("need", event.target.value)} className="h-14 rounded-[16px] border border-[#ECE9FF] dark:border-white/10 bg-white dark:bg-[#0A0612]/50 px-4 text-[15px] text-[#6B7090] dark:text-slate-300 outline-none transition focus:border-[#6D5EF6] focus:ring-4 focus:ring-[#6D5EF6]/10">
-                      <option>Phát hiện khách hàng tiềm năng</option>
-                      <option>Theo dõi sức khỏe thương hiệu</option>
-                      <option>Cảnh báo khủng hoảng truyền thông</option>
-                      <option>Báo cáo AI cho ban lãnh đạo</option>
-                      <option>Tư vấn quy trình tổng thể</option>
-                    </select>
-                  </label>
-                  {submitError && (
-                    <div className="rounded-xl border border-red-500/20 bg-[#ef4444]/5 p-4 text-[14px] text-red-500 dark:text-red-400">
-                      {submitError}
-                    </div>
-                  )}
-                  <button type="submit" disabled={missingRequired || submitting} className="mt-6 inline-flex h-[56px] w-full items-center justify-center gap-2 rounded-full bg-[#1B1B4A] hover:bg-[#2A2A6A] px-8 text-[16px] font-bold text-white shadow-[0_12px_24px_rgba(27,27,74,0.15)] transition-all hover:-translate-y-1 hover:shadow-[0_20px_40px_rgba(27,27,74,0.25)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none">
-                    {submitting ? "Đang gửi yêu cầu..." : "Gửi thông tin để nhận tư vấn"}
-                    {submitting ? (
-                      <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                    ) : (
-                      <Send className="h-5 w-5" />
-                    )}
-                  </button>
-                  <p className="mt-3 text-center text-[13px] leading-[1.6] text-[#6B7090]">Khi gửi biểu mẫu, bạn đồng ý để InsightFlow liên hệ nhằm tư vấn về nhu cầu dùng thử và cách triển khai phù hợp.</p>
-                </form>
-              )}
+            <div className="w-full mx-auto relative z-20">
+              <TrialRegistrationFlow />
             </div>
           </Reveal>
         </div>

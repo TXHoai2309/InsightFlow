@@ -6,6 +6,7 @@ import { ClipboardCheck, Sparkles, UserPlus } from "lucide-react";
 import { LeadHistoryTab } from "@/components/leads/LeadHistoryTab";
 import { LeadProfileTab } from "@/components/leads/LeadProfileTab";
 import { LeadContentContext } from "@/components/leads/LeadContentContext";
+import { CustomerInteractionHistoryPanel } from "@/components/customer-interactions/CustomerInteractionHistoryPanel";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import {
   getLeadOperationErrorMessage,
@@ -14,11 +15,8 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { canPerformAction } from "@/lib/rbac";
 import { isSameBrandScope } from "@/lib/brandScope";
-import { resolveLeadMentionTarget } from "@/lib/mention-navigation";
 import {
   LEAD_DETAIL_PANEL_SCROLL_ID,
-  createLeadReturnToken,
-  saveLeadReturnContext,
   type LeadDetailPanelTab,
 } from "@/lib/lead-return-context";
 import type {
@@ -70,12 +68,13 @@ const RESULT_OPTIONS: Array<{
   label: string;
   icon: string;
   status: Lead["status"];
+  description: string;
 }> = [
-  { id: "positive", label: "Khách phản hồi tích cực", icon: "thumb_up", status: "processing" },
-  { id: "no_response", label: "Chưa phản hồi", icon: "schedule", status: "processing" },
-  { id: "follow_up", label: "Hẹn lại", icon: "event", status: "processing" },
-  { id: "not_fit", label: "Không phù hợp", icon: "block", status: "skipped" },
-  { id: "converted", label: "Đã chuyển đổi", icon: "emoji_events", status: "completed" },
+  { id: "positive", label: "Khách phản hồi tích cực", icon: "thumb_up", status: "processing", description: "Khách hàng có quan tâm và tương tác tốt." },
+  { id: "no_response", label: "Chưa phản hồi", icon: "schedule", status: "processing", description: "Đã liên hệ nhưng khách chưa trả lời." },
+  { id: "follow_up", label: "Hẹn lại", icon: "event", status: "processing", description: "Khách hẹn liên hệ lại vào thời gian khác." },
+  { id: "not_fit", label: "Không phù hợp", icon: "block", status: "skipped", description: "Khách không có nhu cầu hoặc sai đối tượng." },
+  { id: "converted", label: "Đã chuyển đổi", icon: "emoji_events", status: "completed", description: "Khách hàng đã đồng ý chốt deal/đăng ký." },
 ];
 
 function toDateInputValue(dateIso?: string) {
@@ -88,32 +87,6 @@ function toTimeInputValue(dateIso?: string) {
   return new Date(dateIso).toTimeString().slice(0, 5);
 }
 
-function appendLeadReturnParams(
-  href: string,
-  lead: Lead,
-  returnContext?: LeadDetailPanelProps["returnContext"],
-  token?: string,
-) {
-  if (!href) return href;
-
-  const [pathAndQuery, hash] = href.split("#");
-  const params = new URLSearchParams({
-    from: "leads",
-    leadId: returnContext?.selectedLeadId || lead.id,
-    view: returnContext?.view || "priority",
-    page: String(returnContext?.page || 1),
-  });
-  if (token) params.set("returnToken", token);
-  const separator = pathAndQuery.includes("?") ? "&" : "?";
-
-  return `${pathAndQuery}${separator}${params.toString()}${hash ? `#${hash}` : ""}`;
-}
-
-function getPanelScrollTop() {
-  if (typeof window === "undefined") return 0;
-  return document.getElementById(LEAD_DETAIL_PANEL_SCROLL_ID)?.scrollTop || 0;
-}
-
 export function LeadDetailPanel({
   lead,
   mentions = [],
@@ -122,25 +95,29 @@ export function LeadDetailPanel({
   onClose,
   onAfterResult,
   onStartedAction,
-  returnContext,
   activeTab: activeTabProp,
   onTabChange,
   isCollapsed,
   onCollapseToggle,
 }: LeadDetailPanelProps) {
   const { profile, role, user } = useAuth();
-  const { updateLeadDetails } = useDashboardStore();
+  const { updateLeadDetails, claimLead } = useDashboardStore();
   const [internalActiveTab, setInternalActiveTab] = useState<PanelTab>("action");
   const [staffList, setStaffList] = useState<{uid: string, displayName: string, email: string}[]>([]);
   const [loadingStaff, setLoadingStaff] = useState(false);
   const [assigningUid, setAssigningUid] = useState<string | null>(null);
   const [isAssignDropdownOpen, setIsAssignDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [isResultDropdownOpen, setIsResultDropdownOpen] = useState(false);
+  const resultDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsAssignDropdownOpen(false);
+      }
+      if (resultDropdownRef.current && !resultDropdownRef.current.contains(event.target as Node)) {
+        setIsResultDropdownOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -205,11 +182,13 @@ export function LeadDetailPanel({
   const [skipReason, setSkipReason] = useState("");
   const [skipNote, setSkipNote] = useState("");
   const [isSkipping, setIsSkipping] = useState(false);
+  const [isClaiming, setIsClaiming] = useState(false);
   const [skipError, setSkipError] = useState("");
   const [note, setNote] = useState("");
   const [followUpDate, setFollowUpDate] = useState("");
   const [followUpTime, setFollowUpTime] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isSaveSuccess, setIsSaveSuccess] = useState(false);
   const [isOpening, setIsOpening] = useState("");
   const [saveError, setSaveError] = useState("");
   const [isResultSectionHighlighted, setIsResultSectionHighlighted] = useState(false);
@@ -224,29 +203,6 @@ export function LeadDetailPanel({
   const meta = useMemo(
     () => (lead ? getLeadWorkbenchMeta(lead, nowMs) : null),
     [lead, nowMs],
-  );
-
-  const mentionById = useMemo(
-    () => new Map(mentions.map((item) => [item.id, item])),
-    [mentions],
-  );
-
-  const mentionTarget = useMemo(
-    () => (lead ? resolveLeadMentionTarget(lead, mentionById) : null),
-    [lead, mentionById],
-  );
-
-  const returnToken = useMemo(
-    () => (lead ? createLeadReturnToken(lead.id) : ""),
-    [lead],
-  );
-
-  const mentionDetailHref = useMemo(
-    () =>
-      lead && mentionTarget?.canOpenMentionDetail
-        ? appendLeadReturnParams(mentionTarget.href, lead, returnContext, returnToken)
-        : "",
-    [lead, mentionTarget, returnContext, returnToken],
   );
 
   if (!lead || !meta) {
@@ -272,13 +228,10 @@ export function LeadDetailPanel({
     lead.status !== "completed" &&
     lead.status !== "skipped";
   const sourceAction = getLeadSourceAction(lead);
-  const profileSourceHref = sourceAction?.href || mentionDetailHref;
-  const canOpenProfileSource = Boolean(
-    sourceAction ? ownership.canWork : mentionDetailHref,
-  );
+  const profileSourceHref = sourceAction?.href || "";
+  const canOpenProfileSource = Boolean(sourceAction && ownership.canWork);
   const platformMeta = PLATFORM_META[lead.platform];
-  const priorityText =
-    meta.priorityReasons.join(", ") || "Có tín hiệu quan tâm cần kiểm tra.";
+
 
   const getOwnerName = () =>
     profile?.displayName || profile?.email || "Nhân viên xử lý";
@@ -299,23 +252,6 @@ export function LeadDetailPanel({
     window.setTimeout(() => resultSection.focus({ preventScroll: true }), 350);
     setIsResultSectionHighlighted(true);
     window.setTimeout(() => setIsResultSectionHighlighted(false), 1800);
-  };
-
-  const handleOpenMentionDetail = () => {
-    if (!returnToken) return;
-
-    saveLeadReturnContext({
-      token: returnToken,
-      leadId: lead.id,
-      selectedLeadId: returnContext?.selectedLeadId || lead.id,
-      view: returnContext?.view || "priority",
-      page: returnContext?.page || 1,
-      filters: returnContext?.filters || {},
-      panelTab: activeTab,
-      listScrollTop: returnContext?.listScrollTop || 0,
-      panelScrollTop: getPanelScrollTop(),
-      openedAt: new Date().toISOString(),
-    });
   };
 
   const handleSkipLead = async () => {
@@ -381,22 +317,13 @@ export function LeadDetailPanel({
   };
 
   const handleClaim = async () => {
-    if (!canEdit || !profile) return;
+    if (!canEdit || !profile || isClaiming || !ownership.canClaim) return;
 
     try {
+      setIsClaiming(true);
       setSaveError("");
-      const nowIso = new Date().toISOString();
-      const ownerData: Partial<Lead> = {
-        owner_id: profile.uid,
-        owner_name: getOwnerName(),
-        owner_email: profile.email,
-        assigned_at: nowIso,
-        assigned_by: profile.uid,
-        claimed_at: nowIso,
-      };
-
-      await updateLeadDetails(lead.id, ownerData, profile);
-      onStartedAction?.({ ...lead, ...ownerData });
+      const claimData = await claimLead(lead.id, profile);
+      onStartedAction?.({ ...lead, ...claimData });
       showToast("Nhận xử lý lead thành công!", "success");
     } catch (error: any) {
       console.error(error);
@@ -406,6 +333,8 @@ export function LeadDetailPanel({
       );
       setSaveError(message);
       showToast(message, "error");
+    } finally {
+      setIsClaiming(false);
     }
   };
 
@@ -469,11 +398,7 @@ export function LeadDetailPanel({
   const handleProfileOpenSource = () => {
     if (sourceAction) {
       void handleOpenAction(sourceAction, true);
-      return;
     }
-    if (!mentionDetailHref) return;
-    handleOpenMentionDetail();
-    window.location.assign(mentionDetailHref);
   };
 
   const handleSaveResult = async () => {
@@ -528,12 +453,16 @@ export function LeadDetailPanel({
         profile,
       );
 
-      setSelectedResult(null);
-      setNote("");
-      setFollowUpDate("");
-      setFollowUpTime("");
-      onAfterResult?.();
+      setIsSaveSuccess(true);
       showToast("Ghi nhận kết quả thành công!", "success");
+      setTimeout(() => {
+        setIsSaveSuccess(false);
+        setSelectedResult(null);
+        setNote("");
+        setFollowUpDate("");
+        setFollowUpTime("");
+        onAfterResult?.();
+      }, 2000);
     } catch (error: any) {
       console.error(error);
       const message = getLeadOperationErrorMessage(
@@ -550,6 +479,7 @@ export function LeadDetailPanel({
   const tabs: Array<{ id: PanelTab; label: string }> = [
     { id: "action", label: "Xử lý" },
     { id: "profile", label: "Hồ sơ" },
+    { id: "interactions", label: "Tương tác" },
     { id: "history", label: "Lịch sử" },
   ];
 
@@ -573,21 +503,41 @@ export function LeadDetailPanel({
                   {lead.intent}
                 </span>
               </div>
-              <p className="truncate text-xs text-[var(--color-text-secondary)]">
-                {platformMeta?.label || lead.platform} · {formatLeadSla(meta)}
+              <p className="truncate text-xs text-[var(--color-text-secondary)] mt-0.5">
+                Người xử lý: {ownership.ownerName}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2 shrink-0">
+            {sourceAction ? (
+              <button
+                type="button"
+                disabled={!ownership.canWork || Boolean(isOpening)}
+                onClick={() => handleOpenAction(sourceAction, true)}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[13px] font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <span className="material-symbols-outlined text-[20px]">open_in_new</span>
+                <span className="hidden sm:inline">{isOpening === sourceAction.label ? "Đang mở..." : "Mở nguồn"}</span>
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={handleScrollToResult}
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 py-1.5 text-[13px] font-semibold text-white shadow-md shadow-[var(--color-brand)]/20 transition hover:shadow-[var(--color-brand)]/40 hover:opacity-90"
+            >
+              <ClipboardCheck size={18} aria-hidden="true" />
+              <span className="hidden sm:inline">Ghi nhận kết quả</span>
+            </button>
+            <div className="h-6 w-px bg-gray-200 mx-1.5" />
             {onCollapseToggle && (
               <button
                 type="button"
                 onClick={onCollapseToggle}
-                className="rounded-full p-1 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-raised)]"
+                className="rounded-full p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
                 title="Thu gọn panel"
                 aria-label="Thu gọn panel"
               >
-                <span className="material-symbols-outlined text-[18px]">
+                <span className="material-symbols-outlined text-[20px]">
                   dock_to_right
                 </span>
               </button>
@@ -595,25 +545,25 @@ export function LeadDetailPanel({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full p-1 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-raised)]"
+              className="rounded-full p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
               aria-label="Đóng chi tiết lead"
             >
-              <span className="material-symbols-outlined">close</span>
+              <span className="material-symbols-outlined text-[20px]">close</span>
             </button>
           </div>
         </div>
 
-        <div className="mt-3 grid grid-cols-3 gap-1">
+        <div className="mt-4 grid grid-cols-4 gap-1 p-1 rounded-full bg-gray-50/50 border border-gray-100">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               type="button"
               data-tour={tab.id === "action" ? "lead-detail-tab-action" : undefined}
               onClick={() => handleTabChange(tab.id)}
-              className={`w-full rounded-lg px-2 py-1.5 text-xs font-semibold transition ${
+              className={`w-full rounded-full px-2 py-1.5 text-xs font-semibold transition-all duration-300 ${
                 activeTab === tab.id
-                  ? "bg-[var(--color-brand-subtle)] text-[var(--color-brand)]"
-                  : "text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)]"
+                  ? "bg-[var(--color-brand-subtle)] text-[var(--color-brand)] shadow-sm"
+                  : "text-gray-500 hover:bg-white hover:text-gray-700"
               }`}
             >
               {tab.label}
@@ -628,213 +578,140 @@ export function LeadDetailPanel({
       >
         {activeTab === "action" && (
           <div className="space-y-2.5">
-            <div className={workbenchView === "unassigned" || workbenchView === "active" ? "grid gap-2.5 md:grid-cols-[0.96fr_1.04fr]" : "block"}>
-              <section data-tour="lead-detail-owner" className="rounded-lg border border-[var(--color-border)] p-3">
-                <p className="text-xs font-bold uppercase text-[var(--color-text-muted)]">Người phụ trách</p>
-                <div className="mt-2 flex items-center justify-between gap-3">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-sm font-black text-[var(--color-brand)]">
-                      {ownership.status === "unassigned"
-                        ? "--"
-                        : ownership.ownerName.slice(0, 2).toUpperCase()}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-bold text-[var(--color-text-primary)]">{ownership.ownerName}</p>
-                      <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
-                        Đội xử lý tiềm năng
-                      </p>
-                    </div>
-                  </div>
-                  <span className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-bold ${
-                    ownership.status === "assigned_to_me"
-                      ? "border-[var(--color-success)]/30 bg-[var(--color-success-subtle)] text-[var(--color-success)]"
-                      : ownership.status === "unassigned"
-                        ? "border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] text-[var(--color-warning)]"
-                        : "border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]"
-                  }`}>{ownership.label}</span>
-                </div>
-              </section>
 
-              {workbenchView === "unassigned" && (
-                <section className="flex flex-col justify-between rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)]/20 p-3">
-                  <div className="flex items-start gap-2.5">
-                    <Sparkles className="mt-0.5 shrink-0 text-[var(--color-brand)]" size={19} aria-hidden="true" />
-                    <div>
-                      <p className="text-sm font-bold text-[var(--color-brand)]">Hành động chính</p>
-                      <p className="mt-0.5 text-xs leading-5 text-[var(--color-text-secondary)]">Nhận item để bắt đầu xử lý nghiệp vụ.</p>
-                    </div>
-                  </div>
-                  <div className="mt-3 flex gap-2">
-                    {role === "brand_manager" && (
-                      <div className="flex-1 relative min-w-0" ref={dropdownRef}>
-                        <button 
-                          type="button"
-                          onClick={() => setIsAssignDropdownOpen(!isAssignDropdownOpen)}
-                          disabled={loadingStaff || Boolean(assigningUid) || !canClaimLead}
-                          className="flex w-full items-center justify-between gap-2 rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="material-symbols-outlined shrink-0 text-[18px]">person_add</span>
-                            <span className="truncate">
-                              {loadingStaff ? "Đang tải..." : assigningUid ? "Đang giao..." : "Giao việc cho nhân viên"}
-                            </span>
-                          </div>
-                          <span className="material-symbols-outlined shrink-0 text-[18px]">
-                            {isAssignDropdownOpen ? "expand_less" : "expand_more"}
-                          </span>
-                        </button>
-                        
-                        {isAssignDropdownOpen && (
-                          <div className="absolute left-0 top-full z-50 mt-1.5 w-full min-w-[200px] max-h-[240px] overflow-y-auto rounded-xl border border-[var(--color-border)] bg-white p-1.5 shadow-xl animate-in fade-in slide-in-from-top-2">
-                            {staffList.length === 0 ? (
-                              <div className="p-3 text-center text-xs text-[var(--color-text-secondary)]">Không có nhân viên phù hợp</div>
-                            ) : (
-                              staffList.map((s) => (
-                                <button
-                                  key={s.uid}
-                                  onClick={() => {
-                                    setIsAssignDropdownOpen(false);
-                                    handleAssignTo(s.uid);
-                                  }}
-                                  className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-[var(--color-text-primary)] transition hover:bg-[var(--color-bg-surface-raised)]"
-                                >
-                                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-[11px] font-bold text-[var(--color-brand)]">
-                                    {(s.displayName || s.email || "?").charAt(0).toUpperCase()}
-                                  </div>
-                                  <span className="truncate font-medium">{s.displayName || s.email}</span>
-                                </button>
-                              ))
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    <button type="button" data-tour="lead-detail-claim-button" onClick={handleClaim} disabled={!canClaimLead || !ownership.canClaim} className={
-                      role === "brand_manager"
-                        ? "inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-white px-3 py-2 text-[13px] font-semibold text-[var(--color-text-secondary)] shadow-sm transition hover:border-gray-300 hover:text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
-                        : "inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-                    }>
-                      {role !== "brand_manager" && <UserPlus size={18} aria-hidden="true" />}
-                      <span>Nhận xử lý</span>
-                    </button>
-                  </div>
-                </section>
-              )}
-
-              {workbenchView === "active" && (
-                <section className="flex flex-col justify-between rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)]/20 p-3">
-                  <div className="flex items-start gap-2.5">
-                    <Sparkles className="mt-0.5 shrink-0 text-[var(--color-brand)]" size={19} aria-hidden="true" />
-                    <div>
-                      <p className="text-sm font-bold text-[var(--color-brand)]">Hành động chính</p>
-                      <p className="mt-0.5 text-xs leading-5 text-[var(--color-text-secondary)]">Hoàn tất bước xử lý bằng cách ghi nhận kết quả.</p>
-                    </div>
-                  </div>
-                  <button type="button" onClick={handleScrollToResult} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold text-white transition hover:bg-[var(--color-brand-hover)]">
-                    <ClipboardCheck size={18} aria-hidden="true" />
-                    Ghi nhận kết quả
-                  </button>
-                </section>
-              )}
-            </div>
-
-            <section className="rounded-lg border border-amber-300 bg-amber-50/70 p-3 dark:border-amber-800 dark:bg-amber-950/20">
-              <div className="flex items-start gap-2.5">
-                <span className="material-symbols-outlined text-xl text-amber-500">star</span>
-                <div className="min-w-0">
-                  <p className="text-sm font-bold text-[var(--color-text-primary)]">Lý do ưu tiên</p>
-                  <p className="mt-1 text-sm leading-6 text-[var(--color-text-secondary)]">{priorityText}</p>
-                </div>
-              </div>
-            </section>
 
             <LeadContentContext lead={lead} mentions={mentions} />
 
-            <section data-tour="lead-detail-source-actions" className="rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)]/20 p-3">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-xl text-[var(--color-brand)]">call</span>
-                <div>
-                  <p className="text-sm font-bold text-[var(--color-text-primary)]">Cách thức liên hệ / xử lý</p>
-                  <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">Mở đúng nguồn để xử lý, hoặc xem thêm bối cảnh của khách hàng.</p>
-                </div>
-              </div>
-              <div className="mt-3 grid grid-cols-3 gap-2">
-                {sourceAction ? (
-                  <button type="button" disabled={!ownership.canWork || Boolean(isOpening)} onClick={() => handleOpenAction(sourceAction, true)} className="inline-flex min-w-0 items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-2 py-2.5 text-sm font-bold text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50">
-                    <span className="material-symbols-outlined shrink-0 text-lg">open_in_new</span>
-                    <span className="truncate">{isOpening === sourceAction.label ? "Đang mở..." : "Mở nguồn"}</span>
-                  </button>
-                ) : mentionDetailHref ? (
-                  <Link href={mentionDetailHref} onClick={handleOpenMentionDetail} className="inline-flex min-w-0 items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-2 py-2.5 text-sm font-bold text-white transition hover:bg-[var(--color-brand-hover)]">
-                    <span className="material-symbols-outlined shrink-0 text-lg">open_in_new</span>
-                    <span className="truncate">Mở nguồn</span>
-                  </Link>
-                ) : (
-                  <button type="button" disabled className="inline-flex min-w-0 items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-2 py-2.5 text-sm font-bold text-white opacity-40">
-                    <span className="material-symbols-outlined shrink-0 text-lg">open_in_new</span>
-                    <span className="truncate">Mở nguồn</span>
-                  </button>
-                )}
-                <button type="button" onClick={() => handleTabChange("profile")} className="inline-flex min-w-0 items-center justify-center gap-2 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-bg-surface)] px-2 py-2.5 text-sm font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-brand-subtle)]">
-                  <span className="material-symbols-outlined shrink-0 text-lg">person</span>
-                  <span className="truncate">Xem hồ sơ</span>
-                </button>
-                <button type="button" onClick={() => handleTabChange("history")} className="inline-flex min-w-0 items-center justify-center gap-2 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-bg-surface)] px-2 py-2.5 text-sm font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-brand-subtle)]">
-                  <span className="material-symbols-outlined shrink-0 text-lg">history</span>
-                  <span className="truncate">Xem lịch sử</span>
-                </button>
-              </div>
-              {!ownership.canWork && (
-                <p className="mt-2 text-xs text-[var(--color-text-secondary)]">Hãy nhận xử lý item trước khi mở nguồn.</p>
-              )}
-            </section>
+
 
             <section
               ref={resultSectionRef}
               tabIndex={-1}
               data-tour="lead-detail-result-actions"
-              className={`scroll-mt-4 rounded-lg border p-3 outline-none transition-shadow duration-300 ${
+              className={`scroll-mt-4 rounded-xl border p-5 outline-none transition-shadow duration-300 shadow-sm ${
                 isResultSectionHighlighted
-                  ? "border-[var(--color-brand)] ring-2 ring-[var(--color-brand)]/25"
-                  : "border-[var(--color-border)]"
+                  ? "border-[var(--color-brand)] ring-2 ring-[var(--color-brand)]/25 bg-white"
+                  : "border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)]/30"
               }`}
             >
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <p className="text-sm font-bold text-[var(--color-text-primary)]">Ghi nhận kết quả nhanh</p>
-                  <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">Chọn kết quả sau khi đã xử lý yêu cầu của khách hàng.</p>
-                </div>
-                {meta.needsResultCapture && <span className="rounded-full bg-[var(--color-brand-subtle)] px-2 py-1 text-[10px] font-bold uppercase text-[var(--color-brand)]">Chờ kết quả</span>}
+              <div className="mb-4 flex items-center gap-3">
+                <h4 className="text-base font-bold text-[var(--color-text-primary)]">Ghi nhận kết quả nhanh</h4>
+                {meta.needsResultCapture && <span className="rounded-full bg-[var(--color-brand-subtle)] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--color-brand)]">Chờ kết quả</span>}
               </div>
-              {!canRecordResult && <p className="mt-2 rounded-lg bg-[var(--color-bg-surface-raised)] p-2.5 text-xs text-[var(--color-text-secondary)]">Hãy nhận xử lý và mở nguồn trước khi ghi nhận kết quả.</p>}
-              <div className="mt-3 grid grid-cols-2 gap-2 xl:grid-cols-5">
-                {RESULT_OPTIONS.map((option) => (
-                  <button key={option.id} type="button" disabled={!canRecordResult} onClick={() => {
-                    setSelectedResult(option.id);
-                    if (option.id === "follow_up" && !followUpDate) {
-                      const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
-                      setFollowUpDate(toDateInputValue(tomorrow.toISOString()));
-                      setFollowUpTime(toTimeInputValue(tomorrow.toISOString()) || "09:00");
-                    }
-                  }} className={`inline-flex min-w-0 items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-xs font-semibold transition ${
-                    selectedResult === option.id
-                      ? "border-[var(--color-brand)] bg-[var(--color-brand-subtle)] text-[var(--color-brand)]"
-                      : "border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)] disabled:cursor-not-allowed disabled:opacity-50"
-                  }`}>
-                    <span className="material-symbols-outlined shrink-0 text-base">{option.icon}</span>
-                    <span className="truncate">{option.label}</span>
+              {!canRecordResult && <p className="mb-4 rounded-lg bg-white p-3 text-xs text-[var(--color-text-secondary)] border border-[var(--color-border)] shadow-sm">Hãy nhận xử lý và mở nguồn trước khi ghi nhận kết quả.</p>}
+              
+              <div className="grid gap-4 md:grid-cols-[2fr_3fr] items-start">
+                <div className="relative min-w-0" ref={resultDropdownRef}>
+                  <label className="mb-1.5 block text-xs font-bold text-[var(--color-text-secondary)]">Kết quả xử lý</label>
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      if (!canRecordResult) {
+                        showToast("Vui lòng nhận xử lý và mở nguồn trước khi ghi nhận kết quả.", "error");
+                        return;
+                      }
+                      setIsResultDropdownOpen(!isResultDropdownOpen);
+                    }}
+                    className={`flex w-full items-center justify-between gap-2 rounded-lg border border-[var(--color-border)] bg-white px-3 py-2.5 text-sm text-[var(--color-text-primary)] shadow-sm outline-none transition ${
+                      canRecordResult 
+                        ? "hover:border-[var(--color-brand)] focus:border-[var(--color-brand)]"
+                        : "cursor-not-allowed bg-gray-50 opacity-80"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      {selectedResult ? (
+                        <>
+                          <span className="material-symbols-outlined shrink-0 text-[18px] text-[var(--color-brand)]">
+                            {RESULT_OPTIONS.find(o => o.id === selectedResult)?.icon}
+                          </span>
+                          <span className="truncate font-semibold">{RESULT_OPTIONS.find(o => o.id === selectedResult)?.label}</span>
+                        </>
+                      ) : (
+                        <span className="text-gray-400">Chọn kết quả xử lý</span>
+                      )}
+                    </div>
+                    <span className="material-symbols-outlined shrink-0 text-[20px] text-gray-400">
+                      {isResultDropdownOpen ? "expand_less" : "expand_more"}
+                    </span>
                   </button>
-                ))}
-              </div>
-              {selectedResult === "follow_up" && (
-                <div data-tour="lead-detail-followup" className="mt-3 grid grid-cols-2 gap-2">
-                  <label className="text-xs font-semibold text-[var(--color-text-secondary)]">Ngày follow-up<input type="date" value={followUpDate} onChange={(event) => setFollowUpDate(event.target.value)} className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]" /></label>
-                  <label className="text-xs font-semibold text-[var(--color-text-secondary)]">Giờ follow-up<input type="time" value={followUpTime} onChange={(event) => setFollowUpTime(event.target.value)} className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]" /></label>
+                  
+                  {isResultDropdownOpen && (
+                    <div className="absolute left-0 top-full z-50 mt-1.5 w-full overflow-hidden rounded-xl border border-[var(--color-border)] bg-white shadow-xl animate-in fade-in slide-in-from-top-2">
+                      <div className="max-h-[300px] overflow-y-auto p-1">
+                        {RESULT_OPTIONS.map((option) => (
+                          <button
+                            key={option.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedResult(option.id);
+                              setIsResultDropdownOpen(false);
+                              if (option.id === "follow_up" && !followUpDate) {
+                                const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+                                setFollowUpDate(toDateInputValue(tomorrow.toISOString()));
+                                setFollowUpTime(toTimeInputValue(tomorrow.toISOString()) || "09:00");
+                              }
+                            }}
+                            className={`flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition ${
+                              selectedResult === option.id 
+                                ? "bg-[var(--color-brand-subtle)]" 
+                                : "hover:bg-[var(--color-bg-surface-raised)]"
+                            }`}
+                          >
+                            <span className={`material-symbols-outlined mt-0.5 shrink-0 text-[20px] ${
+                              selectedResult === option.id ? "text-[var(--color-brand)]" : "text-gray-500"
+                            }`}>
+                              {option.icon}
+                            </span>
+                            <div>
+                              <p className={`text-sm font-semibold ${
+                                selectedResult === option.id ? "text-[var(--color-brand)]" : "text-[var(--color-text-primary)]"
+                              }`}>
+                                {option.label}
+                              </p>
+                              <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">{option.description}</p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {selectedResult === "follow_up" && (
+                    <div data-tour="lead-detail-followup" className="mt-3 grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-[var(--color-text-secondary)]">Ngày follow-up</label>
+                        <input type="date" value={followUpDate} onChange={(event) => setFollowUpDate(event.target.value)} className="w-full rounded-lg border border-[var(--color-border)] bg-white px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)] shadow-sm" />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-[var(--color-text-secondary)]">Giờ follow-up</label>
+                        <input type="time" value={followUpTime} onChange={(event) => setFollowUpTime(event.target.value)} className="w-full rounded-lg border border-[var(--color-border)] bg-white px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)] shadow-sm" />
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-              <textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Ghi chú nhanh..." className="mt-3 min-h-[72px] w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-3 text-sm text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]" />
-              {saveError && <p className="mt-2 text-xs font-semibold text-[var(--color-error)]">{saveError}</p>}
-              <button type="button" disabled={!selectedResult || isSaving || !canRecordResult} onClick={handleSaveResult} className="mt-3 w-full rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50">{isSaving ? "Đang lưu..." : "Lưu kết quả"}</button>
+                
+                <div className="flex flex-col">
+                  <label className="mb-1.5 block text-xs font-bold text-[var(--color-text-secondary)]">Ghi chú</label>
+                  <textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Nhập kết quả trao đổi với khách hàng...&#10;Ví dụ: khách hẹn liên hệ lại vào tuần sau." className="flex-1 min-h-[120px] w-full rounded-lg border border-[var(--color-border)] bg-white p-3.5 text-sm leading-relaxed text-[var(--color-text-primary)] shadow-sm outline-none transition focus:border-[var(--color-brand)] resize-y" />
+                </div>
+              </div>
+              
+              {saveError && <p className="mt-3 text-xs font-semibold text-[var(--color-error)]">{saveError}</p>}
+              
+              <div className="mt-5 flex justify-end">
+                <button type="button" disabled={!selectedResult || isSaving || isSaveSuccess || !canRecordResult} onClick={handleSaveResult} className={`inline-flex items-center gap-2 rounded-xl px-8 py-3 text-sm font-bold text-white shadow-md transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-50 ${isSaveSuccess ? "bg-emerald-500 shadow-emerald-500/20" : "bg-[var(--color-brand)] hover:shadow-[var(--color-brand)]/40 hover:scale-[1.02]"}`}>
+                  {isSaveSuccess ? (
+                    <>
+                      <span className="material-symbols-outlined text-[20px] animate-bounce">check_circle</span>
+                      <span>Lưu thành công!</span>
+                    </>
+                  ) : (
+                    <>
+                      <ClipboardCheck size={18} />
+                      <span>{isSaving ? "Đang lưu..." : "Lưu kết quả"}</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </section>
 
             <section className="rounded-lg border border-red-200 bg-red-50/40 p-3 dark:border-red-900/40 dark:bg-red-950/10">
@@ -870,11 +747,14 @@ export function LeadDetailPanel({
           />
         )}
 
+        {activeTab === "interactions" && (
+          <CustomerInteractionHistoryPanel sourceType="lead" sourceId={lead.id} />
+        )}
+
         {activeTab === "history" && (
           <LeadHistoryTab
             lead={lead}
             meta={meta}
-            platformLabel={platformMeta?.label || lead.platform}
             slaLabel={formatLeadSla(meta)}
           />
         )}

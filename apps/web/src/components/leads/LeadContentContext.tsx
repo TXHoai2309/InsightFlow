@@ -76,9 +76,9 @@ function ContentNodeCard({
   return (
     <article
       id={`lead-context-${mention.id}`}
-      className={`rounded-lg border p-3 transition-colors ${
+      className={`rounded-xl border p-3.5 transition-all duration-300 ${
         isTarget
-          ? "border-[var(--color-brand)] bg-[var(--color-brand-subtle)]/70 ring-1 ring-[var(--color-brand)]/15"
+          ? "border-[var(--color-brand)] bg-white ring-2 ring-[var(--color-brand)]/20 shadow-md shadow-[var(--color-brand)]/5"
           : "border-[var(--color-border)] bg-[var(--color-bg-surface)]"
       }`}
     >
@@ -88,20 +88,20 @@ function ContentNodeCard({
             {getContentTypeLabel(mention, level)}
           </span>
           {isTarget && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-brand)] px-2 py-0.5 text-[10px] font-bold uppercase text-white">
-              <span className="material-symbols-outlined text-[12px]">my_location</span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-brand)] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm">
+              <span className="material-symbols-outlined text-[12px]">electric_bolt</span>
               Đang cần xử lý
             </span>
           )}
         </div>
-        <time className="shrink-0 text-[10px] text-[var(--color-text-muted)]">
+        <time className="shrink-0 text-[10px] text-gray-400 font-medium">
           {formatContentTime(mention.posted_at || mention.created_at)}
         </time>
       </div>
-      <p className="mt-2 text-xs font-bold text-[var(--color-text-secondary)]">
+      <p className="mt-2.5 text-xs font-bold text-[var(--color-text-secondary)]">
         {mention.author || "Khách hàng"}
       </p>
-      <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-[var(--color-text-primary)]">
+      <p className="mt-1.5 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-[var(--color-text-primary)]">
         {content || "Không có nội dung hiển thị."}
       </p>
     </article>
@@ -231,11 +231,11 @@ export function LeadContentContext({ lead, mentions }: LeadContentContextProps) 
     target.content_type !== "post" && (!postContent || context.orphanedCount > 0);
 
   return (
-    <section className="rounded-lg border border-[var(--color-border)] p-3">
-      <div className="flex items-center justify-between gap-3">
+    <section className="rounded-xl border border-[var(--color-brand-border)] bg-white p-4 shadow-lg shadow-[var(--color-brand)]/10">
+      <div className="flex items-center justify-between gap-3 mb-1">
         <div className="flex items-center gap-2">
-          <span className="material-symbols-outlined text-xl text-[var(--color-brand)]">account_tree</span>
-          <p className="text-sm font-bold text-[var(--color-text-primary)]">Nội dung cần xử lý</p>
+          <span className="material-symbols-outlined text-[22px] text-[var(--color-brand)]">electric_bolt</span>
+          <h3 className="text-base font-bold text-[var(--color-text-primary)]">Nội dung cần xử lý</h3>
         </div>
         {isLoading && (
           <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[var(--color-text-muted)]">
@@ -246,7 +246,7 @@ export function LeadContentContext({ lead, mentions }: LeadContentContextProps) 
       </div>
 
       {(context.post || postContent) && (
-        <article className="mt-3 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)]/25 p-3">
+        <article className="mt-3 rounded-xl border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] p-3.5">
           <div className="flex items-start justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2">
               <PlatformLogo platform={lead.platform} size="xs" />
@@ -254,21 +254,22 @@ export function LeadContentContext({ lead, mentions }: LeadContentContextProps) 
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="text-xs font-bold uppercase text-[var(--color-brand)]">Bài viết gốc</p>
                   {target.content_type === "post" && (
-                    <span className="rounded-full bg-[var(--color-brand)] px-2 py-0.5 text-[9px] font-bold uppercase text-white">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-brand)] px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white shadow-sm">
+                      <span className="material-symbols-outlined text-[10px]">electric_bolt</span>
                       Đang cần xử lý
                     </span>
                   )}
                 </div>
-                <p className="truncate text-[11px] text-[var(--color-text-muted)]">
+                <p className="truncate text-[11px] text-gray-500 mt-0.5">
                   {context.post?.author || "Không rõ tác giả"} · {platformLabel}
                 </p>
               </div>
             </div>
-            <time className="shrink-0 text-[10px] text-[var(--color-text-muted)]">
+            <time className="shrink-0 text-[10px] text-gray-400 font-medium">
               {formatContentTime(context.post?.posted_at || context.post?.created_at)}
             </time>
           </div>
-          <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-[var(--color-text-primary)]">
+          <p className="mt-2.5 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-[var(--color-text-primary)]">
             {postContent || "Không có nội dung bài viết gốc."}
           </p>
         </article>
@@ -305,10 +306,12 @@ export function LeadContentContext({ lead, mentions }: LeadContentContextProps) 
       )}
 
       {(loadError || hasIncompleteContext) && !isLoading && (
-        <p className="mt-2 flex items-start gap-1.5 text-[11px] leading-5 text-amber-700 dark:text-amber-300">
-          <span className="material-symbols-outlined mt-0.5 text-sm">warning</span>
-          {loadError || "Một phần quan hệ cha không còn trong dữ liệu; nội dung cần xử lý vẫn được giữ nguyên."}
-        </p>
+        <div className="mt-4 flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-800">
+          <span className="material-symbols-outlined shrink-0 text-xl text-amber-500">warning</span>
+          <p className="text-xs leading-5">
+            {loadError || "Một phần ngữ cảnh không còn trong dữ liệu; nội dung cần xử lý vẫn được giữ nguyên."}
+          </p>
+        </div>
       )}
     </section>
   );
