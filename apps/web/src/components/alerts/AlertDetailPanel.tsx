@@ -16,8 +16,9 @@ import { PlatformLogo } from "@/components/platform/PlatformLogo";
 import { getAlertWorkflowStatus } from "@/lib/alertWorkflow";
 import type { AlertData } from "@/stores/alert.store";
 import { AlertContactWorkflow } from "./AlertContactWorkflow";
+import { CustomerInteractionHistoryPanel } from "@/components/customer-interactions/CustomerInteractionHistoryPanel";
 
-export type AlertDetailPanelTab = "action" | "profile" | "history";
+export type AlertDetailPanelTab = "action" | "profile" | "interactions" | "history";
 
 interface AlertDetailPanelProps {
   alert: AlertData;
@@ -245,6 +246,7 @@ export function AlertDetailPanel({
   const tabs: Array<{ id: AlertDetailPanelTab; label: string }> = [
     { id: "action", label: "Xử lý" },
     { id: "profile", label: "Hồ sơ" },
+    { id: "interactions", label: "Tương tác" },
     { id: "history", label: "Lịch sử" },
   ];
 
@@ -269,7 +271,7 @@ export function AlertDetailPanel({
             <PanelRightClose size={18} aria-hidden="true" />
           </button>
         </div>
-        <div className="mt-3 grid grid-cols-3 gap-1">
+        <div className="mt-3 grid grid-cols-4 gap-1">
           {tabs.map((tab) => (
             <button key={tab.id} type="button" onClick={() => onTabChange(tab.id)} className={`w-full rounded-lg px-2 py-1.5 text-xs font-semibold transition ${activeTab === tab.id ? "bg-[var(--color-brand-subtle)] text-[var(--color-brand)]" : "text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)]"}`}>{tab.label}</button>
           ))}
@@ -330,6 +332,10 @@ export function AlertDetailPanel({
               <InfoSection title="Thông tin xử lý" rows={[["Người phụ trách", ownerName], ["Trạng thái", getStatusLabel(alert)], ["Mức độ", String(alert.severity || "Không rõ").toUpperCase()], ["Nghiệp vụ", "Khủng hoảng"]]} />
             </div>
           </div>
+        )}
+
+        {activeTab === "interactions" && (
+          <CustomerInteractionHistoryPanel sourceType="alert" sourceId={alert.id} />
         )}
 
         {activeTab === "history" && (

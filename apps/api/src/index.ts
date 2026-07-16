@@ -5,6 +5,7 @@ import authRoutes from "./routes/auth";
 import adminRoutes from "./routes/admin";
 import staffRoutes from "./routes/staff";
 import templateRoutes from "./routes/templates";
+import customerInteractionRoutes from "./routes/customer_interactions";
 
 const fastify = Fastify({
   logger: true,
@@ -34,6 +35,9 @@ fastify.register(staffRoutes, { prefix: "/api/staff" });
 
 // Register Template routes
 fastify.register(templateRoutes, { prefix: "/api/templates" });
+
+// Register customer interaction history routes
+fastify.register(customerInteractionRoutes, { prefix: "/api/customer-interactions" });
 
 // Health check endpoint
 fastify.get("/health", async () => {
