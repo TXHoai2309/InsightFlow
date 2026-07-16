@@ -1,11 +1,24 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { CheckCircle2, Clock, Mail, Hash, Calendar } from "lucide-react";
+import { ArrowRight, CheckCircle2, Clock, Mail, Hash, Calendar, MessageSquareText } from "lucide-react";
 import { motion } from "framer-motion";
 
-export function SuccessStep() {
-  const [reqId] = useState(`REQ-${Math.floor(Math.random() * 90000) + 10000}`);
+interface SuccessStepProps {
+  requestId: string;
+  email: string;
+  onFillConsultation?: () => void;
+  consultationCompleted?: boolean;
+  consultationEmailSent?: boolean | null;
+}
+
+export function SuccessStep({
+  requestId,
+  email,
+  onFillConsultation,
+  consultationCompleted = false,
+  consultationEmailSent = null,
+}: SuccessStepProps) {
   const [timeStr, setTimeStr] = useState("");
 
   useEffect(() => {
@@ -33,10 +46,14 @@ export function SuccessStep() {
           <CheckCircle2 className="w-10 h-10 text-white" />
         </motion.div>
         <h3 className="text-[32px] md:text-[40px] font-extrabold text-[#0F172A] tracking-tight mb-4 text-center">
-          Yêu cầu đã được gửi thành công!
+          {consultationCompleted ? "Thông tin tư vấn đã được bổ sung!" : "Yêu cầu đã được gửi thành công!"}
         </h3>
         <p className="text-[#64748B] text-[16px] max-w-[650px] text-center leading-relaxed">
-          Đội ngũ InsightFlow đang kiểm tra thông tin xác thực. Tài khoản của doanh nghiệp sẽ được cấu hình và kích hoạt trong vòng <span className="font-bold text-[#0F172A]">1–2 giờ</span> tới.
+          {consultationCompleted
+            ? consultationEmailSent
+              ? <>Đội ngũ InsightFlow đã nhận nhu cầu tư vấn. Email xác nhận đã được gửi tới <span className="font-bold text-[#0F172A]">{email}</span>; vui lòng chờ phản hồi.</>
+              : "Đội ngũ InsightFlow đã nhận nhu cầu tư vấn. Yêu cầu đã được lưu, nhưng EmailJS chưa gửi được email xác nhận; đội ngũ sẽ vẫn tiếp tục xử lý."
+            : <>Đội ngũ InsightFlow đang kiểm tra thông tin xác thực. Tài khoản của doanh nghiệp sẽ được cấu hình và kích hoạt trong vòng <span className="font-bold text-[#0F172A]">1–2 giờ</span> tới.</>}
         </p>
       </div>
 
@@ -47,7 +64,7 @@ export function SuccessStep() {
           <div className="flex flex-col gap-6">
             <div className="flex justify-between items-center pb-4 border-b border-[#E2E8F0]">
               <span className="text-[#64748B] text-[15px] font-medium flex items-center gap-2"><Hash className="w-4 h-4"/> Mã yêu cầu</span>
-              <span className="font-bold text-[16px] text-[#0F172A]">{reqId}</span>
+              <span className="max-w-[220px] break-all text-right font-bold text-[14px] text-[#0F172A]">{requestId}</span>
             </div>
             <div className="flex justify-between items-center pb-4 border-b border-[#E2E8F0]">
               <span className="text-[#64748B] text-[15px] font-medium flex items-center gap-2"><Calendar className="w-4 h-4"/> Thời gian gửi</span>
@@ -55,7 +72,7 @@ export function SuccessStep() {
             </div>
             <div className="flex justify-between items-center pb-4 border-b border-[#E2E8F0]">
               <span className="text-[#64748B] text-[15px] font-medium flex items-center gap-2"><Mail className="w-4 h-4"/> Email thông báo</span>
-              <span className="font-bold text-[16px] text-[#0F172A]">contact@company.vn</span>
+              <span className="max-w-[220px] break-all text-right font-bold text-[14px] text-[#0F172A]">{email}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-[#64748B] text-[15px] font-medium flex items-center gap-2"><Clock className="w-4 h-4"/> Trạng thái</span>
@@ -116,6 +133,24 @@ export function SuccessStep() {
           </div>
         </div>
       </div>
+
+      {!consultationCompleted && onFillConsultation && (
+        <div className="relative z-10 mt-8 flex flex-col items-center rounded-[20px] border border-[#C7D2FE] bg-[#EEF2FF] p-5 text-center sm:flex-row sm:justify-between sm:text-left">
+          <div>
+            <p className="flex items-center justify-center gap-2 text-[15px] font-extrabold text-[#3730A3] sm:justify-start">
+              <MessageSquareText className="h-5 w-5" /> Bạn cần chuyên viên hỗ trợ thêm?
+            </p>
+            <p className="mt-1 text-[13px] leading-5 text-[#4F46E5]">Bổ sung nhu cầu chính và ghi chú để nhận tư vấn sát với bài toán doanh nghiệp.</p>
+          </div>
+          <button
+            type="button"
+            onClick={onFillConsultation}
+            className="mt-4 inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-[14px] bg-[#6D5EF6] px-6 text-[14px] font-bold text-white shadow-[0_10px_22px_rgba(109,94,246,0.22)] transition hover:-translate-y-0.5 hover:bg-[#5B4DF5] sm:mt-0 sm:ml-5"
+          >
+            Điền thêm form tư vấn <ArrowRight className="h-4 w-4" />
+          </button>
+        </div>
+      )}
     </motion.div>
   );
 }

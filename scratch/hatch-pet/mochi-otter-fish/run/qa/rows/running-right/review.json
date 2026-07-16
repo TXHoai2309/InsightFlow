@@ -1,0 +1,142 @@
+{
+  "ok": true,
+  "frames_root": "D:\\baitap\\InsightFlow\\InsightFlow\\scratch\\hatch-pet\\mochi-otter-fish\\run\\qa\\rows\\running-right\\frames",
+  "states": [
+    "running-right"
+  ],
+  "errors": [],
+  "warnings": [],
+  "rows": [
+    {
+      "state": "running-right",
+      "expected_frames": 8,
+      "actual_frames": 8,
+      "extraction_method": "components",
+      "ok": true,
+      "errors": [],
+      "warnings": [],
+      "frames": [
+        {
+          "index": 0,
+          "file": "D:\\baitap\\InsightFlow\\InsightFlow\\scratch\\hatch-pet\\mochi-otter-fish\\run\\qa\\rows\\running-right\\frames\\running-right\\00.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 21303,
+          "bbox": [
+            5,
+            7,
+            187,
+            200
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 285
+        },
+        {
+          "index": 1,
+          "file": "D:\\baitap\\InsightFlow\\InsightFlow\\scratch\\hatch-pet\\mochi-otter-fish\\run\\qa\\rows\\running-right\\frames\\running-right\\01.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 19251,
+          "bbox": [
+            5,
+            7,
+            187,
+            200
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 216
+        },
+        {
+          "index": 2,
+          "file": "D:\\baitap\\InsightFlow\\InsightFlow\\scratch\\hatch-pet\\mochi-otter-fish\\run\\qa\\rows\\running-right\\frames\\running-right\\02.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 19793,
+          "bbox": [
+            5,
+            10,
+            187,
+            197
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 270
+        },
+        {
+          "index": 3,
+          "file": "D:\\baitap\\InsightFlow\\InsightFlow\\scratch\\hatch-pet\\mochi-otter-fish\\run\\qa\\rows\\running-right\\frames\\running-right\\03.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 19079,
+          "bbox": [
+            5,
+            13,
+            187,
+            194
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 224
+        },
+        {
+          "index": 4,
+          "file": "D:\\baitap\\InsightFlow\\InsightFlow\\scratch\\hatch-pet\\mochi-otter-fish\\run\\qa\\rows\\running-right\\frames\\running-right\\04.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 18588,
+          "bbox": [
+            5,
+            14,
+            187,
+            193
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 224
+        },
+        {
+          "index": 5,
+          "file": "D:\\baitap\\InsightFlow\\InsightFlow\\scratch\\hatch-pet\\mochi-otter-fish\\run\\qa\\rows\\running-right\\frames\\running-right\\05.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 19566,
+          "bbox": [
+            5,
+            13,
+            187,
+            195
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 213
+        },
+        {
+          "index": 6,
+          "file": "D:\\baitap\\InsightFlow\\InsightFlow\\scratch\\hatch-pet\\mochi-otter-fish\\run\\qa\\rows\\running-right\\frames\\running-right\\06.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 18495,
+          "bbox": [
+            5,
+            11,
+            187,
+            196
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 217
+        },
+        {
+          "index": 7,
+          "file": "D:\\baitap\\InsightFlow\\InsightFlow\\scratch\\hatch-pet\\mochi-otter-fish\\run\\qa\\rows\\running-right\\frames\\running-right\\07.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 19870,
+          "bbox": [
+            5,
+            8,
+            187,
+            200
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 251
+        }
+      ]
+    }
+  ]
+}

@@ -1,5 +1,5 @@
-import AdminBrandConfigurationsPage from "@/components/admin/AdminBrandConfigurationsPage";
+import { redirect } from "next/navigation";
 
 export default function BrandConfigurationsAdminPage() {
-  return <AdminBrandConfigurationsPage />;
+  redirect("/admin/consultations");
 }

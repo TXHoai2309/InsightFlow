@@ -1,0 +1,19 @@
+{
+  "ok": true,
+  "reviewed_at": "2026-07-16T07:35:27Z",
+  "assembled_atlas": "final/spritesheet-extended.webp",
+  "edge_check": "pass",
+  "identity": "pass",
+  "fish_attachment": "pass; both paws remain connected to the same belly-centered fish in every pose",
+  "continuity": "pass; 157.5 to 180 continues downward, 180 to 270 moves progressively screen-left, and 270 to 337.5 moves progressively upward while staying left",
+  "directions": [
+    {"degree": "180", "verdict": "pass", "observed": "eyes, nose, and chin aim down"},
+    {"degree": "202.5", "verdict": "pass", "observed": "small even turn from down toward screen-left"},
+    {"degree": "225", "verdict": "pass", "observed": "clear down-left diagonal"},
+    {"degree": "247.5", "verdict": "pass", "observed": "near-left pose retains a downward axis"},
+    {"degree": "270", "verdict": "pass", "observed": "nose and eyes unmistakably screen-left"},
+    {"degree": "292.5", "verdict": "pass", "observed": "leftward pose begins an even upward turn"},
+    {"degree": "315", "verdict": "pass", "observed": "clear up-left diagonal"},
+    {"degree": "337.5", "verdict": "pass", "observed": "near-up pose retains a screen-left axis and lands one step before 000"}
+  ]
+}

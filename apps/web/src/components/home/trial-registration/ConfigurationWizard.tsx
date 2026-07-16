@@ -1,13 +1,20 @@
 "use client";
 
 import React, { useState } from "react";
-import { ArrowRight, ArrowLeft, ShieldAlert, Target, Loader2, Sparkles, CheckCircle2, Activity, PieChart, Briefcase } from "lucide-react";
+import { ArrowRight, ArrowLeft, ShieldAlert, Target, Loader2, Sparkles, CheckCircle2, Activity, PieChart, Briefcase, AtSign } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
+export interface ConfigurationData {
+  channels: string[];
+  keywords: string[];
+  companyEmailDomain: string;
+}
+
 interface ConfigurationWizardProps {
-  onSubmit: (data: any) => void;
+  onSubmit: (data: ConfigurationData) => Promise<void> | void;
   onBack?: () => void;
-  initialData?: any;
+  initialData?: ConfigurationData | null;
+  submissionError?: string;
 }
 
 const CHANNELS = [
@@ -21,10 +28,19 @@ const CHANNELS = [
 
 const SUGGESTED_KEYWORDS = ["VinFast", "Hyundai", "Khuyến mãi", "Bảo hành"];
 
-export function ConfigurationWizard({ onSubmit, onBack, initialData }: ConfigurationWizardProps) {
-  const [formData, setFormData] = useState({
-    channels: initialData?.channels || ([] as string[]),
-    keywords: initialData?.keywords || ([] as string[]),
+function normalizeEmailDomain(value: string) {
+  return value.trim().toLowerCase().replace(/^@+/, "");
+}
+
+function isValidEmailDomain(value: string) {
+  return /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i.test(normalizeEmailDomain(value));
+}
+
+export function ConfigurationWizard({ onSubmit, onBack, initialData, submissionError = "" }: ConfigurationWizardProps) {
+  const [formData, setFormData] = useState<ConfigurationData>({
+    channels: initialData?.channels || [],
+    keywords: initialData?.keywords || [],
+    companyEmailDomain: initialData?.companyEmailDomain || "",
   });
 
   const [currentKeyword, setCurrentKeyword] = useState("");
@@ -32,8 +48,16 @@ export function ConfigurationWizard({ onSubmit, onBack, initialData }: Configura
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    onSubmit(formData);
+    try {
+      await onSubmit({
+        ...formData,
+        companyEmailDomain: normalizeEmailDomain(formData.companyEmailDomain),
+      });
+    } catch {
+      // The parent renders the server-provided submission error.
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const toggleChannel = (val: string) => {
@@ -71,7 +95,8 @@ export function ConfigurationWizard({ onSubmit, onBack, initialData }: Configura
     }));
   };
 
-  const isFormValid = formData.channels.length > 0;
+  const emailDomainValid = isValidEmailDomain(formData.companyEmailDomain);
+  const isFormValid = formData.channels.length > 0 && emailDomainValid;
 
   return (
     <div className="w-full flex flex-col lg:flex-row gap-8 p-4 md:p-8 bg-[#F6F8FA] rounded-[32px] overflow-hidden font-sans">
@@ -101,6 +126,28 @@ export function ConfigurationWizard({ onSubmit, onBack, initialData }: Configura
             </div>
           </div>
           
+          {/* Company email domain */}
+          <div className="mb-10">
+            <div className="mb-4">
+              <h3 className="text-[15px] font-bold text-[#0F172A]">Đuôi email doanh nghiệp <span className="text-[#EF4444]">*</span></h3>
+              <p className="mt-1 text-[13px] text-[#64748B]">Dùng để xác định tài khoản thuộc công ty / thương hiệu khi cấp quyền dùng thử.</p>
+            </div>
+            <div className={`relative rounded-[16px] border-[1.5px] bg-white shadow-sm transition-all focus-within:ring-2 ${formData.companyEmailDomain && !emailDomainValid ? "border-[#EF4444] focus-within:ring-red-100" : "border-[#E2E8F0] focus-within:border-[#6D5EF6] focus-within:ring-[#EEF2FF]"}`}>
+              <AtSign className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#94A3B8]" />
+              <input
+                type="text"
+                value={formData.companyEmailDomain}
+                onChange={(event) => setFormData((previous) => ({ ...previous, companyEmailDomain: event.target.value }))}
+                onBlur={() => setFormData((previous) => ({ ...previous, companyEmailDomain: normalizeEmailDomain(previous.companyEmailDomain) }))}
+                placeholder="company.com"
+                className="h-[56px] w-full rounded-[16px] bg-transparent pl-12 pr-4 text-[15px] font-semibold text-[#0F172A] outline-none placeholder:text-[#94A3B8]"
+              />
+            </div>
+            {formData.companyEmailDomain && !emailDomainValid && (
+              <p className="mt-2 text-[12px] font-semibold text-[#EF4444]">Vui lòng nhập đúng định dạng, ví dụ: insightflow.vn</p>
+            )}
+          </div>
+
           {/* Section 1: Data Sources */}
           <div className="mb-12">
             <div className="flex items-center justify-between mb-4">
@@ -179,6 +226,13 @@ export function ConfigurationWizard({ onSubmit, onBack, initialData }: Configura
               ))}
             </div>
           </div>
+
+          {submissionError && (
+            <div className="mt-6 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">
+              <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{submissionError}</span>
+            </div>
+          )}
         </div>
 
         {/* Footer Actions */}
@@ -194,7 +248,7 @@ export function ConfigurationWizard({ onSubmit, onBack, initialData }: Configura
           <div className="flex items-center gap-5">
             {!isFormValid && (
               <span className="text-[14px] text-[#EF4444] font-semibold hidden sm:block">
-                Chọn ít nhất 1 kênh theo dõi
+                {!emailDomainValid ? "Nhập đúng đuôi email doanh nghiệp" : "Chọn ít nhất 1 kênh theo dõi"}
               </span>
             )}
             <button
@@ -227,6 +281,14 @@ export function ConfigurationWizard({ onSubmit, onBack, initialData }: Configura
           </div>
           
           <div className="flex flex-col gap-7">
+            <div>
+              <p className="text-[12px] font-bold text-[#64748B] uppercase tracking-wider mb-3.5">Đuôi email doanh nghiệp</p>
+              <div className="flex items-center gap-2 rounded-xl border border-[#E2E8F0] bg-white px-3 py-2.5 text-[14px] font-bold text-[#334155]">
+                <AtSign className="h-4 w-4 text-[#6D5EF6]" />
+                {normalizeEmailDomain(formData.companyEmailDomain) || "Chưa nhập..."}
+              </div>
+            </div>
+
             {/* Data Sources Preview */}
             <div>
               <p className="text-[12px] font-bold text-[#64748B] uppercase tracking-wider mb-3.5">Nguồn theo dõi</p>

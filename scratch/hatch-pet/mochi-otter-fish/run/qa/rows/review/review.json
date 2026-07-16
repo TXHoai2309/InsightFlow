@@ -1,0 +1,112 @@
+{
+  "ok": true,
+  "frames_root": "D:\\baitap\\InsightFlow\\InsightFlow\\scratch\\hatch-pet\\mochi-otter-fish\\run\\qa\\rows\\review\\frames",
+  "states": [
+    "review"
+  ],
+  "errors": [],
+  "warnings": [],
+  "rows": [
+    {
+      "state": "review",
+      "expected_frames": 6,
+      "actual_frames": 6,
+      "extraction_method": "components",
+      "ok": true,
+      "errors": [],
+      "warnings": [],
+      "frames": [
+        {
+          "index": 0,
+          "file": "D:\\baitap\\InsightFlow\\InsightFlow\\scratch\\hatch-pet\\mochi-otter-fish\\run\\qa\\rows\\review\\frames\\review\\00.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 23136,
+          "bbox": [
+            11,
+            5,
+            180,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 141
+        },
+        {
+          "index": 1,
+          "file": "D:\\baitap\\InsightFlow\\InsightFlow\\scratch\\hatch-pet\\mochi-otter-fish\\run\\qa\\rows\\review\\frames\\review\\01.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 23102,
+          "bbox": [
+            11,
+            5,
+            180,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 170
+        },
+        {
+          "index": 2,
+          "file": "D:\\baitap\\InsightFlow\\InsightFlow\\scratch\\hatch-pet\\mochi-otter-fish\\run\\qa\\rows\\review\\frames\\review\\02.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 23063,
+          "bbox": [
+            11,
+            5,
+            180,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 166
+        },
+        {
+          "index": 3,
+          "file": "D:\\baitap\\InsightFlow\\InsightFlow\\scratch\\hatch-pet\\mochi-otter-fish\\run\\qa\\rows\\review\\frames\\review\\03.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 23073,
+          "bbox": [
+            11,
+            5,
+            180,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 153
+        },
+        {
+          "index": 4,
+          "file": "D:\\baitap\\InsightFlow\\InsightFlow\\scratch\\hatch-pet\\mochi-otter-fish\\run\\qa\\rows\\review\\frames\\review\\04.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 23773,
+          "bbox": [
+            7,
+            5,
+            185,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 168
+        },
+        {
+          "index": 5,
+          "file": "D:\\baitap\\InsightFlow\\InsightFlow\\scratch\\hatch-pet\\mochi-otter-fish\\run\\qa\\rows\\review\\frames\\review\\05.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 22679,
+          "bbox": [
+            12,
+            5,
+            179,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 148
+        }
+      ]
+    }
+  ]
+}
