@@ -238,13 +238,16 @@ function getSlaStatus(alert: AlertData, nowMs: number) {
   return due < nowMs ? "Qua han" : "Trong SLA";
 }
 
-function canAlertBeVisibleToUser(alert: AlertData, profile?: UserRoleProfile | null) {
+export function canAlertBeVisibleToUser(alert: AlertData, profile?: UserRoleProfile | null) {
   if (!profile) return false;
   if (!isRecordInBrandScope({ brand: alert.brand }, getScopedBrandKey(profile))) {
     return false;
   }
 
-  if (profile.role !== "crisis_employee") return true;
+  const isCrisisOperator =
+    profile.role === "crisis_employee" ||
+    (profile.role === "lead_employee" && profile.permissions?.includes("alerts"));
+  if (!isCrisisOperator) return true;
 
   const email = normalizeText(profile.email);
   const uid = normalizeText(profile.uid);

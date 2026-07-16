@@ -2,11 +2,10 @@
 
 import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { doc, serverTimestamp, setDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
 import { useAuthStore } from "@/stores/auth.store";
 import { CRISIS_EMPLOYEE_TOUR_EVENT } from "@/components/onboarding/events";
+import { completeRoleOnboarding } from "@/lib/onboarding";
 
 const CRISIS_EMPLOYEE_ONBOARDING_VERSION = "2026-07-crisis-employee-tour-v1";
 
@@ -256,30 +255,14 @@ export function CrisisEmployeeOnboarding() {
     setError("");
 
     try {
-      const completedAt = new Date().toISOString();
+      const onboardingState = await completeRoleOnboarding(
+        "crisis_employee",
+        CRISIS_EMPLOYEE_ONBOARDING_VERSION,
+      );
       const nextOnboarding = {
         ...(profile.onboarding || {}),
-        crisis_employee: {
-          completedAt,
-          lastSeenAt: completedAt,
-          version: CRISIS_EMPLOYEE_ONBOARDING_VERSION,
-        },
+        crisis_employee: onboardingState,
       };
-
-      await setDoc(
-        doc(db, "users", profile.uid),
-        {
-          onboarding: {
-            crisis_employee: {
-              completedAt,
-              lastSeenAt: serverTimestamp(),
-              version: CRISIS_EMPLOYEE_ONBOARDING_VERSION,
-            },
-          },
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
 
       setProfile({ ...profile, onboarding: nextOnboarding });
       setManualOpen(false);

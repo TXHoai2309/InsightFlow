@@ -11,7 +11,7 @@ import { normalizeClassificationLabel } from "@/lib/label-change";
 import { calculateNegativityScore } from "@/lib/negativityScore";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import type { Lead, Mention } from "@/types/dashboard";
-import { getPersistedAlertStatus } from "@/lib/alertWorkflow";
+import { getPersistedAlertStatus, isResolvedAlert } from "@/lib/alertWorkflow";
 
 function getResolverName(emailOrId: string | null | undefined): string {
   if (!emailOrId) return "";
@@ -429,10 +429,21 @@ function buildAlertsFromMentions(
       return mention.sentiment === "negative" || routedLead?.operational_queue === "crisis";
     })
     .map((mention) => mentionToAlertData(mention, routedLeadByMentionId.get(mention.id)))
-    .filter((alert) =>
-      isWithinAlertReviewWindow(alert.created_at) &&
-      isRecordInBrandScope({ brand: alert.brand }, scopedBrandKey ?? null)
-    );
+    .filter((alert) => {
+      const history = Array.isArray(alert.resolution_history) ? alert.resolution_history : [];
+      const completedAt =
+        alert.resolved_at ||
+        alert.monitoring_started_at ||
+        history[history.length - 1]?.timestamp;
+      const reviewTimestamp = isResolvedAlert(alert)
+        ? completedAt || alert.created_at
+        : alert.created_at;
+
+      return (
+        isWithinAlertReviewWindow(reviewTimestamp) &&
+        isRecordInBrandScope({ brand: alert.brand }, scopedBrandKey ?? null)
+      );
+    });
 }
 
 function loadDashboardCachedMentions(scopedBrandKey?: string | null): Mention[] {

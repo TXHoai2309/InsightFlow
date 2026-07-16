@@ -88,7 +88,10 @@ export default async function authRoutes(fastify: FastifyInstance, options: Fast
         { merge: true },
       );
 
-      if (profile?.brandId && ["crisis_staff", "lead_staff"].includes(profile.role)) {
+      if (
+        profile?.brandId &&
+        ["crisis_employee", "crisis_staff", "lead_employee", "lead_staff"].includes(profile.role)
+      ) {
         await db
           .collection("brands")
           .doc(profile.brandId)

@@ -4,8 +4,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useRouter } from "next/navigation";
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from "firebase/auth";
-import { deleteField, doc, serverTimestamp, setDoc } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
 import { validateStrongPassword } from "@/lib/passwordPolicy";
 import { useAuthStore } from "@/stores/auth.store";
 
@@ -49,24 +48,15 @@ export default function ChangePasswordPage() {
       await reauthenticateWithCredential(user, credential);
       await updatePassword(user, newPassword);
 
-      const passwordChangePayload = {
-        temporaryPasswordIssued: false,
-        temporaryPassword: deleteField(),
-        passwordChangedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      };
+      const token = await user.getIdToken(true);
+      const response = await fetch("/api/auth/complete-first-password-change", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
 
-      await setDoc(doc(db, "users", user.uid), passwordChangePayload, { merge: true });
-
-      if (
-        profile?.brandId &&
-        ["crisis_employee", "crisis_staff", "lead_employee", "lead_staff"].includes(profile.role)
-      ) {
-        await setDoc(
-          doc(db, "brands", profile.brandId, "staff", user.uid),
-          passwordChangePayload,
-          { merge: true },
-        );
+      if (!response.ok) {
+        throw new Error(data.error || t("changePassword.errors.completeFailed"));
       }
 
       if (profile) {

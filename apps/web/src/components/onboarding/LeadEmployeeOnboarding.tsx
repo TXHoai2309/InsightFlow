@@ -2,11 +2,10 @@
 
 import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { doc, serverTimestamp, setDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
 import { useAuthStore } from "@/stores/auth.store";
 import { LEAD_EMPLOYEE_TOUR_EVENT } from "@/components/onboarding/events";
+import { completeRoleOnboarding } from "@/lib/onboarding";
 
 const LEAD_EMPLOYEE_ONBOARDING_VERSION = "2026-07-lead-employee-tour-v2";
 
@@ -297,30 +296,14 @@ export function LeadEmployeeOnboarding() {
     setError("");
 
     try {
-      const completedAt = new Date().toISOString();
+      const onboardingState = await completeRoleOnboarding(
+        "lead_employee",
+        LEAD_EMPLOYEE_ONBOARDING_VERSION,
+      );
       const nextOnboarding = {
         ...(profile.onboarding || {}),
-        lead_employee: {
-          completedAt,
-          lastSeenAt: completedAt,
-          version: LEAD_EMPLOYEE_ONBOARDING_VERSION,
-        },
+        lead_employee: onboardingState,
       };
-
-      await setDoc(
-        doc(db, "users", profile.uid),
-        {
-          onboarding: {
-            lead_employee: {
-              completedAt,
-              lastSeenAt: serverTimestamp(),
-              version: LEAD_EMPLOYEE_ONBOARDING_VERSION,
-            },
-          },
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
 
       setProfile({ ...profile, onboarding: nextOnboarding });
       setManualOpen(false);
