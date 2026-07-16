@@ -10,7 +10,7 @@ export type PlatformFilter =
   | 'befood'
   | 'news';
 
-export type AssignmentView = 'pending' | 'completed';
+export type AssignmentView = 'pending' | 'ai_review' | 'completed';
 
 export interface SupabaseConfig {
   url: string;
@@ -29,6 +29,8 @@ export interface PendingAssignmentCounts {
   comments: number;
   labeledPosts: number;
   labeledComments: number;
+  aiPendingPosts: number;
+  aiPendingComments: number;
   completedThreads: number;
 }
 
@@ -92,9 +94,13 @@ interface SupabaseComment {
 
 interface SupabaseAnnotation {
   entity_key: string;
+  platform: string;
+  entity_type: 'post' | 'comment';
+  post_id: string;
+  comment_id: string | null;
   assignee: string;
   label: string | Record<string, unknown> | null;
-  status: 'pending' | 'completed' | 'skipped';
+  status: 'pending' | 'ai_pending' | 'completed' | 'skipped';
   labeled_version: number;
   needs_review: boolean;
   updated_at: string;
@@ -160,6 +166,10 @@ const COMMENT_SELECT = [
 
 const ANNOTATION_SELECT = [
   'entity_key',
+  'platform',
+  'entity_type',
+  'post_id',
+  'comment_id',
   'assignee',
   'label',
   'status',
@@ -232,20 +242,28 @@ async function requestExactCount(
   table: string,
   query: string,
 ): Promise<number> {
-  const response = await fetch(endpoint(config, table, query), {
-    headers: {
-      apikey: config.anonKey,
-      Authorization: `Bearer ${config.anonKey}`,
-      Prefer: 'count=exact',
-      Range: '0-0',
-    },
-  });
-  if (!response.ok) {
+  let lastError: Error | null = null;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const response = await fetch(endpoint(config, table, query), {
+      headers: {
+        apikey: config.anonKey,
+        Authorization: `Bearer ${config.anonKey}`,
+        Prefer: 'count=exact',
+        Range: '0-0',
+      },
+    });
+    if (response.ok) {
+      const total = response.headers.get('content-range')?.split('/').pop();
+      return total && total !== '*' ? Number(total) || 0 : 0;
+    }
     const message = await response.text();
-    throw new Error(`Supabase ${table} ${response.status}: ${message}`);
+    lastError = new Error(`Supabase ${table} ${response.status}: ${message}`);
+    if (![429, 500, 502, 503, 504].includes(response.status) || attempt === 3) {
+      throw lastError;
+    }
+    await new Promise(resolve => setTimeout(resolve, 500 * (2 ** (attempt - 1))));
   }
-  const total = response.headers.get('content-range')?.split('/').pop();
-  return total && total !== '*' ? Number(total) || 0 : 0;
+  throw lastError ?? new Error(`Supabase ${table}: count failed`);
 }
 
 function encode(value: string): string {
@@ -265,7 +283,6 @@ function toQueueStatus(status: string): 'unassigned' | 'updated_review' | null {
 export async function loadPendingAssignmentCounts(
   config: SupabaseConfig,
   platform: PlatformFilter,
-  assignee = 'Person A',
 ): Promise<PendingAssignmentCounts> {
   const platformFilter = platform === 'news'
     ? 'in.(news,news_html)'
@@ -273,82 +290,76 @@ export async function loadPendingAssignmentCounts(
       ? 'in.(be,befood)'
       : `eq.${platform}`;
 
-  const assignmentBase = {
-    select: 'assignment_id',
-    platform: platformFilter,
-    limit: '1',
-  };
-
   const annotationBase = {
     select: 'annotation_id',
     platform: platformFilter,
-    assignee: `eq.${assignee}`,
     status: 'in.(completed,skipped)',
     limit: '1',
   };
 
   const [
-    unassignedPosts,
-    unassignedComments,
-    completedThreads,
     labeledPosts,
     labeledComments,
+    aiPendingPosts,
+    aiPendingComments,
+    totalPosts,
+    totalComments,
   ] = await Promise.all([
-    // Post chưa gán (unassigned/updated_review trong labeling_assignments)
-    requestExactCount(config, 'labeling_assignments', new URLSearchParams({
-      ...assignmentBase,
-      entity_type: 'eq.post',
-      status: 'in.(unassigned,updated_review)',
-    }).toString()).catch(() => 0),
-    // Comment chưa gán (unassigned/updated_review trong labeling_assignments)
-    requestExactCount(config, 'labeling_assignments', new URLSearchParams({
-      ...assignmentBase,
-      entity_type: 'eq.comment',
-      status: 'in.(unassigned,updated_review)',
-    }).toString()).catch(() => 0),
-    // Thread hoàn tất (completed/skipped post assignments)
-    requestExactCount(config, 'labeling_assignments', new URLSearchParams({
-      ...assignmentBase,
-      entity_type: 'eq.post',
-      status: 'in.(completed,skipped)',
-    }).toString()).catch(() => 0),
-    // Post đã gán (từ annotations lọc theo assignee)
     requestExactCount(config, 'annotations', new URLSearchParams({
       ...annotationBase,
       entity_type: 'eq.post',
-    }).toString()).catch(() => 0),
-    // Comment đã gán (từ annotations lọc theo assignee)
+    }).toString()),
     requestExactCount(config, 'annotations', new URLSearchParams({
       ...annotationBase,
       entity_type: 'eq.comment',
-    }).toString()).catch(() => 0),
-  ]);
-
-  // Query total posts (small table, fast lookup)
-  const totalPosts = await requestExactCount(config, 'posts', new URLSearchParams({
-    select: 'post_id',
-    platform: platformFilter,
-    limit: '1',
-  }).toString()).catch(() => 0);
-
-  // Query total comments (skip for large tables to avoid 4s statement timeout)
-  let totalComments = 0;
-  if (platform !== 'google_maps' && platform !== 'tiktok' && platform !== 'facebook') {
-    totalComments = await requestExactCount(config, 'comments', new URLSearchParams({
+    }).toString()),
+    requestExactCount(config, 'annotations', new URLSearchParams({
+      ...annotationBase,
+      status: 'eq.ai_pending',
+      entity_type: 'eq.post',
+    }).toString()),
+    requestExactCount(config, 'annotations', new URLSearchParams({
+      ...annotationBase,
+      status: 'eq.ai_pending',
+      entity_type: 'eq.comment',
+    }).toString()),
+    requestExactCount(config, 'posts', new URLSearchParams({
+      select: 'post_id',
+      platform: platformFilter,
+      crawl_status: 'eq.active',
+      limit: '1',
+    }).toString()),
+    requestExactCount(config, 'comments', new URLSearchParams({
       select: 'comment_id',
       platform: platformFilter,
+      crawl_status: 'eq.active',
       limit: '1',
-    }).toString()).catch(() => 0);
-  }
+    }).toString()),
+  ]);
+
+  // Assignments and annotations overlap while a labeler is running. Keep the
+  // dashboard categories mutually exclusive by deriving remaining work from
+  // the crawled entity totals instead of adding queue rows to annotation rows.
+  // Preserve the exact AI review queue first. Historical completed annotations
+  // can outnumber the currently active crawler rows (for example after a purge),
+  // and must not force a real ai_pending count back to zero.
+  const safeAiPendingPosts = Math.min(aiPendingPosts, totalPosts);
+  const safeAiPendingComments = Math.min(aiPendingComments, totalComments);
+  const safeLabeledPosts = Math.min(labeledPosts, Math.max(0, totalPosts - safeAiPendingPosts));
+  const safeLabeledComments = Math.min(labeledComments, Math.max(0, totalComments - safeAiPendingComments));
+  const unassignedPosts = Math.max(0, totalPosts - safeLabeledPosts - safeAiPendingPosts);
+  const unassignedComments = Math.max(0, totalComments - safeLabeledComments - safeAiPendingComments);
 
   return {
-    totalPosts: totalPosts || (unassignedPosts + completedThreads),
-    totalComments: totalComments || (unassignedComments + labeledComments),
+    totalPosts,
+    totalComments,
     posts: unassignedPosts,
     comments: unassignedComments,
-    labeledPosts,
-    labeledComments,
-    completedThreads,
+    labeledPosts: safeLabeledPosts,
+    labeledComments: safeLabeledComments,
+    aiPendingPosts: safeAiPendingPosts,
+    aiPendingComments: safeAiPendingComments,
+    completedThreads: safeLabeledPosts,
   };
 }
 
@@ -563,7 +574,7 @@ function annotationToStoredLabel(row: SupabaseAnnotation): StoredLabel | null {
       entity_key: row.entity_key,
       labeled_by: row.assignee,
       labeled_at: row.updated_at,
-      skipped: row.status === 'skipped',
+      skipped: row.status === 'skipped' || (value as { skipped?: boolean }).skipped === true,
       data_version: row.labeled_version,
       sentiment: label.sentiment ?? null,
       topic: Array.isArray(label.topic) ? label.topic : [],
@@ -581,7 +592,6 @@ export async function loadSupabaseThreads(
   platform: PlatformFilter,
   limit: number,
   assignmentView: AssignmentView = 'pending',
-  assignee = 'Person A',
   dateRange: SupabaseDateRange = {},
   brand?: string,
   signal?: AbortSignal,
@@ -604,22 +614,58 @@ export async function loadSupabaseThreads(
     if (signal?.aborted) {
       throw new DOMException('The user aborted a request.', 'AbortError');
     }
-    const assignmentParams = new URLSearchParams({
-      select: ASSIGNMENT_SELECT,
-      platform: platformFilter,
-      status: assignmentView === 'completed'
-        ? 'eq.completed'
-        : 'in.(updated_review,unassigned)',
-      limit: String(pageSize),
-      offset: String(offset),
-      order: 'updated_at.desc',
-    });
-    const assignments = await request<SupabaseAssignment[]>(
-      config,
-      'labeling_assignments',
-      assignmentParams.toString(),
-      { signal },
-    );
+    let assignments: SupabaseAssignment[];
+    if (assignmentView === 'completed' || assignmentView === 'ai_review') {
+      // Gemini writes completed labels directly to annotations. Some historical
+      // rows do not have a matching completed assignment, so annotations must
+      // be the source of truth for the completed view.
+      const annotationParams = new URLSearchParams({
+        select: ANNOTATION_SELECT,
+        platform: platformFilter,
+        status: assignmentView === 'ai_review'
+          ? 'eq.ai_pending'
+          : 'in.(completed,skipped)',
+        limit: String(pageSize),
+        offset: String(offset),
+        order: 'updated_at.desc',
+      });
+      if (assignmentView === 'completed') {
+        annotationParams.set('entity_type', 'eq.post');
+      }
+      const completedAnnotations = await request<SupabaseAnnotation[]>(
+        config,
+        'annotations',
+        annotationParams.toString(),
+        { signal },
+      );
+      assignments = completedAnnotations.map(annotation => ({
+        assignment_id: '',
+        entity_key: annotation.entity_key,
+        platform: annotation.platform,
+        entity_type: annotation.entity_type,
+        post_id: annotation.post_id,
+        root_comment_id: annotation.comment_id,
+        queue_group: '',
+        status: annotation.status === 'skipped' ? 'skipped' : 'completed',
+        data_version: annotation.labeled_version,
+        content_hash: null,
+      }));
+    } else {
+      const assignmentParams = new URLSearchParams({
+        select: ASSIGNMENT_SELECT,
+        platform: platformFilter,
+        status: 'in.(updated_review,unassigned)',
+        limit: String(pageSize),
+        offset: String(offset),
+        order: 'updated_at.desc',
+      });
+      assignments = await request<SupabaseAssignment[]>(
+        config,
+        'labeling_assignments',
+        assignmentParams.toString(),
+        { signal },
+      );
+    }
     assignments.sort((a, b) => queueOrder(a.status) - queueOrder(b.status));
     exhausted = assignments.length < pageSize;
     offset += assignments.length;
@@ -630,7 +676,7 @@ export async function loadSupabaseThreads(
       ? await request<SupabasePost[]>(
           config,
           'posts',
-          `select=${POST_SELECT}&platform=${platformFilter}&post_id=in.(${uniquePostIds.map(encode).join(',')})`,
+          `select=${POST_SELECT}&platform=${platformFilter}&post_id=in.(${uniquePostIds.map(encode).join(',')})&crawl_status=eq.active`,
           { signal }
         )
       : [];
@@ -673,7 +719,7 @@ export async function loadSupabaseThreads(
         select: ANNOTATION_SELECT,
         platform: annoPlatform,
         post_id: `eq.${assignment.post_id}`,
-        assignee: `eq.${assignee}`,
+        order: 'updated_at.desc',
       }).toString();
 
       const [comments, annotations] = await Promise.all([
@@ -691,27 +737,49 @@ export async function loadSupabaseThreads(
       if (!parsed) return null;
 
       const postAssignments = assignments.filter(a => a.post_id === assignment.post_id);
-      const assignedKeys = postAssignments.map(a => a.entity_key.replace(/^be:/, 'befood:'));
 
-      parsed._assignment_id = assignment.assignment_id;
-      parsed._assignment_entity_key = assignment.entity_key;
-      parsed._assigned_entity_keys = assignedKeys;
-      parsed._data_source = 'supabase';
-      parsed.post._queue_status = toQueueStatus(assignment.status);
-      parsed.post._data_version = post.data_version;
-
-      if (assignmentView === 'completed' && annotations.length === 0) {
+      if (assignmentView === 'completed' && annotations.length === 0 && assignment.assignment_id) {
         await resetSupabaseAssignment(config, assignment.assignment_id);
         return null;
       }
 
-      const annotationByEntity = new Map(
-        annotations.map(annotation => [annotation.entity_key.replace(/^be:/, 'befood:'), annotation]),
+      const annotationByEntity = new Map<string, SupabaseAnnotation>();
+      for (const annotation of annotations) {
+        const entityKey = annotation.entity_key.replace(/^be:/, 'befood:');
+        // The response is newest-first, so keep the first label for each entity.
+        if (!annotationByEntity.has(entityKey)) {
+          annotationByEntity.set(entityKey, annotation);
+        }
+      }
+
+      const activeAssignments = assignmentView === 'pending'
+        ? postAssignments.filter(candidate => {
+            const entityKey = candidate.entity_key.replace(/^be:/, 'befood:');
+            const annotation = annotationByEntity.get(entityKey);
+            return !annotation || annotation.labeled_version < candidate.data_version;
+          })
+        : postAssignments;
+      if (assignmentView === 'pending' && activeAssignments.length === 0) {
+        return null;
+      }
+
+      const activeAssignment = activeAssignments[0] ?? assignment;
+      parsed._assignment_id = activeAssignment.assignment_id;
+      parsed._assignment_entity_key = activeAssignment.entity_key;
+      parsed._assigned_entity_keys = activeAssignments.map(
+        candidate => candidate.entity_key.replace(/^be:/, 'befood:'),
       );
+      parsed._data_source = 'supabase';
+      parsed.post._queue_status = toQueueStatus(activeAssignment.status);
+      parsed.post._data_version = post.data_version;
+
       for (const item of threadItems(parsed)) {
         const annotation = annotationByEntity.get(item._entity_key);
         const loadedLabel = annotation ? annotationToStoredLabel(annotation) : null;
-        if (loadedLabel) item._loaded_label = loadedLabel;
+        if (loadedLabel) {
+          item._loaded_label = loadedLabel;
+          item._annotation_status = annotation?.status;
+        }
       }
       return { postKey, parsed };
     });
@@ -750,7 +818,7 @@ async function loadPostComments(
   let offset = 0;
   while (all.length < MAX_COMMENTS_PER_POST) {
     const currentPageSize = Math.min(pageSize, MAX_COMMENTS_PER_POST - all.length);
-    const commentsQuery = `select=${COMMENT_SELECT}&platform=eq.${encode(platform)}&post_id=eq.${encode(postId)}&order=comment_level.asc,posted_at.asc&limit=${currentPageSize}&offset=${offset}`;
+    const commentsQuery = `select=${COMMENT_SELECT}&platform=eq.${encode(platform)}&post_id=eq.${encode(postId)}&crawl_status=eq.active&order=comment_level.asc,posted_at.asc&limit=${currentPageSize}&offset=${offset}`;
     const page = await request<SupabaseComment[]>(config, 'comments', commentsQuery, { signal });
     all.push(...page);
     if (page.length < currentPageSize) break;
@@ -758,7 +826,7 @@ async function loadPostComments(
   }
 
   if (focusedCommentId && !all.some(comment => comment.comment_id === focusedCommentId)) {
-    const focusedQuery = `select=${COMMENT_SELECT}&platform=eq.${encode(platform)}&post_id=eq.${encode(postId)}&comment_id=eq.${encode(focusedCommentId)}&limit=1`;
+    const focusedQuery = `select=${COMMENT_SELECT}&platform=eq.${encode(platform)}&post_id=eq.${encode(postId)}&comment_id=eq.${encode(focusedCommentId)}&crawl_status=eq.active&limit=1`;
     const focused = await request<SupabaseComment[]>(config, 'comments', focusedQuery, { signal });
     all.push(...focused.filter(comment => !all.some(existing => existing.comment_id === comment.comment_id)));
   }
@@ -839,6 +907,34 @@ export async function saveSupabaseAnnotation(
       headers: { Prefer: 'return=minimal' },
     },
   );
+}
+
+export async function approveSupabaseAiAnnotations(
+  config: SupabaseConfig,
+  items: Array<{
+    entityKey: string;
+    label: Label & { skipped?: boolean };
+  }>,
+  reviewer = 'InsightFlow Admin',
+): Promise<number> {
+  if (items.length === 0) return 0;
+  const approved = await request<number>(
+    config,
+    'rpc/approve_ai_annotations',
+    '',
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        p_items: items.map(item => ({
+          entity_key: item.entityKey.replace(/^befood:/, 'be:'),
+          label: item.label,
+        })),
+        p_reviewer: reviewer,
+      }),
+      headers: { Prefer: 'return=representation' },
+    },
+  );
+  return Number(approved) || 0;
 }
 
 export async function updateSupabaseAssignment(

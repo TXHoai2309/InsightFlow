@@ -7,6 +7,7 @@ import {
   POSITIVE_COLD_PRESET_LABEL, isPositiveColdPreset,
   NEGATIVE_STAFF_ATTITUDE_PRESET_LABEL, isNegativeStaffAttitudePreset,
   POSITIVE_NONE_PRESET_LABEL, isPositiveNonePreset,
+  isLabelComplete,
 } from './types';
 import { useData } from './hooks/useData';
 import { useLabeling } from './hooks/useLabeling';
@@ -16,6 +17,7 @@ import Sidebar from './components/Sidebar';
 import ExportButton from './components/ExportButton';
 import {
   AssignmentView,
+  approveSupabaseAiAnnotations,
   loadPendingAssignmentCounts,
   PendingAssignmentCounts,
   PlatformFilter,
@@ -111,6 +113,8 @@ export default function App() {
   );
   const [pendingCounts, setPendingCounts] = useState<PendingAssignmentCounts | null>(null);
   const [pendingCountsLoading, setPendingCountsLoading] = useState(false);
+  const [approvingAi, setApprovingAi] = useState(false);
+  const [approvalMessage, setApprovalMessage] = useState<string | null>(null);
   const [pendingRestoreThreadId, setPendingRestoreThreadId] = useState<string | null>(
     () => initialSessionRef.current?.currentThreadId ?? null,
   );
@@ -169,7 +173,12 @@ export default function App() {
   }, [rawThreads, brandFilter, sourceFilter, onlyRated]);
 
   // ─── Labeling ──────────────────────────────────────────
-  const labeling = useLabeling(person, filteredThreads, activeSupabaseConfig);
+  // AI-review edits stay local until the explicit approval RPC is called.
+  const labeling = useLabeling(
+    person,
+    filteredThreads,
+    assignmentView === 'ai_review' ? null : activeSupabaseConfig,
+  );
   const {
     currentThreadIndex, labels, threadStates, stats, storageError,
     getLabel, setLabel, setItemSkipped, skipThread, unskipThread, completeThread,
@@ -232,7 +241,6 @@ export default function App() {
     loadPendingAssignmentCounts(
       { url: supabaseUrl.trim(), anonKey: supabaseAnonKey.trim() },
       platformFilter,
-      person,
     )
       .then(counts => {
         if (!cancelled) setPendingCounts(counts);
@@ -256,6 +264,11 @@ export default function App() {
       ...currentThread.comments.flatMap(c => [c.comment, ...c.replies]),
     ];
   }, [currentThread]);
+
+  const aiCandidateItems = useMemo(
+    () => threadItems.filter(item => item._annotation_status === 'ai_pending'),
+    [threadItems],
+  );
 
   // ─── Focused item index for Tab navigation ─────────────
   const focusedItemIndex = useMemo(() => {
@@ -414,7 +427,6 @@ export default function App() {
         platformFilter,
         supabaseLimit,
         assignmentView,
-        person,
         { from: queueDateFrom || undefined, to: queueDateTo || undefined },
         supabaseBrandQuery,
         controller.signal,
@@ -437,6 +449,49 @@ export default function App() {
     supabaseLimit,
     supabaseUrl,
     saveLabelingSession,
+  ]);
+
+  const handleApproveAiThread = useCallback(async () => {
+    if (!activeSupabaseConfig || !currentThread || aiCandidateItems.length === 0) return;
+    setApprovingAi(true);
+    setApprovalMessage(null);
+    try {
+      const approvalItems = aiCandidateItems.map(item => {
+        const label = getLabel(item._entity_key);
+        if (!label || (!label.skipped && !isLabelComplete(label))) {
+          throw new Error(`Nhãn AI chưa đầy đủ: ${item._entity_key}`);
+        }
+        return {
+          entityKey: item._entity_key,
+          label: {
+            sentiment: label.sentiment,
+            topic: label.topic,
+            relevance: label.relevance,
+            urgency: label.urgency,
+            intent: label.intent,
+            skipped: label.skipped,
+          },
+        };
+      });
+      const approved = await approveSupabaseAiAnnotations(
+        activeSupabaseConfig,
+        approvalItems,
+      );
+      setApprovalMessage(`Đã chấp nhận ${approved.toLocaleString()} nhãn AI.`);
+      await handleSupabaseLoad(null);
+    } catch (error) {
+      setApprovalMessage(
+        error instanceof Error ? `Không thể chấp nhận nhãn AI: ${error.message}` : 'Không thể chấp nhận nhãn AI.',
+      );
+    } finally {
+      setApprovingAi(false);
+    }
+  }, [
+    activeSupabaseConfig,
+    aiCandidateItems,
+    currentThread,
+    getLabel,
+    handleSupabaseLoad,
   ]);
 
   useEffect(() => {
@@ -498,6 +553,16 @@ export default function App() {
                       }`}
                   >
                     Cần gán
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAssignmentView('ai_review')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${assignmentView === 'ai_review'
+                        ? 'bg-violet-600 text-white'
+                        : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-surface-700'
+                      }`}
+                  >
+                    AI chờ duyệt
                   </button>
                   <button
                     type="button"
@@ -722,6 +787,35 @@ export default function App() {
             <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-5">
               {/* Left: Thread view */}
               <div>
+                {assignmentView === 'ai_review' && (
+                  <div className="mb-4 rounded-xl border border-violet-200 bg-violet-50 p-4 dark:border-violet-800 dark:bg-violet-950/30">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <h2 className="text-sm font-bold text-violet-900 dark:text-violet-100">
+                          Nhãn AI đang chờ admin duyệt
+                        </h2>
+                        <p className="mt-1 text-xs text-violet-700 dark:text-violet-300">
+                          Có {aiCandidateItems.length.toLocaleString()} nhãn AI trong thread này. Các chỉnh sửa chỉ được lưu chính thức sau khi chấp nhận.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handleApproveAiThread()}
+                        disabled={approvingAi || aiCandidateItems.length === 0}
+                        className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {approvingAi
+                          ? 'Đang cập nhật...'
+                          : `✓ Chấp nhận ${aiCandidateItems.length.toLocaleString()} nhãn`}
+                      </button>
+                    </div>
+                    {approvalMessage && (
+                      <p className="mt-3 text-xs font-semibold text-violet-800 dark:text-violet-200">
+                        {approvalMessage}
+                      </p>
+                    )}
+                  </div>
+                )}
                 <ThreadView
                   thread={currentThread}
                   threadIndex={currentThreadIndex}

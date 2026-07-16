@@ -166,6 +166,18 @@ export default function Sidebar({
                 {pendingCounts.comments.toLocaleString()}
               </div>
             </div>
+            <div className="rounded-md border border-violet-100 bg-violet-50 p-3 dark:border-violet-900/40 dark:bg-violet-900/20">
+              <div className="text-xs text-violet-700 dark:text-violet-300">Post AI chờ duyệt</div>
+              <div className="mt-1 text-2xl font-bold text-violet-900 dark:text-violet-100">
+                {pendingCounts.aiPendingPosts.toLocaleString()}
+              </div>
+            </div>
+            <div className="rounded-md border border-fuchsia-100 bg-fuchsia-50 p-3 dark:border-fuchsia-900/40 dark:bg-fuchsia-900/20">
+              <div className="text-xs text-fuchsia-700 dark:text-fuchsia-300">Comment AI chờ duyệt</div>
+              <div className="mt-1 text-2xl font-bold text-fuchsia-900 dark:text-fuchsia-100">
+                {pendingCounts.aiPendingComments.toLocaleString()}
+              </div>
+            </div>
             <div className="rounded-md border border-emerald-100 bg-emerald-50 p-3 dark:border-emerald-900/40 dark:bg-emerald-900/20">
               <div className="text-xs text-emerald-700 dark:text-emerald-300">Post đã gán</div>
               <div className="mt-1 text-2xl font-bold text-emerald-900 dark:text-emerald-100">
@@ -180,7 +192,14 @@ export default function Sidebar({
             </div>
             <div className="col-span-2 flex justify-between border-t border-gray-100 pt-3 text-sm dark:border-surface-600">
               <span className="text-gray-600 dark:text-gray-400">Tổng còn lại</span>
-              <span className="font-bold">{(pendingCounts.posts + pendingCounts.comments).toLocaleString()}</span>
+              <span className="font-bold">
+                {(
+                  pendingCounts.posts
+                  + pendingCounts.comments
+                  + pendingCounts.aiPendingPosts
+                  + pendingCounts.aiPendingComments
+                ).toLocaleString()}
+              </span>
             </div>
             <div className="col-span-2 flex justify-between text-sm">
               <span className="text-gray-600 dark:text-gray-400">Tổng đã gán</span>

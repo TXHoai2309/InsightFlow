@@ -246,6 +246,7 @@ export interface Item extends RawItem {
 
   stats: PlatformStats;
   _loaded_label?: StoredLabel;
+  _annotation_status?: 'pending' | 'ai_pending' | 'completed' | 'skipped';
 }
 
 export interface Thread {
