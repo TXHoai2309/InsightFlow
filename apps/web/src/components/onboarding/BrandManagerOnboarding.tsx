@@ -2,11 +2,10 @@
 
 import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { doc, serverTimestamp, setDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
 import { useAuthStore } from "@/stores/auth.store";
 import { BRAND_MANAGER_TOUR_EVENT } from "@/components/onboarding/events";
+import { completeRoleOnboarding } from "@/lib/onboarding";
 
 const BRAND_MANAGER_ONBOARDING_VERSION = "2026-07-brand-manager-tour-v4";
 
@@ -384,30 +383,14 @@ export function BrandManagerOnboarding() {
     setError("");
 
     try {
-      const completedAt = new Date().toISOString();
+      const onboardingState = await completeRoleOnboarding(
+        "brand_manager",
+        BRAND_MANAGER_ONBOARDING_VERSION,
+      );
       const nextOnboarding = {
         ...(profile.onboarding || {}),
-        brand_manager: {
-          completedAt,
-          lastSeenAt: completedAt,
-          version: BRAND_MANAGER_ONBOARDING_VERSION,
-        },
+        brand_manager: onboardingState,
       };
-
-      await setDoc(
-        doc(db, "users", profile.uid),
-        {
-          onboarding: {
-            brand_manager: {
-              completedAt,
-              lastSeenAt: serverTimestamp(),
-              version: BRAND_MANAGER_ONBOARDING_VERSION,
-            },
-          },
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
 
       setProfile({ ...profile, onboarding: nextOnboarding });
       setManualOpen(false);

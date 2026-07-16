@@ -160,6 +160,7 @@ export interface Lead {
   intent_signals: string[];
   status: "new" | "processing" | "completed" | "skipped";
   created_at: string;
+  updated_at?: string;
   expiry_at?: string;
   url?: string;
   source_url?: string;

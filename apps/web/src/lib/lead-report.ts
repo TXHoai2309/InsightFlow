@@ -42,6 +42,7 @@ export interface LeadReportTrendPoint {
   contacted: number;
   converted: number;
   avgResponseMinutes: number;
+  slaOnTimeRate: number;
 }
 
 export interface LeadStaffPerformanceRow {
@@ -227,14 +228,14 @@ function buildPipeline(leads: Lead[]): LeadReportBucket[] {
   }));
 }
 
-function buildResponseTrend(leads: Lead[], daysCount = 7): LeadReportTrendPoint[] {
-  const buckets: Record<string, { created: number; contacted: number; converted: number; responseTotal: number; responseCount: number }> = {};
+function buildResponseTrend(leads: Lead[], daysCount = 7, nowMs: number = Date.now()): LeadReportTrendPoint[] {
+  const buckets: Record<string, { created: number; contacted: number; converted: number; responseTotal: number; responseCount: number; slaEvaluated: number; slaOnTime: number }> = {};
   for (let index = daysCount - 1; index >= 0; index -= 1) {
     const date = new Date();
     date.setDate(date.getDate() - index);
     date.setHours(0, 0, 0, 0);
     const key = date.toISOString().slice(0, 10);
-    buckets[key] = { created: 0, contacted: 0, converted: 0, responseTotal: 0, responseCount: 0 };
+    buckets[key] = { created: 0, contacted: 0, converted: 0, responseTotal: 0, responseCount: 0, slaEvaluated: 0, slaOnTime: 0 };
   }
 
   leads.forEach((lead) => {
@@ -244,7 +245,11 @@ function buildResponseTrend(leads: Lead[], daysCount = 7): LeadReportTrendPoint[
     const bucket = buckets[key];
     if (!bucket) return;
     bucket.created += 1;
-    if (hasContacted(lead)) bucket.contacted += 1;
+    if (hasContacted(lead)) {
+      bucket.contacted += 1;
+      bucket.slaEvaluated += 1;
+      if (getSlaStatus(lead, nowMs) === "Dung SLA") bucket.slaOnTime += 1;
+    }
     if (isConverted(lead)) bucket.converted += 1;
     const responseMinutes = minutesBetween(lead.created_at, lead.first_contacted_at || lead.last_contact_at);
     if (responseMinutes !== null) {
@@ -260,6 +265,7 @@ function buildResponseTrend(leads: Lead[], daysCount = 7): LeadReportTrendPoint[
     converted: bucket.converted,
     avgResponseMinutes:
       bucket.responseCount > 0 ? Math.round(bucket.responseTotal / bucket.responseCount) : 0,
+    slaOnTimeRate: percentage(bucket.slaOnTime, bucket.slaEvaluated),
   }));
 }
 
@@ -403,7 +409,7 @@ export function buildLeadReportData(
     ),
     sourceDistribution,
     pipeline: buildPipeline(scopedLeads),
-    responseTrend: buildResponseTrend(scopedLeads),
+    responseTrend: buildResponseTrend(scopedLeads, 7, nowMs),
     staffPerformance,
     detailRows: buildDetailRows(scopedLeads, nowMs),
     aiSummary: buildAiSummary(kpis, sourceDistribution, staffPerformance),

@@ -11,7 +11,7 @@ import { normalizeClassificationLabel } from "@/lib/label-change";
 import { calculateNegativityScore } from "@/lib/negativityScore";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import type { Mention } from "@/types/dashboard";
-import { getPersistedAlertStatus } from "@/lib/alertWorkflow";
+import { getPersistedAlertStatus, isResolvedAlert } from "@/lib/alertWorkflow";
 import { canAlertBeVisibleToUser } from "@/lib/alert-visibility";
 
 function getResolverName(emailOrId: string | null | undefined): string {
@@ -411,33 +411,21 @@ function buildAlertsFromMentions(
   return mentions
     .filter((mention) => mention.sentiment === "negative")
     .map(mentionToAlertData)
-    .filter((alert) =>
-      isWithinAlertReviewWindow(alert.created_at) &&
-      isRecordInBrandScope({ brand: alert.brand }, scopedBrandKey ?? null)
-    );
-}
+    .filter((alert) => {
+      const history = Array.isArray(alert.resolution_history) ? alert.resolution_history : [];
+      const completedAt =
+        alert.resolved_at ||
+        alert.monitoring_started_at ||
+        history[history.length - 1]?.timestamp;
+      const reviewTimestamp = isResolvedAlert(alert)
+        ? completedAt || alert.created_at
+        : alert.created_at;
 
-function loadDashboardCachedMentions(scopedBrandKey?: string | null): Mention[] {
-  if (typeof window === "undefined") return [];
-  const brandKey = scopedBrandKey && scopedBrandKey !== "global" ? scopedBrandKey : "global";
-  const keys = [
-    `insightflow_dashboard_cache_${brandKey}`,
-    "insightflow_dashboard_cache_global",
-  ];
-
-  for (const key of keys) {
-    try {
-      const cached = localStorage.getItem(key);
-      if (!cached) continue;
-      const { data } = JSON.parse(cached);
-      if (Array.isArray(data?.mentions) && data.mentions.length > 0) {
-        return data.mentions as Mention[];
-      }
-    } catch (error) {
-      console.warn("[AlertStore] Failed to read dashboard cache:", error);
-    }
-  }
-  return [];
+      return (
+        isWithinAlertReviewWindow(reviewTimestamp) &&
+        isRecordInBrandScope({ brand: alert.brand }, scopedBrandKey ?? null)
+      );
+    });
 }
 
 function setAlertsFromDashboardCache(
@@ -446,9 +434,9 @@ function setAlertsFromDashboardCache(
   scopedBrandKey?: string | null,
 ): boolean {
   const dashboardMentions = useDashboardStore.getState().mentions;
-  const mentions = dashboardMentions.length > 0
-    ? dashboardMentions
-    : loadDashboardCachedMentions(scopedBrandKey);
+  // The dashboard cache is scoped by user. Reuse only the in-memory store here;
+  // reading legacy brand-only localStorage keys can expose another employee's queue.
+  const mentions = dashboardMentions;
   if (mentions.length === 0) return false;
 
   const recentLocks = getState().recentLocks || {};

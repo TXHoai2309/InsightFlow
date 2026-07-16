@@ -1,6 +1,6 @@
 /**
  * useDashboard Hook
- * Fetch dữ liệu từ Firestore, tính aggregations, nạp vào Zustand store
+ * Fetch dữ liệu nghiệp vụ từ Supabase, tính aggregations, nạp vào Zustand store
  */
 
 "use client";
@@ -12,6 +12,8 @@ import { filterByBusinessPolicy, getScopedBrandKey } from "@/lib/brandScope";
 import { useAuth } from "@/hooks/useAuth";
 import { supabaseClient } from "@/lib/supabaseClient";
 import { useAlertStore } from "@/stores/alert.store";
+import { canLeadBeVisibleToUser } from "@/lib/lead-workbench";
+import { canPerformAction } from "@/lib/rbac";
 
 interface UseDashboardOptions {
   autoFetch?: boolean;
@@ -46,7 +48,12 @@ export function useDashboard(options: UseDashboardOptions = {}) {
 
   const fetchDashboardData = async (force: boolean = false) => {
     const brandKey = getScopedBrandKey(profile) || "global";
-    const cacheKey = `insightflow_dashboard_cache_${brandKey}`;
+    // Scope browser cache by user as well as brand. Brand-only cache keys can
+    // otherwise render another employee's assigned work after account changes
+    // in the same browser.
+    const profileKey = profile?.uid || profile?.role || "anonymous";
+    const fetchScopeKey = `${brandKey}:${profileKey}`;
+    const cacheKey = `insightflow_dashboard_cache_${brandKey}_${profileKey}`;
     try {
       let hasRenderedCache = false;
 
@@ -71,7 +78,7 @@ export function useDashboard(options: UseDashboardOptions = {}) {
             const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes fresh cache window
             const hasCachedMentions = data.mentions && data.mentions.length > 0;
             if (hasCachedMentions && Date.now() - timestamp < CACHE_DURATION) {
-              setLastFetchedAt(brandKey, timestamp);
+              setLastFetchedAt(fetchScopeKey, timestamp);
               setLoading(false);
               return;
             }
@@ -86,7 +93,7 @@ export function useDashboard(options: UseDashboardOptions = {}) {
         setLoading(true);
       }
 
-      // 1. Fetch raw data từ Firestore (lọc theo brand nếu có)
+      // 1. Fetch raw data từ Supabase (lọc theo brand nếu có)
       const rawBrandKey = brandKey === "global" ? undefined : brandKey;
       const rawData =
         await DashboardService.fetchRawData({ brandKey: rawBrandKey });
@@ -100,7 +107,8 @@ export function useDashboard(options: UseDashboardOptions = {}) {
       );
       const mentions = filterByBusinessPolicy(rawData.mentions, profile, "view_mentions");
       const alerts = filterByBusinessPolicy(rawData.alerts, profile, "view_crisis_queue");
-      const leads = filterByBusinessPolicy(rawData.leads, profile, "view_leads");
+      const scopedLeads = filterByBusinessPolicy(rawData.leads, profile, "view_leads");
+      const leads = scopedLeads.filter((lead) => canLeadBeVisibleToUser(lead, profile));
 
       // 2. Aggregations từ toàn bộ dữ liệu
       const stats = DashboardService.calculateStats(mentions, alerts, leads);
@@ -150,13 +158,13 @@ export function useDashboard(options: UseDashboardOptions = {}) {
         }
       }
 
-      setLastFetchedAt(brandKey, Date.now());
+      setLastFetchedAt(fetchScopeKey, Date.now());
       setError(null);
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
-          : "Không thể kết nối Firestore";
+          : "Không thể kết nối Supabase";
       
       console.error("[useDashboard] fetch error:", error);
 
@@ -204,7 +212,9 @@ export function useDashboard(options: UseDashboardOptions = {}) {
     if (!autoFetch || authLoading) return;
 
     const brandKey = getScopedBrandKey(profile) || "global";
-    const lastFetched = lastFetchedAtMap[brandKey] || 0;
+    const profileKey = profile?.uid || profile?.role || "anonymous";
+    const fetchScopeKey = `${brandKey}:${profileKey}`;
+    const lastFetched = lastFetchedAtMap[fetchScopeKey] || 0;
     const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes cache window
 
     // Only fetch if we don't have data in the Zustand store or it is older than 30 minutes
@@ -217,6 +227,7 @@ export function useDashboard(options: UseDashboardOptions = {}) {
 
     // Prefetch alerts page data in the background when the dashboard is idle
     const prefetchTimer = setTimeout(() => {
+      if (!canPerformAction(profile, "view_crisis_queue")) return;
       const alertStore = useAlertStore.getState();
       const hasAlerts = alertStore.rawAlerts.length > 0;
       const isAlertsFresh = Date.now() - alertStore.lastFetchedAt < 30 * 60 * 1000;
@@ -231,11 +242,11 @@ export function useDashboard(options: UseDashboardOptions = {}) {
       clearInterval(interval);
       clearTimeout(prefetchTimer);
     };
-  }, [autoFetch, refetchInterval, authLoading, profile?.brandId, profile?.brandName, profile?.role]);
+  }, [autoFetch, refetchInterval, authLoading, profile?.uid, profile?.brandId, profile?.brandName, profile?.role]);
 
   // Realtime subscription on leads table to sync assignee and status instantly
   useEffect(() => {
-    if (!profile || authLoading) return;
+    if (!profile || authLoading || !canPerformAction(profile, "view_leads")) return;
 
     if (supabaseClient) {
       console.log("[useDashboard] Initializing Realtime leads subscription");
