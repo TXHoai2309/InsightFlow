@@ -10,7 +10,7 @@
 > - Các commit merge vẫn được giữ lại để phản ánh đúng dòng phát triển giữa các nhánh.
 >   Tất cả các thay đổi đáng chú ý đối với dự án này sẽ được ghi lại trong file này.
 >   Định dạng dựa trên [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) và dự án này tuân thủ [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
+aaaa
 ## [Unreleased] - 2026-07-16
 
 ### Added
