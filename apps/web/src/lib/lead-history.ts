@@ -8,7 +8,6 @@ export type LeadHistoryKind =
   | "status"
   | "result"
   | "follow_up"
-  | "transfer"
   | "closed";
 
 export interface LeadHistoryEvent {
@@ -29,7 +28,6 @@ const ACTION_LABELS: Record<NonNullable<Lead["last_action_type"]>, string> = {
   email: "Đã gửi email",
   open_profile: "Đã mở hồ sơ nguồn",
   note: "Đã thêm ghi chú",
-  transfer_business: "Đã chuyển nghiệp vụ",
   skip: "Đã bỏ qua item",
 };
 
@@ -99,7 +97,7 @@ export function buildLeadHistoryEvents(lead: Lead): LeadHistoryEvent[] {
     });
   }
 
-  if (isValidDate(lead.last_action_at) && lead.last_action_type !== "transfer_business") {
+  if (isValidDate(lead.last_action_at)) {
     pushEvent(events, {
       id: `action-${lead.id}-${lead.last_action_at}`,
       occurredAt: lead.last_action_at,
@@ -140,19 +138,6 @@ export function buildLeadHistoryEvents(lead: Lead): LeadHistoryEvent[] {
     });
   }
 
-  for (const [index, transfer] of (lead.transfer_history || []).entries()) {
-    pushEvent(events, {
-      id: `transfer-${lead.id}-${index}-${transfer.transferred_at}`,
-      occurredAt: transfer.transferred_at,
-      actor: "employee",
-      actorName: transfer.transferred_by_name || ownerName,
-      kind: "transfer",
-      title: `Chuyển từ ${transfer.from === "lead" ? "Tiềm năng" : "Khủng hoảng"} sang ${transfer.to === "lead" ? "Tiềm năng" : "Khủng hoảng"}`,
-      description: [transfer.reason, transfer.note].filter(Boolean).join(" · "),
-      badge: "Chuyển nghiệp vụ",
-    });
-  }
-
   if (isValidDate(lead.closed_at) && !lead.result_recorded_at) {
     pushEvent(events, {
       id: `closed-${lead.id}-${lead.closed_at}`,
@@ -180,4 +165,3 @@ export function buildLeadHistoryEvents(lead: Lead): LeadHistoryEvent[] {
         new Date(right.occurredAt).getTime(),
     );
 }
-

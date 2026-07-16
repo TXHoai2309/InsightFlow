@@ -57,8 +57,6 @@ export function LeadProfileTab({
 }: LeadProfileTabProps) {
   const contactValue =
     lead.phone || lead.email || lead.social_profile_url || "Chưa có thông tin";
-  const operationLabel =
-    lead.operational_queue === "crisis" ? "Khủng hoảng" : "Tiềm năng";
   const latestInteractionAt =
     lead.last_contact_at || lead.last_action_at || lead.posted_at || lead.created_at;
   const sourceDisplay = sourceHref || "Chưa có đường dẫn nguồn";
@@ -159,7 +157,7 @@ export function LeadProfileTab({
             <InfoRow label="Người phụ trách">{ownership.ownerName}</InfoRow>
             <InfoRow label="Trạng thái">{getLeadStatusLabel(lead)}</InfoRow>
             <InfoRow label="Mức ưu tiên"><span className="uppercase text-red-600">{lead.intent}</span></InfoRow>
-            <InfoRow label="Nghiệp vụ"><span className="text-[var(--color-success)]">{operationLabel}</span></InfoRow>
+            <InfoRow label="Nghiệp vụ"><span className="text-[var(--color-success)]">Tiềm năng</span></InfoRow>
           </dl>
         </section>
 
@@ -212,4 +210,3 @@ export function LeadProfileTab({
     </div>
   );
 }
-

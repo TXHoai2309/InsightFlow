@@ -23,6 +23,11 @@ import {
 } from "@/lib/brandScope";
 import { canPerformAction } from "@/lib/rbac";
 import { getAlertWorkflowStatus, isResolvedAlert } from "@/lib/alertWorkflow";
+import {
+  canAccessAlertQueue,
+  canAlertBeVisibleToUser,
+  isAlertOwnedByUser,
+} from "@/lib/alert-visibility";
 
 const ALERTS_PER_PAGE = 5;
 import { collection, getDocs, doc, getDoc } from "firebase/firestore";
@@ -211,13 +216,13 @@ function MonitoringCountdown({ alert }: MonitoringCountdownProps) {
 export default function AlertsPage() {
   const router = useRouter();
   const { profile, loading: authLoading } = useAuth();
-  const isManager = profile?.role === "admin" || profile?.role === "brand_manager";
+  const isManager = profile?.role === "brand_manager";
   const scopedBrandKey = getScopedBrandKey(profile);
-  const canViewCrisisQueue = canPerformAction(profile, "view_crisis_queue");
+  const canViewCrisisQueue = canAccessAlertQueue(profile);
   const canUpdateCrisisStatus =
     hasBusinessBrandScope(profile) &&
     canPerformAction(profile, "update_crisis_status");
-  const brandFilterLocked = Boolean(profile && profile.role !== "admin");
+  const brandFilterLocked = Boolean(profile && canViewCrisisQueue);
   const { t, i18n } = useTranslation();
   const [spikeValue, setSpikeValue] = useState(40);
   const [reachValue, setReachValue] = useState(105000);
@@ -253,6 +258,10 @@ export default function AlertsPage() {
   const [customEndDate, setCustomEndDate] = useState<string>("");
   const [showDatePopover, setShowDatePopover] = useState(false);
   const [activeTrending, setActiveTrending] = useState<{ name: string; matchIds: string[] } | null>(null);
+
+  useEffect(() => {
+    if (!isManager) setShowMineOnly(false);
+  }, [isManager]);
 
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
@@ -439,18 +448,22 @@ export default function AlertsPage() {
     return alert.negativity_score ?? 0;
   };
 
-  // Everyone can see the shared queue; ownership only controls who may update it.
+  const visibleBaseAlerts = useMemo(
+    () => brandFilteredAlerts.filter((alert) => canAlertBeVisibleToUser(alert, profile)),
+    [brandFilteredAlerts, profile],
+  );
+
   const activeAlerts = useMemo(() => {
-    return brandFilteredAlerts.filter(a => {
+    return visibleBaseAlerts.filter(a => {
       const status = getAlertWorkflowStatus(a);
       if (status === "resolved") return false;
       return true;
     });
-  }, [brandFilteredAlerts]);
+  }, [visibleBaseAlerts]);
 
   const resolvedAlerts = useMemo(() => {
-    return brandFilteredAlerts.filter(isResolvedAlert);
-  }, [brandFilteredAlerts]);
+    return visibleBaseAlerts.filter(isResolvedAlert);
+  }, [visibleBaseAlerts]);
 
   const processedActiveAlerts = useMemo(() => {
     let result = statusFilter === "resolved" ? [...resolvedAlerts] : [...activeAlerts];
@@ -494,8 +507,8 @@ export default function AlertsPage() {
     }
 
     // 4. Mine only filter
-    if (showMineOnly && profile?.email) {
-      result = result.filter(a => a.being_resolved_by === profile.email);
+    if (showMineOnly) {
+      result = result.filter(a => isAlertOwnedByUser(a, profile));
     }
 
     // 5. Sorting. Risk priority is severity first, then the detailed risk
@@ -610,7 +623,7 @@ export default function AlertsPage() {
   // Harvest resolution log logs from actual alert histories
   const teamActivities = useMemo(() => {
     const list: any[] = [];
-    brandFilteredAlerts.forEach(a => {
+    visibleBaseAlerts.forEach(a => {
       if (a.resolution_history) {
         a.resolution_history.forEach((h: any) => {
           // Priority: stored name > stored email (mapped) > current lock holder > fallback
@@ -646,16 +659,16 @@ export default function AlertsPage() {
     }
 
     return list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 5);
-  }, [brandFilteredAlerts, t]);
+  }, [visibleBaseAlerts, t]);
 
   // Shift Performance resolved ratio calculation
   const shiftPerformanceStats = useMemo(() => {
-    const resolved = brandFilteredAlerts.filter(isResolvedAlert).length;
-    const total = brandFilteredAlerts.length;
+    const resolved = visibleBaseAlerts.filter(isResolvedAlert).length;
+    const total = visibleBaseAlerts.length;
     // We default to 100% KPI completion if there are no alerts to handle
     const percentage = total === 0 ? 100 : Math.round((resolved / total) * 100);
     return { percentage, resolved, total };
-  }, [brandFilteredAlerts]);
+  }, [visibleBaseAlerts]);
 
   const shiftPerformance = shiftPerformanceStats.percentage;
 
@@ -908,7 +921,7 @@ export default function AlertsPage() {
   // Compute lists of high-risk items for the Crisis Priority Center (unified Sự vụ & Bài viết & Thông tin liên hệ)
   const highRiskIncidents = useMemo(() => {
     // 1. Get unresolved critical/high alerts
-    const activeAlerts = alerts.filter(
+    const activeAlerts = visibleBaseAlerts.filter(
       a => (a.severity.toLowerCase() === "critical" || a.severity.toLowerCase() === "high") && !isResolvedAlert(a)
     );
 
@@ -937,7 +950,7 @@ export default function AlertsPage() {
         rawLead: matchingLead
       };
     });
-  }, [alerts, dashboardStore.leads]);
+  }, [visibleBaseAlerts, dashboardStore.leads, t]);
 
   // Count cases, posts, and contacts from highRiskIncidents
   const { casesCount, postsCount, contactsCount } = useMemo(() => {
@@ -1033,7 +1046,7 @@ export default function AlertsPage() {
 
       {/* Redesigned Grid Section */}
       <AlertWorkbench
-        alerts={brandFilteredAlerts}
+        alerts={visibleBaseAlerts}
         pageAlerts={paginatedActiveAlerts}
         selectedAlert={selectedAlert}
         selectedAlertId={selectedAlertId}
@@ -1054,6 +1067,7 @@ export default function AlertsPage() {
         customStartDate={customStartDate}
         customEndDate={customEndDate}
         brandFilterLocked={brandFilterLocked}
+        canViewAllAssignments={isManager}
         brands={brands}
         filters={filters}
         currentPage={alertPage}

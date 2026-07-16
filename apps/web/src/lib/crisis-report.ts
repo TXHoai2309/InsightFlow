@@ -1,6 +1,6 @@
 import type { AlertData } from "@/stores/alert.store";
 import type { UserRoleProfile } from "@/lib/rbac";
-import { getScopedBrandKey, isRecordInBrandScope } from "@/lib/brandScope";
+import { canAlertBeVisibleToUser } from "@/lib/alert-visibility";
 
 export interface CrisisReportKpi {
   total: number;
@@ -236,29 +236,6 @@ function getSlaStatus(alert: AlertData, nowMs: number) {
   if (resolvedTime !== null) return resolvedTime <= due ? "Dung SLA" : "Tre SLA";
   if (normalizeStatus(alert.status) === "resolved") return "Da dong";
   return due < nowMs ? "Qua han" : "Trong SLA";
-}
-
-function canAlertBeVisibleToUser(alert: AlertData, profile?: UserRoleProfile | null) {
-  if (!profile) return false;
-  if (!isRecordInBrandScope({ brand: alert.brand }, getScopedBrandKey(profile))) {
-    return false;
-  }
-
-  if (profile.role !== "crisis_employee") return true;
-
-  const email = normalizeText(profile.email);
-  const uid = normalizeText(profile.uid);
-  const status = normalizeStatus(alert.status);
-  const assignedTo = normalizeText(alert.being_resolved_by);
-  const resolvedBy = normalizeText(alert.resolved_by_email);
-  const touchedByUser = (alert.resolution_history || []).some((item) => {
-    return normalizeText(item.resolved_by_email) === email || normalizeText(item.resolved_by_name) === normalizeText(profile.displayName);
-  });
-
-  if (resolvedBy && resolvedBy !== email) return touchedByUser;
-  if (status === "resolved") return resolvedBy === email || touchedByUser;
-  if (!assignedTo) return true;
-  return assignedTo === email || assignedTo === uid || touchedByUser;
 }
 
 function buildDistribution(

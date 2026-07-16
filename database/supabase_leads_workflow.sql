@@ -36,6 +36,8 @@ alter table public.leads
   add column if not exists label_correction_status text,
   add column if not exists pending_label_request_id text,
   add column if not exists last_label_corrected_at timestamptz,
+  -- Legacy transfer fields are retained temporarily for read-only audit.
+  -- The application no longer reads or writes these fields.
   add column if not exists operational_queue text,
   add column if not exists previous_operational_queue text,
   add column if not exists transfer_reason text,
