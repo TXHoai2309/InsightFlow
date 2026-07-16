@@ -946,7 +946,10 @@ export async function approveSupabaseAiAnnotations(
       method: 'POST',
       body: JSON.stringify({
         p_items: labelableItems.map(item => ({
-          entity_key: item.entityKey.replace(/^befood:/, 'be:'),
+          // The approval RPC requires an exact annotations.entity_key match.
+          // Keep the key returned by Supabase instead of rewriting BeFood's
+          // canonical `befood:` prefix to the legacy `be:` alias.
+          entity_key: item.entityKey,
           label: item.label,
         })),
         p_reviewer: reviewer,
@@ -954,7 +957,13 @@ export async function approveSupabaseAiAnnotations(
       headers: { Prefer: 'return=representation' },
     },
   );
-  return Number(approved) || 0;
+  const approvedCount = Number(approved) || 0;
+  if (approvedCount === 0) {
+    throw new Error(
+      'Không tìm thấy nhãn AI đang chờ khớp với dữ liệu vừa tải. Hãy tải lại dữ liệu rồi thử lại.',
+    );
+  }
+  return approvedCount;
 }
 
 export interface BulkAiApprovalResult {
