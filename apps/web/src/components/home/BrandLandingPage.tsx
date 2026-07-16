@@ -41,8 +41,6 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { getDefaultRouteForRole } from "@/lib/rbac";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
 
 type FormState = {
   fullName: string;
@@ -50,9 +48,14 @@ type FormState = {
   phone: string;
   company: string;
   industry: string;
-  channels: string;
   need: string;
   teamSize: string;
+};
+
+type BrandConfigurationState = {
+  keywords: string;
+  platforms: string[];
+  notes: string;
 };
 
 const initialFormState: FormState = {
@@ -61,12 +64,56 @@ const initialFormState: FormState = {
   phone: "",
   company: "",
   industry: "",
-  channels: "",
-  need: "Phát hiện khách hàng tiềm năng",
+  need: "",
   teamSize: "",
 };
 
-const channels = ["Facebook", "TikTok", "YouTube", "Review", "Tin tức", "Website"];
+const initialBrandConfiguration: BrandConfigurationState = {
+  keywords: "",
+  platforms: [],
+  notes: "",
+};
+
+const industryOptions = [
+  "Bán lẻ & Thương mại điện tử",
+  "F&B - Nhà hàng & Đồ uống",
+  "Tài chính - Ngân hàng - Bảo hiểm",
+  "Bất động sản",
+  "Ô tô & Xe máy",
+  "Công nghệ & Phần mềm",
+  "Viễn thông",
+  "Y tế & Dược phẩm",
+  "Giáo dục & Đào tạo",
+  "Du lịch & Khách sạn",
+  "Thời trang & Làm đẹp",
+  "Hàng tiêu dùng nhanh (FMCG)",
+  "Truyền thông & Giải trí",
+  "Logistics & Vận tải",
+  "Sản xuất & Công nghiệp",
+  "Dịch vụ chuyên nghiệp",
+  "Tổ chức công & Phi lợi nhuận",
+  "Khác",
+];
+
+const needOptions = [
+  "Phát hiện khách hàng tiềm năng",
+  "Theo dõi sức khỏe thương hiệu",
+  "Cảnh báo khủng hoảng truyền thông",
+  "Báo cáo AI cho ban lãnh đạo",
+  "Tư vấn quy trình tổng thể",
+  "Tất cả nhu cầu trên",
+];
+
+const monitoringPlatforms = [
+  "Facebook",
+  "TikTok",
+  "YouTube",
+  "Threads",
+  "Tin tức/Báo chí",
+  "Website/Blog",
+  "Google Maps",
+  "Sàn thương mại điện tử",
+];
 
 const heatmapOpacities = [
   0.72, 0.9, 1, 0.58, 0.66, 0.86, 0.62,
@@ -449,6 +496,8 @@ export default function BrandLandingPage() {
   const reduceMotion = useReducedMotion();
   const appRoute = profile?.defaultRoute || getDefaultRouteForRole(role);
   const [form, setForm] = useState<FormState>(initialFormState);
+  const [brandConfiguration, setBrandConfiguration] = useState<BrandConfigurationState>(initialBrandConfiguration);
+  const [consultationStep, setConsultationStep] = useState<1 | 2>(1);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -456,36 +505,65 @@ export default function BrandLandingPage() {
   const activeRole = roleStories.find((story) => story.id === selectedRole) ?? roleStories[0];
 
   const missingRequired = useMemo(
-    () => !form.fullName || !form.email || !form.phone || !form.company || !form.need,
+    () => !form.fullName.trim() || !form.email.trim() || !form.phone.trim() || !form.company.trim() || !form.industry || !form.need,
     [form],
+  );
+
+  const missingConfiguration = useMemo(
+    () => !brandConfiguration.keywords.trim() || brandConfiguration.platforms.length === 0,
+    [brandConfiguration],
   );
 
   const updateForm = (field: keyof FormState, value: string) => setForm((current) => ({ ...current, [field]: value }));
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleContinueToConfiguration = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (missingRequired) return;
+    setSubmitError("");
+    setConsultationStep(2);
+  };
+
+  const togglePlatform = (platform: string) => {
+    setBrandConfiguration((current) => ({
+      ...current,
+      platforms: current.platforms.includes(platform)
+        ? current.platforms.filter((item) => item !== platform)
+        : [...current.platforms, platform],
+    }));
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (missingRequired) {
+      setConsultationStep(1);
+      return;
+    }
+    if (missingConfiguration) return;
     setSubmitting(true);
     setSubmitError("");
     try {
-      await addDoc(collection(db, "consultations"), {
-        fullName: form.fullName.trim(),
-        email: form.email.trim(),
-        phone: form.phone.trim(),
-        company: form.company.trim(),
-        industry: form.industry.trim() || "",
-        channels: form.channels || "",
-        need: form.need,
-        teamSize: form.teamSize || "",
-        status: "pending",
-        notes: "",
-        contactPlan: "",
-        createdAt: serverTimestamp(),
+      const response = await fetch("/api/consultations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...form,
+          keywords: brandConfiguration.keywords
+            .split(/[\n,]/)
+            .map((keyword) => keyword.trim())
+            .filter(Boolean),
+          platforms: brandConfiguration.platforms,
+          configurationNotes: brandConfiguration.notes.trim(),
+        }),
       });
+
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result.error || "Không thể gửi yêu cầu tư vấn.");
+      }
       setSubmitted(true);
     } catch (err: any) {
       console.error("Error submitting consultation request:", err);
-      setSubmitError("Đã xảy ra lỗi khi gửi yêu cầu. Vui lòng thử lại sau.");
+      setSubmitError(err?.message || "Đã xảy ra lỗi khi gửi yêu cầu. Vui lòng thử lại sau.");
     } finally {
       setSubmitting(false);
     }
@@ -1312,10 +1390,17 @@ export default function BrandLandingPage() {
                   </div>
                   <h3 className="font-display text-[32px] font-extrabold text-[#1B1B4A] dark:text-white">Thông tin của bạn đã đến nơi.</h3>
                   <p className="mt-4 max-w-[440px] text-[17px] leading-[1.7] text-[#6B7090] dark:text-slate-300">Đội InsightFlow sẽ liên hệ để tìm hiểu bài toán và sắp xếp buổi tư vấn phù hợp.</p>
-                  <button type="button" onClick={() => { setSubmitted(false); setForm(initialFormState); }} className="mt-8 rounded-full border border-[#ECE9FF] dark:border-white/10 bg-white dark:bg-white/5 px-8 py-4 text-[15px] font-bold text-[#1B1B4A] dark:text-white transition-all hover:bg-[#F5F3FF] dark:hover:bg-white/10 hover:border-[#6D5EF6]/30 shadow-sm">Gửi một yêu cầu khác</button>
+                  <button type="button" onClick={() => { setSubmitted(false); setForm(initialFormState); setBrandConfiguration(initialBrandConfiguration); setConsultationStep(1); }} className="mt-8 rounded-full border border-[#ECE9FF] dark:border-white/10 bg-white dark:bg-white/5 px-8 py-4 text-[15px] font-bold text-[#1B1B4A] dark:text-white transition-all hover:bg-[#F5F3FF] dark:hover:bg-white/10 hover:border-[#6D5EF6]/30 shadow-sm">Gửi một yêu cầu khác</button>
                 </div>
-              ) : (
-                <form onSubmit={handleSubmit} className="grid gap-6">
+              ) : consultationStep === 1 ? (
+                <form onSubmit={handleContinueToConfiguration} className="grid gap-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[12px] font-extrabold uppercase tracking-[0.16em] text-[#6D5EF6]">Bước 1/2</p>
+                      <h3 className="mt-1 text-[24px] font-extrabold text-[#1B1B4A] dark:text-white">Đăng ký tư vấn</h3>
+                    </div>
+                    <span className="rounded-full bg-[#6D5EF6]/10 px-3 py-1 text-[12px] font-bold text-[#6D5EF6]">Thông tin liên hệ</span>
+                  </div>
                   <div className="grid gap-6 md:grid-cols-2">
                     <label className="grid gap-2 text-[14px] font-extrabold text-[#1B1B4A] dark:text-white">
                       Họ và tên *
@@ -1338,8 +1423,11 @@ export default function BrandLandingPage() {
                   </div>
                   <div className="grid gap-6 md:grid-cols-2">
                     <label className="grid gap-2 text-[14px] font-extrabold text-[#1B1B4A] dark:text-white">
-                      Ngành hàng
-                      <input value={form.industry} onChange={(event) => updateForm("industry", event.target.value)} className="h-14 rounded-[16px] border border-[#ECE9FF] dark:border-white/10 bg-white dark:bg-[#0A0612]/50 px-4 text-[15px] text-[#1B1B4A] dark:text-white outline-none transition focus:border-[#6D5EF6] focus:ring-4 focus:ring-[#6D5EF6]/10 placeholder:text-slate-400" placeholder="F&B, bán lẻ..." />
+                      Ngành hàng *
+                      <select value={form.industry} onChange={(event) => updateForm("industry", event.target.value)} className="h-14 rounded-[16px] border border-[#ECE9FF] dark:border-white/10 bg-white dark:bg-[#0A0612]/50 px-4 text-[15px] text-[#6B7090] dark:text-slate-300 outline-none transition focus:border-[#6D5EF6] focus:ring-4 focus:ring-[#6D5EF6]/10">
+                        <option value="">Chọn ngành hàng</option>
+                        {industryOptions.map((industry) => <option key={industry} value={industry}>{industry}</option>)}
+                      </select>
                     </label>
                     <label className="grid gap-2 text-[14px] font-extrabold text-[#1B1B4A] dark:text-white">
                       Quy mô đội ngũ
@@ -1352,46 +1440,61 @@ export default function BrandLandingPage() {
                       </select>
                     </label>
                   </div>
+                  <label className="grid gap-2 text-[14px] font-extrabold text-[#1B1B4A] dark:text-white">
+                    Nhu cầu chính *
+                    <select value={form.need} onChange={(event) => updateForm("need", event.target.value)} className="h-14 rounded-[16px] border border-[#ECE9FF] dark:border-white/10 bg-white dark:bg-[#0A0612]/50 px-4 text-[15px] text-[#6B7090] dark:text-slate-300 outline-none transition focus:border-[#6D5EF6] focus:ring-4 focus:ring-[#6D5EF6]/10">
+                      <option value="">Chọn nhu cầu chính</option>
+                      {needOptions.map((need) => <option key={need} value={need}>{need}</option>)}
+                    </select>
+                  </label>
+                  <button type="submit" disabled={missingRequired} className="mt-6 inline-flex h-[56px] w-full items-center justify-center gap-2 rounded-full bg-[#1B1B4A] hover:bg-[#2A2A6A] px-8 text-[16px] font-bold text-white shadow-[0_12px_24px_rgba(27,27,74,0.15)] transition-all hover:-translate-y-1 hover:shadow-[0_20px_40px_rgba(27,27,74,0.25)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none">
+                    Gửi thông tin để nhận tư vấn
+                    <ArrowRight className="h-5 w-5" />
+                  </button>
+                </form>
+              ) : (
+                <form onSubmit={handleSubmit} className="grid gap-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-[12px] font-extrabold uppercase tracking-[0.16em] text-[#6D5EF6]">Bước 2/2</p>
+                      <h3 className="mt-1 text-[24px] font-extrabold text-[#1B1B4A] dark:text-white">Cấu hình thương hiệu</h3>
+                      <p className="mt-2 text-[14px] text-[#6B7090] dark:text-slate-300">Thiết lập thông tin theo dõi cho <strong>{form.company}</strong>.</p>
+                    </div>
+                    <button type="button" onClick={() => setConsultationStep(1)} className="shrink-0 rounded-full border border-[#ECE9FF] px-4 py-2 text-[13px] font-bold text-[#6D5EF6] transition hover:bg-[#6D5EF6]/5">Quay lại</button>
+                  </div>
+
+                  <label className="grid gap-2 text-[14px] font-extrabold text-[#1B1B4A] dark:text-white">
+                    Từ khóa thương hiệu *
+                    <textarea value={brandConfiguration.keywords} onChange={(event) => setBrandConfiguration((current) => ({ ...current, keywords: event.target.value }))} rows={4} className="rounded-[16px] border border-[#ECE9FF] dark:border-white/10 bg-white dark:bg-[#0A0612]/50 px-4 py-3 text-[15px] font-medium text-[#1B1B4A] dark:text-white outline-none transition focus:border-[#6D5EF6] focus:ring-4 focus:ring-[#6D5EF6]/10 placeholder:text-slate-400" placeholder="Ví dụ: InsightFlow, Insight Flow, sản phẩm chủ lực... (ngăn cách bằng dấu phẩy hoặc xuống dòng)" />
+                  </label>
+
                   <div className="grid gap-3">
-                    <span className="text-[14px] font-extrabold text-[#1B1B4A] dark:text-white">Kênh muốn theo dõi</span>
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      {channels.map((channel) => {
-                        const selected = form.channels.split(",").filter(Boolean).includes(channel);
+                    <span className="text-[14px] font-extrabold text-[#1B1B4A] dark:text-white">Các nền tảng cần theo dõi *</span>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {monitoringPlatforms.map((platform) => {
+                        const selected = brandConfiguration.platforms.includes(platform);
                         return (
-                          <button key={channel} type="button" onClick={() => { const current = form.channels.split(",").filter(Boolean); updateForm("channels", (selected ? current.filter((item) => item !== channel) : [...current, channel]).join(",")); }} className={`h-12 rounded-[12px] border text-[14px] font-bold transition-all ${selected ? "border-[#6D5EF6] bg-[#6D5EF6]/10 text-[#6D5EF6]" : "border-[#ECE9FF] dark:border-white/10 bg-white dark:bg-[#0A0612]/50 text-[#6B7090] dark:text-slate-300 hover:border-[#6D5EF6]/40"}`}>
-                            {channel}
+                          <button key={platform} type="button" onClick={() => togglePlatform(platform)} className={`min-h-12 rounded-[12px] border px-3 py-2 text-[14px] font-bold transition-all ${selected ? "border-[#6D5EF6] bg-[#6D5EF6]/10 text-[#6D5EF6]" : "border-[#ECE9FF] dark:border-white/10 bg-white dark:bg-[#0A0612]/50 text-[#6B7090] dark:text-slate-300 hover:border-[#6D5EF6]/40"}`}>
+                            {selected && <CheckCircle2 className="mr-2 inline h-4 w-4" />}
+                            {platform}
                           </button>
                         );
                       })}
                     </div>
                   </div>
+
                   <label className="grid gap-2 text-[14px] font-extrabold text-[#1B1B4A] dark:text-white">
-                    Nhu cầu chính *
-                    <select value={form.need} onChange={(event) => updateForm("need", event.target.value)} className="h-14 rounded-[16px] border border-[#ECE9FF] dark:border-white/10 bg-white dark:bg-[#0A0612]/50 px-4 text-[15px] text-[#6B7090] dark:text-slate-300 outline-none transition focus:border-[#6D5EF6] focus:ring-4 focus:ring-[#6D5EF6]/10">
-                      <option>Phát hiện khách hàng tiềm năng</option>
-                      <option>Theo dõi sức khỏe thương hiệu</option>
-                      <option>Cảnh báo khủng hoảng truyền thông</option>
-                      <option>Báo cáo AI cho ban lãnh đạo</option>
-                      <option>Tư vấn quy trình tổng thể</option>
-                    </select>
+                    Ghi chú
+                    <textarea value={brandConfiguration.notes} onChange={(event) => setBrandConfiguration((current) => ({ ...current, notes: event.target.value }))} rows={4} className="rounded-[16px] border border-[#ECE9FF] dark:border-white/10 bg-white dark:bg-[#0A0612]/50 px-4 py-3 text-[15px] font-medium text-[#1B1B4A] dark:text-white outline-none transition focus:border-[#6D5EF6] focus:ring-4 focus:ring-[#6D5EF6]/10 placeholder:text-slate-400" placeholder="Mô tả thêm sản phẩm, đối thủ, khu vực hoặc yêu cầu cần lưu ý..." />
                   </label>
-                  {submitError && (
-                    <div className="rounded-xl border border-red-500/20 bg-[#ef4444]/5 p-4 text-[14px] text-red-500 dark:text-red-400">
-                      {submitError}
-                    </div>
-                  )}
-                  <button type="submit" disabled={missingRequired || submitting} className="mt-6 inline-flex h-[56px] w-full items-center justify-center gap-2 rounded-full bg-[#1B1B4A] hover:bg-[#2A2A6A] px-8 text-[16px] font-bold text-white shadow-[0_12px_24px_rgba(27,27,74,0.15)] transition-all hover:-translate-y-1 hover:shadow-[0_20px_40px_rgba(27,27,74,0.25)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none">
-                    {submitting ? "Đang gửi yêu cầu..." : "Gửi thông tin để nhận tư vấn"}
-                    {submitting ? (
-                      <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                    ) : (
-                      <Send className="h-5 w-5" />
-                    )}
+
+                  {submitError && <div className="rounded-xl border border-red-500/20 bg-[#ef4444]/5 p-4 text-[14px] text-red-500 dark:text-red-400">{submitError}</div>}
+
+                  <button type="submit" disabled={missingConfiguration || submitting} className="mt-2 inline-flex h-[56px] w-full items-center justify-center gap-2 rounded-full bg-[#1B1B4A] hover:bg-[#2A2A6A] px-8 text-[16px] font-bold text-white shadow-[0_12px_24px_rgba(27,27,74,0.15)] transition-all hover:-translate-y-1 hover:shadow-[0_20px_40px_rgba(27,27,74,0.25)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none">
+                    {submitting ? "Đang gửi yêu cầu..." : "Gửi yêu cầu và cấu hình"}
+                    {submitting ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : <Send className="h-5 w-5" />}
                   </button>
-                  <p className="mt-3 text-center text-[13px] leading-[1.6] text-[#6B7090]">Khi gửi biểu mẫu, bạn đồng ý để InsightFlow liên hệ nhằm tư vấn về nhu cầu dùng thử và cách triển khai phù hợp.</p>
+                  <p className="text-center text-[13px] leading-[1.6] text-[#6B7090]">Yêu cầu tư vấn và cấu hình thương hiệu sẽ được gửi đồng thời đến đội ngũ InsightFlow.</p>
                 </form>
               )}
             </div>

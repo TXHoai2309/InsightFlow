@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
-import { collection, doc, updateDoc, onSnapshot, query, orderBy } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { auth } from "@/lib/firebase";
 import {
   Search,
   User,
@@ -18,11 +18,12 @@ import {
   Copy,
   ExternalLink,
   Filter,
-  MessageSquare,
+  Settings2,
   HelpCircle,
   Users,
   AlertTriangle,
-  Play
+  Play,
+  RefreshCw,
 } from "lucide-react";
 
 interface ConsultationRequest {
@@ -32,7 +33,8 @@ interface ConsultationRequest {
   phone: string;
   company: string;
   industry?: string;
-  channels?: string;
+  configurationId?: string;
+  hasBrandConfiguration?: boolean;
   need: string;
   teamSize?: string;
   status: "pending" | "contacting" | "completed" | "unreachable";
@@ -129,41 +131,37 @@ export default function AdminConsultationsPage() {
 
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [loadError, setLoadError] = useState("");
 
-  // Load consultations from Firestore in real-time
-  useEffect(() => {
-    const q = query(collection(db, "consultations"), orderBy("createdAt", "desc"));
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const loaded: ConsultationRequest[] = snapshot.docs.map((doc) => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            fullName: data.fullName || "",
-            email: data.email || "",
-            phone: data.phone || "",
-            company: data.company || "",
-            industry: data.industry || "",
-            channels: data.channels || "",
-            need: data.need || "",
-            teamSize: data.teamSize || "",
-            status: data.status || "pending",
-            notes: data.notes || "",
-            contactPlan: data.contactPlan || "",
-            createdAt: data.createdAt,
-          } as ConsultationRequest;
-        });
-        setRequests(loaded);
-        setLoading(false);
-      },
-      (error) => {
-        console.error("Error loading consultations:", error);
-        setLoading(false);
-      }
-    );
-    return () => unsubscribe();
+  const loadConsultations = useCallback(async () => {
+    setLoading(true);
+    setLoadError("");
+    try {
+      await auth.authStateReady();
+      const user = auth.currentUser;
+      if (!user) throw new Error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+      const token = await user.getIdToken();
+      const response = await fetch("/api/admin/consultations", {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Không thể tải yêu cầu tư vấn.");
+
+      const loaded = (result.consultations || []) as ConsultationRequest[];
+      setRequests(loaded);
+      setSelectedId((current) => current && loaded.some((item) => item.id === current) ? current : loaded[0]?.id || null);
+    } catch (error: any) {
+      console.error("Error loading consultations:", error);
+      setLoadError(error?.message || "Không thể tải yêu cầu tư vấn.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadConsultations();
+  }, [loadConsultations]);
 
   // Filter and search computation
   const filteredRequests = useMemo(() => {
@@ -204,7 +202,6 @@ export default function AdminConsultationsPage() {
     }
   }, [selectedRequest]);
 
-  // Save updates to Firestore
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedId) return;
@@ -212,16 +209,33 @@ export default function AdminConsultationsPage() {
     setSaving(true);
     setSaveSuccess(false);
     try {
-      const docRef = doc(db, "consultations", selectedId);
-      await updateDoc(docRef, {
+      await auth.authStateReady();
+      const user = auth.currentUser;
+      if (!user) throw new Error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+      const token = await user.getIdToken();
+      const response = await fetch("/api/admin/consultations", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          id: selectedId,
+          status: editStatus,
+          notes: editNotes,
+          contactPlan: editContactPlan,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Không thể cập nhật yêu cầu tư vấn.");
+      setRequests((current) => current.map((item) => item.id === selectedId ? {
+        ...item,
         status: editStatus,
         notes: editNotes.trim(),
         contactPlan: editContactPlan,
-      });
+      } : item));
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating consultation:", error);
+      setLoadError(error?.message || "Không thể cập nhật yêu cầu tư vấn.");
     } finally {
       setSaving(false);
     }
@@ -283,6 +297,15 @@ export default function AdminConsultationsPage() {
           </div>
         </div>
       </section>
+
+      {loadError && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-[13px] text-rose-600 dark:text-rose-400">
+          <span>{loadError}</span>
+          <button type="button" onClick={() => void loadConsultations()} className="inline-flex items-center gap-1.5 rounded-lg border border-rose-500/20 bg-white/60 px-3 py-1.5 font-bold transition hover:bg-white dark:bg-black/10 dark:hover:bg-black/20">
+            <RefreshCw className="h-3.5 w-3.5" /> Thử tải lại
+          </button>
+        </div>
+      )}
 
       {/* Main workspace */}
       {loading ? (
@@ -476,23 +499,18 @@ export default function AdminConsultationsPage() {
                     </p>
                   </div>
 
-                  <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-3 space-y-1 sm:col-span-2">
-                    <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
-                      <MessageSquare className="h-3.5 w-3.5" />
-                      Kênh muốn giám sát
-                    </span>
-                    <div className="flex flex-wrap gap-1.5 mt-1">
-                      {selectedRequest.channels ? (
-                        selectedRequest.channels.split(",").filter(Boolean).map((ch) => (
-                          <span key={ch} className="text-[11px] px-2 py-0.5 rounded-md font-bold border bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20">
-                            {ch}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-[12px] text-[var(--color-text-muted)] font-medium">Chưa gán kênh nào</span>
-                      )}
+                  {selectedRequest.hasBrandConfiguration && (
+                    <div className="flex items-center justify-between gap-3 rounded-xl border border-[var(--color-brand)]/20 bg-[var(--color-brand-subtle)] p-3 sm:col-span-2">
+                      <div>
+                        <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--color-brand)]">
+                          <Settings2 className="h-3.5 w-3.5" />
+                          Cấu hình thương hiệu
+                        </span>
+                        <p className="mt-1 text-[12px] text-[var(--color-text-secondary)]">Khách hàng đã gửi từ khóa và nền tảng cần theo dõi.</p>
+                      </div>
+                      <Link href="/admin/brand-configurations" className="shrink-0 rounded-lg bg-[var(--color-brand)] px-3 py-2 text-[12px] font-bold text-white transition hover:opacity-90">Xem cấu hình</Link>
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 {/* Edit Form - Plan and Status */}

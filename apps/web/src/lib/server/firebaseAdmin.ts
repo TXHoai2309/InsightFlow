@@ -7,6 +7,7 @@ import { getAuth } from "firebase-admin/auth";
 const SERVICE_ACCOUNT_PATHS = [
   path.join(process.cwd(), "service-account.json"),
   path.join(process.cwd(), "..", "api", "service-account.json"),
+  path.join(process.cwd(), "apps", "api", "service-account.json"),
 ];
 
 const possiblePaths = [
