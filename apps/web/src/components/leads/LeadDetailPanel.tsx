@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ClipboardCheck, Sparkles, UserPlus } from "lucide-react";
 import { LeadHistoryTab } from "@/components/leads/LeadHistoryTab";
 import { LeadProfileTab } from "@/components/leads/LeadProfileTab";
@@ -43,7 +43,7 @@ interface LeadDetailPanelProps {
   workbenchView: LeadWorkbenchView;
   onClose: () => void;
   onAfterResult?: () => void;
-  onStartedAction?: (lead: Lead) => void;
+  onStartedAction?: (lead: Lead, preventJump?: boolean) => void;
   returnContext?: {
     view: LeadWorkbenchView;
     page: number;
@@ -128,9 +128,78 @@ export function LeadDetailPanel({
   isCollapsed,
   onCollapseToggle,
 }: LeadDetailPanelProps) {
-  const { profile } = useAuth();
+  const { profile, role, user } = useAuth();
   const { updateLeadDetails } = useDashboardStore();
   const [internalActiveTab, setInternalActiveTab] = useState<PanelTab>("action");
+  const [staffList, setStaffList] = useState<{uid: string, displayName: string, email: string}[]>([]);
+  const [loadingStaff, setLoadingStaff] = useState(false);
+  const [assigningUid, setAssigningUid] = useState<string | null>(null);
+  const [isAssignDropdownOpen, setIsAssignDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsAssignDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    if (role === 'brand_manager' && workbenchView === "unassigned") {
+      const loadStaff = async () => {
+        setLoadingStaff(true);
+        try {
+          const token = await user?.getIdToken();
+          const res = await fetch("/api/staff", { headers: { Authorization: `Bearer ${token}` } });
+          const data = await res.json();
+          if (res.ok && data.data) {
+            setStaffList(data.data.filter((s: any) => !s.disabled && (s.permissions || []).includes("leads")));
+          }
+        } catch (e) {
+          console.error(e);
+        }
+        setLoadingStaff(false);
+      };
+      loadStaff();
+    }
+  }, [role, workbenchView, user]);
+
+  const handleAssignTo = async (uid: string) => {
+    if (!uid || !canEdit || !profile) return;
+    const selectedStaff = staffList.find(s => s.uid === uid);
+    if (!selectedStaff) return;
+    
+    try {
+      setAssigningUid(uid);
+      setSaveError("");
+      const nowIso = new Date().toISOString();
+      const ownerData: Partial<Lead> = {
+        owner_id: selectedStaff.uid,
+        owner_name: selectedStaff.displayName || selectedStaff.email || "Nhân viên",
+        owner_email: selectedStaff.email,
+        assigned_at: nowIso,
+        assigned_by: profile.uid,
+        claimed_at: nowIso,
+      };
+
+      await updateLeadDetails(lead.id, ownerData, profile);
+      onStartedAction?.({ ...lead, ...ownerData }, true);
+      showToast(`Đã giao việc cho ${ownerData.owner_name}`, "success");
+    } catch (error: any) {
+      console.error(error);
+      const message = getLeadOperationErrorMessage(
+        error,
+        "Không thể giao việc cho nhân viên.",
+      );
+      setSaveError(message);
+      showToast(message, "error");
+    } finally {
+      setAssigningUid(null);
+    }
+  };
   const [selectedResult, setSelectedResult] = useState<ResultAction | null>(null);
   const [showSkipForm, setShowSkipForm] = useState(false);
   const [skipReason, setSkipReason] = useState("");
@@ -487,7 +556,7 @@ export function LeadDetailPanel({
   return (
     <aside
       data-tour="lead-detail-panel"
-      className="flex min-w-0 shrink-0 flex-col self-start rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm"
+      className="flex min-w-0 shrink-0 flex-col self-start rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm min-[1100px]:sticky min-[1100px]:top-4 min-[1100px]:max-h-[calc(100vh-100px)]"
     >
       <div className="shrink-0 border-b border-[var(--color-border)] p-[2%]">
         <div className="flex items-start justify-between gap-2.5">
@@ -555,7 +624,7 @@ export function LeadDetailPanel({
 
       <div
         id={LEAD_DETAIL_PANEL_SCROLL_ID}
-        className="flex-1 p-[2%]"
+        className="flex-1 overflow-y-auto p-[2%] min-h-0"
       >
         {activeTab === "action" && (
           <div className="space-y-2.5">
@@ -595,10 +664,60 @@ export function LeadDetailPanel({
                       <p className="mt-0.5 text-xs leading-5 text-[var(--color-text-secondary)]">Nhận item để bắt đầu xử lý nghiệp vụ.</p>
                     </div>
                   </div>
-                  <button type="button" data-tour="lead-detail-claim-button" onClick={handleClaim} disabled={!canClaimLead || !ownership.canClaim} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50">
-                    <UserPlus size={18} aria-hidden="true" />
-                    Nhận xử lý
-                  </button>
+                  <div className="mt-3 flex gap-2">
+                    {role === "brand_manager" && (
+                      <div className="flex-1 relative min-w-0" ref={dropdownRef}>
+                        <button 
+                          type="button"
+                          onClick={() => setIsAssignDropdownOpen(!isAssignDropdownOpen)}
+                          disabled={loadingStaff || Boolean(assigningUid) || !canClaimLead}
+                          className="flex w-full items-center justify-between gap-2 rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="material-symbols-outlined shrink-0 text-[18px]">person_add</span>
+                            <span className="truncate">
+                              {loadingStaff ? "Đang tải..." : assigningUid ? "Đang giao..." : "Giao việc cho nhân viên"}
+                            </span>
+                          </div>
+                          <span className="material-symbols-outlined shrink-0 text-[18px]">
+                            {isAssignDropdownOpen ? "expand_less" : "expand_more"}
+                          </span>
+                        </button>
+                        
+                        {isAssignDropdownOpen && (
+                          <div className="absolute left-0 top-full z-50 mt-1.5 w-full min-w-[200px] max-h-[240px] overflow-y-auto rounded-xl border border-[var(--color-border)] bg-white p-1.5 shadow-xl animate-in fade-in slide-in-from-top-2">
+                            {staffList.length === 0 ? (
+                              <div className="p-3 text-center text-xs text-[var(--color-text-secondary)]">Không có nhân viên phù hợp</div>
+                            ) : (
+                              staffList.map((s) => (
+                                <button
+                                  key={s.uid}
+                                  onClick={() => {
+                                    setIsAssignDropdownOpen(false);
+                                    handleAssignTo(s.uid);
+                                  }}
+                                  className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-[var(--color-text-primary)] transition hover:bg-[var(--color-bg-surface-raised)]"
+                                >
+                                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-[11px] font-bold text-[var(--color-brand)]">
+                                    {(s.displayName || s.email || "?").charAt(0).toUpperCase()}
+                                  </div>
+                                  <span className="truncate font-medium">{s.displayName || s.email}</span>
+                                </button>
+                              ))
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <button type="button" data-tour="lead-detail-claim-button" onClick={handleClaim} disabled={!canClaimLead || !ownership.canClaim} className={
+                      role === "brand_manager"
+                        ? "inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-white px-3 py-2 text-[13px] font-semibold text-[var(--color-text-secondary)] shadow-sm transition hover:border-gray-300 hover:text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
+                        : "inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+                    }>
+                      {role !== "brand_manager" && <UserPlus size={18} aria-hidden="true" />}
+                      <span>Nhận xử lý</span>
+                    </button>
+                  </div>
                 </section>
               )}
 

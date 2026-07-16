@@ -180,14 +180,14 @@ export default function RootLayout({
                 /* Trang app (Dashboard, Mentions...) — có sidebar */
                 <ProtectedRoute>
                   <div
-                    className="flex h-screen w-screen overflow-hidden"
+                    className="flex h-screen w-full overflow-hidden"
                     style={{ backgroundColor: "var(--color-bg-primary)" }}
                   >
                     <Sidebar
                       isOpen={sidebarOpen}
                       onClose={() => setSidebarOpen(false)}
                     />
-                    <div className="flex flex-col flex-1 md:ml-64">
+                    <div className="flex flex-col flex-1 min-w-0 md:ml-64">
                       <Header
                         onMenuToggle={() => setSidebarOpen((prev) => !prev)}
                       />
