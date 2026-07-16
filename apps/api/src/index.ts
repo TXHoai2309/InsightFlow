@@ -6,6 +6,7 @@ import adminRoutes from "./routes/admin";
 import staffRoutes from "./routes/staff";
 import templateRoutes from "./routes/templates";
 import customerInteractionRoutes from "./routes/customer_interactions";
+import leadActivityRoutes from "./routes/lead_activity";
 
 const fastify = Fastify({
   logger: true,
@@ -38,6 +39,9 @@ fastify.register(templateRoutes, { prefix: "/api/templates" });
 
 // Register customer interaction history routes
 fastify.register(customerInteractionRoutes, { prefix: "/api/customer-interactions" });
+
+// Register Lead operational activity history routes
+fastify.register(leadActivityRoutes, { prefix: "/api/leads" });
 
 // Health check endpoint
 fastify.get("/health", async () => {

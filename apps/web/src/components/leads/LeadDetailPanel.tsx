@@ -99,13 +99,14 @@ export function LeadDetailPanel({
   onCollapseToggle,
 }: LeadDetailPanelProps) {
   const { profile } = useAuth();
-  const { updateLeadDetails } = useDashboardStore();
+  const { updateLeadDetails, claimLead } = useDashboardStore();
   const [internalActiveTab, setInternalActiveTab] = useState<PanelTab>("action");
   const [selectedResult, setSelectedResult] = useState<ResultAction | null>(null);
   const [showSkipForm, setShowSkipForm] = useState(false);
   const [skipReason, setSkipReason] = useState("");
   const [skipNote, setSkipNote] = useState("");
   const [isSkipping, setIsSkipping] = useState(false);
+  const [isClaiming, setIsClaiming] = useState(false);
   const [skipError, setSkipError] = useState("");
   const [note, setNote] = useState("");
   const [followUpDate, setFollowUpDate] = useState("");
@@ -240,22 +241,13 @@ export function LeadDetailPanel({
   };
 
   const handleClaim = async () => {
-    if (!canEdit || !profile) return;
+    if (!canEdit || !profile || isClaiming || !ownership.canClaim) return;
 
     try {
+      setIsClaiming(true);
       setSaveError("");
-      const nowIso = new Date().toISOString();
-      const ownerData: Partial<Lead> = {
-        owner_id: profile.uid,
-        owner_name: getOwnerName(),
-        owner_email: profile.email,
-        assigned_at: nowIso,
-        assigned_by: profile.uid,
-        claimed_at: nowIso,
-      };
-
-      await updateLeadDetails(lead.id, ownerData, profile);
-      onStartedAction?.({ ...lead, ...ownerData });
+      const claimData = await claimLead(lead.id, profile);
+      onStartedAction?.({ ...lead, ...claimData });
       showToast("Nhận xử lý lead thành công!", "success");
     } catch (error: any) {
       console.error(error);
@@ -265,6 +257,8 @@ export function LeadDetailPanel({
       );
       setSaveError(message);
       showToast(message, "error");
+    } finally {
+      setIsClaiming(false);
     }
   };
 
@@ -520,9 +514,13 @@ export function LeadDetailPanel({
                       <p className="mt-0.5 text-xs leading-5 text-[var(--color-text-secondary)]">Nhận item để bắt đầu xử lý nghiệp vụ.</p>
                     </div>
                   </div>
-                  <button type="button" data-tour="lead-detail-claim-button" onClick={handleClaim} disabled={!canClaimLead || !ownership.canClaim} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50">
-                    <UserPlus size={18} aria-hidden="true" />
-                    Nhận xử lý
+                  <button type="button" data-tour="lead-detail-claim-button" onClick={handleClaim} disabled={!canClaimLead || !ownership.canClaim || isClaiming} aria-busy={isClaiming} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50">
+                    {isClaiming ? (
+                      <span className="material-symbols-outlined animate-spin text-lg" aria-hidden="true">progress_activity</span>
+                    ) : (
+                      <UserPlus size={18} aria-hidden="true" />
+                    )}
+                    {isClaiming ? "Đang nhận xử lý..." : "Nhận xử lý"}
                   </button>
                 </section>
               )}
@@ -679,7 +677,6 @@ export function LeadDetailPanel({
           <LeadHistoryTab
             lead={lead}
             meta={meta}
-            platformLabel={platformMeta?.label || lead.platform}
             slaLabel={formatLeadSla(meta)}
           />
         )}
