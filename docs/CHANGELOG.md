@@ -11,18 +11,88 @@
 >   Tất cả các thay đổi đáng chú ý đối với dự án này sẽ được ghi lại trong file này.
 >   Định dạng dựa trên [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) và dự án này tuân thủ [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-07-15
+## [Unreleased] - 2026-07-16
+
+### Added
+
+- **Luồng đăng ký dùng thử và yêu cầu tư vấn**:
+  - Xây dựng luồng đăng ký dùng thử nhiều bước gồm thông tin người đăng ký, thông tin công ty/thương hiệu và cấu hình theo dõi.
+  - Bổ sung các trường tên công ty/thương hiệu, ngành hàng, nhu cầu chính, từ khóa thương hiệu, nền tảng cần theo dõi, đuôi email doanh nghiệp và ghi chú.
+  - Cho phép người đăng ký gửi thêm yêu cầu tư vấn sau khi hoàn thành form dùng thử.
+  - Lưu thông tin đăng ký, yêu cầu tư vấn và cấu hình thương hiệu vào Firebase.
+
+- **Quản lý yêu cầu tư vấn trên trang Admin**:
+  - Gộp thông tin cấu hình thương hiệu vào chi tiết yêu cầu tư vấn để Admin xem toàn bộ dữ liệu trên một màn hình.
+  - Bổ sung quy trình cập nhật phương án liên hệ và trạng thái yêu cầu.
+  - Khi duyệt yêu cầu, hệ thống tự tạo tài khoản Brand Manager, sinh mật khẩu tạm thời và thiết lập thời gian dùng thử 14 ngày.
+  - Thông tin tài khoản tự động lấy họ tên, tên thương hiệu và đuôi email doanh nghiệp từ form đăng ký.
+
+- **Thông báo email bằng EmailJS**:
+  - Gửi email xác nhận ngay sau khi người dùng gửi yêu cầu tư vấn.
+  - Gửi email chấp thuận kèm nội dung dùng thử 14 ngày, tài khoản và mật khẩu tạm thời.
+  - Gửi email thông báo khi yêu cầu tư vấn bị từ chối.
+  - Bổ sung biến môi trường và module dùng chung cho các mẫu EmailJS.
+
+- **Dashboard và phân quyền nghiệp vụ**:
+  - Bổ sung dữ liệu nhật ký hoàn thành và trạng thái `Chờ khách phản hồi` trên trang tổng quan nghiệp vụ.
+  - Cho phép nhân viên có đồng thời quyền Khủng hoảng và Tiềm năng chuyển đổi giữa hai trang tổng quan.
+  - Bổ sung ngữ cảnh nội dung và luồng hội thoại cho phần chi tiết khách hàng/lead.
 
 ### Changed
 
+- Cập nhật giao diện landing page và luồng `Bắt đầu dùng thử miễn phí`.
+- Chuyển các API Admin quan trọng sang Firebase Admin SDK để không phụ thuộc vào Firestore Rules phía trình duyệt.
+- Cải thiện khởi tạo Firebase Admin để hoạt động ổn định hơn giữa môi trường local và VPS.
+- Trang quản lý Brand Manager tải danh sách và khóa/mở khóa tài khoản thông qua API xác thực của hệ thống.
+- Chuẩn hóa dữ liệu hiển thị trong trang yêu cầu tư vấn, bao gồm cả các giá trị thời gian từ Firestore.
+
+### Fixed
+
+- Sửa lỗi đổi mật khẩu lần đầu báo `Missing or insufficient permissions`.
+- Sửa lỗi lưu trạng thái onboarding khi người dùng chọn không hiển thị lại hướng dẫn.
+- Sửa lỗi trang Admin không tải được dữ liệu yêu cầu tư vấn và cấu hình thương hiệu.
+- Sửa lỗi EmailJS khi duyệt yêu cầu, đồng thời trả về thông báo cấu hình rõ ràng khi API từ môi trường server chưa được cho phép.
+- Sửa lỗi trang `brand-managers` không hiển thị danh sách do truy cập Firestore trực tiếp bị từ chối quyền.
+- Ngăn cập nhật yêu cầu tư vấn khi Admin chưa chọn `Trạng thái hiện tại`.
+
+### Verification
+
+- TypeScript typecheck hoàn tất thành công sau phần sửa API và danh sách Brand Manager.
+
+---
+
+## [Unreleased] - 2026-07-15
+
+### Added
+
+- **Không gian xử lý cảnh báo theo khách hàng**:
+  - Thiết kế lại trang cảnh báo theo hướng tập trung vào từng khách hàng và nội dung được phân công.
+  - Bổ sung bảng công việc, hàng dữ liệu cảnh báo, panel chi tiết và luồng ghi nhận liên hệ với khách hàng.
+  - Giới hạn dữ liệu cảnh báo hiển thị theo đúng phạm vi được giao cho nhân viên.
+
+- **Hồ sơ và lịch sử khách hàng tiềm năng**:
+  - Bổ sung giao diện chi tiết lead/khách hàng với các tab hồ sơ và lịch sử xử lý.
+  - Bổ sung module tổng hợp lịch sử lead để theo dõi các lần tương tác và thay đổi trạng thái.
+
+### Changed
+
+- Cập nhật giao diện trang tổng quan dành cho nhân viên xử lý khách hàng tiềm năng.
+- Điều chỉnh thanh điều hướng desktop/mobile và bố cục dashboard theo luồng nghiệp vụ mới.
+- Hoàn thiện giao diện chi tiết, hàng chờ và khu vực xử lý cảnh báo.
 - Khôi phục quy tắc phân loại thuần API: lead dựa trên intent và cảnh báo dựa trên sentiment tiêu cực.
 - Bổ sung migration vô hiệu hóa định tuyến thủ công, trả `operational_queue` về `NULL` nhưng giữ metadata lịch sử để đối soát.
 
 ### Removed
 
-- Gỡ giao diện, form, trạng thái và thao tác `Chuyển nghiệp vụ` khỏi panel Khách hàng.
-- Gỡ badge, lý do ưu tiên và quy tắc đưa cảnh báo vào hàng chờ dựa trên dữ liệu điều chuyển.
+- Gỡ chức năng `Chuyển nghiệp vụ` cùng form, trạng thái, badge và lý do ưu tiên liên quan.
+- Gỡ quy tắc đưa cảnh báo vào hàng chờ dựa trên dữ liệu điều chuyển thủ công.
 - Gỡ kiểu dữ liệu, lịch sử hiển thị và kiểm tra schema dành riêng cho chuyển nghiệp vụ.
+- Gỡ các thành phần lịch làm việc cũ không còn phù hợp với trang tổng quan lead mới.
+
+### Fixed
+
+- Sửa phạm vi hiển thị cảnh báo để nhân viên chỉ nhìn thấy các mục được phân công.
+- Sửa và hoàn thiện luồng liên hệ khách hàng ngay trong trang xử lý cảnh báo.
 
 ### Verification
 
