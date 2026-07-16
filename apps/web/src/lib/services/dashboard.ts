@@ -1084,50 +1084,53 @@ function supabaseCommentToMention(
   };
 }
 
+const SUPABASE_POST_COLUMNS = [
+  "post_id",
+  "platform",
+  "source",
+  "brand",
+  "brand_slug",
+  "author",
+  "contact",
+  "language",
+  "posted_at",
+  "created_at",
+  "url",
+  "payload_json",
+];
+
+const SUPABASE_COMMENT_COLUMNS = [
+  "comment_id",
+  "post_id",
+  "parent_comment_id",
+  "platform",
+  "username",
+  "contact",
+  "text",
+  "posted_at",
+  "created_at",
+  "url",
+  "payload_json",
+];
+
+const SUPABASE_ANNOTATION_COLUMNS = [
+  "annotation_id",
+  "entity_key",
+  "platform",
+  "entity_type",
+  "post_id",
+  "comment_id",
+  "assignee",
+  "label",
+  "status",
+  "updated_at",
+  "created_at",
+];
+
 async function fetchSupabaseMentionsUncached(opts: FetchOptions): Promise<Mention[]> {
   const config = getSupabaseConfig();
   const maxMentions = opts.maxMentions || 2500;
   const brandKey = opts.brandKey ? opts.brandKey.toLowerCase().replace(/[\s\-_.]/g, "").trim() : "";
-  const postColumns = [
-    "post_id",
-    "platform",
-    "source",
-    "brand",
-    "brand_slug",
-    "author",
-    "contact",
-    "language",
-    "posted_at",
-    "created_at",
-    "url",
-    "payload_json",
-  ];
-  const commentColumns = [
-    "comment_id",
-    "post_id",
-    "platform",
-    "username",
-    "contact",
-    "text",
-    "posted_at",
-    "created_at",
-    "url",
-    "payload_json",
-  ];
-  const annotationColumns = [
-    "annotation_id",
-    "entity_key",
-    "platform",
-    "entity_type",
-    "post_id",
-    "comment_id",
-    "assignee",
-    "label",
-    "status",
-    "updated_at",
-    "created_at",
-  ];
-
   let annotationRows: SupabaseRow[] = [];
   
   if (brandKey) {
@@ -1182,7 +1185,7 @@ async function fetchSupabaseMentionsUncached(opts: FetchOptions): Promise<Mentio
           "annotations",
           "post_id",
           postIds,
-          annotationColumns,
+          SUPABASE_ANNOTATION_COLUMNS,
           { platform: p === "be" ? "in.(be,befood)" : (p === "thread" ? "in.(thread,threads)" : `eq.${p}`), status: "eq.completed", order: "updated_at.desc.nullslast" },
           perPlatformLimit,
         ).catch((err: any) => {
@@ -1231,11 +1234,11 @@ async function fetchSupabaseMentionsUncached(opts: FetchOptions): Promise<Mentio
   ).filter(Boolean);
 
   const [postRows, commentRows] = await Promise.all([
-    loadSupabaseRowsByIds<SupabaseRow>(config, "posts", "post_id", postIds, postColumns).catch((err: any) => {
+    loadSupabaseRowsByIds<SupabaseRow>(config, "posts", "post_id", postIds, SUPABASE_POST_COLUMNS).catch((err: any) => {
       console.warn("[DashboardService] Failed to fetch post details:", err);
       return [] as SupabaseRow[];
     }),
-    loadSupabaseRowsByIds<SupabaseRow>(config, "comments", "comment_id", commentIds, commentColumns).catch((err: any) => {
+    loadSupabaseRowsByIds<SupabaseRow>(config, "comments", "comment_id", commentIds, SUPABASE_COMMENT_COLUMNS).catch((err: any) => {
       console.warn("[DashboardService] Failed to fetch comment details:", err);
       return [] as SupabaseRow[];
     }),
@@ -1284,6 +1287,87 @@ const supabaseMentionCache = new Map<
   { expiresAt: number; promise: Promise<Mention[]> }
 >();
 const SUPABASE_MENTION_CACHE_MS = 15_000;
+
+const supabaseMentionThreadCache = new Map<
+  string,
+  { expiresAt: number; promise: Promise<Mention[]> }
+>();
+const SUPABASE_MENTION_THREAD_CACHE_MS = 5 * 60_000;
+
+async function fetchSupabaseMentionThreadUncached(postId: string): Promise<Mention[]> {
+  const normalizedPostId = postId.trim();
+  if (!normalizedPostId) return [];
+
+  const config = getSupabaseConfig();
+  const [postRows, commentRows, annotationRows] = await Promise.all([
+    loadSupabaseRowsByIds<SupabaseRow>(
+      config,
+      "posts",
+      "post_id",
+      [normalizedPostId],
+      SUPABASE_POST_COLUMNS,
+      {},
+      1,
+    ),
+    loadSupabaseRowsByPostIdsWithSelectFallback<SupabaseRow>(
+      config,
+      "comments",
+      [normalizedPostId],
+      SUPABASE_COMMENT_COLUMNS,
+      { order: "posted_at.asc.nullslast" },
+      2000,
+      ["comment_id", "post_id"],
+    ),
+    loadSupabaseRowsByIds<SupabaseRow>(
+      config,
+      "annotations",
+      "post_id",
+      [normalizedPostId],
+      SUPABASE_ANNOTATION_COLUMNS,
+      { order: "updated_at.desc.nullslast" },
+      3000,
+    ).catch(() => [] as SupabaseRow[]),
+  ]);
+
+  const annotationByKey = new Map<string, SupabaseRow>();
+  for (const row of annotationRows) {
+    const platform = String(row.platform || "");
+    const rowPostId = String(row.post_id || normalizedPostId);
+    const commentId = normalizeOptionalText(row.comment_id);
+    const keys = [String(row.entity_key || ""), ...buildEntityKeys(platform, rowPostId, commentId)];
+    keys.filter(Boolean).forEach((key) => {
+      if (!annotationByKey.has(key)) annotationByKey.set(key, row);
+    });
+  }
+
+  const posts = postRows.map((row) => supabasePostToMention(row, annotationByKey));
+  const postById = new Map(posts.map((post) => [post.id, post]));
+  const comments = commentRows.map((row) =>
+    supabaseCommentToMention(row, postById, annotationByKey),
+  );
+
+  return uniqueRecordsById([...posts, ...comments]).sort(
+    (a, b) => new Date(a.posted_at).getTime() - new Date(b.posted_at).getTime(),
+  );
+}
+
+async function fetchSupabaseMentionThread(postId: string): Promise<Mention[]> {
+  const cacheKey = postId.trim();
+  if (!cacheKey) return [];
+
+  const cached = supabaseMentionThreadCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.promise;
+
+  const promise = fetchSupabaseMentionThreadUncached(cacheKey).catch((error) => {
+    supabaseMentionThreadCache.delete(cacheKey);
+    throw error;
+  });
+  supabaseMentionThreadCache.set(cacheKey, {
+    expiresAt: Date.now() + SUPABASE_MENTION_THREAD_CACHE_MS,
+    promise,
+  });
+  return promise;
+}
 
 async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
   const cacheKey = `${normalizeBrandName(opts.brandKey || "global")}:${opts.maxMentions || 30000}`;
@@ -1449,6 +1533,14 @@ export interface FetchOptions {
 
 // ─── Main service ─────────────────────────────────────────────────────────────
 export class DashboardService {
+  /**
+   * Load the complete post/comment/reply context only when a detail view needs it.
+   * Results are cached per post so switching between leads in the same thread is cheap.
+   */
+  static async fetchMentionThread(postId: string): Promise<Mention[]> {
+    return fetchSupabaseMentionThread(postId);
+  }
+
   /**
    * Fetch raw data from Firestore.
    * Mapping field names Firestore → internal types happens here.
@@ -1678,7 +1770,7 @@ export class DashboardService {
           source_mention_id: m.id,
           parent_id: m.parent_id,
           content_type: m.content_type,
-          post_id: m.parent_id || m.id,
+          post_id: m.post_id || (m.content_type === "post" ? m.id : undefined),
           workspace_id: m.workspace_id,
           platform: m.platform,
           author: m.author,

@@ -5,6 +5,7 @@ import React, { useMemo, useRef, useState } from "react";
 import { ClipboardCheck, Sparkles, UserPlus } from "lucide-react";
 import { LeadHistoryTab } from "@/components/leads/LeadHistoryTab";
 import { LeadProfileTab } from "@/components/leads/LeadProfileTab";
+import { LeadContentContext } from "@/components/leads/LeadContentContext";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import {
   getLeadOperationErrorMessage,
@@ -628,14 +629,7 @@ export function LeadDetailPanel({
               </div>
             </section>
 
-            <section className="rounded-lg border border-[var(--color-border)] p-3">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-xl text-[var(--color-brand)]">chat_bubble</span>
-                <p className="text-sm font-bold text-[var(--color-text-primary)]">Nội dung cần xử lý</p>
-              </div>
-              <p className="mt-2 whitespace-pre-wrap break-words rounded-lg bg-[var(--color-bg-surface-raised)] p-3 text-sm leading-6 text-[var(--color-text-primary)]">{lead.content}</p>
-              <p className="mt-2 text-xs text-[var(--color-text-muted)]">{new Date(lead.created_at).toLocaleString("vi-VN")}</p>
-            </section>
+            <LeadContentContext lead={lead} mentions={mentions} />
 
             <section data-tour="lead-detail-source-actions" className="rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)]/20 p-3">
               <div className="flex items-center gap-2">
