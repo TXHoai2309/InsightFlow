@@ -934,7 +934,10 @@ export async function approveSupabaseAiAnnotations(
   }>,
   reviewer = 'InsightFlow Admin',
 ): Promise<number> {
-  if (items.length === 0) return 0;
+  const labelableItems = items.filter(item => (
+    !/^(google_maps|be|befood):post:/.test(item.entityKey)
+  ));
+  if (labelableItems.length === 0) return 0;
   const approved = await request<number>(
     config,
     'rpc/approve_ai_annotations',
@@ -942,7 +945,7 @@ export async function approveSupabaseAiAnnotations(
     {
       method: 'POST',
       body: JSON.stringify({
-        p_items: items.map(item => ({
+        p_items: labelableItems.map(item => ({
           entity_key: item.entityKey.replace(/^befood:/, 'be:'),
           label: item.label,
         })),

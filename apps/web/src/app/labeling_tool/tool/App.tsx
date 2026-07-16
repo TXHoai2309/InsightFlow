@@ -281,7 +281,10 @@ export default function App() {
     () => threadItems.filter(item => (
       item._annotation_status === 'ai_pending'
       && !(
-        item._content_type === 'post'
+        (
+          item._content_type === 'post'
+          || /^(google_maps|be|befood):post:/.test(item._entity_key)
+        )
         && (platformFilter === 'google_maps' || platformFilter === 'befood')
       )
     )),
