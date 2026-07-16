@@ -278,8 +278,14 @@ export default function App() {
   }, [currentThread]);
 
   const aiCandidateItems = useMemo(
-    () => threadItems.filter(item => item._annotation_status === 'ai_pending'),
-    [threadItems],
+    () => threadItems.filter(item => (
+      item._annotation_status === 'ai_pending'
+      && !(
+        item._content_type === 'post'
+        && (platformFilter === 'google_maps' || platformFilter === 'befood')
+      )
+    )),
+    [platformFilter, threadItems],
   );
   const platformAiPendingCount = (pendingCounts?.aiPendingPosts ?? 0)
     + (pendingCounts?.aiPendingComments ?? 0);

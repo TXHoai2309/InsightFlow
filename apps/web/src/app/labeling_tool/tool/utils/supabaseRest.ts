@@ -280,6 +280,10 @@ function toQueueStatus(status: string): 'unassigned' | 'updated_review' | null {
   return status === 'unassigned' || status === 'updated_review' ? status : null;
 }
 
+function usesLocationContainerPosts(platform: PlatformFilter): boolean {
+  return platform === 'google_maps' || platform === 'befood';
+}
+
 export async function loadPendingAssignmentCounts(
   config: SupabaseConfig,
   platform: PlatformFilter,
@@ -289,6 +293,7 @@ export async function loadPendingAssignmentCounts(
     : platform === 'befood'
       ? 'in.(be,befood)'
       : `eq.${platform}`;
+  const commentsOnly = usesLocationContainerPosts(platform);
 
   const annotationBase = {
     select: 'annotation_id',
@@ -305,19 +310,23 @@ export async function loadPendingAssignmentCounts(
     totalPosts,
     totalComments,
   ] = await Promise.all([
-    requestExactCount(config, 'annotations', new URLSearchParams({
-      ...annotationBase,
-      entity_type: 'eq.post',
-    }).toString()),
+    commentsOnly
+      ? Promise.resolve(0)
+      : requestExactCount(config, 'annotations', new URLSearchParams({
+          ...annotationBase,
+          entity_type: 'eq.post',
+        }).toString()),
     requestExactCount(config, 'annotations', new URLSearchParams({
       ...annotationBase,
       entity_type: 'eq.comment',
     }).toString()),
-    requestExactCount(config, 'annotations', new URLSearchParams({
-      ...annotationBase,
-      status: 'eq.ai_pending',
-      entity_type: 'eq.post',
-    }).toString()),
+    commentsOnly
+      ? Promise.resolve(0)
+      : requestExactCount(config, 'annotations', new URLSearchParams({
+          ...annotationBase,
+          status: 'eq.ai_pending',
+          entity_type: 'eq.post',
+        }).toString()),
     requestExactCount(config, 'annotations', new URLSearchParams({
       ...annotationBase,
       status: 'eq.ai_pending',
@@ -347,7 +356,9 @@ export async function loadPendingAssignmentCounts(
   const safeAiPendingComments = Math.min(aiPendingComments, totalComments);
   const safeLabeledPosts = Math.min(labeledPosts, Math.max(0, totalPosts - safeAiPendingPosts));
   const safeLabeledComments = Math.min(labeledComments, Math.max(0, totalComments - safeAiPendingComments));
-  const unassignedPosts = Math.max(0, totalPosts - safeLabeledPosts - safeAiPendingPosts);
+  const unassignedPosts = commentsOnly
+    ? 0
+    : Math.max(0, totalPosts - safeLabeledPosts - safeAiPendingPosts);
   const unassignedComments = Math.max(0, totalComments - safeLabeledComments - safeAiPendingComments);
 
   return {
@@ -601,6 +612,7 @@ export async function loadSupabaseThreads(
     : platform === 'befood'
       ? 'in.(be,befood)'
       : `eq.${platform}`;
+  const commentsOnly = usesLocationContainerPosts(platform);
   const threads: Thread[] = [];
   const includedPostKeys = new Set<string>();
   const needsClientFilter = hasDateRange(dateRange) || (brand && brand !== 'all');
@@ -629,7 +641,9 @@ export async function loadSupabaseThreads(
         offset: String(offset),
         order: 'updated_at.desc',
       });
-      if (assignmentView === 'completed') {
+      if (commentsOnly) {
+        annotationParams.set('entity_type', 'eq.comment');
+      } else if (assignmentView === 'completed') {
         annotationParams.set('entity_type', 'eq.post');
       }
       const completedAnnotations = await request<SupabaseAnnotation[]>(
@@ -659,6 +673,9 @@ export async function loadSupabaseThreads(
         offset: String(offset),
         order: 'updated_at.desc',
       });
+      if (commentsOnly) {
+        assignmentParams.set('entity_type', 'eq.comment');
+      }
       assignments = await request<SupabaseAssignment[]>(
         config,
         'labeling_assignments',
@@ -996,6 +1013,9 @@ export async function approveAllSupabaseAiAnnotations(
       limit: String(pageSize),
       offset: String(offset),
     });
+    if (usesLocationContainerPosts(platform)) {
+      params.set('entity_type', 'eq.comment');
+    }
     const page = await request<SupabaseAnnotation[]>(
       config,
       'annotations',
