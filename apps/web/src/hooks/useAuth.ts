@@ -1,19 +1,13 @@
 "use client";
 import { useEffect } from "react";
 import { getIdTokenResult, onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { buildUserRoleProfile, normalizeRole, type UserRoleProfile } from "@/lib/rbac";
 import { useAuthStore } from "@/stores/auth.store";
 
 let unsubscribeAuth: (() => void) | null = null;
 let authSubscriberCount = 0;
-
-function stripUndefinedFields<T extends Record<string, unknown>>(data: T) {
-  return Object.fromEntries(
-    Object.entries(data).filter(([, value]) => value !== undefined),
-  ) as Partial<T>;
-}
 
 async function resolveProfileFromClaims(firebaseUser: NonNullable<typeof auth.currentUser>) {
   const tokenResult = await getIdTokenResult(firebaseUser, true);
@@ -73,18 +67,9 @@ async function resolveUserProfile(firebaseUser: NonNullable<typeof auth.currentU
     resolvedProfile = await resolveProfileFromClaims(firebaseUser);
   }
 
-  void setDoc(
-    userRef,
-    stripUndefinedFields({
-      ...resolvedProfile,
-      lastLogin: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      createdAt: storedData?.createdAt || new Date().toISOString(),
-    }),
-    { merge: true },
-  ).catch((error) => {
-    console.warn("Could not update Firestore user profile after login.", error);
-  });
+  // User profiles and login audit fields are managed by privileged backend
+  // workflows. A regular employee may read this document but is intentionally
+  // not allowed to write it, so login must not attempt an optional client write.
 
   return resolvedProfile;
 }

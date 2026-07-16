@@ -68,6 +68,10 @@ interface DashboardState {
     data: Partial<Lead>,
     profile: UserRoleProfile | null | undefined,
   ) => Promise<void>;
+  claimLead: (
+    id: string,
+    profile: UserRoleProfile | null | undefined,
+  ) => Promise<Partial<Lead>>;
   createLabelChangeRequest: (
     data: Omit<
       LabelChangeRequest,
@@ -285,6 +289,32 @@ export const useDashboardStore = create<DashboardState>()(
         }));
       } catch (error) {
         console.error("[DashboardStore] updateLeadDetails error:", error);
+        throw error;
+      }
+    },
+
+    claimLead: async (id, profile) => {
+      try {
+        const currentLead = get().leads.find((lead) => lead.id === id);
+        if (!canPerformAction(profile, "update_lead_details")) {
+          throw new Error("User is not allowed to claim this lead.");
+        }
+        if (!canPerformAction(profile, "update_lead_status")) {
+          throw new Error("User is not allowed to update lead status.");
+        }
+        if (!currentLead || !isSameBrandScope(profile, currentLead)) {
+          throw new Error("Lead is outside the user's brand scope.");
+        }
+
+        const claimData = await DashboardService.claimLead(id, profile, currentLead);
+        set((state) => ({
+          leads: state.leads.map((lead) =>
+            lead.id === id ? { ...lead, ...claimData } : lead,
+          ),
+        }));
+        return claimData;
+      } catch (error) {
+        console.error("[DashboardStore] claimLead error:", error);
         throw error;
       }
     },

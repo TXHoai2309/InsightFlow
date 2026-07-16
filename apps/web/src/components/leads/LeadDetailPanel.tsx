@@ -6,6 +6,7 @@ import { ClipboardCheck, Sparkles, UserPlus } from "lucide-react";
 import { LeadHistoryTab } from "@/components/leads/LeadHistoryTab";
 import { LeadProfileTab } from "@/components/leads/LeadProfileTab";
 import { LeadContentContext } from "@/components/leads/LeadContentContext";
+import { CustomerInteractionHistoryPanel } from "@/components/customer-interactions/CustomerInteractionHistoryPanel";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import {
   getLeadOperationErrorMessage,
@@ -14,11 +15,8 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { canPerformAction } from "@/lib/rbac";
 import { isSameBrandScope } from "@/lib/brandScope";
-import { resolveLeadMentionTarget } from "@/lib/mention-navigation";
 import {
   LEAD_DETAIL_PANEL_SCROLL_ID,
-  createLeadReturnToken,
-  saveLeadReturnContext,
   type LeadDetailPanelTab,
 } from "@/lib/lead-return-context";
 import type {
@@ -88,32 +86,6 @@ function toTimeInputValue(dateIso?: string) {
   return new Date(dateIso).toTimeString().slice(0, 5);
 }
 
-function appendLeadReturnParams(
-  href: string,
-  lead: Lead,
-  returnContext?: LeadDetailPanelProps["returnContext"],
-  token?: string,
-) {
-  if (!href) return href;
-
-  const [pathAndQuery, hash] = href.split("#");
-  const params = new URLSearchParams({
-    from: "leads",
-    leadId: returnContext?.selectedLeadId || lead.id,
-    view: returnContext?.view || "priority",
-    page: String(returnContext?.page || 1),
-  });
-  if (token) params.set("returnToken", token);
-  const separator = pathAndQuery.includes("?") ? "&" : "?";
-
-  return `${pathAndQuery}${separator}${params.toString()}${hash ? `#${hash}` : ""}`;
-}
-
-function getPanelScrollTop() {
-  if (typeof window === "undefined") return 0;
-  return document.getElementById(LEAD_DETAIL_PANEL_SCROLL_ID)?.scrollTop || 0;
-}
-
 export function LeadDetailPanel({
   lead,
   mentions = [],
@@ -122,14 +94,13 @@ export function LeadDetailPanel({
   onClose,
   onAfterResult,
   onStartedAction,
-  returnContext,
   activeTab: activeTabProp,
   onTabChange,
   isCollapsed,
   onCollapseToggle,
 }: LeadDetailPanelProps) {
   const { profile, role, user } = useAuth();
-  const { updateLeadDetails } = useDashboardStore();
+  const { updateLeadDetails, claimLead } = useDashboardStore();
   const [internalActiveTab, setInternalActiveTab] = useState<PanelTab>("action");
   const [staffList, setStaffList] = useState<{uid: string, displayName: string, email: string}[]>([]);
   const [loadingStaff, setLoadingStaff] = useState(false);
@@ -205,6 +176,7 @@ export function LeadDetailPanel({
   const [skipReason, setSkipReason] = useState("");
   const [skipNote, setSkipNote] = useState("");
   const [isSkipping, setIsSkipping] = useState(false);
+  const [isClaiming, setIsClaiming] = useState(false);
   const [skipError, setSkipError] = useState("");
   const [note, setNote] = useState("");
   const [followUpDate, setFollowUpDate] = useState("");
@@ -224,29 +196,6 @@ export function LeadDetailPanel({
   const meta = useMemo(
     () => (lead ? getLeadWorkbenchMeta(lead, nowMs) : null),
     [lead, nowMs],
-  );
-
-  const mentionById = useMemo(
-    () => new Map(mentions.map((item) => [item.id, item])),
-    [mentions],
-  );
-
-  const mentionTarget = useMemo(
-    () => (lead ? resolveLeadMentionTarget(lead, mentionById) : null),
-    [lead, mentionById],
-  );
-
-  const returnToken = useMemo(
-    () => (lead ? createLeadReturnToken(lead.id) : ""),
-    [lead],
-  );
-
-  const mentionDetailHref = useMemo(
-    () =>
-      lead && mentionTarget?.canOpenMentionDetail
-        ? appendLeadReturnParams(mentionTarget.href, lead, returnContext, returnToken)
-        : "",
-    [lead, mentionTarget, returnContext, returnToken],
   );
 
   if (!lead || !meta) {
@@ -272,10 +221,8 @@ export function LeadDetailPanel({
     lead.status !== "completed" &&
     lead.status !== "skipped";
   const sourceAction = getLeadSourceAction(lead);
-  const profileSourceHref = sourceAction?.href || mentionDetailHref;
-  const canOpenProfileSource = Boolean(
-    sourceAction ? ownership.canWork : mentionDetailHref,
-  );
+  const profileSourceHref = sourceAction?.href || "";
+  const canOpenProfileSource = Boolean(sourceAction && ownership.canWork);
   const platformMeta = PLATFORM_META[lead.platform];
   const priorityText =
     meta.priorityReasons.join(", ") || "Có tín hiệu quan tâm cần kiểm tra.";
@@ -299,23 +246,6 @@ export function LeadDetailPanel({
     window.setTimeout(() => resultSection.focus({ preventScroll: true }), 350);
     setIsResultSectionHighlighted(true);
     window.setTimeout(() => setIsResultSectionHighlighted(false), 1800);
-  };
-
-  const handleOpenMentionDetail = () => {
-    if (!returnToken) return;
-
-    saveLeadReturnContext({
-      token: returnToken,
-      leadId: lead.id,
-      selectedLeadId: returnContext?.selectedLeadId || lead.id,
-      view: returnContext?.view || "priority",
-      page: returnContext?.page || 1,
-      filters: returnContext?.filters || {},
-      panelTab: activeTab,
-      listScrollTop: returnContext?.listScrollTop || 0,
-      panelScrollTop: getPanelScrollTop(),
-      openedAt: new Date().toISOString(),
-    });
   };
 
   const handleSkipLead = async () => {
@@ -381,22 +311,13 @@ export function LeadDetailPanel({
   };
 
   const handleClaim = async () => {
-    if (!canEdit || !profile) return;
+    if (!canEdit || !profile || isClaiming || !ownership.canClaim) return;
 
     try {
+      setIsClaiming(true);
       setSaveError("");
-      const nowIso = new Date().toISOString();
-      const ownerData: Partial<Lead> = {
-        owner_id: profile.uid,
-        owner_name: getOwnerName(),
-        owner_email: profile.email,
-        assigned_at: nowIso,
-        assigned_by: profile.uid,
-        claimed_at: nowIso,
-      };
-
-      await updateLeadDetails(lead.id, ownerData, profile);
-      onStartedAction?.({ ...lead, ...ownerData });
+      const claimData = await claimLead(lead.id, profile);
+      onStartedAction?.({ ...lead, ...claimData });
       showToast("Nhận xử lý lead thành công!", "success");
     } catch (error: any) {
       console.error(error);
@@ -406,6 +327,8 @@ export function LeadDetailPanel({
       );
       setSaveError(message);
       showToast(message, "error");
+    } finally {
+      setIsClaiming(false);
     }
   };
 
@@ -469,11 +392,7 @@ export function LeadDetailPanel({
   const handleProfileOpenSource = () => {
     if (sourceAction) {
       void handleOpenAction(sourceAction, true);
-      return;
     }
-    if (!mentionDetailHref) return;
-    handleOpenMentionDetail();
-    window.location.assign(mentionDetailHref);
   };
 
   const handleSaveResult = async () => {
@@ -550,6 +469,7 @@ export function LeadDetailPanel({
   const tabs: Array<{ id: PanelTab; label: string }> = [
     { id: "action", label: "Xử lý" },
     { id: "profile", label: "Hồ sơ" },
+    { id: "interactions", label: "Tương tác" },
     { id: "history", label: "Lịch sử" },
   ];
 
@@ -603,7 +523,7 @@ export function LeadDetailPanel({
           </div>
         </div>
 
-        <div className="mt-3 grid grid-cols-3 gap-1">
+        <div className="mt-3 grid grid-cols-4 gap-1">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -709,13 +629,17 @@ export function LeadDetailPanel({
                         )}
                       </div>
                     )}
-                    <button type="button" data-tour="lead-detail-claim-button" onClick={handleClaim} disabled={!canClaimLead || !ownership.canClaim} className={
+                    <button type="button" data-tour="lead-detail-claim-button" onClick={handleClaim} disabled={!canClaimLead || !ownership.canClaim || isClaiming} aria-busy={isClaiming} className={
                       role === "brand_manager"
                         ? "inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-white px-3 py-2 text-[13px] font-semibold text-[var(--color-text-secondary)] shadow-sm transition hover:border-gray-300 hover:text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
                         : "inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50"
                     }>
-                      {role !== "brand_manager" && <UserPlus size={18} aria-hidden="true" />}
-                      <span>Nhận xử lý</span>
+                      {isClaiming ? (
+                        <span className="material-symbols-outlined animate-spin text-lg" aria-hidden="true">progress_activity</span>
+                      ) : (
+                        role !== "brand_manager" && <UserPlus size={18} aria-hidden="true" />
+                      )}
+                      <span>{isClaiming ? "Đang nhận..." : "Nhận xử lý"}</span>
                     </button>
                   </div>
                 </section>
@@ -764,11 +688,6 @@ export function LeadDetailPanel({
                     <span className="material-symbols-outlined shrink-0 text-lg">open_in_new</span>
                     <span className="truncate">{isOpening === sourceAction.label ? "Đang mở..." : "Mở nguồn"}</span>
                   </button>
-                ) : mentionDetailHref ? (
-                  <Link href={mentionDetailHref} onClick={handleOpenMentionDetail} className="inline-flex min-w-0 items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-2 py-2.5 text-sm font-bold text-white transition hover:bg-[var(--color-brand-hover)]">
-                    <span className="material-symbols-outlined shrink-0 text-lg">open_in_new</span>
-                    <span className="truncate">Mở nguồn</span>
-                  </Link>
                 ) : (
                   <button type="button" disabled className="inline-flex min-w-0 items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-2 py-2.5 text-sm font-bold text-white opacity-40">
                     <span className="material-symbols-outlined shrink-0 text-lg">open_in_new</span>
@@ -779,9 +698,9 @@ export function LeadDetailPanel({
                   <span className="material-symbols-outlined shrink-0 text-lg">person</span>
                   <span className="truncate">Xem hồ sơ</span>
                 </button>
-                <button type="button" onClick={() => handleTabChange("history")} className="inline-flex min-w-0 items-center justify-center gap-2 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-bg-surface)] px-2 py-2.5 text-sm font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-brand-subtle)]">
+                <button type="button" onClick={() => handleTabChange("interactions")} className="inline-flex min-w-0 items-center justify-center gap-2 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-bg-surface)] px-2 py-2.5 text-sm font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-brand-subtle)]">
                   <span className="material-symbols-outlined shrink-0 text-lg">history</span>
-                  <span className="truncate">Xem lịch sử</span>
+                  <span className="truncate">Xem tương tác</span>
                 </button>
               </div>
               {!ownership.canWork && (
@@ -870,11 +789,14 @@ export function LeadDetailPanel({
           />
         )}
 
+        {activeTab === "interactions" && (
+          <CustomerInteractionHistoryPanel sourceType="lead" sourceId={lead.id} />
+        )}
+
         {activeTab === "history" && (
           <LeadHistoryTab
             lead={lead}
             meta={meta}
-            platformLabel={platformMeta?.label || lead.platform}
             slaLabel={formatLeadSla(meta)}
           />
         )}
