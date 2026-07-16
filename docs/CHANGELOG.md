@@ -11,6 +11,25 @@
 >   Tất cả các thay đổi đáng chú ý đối với dự án này sẽ được ghi lại trong file này.
 >   Định dạng dựa trên [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) và dự án này tuân thủ [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-07-15
+
+### Changed
+
+- Khôi phục quy tắc phân loại thuần API: lead dựa trên intent và cảnh báo dựa trên sentiment tiêu cực.
+- Bổ sung migration vô hiệu hóa định tuyến thủ công, trả `operational_queue` về `NULL` nhưng giữ metadata lịch sử để đối soát.
+
+### Removed
+
+- Gỡ giao diện, form, trạng thái và thao tác `Chuyển nghiệp vụ` khỏi panel Khách hàng.
+- Gỡ badge, lý do ưu tiên và quy tắc đưa cảnh báo vào hàng chờ dựa trên dữ liệu điều chuyển.
+- Gỡ kiểu dữ liệu, lịch sử hiển thị và kiểm tra schema dành riêng cho chuyển nghiệp vụ.
+
+### Verification
+
+- Typecheck và production build của ứng dụng web hoàn tất thành công.
+
+---
+
 ## [Unreleased] - 2026-07-13
 
 ### Added

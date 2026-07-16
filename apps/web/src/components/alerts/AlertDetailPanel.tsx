@@ -54,7 +54,6 @@ function getPriorityReason(alert: AlertData) {
   else if (severity === "high") reasons.push("Nguy cơ ảnh hưởng hình ảnh thương hiệu");
   if ((alert.negativity_score || 0) >= 70) reasons.push("Điểm tiêu cực cao");
   if ((alert.reach || 0) >= 10000) reasons.push("Phạm vi tiếp cận lớn");
-  if (alert.transferred_at) reasons.push("Được chuyển từ nghiệp vụ khác");
   return reasons.length > 0 ? reasons.join(" · ") : "Nội dung tiêu cực cần nhân viên đánh giá và xử lý.";
 }
 

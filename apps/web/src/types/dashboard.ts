@@ -168,27 +168,6 @@ export interface Lead {
   pending_label_request_id?: string;
   last_label_corrected_at?: string;
 
-  // Operational routing is independent from the immutable API labels.
-  operational_queue?: "lead" | "crisis";
-  previous_operational_queue?: "lead" | "crisis";
-  transfer_reason?: string;
-  transfer_note?: string;
-  transferred_by?: string;
-  transferred_by_name?: string;
-  transferred_at?: string;
-  transfer_count?: number;
-  transfer_history?: Array<{
-    from: "lead" | "crisis";
-    to: "lead" | "crisis";
-    reason: string;
-    note?: string;
-    transferred_by: string;
-    transferred_by_name: string;
-    transferred_at: string;
-    owner_before?: string;
-    owner_after?: string;
-  }>;
-  
   // Contact Info
   phone?: string;
   email?: string;
@@ -208,7 +187,7 @@ export interface Lead {
   last_contact_at?: string;
   pending_result?: boolean;
   last_action_at?: string;
-  last_action_type?: "open_source" | "message" | "call" | "email" | "open_profile" | "note" | "transfer_business" | "skip";
+  last_action_type?: "open_source" | "message" | "call" | "email" | "open_profile" | "note" | "skip";
   last_contact_channel?: string;
   result_type?:
     | "positive"

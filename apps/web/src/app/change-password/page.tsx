@@ -3,7 +3,11 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useRouter } from "next/navigation";
-import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from "firebase/auth";
+import {
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  signInWithEmailAndPassword,
+} from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { validateStrongPassword } from "@/lib/passwordPolicy";
 import { useAuthStore } from "@/stores/auth.store";
@@ -46,25 +50,45 @@ export default function ChangePasswordPage() {
 
       const credential = EmailAuthProvider.credential(user.email, temporaryPassword);
       await reauthenticateWithCredential(user, credential);
-      await updatePassword(user, newPassword);
-
       const token = await user.getIdToken(true);
-      const response = await fetch("/api/auth/complete-first-password-change", {
+      const response = await fetch("/api/auth/change-initial-password", {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ newPassword }),
       });
-      const data = await response.json();
-
+      const result = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(data.error || t("changePassword.errors.completeFailed"));
+        const apiError = new Error(
+          result?.error || t("changePassword.errors.failed"),
+        ) as Error & { code?: string };
+        apiError.code = result?.code;
+        throw apiError;
       }
+
+      if (result?.data?.alreadyCompleted) {
+        await user.getIdToken(true);
+      } else {
+        const refreshedCredential = await signInWithEmailAndPassword(
+          auth,
+          user.email,
+          newPassword,
+        );
+        await refreshedCredential.user.getIdToken(true);
+      }
+      const defaultRoute = result?.data?.defaultRoute || profile?.defaultRoute || "/dashboard";
 
       if (profile) {
-        setProfile({ ...profile, temporaryPasswordIssued: false });
+        setProfile({
+          ...profile,
+          defaultRoute,
+          temporaryPasswordIssued: false,
+        });
       }
 
-      await user.getIdToken(true);
-      router.replace(profile?.defaultRoute || "/dashboard");
+      router.replace(defaultRoute);
     } catch (err: any) {
       const messageByCode: Record<string, string> = {
         "auth/wrong-password": t("changePassword.errors.wrongTemporary"),
@@ -72,6 +96,8 @@ export default function ChangePasswordPage() {
         "auth/weak-password": t("changePassword.errors.weakPassword"),
         "auth/requires-recent-login": t("changePassword.errors.recentLogin"),
         "auth/too-many-requests": t("changePassword.errors.tooManyRequests"),
+        "INVALID_SESSION": t("changePassword.errors.invalidSession"),
+        "SESSION_NOT_RECENT": t("changePassword.errors.recentLogin"),
       };
       setError(messageByCode[err.code] || err.message || t("changePassword.errors.failed"));
     } finally {

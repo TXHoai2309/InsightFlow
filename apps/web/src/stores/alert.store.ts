@@ -10,8 +10,9 @@ import { supabaseClient } from "@/lib/supabaseClient";
 import { normalizeClassificationLabel } from "@/lib/label-change";
 import { calculateNegativityScore } from "@/lib/negativityScore";
 import { useDashboardStore } from "@/stores/dashboard.store";
-import type { Lead, Mention } from "@/types/dashboard";
+import type { Mention } from "@/types/dashboard";
 import { getPersistedAlertStatus, isResolvedAlert } from "@/lib/alertWorkflow";
+import { canAlertBeVisibleToUser } from "@/lib/alert-visibility";
 
 function getResolverName(emailOrId: string | null | undefined): string {
   if (!emailOrId) return "";
@@ -135,10 +136,6 @@ export interface AlertData {
   customer_contact_evidence_image?: string;
   customer_response_result?: "positive" | "no_response" | "still_upset" | "not_suitable";
   customer_contact_history?: CustomerContactAttempt[];
-  operational_queue?: Lead["operational_queue"];
-  transferred_at?: string;
-  transfer_reason?: string;
-  transfer_note?: string;
 }
 
 export interface AlertFilters {
@@ -318,7 +315,7 @@ function applyFilters(rawAlerts: AlertData[], filters: AlertFilters): AlertData[
   return result;
 }
 
-function mentionToAlertData(m: Mention, routedLead?: Lead): AlertData {
+function mentionToAlertData(m: Mention): AlertData {
   const labelObj = (m.labels || {}) as any;
   const negativity = calculateNegativityScore({
     sentiment: m.sentiment || "negative",
@@ -391,10 +388,6 @@ function mentionToAlertData(m: Mention, routedLead?: Lead): AlertData {
     customer_contact_history: Array.isArray(labelObj.customer_contact_history)
       ? labelObj.customer_contact_history
       : [],
-    operational_queue: routedLead?.operational_queue,
-    transferred_at: routedLead?.transferred_at,
-    transfer_reason: routedLead?.transfer_reason,
-    transfer_note: routedLead?.transfer_note,
   };
 }
 
@@ -414,21 +407,10 @@ function resolveAlertStatusFromLabel(labelObj: any): string {
 function buildAlertsFromMentions(
   mentions: Mention[],
   scopedBrandKey?: string | null,
-  routedLeads: Lead[] = [],
 ): AlertData[] {
-  const routedLeadByMentionId = new Map<string, Lead>();
-  routedLeads.forEach((lead) => {
-    [lead.id, lead.mention_id, lead.source_mention_id]
-      .filter(Boolean)
-      .forEach((id) => routedLeadByMentionId.set(String(id), lead));
-  });
-
   return mentions
-    .filter((mention) => {
-      const routedLead = routedLeadByMentionId.get(mention.id);
-      return mention.sentiment === "negative" || routedLead?.operational_queue === "crisis";
-    })
-    .map((mention) => mentionToAlertData(mention, routedLeadByMentionId.get(mention.id)))
+    .filter((mention) => mention.sentiment === "negative")
+    .map(mentionToAlertData)
     .filter((alert) => {
       const history = Array.isArray(alert.resolution_history) ? alert.resolution_history : [];
       const completedAt =
@@ -446,43 +428,19 @@ function buildAlertsFromMentions(
     });
 }
 
-function loadDashboardCachedMentions(scopedBrandKey?: string | null): Mention[] {
-  if (typeof window === "undefined") return [];
-  const brandKey = scopedBrandKey && scopedBrandKey !== "global" ? scopedBrandKey : "global";
-  const keys = [
-    `insightflow_dashboard_cache_${brandKey}`,
-    "insightflow_dashboard_cache_global",
-  ];
-
-  for (const key of keys) {
-    try {
-      const cached = localStorage.getItem(key);
-      if (!cached) continue;
-      const { data } = JSON.parse(cached);
-      if (Array.isArray(data?.mentions) && data.mentions.length > 0) {
-        return data.mentions as Mention[];
-      }
-    } catch (error) {
-      console.warn("[AlertStore] Failed to read dashboard cache:", error);
-    }
-  }
-  return [];
-}
-
 function setAlertsFromDashboardCache(
   setState: typeof useAlertStore.setState,
   getState: typeof useAlertStore.getState,
   scopedBrandKey?: string | null,
 ): boolean {
   const dashboardMentions = useDashboardStore.getState().mentions;
-  const dashboardLeads = useDashboardStore.getState().leads;
-  const mentions = dashboardMentions.length > 0
-    ? dashboardMentions
-    : loadDashboardCachedMentions(scopedBrandKey);
+  // The dashboard cache is scoped by user. Reuse only the in-memory store here;
+  // reading legacy brand-only localStorage keys can expose another employee's queue.
+  const mentions = dashboardMentions;
   if (mentions.length === 0) return false;
 
   const recentLocks = getState().recentLocks || {};
-  const fetched = buildAlertsFromMentions(mentions, scopedBrandKey, dashboardLeads).map((alert) => {
+  const fetched = buildAlertsFromMentions(mentions, scopedBrandKey).map((alert) => {
     const recent = recentLocks[alert.id];
     if (recent && Date.now() - recent.timestamp < 15000) {
       return {
@@ -650,7 +608,7 @@ export const useAlertStore = create<AlertState>()(
         try {
           const rawBrandKey = (scopedBrandKey === "global" || !scopedBrandKey) ? undefined : scopedBrandKey;
           const rawData = await DashboardService.fetchRawData({ brandKey: rawBrandKey });
-          const filtered = buildAlertsFromMentions(rawData.mentions, scopedBrandKey, rawData.leads);
+          const filtered = buildAlertsFromMentions(rawData.mentions, scopedBrandKey);
 
           const scopedBrands = Array.from(new Set(filtered.map((alert) => alert.brand))).sort();
           const fallbackBrands = ["Highlands Coffee", "Starbucks", "Mixue"].filter((brand) => {
@@ -763,6 +721,10 @@ export const useAlertStore = create<AlertState>()(
       if (!profile || !canPerformAction(profile, "update_crisis_status")) {
         console.error("[AlertStore] Permission check failed:", { profileExists: !!profile, hasPermission: profile ? canPerformAction(profile, "update_crisis_status") : false });
         throw new Error("User is not allowed to update crisis status.");
+      }
+
+      if (currentAlert && !canAlertBeVisibleToUser(currentAlert, profile)) {
+        throw new Error("Cảnh báo không thuộc phạm vi xử lý của bạn.");
       }
 
       if (["resolved", "contact_waiting", "contact_failed"].includes(newStatus)) {

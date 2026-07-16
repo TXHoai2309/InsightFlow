@@ -543,42 +543,10 @@ export class SupabaseServiceError extends Error {
   }
 }
 
-const OPERATIONAL_ROUTING_COLUMNS = new Set([
-  "operational_queue",
-  "previous_operational_queue",
-  "transfer_reason",
-  "transfer_note",
-  "transferred_by",
-  "transferred_by_name",
-  "transferred_at",
-  "transfer_count",
-  "transfer_history",
-]);
-
-export function isOperationalRoutingSchemaError(error: unknown): boolean {
-  if (error instanceof SupabaseServiceError) {
-    return (
-      error.code === "PGRST204" &&
-      Boolean(error.missingColumn && OPERATIONAL_ROUTING_COLUMNS.has(error.missingColumn))
-    );
-  }
-
-  const message = error instanceof Error ? error.message : String(error || "");
-  return (
-    message.includes("PGRST204") &&
-    Array.from(OPERATIONAL_ROUTING_COLUMNS).some((column) =>
-      message.includes(`'${column}'`),
-    )
-  );
-}
-
 export function getLeadOperationErrorMessage(
   error: unknown,
   fallback = "Không thể cập nhật dữ liệu lead. Vui lòng thử lại.",
 ): string {
-  if (isOperationalRoutingSchemaError(error)) {
-    return "Hệ thống chưa hoàn tất cấu hình chuyển nghiệp vụ. Vui lòng liên hệ quản trị viên.";
-  }
   if (error instanceof SupabaseServiceError && error.code === "PGRST204") {
     return "Cấu hình dữ liệu chưa được đồng bộ. Vui lòng liên hệ quản trị viên.";
   }
@@ -671,43 +639,6 @@ async function upsertSupabaseLead(
     false,
     "resolution=merge-duplicates,return=minimal",
   );
-}
-
-let operationalRoutingSchemaCache: {
-  ready: boolean;
-  expiresAt: number;
-} | null = null;
-
-export async function checkOperationalRoutingSchema(
-  force = false,
-): Promise<boolean> {
-  if (
-    !force &&
-    operationalRoutingSchemaCache &&
-    operationalRoutingSchemaCache.expiresAt > Date.now()
-  ) {
-    return operationalRoutingSchemaCache.ready;
-  }
-
-  try {
-    await supabaseRequest<SupabaseRow[]>(
-      getSupabaseConfig(),
-      "leads",
-      "select=operational_queue,previous_operational_queue,transfer_count,transfer_history&limit=1",
-    );
-    operationalRoutingSchemaCache = {
-      ready: true,
-      expiresAt: Date.now() + 5 * 60 * 1000,
-    };
-    return true;
-  } catch (error) {
-    if (!isOperationalRoutingSchemaError(error)) throw error;
-    operationalRoutingSchemaCache = {
-      ready: false,
-      expiresAt: Date.now() + 10 * 1000,
-    };
-    return false;
-  }
 }
 
 async function deleteSupabaseLead(config: SupabaseConfig, id: string) {
@@ -1220,51 +1151,53 @@ function supabaseCommentToMention(
   };
 }
 
+const SUPABASE_POST_COLUMNS = [
+  "post_id",
+  "platform",
+  "source",
+  "brand",
+  "brand_slug",
+  "author",
+  "contact",
+  "language",
+  "posted_at",
+  "created_at",
+  "url",
+  "payload_json",
+];
+
+const SUPABASE_COMMENT_COLUMNS = [
+  "comment_id",
+  "post_id",
+  "parent_comment_id",
+  "platform",
+  "username",
+  "contact",
+  "text",
+  "posted_at",
+  "created_at",
+  "url",
+  "payload_json",
+];
+
+const SUPABASE_ANNOTATION_COLUMNS = [
+  "annotation_id",
+  "entity_key",
+  "platform",
+  "entity_type",
+  "post_id",
+  "comment_id",
+  "assignee",
+  "label",
+  "status",
+  "updated_at",
+  "created_at",
+];
+
 async function fetchSupabaseMentionsUncached(opts: FetchOptions): Promise<Mention[]> {
   const config = getSupabaseConfig();
   const maxMentions = opts.maxMentions || 2500;
   const brandKey = opts.brandKey ? opts.brandKey.toLowerCase().replace(/[\s\-_.]/g, "").trim() : "";
-  const postColumns = [
-    "post_id",
-    "platform",
-    "source",
-    "brand",
-    "brand_slug",
-    "author",
-    "contact",
-    "language",
-    "posted_at",
-    "created_at",
-    "url",
-    "payload_json",
-  ];
-  const commentColumns = [
-    "comment_id",
-    "post_id",
-    "parent_comment_id",
-    "platform",
-    "username",
-    "contact",
-    "text",
-    "posted_at",
-    "created_at",
-    "url",
-    "payload_json",
-  ];
-  const annotationColumns = [
-    "annotation_id",
-    "entity_key",
-    "platform",
-    "entity_type",
-    "post_id",
-    "comment_id",
-    "assignee",
-    "label",
-    "status",
-    "updated_at",
-    "created_at",
-  ];
-
   let annotationRows: SupabaseRow[] = [];
   
   if (brandKey) {
@@ -1319,7 +1252,7 @@ async function fetchSupabaseMentionsUncached(opts: FetchOptions): Promise<Mentio
           "annotations",
           "post_id",
           postIds,
-          annotationColumns,
+          SUPABASE_ANNOTATION_COLUMNS,
           { platform: p === "be" ? "in.(be,befood)" : (p === "thread" ? "in.(thread,threads)" : `eq.${p}`), status: "eq.completed", order: "updated_at.desc.nullslast" },
           perPlatformLimit,
         ).catch((err: any) => {
@@ -1368,11 +1301,11 @@ async function fetchSupabaseMentionsUncached(opts: FetchOptions): Promise<Mentio
   ).filter(Boolean);
 
   const [postRows, commentRows] = await Promise.all([
-    loadSupabaseRowsByIds<SupabaseRow>(config, "posts", "post_id", postIds, postColumns).catch((err: any) => {
+    loadSupabaseRowsByIds<SupabaseRow>(config, "posts", "post_id", postIds, SUPABASE_POST_COLUMNS).catch((err: any) => {
       console.warn("[DashboardService] Failed to fetch post details:", err);
       return [] as SupabaseRow[];
     }),
-    loadSupabaseRowsByIds<SupabaseRow>(config, "comments", "comment_id", commentIds, commentColumns).catch((err: any) => {
+    loadSupabaseRowsByIds<SupabaseRow>(config, "comments", "comment_id", commentIds, SUPABASE_COMMENT_COLUMNS).catch((err: any) => {
       console.warn("[DashboardService] Failed to fetch comment details:", err);
       return [] as SupabaseRow[];
     }),
@@ -1433,6 +1366,87 @@ const supabaseMentionCache = new Map<
   { expiresAt: number; promise: Promise<Mention[]> }
 >();
 const SUPABASE_MENTION_CACHE_MS = 15_000;
+
+const supabaseMentionThreadCache = new Map<
+  string,
+  { expiresAt: number; promise: Promise<Mention[]> }
+>();
+const SUPABASE_MENTION_THREAD_CACHE_MS = 5 * 60_000;
+
+async function fetchSupabaseMentionThreadUncached(postId: string): Promise<Mention[]> {
+  const normalizedPostId = postId.trim();
+  if (!normalizedPostId) return [];
+
+  const config = getSupabaseConfig();
+  const [postRows, commentRows, annotationRows] = await Promise.all([
+    loadSupabaseRowsByIds<SupabaseRow>(
+      config,
+      "posts",
+      "post_id",
+      [normalizedPostId],
+      SUPABASE_POST_COLUMNS,
+      {},
+      1,
+    ),
+    loadSupabaseRowsByPostIdsWithSelectFallback<SupabaseRow>(
+      config,
+      "comments",
+      [normalizedPostId],
+      SUPABASE_COMMENT_COLUMNS,
+      { order: "posted_at.asc.nullslast" },
+      2000,
+      ["comment_id", "post_id"],
+    ),
+    loadSupabaseRowsByIds<SupabaseRow>(
+      config,
+      "annotations",
+      "post_id",
+      [normalizedPostId],
+      SUPABASE_ANNOTATION_COLUMNS,
+      { order: "updated_at.desc.nullslast" },
+      3000,
+    ).catch(() => [] as SupabaseRow[]),
+  ]);
+
+  const annotationByKey = new Map<string, SupabaseRow>();
+  for (const row of annotationRows) {
+    const platform = String(row.platform || "");
+    const rowPostId = String(row.post_id || normalizedPostId);
+    const commentId = normalizeOptionalText(row.comment_id);
+    const keys = [String(row.entity_key || ""), ...buildEntityKeys(platform, rowPostId, commentId)];
+    keys.filter(Boolean).forEach((key) => {
+      if (!annotationByKey.has(key)) annotationByKey.set(key, row);
+    });
+  }
+
+  const posts = postRows.map((row) => supabasePostToMention(row, annotationByKey));
+  const postById = new Map(posts.map((post) => [post.id, post]));
+  const comments = commentRows.map((row) =>
+    supabaseCommentToMention(row, postById, annotationByKey),
+  );
+
+  return uniqueRecordsById([...posts, ...comments]).sort(
+    (a, b) => new Date(a.posted_at).getTime() - new Date(b.posted_at).getTime(),
+  );
+}
+
+async function fetchSupabaseMentionThread(postId: string): Promise<Mention[]> {
+  const cacheKey = postId.trim();
+  if (!cacheKey) return [];
+
+  const cached = supabaseMentionThreadCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.promise;
+
+  const promise = fetchSupabaseMentionThreadUncached(cacheKey).catch((error) => {
+    supabaseMentionThreadCache.delete(cacheKey);
+    throw error;
+  });
+  supabaseMentionThreadCache.set(cacheKey, {
+    expiresAt: Date.now() + SUPABASE_MENTION_THREAD_CACHE_MS,
+    promise,
+  });
+  return promise;
+}
 
 async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
   const cacheKey = `${normalizeBrandName(opts.brandKey || "global")}:${opts.maxMentions || 30000}`;
@@ -1528,15 +1542,6 @@ const LEAD_PERSISTED_FIELDS = new Set<keyof Lead>([
   "label_correction_status",
   "pending_label_request_id",
   "last_label_corrected_at",
-  "operational_queue",
-  "previous_operational_queue",
-  "transfer_reason",
-  "transfer_note",
-  "transferred_by",
-  "transferred_by_name",
-  "transferred_at",
-  "transfer_count",
-  "transfer_history",
   "owner_id",
   "owner_name",
   "owner_email",
@@ -1607,6 +1612,14 @@ export interface FetchOptions {
 
 // ─── Main service ─────────────────────────────────────────────────────────────
 export class DashboardService {
+  /**
+   * Load the complete post/comment/reply context only when a detail view needs it.
+   * Results are cached per post so switching between leads in the same thread is cheap.
+   */
+  static async fetchMentionThread(postId: string): Promise<Mention[]> {
+    return fetchSupabaseMentionThread(postId);
+  }
+
   /**
    * Fetch raw data from Firestore.
    * Mapping field names Firestore → internal types happens here.
@@ -1843,7 +1856,7 @@ export class DashboardService {
           source_mention_id: m.id,
           parent_id: m.parent_id,
           content_type: m.content_type,
-          post_id: m.parent_id || m.id,
+          post_id: m.post_id || (m.content_type === "post" ? m.id : undefined),
           workspace_id: m.workspace_id,
           platform: m.platform,
           author: m.author,
@@ -1864,15 +1877,6 @@ export class DashboardService {
           label_correction_status: undefined,
           pending_label_request_id: undefined,
           last_label_corrected_at: undefined,
-          operational_queue: undefined,
-          previous_operational_queue: undefined,
-          transfer_reason: undefined,
-          transfer_note: undefined,
-          transferred_by: undefined,
-          transferred_by_name: undefined,
-          transferred_at: undefined,
-          transfer_count: 0,
-          transfer_history: [],
           phone: parsed.phone,
           email: parsed.email,
           zalo_id: parsed.zalo_id,
@@ -1910,6 +1914,8 @@ export class DashboardService {
           const { labels: mergedLabels, intent: mergedIntent } =
             resolveSupabaseLeadClassification(d, baseLead.labels);
           if (!isQualifiedLeadIntent(mergedIntent)) return;
+          const persistedLastAction = normalizeOptionalText(d.last_action_type);
+          const lastActionWasLegacyTransfer = persistedLastAction === "transfer_business";
 
           derivedLeadById.set(m.id, {
             ...baseLead,
@@ -1921,17 +1927,6 @@ export class DashboardService {
             label_correction_status: mapLabelCorrectionStatus(d.label_correction_status as string | undefined),
             pending_label_request_id: normalizeOptionalText(d.pending_label_request_id),
             last_label_corrected_at: d.last_label_corrected_at ? parseDate(d.last_label_corrected_at) : undefined,
-            operational_queue: normalizeOptionalText(d.operational_queue) as Lead["operational_queue"],
-            previous_operational_queue: normalizeOptionalText(d.previous_operational_queue) as Lead["previous_operational_queue"],
-            transfer_reason: normalizeOptionalText(d.transfer_reason),
-            transfer_note: normalizeOptionalText(d.transfer_note),
-            transferred_by: normalizeOptionalText(d.transferred_by),
-            transferred_by_name: normalizeOptionalText(d.transferred_by_name),
-            transferred_at: d.transferred_at ? parseDate(d.transferred_at) : undefined,
-            transfer_count: typeof d.transfer_count === "number" ? d.transfer_count : 0,
-            transfer_history: Array.isArray(d.transfer_history)
-              ? (d.transfer_history as Lead["transfer_history"])
-              : [],
             phone: normalizeOptionalText(d.phone) || parsed.phone,
             email: normalizeOptionalText(d.email) || parsed.email,
             zalo_id: normalizeOptionalText(d.zalo_id) || parsed.zalo_id,
@@ -1947,8 +1942,12 @@ export class DashboardService {
             contact_attempts: typeof d.contact_attempts === "number" ? d.contact_attempts : 0,
             last_contact_at: d.last_contact_at ? parseDate(d.last_contact_at) : undefined,
             pending_result: d.pending_result === true,
-            last_action_at: d.last_action_at ? parseDate(d.last_action_at) : undefined,
-            last_action_type: normalizeOptionalText(d.last_action_type) as Lead["last_action_type"],
+            last_action_at: !lastActionWasLegacyTransfer && d.last_action_at
+              ? parseDate(d.last_action_at)
+              : undefined,
+            last_action_type: lastActionWasLegacyTransfer
+              ? undefined
+              : (persistedLastAction as Lead["last_action_type"]),
             last_contact_channel: normalizeOptionalText(d.last_contact_channel),
             result_type: normalizeOptionalText(d.result_type) as Lead["result_type"],
             result_recorded_at: d.result_recorded_at ? parseDate(d.result_recorded_at) : undefined,
@@ -2039,7 +2038,7 @@ export class DashboardService {
           post_id:
             normalizeOptionalText(row.post_id) ||
             sourceMention?.post_id ||
-            sourceMention?.parent_id ||
+            (sourceMention?.content_type === "post" ? sourceMention.id : undefined) ||
             id,
           workspace_id: workspaceId,
           platform: mapSourceToPlatform(
@@ -2069,17 +2068,6 @@ export class DashboardService {
           last_label_corrected_at: row.last_label_corrected_at
             ? parseDate(row.last_label_corrected_at)
             : undefined,
-          operational_queue: normalizeOptionalText(row.operational_queue) as Lead["operational_queue"],
-          previous_operational_queue: normalizeOptionalText(row.previous_operational_queue) as Lead["previous_operational_queue"],
-          transfer_reason: normalizeOptionalText(row.transfer_reason),
-          transfer_note: normalizeOptionalText(row.transfer_note),
-          transferred_by: normalizeOptionalText(row.transferred_by),
-          transferred_by_name: normalizeOptionalText(row.transferred_by_name),
-          transferred_at: row.transferred_at ? parseDate(row.transferred_at) : undefined,
-          transfer_count: Number.isFinite(Number(row.transfer_count)) ? Number(row.transfer_count) : 0,
-          transfer_history: Array.isArray(row.transfer_history)
-            ? (row.transfer_history as Lead["transfer_history"])
-            : [],
           phone: normalizeOptionalText(row.phone) || parsedContact.phone,
           email: normalizeOptionalText(row.email) || parsedContact.email,
           zalo_id: normalizeOptionalText(row.zalo_id) || parsedContact.zalo_id,

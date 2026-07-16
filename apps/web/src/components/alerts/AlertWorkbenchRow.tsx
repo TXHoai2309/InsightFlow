@@ -55,9 +55,6 @@ export function AlertWorkbenchRow({ alert, selected, onSelect, getResolverName }
             <div className="mt-1 flex min-w-0 items-center gap-1.5">
               <PlatformLogo platform={alert.source} size="sm" />
               <span className="truncate text-[10px] font-bold text-[var(--color-text-muted)]">{alert.source || "Nền tảng khác"}</span>
-              {alert.operational_queue === "crisis" && alert.transferred_at && (
-                <span className="shrink-0 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold text-amber-700">Được chuyển đến</span>
-              )}
             </div>
           </div>
         </div>
