@@ -71,7 +71,7 @@ export function LeadPriorityOverview() {
                   {style.label}
                 </p>
                 <div className="mt-2 flex items-end gap-2">
-                  <span className="font-['Hanken_Grotesk'] text-[30px] font-bold leading-none">
+                  <span className="font-sans text-[30px] font-bold leading-none">
                     {item.value}
                   </span>
                   <span className="pb-1 text-[12px] font-semibold text-[#787585]">

@@ -215,7 +215,7 @@ export function LeadTable() {
     <div className="flex flex-col overflow-hidden rounded-[14px] border border-[#E9E7EE] bg-white shadow-sm">
       <div className="flex flex-col gap-4 border-b border-[#E9E7EE] px-5 py-5 xl:flex-row xl:items-center xl:justify-between">
         <div>
-          <h2 className="font-['Hanken_Grotesk'] text-[18px] font-bold text-[#1A1B20]">
+          <h2 className="font-sans text-[18px] font-bold text-[#1A1B20]">
             Danh sách lead ưu tiên ({filteredLeads.length})
           </h2>
           <p className="mt-1 text-[13px] text-[#787585]">
@@ -244,7 +244,7 @@ export function LeadTable() {
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1180px] text-left font-['Inter']">
+        <table className="w-full min-w-[1180px] text-left font-sans">
           <thead className="sticky top-0 z-10 bg-[#F4F3FA]">
             <tr>
               {["Khách hàng", "Tín hiệu mua hàng", "Điểm", "SLA", "Trạng thái", "Phụ trách", "Phản hồi", "Hành động"].map((head) => (
@@ -291,7 +291,7 @@ export function LeadTable() {
                         {getLeadSignal(lead)}
                       </p>
                       <p className="mt-1 line-clamp-2 text-[13px] leading-5 text-[#474554]">
-                        "{lead.content}"
+                        “{lead.content}”
                       </p>
                     </td>
 

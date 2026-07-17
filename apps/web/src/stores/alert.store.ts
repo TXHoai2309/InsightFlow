@@ -530,7 +530,8 @@ function applyRealtimeAnnotationUpdate(
 }
 
 let activeUnsubscribe: (() => void) | null = null;
-let activeRequestsUnsubscribe: (() => void) | null = null;
+let activeRequestsUnsubscribe: (() => Promise<void>) | null = null;
+let activeRequestsScope: string | null = null;
 const ALERT_REVIEW_WINDOW_DAYS = 30;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const ALERT_REFRESH_INTERVAL_MS = 60 * 1000;
@@ -993,9 +994,20 @@ export const useAlertStore = create<AlertState>()(
     },
 
     fetchCorrectionRequests: async (scopedBrandKey = null, force = false) => {
-      if (activeRequestsUnsubscribe && !force) {
+      const requestScope = scopedBrandKey || null;
+
+      if (activeRequestsUnsubscribe && activeRequestsScope === requestScope && !force) {
         return;
       }
+
+      // A brand scope change needs a different callback closure. Remove the
+      // previous channel before loading/subscribing for the new scope.
+      if (activeRequestsUnsubscribe && activeRequestsScope !== requestScope) {
+        await activeRequestsUnsubscribe();
+        activeRequestsUnsubscribe = null;
+        activeRequestsScope = null;
+      }
+
       set({ isLoadingRequests: true });
       try {
         const loadFromSupabase = async () => {
@@ -1056,8 +1068,27 @@ export const useAlertStore = create<AlertState>()(
         await loadFromSupabase();
 
         if (supabaseClient) {
-          const channel = supabaseClient
-            .channel(`alert-label-change-requests-${scopedBrandKey || "all"}`)
+          const realtimeClient = supabaseClient;
+
+          // A forced refresh only reloads the rows; the existing subscription
+          // is already listening for the same scope and must not be registered again.
+          if (activeRequestsUnsubscribe && activeRequestsScope === requestScope) {
+            return;
+          }
+
+          const channelName = `alert-label-change-requests-${requestScope || "all"}`;
+
+          // During Next.js hot reload the module-level cleanup can be reset while
+          // the singleton Supabase client still owns the subscribed channel.
+          const staleChannel = realtimeClient
+            .getChannels()
+            .find((existingChannel) => existingChannel.topic === `realtime:${channelName}`);
+          if (staleChannel) {
+            await realtimeClient.removeChannel(staleChannel);
+          }
+
+          const channel = realtimeClient
+            .channel(channelName)
             .on(
               "postgres_changes",
               { event: "*", schema: "public", table: "label_change_requests" },
@@ -1068,10 +1099,11 @@ export const useAlertStore = create<AlertState>()(
               },
             )
             .subscribe();
-          setTimeout(() => {
-            // Keep the channel active while the store is alive; duplicate fetches replace state.
-            void channel;
-          }, 0);
+
+          activeRequestsScope = requestScope;
+          activeRequestsUnsubscribe = async () => {
+            await realtimeClient.removeChannel(channel);
+          };
         }
       } catch (error) {
         console.error("[AlertStore] fetchCorrectionRequests error:", error);

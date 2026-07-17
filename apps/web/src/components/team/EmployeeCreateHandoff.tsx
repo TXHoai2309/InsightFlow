@@ -86,7 +86,7 @@ export function EmployeeCreateHandoff({ createdAccount, t }: EmployeeCreateHando
                     <CopyButton value={createdAccount.temporaryPassword} label="Sao chép" />
                   )}
                 </div>
-                <p className="mt-2 font-mono text-[15px] font-bold tracking-wide text-amber-900">
+                <p className="mt-2 font-sans text-[15px] font-bold tracking-wide text-amber-900">
                   {createdAccount.temporaryPassword || "—"}
                 </p>
               </div>

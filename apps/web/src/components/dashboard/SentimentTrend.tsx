@@ -35,6 +35,7 @@ ChartJS.register(
   Legend,
   Filler
 );
+ChartJS.defaults.font.family = 'Inter, "Segoe UI", Arial, sans-serif';
 
 interface SentimentTrendProps {
   filteredMentions: Mention[];

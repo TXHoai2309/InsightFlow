@@ -54,7 +54,7 @@ export function AISummaryBanner() {
             <Sparkles className="h-6 w-6 text-white" />
           </div>
           <div className="min-w-0">
-            <p className="font-['Hanken_Grotesk'] text-[18px] font-bold text-[#1A1B20]">
+            <p className="font-sans text-[18px] font-bold text-[#1A1B20]">
               AI đề xuất xử lý
             </p>
             <p className="mt-1 max-w-3xl text-[14px] leading-6 text-[#474554]">

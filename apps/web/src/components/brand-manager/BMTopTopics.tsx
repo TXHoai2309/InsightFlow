@@ -110,7 +110,11 @@ export function BMTopTopics({ topics }: BMTopTopicsProps) {
                 {/* Content */}
                 <div className="bm-topic-content">
                   <div className="bm-topic-top">
-                    <span className="bm-topic-name">{meta.label}</span>
+                    <span className="bm-topic-name">
+                      {topic.name.toLowerCase() === "khác" 
+                        ? t("dashboard.topics.other", "Other")
+                        : t(`dashboard.topics.${topic.name}`, meta.label)}
+                    </span>
                     <div className="bm-topic-right">
                       <span className="bm-topic-count">
                         {total.toLocaleString("vi-VN")}

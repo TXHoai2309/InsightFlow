@@ -261,7 +261,7 @@ function LiveIntelligenceSection() {
                   <span className="text-[16px] md:text-[18px] font-display font-bold bg-gradient-to-r from-[#6D5EF6] to-[#9B8CFF] bg-clip-text text-transparent hidden sm:block">Live Command Center</span>
                   <div className="h-6 w-px bg-slate-200 dark:bg-white/10 hidden sm:block" />
                   {/* Counter */}
-                  <span className="font-mono font-bold text-[#1B1B4A] dark:text-white flex items-center gap-2">
+                  <span className="font-sans font-bold text-[#1B1B4A] dark:text-white flex items-center gap-2">
                     <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#34D399] opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-[#34D399]"></span></span>
                     <span className="tabular-nums opacity-90 text-[14px] md:text-[16px]">2,459,102</span>
                     <span className="text-[11px] text-[#6B7090] font-sans ml-1 uppercase tracking-wider hidden sm:inline-block">Mentions</span>
@@ -802,7 +802,7 @@ export default function BrandLandingPage() {
               <span className="bg-gradient-to-r from-[#6D5EF6] to-[#9B8CFF] bg-clip-text text-transparent">bước tiếp theo của tăng trưởng.</span>
             </h2>
             <p className="mt-6 text-[17px] leading-[1.7] text-[#6B7090]">
-              InsightFlow không dừng ở việc "nghe". Hệ thống gắn bối cảnh, chấm mức độ ưu tiên và đưa tín hiệu đến đúng người để tạo ra hành động ngay lập tức.
+              InsightFlow không dừng ở việc “nghe”. Hệ thống gắn bối cảnh, chấm mức độ ưu tiên và đưa tín hiệu đến đúng người để tạo ra hành động ngay lập tức.
             </p>
           </Reveal>
 
@@ -1203,9 +1203,6 @@ export default function BrandLandingPage() {
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link href="#consultation" className="inline-flex h-[60px] items-center justify-center rounded-[18px] bg-white px-[36px] text-[16px] font-extrabold text-linear-primary shadow-[0_20px_40px_rgba(0,0,0,0.15)] transition-all duration-300 hover:scale-[1.04] hover:-translate-y-[3px] hover:shadow-[0_30px_60px_rgba(0,0,0,0.2)]">
               Đặt lịch Demo
-            </Link>
-            <Link href="/dashboard" className="inline-flex h-[60px] items-center justify-center rounded-[18px] border border-white/30 bg-white/10 px-[36px] text-[16px] font-extrabold text-white backdrop-blur-md transition-all duration-300 hover:scale-[1.04] hover:-translate-y-[3px] hover:bg-white/20">
-              Liên hệ
             </Link>
           </div>
 

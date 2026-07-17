@@ -78,10 +78,10 @@ export function BusinessAuthStep({ onSubmit, onBack, initialData }: BusinessAuth
   };
 
   return (
-    <div className="flex flex-col-reverse lg:flex-row w-full bg-gradient-to-br from-[#F5F3FF] to-white rounded-[24px] shadow-[0_20px_40px_rgba(109,94,246,0.06)] overflow-hidden min-h-[600px]">
+    <div className="flex flex-col-reverse lg:flex-row w-full bg-gradient-to-br from-[#F5F3FF] to-white dark:from-[#13141f] dark:to-[#0B0B13] rounded-[24px] shadow-[0_20px_40px_rgba(109,94,246,0.06)] dark:shadow-[0_20px_40px_rgba(0,0,0,0.5)] overflow-hidden min-h-[600px] border border-transparent dark:border-white/5">
       
       {/* Left Column (55%) - Explanation */}
-      <div className="lg:w-[55%] p-8 lg:p-12 xl:p-14 flex flex-col justify-center relative bg-gradient-to-br from-[#1B1B4A] to-[#2D2B65] text-white">
+      <div className="lg:w-[55%] p-8 lg:p-12 xl:p-14 flex flex-col justify-center relative bg-gradient-to-br from-[#1B1B4A] to-[#2D2B65] dark:from-[#0C0C16] dark:to-[#171638] text-white">
         <div className="absolute top-0 right-0 w-64 h-64 bg-[#6D5EF6] blur-[100px] opacity-30 rounded-full pointer-events-none" />
         
         <motion.div 
@@ -132,27 +132,27 @@ export function BusinessAuthStep({ onSubmit, onBack, initialData }: BusinessAuth
       </div>
 
       {/* Right Column (45%) - Form */}
-      <div className="lg:w-[45%] p-6 lg:p-10 flex items-center justify-center relative bg-gradient-to-bl from-white via-white to-[#F5F3FF]/30">
+      <div className="lg:w-[45%] p-6 lg:p-10 flex items-center justify-center relative bg-gradient-to-bl from-white via-white to-[#F5F3FF]/30 dark:from-[#1A1B28] dark:via-[#1A1B28] dark:to-[#13141f]">
         <motion.div 
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
-          className="w-full max-w-[480px] bg-white border border-[#F1F0F5] rounded-[24px] p-6 sm:p-8 shadow-[0_30px_60px_rgba(109,94,246,0.12)] transition-transform hover:-translate-y-1 duration-300"
+          className="w-full max-w-[480px] bg-white dark:bg-[#161722] border border-[#F1F0F5] dark:border-white/10 rounded-[24px] p-6 sm:p-8 shadow-[0_30px_60px_rgba(109,94,246,0.12)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-transform hover:-translate-y-1 duration-300"
         >
           {/* Progress Bar */}
-          <div className="flex items-center gap-2 mb-6 text-[10px] font-bold uppercase tracking-wider text-[#6B7090]">
+          <div className="flex items-center gap-2 mb-6 text-[10px] font-bold uppercase tracking-wider text-[#6B7090] dark:text-gray-400">
             <span>Cơ bản</span>
             <ArrowRight className="h-2.5 w-2.5" />
-            <span className="text-[#6D5EF6]">Xác thực</span>
+            <span className="text-[#6D5EF6] dark:text-[#8E83FA]">Xác thực</span>
             <ArrowRight className="h-2.5 w-2.5" />
             <span>Cấu hình</span>
           </div>
 
           <div className="mb-6 lg:mb-8">
-            <h3 className="font-display text-[22px] font-bold text-[#1B1B4A] mb-2 flex items-center gap-2">
+            <h3 className="font-display text-[22px] font-bold text-[#1B1B4A] dark:text-white mb-2 flex items-center gap-2">
               Xác thực doanh nghiệp
             </h3>
-            <p className="text-[#6B7090] text-[14px] leading-relaxed">
+            <p className="text-[#6B7090] dark:text-gray-400 text-[14px] leading-relaxed">
               Nhập mã số thuế và mã xác nhận để tiếp tục cấu hình.
             </p>
           </div>
@@ -160,16 +160,16 @@ export function BusinessAuthStep({ onSubmit, onBack, initialData }: BusinessAuth
           <form onSubmit={handleSubmit} className="flex flex-col gap-6">
             {/* Tax ID */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-[13px] font-bold text-[#1B1B4A]">Mã số thuế doanh nghiệp <span className="text-red-500">*</span></label>
+              <label className="text-[13px] font-bold text-[#1B1B4A] dark:text-gray-200">Mã số thuế doanh nghiệp <span className="text-red-500">*</span></label>
               <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#9CA3AF] group-focus-within:text-[#6D5EF6] transition-colors">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#9CA3AF] dark:text-gray-500 group-focus-within:text-[#6D5EF6] dark:group-focus-within:text-[#8E83FA] transition-colors">
                   <Building2 className="h-[18px] w-[18px]" />
                 </div>
                 <input
                   type="text"
                   required
                   placeholder="Nhập mã số thuế..."
-                  className="w-full h-[52px] rounded-[14px] border border-gray-200 bg-[#FAFAFA] pl-[42px] pr-4 text-[14px] outline-none transition-all focus:border-[#6D5EF6] focus:bg-white focus:ring-[3px] focus:ring-[#6D5EF6]/15 hover:border-gray-300 hover:bg-white shadow-sm"
+                  className="w-full h-[52px] rounded-[14px] border border-gray-200 dark:border-white/10 bg-[#FAFAFA] dark:bg-[#1B1C2A] text-black dark:text-white pl-[42px] pr-4 text-[14px] outline-none transition-all focus:border-[#6D5EF6] dark:focus:border-[#8E83FA] focus:bg-white dark:focus:bg-[#1F202E] focus:ring-[3px] focus:ring-[#6D5EF6]/15 hover:border-gray-300 dark:hover:border-white/20 hover:bg-white dark:hover:bg-[#1F202E] shadow-sm"
                   value={formData.taxId}
                   onChange={handleTaxIdChange}
                 />
@@ -179,10 +179,10 @@ export function BusinessAuthStep({ onSubmit, onBack, initialData }: BusinessAuth
                 <motion.div 
                   initial={{ opacity: 0, y: -10 }} 
                   animate={{ opacity: 1, y: 0 }}
-                  className="flex items-center gap-2 mt-2 p-3 bg-gray-50 rounded-xl border border-gray-100"
+                  className="flex items-center gap-2 mt-2 p-3 bg-gray-50 dark:bg-[#1B1C2A] rounded-xl border border-gray-100 dark:border-white/10"
                 >
-                  <Loader2 className="w-4 h-4 text-gray-500 animate-spin" />
-                  <span className="text-[12px] font-medium text-gray-500">Đang tra cứu thông tin doanh nghiệp...</span>
+                  <Loader2 className="w-4 h-4 text-gray-500 dark:text-gray-400 animate-spin" />
+                  <span className="text-[12px] font-medium text-gray-500 dark:text-gray-400">Đang tra cứu thông tin doanh nghiệp...</span>
                 </motion.div>
               )}
               
@@ -190,12 +190,12 @@ export function BusinessAuthStep({ onSubmit, onBack, initialData }: BusinessAuth
                 <motion.div 
                   initial={{ opacity: 0, y: -10 }} 
                   animate={{ opacity: 1, y: 0 }}
-                  className="flex flex-col gap-1.5 mt-2 p-3 bg-[#EEF2FF] rounded-xl border border-[#C7D2FE]"
+                  className="flex flex-col gap-1.5 mt-2 p-3 bg-[#EEF2FF] dark:bg-indigo-900/20 rounded-xl border border-[#C7D2FE] dark:border-indigo-500/20"
                 >
-                  <p className="text-[13px] font-bold text-[#3730A3]">{companyInfo.name}</p>
+                  <p className="text-[13px] font-bold text-[#3730A3] dark:text-indigo-300">{companyInfo.name}</p>
                   <div className="flex items-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4 text-[#10B981]" />
-                    <span className="text-[12px] font-medium text-[#10B981]">{companyInfo.status}</span>
+                    <CheckCircle2 className="w-4 h-4 text-[#10B981] dark:text-[#10B981]" />
+                    <span className="text-[12px] font-medium text-[#10B981] dark:text-[#10B981]">{companyInfo.status}</span>
                   </div>
                 </motion.div>
               )}
@@ -204,10 +204,10 @@ export function BusinessAuthStep({ onSubmit, onBack, initialData }: BusinessAuth
                 <motion.div 
                   initial={{ opacity: 0, y: -10 }} 
                   animate={{ opacity: 1, y: 0 }}
-                  className="flex items-center gap-1.5 mt-2 p-3 bg-red-50 rounded-xl border border-red-100"
+                  className="flex items-center gap-1.5 mt-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-100 dark:border-red-500/20"
                 >
-                  <AlertCircle className="w-4 h-4 text-red-500" />
-                  <span className="text-[12px] font-medium text-red-500">{fetchError}</span>
+                  <AlertCircle className="w-4 h-4 text-red-500 dark:text-red-400" />
+                  <span className="text-[12px] font-medium text-red-500 dark:text-red-400">{fetchError}</span>
                 </motion.div>
               )}
             </div>
@@ -216,7 +216,7 @@ export function BusinessAuthStep({ onSubmit, onBack, initialData }: BusinessAuth
               <button
                 type="button"
                 onClick={onBack}
-                className="flex items-center justify-center w-[56px] h-[56px] rounded-[14px] bg-[#F1F0F5] hover:bg-[#E5E5EB] text-[#6B7090] transition-colors shrink-0"
+                className="flex items-center justify-center w-[56px] h-[56px] rounded-[14px] bg-[#F1F0F5] dark:bg-[#1B1C2A] hover:bg-[#E5E5EB] dark:hover:bg-[#252636] text-[#6B7090] dark:text-gray-400 transition-colors shrink-0"
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>

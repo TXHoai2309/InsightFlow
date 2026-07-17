@@ -10,6 +10,7 @@
 
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useDashboardStore } from "@/stores/dashboard.store";
+import { useAlertStore } from "@/stores/alert.store";
 import { DashboardService, normalizeBrandName } from "@/lib/services/dashboard";
 import { filterLeadsForDashboard } from "@/lib/lead-metrics";
 import { useTranslation } from "react-i18next";
@@ -43,6 +44,7 @@ export function BrandManagerDashboard({
     setWorkspaces,
     setFilters,
   } = useDashboardStore();
+  const crisisAlerts = useAlertStore((state) => state.rawAlerts);
 
   const { t } = useTranslation();
   const [isMounted, setIsMounted] = useState(false);
@@ -52,7 +54,9 @@ export function BrandManagerDashboard({
   useEffect(() => {
     setIsMounted(true);
     if (initialWorkspaces.length > 0) setWorkspaces(initialWorkspaces);
-    setFilters({ sentiment: "all", topic: "all" });
+    // The Supabase dashboard data is historical; defaulting to only today can
+    // make every KPI look empty when the latest crawl finished on a prior day.
+    setFilters({ sentiment: "all", topic: "all", time_range: "30d" });
   }, []);
 
   useEffect(() => {
@@ -280,17 +284,24 @@ export function BrandManagerDashboard({
           ratio > 0.3 ? "critical" : ratio > 0.15 ? "high" : ratio > 0.05 ? "medium" : "low";
         const sample = data.mentions[0];
         const TOPIC_LABELS: Record<string, string> = {
-          quality: "Chất lượng sản phẩm", service: "Phục vụ & CSKH",
-          price: "Giá cả", delivery: "Giao hàng", staff: "Thái độ nhân viên",
-          legal: "Pháp lý", operation: "Vận hành", marketing: "Marketing",
-          experience: "Trải nghiệm", competitor: "Đối thủ", other: "Chủ đề khác",
+          quality: t("dashboard.topics.quality") || "Chất lượng sản phẩm", 
+          service: t("dashboard.topics.service") || "Phục vụ & CSKH",
+          price: t("dashboard.topics.price") || "Giá cả", 
+          delivery: t("dashboard.topics.delivery") || "Giao hàng", 
+          staff: t("dashboard.topics.staff") || "Thái độ nhân viên",
+          legal: t("dashboard.topics.legal") || "Pháp lý", 
+          operation: t("dashboard.topics.operation") || "Vận hành", 
+          marketing: t("dashboard.topics.marketing") || "Marketing",
+          experience: t("dashboard.topics.experience") || "Trải nghiệm", 
+          competitor: t("dashboard.topics.competitor") || "Đối thủ", 
+          other: t("dashboard.topics.other") || "Chủ đề khác",
         };
         return {
           id: `derived-${topic}-${i}`,
           workspace_id: sample?.workspace_id || "",
           severity: severity as "critical" | "high" | "medium" | "low",
           signal_type: (negRatio > 0.2 ? "mention_spike" : "sensitive_topic") as "mention_spike" | "high_reach" | "sensitive_topic",
-          message: `${TOPIC_LABELS[topic] || topic}: ${data.count} bình luận tiêu cực (${Math.round(ratio * 100)}% tổng thảo luận)`,
+          message: `${TOPIC_LABELS[topic] || topic}: ${data.count} ${t("bm.hero.negativeComments", "bình luận tiêu cực")} (${Math.round(ratio * 100)}% ${t("bm.hero.totalDiscussions", "tổng thảo luận")})`,
           spike_multiplier: parseFloat((data.count / Math.max(totalAll / 10, 1)).toFixed(1)),
           affected_mentions_count: data.count,
           created_at: sample?.created_at || new Date().toISOString(),
@@ -302,6 +313,24 @@ export function BrandManagerDashboard({
   const highAlerts = derivedAlerts.filter(
     (a) => a.severity === "critical" || a.severity === "high"
   );
+  const crisisAlertKpi = useMemo(() => {
+    const targetBrand =
+      filters.workspace_id !== "all"
+        ? normalizeBrandName(filters.workspace_id)
+        : null;
+
+    const scopedAlerts = crisisAlerts.filter((alert) => {
+      if (targetBrand && normalizeBrandName(alert.brand || "") !== targetBrand) return false;
+      if (filters.platform !== "all" && alert.source !== filters.platform) return false;
+      return true;
+    });
+    const high = scopedAlerts.filter((alert) => {
+      const severity = String(alert.severity || alert.urgency || "").toLowerCase();
+      return severity === "critical" || severity === "high" || severity === "urgent";
+    }).length;
+
+    return { total: scopedAlerts.length, high };
+  }, [crisisAlerts, filters.workspace_id, filters.platform]);
   const unprocessedContacts = filteredLeads.filter((l) => l.status === "new").length;
 
   const hasData = mentions.length > 0;
@@ -372,8 +401,8 @@ export function BrandManagerDashboard({
         totalTrend={totalTrend}
         negativeMentions={stats.negative_count}
         negativePrev={prevStats.negative_count}
-        alertsTotal={stats.alerts_today}
-        alertsHigh={highAlerts.length}
+        alertsTotal={crisisAlertKpi.total}
+        alertsHigh={crisisAlertKpi.high}
         unprocessed={unprocessedContacts}
         crises={derivedAlerts.filter((a) => a.severity === "critical").length}
         hotLeads={filteredLeads.length}

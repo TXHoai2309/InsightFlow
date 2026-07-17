@@ -204,7 +204,7 @@ export default function ForgotPasswordPage() {
         background: isDark
           ? "radial-gradient(circle at top right, #1a0e2e 0%, #0A0612 50%, #0f0f1a 100%)"
           : "radial-gradient(circle at top right, #f5f3ff 0%, #ffffff 50%, #fafafa 100%)",
-        fontFamily: "'Inter', 'Public Sans', sans-serif",
+        fontFamily: "var(--font-app)",
         transition: "background 0.3s ease",
       }}
     >

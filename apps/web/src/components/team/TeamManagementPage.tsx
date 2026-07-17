@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -20,6 +20,7 @@ import { EmployeeEmptyState } from "./EmployeeEmptyState";
 import { EmployeeCreateForm } from "./EmployeeCreateForm";
 import { EmployeeCreateHandoff } from "./EmployeeCreateHandoff";
 import { getBusinessRoleLabel, getStaffBusinessRole } from "./utils";
+import { ExportPreviewModal } from "./ExportPreviewModal";
 
 const roleOptions: RoleAssignmentOption[] = [
   {
@@ -89,6 +90,7 @@ export function TeamManagementPage({ initialTab = "list" }: TeamManagementPagePr
   const [listError, setListError] = useState("");
   const [createError, setCreateError] = useState("");
   const [actionError, setActionError] = useState("");
+  const [showExportPreview, setShowExportPreview] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
@@ -353,18 +355,7 @@ export function TeamManagementPage({ initialTab = "list" }: TeamManagementPagePr
   };
 
   const handleExport = () => {
-    const headers = ["Há» vÃ  tÃªn", "Email", "Vai trÃ²", "Tráº¡ng thÃ¡i"];
-    const rows = filteredStaff.map(s => [
-      s.displayName,
-      s.email,
-      getBusinessRoleLabel(getStaffBusinessRole(s.permissions, s.role)),
-      s.disabled ? "ÄÃ£ khÃ³a" : "Äang hoáº¡t Ä‘á»™ng",
-    ]);
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
-    const link = document.createElement("a");
-    link.setAttribute("href", encodeURI(csvContent));
-    link.setAttribute("download", "danh_sach_nhan_vien.csv");
-    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    setShowExportPreview(true);
   };
 
   const filteredStaff = useMemo(() => {
@@ -567,6 +558,12 @@ export function TeamManagementPage({ initialTab = "list" }: TeamManagementPagePr
           </div>
         </div>
       )}
+
+      <ExportPreviewModal
+        isOpen={showExportPreview}
+        onClose={() => setShowExportPreview(false)}
+        staffData={filteredStaff}
+      />
     </div>
   );
 }

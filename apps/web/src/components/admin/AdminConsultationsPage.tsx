@@ -245,7 +245,7 @@ export default function AdminConsultationsPage() {
       setApprovalError("");
       setSaveSuccess(false);
     }
-  }, [selectedId]);
+  }, [selectedRequest]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -441,8 +441,12 @@ export default function AdminConsultationsPage() {
                           </span>
                         </div>
 
-                        <div className="text-[12px] text-[var(--color-text-secondary)] space-y-0.5">
-                          <p className="font-medium line-clamp-1">{req.company}</p>
+                        <div className="space-y-1 text-[12px] text-[var(--color-text-secondary)]">
+                          <p className="font-medium line-clamp-1"><span className="text-[var(--color-text-muted)]">Công ty:</span> {req.company || "Chưa cung cấp"}</p>
+                          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-[var(--color-text-muted)]">
+                            <span>Mã số DN: <strong className="text-[var(--color-text-secondary)]">{req.taxId || "Chưa cung cấp"}</strong></span>
+                            <span>Ngành: <strong className="text-[var(--color-text-secondary)]">{req.industry || "Chưa cung cấp"}</strong></span>
+                          </div>
                           <p className="text-[11px] text-[var(--color-text-muted)]">
                             {req.need}
                           </p>
@@ -484,6 +488,16 @@ export default function AdminConsultationsPage() {
 
                 {/* Profile Grid */}
                 <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-3 space-y-1.5 sm:col-span-2">
+                    <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
+                      <Building className="h-3.5 w-3.5" />
+                      Tên công ty / thương hiệu
+                    </span>
+                    <p className="text-[13px] font-semibold text-[var(--color-text-primary)]">
+                      {selectedRequest.company || "Chưa cung cấp"}
+                    </p>
+                  </div>
+
                   <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-3 space-y-1.5">
                     <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
                       <Mail className="h-3.5 w-3.5" />
@@ -731,14 +745,14 @@ export default function AdminConsultationsPage() {
                         <div className="rounded-lg bg-white p-3 dark:bg-black/10">
                           <p className="text-[11px] font-bold uppercase text-[var(--color-text-muted)]">Email đăng nhập</p>
                           <div className="mt-1 flex items-center justify-between gap-2">
-                            <span className="break-all font-mono text-[13px] font-bold text-[var(--color-text-primary)]">{generatedCredentials.email}</span>
+                            <span className="break-all font-sans text-[13px] font-bold text-[var(--color-text-primary)]">{generatedCredentials.email}</span>
                             <CopyButton value={generatedCredentials.email} label="email tài khoản" />
                           </div>
                         </div>
                         <div className="rounded-lg bg-white p-3 dark:bg-black/10">
                           <p className="text-[11px] font-bold uppercase text-[var(--color-text-muted)]">Mật khẩu tạm thời</p>
                           <div className="mt-1 flex items-center justify-between gap-2">
-                            <span className="font-mono text-[13px] font-bold text-[var(--color-text-primary)]">{generatedCredentials.temporaryPassword}</span>
+                            <span className="font-sans text-[13px] font-bold text-[var(--color-text-primary)]">{generatedCredentials.temporaryPassword}</span>
                             <CopyButton value={generatedCredentials.temporaryPassword} label="mật khẩu tạm thời" />
                           </div>
                         </div>

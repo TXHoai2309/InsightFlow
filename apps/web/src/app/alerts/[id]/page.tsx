@@ -1113,7 +1113,7 @@ export default function AlertDetailPage() {
 
                   <div className="bg-white dark:bg-slate-900 border border-[var(--color-border)] rounded-xl p-4 text-center space-y-1">
                     <p className="text-[10px] text-[var(--color-text-muted)] font-semibold uppercase">Thời gian theo dõi còn lại</p>
-                    <p className="text-lg md:text-xl font-black text-cyan-600 dark:text-cyan-400 font-mono tracking-tight">
+                    <p className="text-lg md:text-xl font-black text-cyan-600 dark:text-cyan-400 font-sans tracking-tight">
                       {timeLeftStr || "Đang tính toán..."}
                     </p>
                   </div>

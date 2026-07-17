@@ -111,7 +111,7 @@ export function BMFiltersBar({ workspaces }: BMFiltersBarProps) {
               onChange={(e) => handle("custom_start_date", e.target.value)}
               className="bm-date-input"
             />
-            <span className="bm-date-sep">to</span>
+            <span className="bm-date-sep">{t("dashboard.filters.to", "đến")}</span>
             <input
               type="date"
               value={filters.custom_end_date || ""}

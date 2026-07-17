@@ -67,7 +67,7 @@ export function SLAGaugeCard() {
   return (
     <Card className="flex h-[260px] flex-col rounded-xl shadow-[0px_4px_20px_rgba(30,31,36,0.08)] transition-all duration-300 hover:-translate-y-[2px] hover:shadow-[0px_8px_30px_rgba(30,31,36,0.12)] border-[#C8C4D6] bg-white/70 backdrop-blur-md">
       <CardHeader className="pb-1 pt-5 px-6">
-        <CardTitle className="text-[14px] font-bold uppercase text-[#1A1B20] font-['Hanken_Grotesk'] tracking-wide leading-tight text-center">
+        <CardTitle className="text-[14px] font-bold uppercase text-[#1A1B20] font-sans tracking-wide leading-tight text-center">
           Tỷ lệ đạt SLA xử lý
         </CardTitle>
       </CardHeader>

@@ -68,8 +68,8 @@ const config: Config = {
         gutter: "20px",
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
-        display: ["Inter", "system-ui", "sans-serif"],
+        sans: ["Inter", "Segoe UI", "Arial", "sans-serif"],
+        display: ["Inter", "Segoe UI", "Arial", "sans-serif"],
       },
       fontSize: {
         "headline-lg-mobile": [

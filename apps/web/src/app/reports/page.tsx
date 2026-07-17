@@ -116,7 +116,7 @@ function ReportPreviewModal({
   const excelBody = excelSheet === "dashboard" ? excelSheets?.dashboardHtml : excelSheets?.evidenceHtml;
   const excelDocument = excelBody
     ? `<!doctype html><html><head><meta charset="utf-8"><style>
-        body{font-family:Arial,sans-serif;color:#172033;margin:0;padding:22px;background:#fff}
+        body{font-family:Inter,"Segoe UI",Arial,sans-serif;color:#172033;margin:0;padding:22px;background:#fff}
         h1{font-size:22px;margin:0 0 4px;color:#1f2937}.subtitle{color:#64748b;margin:0 0 14px}
         table{border-collapse:collapse;margin:12px 0 18px;width:100%}th,td{border:1px solid #cbd5e1;padding:7px 8px;vertical-align:top;font-size:12px}
         th,.section-title{background:#3730a3;color:#fff;font-weight:700;text-align:left}.header-row td,.header-row th{background:#eef2ff;color:#1e1b4b;font-weight:700}
@@ -2227,23 +2227,7 @@ function LegacyReportsPage() {
           {/* Filters */}
           {activeTab === "periodic" && (
             <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-              <div className="flex items-center gap-2 flex-1 md:flex-none min-w-[140px]">
-                <span className="text-[11px] text-[var(--color-text-muted)] font-bold uppercase tracking-wider hidden sm:block">
-                  Thương hiệu:
-                </span>
-                <select
-                  value={selectedBrand}
-                  onChange={(e) => setSelectedBrand(e.target.value)}
-                  className="select-app border border-[var(--color-border)] rounded-lg text-xs py-2 px-3 outline-none font-bold focus:ring-2 focus:ring-[var(--color-brand)]/20 w-full"
-                >
-                  <option value="all">Tất cả nhãn hàng</option>
-                  {brands.map((b) => (
-                    <option key={b} value={b} className="capitalize">
-                      {b}
-                    </option>
-                  ))}
-                </select>
-              </div>
+
               <div className="flex items-center gap-2 flex-1 md:flex-none min-w-[120px]">
                 <span className="text-[11px] text-[var(--color-text-muted)] font-bold uppercase tracking-wider hidden sm:block">
                   Thời gian:
@@ -3210,66 +3194,7 @@ function LegacyReportsPage() {
         )}
       </div>
 
-      {/* ── Promotional Banners ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 pb-4">
-        {/* Email Banner */}
-        <div className="relative overflow-hidden rounded-2xl bg-[var(--color-brand)] text-white p-6 md:p-8 flex flex-col justify-center min-h-[180px] md:min-h-[220px]">
-          <div className="relative z-10">
-            <p className="text-[10px] font-bold uppercase tracking-widest opacity-60 mb-2">
-              Tự động hóa
-            </p>
-            <h3 className="text-xl md:text-2xl font-bold mb-2">
-              Gửi báo cáo qua Email
-            </h3>
-            <p className="text-sm opacity-80 mb-5 max-w-sm">
-              Cấu hình gửi báo cáo AI tự động vào hộp thư lúc 8:00 sáng mỗi
-              ngày.
-            </p>
-            <button className="bg-white text-[var(--color-brand)] px-6 py-2.5 rounded-xl font-bold text-sm hover:shadow-lg active:scale-95 transition-all w-fit">
-              {t("reports.banner.setupBtn", { defaultValue: "Thiết lập ngay" })}
-            </button>
-          </div>
-          <span
-            className="material-symbols-outlined absolute -right-6 -top-6 text-[130px] md:text-[180px] opacity-10 rotate-12 pointer-events-none"
-            style={{ fontVariationSettings: "'FILL' 1" }}
-          >
-            mail
-          </span>
-        </div>
 
-        {/* AI Trend Banner */}
-        <div className="relative overflow-hidden rounded-2xl bg-[var(--color-bg-surface-high)] border border-[var(--color-border)] p-6 md:p-8 flex flex-col sm:flex-row items-center gap-5 min-h-[180px] md:min-h-[220px]">
-          <div className="flex-1 relative z-10 text-center sm:text-left">
-            <div className="inline-flex items-center gap-2 mb-3">
-              <span className="bg-[var(--color-brand)] text-white text-[9px] font-bold uppercase tracking-widest px-2 py-1 rounded-lg">
-                Mới
-              </span>
-            </div>
-            <h3 className="text-xl md:text-2xl font-bold mb-2 text-[var(--color-text-primary)]">
-              Phân tích Xu hướng AI
-            </h3>
-            <p className="text-sm text-[var(--color-text-secondary)] opacity-75 mb-5">
-              {t("reports.banner.trendDesc", { defaultValue: "Dùng LLM tóm tắt biến động thị trường quan trọng nhất trong tuần." })}
-            </p>
-            <a
-              href="#"
-              className="inline-flex items-center gap-1 text-[var(--color-brand)] hover:text-[var(--color-brand-hover)] font-bold text-sm transition-colors"
-            >
-              Khám phá ngay
-              <span className="material-symbols-outlined text-lg">
-                arrow_forward
-              </span>
-            </a>
-          </div>
-          <div className="w-24 h-24 md:w-32 md:h-32 rounded-2xl overflow-hidden shadow-2xl border-2 border-[var(--color-border)] flex-shrink-0 rotate-3 hidden sm:block relative z-10">
-            <img
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDFCABMvUN8JyM7a3E2elTgaODiz73B5O5e6t0CG4tqShjMiOpQt34ZqJsvkeVwSxzqY0Cq4Ev06YARyRjjEyW1vN2-3_33fBGzU12y6RBh0xm8_ZNFF5LAn3l7k0Yt3zdPvTj5Lmd6tlyM2dwsDzs4MIZNaXD76ohyzbXFkcNWO-hKAYON9biih5GUW4oV3RfVXy04Zc3FAfQuioapcW7o_sjM2865Oh8xGp62uIWVdNouDsgCvqGRdJihgGOCo9T26pmf4QIDXkY"
-              alt="AI Visualization"
-              className="w-full h-full object-cover"
-            />
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
