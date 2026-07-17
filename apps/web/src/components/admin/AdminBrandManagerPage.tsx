@@ -3,9 +3,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useTranslation } from "react-i18next";
-import { collection, getDocs, limit, query } from "firebase/firestore";
+import { collection, getDocs, limit, query, doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
-import { auth, dbData } from "@/lib/firebase";
+import { auth, dbData, db } from "@/lib/firebase";
 import { validateStrongPassword } from "@/lib/passwordPolicy";
 import { buildBrandEmail, getBrandEmailDomain, slugifyBrandDomain, type BrandOption } from "@/lib/brandEmail";
 import { formatBrandDisplayName } from "@/lib/services/dashboard";
