@@ -265,6 +265,8 @@ export default function AlertsPage() {
 
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
+  const alertIdParam = searchParams.get("alertId");
+  const handledAlertIdParamRef = useRef<string | null>(null);
 
 
 
@@ -464,6 +466,43 @@ export default function AlertsPage() {
   const resolvedAlerts = useMemo(() => {
     return visibleBaseAlerts.filter(isResolvedAlert);
   }, [visibleBaseAlerts]);
+
+  useEffect(() => {
+    if (!alertIdParam) {
+      handledAlertIdParamRef.current = null;
+      return;
+    }
+    if (handledAlertIdParamRef.current === alertIdParam) return;
+
+    const targetAlert = visibleBaseAlerts.find((alert) => {
+      return [alert.id, alert.source_id, alert.post_id, alert.comment_id]
+        .filter(Boolean)
+        .some((id) => String(id) === alertIdParam);
+    });
+    if (!targetAlert) return;
+
+    handledAlertIdParamRef.current = alertIdParam;
+    const workflowStatus = getAlertWorkflowStatus(targetAlert);
+
+    // A deep link must reveal the requested record even if the user left
+    // restrictive queue filters active during the previous visit.
+    setSearchText("");
+    setSeverityFilter("all");
+    setSourceFilter("all");
+    setContentTypeFilter("all");
+    setShowMineOnly(false);
+    setStatusFilter(
+      workflowStatus === "resolved"
+        ? "resolved"
+        : workflowStatus === "contact_failed"
+          ? "contact_failed"
+          : "all",
+    );
+    setAlertPage(1);
+    setDetailPanelTab("action");
+    setIsDetailPanelCollapsed(false);
+    setPendingClaimSelectionId(targetAlert.id);
+  }, [alertIdParam, visibleBaseAlerts]);
 
   const processedActiveAlerts = useMemo(() => {
     let result = statusFilter === "resolved" ? [...resolvedAlerts] : [...activeAlerts];
@@ -1397,6 +1436,7 @@ function TrendModal({ alert, onClose }: TrendModalProps) {
         ChartLegend,
         ChartFiller
       );
+      ChartJS.defaults.font.family = 'Inter, "Segoe UI", Arial, sans-serif';
 
       if (!canvasRef.current) return;
 

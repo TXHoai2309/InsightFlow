@@ -46,7 +46,7 @@ export function NegativeTrendCard() {
   return (
     <Card className="flex h-[260px] flex-col rounded-xl shadow-[0px_4px_20px_rgba(30,31,36,0.08)] transition-all duration-300 hover:-translate-y-[2px] hover:shadow-[0px_8px_30px_rgba(30,31,36,0.12)] border-[#C8C4D6] bg-white">
       <CardHeader className="flex flex-row items-start justify-between pb-2 pt-6 px-6">
-        <CardTitle className="text-[14px] font-bold uppercase text-[#1A1B20] font-['Hanken_Grotesk'] tracking-wide max-w-[70%] leading-tight">
+        <CardTitle className="text-[14px] font-bold uppercase text-[#1A1B20] font-sans tracking-wide max-w-[70%] leading-tight">
           Xu hướng thảo luận tiêu cực
         </CardTitle>
         <span className={`text-[16px] font-bold ${negativeTrendChangePercent > 0 ? 'text-[#BA1A1A]' : 'text-green-600'}`}>

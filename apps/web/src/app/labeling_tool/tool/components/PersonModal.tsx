@@ -48,7 +48,7 @@ export default function PersonModal({ onSelect }: PersonModalProps) {
                     <span>{meta.icon}</span>
                     <span>{person}</span>
                   </span>
-                  <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">
+                  <span className="text-xs text-gray-400 dark:text-gray-500 font-sans">
                     {meta.range}
                   </span>
                 </button>

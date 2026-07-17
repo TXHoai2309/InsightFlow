@@ -17,6 +17,7 @@ import {
 import { useTranslation } from "react-i18next";
 
 ChartJS.register(ArcElement, DoughnutController, Tooltip);
+ChartJS.defaults.font.family = 'Inter, "Segoe UI", Arial, sans-serif';
 
 interface BMHeroRowProps {
   score: number;       // 0–100

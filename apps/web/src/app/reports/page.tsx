@@ -116,7 +116,7 @@ function ReportPreviewModal({
   const excelBody = excelSheet === "dashboard" ? excelSheets?.dashboardHtml : excelSheets?.evidenceHtml;
   const excelDocument = excelBody
     ? `<!doctype html><html><head><meta charset="utf-8"><style>
-        body{font-family:Arial,sans-serif;color:#172033;margin:0;padding:22px;background:#fff}
+        body{font-family:Inter,"Segoe UI",Arial,sans-serif;color:#172033;margin:0;padding:22px;background:#fff}
         h1{font-size:22px;margin:0 0 4px;color:#1f2937}.subtitle{color:#64748b;margin:0 0 14px}
         table{border-collapse:collapse;margin:12px 0 18px;width:100%}th,td{border:1px solid #cbd5e1;padding:7px 8px;vertical-align:top;font-size:12px}
         th,.section-title{background:#3730a3;color:#fff;font-weight:700;text-align:left}.header-row td,.header-row th{background:#eef2ff;color:#1e1b4b;font-weight:700}

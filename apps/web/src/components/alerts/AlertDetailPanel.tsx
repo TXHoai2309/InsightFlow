@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   CheckCircle2,
@@ -11,10 +11,12 @@ import {
   ShieldAlert,
   UserPlus,
   UserRound,
+  ChevronDown,
 } from "lucide-react";
 import { PlatformLogo } from "@/components/platform/PlatformLogo";
 import { getAlertWorkflowStatus } from "@/lib/alertWorkflow";
-import type { AlertData } from "@/stores/alert.store";
+import { useAlertStore, type AlertData } from "@/stores/alert.store";
+import { useAuth } from "@/hooks/useAuth";
 import { AlertContactWorkflow } from "./AlertContactWorkflow";
 import { CustomerInteractionHistoryPanel } from "@/components/customer-interactions/CustomerInteractionHistoryPanel";
 
@@ -112,6 +114,70 @@ export function AlertDetailPanel({
     alert.customer_contact_evidence_image &&
     alert.customer_response_result
   );
+
+  const { role, profile, user } = useAuth();
+  const [staffList, setStaffList] = useState<any[]>([]);
+  const [loadingStaff, setLoadingStaff] = useState(false);
+  const [assigningUid, setAssigningUid] = useState<string | null>(null);
+  const [isAssignDropdownOpen, setIsAssignDropdownOpen] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const showToast = (message: string, type: "success" | "error" = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3500);
+  };
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsAssignDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    if (role === "brand_manager") {
+      const loadStaff = async () => {
+        setLoadingStaff(true);
+        try {
+          const token = await user?.getIdToken();
+          const res = await fetch("/api/staff", { headers: { Authorization: `Bearer ${token}` } });
+          const data = await res.json();
+          if (res.ok && data.data) {
+            setStaffList(data.data.filter((s: any) => !s.disabled && (s.permissions || []).includes("alerts")));
+          }
+        } catch (e) {
+          console.error(e);
+        }
+        setLoadingStaff(false);
+      };
+      loadStaff();
+    }
+  }, [role, user]);
+
+  const handleAssignTo = async (uid: string) => {
+    if (!uid || !canUpdate || !profile) return;
+    const selectedStaff = staffList.find(s => s.uid === uid);
+    if (!selectedStaff) return;
+    
+    try {
+      setAssigningUid(uid);
+      await useAlertStore.getState().lockAlertForResolution(alert.id, { 
+         email: selectedStaff.email, 
+         displayName: selectedStaff.displayName,
+         uid: selectedStaff.uid
+      } as any);
+      showToast(`Đã giao việc cho ${selectedStaff.displayName || selectedStaff.email}`, "success");
+      setIsAssignDropdownOpen(false);
+    } catch (error: any) {
+      console.error(error);
+      showToast("Không thể giao việc cho nhân viên.", "error");
+    } finally {
+      setAssigningUid(null);
+    }
+  };
   const historyEntries = useMemo<AlertHistoryViewEntry[]>(() => {
     const entries: AlertHistoryViewEntry[] = [
       {
@@ -296,9 +362,92 @@ export function AlertDetailPanel({
               {(canClaim || canRecord) && (
                 <section className="flex flex-col justify-between rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)]/20 p-3">
                   <div className="flex items-start gap-2.5"><ShieldAlert className="mt-0.5 shrink-0 text-[var(--color-brand)]" size={19} /><div><p className="text-sm font-bold text-[var(--color-brand)]">Hành động chính</p><p className="mt-0.5 text-xs leading-5 text-[var(--color-text-secondary)]">{canClaim ? "Nhận cảnh báo để bắt đầu xử lý." : hasRequiredResultEvidence ? "Đã đủ minh chứng và kết quả phản hồi để hoàn tất." : "Cần lưu minh chứng liên hệ và kết quả phản hồi trước."}</p></div></div>
-                  <button type="button" onClick={() => void handlePrimaryAction()} disabled={canRecord && (!hasRequiredResultEvidence || isRecordingResult)} title={canRecord && !hasRequiredResultEvidence ? "Cần có ghi chú, ảnh minh chứng và kết quả phản hồi của khách hàng" : undefined} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold text-white hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500">
-                    {canClaim ? <UserPlus size={18} /> : <CheckCircle2 size={18} />}{canClaim ? "Nhận xử lý" : isRecordingResult ? "Đang ghi nhận..." : "Ghi nhận kết quả"}
-                  </button>
+                  {canClaim ? (
+                    <div className="mt-3 flex w-full flex-row gap-2" ref={dropdownRef}>
+                      {role === "brand_manager" ? (
+                        <>
+                          <div className="relative flex-1">
+                            <button
+                              type="button"
+                              onClick={() => setIsAssignDropdownOpen(!isAssignDropdownOpen)}
+                              disabled={!canUpdate || loadingStaff}
+                              className="inline-flex w-full items-center justify-between rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold text-white hover:bg-[var(--color-brand-hover)] focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
+                            >
+                              <div className="flex items-center gap-2">
+                                <UserPlus size={18} />
+                                Giao việc cho nhân viên
+                              </div>
+                              <ChevronDown size={18} className={`transition-transform duration-200 ${isAssignDropdownOpen ? "rotate-180" : ""}`} />
+                            </button>
+
+                            {isAssignDropdownOpen && (
+                              <div className="absolute left-0 top-full z-10 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-1 shadow-lg">
+                                {loadingStaff ? (
+                                  <div className="p-2 text-center text-sm text-[var(--color-text-secondary)]">
+                                    Đang tải...
+                                  </div>
+                                ) : staffList.length === 0 ? (
+                                  <div className="p-2 text-center text-sm text-[var(--color-text-secondary)]">
+                                    Không có nhân viên xử lý
+                                  </div>
+                                ) : (
+                                  staffList.map((staff) => (
+                                    <button
+                                      key={staff.uid}
+                                      type="button"
+                                      onClick={() => void handleAssignTo(staff.uid)}
+                                      disabled={assigningUid !== null}
+                                      className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-semibold hover:bg-[var(--color-bg-surface-raised)] disabled:opacity-50"
+                                    >
+                                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-[10px] font-bold text-[var(--color-brand)]">
+                                        {staff.displayName?.slice(0, 2).toUpperCase() || "NV"}
+                                      </div>
+                                      <div className="flex-1 truncate">
+                                        <p className="truncate text-sm text-[var(--color-text-primary)]">
+                                          {staff.displayName || "Nhân viên"}
+                                        </p>
+                                        <p className="truncate text-[10px] text-[var(--color-text-secondary)]">
+                                          {staff.email}
+                                        </p>
+                                      </div>
+                                      {assigningUid === staff.uid && (
+                                        <span className="shrink-0 text-xs text-[var(--color-brand)]">
+                                          Đang giao...
+                                        </span>
+                                      )}
+                                    </button>
+                                  ))
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => void handlePrimaryAction()}
+                            disabled={!canUpdate || assigningUid !== null}
+                            title="Tự nhận xử lý"
+                            className="inline-flex shrink-0 items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm font-bold text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Nhận xử lý
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => void handlePrimaryAction()}
+                          disabled={!canUpdate}
+                          className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold text-white hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
+                        >
+                          <UserPlus size={18} />
+                          Nhận xử lý
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => void handlePrimaryAction()} disabled={canRecord && (!hasRequiredResultEvidence || isRecordingResult)} title={canRecord && !hasRequiredResultEvidence ? "Cần có ghi chú, ảnh minh chứng và kết quả phản hồi của khách hàng" : undefined} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold text-white hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500">
+                      <CheckCircle2 size={18} />{isRecordingResult ? "Đang ghi nhận..." : "Ghi nhận kết quả"}
+                    </button>
+                  )}
                 </section>
               )}
             </div>
@@ -372,6 +521,21 @@ export function AlertDetailPanel({
             <span className="material-symbols-outlined">close</span>
           </button>
           <img src={previewHistoryImage} alt="Ảnh minh chứng trong lịch sử xử lý" className="max-h-[90vh] max-w-[92vw] rounded-xl bg-white object-contain shadow-2xl" onClick={(event) => event.stopPropagation()} />
+        </div>
+      )}
+
+      {toast && (
+        <div
+          className={`fixed bottom-6 right-6 z-[9999] flex items-center gap-2.5 rounded-xl border bg-white px-4 py-3.5 text-sm font-bold shadow-2xl animate-fade-in ${
+            toast.type === "success"
+              ? "border-emerald-200 text-emerald-700 dark:border-emerald-900/30 dark:bg-emerald-950/20 dark:text-emerald-400"
+              : "border-red-200 text-red-700 dark:border-red-900/30 dark:bg-red-950/20 dark:text-red-400"
+          }`}
+        >
+          <span className="material-symbols-outlined text-[18px]">
+            {toast.type === "success" ? "check_circle" : "error"}
+          </span>
+          <span>{toast.message}</span>
         </div>
       )}
     </aside>

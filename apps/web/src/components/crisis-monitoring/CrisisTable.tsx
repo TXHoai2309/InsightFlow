@@ -11,10 +11,10 @@ import { ArrowRight, X, CheckCircle2, AlertCircle, PlayCircle, RefreshCw, Copy, 
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { cn } from "@/lib/utils";
-import { useDashboardStore } from "@/stores/dashboard.store";
 import { auth } from "@/lib/firebase";
 import { motion, AnimatePresence } from "framer-motion";
 import { PlatformLogo } from "@/components/platform/PlatformLogo";
+import type { Mention } from "@/types/dashboard";
 
 // AI Response SOP Templates map
 const AI_COPILOT_TEMPLATES: Record<string, string[]> = {
@@ -45,9 +45,16 @@ const getCopilotTemplates = (topic: string | null) => {
   return AI_COPILOT_TEMPLATES.other;
 };
 
-export function CrisisTable() {
-  const { getFilteredAlerts, getFilteredMentions } = useDashboardStore();
-  const alerts = getFilteredAlerts();
+export type CrisisTableAlert = {
+  id: string;
+  message: string;
+  severity: string;
+  status: string;
+  created_at: string;
+  assigned_to?: string | null;
+};
+
+export function CrisisTable({ alerts, mentions }: { alerts: CrisisTableAlert[]; mentions: Mention[] }) {
 
   // Local state for interactive mockup updates
   const [staffList, setStaffList] = useState<any[]>([]);
@@ -138,12 +145,12 @@ export function CrisisTable() {
     const topic = id.startsWith("derived-") ? id.split("-")[1] : null;
     
     // Get all negative mentions
-    const negMentions = getFilteredMentions().filter(m => m.sentiment === "negative");
+    const negMentions = mentions.filter(m => m.sentiment === "negative");
     if (!topic || topic === "other") {
       return negMentions.filter(m => !m.topic || m.topic === "other");
     }
     return negMentions.filter(m => m.topic === topic);
-  }, [selectedRow, getFilteredMentions]);
+  }, [selectedRow, mentions]);
 
   // Transform alerts to display format
   const data = useMemo(() => {
@@ -373,7 +380,7 @@ export function CrisisTable() {
     <>
       <Card className="overflow-hidden shadow-[0px_4px_25px_rgba(0,0,0,0.04)] border-[#C8C4D6]/70 rounded-xl bg-white/70 backdrop-blur-md">
         <div className="border-b border-[#EEEDF4] p-6 bg-white dark:bg-[#1a1b1e]">
-          <h2 className="text-[16px] font-['Hanken_Grotesk'] font-bold text-[#1A1B20] dark:text-gray-100">
+          <h2 className="text-[16px] font-sans font-bold text-[#1A1B20] dark:text-gray-100">
             Danh sách sự vụ khẩn cấp
           </h2>
         </div>

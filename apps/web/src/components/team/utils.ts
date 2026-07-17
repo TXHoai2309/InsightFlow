@@ -1,4 +1,5 @@
 import type { StaffBusinessRole, StaffRoleValue } from "./types";
+import { getEmployeeBusinessScope } from "@/lib/rbac";
 
 export function formatStaffDate(value?: string): string {
   if (!value) return "—";
@@ -25,22 +26,20 @@ export function getStaffBusinessRole(
   permissions?: string[] | null,
   fallbackRole?: StaffRoleValue | null,
 ): StaffBusinessRole {
-  const permissionSet = new Set(permissions || []);
-  const hasCrisis = permissionSet.has("alerts");
-  const hasLead = permissionSet.has("leads");
-
-  if (hasCrisis && hasLead) return "dual_employee";
-  if (hasCrisis) return "crisis_employee";
-  if (hasLead) return "lead_employee";
-  if (fallbackRole === "crisis_employee" || fallbackRole === "crisis_staff") return "crisis_employee";
-  if (fallbackRole === "lead_employee" || fallbackRole === "lead_staff") return "lead_employee";
+  const scope = getEmployeeBusinessScope({
+    role: fallbackRole,
+    permissions,
+  });
+  if (scope === "dual") return "dual_employee";
+  if (scope === "crisis") return "crisis_employee";
+  if (scope === "lead") return "lead_employee";
   return "unassigned";
 }
 
 export function getBusinessRoleLabel(role: StaffBusinessRole) {
-  if (role === "dual_employee") return "Crisis + Lead";
-  if (role === "crisis_employee") return "Crisis";
-  if (role === "lead_employee") return "Lead";
+  if (role === "dual_employee") return "Xử lý khủng hoảng & tiềm năng";
+  if (role === "crisis_employee") return "Xử lý khủng hoảng";
+  if (role === "lead_employee") return "Xử lý khách hàng tiềm năng";
   return "Chưa phân quyền";
 }
 

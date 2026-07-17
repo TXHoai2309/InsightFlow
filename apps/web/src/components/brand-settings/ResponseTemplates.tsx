@@ -332,7 +332,7 @@ export function ResponseTemplates() {
                   )}
                 </div>
 
-                <div className="rounded-lg bg-[var(--color-bg-surface-raised)] p-3 text-[13px] text-[var(--color-text-secondary)] font-mono leading-relaxed line-clamp-3 whitespace-pre-wrap">
+                <div className="rounded-lg bg-[var(--color-bg-surface-raised)] p-3 text-[13px] text-[var(--color-text-secondary)] font-sans leading-relaxed line-clamp-3 whitespace-pre-wrap">
                   {template.templateText}
                 </div>
               </div>
@@ -436,7 +436,7 @@ export function ResponseTemplates() {
                       )}
                     </button>
                     <span className="text-[11px] text-[var(--color-text-muted)]">
-                      Dùng cú pháp gõ <code className="bg-[var(--color-bg-surface-raised)] px-1 py-0.5 rounded font-mono">{"{{tên}}"}</code> để tạo biến
+                      Dùng cú pháp gõ <code className="bg-[var(--color-bg-surface-raised)] px-1 py-0.5 rounded font-sans">{"{{tên}}"}</code> để tạo biến
                     </span>
                   </div>
                 </div>
@@ -446,14 +446,14 @@ export function ResponseTemplates() {
                   value={formText}
                   onChange={(e) => setFormText(e.target.value)}
                   placeholder={`Ví dụ:\nChào {{customer_name}}, {{brand_name}} vô cùng xin lỗi về trải nghiệm không tốt tại chi nhánh {{location_name}}...\nChúng tôi xin phép liên hệ qua hộp thư để hỗ trợ đền bù ạ.`}
-                  className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-3 text-[13px] font-mono outline-none focus:border-[#6C63FF] focus:ring-1 focus:ring-[#6C63FF] text-[var(--color-text-primary)] leading-relaxed"
+                  className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-3 text-[13px] font-sans outline-none focus:border-[#6C63FF] focus:ring-1 focus:ring-[#6C63FF] text-[var(--color-text-primary)] leading-relaxed"
                 />
               </label>
 
               {/* Placeholder Helper Tooltips */}
               <div className="rounded-xl bg-[var(--color-bg-surface-raised)] p-3.5 space-y-2">
                 <span className="text-[12px] font-bold text-[var(--color-text-primary)]">Gợi ý Placeholder AI tự nhận biết:</span>
-                <div className="grid grid-cols-2 gap-2 text-[11px] text-[var(--color-text-secondary)] font-mono">
+                <div className="grid grid-cols-2 gap-2 text-[11px] text-[var(--color-text-secondary)] font-sans">
                   <div>• <code>{"{{customer_name}}"}</code>: Tên khách</div>
                   <div>• <code>{"{{brand_name}}"}</code>: Tên thương hiệu</div>
                   <div>• <code>{"{{location_name}}"}</code>: Tên chi nhánh</div>

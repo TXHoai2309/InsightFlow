@@ -7,12 +7,15 @@
  */
 
 import React, { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { ROLE_CONFIG } from "@/lib/rbac";
+import {
+  canPerformAction,
+  getProfileRoleLabel,
+} from "@/lib/rbac";
 import {
   BRAND_MANAGER_TOUR_EVENT,
   CRISIS_EMPLOYEE_TOUR_EVENT,
@@ -41,6 +44,7 @@ interface AppNotification {
 
 export function Header({ onMenuToggle }: HeaderProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const [showNotifications, setShowNotifications] = useState(false);
   const { user, role, profile } = useAuth();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -58,16 +62,26 @@ export function Header({ onMenuToggle }: HeaderProps) {
     ? `${profile.brandName} Brand Manager`
     : (user?.displayName || user?.email?.split("@")[0] || t("header.guest"));
   const userName = role === "brand_manager" ? brandManagerName : (user?.displayName || user?.email?.split("@")[0] || t("header.guest"));
-  const roleLabel = role === "brand_manager" ? t("header.roles.brand_manager", "Quản lý thương hiệu") : (role ? ROLE_CONFIG[role].label : t("header.guest", "Khách"));
+  const roleLabel = role
+    ? getProfileRoleLabel({ role, permissions: profile?.permissions })
+    : t("header.guest");
   const initials = getInitials(role === "brand_manager" ? brandManagerName : (user?.displayName || userName));
   const isDark = theme === "dark";
   const handleOpenGuide = () => {
-    const eventName =
-      role === "lead_employee"
-        ? LEAD_EMPLOYEE_TOUR_EVENT
-        : role === "crisis_employee"
-          ? CRISIS_EMPLOYEE_TOUR_EVENT
-          : BRAND_MANAGER_TOUR_EVENT;
+    const canViewLeads = canPerformAction(profile, "view_leads");
+    const canViewAlerts = canPerformAction(profile, "view_crisis_queue");
+    const prefersLeadGuide =
+      pathname?.startsWith("/leads") ||
+      (!pathname?.startsWith("/alerts") && profile?.defaultRoute?.startsWith("/leads"));
+    const eventName = role === "brand_manager"
+      ? BRAND_MANAGER_TOUR_EVENT
+      : canViewLeads && canViewAlerts
+        ? prefersLeadGuide
+          ? LEAD_EMPLOYEE_TOUR_EVENT
+          : CRISIS_EMPLOYEE_TOUR_EVENT
+        : canViewLeads
+          ? LEAD_EMPLOYEE_TOUR_EVENT
+          : CRISIS_EMPLOYEE_TOUR_EVENT;
     window.dispatchEvent(new Event(eventName));
   };
 
@@ -88,7 +102,18 @@ export function Header({ onMenuToggle }: HeaderProps) {
 
         const filtered = rows
           .filter((item) => {
-            const roleMatches = !item.recipient_role || item.recipient_role === profile.role;
+            const recipientRole = item.recipient_role === "crisis_staff"
+              ? "crisis_employee"
+              : item.recipient_role === "lead_staff"
+                ? "lead_employee"
+                : item.recipient_role;
+            const roleMatches =
+              !recipientRole ||
+              recipientRole === profile.role ||
+              (recipientRole === "crisis_employee" &&
+                canPerformAction(profile, "view_crisis_queue")) ||
+              (recipientRole === "lead_employee" &&
+                canPerformAction(profile, "view_leads"));
             const emailMatches = !item.recipient_email || item.recipient_email === profile.email;
             const brandMatches =
               !scopedBrandKey ||
@@ -352,11 +377,14 @@ export function Header({ onMenuToggle }: HeaderProps) {
           {/* User Profile */}
           <div className="flex items-center gap-3">
             {/* Tên — desktop only */}
-            <div className="hidden md:flex flex-col items-end">
+            <div className="hidden max-w-[280px] flex-col items-end md:flex">
               <span className="font-bold text-[14px] leading-tight" style={{ color: "var(--color-text-primary)" }}>
                 {userName}
               </span>
-              <span className="text-[12px] text-gray-500 leading-tight">
+              <span
+                className="max-w-full truncate text-[12px] leading-tight text-gray-500"
+                title={roleLabel}
+              >
                 {roleLabel}
               </span>
             </div>

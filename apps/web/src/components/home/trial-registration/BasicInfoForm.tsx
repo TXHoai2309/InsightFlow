@@ -10,21 +10,52 @@ import {
   BellRing, 
   Target, 
   Star,
-  ArrowRight
+  ArrowRight,
+  BriefcaseBusiness,
 } from "lucide-react";
 import { motion } from "framer-motion";
 
-interface BasicInfoFormProps {
-  onSubmit: (data: any) => void;
-  initialData?: any;
+export interface BasicInfoData {
+  fullName: string;
+  email: string;
+  phone: string;
+  brandName: string;
+  industry: string;
 }
 
+interface BasicInfoFormProps {
+  onSubmit: (data: BasicInfoData) => void;
+  initialData?: BasicInfoData | null;
+}
+
+const INDUSTRY_OPTIONS = [
+  "Bán lẻ & Thương mại điện tử",
+  "F&B - Nhà hàng & Đồ uống",
+  "Tài chính - Ngân hàng - Bảo hiểm",
+  "Bất động sản",
+  "Ô tô & Xe máy",
+  "Công nghệ & Phần mềm",
+  "Viễn thông",
+  "Y tế & Dược phẩm",
+  "Giáo dục & Đào tạo",
+  "Du lịch & Khách sạn",
+  "Thời trang & Làm đẹp",
+  "Hàng tiêu dùng nhanh (FMCG)",
+  "Truyền thông & Giải trí",
+  "Logistics & Vận tải",
+  "Sản xuất & Công nghiệp",
+  "Dịch vụ chuyên nghiệp",
+  "Tổ chức công & Phi lợi nhuận",
+  "Khác",
+];
+
 export function BasicInfoForm({ onSubmit, initialData }: BasicInfoFormProps) {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<BasicInfoData>({
     fullName: initialData?.fullName || "",
     email: initialData?.email || "",
     phone: initialData?.phone || "",
     brandName: initialData?.brandName || "",
+    industry: initialData?.industry || "",
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -32,13 +63,14 @@ export function BasicInfoForm({ onSubmit, initialData }: BasicInfoFormProps) {
   const validate = () => {
     const newErrors: Record<string, string> = {};
     if (!formData.fullName.trim()) newErrors.fullName = "Vui lòng nhập họ và tên";
-    if (!formData.brandName.trim()) newErrors.brandName = "Vui lòng nhập tên doanh nghiệp";
+    if (!formData.brandName.trim()) newErrors.brandName = "Vui lòng nhập tên công ty / thương hiệu";
     if (!formData.email.trim()) {
       newErrors.email = "Vui lòng nhập email công việc";
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = "Email không hợp lệ";
     }
     if (!formData.phone.trim()) newErrors.phone = "Vui lòng nhập số điện thoại";
+    if (!formData.industry) newErrors.industry = "Vui lòng chọn ngành hàng";
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -152,16 +184,16 @@ export function BasicInfoForm({ onSubmit, initialData }: BasicInfoFormProps) {
                 {errors.fullName && <span className="text-[12px] text-red-500 font-medium">{errors.fullName}</span>}
               </div>
 
-              {/* Tên doanh nghiệp */}
+              {/* Tên công ty / thương hiệu */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-[13px] font-bold text-[#1B1B4A] dark:text-gray-200">Tên doanh nghiệp <span className="text-red-500">*</span></label>
+                <label className="text-[13px] font-bold text-[#1B1B4A] dark:text-gray-200">Tên công ty / thương hiệu <span className="text-red-500">*</span></label>
                 <div className="relative group">
                   <div className={`absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none transition-colors ${errors.brandName ? "text-red-500" : "text-[#9CA3AF] dark:text-gray-500 group-focus-within:text-[#6D5EF6] dark:group-focus-within:text-[#8E83FA]"}`}>
                     <Building2 className="h-[18px] w-[18px]" />
                   </div>
                   <input
                     type="text"
-                    placeholder="InsightFlow Inc"
+                    placeholder="InsightFlow"
                     className={`w-full h-[52px] rounded-[14px] border bg-[#FAFAFA] dark:bg-[#1B1C2A] text-black dark:text-white pl-[42px] pr-4 text-[14px] outline-none transition-all hover:bg-white dark:hover:bg-[#1F202E] focus:bg-white dark:focus:bg-[#1F202E] shadow-sm ${errors.brandName ? "border-red-500 focus:ring-[3px] focus:ring-red-500/15" : "border-gray-200 dark:border-white/10 focus:border-[#6D5EF6] dark:focus:border-[#8E83FA] focus:ring-[3px] focus:ring-[#6D5EF6]/15 hover:border-gray-300 dark:hover:border-white/20"}`}
                     value={formData.brandName}
                     onChange={(e) => {
@@ -214,6 +246,29 @@ export function BasicInfoForm({ onSubmit, initialData }: BasicInfoFormProps) {
                 </div>
                 {errors.phone && <span className="text-[12px] text-red-500 font-medium">{errors.phone}</span>}
               </div>
+
+              {/* Ngành hàng */}
+              <div className="flex flex-col gap-1.5 sm:col-span-2">
+                <label className="text-[13px] font-bold text-[#1B1B4A]">Ngành hàng <span className="text-red-500">*</span></label>
+                <div className="relative group">
+                  <div className={`absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none transition-colors ${errors.industry ? "text-red-500" : "text-[#9CA3AF] group-focus-within:text-[#6D5EF6]"}`}>
+                    <BriefcaseBusiness className="h-[18px] w-[18px]" />
+                  </div>
+                  <select
+                    className={`w-full h-[52px] appearance-none rounded-[14px] border bg-[#FAFAFA] pl-[42px] pr-9 text-[14px] outline-none transition-all focus:bg-white hover:bg-white shadow-sm ${errors.industry ? "border-red-500 focus:ring-[3px] focus:ring-red-500/15" : "border-gray-200 focus:border-[#6D5EF6] focus:ring-[3px] focus:ring-[#6D5EF6]/15 hover:border-gray-300"}`}
+                    value={formData.industry}
+                    onChange={(e) => {
+                      setFormData({ ...formData, industry: e.target.value });
+                      if (errors.industry) setErrors({ ...errors, industry: "" });
+                    }}
+                  >
+                    <option value="">Chọn ngành hàng</option>
+                    {INDUSTRY_OPTIONS.map((industry) => <option key={industry} value={industry}>{industry}</option>)}
+                  </select>
+                </div>
+                {errors.industry && <span className="text-[12px] text-red-500 font-medium">{errors.industry}</span>}
+              </div>
+
             </div>
 
             {/* CTA Button */}

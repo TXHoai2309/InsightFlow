@@ -6,7 +6,7 @@ import { ArrowUpRight, CheckCircle2, ExternalLink, UserPlus } from "lucide-react
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { PlatformLogo } from "@/components/platform/PlatformLogo";
-import { useDashboardStore } from "@/stores/dashboard.store";
+import type { Mention } from "@/types/dashboard";
 
 const TOPIC_LABELS: Record<string, string> = {
   service: "Dịch vụ",
@@ -41,10 +41,7 @@ function formatRelativeTime(dateValue?: string) {
   return `${Math.round(hours / 24)} ngày trước`;
 }
 
-export function LiveCrisisFeed() {
-  const { getFilteredMentions } = useDashboardStore();
-  const mentions = getFilteredMentions();
-
+export function LiveCrisisFeed({ mentions }: { mentions: Mention[] }) {
   const liveIncidents = useMemo(() => {
     return mentions
       .filter((mention) => mention.sentiment === "negative")

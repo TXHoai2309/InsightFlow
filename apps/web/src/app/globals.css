@@ -4,7 +4,7 @@
 @tailwind utilities;
 
 .font-display {
-  font-family: "Inter", sans-serif;
+  font-family: var(--font-app);
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -14,6 +14,8 @@
    ═══════════════════════════════════════════════════════════════ */
 
 :root {
+  --font-app: "Inter", "Segoe UI", Arial, sans-serif;
+
   /* ── Backgrounds ─────────────────────────────────────────── */
   --color-bg-primary:        #f9f9ff;   /* Nền chính của trang */
   --color-bg-surface:        #ffffff;   /* Nền card, modal, sidebar */
@@ -180,6 +182,7 @@
    ═══════════════════════════════════════════════════════════════ */
 html {
   scroll-behavior: smooth;
+  font-family: var(--font-app);
 }
 
 * {
@@ -198,9 +201,18 @@ body {
   margin: 0;
   background-color: var(--color-bg-primary);
   color: var(--color-text-primary);
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-app);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+input,
+textarea,
+select,
+option,
+table {
+  font-family: inherit;
 }
 
 .material-symbols-outlined {

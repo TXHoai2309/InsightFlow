@@ -33,9 +33,11 @@ const navItems: NavItem[] = [
   { href: "/operations", label: "nav.operations", fallback: "Vận hành", icon: "ti-layout-dashboard" },
   { href: "/team", label: "nav.team", fallback: "Quản lý đội ngũ", icon: "ti-users" },
   { href: "/mentions", label: "nav.mentions", fallback: "Đề cập", icon: "ti-message-circle" },
+  { href: "/label-requests", label: "nav.label_requests", fallback: "Duyệt yêu cầu", icon: "ti-clipboard-check" },
   { href: "/alerts", label: "nav.alerts", fallback: "Cảnh báo", icon: "ti-bell" },
   { href: "/leads", label: "nav.leads", fallback: "Khách hàng", icon: "ti-chart-bar" },
   { href: "/reports", label: "nav.reports", fallback: "Báo cáo", icon: "ti-file-analytics" },
+  { href: "/settings/brand", label: "nav.brands", fallback: "Cấu hình thương hiệu", icon: "ti-settings" },
 ];
 
 

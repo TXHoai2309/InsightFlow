@@ -3,10 +3,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useTranslation } from "react-i18next";
-import { collection, doc, getDocs, limit, query, serverTimestamp, setDoc, where } from "firebase/firestore";
+import { collection, getDocs, limit, query } from "firebase/firestore";
 import { EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
-import { auth, db } from "@/lib/firebase";
-import { dbData } from "@/lib/firebase";
+import { auth, dbData } from "@/lib/firebase";
 import { validateStrongPassword } from "@/lib/passwordPolicy";
 import { buildBrandEmail, getBrandEmailDomain, slugifyBrandDomain, type BrandOption } from "@/lib/brandEmail";
 import { formatBrandDisplayName } from "@/lib/services/dashboard";
@@ -287,31 +286,22 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
     setActionError("");
 
     try {
+      await auth.authStateReady();
       if (!auth.currentUser) {
         throw new Error(t("admin.brandManager.errors.needAdmin"));
       }
 
-      const snapshot = await getDocs(query(collection(db, "users"), where("role", "==", "brand_manager")));
-      const managers = snapshot.docs
-        .map((doc) => {
-          const data = doc.data();
-          return {
-            uid: String(data.uid || doc.id),
-            email: String(data.email || ""),
-            displayName: String(data.displayName || ""),
-            role: "brand_manager",
-            brandId: String(data.brandId || ""),
-            brandName: String(data.brandName || ""),
-            companyDomain: String(data.companyDomain || ""),
-            permissions: Array.isArray(data.permissions) ? data.permissions : [],
-            defaultRoute: String(data.defaultRoute || "/dashboard"),
-            disabled: data.disabled === true,
-            createdAt: data.createdAt,
-            updatedAt: data.updatedAt,
-            hasTemporaryPassword: data.temporaryPasswordIssued === true && Boolean(data.temporaryPassword),
-          } as BrandManagerAccount;
-        })
-        .sort((a, b) => a.displayName.localeCompare(b.displayName));
+      const token = await auth.currentUser.getIdToken();
+      const response = await fetch("/api/admin/brand-managers", {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Không thể tải danh sách Brand Manager.");
+      }
+      const managers = ((data.data || []) as BrandManagerAccount[])
+        .sort((a, b) => a.displayName.localeCompare(b.displayName, "vi"));
 
       setBrandManagers(managers);
     } catch (err: any) {
@@ -476,7 +466,6 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
       setActionError(err.message || "Không thể cập nhật trạng thái tài khoản.");
     }
   };
-
   const openPasswordRequest = (uid: string, mode: "reveal" | "reset") => {
     setPasswordRequestUid(uid);
     setPasswordRequestMode(mode);
@@ -831,7 +820,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
                   onChange={(event) => setTemporaryPassword(event.target.value)}
                   required
                   minLength={10}
-                  className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2.5 font-mono text-[14px] text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/15"
+                  className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2.5 font-sans text-[14px] text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/15"
                 />
                 <button
                   type="button"
@@ -884,7 +873,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
                       <dt className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
                         {t("admin.brandManager.result.tempPassword")}
                       </dt>
-                      <dd className="truncate font-mono text-[var(--color-text-primary)]">{createdAccount.temporaryPassword}</dd>
+                      <dd className="truncate font-sans text-[var(--color-text-primary)]">{createdAccount.temporaryPassword}</dd>
                     </div>
                     <CopyButton value={createdAccount.temporaryPassword} label="mật khẩu" />
                   </div>
@@ -1017,7 +1006,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
                       <td className="py-3.5 pr-4">
                         {revealedPasswords[item.uid] ? (
                           <div className="flex items-center gap-2">
-                            <span className="font-mono text-[13px] text-[var(--color-text-primary)]">
+                            <span className="font-sans text-[13px] text-[var(--color-text-primary)]">
                               {revealedPasswords[item.uid]}
                             </span>
                             <CopyButton value={revealedPasswords[item.uid]} label="mật khẩu" />
@@ -1026,7 +1015,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
                           <button
                             type="button"
                             onClick={() => openPasswordRequest(item.uid, "reveal")}
-                            className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 font-mono text-[13px] text-[var(--color-text-primary)] transition hover:bg-[var(--color-brand-subtle)] hover:text-[var(--color-brand)]"
+                            className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 font-sans text-[13px] text-[var(--color-text-primary)] transition hover:bg-[var(--color-brand-subtle)] hover:text-[var(--color-brand)]"
                           >
                             ••••••••••
                           </button>
@@ -1052,7 +1041,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
                           </button>
                           <button
                             type="button"
-                            onClick={() => handleToggleStatusDirect(item)}
+                            onClick={() => handleToggleStatus(item)}
                             className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold transition ${item.disabled
                               ? "bg-emerald-600 text-white hover:bg-emerald-700"
                               : "bg-red-600 text-white hover:bg-red-700"

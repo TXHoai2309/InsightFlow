@@ -284,7 +284,7 @@ export function EmployeeCreateForm({
                       onChange={(e) => setTemporaryPassword(e.target.value)}
                       required
                       minLength={10}
-                      className="w-full rounded-xl border border-gray-200 bg-gray-50/50 py-3 pl-10 pr-4 font-mono text-[14px] text-gray-900 outline-none transition-all focus:border-[#6C5CE7] focus:bg-white focus:ring-1 focus:ring-[#6C5CE7]"
+                      className="w-full rounded-xl border border-gray-200 bg-gray-50/50 py-3 pl-10 pr-4 font-sans text-[14px] text-gray-900 outline-none transition-all focus:border-[#6C5CE7] focus:bg-white focus:ring-1 focus:ring-[#6C5CE7]"
                     />
                   </div>
                   <button

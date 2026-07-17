@@ -34,7 +34,7 @@ const KBD_STYLE = `
     border: 1px solid currentColor;
     border-radius: 4px;
     font-size: 0.7rem;
-    font-family: monospace;
+    font-family: var(--font-app);
     opacity: 0.75;
     margin-right: 2px;
   }
