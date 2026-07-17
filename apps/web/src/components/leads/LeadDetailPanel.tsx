@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ClipboardCheck, Sparkles, UserPlus } from "lucide-react";
+import { ClipboardCheck, Sparkles, UserPlus, ShieldAlert, ChevronDown } from "lucide-react";
 import { LeadHistoryTab } from "@/components/leads/LeadHistoryTab";
 import { LeadProfileTab } from "@/components/leads/LeadProfileTab";
 import { LeadContentContext } from "@/components/leads/LeadContentContext";
@@ -509,25 +509,93 @@ export function LeadDetailPanel({
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            {sourceAction ? (
-              <button
-                type="button"
-                disabled={!ownership.canWork || Boolean(isOpening)}
-                onClick={() => handleOpenAction(sourceAction, true)}
-                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[13px] font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <span className="material-symbols-outlined text-[20px]">open_in_new</span>
-                <span className="hidden sm:inline">{isOpening === sourceAction.label ? "Đang mở..." : "Mở nguồn"}</span>
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={handleScrollToResult}
-              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 py-1.5 text-[13px] font-semibold text-white shadow-md shadow-[var(--color-brand)]/20 transition hover:shadow-[var(--color-brand)]/40 hover:opacity-90"
-            >
-              <ClipboardCheck size={18} aria-hidden="true" />
-              <span className="hidden sm:inline">Ghi nhận kết quả</span>
-            </button>
+            {!lead.owner_id ? (
+              role === "brand_manager" ? (
+                <div className="flex items-center gap-2" ref={dropdownRef}>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setIsAssignDropdownOpen(!isAssignDropdownOpen)}
+                      disabled={!canEdit || loadingStaff}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 py-1.5 text-[13px] font-semibold text-white shadow-md shadow-[var(--color-brand)]/20 transition hover:shadow-[var(--color-brand)]/40 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <UserPlus size={16} />
+                      <span className="hidden sm:inline">Giao việc cho nhân viên</span>
+                      <ChevronDown size={14} className={`transition-transform duration-200 ${isAssignDropdownOpen ? "rotate-180" : ""}`} />
+                    </button>
+
+                    {isAssignDropdownOpen && (
+                      <div className="absolute right-0 top-full z-50 mt-1 max-h-60 w-56 overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-1 shadow-lg">
+                        {loadingStaff ? (
+                          <div className="p-2 text-center text-sm text-[var(--color-text-secondary)]">Đang tải...</div>
+                        ) : staffList.length === 0 ? (
+                          <div className="p-2 text-center text-sm text-[var(--color-text-secondary)]">Không có nhân viên xử lý</div>
+                        ) : (
+                          staffList.map((staff) => (
+                            <button
+                              key={staff.uid}
+                              type="button"
+                              onClick={() => { void handleAssignTo(staff.uid); setIsAssignDropdownOpen(false); }}
+                              disabled={assigningUid !== null}
+                              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-semibold hover:bg-[var(--color-bg-surface-raised)] disabled:opacity-50"
+                            >
+                              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-[10px] font-bold text-[var(--color-brand)]">
+                                {staff.displayName?.slice(0, 2).toUpperCase() || "NV"}
+                              </div>
+                              <div className="flex-1 truncate">
+                                <p className="truncate text-sm text-[var(--color-text-primary)]">{staff.displayName || "Nhân viên"}</p>
+                                <p className="truncate text-[10px] text-[var(--color-text-secondary)]">{staff.email}</p>
+                              </div>
+                              {assigningUid === staff.uid && <span className="shrink-0 text-xs text-[var(--color-brand)]">Đang giao...</span>}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleClaim()}
+                    disabled={!canEdit || isClaiming || assigningUid !== null}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[13px] font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <span className="hidden sm:inline">{isClaiming ? "Đang nhận..." : "Nhận xử lý"}</span>
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void handleClaim()}
+                  disabled={!canEdit || isClaiming}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 py-1.5 text-[13px] font-semibold text-white shadow-md shadow-[var(--color-brand)]/20 transition hover:shadow-[var(--color-brand)]/40 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <UserPlus size={16} />
+                  <span className="hidden sm:inline">{isClaiming ? "Đang nhận..." : "Nhận xử lý"}</span>
+                </button>
+              )
+            ) : (
+              <>
+                {sourceAction ? (
+                  <button
+                    type="button"
+                    disabled={!ownership.canWork || Boolean(isOpening)}
+                    onClick={() => handleOpenAction(sourceAction, true)}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[13px] font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">open_in_new</span>
+                    <span className="hidden sm:inline">{isOpening === sourceAction.label ? "Đang mở..." : "Mở nguồn"}</span>
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={handleScrollToResult}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 py-1.5 text-[13px] font-semibold text-white shadow-md shadow-[var(--color-brand)]/20 transition hover:shadow-[var(--color-brand)]/40 hover:opacity-90"
+                >
+                  <ClipboardCheck size={18} aria-hidden="true" />
+                  <span className="hidden sm:inline">Ghi nhận kết quả</span>
+                </button>
+              </>
+            )}
             <div className="h-6 w-px bg-gray-200 mx-1.5" />
             {onCollapseToggle && (
               <button

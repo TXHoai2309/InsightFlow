@@ -245,6 +245,20 @@ export async function listStaff(user: DecodedIdToken) {
       });
     });
 
+    try {
+      const brandUsers = await db.collection("users").where("brandId", "==", manager.brandId).get();
+      brandUsers.docs.forEach(doc => {
+        const data = doc.data();
+        if (!staffByUid.has(doc.id)) {
+          staffByUid.set(doc.id, { ...data, uid: doc.id });
+        } else {
+          staffByUid.set(doc.id, { ...staffByUid.get(doc.id), ...data });
+        }
+      });
+    } catch (error) {
+      console.warn("[StaffService] additional brand users load failed:", error);
+    }
+
     return Array.from(staffByUid.values())
       .filter((data) => isStaffAccount(data, manager))
       .map((data) => serializeStaffAccount(data, manager));
