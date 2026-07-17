@@ -305,8 +305,9 @@ export function useDashboard(options: UseDashboardOptions = {}) {
 
     if (supabaseClient) {
       console.log("[useDashboard] Initializing Realtime leads subscription");
+      const channelId = `realtime-leads-dashboard-${Math.random().toString(36).substring(2, 10)}`;
       const channel = supabaseClient
-        .channel("realtime-leads-dashboard")
+        .channel(channelId)
         .on(
           "postgres_changes",
           { event: "*", schema: "public", table: "leads" },

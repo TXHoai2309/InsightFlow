@@ -452,16 +452,16 @@ export default function BrandLandingPage() {
 
             <div className="mt-10 flex flex-col gap-4 sm:flex-row">
               {!loading && user ? (
-                <Link href={appRoute} className="inline-flex h-[52px] px-8 items-center justify-center gap-2 rounded-[24px] bg-gradient-to-br from-[#6D5EF6] to-[#5B4FE0] text-[16px] font-bold text-white shadow-[0_18px_50px_rgba(109,94,246,0.08)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_30px_60px_rgba(109,94,246,0.12)]">
-                  Vào Dashboard <ArrowRight className="h-5 w-5" />
+                <Link href={appRoute} className="inline-flex h-[52px] px-8 items-center justify-center gap-2 rounded-[24px] bg-gradient-to-br from-[#6D5EF6] to-[#5B4FE0] text-[16px] font-bold text-white whitespace-nowrap shadow-[0_18px_50px_rgba(109,94,246,0.08)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_30px_60px_rgba(109,94,246,0.12)]">
+                  Vào Dashboard <ArrowRight className="h-5 w-5 shrink-0" />
                 </Link>
               ) : (
-                <Link href="#consultation" className="inline-flex h-[52px] px-8 items-center justify-center gap-2 rounded-[24px] bg-gradient-to-br from-[#6D5EF6] to-[#5B4FE0] text-[16px] font-bold text-white shadow-[0_18px_50px_rgba(109,94,246,0.08)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_30px_60px_rgba(109,94,246,0.12)]">
-                  Đăng ký tư vấn dùng thử <ArrowRight className="h-5 w-5" />
+                <Link href="#consultation" className="inline-flex h-[52px] px-8 items-center justify-center gap-2 rounded-[24px] bg-gradient-to-br from-[#6D5EF6] to-[#5B4FE0] text-[16px] font-bold text-white whitespace-nowrap shadow-[0_18px_50px_rgba(109,94,246,0.08)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_30px_60px_rgba(109,94,246,0.12)]">
+                  Đăng ký tư vấn dùng thử <ArrowRight className="h-5 w-5 shrink-0" />
                 </Link>
               )}
-              <Link href="#workflow" className="inline-flex h-[52px] px-8 items-center justify-center gap-2 rounded-[24px] bg-white/80 border border-[#ECE9FF] text-[16px] font-bold text-[#1B1B4A] backdrop-blur-sm shadow-[0_18px_50px_rgba(109,94,246,0.04)] transition-all duration-300 hover:-translate-y-1 hover:border-[#6D5EF6]/30">
-                Xem Demo <ChevronRight className="h-5 w-5" />
+              <Link href="#workflow" className="inline-flex h-[52px] px-8 items-center justify-center gap-2 rounded-[24px] bg-white/80 border border-[#ECE9FF] text-[16px] font-bold text-[#1B1B4A] whitespace-nowrap backdrop-blur-sm shadow-[0_18px_50px_rgba(109,94,246,0.04)] transition-all duration-300 hover:-translate-y-1 hover:border-[#6D5EF6]/30">
+                Xem Demo <ChevronRight className="h-5 w-5 shrink-0" />
               </Link>
             </div>
 

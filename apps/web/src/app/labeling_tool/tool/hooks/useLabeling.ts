@@ -187,12 +187,18 @@ export function useLabeling(
     skipped: boolean,
   ): Promise<StoredLabel> => {
     if (!person) throw new Error('Chưa chọn người gán nhãn.');
+    // Preserve the original annotator when editing an API/other-person label.
+    // Otherwise the same entity receives a second annotation row and dashboard
+    // counts become larger than the number of crawled entities.
+    const labelAssignee = item._loaded_label?.person
+      ?? labelsRef.current[item._entity_key]?.person
+      ?? person;
     const optimistic: StoredLabel = {
       ...label,
-      key: `${person}|${item._entity_key}`,
-      person,
+      key: `${labelAssignee}|${item._entity_key}`,
+      person: labelAssignee,
       entity_key: item._entity_key,
-      labeled_by: person,
+      labeled_by: labelAssignee,
       labeled_at: new Date().toISOString(),
       skipped,
       data_version: itemVersion(item),
@@ -201,7 +207,7 @@ export function useLabeling(
     setLabels(labelsRef.current);
     try {
       const stored = await saveLabel(
-        person,
+        labelAssignee,
         item._entity_key,
         label,
         itemVersion(item),
@@ -214,7 +220,7 @@ export function useLabeling(
           entityType: item._content_type,
           postId: itemPostId(item),
           commentId: itemCommentId(item),
-          assignee: person,
+          assignee: labelAssignee,
           label,
           dataVersion: itemVersion(item),
           skipped,

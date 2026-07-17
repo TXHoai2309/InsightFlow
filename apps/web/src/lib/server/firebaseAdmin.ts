@@ -1,6 +1,11 @@
 import fs from "fs";
 import path from "path";
-import { initializeApp, getApps, cert } from "firebase-admin/app";
+import {
+  applicationDefault,
+  cert,
+  getApps,
+  initializeApp,
+} from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 
@@ -46,25 +51,26 @@ function loadServiceAccountFromFile(): Record<string, unknown> | null {
       const raw = fs.readFileSync(accountPath, "utf8");
       return JSON.parse(raw) as Record<string, unknown>;
     } catch {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        return require(accountPath) as Record<string, unknown>;
-      } catch {
-        // try next path
-      }
+      // Invalid or unreadable credential file; try the next configured path.
     }
   }
   return null;
 }
 
 function initFirebaseAdmin() {
+  const apps = getApps();
+  const hasDefault = apps.some((app) => app.name === "[DEFAULT]");
+  const hasDataInsight = apps.some((app) => app.name === "datainsight");
+
+  if (hasDefault && hasDataInsight) return;
+
   let serviceAccount: Record<string, unknown> | null = null;
   const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (serviceAccountJson) {
     try {
       serviceAccount = JSON.parse(serviceAccountJson) as Record<string, unknown>;
-    } catch {
-      serviceAccount = null;
+    } catch (error) {
+      console.error("[Firebase Admin] FIREBASE_SERVICE_ACCOUNT_JSON is invalid.", error);
     }
   }
   serviceAccount ||= loadServiceAccountFromFile();
@@ -73,24 +79,34 @@ function initFirebaseAdmin() {
   if (serviceAccount) {
     try {
       adminCredential = cert(serviceAccount as Parameters<typeof cert>[0]);
-    } catch {
-      adminCredential = undefined;
+    } catch (error) {
+      console.error("[Firebase Admin] Could not create a service-account credential.", error);
+    }
+  } else {
+    try {
+      adminCredential = applicationDefault();
+    } catch (error) {
+      console.warn("[Firebase Admin] Application Default Credentials are unavailable.", error);
     }
   }
 
-  const apps = getApps();
-  if (!apps.some((app) => app.name === "[DEFAULT]")) {
-    initializeApp({
-      ...(adminCredential ? { credential: adminCredential } : {}),
-      projectId: (serviceAccount?.project_id as string) || primaryProjectId,
-    });
-  }
+  const appOptions = (projectId: string) => ({
+    ...(adminCredential ? { credential: adminCredential } : {}),
+    projectId,
+  });
 
-  if (!getApps().some((app) => app.name === "datainsight")) {
-    initializeApp({
-      ...(adminCredential ? { credential: adminCredential } : {}),
-      projectId: secondaryProjectId,
-    }, "datainsight");
+  try {
+    if (!hasDefault) {
+      initializeApp(
+        appOptions((serviceAccount?.project_id as string) || primaryProjectId),
+      );
+    }
+    if (!hasDataInsight) {
+      initializeApp(appOptions(secondaryProjectId), "datainsight");
+    }
+  } catch (error) {
+    console.error("[Firebase Admin] Failed to initialize Firebase Admin apps.", error);
+    throw error;
   }
 }
 

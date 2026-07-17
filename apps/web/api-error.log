@@ -1,0 +1,14 @@
+Error: The default Firebase app does not exist. Make sure you call initializeApp() before using any of the Firebase services.
+    at AppStore.getApp (D:\InsightFlow\InsightFlow\node_modules\firebase-admin\lib\app\lifecycle.js:85:19)
+    at getApp (D:\InsightFlow\InsightFlow\node_modules\firebase-admin\lib\app\lifecycle.js:243:36)
+    at getFirestore (D:\InsightFlow\InsightFlow\node_modules\firebase-admin\lib\firestore\index.js:51:90)
+    at Object.get (webpack-internal:///(rsc)/./src/lib/server/firebaseAdmin.ts:141:194)
+    at getUserProfile (webpack-internal:///(rsc)/./src/lib/server/staffService.ts:188:77)
+    at ensureBrandManager (webpack-internal:///(rsc)/./src/lib/server/staffService.ts:198:36)
+    at listStaff (webpack-internal:///(rsc)/./src/lib/server/staffService.ts:218:27)
+    at GET (webpack-internal:///(rsc)/./src/app/api/staff/route.ts:28:95)
+    at async D:\InsightFlow\InsightFlow\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:57228
+    at async eT.execute (D:\InsightFlow\InsightFlow\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:46851)
+    at async eT.handle (D:\InsightFlow\InsightFlow\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:58760)
+    at async doRender (D:\InsightFlow\InsightFlow\node_modules\next\dist\server\base-server.js:1366:42)
+    at async cacheEntry.responseCache.get.routeKind (D:\InsightFlow\InsightFlow\node_modules\next\dist\server\base-server.js:1588:28)
