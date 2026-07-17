@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ClipboardCheck, Sparkles, UserPlus } from "lucide-react";
+import { ClipboardCheck, Sparkles, UserPlus, ChevronDown } from "lucide-react";
 import { LeadHistoryTab } from "@/components/leads/LeadHistoryTab";
 import { LeadProfileTab } from "@/components/leads/LeadProfileTab";
 import { LeadContentContext } from "@/components/leads/LeadContentContext";
@@ -56,6 +56,13 @@ interface LeadDetailPanelProps {
 }
 
 type PanelTab = LeadDetailPanelTab;
+type AssignableStaff = {
+  uid: string;
+  displayName: string;
+  email: string;
+  permissions?: string[];
+  disabled?: boolean;
+};
 type ResultAction =
   | "positive"
   | "no_response"
@@ -100,14 +107,22 @@ export function LeadDetailPanel({
   isCollapsed,
   onCollapseToggle,
 }: LeadDetailPanelProps) {
-  const { profile } = useAuth();
+  const { profile, role, user } = useAuth();
   const { updateLeadDetails, claimLead } = useDashboardStore();
   const [internalActiveTab, setInternalActiveTab] = useState<PanelTab>("action");
+  const [staffList, setStaffList] = useState<AssignableStaff[]>([]);
+  const [loadingStaff, setLoadingStaff] = useState(false);
+  const [assigningUid, setAssigningUid] = useState<string | null>(null);
+  const [isAssignDropdownOpen, setIsAssignDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const [isResultDropdownOpen, setIsResultDropdownOpen] = useState(false);
   const resultDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsAssignDropdownOpen(false);
+      }
       if (resultDropdownRef.current && !resultDropdownRef.current.contains(event.target as Node)) {
         setIsResultDropdownOpen(false);
       }
@@ -115,6 +130,48 @@ export function LeadDetailPanel({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (role !== "brand_manager" || workbenchView !== "unassigned" || !user) {
+      setIsAssignDropdownOpen(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const loadStaff = async () => {
+      setLoadingStaff(true);
+      try {
+        const token = await user.getIdToken();
+        const response = await fetch("/api/staff", {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload?.error || "Không thể tải danh sách nhân viên.");
+        }
+        const staff = Array.isArray(payload?.data)
+          ? (payload.data as AssignableStaff[]).filter(
+              (item) =>
+                !item.disabled &&
+                Array.isArray(item.permissions) &&
+                item.permissions.includes("leads"),
+            )
+          : [];
+        setStaffList(staff);
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          console.error("[LeadDetailPanel] staff load failed:", error);
+          setStaffList([]);
+        }
+      } finally {
+        if (!controller.signal.aborted) setLoadingStaff(false);
+      }
+    };
+
+    void loadStaff();
+    return () => controller.abort();
+  }, [role, user, workbenchView]);
   const [selectedResult, setSelectedResult] = useState<ResultAction | null>(null);
   const [showSkipForm, setShowSkipForm] = useState(false);
   const [skipReason, setSkipReason] = useState("");
@@ -169,6 +226,40 @@ export function LeadDetailPanel({
   const profileSourceHref = sourceAction?.href || "";
   const canOpenProfileSource = Boolean(sourceAction && ownership.canWork);
   const platformMeta = PLATFORM_META[lead.platform];
+
+  const handleAssignTo = async (uid: string) => {
+    if (!uid || !canEdit || !profile || role !== "brand_manager" || lead.owner_id) return;
+    const selectedStaff = staffList.find((staff) => staff.uid === uid);
+    if (!selectedStaff) return;
+
+    try {
+      setAssigningUid(uid);
+      setSaveError("");
+      const nowIso = new Date().toISOString();
+      const ownerData: Partial<Lead> = {
+        owner_id: selectedStaff.uid,
+        owner_name: selectedStaff.displayName || selectedStaff.email || "Nhân viên",
+        owner_email: selectedStaff.email,
+        assigned_at: nowIso,
+        assigned_by: profile.uid,
+        claimed_at: nowIso,
+      };
+      await updateLeadDetails(lead.id, ownerData, profile);
+      onStartedAction?.({ ...lead, ...ownerData }, true);
+      setIsAssignDropdownOpen(false);
+      showToast(`Đã giao việc cho ${ownerData.owner_name}`, "success");
+    } catch (error) {
+      console.error("[LeadDetailPanel] assign failed:", error);
+      const message = getLeadOperationErrorMessage(
+        error,
+        "Không thể giao việc cho nhân viên.",
+      );
+      setSaveError(message);
+      showToast(message, "error");
+    } finally {
+      setAssigningUid(null);
+    }
+  };
 
 
   const getOwnerName = () =>
@@ -447,25 +538,93 @@ export function LeadDetailPanel({
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            {sourceAction ? (
-              <button
-                type="button"
-                disabled={!ownership.canWork || Boolean(isOpening)}
-                onClick={() => handleOpenAction(sourceAction, true)}
-                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[13px] font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <span className="material-symbols-outlined text-[20px]">open_in_new</span>
-                <span className="hidden sm:inline">{isOpening === sourceAction.label ? "Đang mở..." : "Mở nguồn"}</span>
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={handleScrollToResult}
-              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 py-1.5 text-[13px] font-semibold text-white shadow-md shadow-[var(--color-brand)]/20 transition hover:shadow-[var(--color-brand)]/40 hover:opacity-90"
-            >
-              <ClipboardCheck size={18} aria-hidden="true" />
-              <span className="hidden sm:inline">Ghi nhận kết quả</span>
-            </button>
+            {!lead.owner_id ? (
+              role === "brand_manager" ? (
+                <div className="flex items-center gap-2" ref={dropdownRef}>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setIsAssignDropdownOpen(!isAssignDropdownOpen)}
+                      disabled={!canEdit || loadingStaff}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 py-1.5 text-[13px] font-semibold text-white shadow-md shadow-[var(--color-brand)]/20 transition hover:shadow-[var(--color-brand)]/40 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <UserPlus size={16} />
+                      <span className="hidden sm:inline">Giao việc cho nhân viên</span>
+                      <ChevronDown size={14} className={`transition-transform duration-200 ${isAssignDropdownOpen ? "rotate-180" : ""}`} />
+                    </button>
+
+                    {isAssignDropdownOpen && (
+                      <div className="absolute right-0 top-full z-50 mt-1 max-h-60 w-56 overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-1 shadow-lg">
+                        {loadingStaff ? (
+                          <div className="p-2 text-center text-sm text-[var(--color-text-secondary)]">Đang tải...</div>
+                        ) : staffList.length === 0 ? (
+                          <div className="p-2 text-center text-sm text-[var(--color-text-secondary)]">Không có nhân viên xử lý</div>
+                        ) : (
+                          staffList.map((staff) => (
+                            <button
+                              key={staff.uid}
+                              type="button"
+                              onClick={() => { void handleAssignTo(staff.uid); setIsAssignDropdownOpen(false); }}
+                              disabled={assigningUid !== null}
+                              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-semibold hover:bg-[var(--color-bg-surface-raised)] disabled:opacity-50"
+                            >
+                              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-[10px] font-bold text-[var(--color-brand)]">
+                                {staff.displayName?.slice(0, 2).toUpperCase() || "NV"}
+                              </div>
+                              <div className="flex-1 truncate">
+                                <p className="truncate text-sm text-[var(--color-text-primary)]">{staff.displayName || "Nhân viên"}</p>
+                                <p className="truncate text-[10px] text-[var(--color-text-secondary)]">{staff.email}</p>
+                              </div>
+                              {assigningUid === staff.uid && <span className="shrink-0 text-xs text-[var(--color-brand)]">Đang giao...</span>}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleClaim()}
+                    disabled={!canEdit || isClaiming || assigningUid !== null}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[13px] font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <span className="hidden sm:inline">{isClaiming ? "Đang nhận..." : "Nhận xử lý"}</span>
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void handleClaim()}
+                  disabled={!canEdit || isClaiming}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 py-1.5 text-[13px] font-semibold text-white shadow-md shadow-[var(--color-brand)]/20 transition hover:shadow-[var(--color-brand)]/40 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <UserPlus size={16} />
+                  <span className="hidden sm:inline">{isClaiming ? "Đang nhận..." : "Nhận xử lý"}</span>
+                </button>
+              )
+            ) : (
+              <>
+                {sourceAction ? (
+                  <button
+                    type="button"
+                    disabled={!ownership.canWork || Boolean(isOpening)}
+                    onClick={() => handleOpenAction(sourceAction, true)}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[13px] font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">open_in_new</span>
+                    <span className="hidden sm:inline">{isOpening === sourceAction.label ? "Đang mở..." : "Mở nguồn"}</span>
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={handleScrollToResult}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 py-1.5 text-[13px] font-semibold text-white shadow-md shadow-[var(--color-brand)]/20 transition hover:shadow-[var(--color-brand)]/40 hover:opacity-90"
+                >
+                  <ClipboardCheck size={18} aria-hidden="true" />
+                  <span className="hidden sm:inline">Ghi nhận kết quả</span>
+                </button>
+              </>
+            )}
             <div className="h-6 w-px bg-gray-200 mx-1.5" />
 
             <button
