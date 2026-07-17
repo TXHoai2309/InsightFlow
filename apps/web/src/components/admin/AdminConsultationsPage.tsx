@@ -731,14 +731,14 @@ export default function AdminConsultationsPage() {
                         <div className="rounded-lg bg-white p-3 dark:bg-black/10">
                           <p className="text-[11px] font-bold uppercase text-[var(--color-text-muted)]">Email đăng nhập</p>
                           <div className="mt-1 flex items-center justify-between gap-2">
-                            <span className="break-all font-mono text-[13px] font-bold text-[var(--color-text-primary)]">{generatedCredentials.email}</span>
+                            <span className="break-all font-sans text-[13px] font-bold text-[var(--color-text-primary)]">{generatedCredentials.email}</span>
                             <CopyButton value={generatedCredentials.email} label="email tài khoản" />
                           </div>
                         </div>
                         <div className="rounded-lg bg-white p-3 dark:bg-black/10">
                           <p className="text-[11px] font-bold uppercase text-[var(--color-text-muted)]">Mật khẩu tạm thời</p>
                           <div className="mt-1 flex items-center justify-between gap-2">
-                            <span className="font-mono text-[13px] font-bold text-[var(--color-text-primary)]">{generatedCredentials.temporaryPassword}</span>
+                            <span className="font-sans text-[13px] font-bold text-[var(--color-text-primary)]">{generatedCredentials.temporaryPassword}</span>
                             <CopyButton value={generatedCredentials.temporaryPassword} label="mật khẩu tạm thời" />
                           </div>
                         </div>

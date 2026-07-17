@@ -12,7 +12,7 @@ export function LeadMonitoringFooter() {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#5B4FCF]">
               <BarChart2 className="h-5 w-5 text-white" />
             </div>
-            <span className="font-['Hanken_Grotesk'] text-[20px] font-bold text-white tracking-tight">
+            <span className="font-sans text-[20px] font-bold text-white tracking-tight">
               InsightFlow
             </span>
           </div>

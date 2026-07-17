@@ -261,7 +261,7 @@ function LiveIntelligenceSection() {
                   <span className="text-[16px] md:text-[18px] font-display font-bold bg-gradient-to-r from-[#6D5EF6] to-[#9B8CFF] bg-clip-text text-transparent hidden sm:block">Live Command Center</span>
                   <div className="h-6 w-px bg-slate-200 dark:bg-white/10 hidden sm:block" />
                   {/* Counter */}
-                  <span className="font-mono font-bold text-[#1B1B4A] dark:text-white flex items-center gap-2">
+                  <span className="font-sans font-bold text-[#1B1B4A] dark:text-white flex items-center gap-2">
                     <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#34D399] opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-[#34D399]"></span></span>
                     <span className="tabular-nums opacity-90 text-[14px] md:text-[16px]">2,459,102</span>
                     <span className="text-[11px] text-[#6B7090] font-sans ml-1 uppercase tracking-wider hidden sm:inline-block">Mentions</span>

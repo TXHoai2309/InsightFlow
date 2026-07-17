@@ -6,12 +6,13 @@ import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard.store";
+import { useAlertStore } from "@/stores/alert.store";
 import { filterLeadsForDashboard } from "@/lib/lead-metrics";
 
 export function BMTabs() {
   const pathname = usePathname();
-  const { getFilteredAlerts, leads, filters } = useDashboardStore();
-  const alertsCount = getFilteredAlerts().length;
+  const { leads, filters } = useDashboardStore();
+  const alertsCount = useAlertStore((state) => state.rawAlerts.length);
   const leadsCount = filterLeadsForDashboard(leads, filters).length;
 
   const tabs = [
@@ -54,7 +55,7 @@ export function BMTabs() {
             {tab.count !== undefined && (
               <span
                 className={cn(
-                  "ml-1.5 flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-bold",
+                  "ml-1.5 flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold",
                   isActive 
                     ? cn(activeBgClass, "text-white")
                     : "bg-[#EEEDF4] text-[#474554] dark:bg-gray-800 dark:text-gray-400"

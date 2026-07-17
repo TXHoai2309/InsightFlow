@@ -168,7 +168,7 @@ function alertToTask(alert: AlertData, nowMs: number): EmployeeOperationsTask {
     dueAt,
     completedAt,
     isOverdue: status !== "completed" && dueTime !== null && dueTime <= nowMs,
-    href: `/alerts/${encodeURIComponent(alert.id)}`,
+    href: `/alerts?alertId=${encodeURIComponent(alert.id)}`,
   };
 }
 

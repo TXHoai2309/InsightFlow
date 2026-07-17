@@ -346,7 +346,7 @@ export function BMContactCrisis() {
                       <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] shadow-sm">
                         <div className="flex items-center justify-between mb-1">
                           <span className="font-bold text-xs text-[var(--color-text-primary)]">{event.user}</span>
-                          <span className="text-[10px] text-[var(--color-text-muted)] font-mono">{event.time}</span>
+                          <span className="text-[10px] text-[var(--color-text-muted)] font-sans">{event.time}</span>
                         </div>
                         <p className="text-xs text-[var(--color-text-secondary)]">{event.text}</p>
                       </div>

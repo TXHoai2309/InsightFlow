@@ -34,7 +34,7 @@ export default function MissionVisionSection() {
           >
             {/* Decorative Quote Mark */}
             <span 
-              className="absolute top-4 right-6 text-[160px] font-serif leading-none pointer-events-none"
+              className="absolute top-4 right-6 text-[160px] font-sans leading-none pointer-events-none"
               style={{ color: isDark ? "rgba(255,255,255,0.03)" : "rgba(109,76,255,0.08)" }}
             >
               "

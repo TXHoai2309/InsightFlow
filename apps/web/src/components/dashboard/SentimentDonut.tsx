@@ -18,6 +18,7 @@ import {
 import { useTheme } from "@/contexts/ThemeContext";
 
 ChartJS.register(ArcElement, DoughnutController, Tooltip, Legend);
+ChartJS.defaults.font.family = 'Inter, "Segoe UI", Arial, sans-serif';
 
 interface SentimentDonutProps {
   positive: number;

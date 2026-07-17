@@ -440,7 +440,7 @@ function createExcelReport(filename: string, dashboardHtml: string, evidenceHtml
           </x:ExcelWorkbook>
         </xml><![endif]-->
         <style>
-          body { font-family: Arial, sans-serif; color: #172033; }
+          body { font-family: Inter, "Segoe UI", Arial, sans-serif; color: #172033; }
           h1 { font-size: 22px; margin: 0 0 4px; color: #1f2937; }
           .subtitle { color: #64748b; margin: 0 0 14px; }
           table { border-collapse: collapse; margin: 12px 0 18px; width: 100%; }
@@ -539,7 +539,7 @@ function downloadExcelSheets(filename: string, sheets: Array<{ name: string; row
       <head>
         <meta charset="utf-8" />
         <style>
-          table { border-collapse: collapse; font-family: Arial, sans-serif; font-size: 12px; }
+          table { border-collapse: collapse; font-family: Inter, "Segoe UI", Arial, sans-serif; font-size: 12px; }
           th { background: #4648d4; color: #fff; font-weight: 700; }
           td, th { border: 1px solid #c7c4d7; padding: 6px; vertical-align: top; }
         </style>

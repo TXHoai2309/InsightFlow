@@ -29,6 +29,7 @@ ChartJS.register(
   CategoryScale, LinearScale, LineController, PointElement,
   LineElement, Title, Tooltip, Legend, Filler
 );
+ChartJS.defaults.font.family = 'Inter, "Segoe UI", Arial, sans-serif';
 
 const PALETTE = {
   light: {

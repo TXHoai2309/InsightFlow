@@ -750,7 +750,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
                   onChange={(event) => setTemporaryPassword(event.target.value)}
                   required
                   minLength={10}
-                  className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2.5 font-mono text-[14px] text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/15"
+                  className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2.5 font-sans text-[14px] text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/15"
                 />
                 <button
                   type="button"
@@ -803,7 +803,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
                       <dt className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
                         {t("admin.brandManager.result.tempPassword")}
                       </dt>
-                      <dd className="truncate font-mono text-[var(--color-text-primary)]">{createdAccount.temporaryPassword}</dd>
+                      <dd className="truncate font-sans text-[var(--color-text-primary)]">{createdAccount.temporaryPassword}</dd>
                     </div>
                     <CopyButton value={createdAccount.temporaryPassword} label="mật khẩu" />
                   </div>
@@ -936,7 +936,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
                       <td className="py-3.5 pr-4">
                         {revealedPasswords[item.uid] ? (
                           <div className="flex items-center gap-2">
-                            <span className="font-mono text-[13px] text-[var(--color-text-primary)]">
+                            <span className="font-sans text-[13px] text-[var(--color-text-primary)]">
                               {revealedPasswords[item.uid]}
                             </span>
                             <CopyButton value={revealedPasswords[item.uid]} label="mật khẩu" />
@@ -945,7 +945,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
                           <button
                             type="button"
                             onClick={() => openPasswordRequest(item.uid, "reveal")}
-                            className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 font-mono text-[13px] text-[var(--color-text-primary)] transition hover:bg-[var(--color-brand-subtle)] hover:text-[var(--color-brand)]"
+                            className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 font-sans text-[13px] text-[var(--color-text-primary)] transition hover:bg-[var(--color-brand-subtle)] hover:text-[var(--color-brand)]"
                           >
                             ••••••••••
                           </button>

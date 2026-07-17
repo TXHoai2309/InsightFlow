@@ -136,7 +136,7 @@ export function EmployeeTable({
                     <td className="px-6 py-4">
                       {temporaryPassword ? (
                         <div className="flex items-center gap-2">
-                          <span className="font-mono text-[13px] text-gray-900">{temporaryPassword}</span>
+                          <span className="font-sans text-[13px] text-gray-900">{temporaryPassword}</span>
                           <button
                             type="button"
                             onClick={() => copyPassword(item.uid, temporaryPassword)}
@@ -149,7 +149,7 @@ export function EmployeeTable({
                         <button
                           type="button"
                           onClick={() => onRevealPassword(item)}
-                          className="rounded-lg border border-gray-200 px-3 py-1.5 font-mono text-[13px] text-gray-700 transition hover:border-[#6C5CE7] hover:bg-[#6C5CE7]/5 hover:text-[#6C5CE7]"
+                          className="rounded-lg border border-gray-200 px-3 py-1.5 font-sans text-[13px] text-gray-700 transition hover:border-[#6C5CE7] hover:bg-[#6C5CE7]/5 hover:text-[#6C5CE7]"
                         >
                           **********
                         </button>

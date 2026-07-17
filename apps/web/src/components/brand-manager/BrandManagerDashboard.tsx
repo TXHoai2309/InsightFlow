@@ -10,6 +10,7 @@
 
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useDashboardStore } from "@/stores/dashboard.store";
+import { useAlertStore } from "@/stores/alert.store";
 import { DashboardService, normalizeBrandName } from "@/lib/services/dashboard";
 import { filterLeadsForDashboard } from "@/lib/lead-metrics";
 import { useTranslation } from "react-i18next";
@@ -43,6 +44,7 @@ export function BrandManagerDashboard({
     setWorkspaces,
     setFilters,
   } = useDashboardStore();
+  const crisisAlerts = useAlertStore((state) => state.rawAlerts);
 
   const { t } = useTranslation();
   const [isMounted, setIsMounted] = useState(false);
@@ -52,7 +54,9 @@ export function BrandManagerDashboard({
   useEffect(() => {
     setIsMounted(true);
     if (initialWorkspaces.length > 0) setWorkspaces(initialWorkspaces);
-    setFilters({ sentiment: "all", topic: "all" });
+    // The Supabase dashboard data is historical; defaulting to only today can
+    // make every KPI look empty when the latest crawl finished on a prior day.
+    setFilters({ sentiment: "all", topic: "all", time_range: "30d" });
   }, []);
 
   useEffect(() => {
@@ -302,6 +306,24 @@ export function BrandManagerDashboard({
   const highAlerts = derivedAlerts.filter(
     (a) => a.severity === "critical" || a.severity === "high"
   );
+  const crisisAlertKpi = useMemo(() => {
+    const targetBrand =
+      filters.workspace_id !== "all"
+        ? normalizeBrandName(filters.workspace_id)
+        : null;
+
+    const scopedAlerts = crisisAlerts.filter((alert) => {
+      if (targetBrand && normalizeBrandName(alert.brand || "") !== targetBrand) return false;
+      if (filters.platform !== "all" && alert.source !== filters.platform) return false;
+      return true;
+    });
+    const high = scopedAlerts.filter((alert) => {
+      const severity = String(alert.severity || alert.urgency || "").toLowerCase();
+      return severity === "critical" || severity === "high" || severity === "urgent";
+    }).length;
+
+    return { total: scopedAlerts.length, high };
+  }, [crisisAlerts, filters.workspace_id, filters.platform]);
   const unprocessedContacts = filteredLeads.filter((l) => l.status === "new").length;
 
   const hasData = mentions.length > 0;
@@ -372,8 +394,8 @@ export function BrandManagerDashboard({
         totalTrend={totalTrend}
         negativeMentions={stats.negative_count}
         negativePrev={prevStats.negative_count}
-        alertsTotal={stats.alerts_today}
-        alertsHigh={highAlerts.length}
+        alertsTotal={crisisAlertKpi.total}
+        alertsHigh={crisisAlertKpi.high}
         unprocessed={unprocessedContacts}
         crises={derivedAlerts.filter((a) => a.severity === "critical").length}
         hotLeads={filteredLeads.length}

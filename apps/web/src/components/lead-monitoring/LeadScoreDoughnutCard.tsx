@@ -47,7 +47,7 @@ export function LeadScoreDoughnutCard() {
     <div className="flex h-[280px] flex-col rounded-[14px] border border-[#E9E7EE] bg-white shadow-sm">
       <div className="flex items-start justify-between px-6 pb-2 pt-6">
         <div>
-          <h3 className="font-['Hanken_Grotesk'] text-[14px] font-bold uppercase tracking-wide text-[#1A1B20]">
+          <h3 className="font-sans text-[14px] font-bold uppercase tracking-wide text-[#1A1B20]">
             Chất lượng lead
           </h3>
           <p className="mt-1 text-[12px] font-medium text-[#787585]">
@@ -86,7 +86,7 @@ export function LeadScoreDoughnutCard() {
             ))}
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="font-['Hanken_Grotesk'] text-[22px] font-bold text-[#1A1B20]">{leads.length}</span>
+            <span className="font-sans text-[22px] font-bold text-[#1A1B20]">{leads.length}</span>
             <span className="text-[12px] font-semibold text-[#787585]">leads</span>
           </div>
         </div>
