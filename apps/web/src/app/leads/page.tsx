@@ -615,16 +615,7 @@ export default function LeadsPage() {
               <span className="material-symbols-outlined text-base">tune</span>
               Bộ lọc
             </button>
-            {selectedLead && isPanelCollapsed && (
-              <button
-                type="button"
-                onClick={() => setIsPanelCollapsed(false)}
-                className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] px-2.5 py-1.5 text-sm font-semibold text-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)]/80"
-              >
-                <span className="material-symbols-outlined text-base">dock_to_left</span>
-                Xem chi tiết
-              </button>
-            )}
+
             </div>
           </div>
 

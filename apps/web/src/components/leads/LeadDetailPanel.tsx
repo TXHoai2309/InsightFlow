@@ -529,19 +529,7 @@ export function LeadDetailPanel({
               <span className="hidden sm:inline">Ghi nhận kết quả</span>
             </button>
             <div className="h-6 w-px bg-gray-200 mx-1.5" />
-            {onCollapseToggle && (
-              <button
-                type="button"
-                onClick={onCollapseToggle}
-                className="rounded-full p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
-                title="Thu gọn panel"
-                aria-label="Thu gọn panel"
-              >
-                <span className="material-symbols-outlined text-[20px]">
-                  dock_to_right
-                </span>
-              </button>
-            )}
+
             <button
               type="button"
               onClick={onClose}

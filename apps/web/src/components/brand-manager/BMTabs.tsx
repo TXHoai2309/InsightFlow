@@ -7,17 +7,19 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { filterLeadsForDashboard } from "@/lib/lead-metrics";
+import { useTranslation } from "react-i18next";
 
 export function BMTabs() {
+  const { t } = useTranslation();
   const pathname = usePathname();
   const { getFilteredAlerts, leads, filters } = useDashboardStore();
   const alertsCount = getFilteredAlerts().length;
   const leadsCount = filterLeadsForDashboard(leads, filters).length;
 
   const tabs = [
-    { href: "/dashboard", label: "Tổng quan" },
-    { href: "/dashboard/insights", label: "Crisis Monitoring", count: alertsCount },
-    { href: "/dashboard/lead-monitoring", label: "Lead Monitoring", count: leadsCount },
+    { href: "/dashboard", label: t("bm.tabs.overview", "Tổng quan") },
+    { href: "/dashboard/insights", label: t("bm.tabs.crisis", "Crisis Monitoring"), count: alertsCount },
+    { href: "/dashboard/lead-monitoring", label: t("bm.tabs.lead", "Lead Monitoring"), count: leadsCount },
   ];
 
   return (

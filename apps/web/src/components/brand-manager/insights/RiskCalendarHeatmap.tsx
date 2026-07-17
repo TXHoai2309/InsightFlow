@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { Mention } from "@/types/dashboard";
 
 interface RiskCalendarHeatmapProps {
@@ -24,6 +25,7 @@ const DAYS_OF_WEEK = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
 const MONTHS_VI = ["Th1", "Th2", "Th3", "Th4", "Th5", "Th6", "Th7", "Th8", "Th9", "Th10", "Th11", "Th12"];
 
 export function RiskCalendarHeatmap({ mentions }: RiskCalendarHeatmapProps) {
+  const { t, i18n } = useTranslation();
   const [tooltip, setTooltip] = useState<{ day: string; count: number; x: number; y: number } | null>(null);
 
   const { weeks, maxCount } = useMemo(() => {
@@ -69,23 +71,23 @@ export function RiskCalendarHeatmap({ mentions }: RiskCalendarHeatmapProps) {
     <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-5 shadow-sm">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="text-[15px] font-bold text-[var(--color-text-primary)]">🗓️ Heatmap Cảnh báo Rủi ro theo Ngày</h3>
-          <p className="text-[12px] text-[var(--color-text-muted)] mt-0.5">Độ đậm màu đỏ tương ứng mức độ phàn nàn từng ngày (13 tuần gần nhất)</p>
+          <h3 className="text-[15px] font-bold text-[var(--color-text-primary)]">🗓️ {t("bm.heatmap.title", "Heatmap Cảnh báo Rủi ro theo Ngày")}</h3>
+          <p className="text-[12px] text-[var(--color-text-muted)] mt-0.5">{t("bm.heatmap.subtitle", "Độ đậm màu đỏ tương ứng mức độ phàn nàn từng ngày (13 tuần gần nhất)")}</p>
         </div>
         <div className="flex items-center gap-1.5 text-[11px] text-[var(--color-text-muted)] shrink-0">
-          <span>Ít</span>
+          <span>{t("bm.heatmap.less", "Ít")}</span>
           {LEVEL_CLASSES.map((cls, i) => (
             <div key={i} className={`w-3 h-3 rounded-sm ${cls} border border-[var(--color-border)]`} />
           ))}
-          <span>Nhiều</span>
+          <span>{t("bm.heatmap.more", "Nhiều")}</span>
         </div>
       </div>
 
       {!hasData ? (
         <div className="flex flex-col items-center justify-center py-10 text-center">
           <span className="text-4xl mb-3">🎉</span>
-          <p className="text-[14px] font-semibold text-[var(--color-text-primary)]">Không có cảnh báo rủi ro</p>
-          <p className="text-[12px] text-[var(--color-text-muted)] mt-1">Chưa có dữ liệu tiêu cực trong khoảng thời gian này</p>
+          <p className="text-[14px] font-semibold text-[var(--color-text-primary)]">{t("bm.heatmap.noRisks", "Không có cảnh báo rủi ro")}</p>
+          <p className="text-[12px] text-[var(--color-text-muted)] mt-1">{t("bm.heatmap.noRisksDesc", "Chưa có dữ liệu tiêu cực trong khoảng thời gian này")}</p>
         </div>
       ) : (
         <div className="overflow-x-auto">
@@ -129,7 +131,7 @@ export function RiskCalendarHeatmap({ mentions }: RiskCalendarHeatmapProps) {
           style={{ left: tooltip.x + 12, top: tooltip.y - 40 }}
         >
           <div className="font-semibold">{tooltip.day}</div>
-          <div>{tooltip.count > 0 ? `${tooltip.count} phàn nàn` : "Không có phàn nàn"}</div>
+          <div>{tooltip.count > 0 ? `${tooltip.count} ${t("bm.heatmap.complaints", "phàn nàn")}` : t("bm.heatmap.noComplaints", "Không có phàn nàn")}</div>
         </div>
       )}
     </div>

@@ -82,7 +82,7 @@ export function BMSentimentChart({ filteredMentions }: BMSentimentChartProps) {
     const datasets = [];
     if (sentimentFilter === "all" || sentimentFilter === "positive") {
       datasets.push({
-        label: t("bm.hero.positive"),
+        label: t("bm.hero.positive", "Tích cực"),
         data: trendData.map((d) => d.positive),
         borderColor: p.positive.line,
         backgroundColor: p.positive.fill,
@@ -96,7 +96,7 @@ export function BMSentimentChart({ filteredMentions }: BMSentimentChartProps) {
     }
     if (sentimentFilter === "all" || sentimentFilter === "negative") {
       datasets.push({
-        label: t("bm.hero.negative"),
+        label: t("bm.hero.negative", "Tiêu cực"),
         data: trendData.map((d) => d.negative),
         borderColor: p.negative.line,
         backgroundColor: p.negative.fill,
@@ -110,7 +110,7 @@ export function BMSentimentChart({ filteredMentions }: BMSentimentChartProps) {
     }
     if (sentimentFilter === "all" || sentimentFilter === "neutral") {
       datasets.push({
-        label: t("bm.hero.neutral"),
+        label: t("bm.hero.neutral", "Trung lập"),
         data: trendData.map((d) => d.neutral),
         borderColor: p.neutral.line,
         backgroundColor: p.neutral.fill,
@@ -145,7 +145,7 @@ export function BMSentimentChart({ filteredMentions }: BMSentimentChartProps) {
               title: (items) => `📅 ${items[0]?.label}`,
               afterBody: (items) => {
                 const total = items.reduce((s, i) => s + (i.parsed.y || 0), 0);
-                return `${t("bm.chart.total") || "Tổng:"} ${total} ${t("bm.hero.mentionsCount") || "đề cập"}`;
+                return `${t("bm.chart.total", "Tổng:")} ${total} ${t("bm.hero.mentionsCount", "đề cập")}`;
               },
             },
           },
@@ -188,15 +188,15 @@ export function BMSentimentChart({ filteredMentions }: BMSentimentChartProps) {
 
   const getRangeLabel = () => {
     switch (timeRange) {
-      case "all": return t("time.all") || "Toàn thời gian";
-      case "24h": return t("time.today") || "Hôm nay";
-      case "2d": return "2 ngày qua";
-      case "3d": return "3 ngày qua";
-      case "5d": return "5 ngày qua";
-      case "7d": return t("time.7d") || "7 ngày qua";
-      case "30d": return t("time.30d") || "30 ngày qua";
-      case "custom": return "Tùy chỉnh";
-      default: return t("time.30d") || "30 ngày qua";
+      case "all": return t("time.all", "Toàn thời gian");
+      case "24h": return t("time.today", "Hôm nay");
+      case "2d": return t("time.2d", "2 ngày qua");
+      case "3d": return t("time.3d", "3 ngày qua");
+      case "5d": return t("time.5d", "5 ngày qua");
+      case "7d": return t("time.7d", "7 ngày qua");
+      case "30d": return t("time.30d", "30 ngày qua");
+      case "custom": return t("time.custom", "Tùy chỉnh");
+      default: return t("time.30d", "30 ngày qua");
     }
   };
   const rangeLabel = getRangeLabel();
@@ -230,17 +230,17 @@ export function BMSentimentChart({ filteredMentions }: BMSentimentChartProps) {
             onChange={(e) => setSentimentFilter(e.target.value as any)}
             className="bm-chart-select"
           >
-            <option value="all">Tất cả sắc thái</option>
-            <option value="positive">Tích cực</option>
-            <option value="negative">Tiêu cực</option>
-            <option value="neutral">Trung lập</option>
+            <option value="all">{t("dashboard.filters.allSentiments", "Tất cả sắc thái")}</option>
+            <option value="positive">{t("bm.hero.positive", "Tích cực")}</option>
+            <option value="negative">{t("bm.hero.negative", "Tiêu cực")}</option>
+            <option value="neutral">{t("bm.hero.neutral", "Trung lập")}</option>
           </select>
 
           <div className="bm-chart-legend">
             {[
-              { color: p.positive.line, label: t("bm.hero.positive"), count: totals.positive, key: "positive" },
-              { color: p.negative.line, label: t("bm.hero.negative"), count: totals.negative, key: "negative" },
-              { color: p.neutral.line,  label: t("bm.hero.neutral"), count: totals.neutral, dash: true, key: "neutral" },
+              { color: p.positive.line, label: t("bm.hero.positive", "Tích cực"), count: totals.positive, key: "positive" },
+              { color: p.negative.line, label: t("bm.hero.negative", "Tiêu cực"), count: totals.negative, key: "negative" },
+              { color: p.neutral.line,  label: t("bm.hero.neutral", "Trung lập"), count: totals.neutral, dash: true, key: "neutral" },
             ]
               .filter((item) => sentimentFilter === "all" || sentimentFilter === item.key)
               .map(({ color, label, count, dash }) => (

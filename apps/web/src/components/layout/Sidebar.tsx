@@ -18,25 +18,24 @@ import { useAuth } from "@/hooks/useAuth";
 interface NavItem {
   href: string;
   label: string;
+  fallback: string;
   icon: string;
   badge?: number;
 }
 
 const navItems: NavItem[] = [
-  { href: "/admin/create-brand-manager", label: "Tao tai khoan brand", icon: "ti-user-plus" },
-  { href: "/admin/brand-managers", label: "Danh sach brand", icon: "ti-building-store" },
-  { href: "/admin/consultations", label: "Yêu cầu tư vấn", icon: "ti-headset" },
-  { href: "/labeling_tool", label: "Gan nhan du lieu", icon: "ti-tags" },
+  { href: "/admin/create-brand-manager", label: "nav.admin_create_brand", fallback: "Tạo tài khoản Brand", icon: "ti-user-plus" },
+  { href: "/admin/brand-managers", label: "nav.admin_brand_list", fallback: "Danh sách Brand", icon: "ti-building-store" },
+  { href: "/admin/consultations", label: "nav.admin_consultations", fallback: "Yêu cầu tư vấn", icon: "ti-headset" },
+  { href: "/labeling_tool", label: "nav.labeling_tool", fallback: "Gắn nhãn dữ liệu", icon: "ti-tags" },
 
-  { href: "/dashboard", label: "nav.dashboard", icon: "ti-layout-dashboard" },
-  { href: "/operations", label: "Tổng quan", icon: "ti-layout-dashboard" },
-  { href: "/team", label: "Quản lý đội ngũ", icon: "ti-users" },
-  { href: "/mentions", label: "nav.mentions", icon: "ti-message-circle" },
-  // { href: "/label-requests", label: "Duyệt yêu cầu", icon: "ti-clipboard-check" },
-  { href: "/alerts", label: "nav.alerts", icon: "ti-bell" },
-  { href: "/leads", label: "nav.leads", icon: "ti-chart-bar" },
-  { href: "/reports", label: "nav.reports", icon: "ti-file-analytics" },
-  { href: "/settings/brand", label: "nav.brands", icon: "ti-settings" },
+  { href: "/dashboard", label: "nav.dashboard", fallback: "Tổng quan", icon: "ti-layout-dashboard" },
+  { href: "/operations", label: "nav.operations", fallback: "Vận hành", icon: "ti-layout-dashboard" },
+  { href: "/team", label: "nav.team", fallback: "Quản lý đội ngũ", icon: "ti-users" },
+  { href: "/mentions", label: "nav.mentions", fallback: "Đề cập", icon: "ti-message-circle" },
+  { href: "/alerts", label: "nav.alerts", fallback: "Cảnh báo", icon: "ti-bell" },
+  { href: "/leads", label: "nav.leads", fallback: "Khách hàng", icon: "ti-chart-bar" },
+  { href: "/reports", label: "nav.reports", fallback: "Báo cáo", icon: "ti-file-analytics" },
 ];
 
 
@@ -166,7 +165,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                 }}
               >
                 <i className={`ti ${item.icon} text-[18px] mr-[10px]`}></i>
-                <span className="flex-1">{t(item.label)}</span>
+                <span className="flex-1">{t(item.label, item.fallback)}</span>
                 {item.badge && item.badge > 0 && (
                   <span
                     className="text-[11px] px-2 py-0.5 rounded-full text-white font-bold ml-2"
@@ -193,23 +192,9 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
           >
             <i className="ti ti-logout text-[18px] mr-[10px]"></i>
-            <span className="flex-1 text-left font-medium">{t("nav.logout")}</span>
+            <span className="flex-1 text-left font-medium">{t("nav.logout", "Đăng xuất")}</span>
           </button>
 
-          {/* AI Report Banner */}
-          <div className="bg-gradient-to-br from-[#6C63FF] to-[#9B8FF8] p-4 rounded-[12px] text-white text-sm shadow-[0_4px_14px_rgba(108,99,255,0.35)]">
-            <p className="font-bold mb-2 flex items-center gap-2"><i className="ti ti-bulb text-lg"></i> {t("sidebar.reportReadyTitle")}</p>
-            <p className="text-[12px] mb-3 opacity-90">
-              {t("sidebar.reportReadyDesc")}
-            </p>
-            <Link
-              href="/reports"
-              className="w-full inline-block py-2 font-semibold rounded-[8px] hover:bg-opacity-95 text-[12px] transition-colors duration-200 text-center"
-              style={{ backgroundColor: "var(--color-bg-surface)", color: "var(--color-brand)" }}
-            >
-              {t("sidebar.viewReport")}
-            </Link>
-          </div>
 
           {/* System Status */}
           <div
@@ -217,7 +202,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             style={{ color: "var(--color-text-muted)" }}
           >
             <span className="w-2 h-2 rounded-full bg-[#22C55E] animate-pulse"></span>
-            <span className="text-[12px] font-medium">{t("sidebar.systemActive")}</span>
+            <span className="text-[12px] font-medium">{t("sidebar.systemActive", "Hệ thống Hoạt động 24/7")}</span>
           </div>
         </div>
       </aside>

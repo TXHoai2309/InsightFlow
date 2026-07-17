@@ -280,17 +280,24 @@ export function BrandManagerDashboard({
           ratio > 0.3 ? "critical" : ratio > 0.15 ? "high" : ratio > 0.05 ? "medium" : "low";
         const sample = data.mentions[0];
         const TOPIC_LABELS: Record<string, string> = {
-          quality: "Chất lượng sản phẩm", service: "Phục vụ & CSKH",
-          price: "Giá cả", delivery: "Giao hàng", staff: "Thái độ nhân viên",
-          legal: "Pháp lý", operation: "Vận hành", marketing: "Marketing",
-          experience: "Trải nghiệm", competitor: "Đối thủ", other: "Chủ đề khác",
+          quality: t("dashboard.topics.quality") || "Chất lượng sản phẩm", 
+          service: t("dashboard.topics.service") || "Phục vụ & CSKH",
+          price: t("dashboard.topics.price") || "Giá cả", 
+          delivery: t("dashboard.topics.delivery") || "Giao hàng", 
+          staff: t("dashboard.topics.staff") || "Thái độ nhân viên",
+          legal: t("dashboard.topics.legal") || "Pháp lý", 
+          operation: t("dashboard.topics.operation") || "Vận hành", 
+          marketing: t("dashboard.topics.marketing") || "Marketing",
+          experience: t("dashboard.topics.experience") || "Trải nghiệm", 
+          competitor: t("dashboard.topics.competitor") || "Đối thủ", 
+          other: t("dashboard.topics.other") || "Chủ đề khác",
         };
         return {
           id: `derived-${topic}-${i}`,
           workspace_id: sample?.workspace_id || "",
           severity: severity as "critical" | "high" | "medium" | "low",
           signal_type: (negRatio > 0.2 ? "mention_spike" : "sensitive_topic") as "mention_spike" | "high_reach" | "sensitive_topic",
-          message: `${TOPIC_LABELS[topic] || topic}: ${data.count} bình luận tiêu cực (${Math.round(ratio * 100)}% tổng thảo luận)`,
+          message: `${TOPIC_LABELS[topic] || topic}: ${data.count} ${t("bm.hero.negativeComments", "bình luận tiêu cực")} (${Math.round(ratio * 100)}% ${t("bm.hero.totalDiscussions", "tổng thảo luận")})`,
           spike_multiplier: parseFloat((data.count / Math.max(totalAll / 10, 1)).toFixed(1)),
           affected_mentions_count: data.count,
           created_at: sample?.created_at || new Date().toISOString(),

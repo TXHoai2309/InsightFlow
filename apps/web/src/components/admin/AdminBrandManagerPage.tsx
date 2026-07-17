@@ -137,6 +137,21 @@ const Icon = {
       <path d="M18 6L6 18M6 6l12 12" />
     </svg>
   ),
+  Headset: (p: React.SVGProps<SVGSVGElement>) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}>
+      <path d="M3 11h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H3z" />
+      <path d="M21 11h-3a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h3z" />
+      <path d="M21 16v2a4 4 0 0 1-4 4h-5" />
+      <path d="M12 22v-4" />
+      <path d="M3 11c0-5 4-9 9-9s9 4 9 9" />
+    </svg>
+  ),
+  Tag: (p: React.SVGProps<SVGSVGElement>) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}>
+      <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" />
+      <line x1="7" y1="7" x2="7.01" y2="7" />
+    </svg>
+  ),
 };
 
 function CopyButton({ value, label }: { value: string; label: string }) {
@@ -300,7 +315,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
 
       setBrandManagers(managers);
     } catch (err: any) {
-      setActionError(err.message || "Khong the tai danh sach Brand Manager.");
+      setActionError(err.message || "Không thể tải danh sách Brand Manager.");
     } finally {
       setLoadingList(false);
     }
@@ -458,7 +473,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
         current.map((item) => (item.uid === account.uid ? updatedAccount : item)),
       );
     } catch (err: any) {
-      setActionError(err.message || "Khong the cap nhat trang thai tai khoan.");
+      setActionError(err.message || "Không thể cập nhật trạng thái tài khoản.");
     }
   };
 
@@ -595,10 +610,10 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
               <Icon.User className="h-6 w-6" />
             </div>
             <h2 className="mt-4 text-[18px] font-bold text-[var(--color-text-primary)]">
-              Tao tai khoan Brand Manager
+              {t("nav.admin_create_brand", "Tạo tài khoản Brand Manager")}
             </h2>
             <p className="mt-2 text-[13px] leading-6 text-[var(--color-text-secondary)]">
-              Chọn thương hiệu từ dữ liệu đã cao, nhập thông tin người quản lý và cấp mật khẩu tạm thời.
+              Chọn thương hiệu từ dữ liệu đã cào, nhập thông tin người quản lý và cấp mật khẩu tạm thời.
             </p>
           </Link>
 
@@ -610,10 +625,40 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
               <Icon.Building className="h-6 w-6" />
             </div>
             <h2 className="mt-4 text-[18px] font-bold text-[var(--color-text-primary)]">
-              Danh sách Brand Manager
+              {t("nav.admin_brand_list", "Danh sách Brand Manager")}
             </h2>
             <p className="mt-2 text-[13px] leading-6 text-[var(--color-text-secondary)]">
               Xem, tìm kiếm, chỉnh sửa, khóa hoặc mở khóa các tài khoản quản lý thương hiệu.
+            </p>
+          </Link>
+
+          <Link
+            href="/admin/consultations"
+            className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 transition hover:border-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)]"
+          >
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--color-brand-subtle)] text-[var(--color-brand)]">
+              <Icon.Headset className="h-6 w-6" />
+            </div>
+            <h2 className="mt-4 text-[18px] font-bold text-[var(--color-text-primary)]">
+              {t("nav.admin_consultations", "Yêu cầu tư vấn")}
+            </h2>
+            <p className="mt-2 text-[13px] leading-6 text-[var(--color-text-secondary)]">
+              Xem và xử lý các yêu cầu tư vấn và đăng ký từ khách hàng tiềm năng.
+            </p>
+          </Link>
+
+          <Link
+            href="/labeling_tool"
+            className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 transition hover:border-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)]"
+          >
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--color-brand-subtle)] text-[var(--color-brand)]">
+              <Icon.Tag className="h-6 w-6" />
+            </div>
+            <h2 className="mt-4 text-[18px] font-bold text-[var(--color-text-primary)]">
+              {t("nav.labeling_tool", "Gắn nhãn dữ liệu")}
+            </h2>
+            <p className="mt-2 text-[13px] leading-6 text-[var(--color-text-secondary)]">
+              Công cụ gắn nhãn dữ liệu hệ thống để phục vụ cho việc huấn luyện và cải thiện AI.
             </p>
           </Link>
         </section>

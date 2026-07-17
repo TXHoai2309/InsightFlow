@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
 
     if (!response.ok) {
       return NextResponse.json(
-        { error: data.error || "Khong the tao tai khoan Brand Manager." },
+        { error: data.error || "Không thể tạo tài khoản Brand Manager." },
         { status: response.status },
       );
     }

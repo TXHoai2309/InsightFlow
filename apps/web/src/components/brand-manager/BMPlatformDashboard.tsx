@@ -133,10 +133,10 @@ export function BMPlatformDashboard({ onBack, currentMentions }: BMPlatformDashb
           </button>
           <div>
             <h1 className="text-xl font-bold text-[var(--color-text-primary)]">
-              Phân tích Chi tiết Kênh
+              {t("bm.platform.title", "Phân tích Chi tiết Kênh")}
             </h1>
             <p className="text-xs text-[var(--color-text-muted)] font-medium">
-              Số liệu chi tiết của từng nền tảng thu thập
+              {t("bm.platform.subtitle", "Số liệu chi tiết của từng nền tảng thu thập")}
             </p>
           </div>
         </div>
@@ -171,7 +171,7 @@ export function BMPlatformDashboard({ onBack, currentMentions }: BMPlatformDashb
         <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-6 shadow-sm">
           <h3 className="text-sm font-bold text-[var(--color-text-primary)] mb-4 flex items-center gap-2">
             <span className="material-symbols-outlined text-[var(--color-brand)]" style={{ fontSize: 18 }}>donut_large</span>
-            Tỷ lệ Cảm xúc Kênh
+            {t("bm.platform.sentimentRatio", "Tỷ lệ Cảm xúc Kênh")}
           </h3>
           
           <div className="flex flex-col items-center justify-center py-4">
@@ -211,7 +211,7 @@ export function BMPlatformDashboard({ onBack, currentMentions }: BMPlatformDashb
                   {sentimentStats.total}
                 </span>
                 <span className="text-[10px] text-[var(--color-text-muted)] font-bold uppercase tracking-wider">
-                  Đề cập
+                  {t("bm.platform.mentions", "Đề cập")}
                 </span>
               </div>
             </div>
@@ -220,21 +220,21 @@ export function BMPlatformDashboard({ onBack, currentMentions }: BMPlatformDashb
               <div className="flex justify-between items-center text-xs font-semibold">
                 <div className="flex items-center gap-2">
                   <div className="w-2.5 h-2.5 rounded-full bg-[#22C55E]" />
-                  <span className="text-[var(--color-text-secondary)]">Tích cực</span>
+                  <span className="text-[var(--color-text-secondary)]">{t("bm.hero.positive", "Tích cực")}</span>
                 </div>
                 <span className="text-[var(--color-text-primary)]">{sentimentStats.pos} ({pct(sentimentStats.pos)}%)</span>
               </div>
               <div className="flex justify-between items-center text-xs font-semibold">
                 <div className="flex items-center gap-2">
                   <div className="w-2.5 h-2.5 rounded-full bg-[#94A3B8]" />
-                  <span className="text-[var(--color-text-secondary)]">Trung lập</span>
+                  <span className="text-[var(--color-text-secondary)]">{t("bm.hero.neutral", "Trung lập")}</span>
                 </div>
                 <span className="text-[var(--color-text-primary)]">{sentimentStats.neu} ({pct(sentimentStats.neu)}%)</span>
               </div>
               <div className="flex justify-between items-center text-xs font-semibold">
                 <div className="flex items-center gap-2">
                   <div className="w-2.5 h-2.5 rounded-full bg-[#EF4444]" />
-                  <span className="text-[var(--color-text-secondary)]">Tiêu cực</span>
+                  <span className="text-[var(--color-text-secondary)]">{t("bm.hero.negative", "Tiêu cực")}</span>
                 </div>
                 <span className="text-[var(--color-text-primary)]">{sentimentStats.neg} ({pct(sentimentStats.neg)}%)</span>
               </div>
@@ -247,7 +247,7 @@ export function BMPlatformDashboard({ onBack, currentMentions }: BMPlatformDashb
           <div>
             <h3 className="text-sm font-bold text-[var(--color-text-primary)] mb-4 flex items-center gap-2">
               <span className="material-symbols-outlined text-[var(--color-brand)]" style={{ fontSize: 18 }}>health_and_safety</span>
-              Sức khỏe Kênh
+              {t("bm.platform.healthScore", "Sức khỏe Kênh")}
             </h3>
             
             <div className="flex items-center gap-6 mb-4">
@@ -263,10 +263,10 @@ export function BMPlatformDashboard({ onBack, currentMentions }: BMPlatformDashb
                     ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
                     : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
                 }`}>
-                  {platformHealthScore >= 70 ? "Khỏe mạnh" : platformHealthScore >= 40 ? "Cảnh báo" : "Rủi ro cao"}
+                  {platformHealthScore >= 70 ? t("bm.hero.status.good", "Khỏe mạnh") : platformHealthScore >= 40 ? t("bm.hero.status.warning", "Cảnh báo") : t("bm.hero.status.danger", "Rủi ro cao")}
                 </span>
                 <p className="text-xs text-[var(--color-text-muted)] mt-2 font-medium">
-                  Tính toán dựa trên Net Sentiment của riêng kênh {PLATFORM_META[selectedPlatform]?.label}
+                  {t("bm.platform.healthScoreCalc", "Tính toán dựa trên Net Sentiment của riêng kênh")} {PLATFORM_META[selectedPlatform]?.label}
                 </p>
               </div>
             </div>
@@ -276,7 +276,7 @@ export function BMPlatformDashboard({ onBack, currentMentions }: BMPlatformDashb
             <span className="material-symbols-outlined absolute right-2 top-2 text-purple-500/10" style={{ fontSize: 36 }}>auto_awesome</span>
             <h4 className="text-xs font-bold text-purple-600 dark:text-purple-400 mb-1 flex items-center gap-1">
               <span className="material-symbols-outlined" style={{ fontSize: 14 }}>psychology</span>
-              Nhận định AI cho Kênh
+              {t("bm.platform.aiInsight", "Nhận định AI cho Kênh")}
             </h4>
             <p className="text-xs text-[var(--color-text-primary)] leading-relaxed italic">
               "{aiPlatformInsight}"
@@ -290,7 +290,7 @@ export function BMPlatformDashboard({ onBack, currentMentions }: BMPlatformDashb
             <div>
               <h3 className="text-sm font-bold text-[var(--color-text-primary)] mb-4 flex items-center gap-2">
                 <span className="material-symbols-outlined text-amber-500" style={{ fontSize: 18 }}>star</span>
-                Phân bố Đánh giá Sao
+                {t("bm.platform.starDistribution", "Phân bố Đánh giá Sao")}
               </h3>
               
               <div className="space-y-3.5">
@@ -322,13 +322,13 @@ export function BMPlatformDashboard({ onBack, currentMentions }: BMPlatformDashb
             <div>
               <h3 className="text-sm font-bold text-[var(--color-text-primary)] mb-4 flex items-center gap-2">
                 <span className="material-symbols-outlined text-[var(--color-brand)]" style={{ fontSize: 18 }}>analytics</span>
-                Chỉ số Tương tác Kênh
+                {t("bm.platform.engagementMetrics", "Chỉ số Tương tác Kênh")}
               </h3>
               
               <div className="space-y-4 py-3">
                 <div className="p-4 bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] rounded-xl flex items-center justify-between">
                   <div>
-                    <span className="text-xs text-[var(--color-text-muted)] font-semibold">Tỷ lệ tương tác tiêu cực</span>
+                    <span className="text-xs text-[var(--color-text-muted)] font-semibold">{t("bm.platform.negativeRate", "Tỷ lệ tương tác tiêu cực")}</span>
                     <h4 className="text-lg font-extrabold text-[var(--color-text-primary)] mt-1">
                       {sentimentStats.total === 0 ? "0%" : `${pct(sentimentStats.neg)}%`}
                     </h4>
@@ -338,9 +338,9 @@ export function BMPlatformDashboard({ onBack, currentMentions }: BMPlatformDashb
 
                 <div className="p-4 bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] rounded-xl flex items-center justify-between">
                   <div>
-                    <span className="text-xs text-[var(--color-text-muted)] font-semibold">Tần suất thảo luận trung bình</span>
+                    <span className="text-xs text-[var(--color-text-muted)] font-semibold">{t("bm.platform.avgFreq", "Tần suất thảo luận trung bình")}</span>
                     <h4 className="text-lg font-extrabold text-[var(--color-text-primary)] mt-1">
-                      {(sentimentStats.total / 7).toFixed(1)} / ngày
+                      {(sentimentStats.total / 7).toFixed(1)} / {t("bm.platform.day", "ngày")}
                     </h4>
                   </div>
                   <span className="material-symbols-outlined text-[var(--color-brand)]" style={{ fontSize: 24 }}>insights</span>
@@ -358,23 +358,23 @@ export function BMPlatformDashboard({ onBack, currentMentions }: BMPlatformDashb
           <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-6 shadow-sm">
             <h3 className="text-sm font-bold text-[var(--color-text-primary)] mb-4 flex items-center gap-2">
               <span className="material-symbols-outlined text-red-500" style={{ fontSize: 18 }}>storefront</span>
-              Xếp hạng Chi nhánh có nhiều Đánh giá Tiêu cực nhất
+              {t("bm.platform.negativeBranches", "Xếp hạng Chi nhánh có nhiều Đánh giá Tiêu cực nhất")}
             </h3>
             
             {locationStats.length === 0 ? (
               <div className="py-8 text-center text-xs text-[var(--color-text-muted)] font-semibold">
-                Không tìm thấy dữ liệu chi nhánh nào trên Google Maps.
+                {t("bm.platform.noBranches", "Không tìm thấy dữ liệu chi nhánh nào trên Google Maps.")}
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="border-b border-[var(--color-border)]">
-                      <th className="pb-3 text-xs font-bold text-[var(--color-text-muted)] uppercase tracking-wider">Chi nhánh</th>
-                      <th className="pb-3 text-xs font-bold text-[var(--color-text-muted)] uppercase tracking-wider text-center">Tiêu cực (Đánh giá)</th>
-                      <th className="pb-3 text-xs font-bold text-[var(--color-text-muted)] uppercase tracking-wider text-center">Tích cực / Trung lập</th>
-                      <th className="pb-3 text-xs font-bold text-[var(--color-text-muted)] uppercase tracking-wider text-center">Tổng review</th>
-                      <th className="pb-3 text-xs font-bold text-[var(--color-text-muted)] uppercase tracking-wider">Tỷ lệ rủi ro</th>
+                      <th className="pb-3 text-xs font-bold text-[var(--color-text-muted)] uppercase tracking-wider">{t("bm.platform.branch", "Chi nhánh")}</th>
+                      <th className="pb-3 text-xs font-bold text-[var(--color-text-muted)] uppercase tracking-wider text-center">{t("bm.platform.negativeReviews", "Tiêu cực (Đánh giá)")}</th>
+                      <th className="pb-3 text-xs font-bold text-[var(--color-text-muted)] uppercase tracking-wider text-center">{t("bm.platform.positiveNeutral", "Tích cực / Trung lập")}</th>
+                      <th className="pb-3 text-xs font-bold text-[var(--color-text-muted)] uppercase tracking-wider text-center">{t("bm.platform.totalReviews", "Tổng review")}</th>
+                      <th className="pb-3 text-xs font-bold text-[var(--color-text-muted)] uppercase tracking-wider">{t("bm.platform.riskRatio", "Tỷ lệ rủi ro")}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--color-border)]">
@@ -411,12 +411,12 @@ export function BMPlatformDashboard({ onBack, currentMentions }: BMPlatformDashb
           <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-6 shadow-sm">
             <h3 className="text-sm font-bold text-[var(--color-text-primary)] mb-4 flex items-center gap-2">
               <span className="material-symbols-outlined text-red-500" style={{ fontSize: 18 }}>campaign</span>
-              Các bài đăng/bình luận tiêu cực đáng lưu ý trên kênh
+              {t("bm.platform.notableNegativePosts", "Các bài đăng/bình luận tiêu cực đáng lưu ý trên kênh")}
             </h3>
             
             {viralNegativePosts.length === 0 ? (
               <div className="py-8 text-center text-xs text-[var(--color-text-muted)] font-semibold">
-                Không ghi nhận đề cập tiêu cực nổi bật nào trên nền tảng này.
+                {t("bm.platform.noNegativePosts", "Không ghi nhận đề cập tiêu cực nổi bật nào trên nền tảng này.")}
               </div>
             ) : (
               <div className="space-y-3">

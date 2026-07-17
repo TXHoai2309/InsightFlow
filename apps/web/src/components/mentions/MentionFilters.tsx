@@ -120,24 +120,7 @@ export function MentionFilters({ workspaces, filters, allMentions, contentMode, 
     <div className="flex flex-col gap-4">
       <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-4 shadow-sm flex flex-wrap items-end gap-4">
         
-        {/* Brand Filter */}
-        <div className="flex flex-col gap-1.5 flex-1 min-w-[160px]">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
-            {t("mentions.filters.brandLabel")}
-          </label>
-          <CustomSelect
-            value={filters.workspace_id || "all"}
-            onChange={(val) => setFilters({ workspace_id: val })}
-            options={[
-              { value: "all", label: t("mentions.filters.allBrands") },
-              ...availableBrands.map((brand) => ({
-                value: brand.id,
-                label: getBrandName(brand.id)
-              }))
-            ]}
-            minWidth="100%"
-          />
-        </div>
+
 
         {/* Sentiment Filter */}
         <div className="flex flex-col gap-1.5 flex-1 min-w-[140px]">
