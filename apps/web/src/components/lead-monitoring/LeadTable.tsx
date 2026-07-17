@@ -291,7 +291,7 @@ export function LeadTable() {
                         {getLeadSignal(lead)}
                       </p>
                       <p className="mt-1 line-clamp-2 text-[13px] leading-5 text-[#474554]">
-                        "{lead.content}"
+                        “{lead.content}”
                       </p>
                     </td>
 

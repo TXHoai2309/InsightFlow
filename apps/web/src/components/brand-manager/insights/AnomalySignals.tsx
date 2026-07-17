@@ -35,11 +35,11 @@ export function AnomalySignals({ signals }: AnomalySignalsProps) {
                 <span className={`mt-0.5 shrink-0 font-bold ${isHigh ? "text-red-500" : "text-orange-400"}`}>•</span>
                 <span className="text-[var(--color-text-secondary)]">
                   Chủ đề{" "}
-                  <strong className="text-[var(--color-text-primary)]">"{sig.label}"</strong>{" "}
+                  <strong className="text-[var(--color-text-primary)]">“{sig.label}”</strong>{" "}
                   {deltaStr}.
                   {sig.contentSample && (
                     <span className="block text-[11px] text-[var(--color-text-muted)] italic mt-0.5 line-clamp-1">
-                      Ví dụ: "{sig.contentSample}"
+                      Ví dụ: “{sig.contentSample}”
                     </span>
                   )}
                 </span>

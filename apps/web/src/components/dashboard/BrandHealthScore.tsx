@@ -110,7 +110,7 @@ export function BrandHealthScore({ score, trend, sentiment }: BrandHealthScorePr
             {t("dashboard.aiInsight.title", "Phân tích AI")}
           </h3>
           <p className="text-gray-800 dark:text-gray-200 text-sm md:text-base leading-relaxed font-medium relative z-10 mb-3">
-            "{aiSummary}"
+            “{aiSummary}”
           </p>
           <Link href="/mentions" className="inline-flex items-center text-sm font-semibold text-indigo-700 dark:text-indigo-400 hover:underline relative z-10">
             {t("dashboard.aiInsight.action", "Xem chi tiết nguyên nhân")} &rarr;

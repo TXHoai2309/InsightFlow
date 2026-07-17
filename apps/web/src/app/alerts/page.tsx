@@ -1720,7 +1720,7 @@ function IncidentReportModal({ item, onClose, triggerToast }: IncidentReportModa
           <div className="space-y-1">
             <label className="text-xs font-bold text-[var(--color-text-primary)]">{t("alerts.report.desc")}</label>
             <div className="p-3 bg-[var(--color-bg-surface-raised)] rounded-xl border border-[var(--color-border)] text-xs text-[var(--color-text-secondary)] italic">
-              "{item.text || item.content}"
+              “{item.text || item.content}”
             </div>
           </div>
 

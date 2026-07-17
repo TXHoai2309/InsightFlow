@@ -580,7 +580,7 @@ export function CrisisTable({ alerts, mentions }: { alerts: CrisisTableAlert[]; 
                     {copilotTemplates.map((template, idx) => (
                       <div key={idx} className="p-3.5 rounded-xl border border-indigo-100 bg-indigo-50/20 flex flex-col space-y-2.5 relative group">
                         <p className="text-[12.5px] text-[#474554] leading-relaxed italic">
-                          "{template}"
+                          “{template}”
                         </p>
                         <div className="flex justify-end">
                           <button

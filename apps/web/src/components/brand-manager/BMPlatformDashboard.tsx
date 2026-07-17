@@ -279,7 +279,7 @@ export function BMPlatformDashboard({ onBack, currentMentions }: BMPlatformDashb
               {t("bm.platform.aiInsight", "Nhận định AI cho Kênh")}
             </h4>
             <p className="text-xs text-[var(--color-text-primary)] leading-relaxed italic">
-              "{aiPlatformInsight}"
+              “{aiPlatformInsight}”
             </p>
           </div>
         </div>

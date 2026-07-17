@@ -62,7 +62,11 @@ export function Header({ onMenuToggle }: HeaderProps) {
     ? `${profile.brandName} Brand Manager`
     : (user?.displayName || user?.email?.split("@")[0] || t("header.guest"));
   const userName = role === "brand_manager" ? brandManagerName : (user?.displayName || user?.email?.split("@")[0] || t("header.guest"));
-  const roleLabel = role === "brand_manager" ? t("header.roles.brand_manager", "Quản lý thương hiệu") : (role ? ROLE_CONFIG[role].label : t("header.guest", "Khách"));
+  const roleLabel = role === "brand_manager"
+    ? t("header.roles.brand_manager", "Quản lý thương hiệu")
+    : role
+      ? getProfileRoleLabel(profile)
+      : t("header.guest", "Khách");
   const initials = getInitials(role === "brand_manager" ? brandManagerName : (user?.displayName || userName));
   const isDark = theme === "dark";
   const handleOpenGuide = () => {

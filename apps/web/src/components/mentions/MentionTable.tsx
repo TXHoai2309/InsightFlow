@@ -175,7 +175,7 @@ export function MentionTable({ mentions, isLoading, contentMode }: MentionTableP
                     href={resolveMentionDetailTarget(mention, mentionById).href}
                     className="text-sm leading-relaxed text-[var(--color-text-primary)] hover:text-[var(--color-brand)] line-clamp-3"
                   >
-                    "{displayContent}"
+                    “{displayContent}”
                   </Link>
 
                   <div className="flex flex-wrap gap-2">
@@ -288,7 +288,7 @@ export function MentionTable({ mentions, isLoading, contentMode }: MentionTableP
                           href={resolveMentionDetailTarget(mention, mentionById).href}
                           className="text-sm leading-relaxed line-clamp-2 text-[var(--color-text-primary)] hover:text-[var(--color-brand)]"
                         >
-                          "{displayContent}"
+                          “{displayContent}”
                         </Link>
                         <div className="mt-2 flex gap-2 flex-wrap">
                           {tags.map((tag) => (

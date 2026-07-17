@@ -802,7 +802,7 @@ export default function BrandLandingPage() {
               <span className="bg-gradient-to-r from-[#6D5EF6] to-[#9B8CFF] bg-clip-text text-transparent">bước tiếp theo của tăng trưởng.</span>
             </h2>
             <p className="mt-6 text-[17px] leading-[1.7] text-[#6B7090]">
-              InsightFlow không dừng ở việc "nghe". Hệ thống gắn bối cảnh, chấm mức độ ưu tiên và đưa tín hiệu đến đúng người để tạo ra hành động ngay lập tức.
+              InsightFlow không dừng ở việc “nghe”. Hệ thống gắn bối cảnh, chấm mức độ ưu tiên và đưa tín hiệu đến đúng người để tạo ra hành động ngay lập tức.
             </p>
           </Reveal>
 

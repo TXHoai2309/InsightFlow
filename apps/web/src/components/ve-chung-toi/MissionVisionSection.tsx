@@ -37,7 +37,7 @@ export default function MissionVisionSection() {
               className="absolute top-4 right-6 text-[160px] font-sans leading-none pointer-events-none"
               style={{ color: isDark ? "rgba(255,255,255,0.03)" : "rgba(109,76,255,0.08)" }}
             >
-              "
+              ”
             </span>
 
             <div className="relative z-10 mb-8">
