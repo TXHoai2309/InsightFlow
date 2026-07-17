@@ -3,6 +3,7 @@ import type { LeadReportData } from "@/lib/lead-report";
 import type { CrisisReportData } from "@/lib/crisis-report";
 import type { DualOperationsReportData } from "@/lib/dual-operations-report";
 import type { CrisisEmployeeReportData } from "@/lib/crisis-employee-report";
+import type { LeadEmployeeReportData } from "@/lib/lead-employee-report";
 
 type ReportLabels = {
   dashboard: string;
@@ -562,30 +563,6 @@ function downloadExcelSheets(filename: string, sheets: Array<{ name: string; row
   URL.revokeObjectURL(url);
 }
 
-function downloadBlob(filename: string, content: BlobPart, type: string) {
-  const blob = new Blob([content], { type });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
-}
-
-function csvEscape(value: unknown) {
-  const text = String(value ?? "");
-  if (/[",\r\n]/.test(text)) {
-    return `"${text.replace(/"/g, '""')}"`;
-  }
-  return text;
-}
-
-function rowsToCsv(rows: Array<Array<unknown>>) {
-  return rows.map((row) => row.map(csvEscape).join(",")).join("\r\n");
-}
-
 function getLeadReportOverviewRows(report: LeadReportData) {
   const { kpis } = report;
   return [
@@ -709,13 +686,172 @@ export function exportLeadReportExcel(report: LeadReportData, filename = "Lead_R
   ]);
 }
 
-export function exportLeadReportCsv(report: LeadReportData, filename = "Lead_Report") {
-  const csv = rowsToCsv(getLeadReportDetailRows(report));
-  downloadBlob(
-    `${safeFilePart(filename)}.csv`,
-    `\uFEFF${csv}`,
-    "text/csv;charset=utf-8",
-  );
+export interface LeadEmployeeExcelViewOptions {
+  periodLabel?: string;
+  filterLabel?: string;
+}
+
+function leadExcelMinutes(value: number | null) {
+  if (value === null) return "Chưa có dữ liệu";
+  if (value < 60) return `${value} phút`;
+  const hours = Math.floor(value / 60);
+  const minutes = value % 60;
+  return minutes > 0 ? `${hours} giờ ${minutes} phút` : `${hours} giờ`;
+}
+
+export function buildLeadEmployeeReportExcelDocument(
+  report: LeadEmployeeReportData,
+  options: LeadEmployeeExcelViewOptions = {},
+) {
+  const periodLabel = options.periodLabel || "Theo phạm vi dữ liệu đã chọn";
+  const filterLabel = options.filterLabel || "Lead thuộc trách nhiệm của nhân viên";
+  const detailRows = report.detailRows.map((row) => [
+    row.id,
+    row.customer,
+    row.platform,
+    row.intent.toUpperCase(),
+    row.status,
+    row.slaStatus,
+    row.ownerName,
+    row.firstContactedAt,
+    leadExcelMinutes(row.responseMinutes),
+    row.resultType,
+    row.resultRecordedAt,
+    row.content,
+  ]);
+  const priorityRows = report.priorityRows.map((row) => [
+    row.id,
+    row.customer,
+    row.platform,
+    row.intent.toUpperCase(),
+    row.urgencyLevel === "urgent"
+      ? "Khẩn cấp"
+      : row.urgencyLevel === "attention"
+        ? "Cần chú ý"
+        : "Theo dõi",
+    row.urgencyReasons.join(" · "),
+    row.nextActionLabel,
+    row.slaStatus,
+    row.content,
+  ]);
+  const renderRows = (rows: unknown[][], columnCount: number) =>
+    rows.length > 0
+      ? rows
+          .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`)
+          .join("")
+      : `<tr><td colspan="${columnCount}" class="empty">Không có dữ liệu phù hợp.</td></tr>`;
+
+  return `<!doctype html>
+  <html xmlns:o="urn:schemas-microsoft-com:office:office"
+    xmlns:x="urn:schemas-microsoft-com:office:excel"
+    xmlns="http://www.w3.org/TR/REC-html40">
+    <head>
+      <meta charset="utf-8" />
+      <style>
+        body { margin: 0; padding: 28px; background: #f7f7fc; color: #1f1b2d; font-family: Arial, sans-serif; }
+        .report { width: 1120px; margin: 0 auto; background: #fff; border: 1px solid #e2dff1; }
+        .hero { padding: 28px 32px; color: #fff; background: #5b4de3; }
+        .eyebrow { margin: 0 0 8px; font-size: 11px; font-weight: 700; letter-spacing: 1.8px; text-transform: uppercase; }
+        h1 { margin: 0; font-size: 28px; } .hero p { margin: 10px 0 0; font-size: 13px; }
+        .meta { margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.3); }
+        .section { padding: 22px 32px; border-bottom: 1px solid #ece9f5; }
+        h2 { margin: 0 0 14px; font-size: 17px; }
+        table { width: 100%; border-collapse: separate; border-spacing: 10px; } td { vertical-align: top; }
+        .attention { width: 25%; padding: 14px; border: 1px solid #ddd8fa; background: #f8f7ff; }
+        .attention span, .metric span { display: block; color: #6d6781; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+        .attention strong { display: block; margin-top: 8px; color: #5b4de3; font-size: 24px; }
+        .attention p { margin: 8px 0 0; color: #625c73; font-size: 11px; line-height: 1.5; }
+        .metric { width: 25%; padding: 16px; border: 1px solid #e2dff1; background: #faf9ff; }
+        .metric strong { display: block; margin-top: 8px; color: #5b4de3; font-size: 25px; }
+        .metric.good strong { color: #157347; } .metric.warn strong { color: #b45309; }
+        .recommendation { margin: 8px 0; padding: 11px 13px; border-left: 4px solid #5b4de3; background: #f4f2ff; font-size: 12px; }
+        .trend { border-spacing: 0; } .trend th, .data th { padding: 9px; color: #fff; background: #5b4de3; border: 1px solid #4234b6; font-size: 11px; text-align: left; }
+        .trend td, .data td { padding: 8px; border: 1px solid #e2dff1; font-size: 10px; white-space: normal; word-break: break-word; }
+        .trend tr:nth-child(even) td, .data tr:nth-child(even) td { background: #f8f7ff; }
+        .data { border-spacing: 0; table-layout: fixed; } .empty { padding: 20px !important; color: #6d6781; text-align: center; }
+        .footer { padding: 16px 32px; color: #6d6781; background: #f7f6fb; font-size: 10px; }
+      </style>
+    </head>
+    <body>
+      <main class="report">
+        <header class="hero">
+          <p class="eyebrow">Báo cáo công việc cá nhân</p>
+          <h1>Xử lý khách hàng tiềm năng</h1>
+          <p>Tập trung vào lead cần chú ý, kết quả cá nhân và xu hướng chuyển đổi.</p>
+          <p class="meta"><strong>Kỳ báo cáo:</strong> ${escapeHtml(periodLabel)} &nbsp;·&nbsp; <strong>Phạm vi:</strong> ${escapeHtml(filterLabel)} &nbsp;·&nbsp; <strong>Cập nhật:</strong> ${escapeHtml(new Date(report.generatedAt).toLocaleString("vi-VN"))}</p>
+        </header>
+
+        <section class="section">
+          <h2>Cần xử lý ngay</h2>
+          <table><tr>
+            ${report.attentionItems.length > 0
+              ? report.attentionItems.slice(0, 4).map((item) => `<td class="attention"><span>${escapeHtml(item.title)}</span><strong>${item.count}</strong><p>${escapeHtml(item.description)}</p></td>`).join("")
+              : `<td class="attention"><span>Trạng thái</span><strong>0</strong><p>Không có tồn đọng nổi bật trong phạm vi hiện tại.</p></td>`}
+          </tr></table>
+        </section>
+
+        <section class="section">
+          <h2>Kết quả của tôi trong kỳ</h2>
+          <table><tr>
+            <td class="metric"><span>Đã liên hệ</span><strong>${report.personalKpis.contactedInPeriod}</strong></td>
+            <td class="metric good"><span>Đã chuyển đổi</span><strong>${report.personalKpis.convertedInPeriod}</strong></td>
+            <td class="metric"><span>Đúng SLA</span><strong>${report.personalKpis.contactedInPeriod > 0 ? `${report.personalKpis.slaOnTimeRate}%` : "—"}</strong></td>
+            <td class="metric warn"><span>Lead còn mở</span><strong>${report.personalKpis.openCurrent}</strong></td>
+          </tr></table>
+          <p style="margin: 4px 10px 0; color: #6d6781; font-size: 11px;">Tỷ lệ chuyển đổi: ${report.personalKpis.conversionRate}% trên ${report.personalKpis.resultRecordedInPeriod} kết quả trong kỳ · Phản hồi trung bình: ${escapeHtml(leadExcelMinutes(report.personalKpis.avgFirstResponseMinutes))}</p>
+        </section>
+
+        <section class="section">
+          <h2>Xu hướng xử lý 7 ngày</h2>
+          <table class="trend">
+            <thead><tr><th>Ngày</th><th>Lead phát sinh</th><th>Đã liên hệ</th><th>Đã chuyển đổi</th></tr></thead>
+            <tbody>${report.activityTrend.map((row) => `<tr><td>${escapeHtml(row.day)}</td><td>${row.created}</td><td>${row.contacted}</td><td>${row.converted}</td></tr>`).join("")}</tbody>
+          </table>
+        </section>
+
+        <section class="section">
+          <h2>Nhận định và đề xuất</h2>
+          ${report.recommendations.map((item) => `<p class="recommendation">${escapeHtml(item)}</p>`).join("")}
+        </section>
+
+        <section class="section">
+          <h2>Lead ưu tiên hiện tại</h2>
+          <table class="data">
+            <thead><tr><th>ID</th><th>Khách hàng</th><th>Nền tảng</th><th>Intent</th><th>Ưu tiên</th><th>Lý do</th><th>Hành động</th><th>SLA</th><th>Nội dung</th></tr></thead>
+            <tbody>${renderRows(priorityRows, 9)}</tbody>
+          </table>
+        </section>
+
+        <section class="section">
+          <h2>Chi tiết lead phát sinh trong kỳ</h2>
+          <table class="data">
+            <thead><tr><th>ID</th><th>Khách hàng</th><th>Nền tảng</th><th>Intent</th><th>Trạng thái</th><th>SLA</th><th>Phụ trách</th><th>Liên hệ đầu</th><th>Phản hồi</th><th>Kết quả</th><th>Ghi nhận lúc</th><th>Nội dung</th></tr></thead>
+            <tbody>${renderRows(detailRows, 12)}</tbody>
+          </table>
+        </section>
+        <footer class="footer">InsightFlow · Nội dung trong bản xem trước và file Excel được tạo từ cùng một tài liệu.</footer>
+      </main>
+    </body>
+  </html>`;
+}
+
+export function exportLeadEmployeeReportExcel(
+  report: LeadEmployeeReportData,
+  filename = "Lead_Employee_Report",
+  options: LeadEmployeeExcelViewOptions = {},
+) {
+  const excelDocument = buildLeadEmployeeReportExcelDocument(report, options);
+  const blob = new Blob([excelDocument], {
+    type: "application/vnd.ms-excel;charset=utf-8",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = window.document.createElement("a");
+  link.href = url;
+  link.download = `${safeFilePart(filename)}.xls`;
+  window.document.body.appendChild(link);
+  link.click();
+  window.document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }
 
 function getCrisisReportOverviewRows(report: CrisisReportData) {
