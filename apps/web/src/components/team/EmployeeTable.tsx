@@ -4,7 +4,13 @@ import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { StaffAccount } from "./types";
 import { EmployeeActionMenu } from "./EmployeeActionMenu";
-import { formatStaffDate, getPermissionLabelKey, getRoleLabel } from "./utils";
+import {
+  formatStaffDate,
+  getBusinessRoleBadgeClass,
+  getBusinessRoleLabel,
+  getPermissionLabelKey,
+  getStaffBusinessRole,
+} from "./utils";
 
 interface EmployeeTableProps {
   staff: StaffAccount[];
@@ -36,16 +42,6 @@ export function EmployeeTable({
     }
   };
 
-  const getRoleBadgeClass = (role: string) => {
-    if (role === "crisis_employee" || role === "crisis_staff") {
-      return "bg-orange-50 text-orange-700 border-orange-100";
-    }
-    if (role === "lead_employee" || role === "lead_staff") {
-      return "bg-blue-50 text-blue-700 border-blue-100";
-    }
-    return "bg-gray-100 text-gray-700 border-gray-200";
-  };
-
   return (
     <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
       <div className="overflow-x-auto">
@@ -74,6 +70,7 @@ export function EmployeeTable({
                 const initial = (item.displayName || item.email || "?").charAt(0).toUpperCase();
                 const temporaryPassword = revealedPasswords[item.uid];
                 const hasTemporaryPassword = item.hasTemporaryPassword || item.temporaryPassword;
+                const businessRole = getStaffBusinessRole(item.permissions, item.role);
 
                 return (
                   <tr key={item.uid} className="transition-colors hover:bg-gray-50/50">
@@ -90,8 +87,8 @@ export function EmployeeTable({
                     </td>
 
                     <td className="px-6 py-4">
-                      <span className={`inline-flex items-center rounded-md border px-2.5 py-1 text-[12px] font-medium ${getRoleBadgeClass(item.role)}`}>
-                        {getRoleLabel(item.role)}
+                      <span className={`inline-flex items-center rounded-md border px-2.5 py-1 text-[12px] font-medium ${getBusinessRoleBadgeClass(businessRole)}`}>
+                        {getBusinessRoleLabel(businessRole)}
                       </span>
                     </td>
 
@@ -139,7 +136,7 @@ export function EmployeeTable({
                     <td className="px-6 py-4">
                       {temporaryPassword ? (
                         <div className="flex items-center gap-2">
-                          <span className="font-mono text-[13px] text-gray-900">{temporaryPassword}</span>
+                          <span className="font-sans text-[13px] text-gray-900">{temporaryPassword}</span>
                           <button
                             type="button"
                             onClick={() => copyPassword(item.uid, temporaryPassword)}
@@ -152,7 +149,7 @@ export function EmployeeTable({
                         <button
                           type="button"
                           onClick={() => onRevealPassword(item)}
-                          className="rounded-lg border border-gray-200 px-3 py-1.5 font-mono text-[13px] text-gray-700 transition hover:border-[#6C5CE7] hover:bg-[#6C5CE7]/5 hover:text-[#6C5CE7]"
+                          className="rounded-lg border border-gray-200 px-3 py-1.5 font-sans text-[13px] text-gray-700 transition hover:border-[#6C5CE7] hover:bg-[#6C5CE7]/5 hover:text-[#6C5CE7]"
                         >
                           **********
                         </button>

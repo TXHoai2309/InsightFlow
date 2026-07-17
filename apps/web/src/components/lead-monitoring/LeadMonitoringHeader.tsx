@@ -8,7 +8,7 @@ export function LeadMonitoringHeader() {
 
   return (
     <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-[#C8C4D6] bg-[#FFFFFF] px-10 transition-all">
-      <h1 className="font-['Hanken_Grotesk'] text-[24px] font-bold text-[#1A1B20] leading-8">
+      <h1 className="font-sans text-[24px] font-bold text-[#1A1B20] leading-8">
         Brand Manager Workspace
       </h1>
 

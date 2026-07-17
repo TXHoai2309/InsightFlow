@@ -1,4 +1,4 @@
-import { normalizeBrandName } from "@/lib/services/dashboard";
+import { normalizeBrandName } from "@/lib/brand-normalization";
 import {
   canPerformAction,
   type BusinessAction,

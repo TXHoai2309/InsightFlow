@@ -68,6 +68,10 @@ interface DashboardState {
     data: Partial<Lead>,
     profile: UserRoleProfile | null | undefined,
   ) => Promise<void>;
+  claimLead: (
+    id: string,
+    profile: UserRoleProfile | null | undefined,
+  ) => Promise<Partial<Lead>>;
   createLabelChangeRequest: (
     data: Omit<
       LabelChangeRequest,
@@ -224,9 +228,13 @@ export const useDashboardStore = create<DashboardState>()(
     setTrendData: (trendData) => set({ trendData }),
 
     setFilters: (newFilters) =>
-      set((state) => ({
-        filters: { ...state.filters, ...newFilters },
-      })),
+      set((state) => {
+        const hasChanges = Object.keys(newFilters).some(
+          (key) => newFilters[key as keyof DashboardFilters] !== state.filters[key as keyof DashboardFilters]
+        );
+        if (!hasChanges) return state; // Prevent infinite re-renders
+        return { filters: { ...state.filters, ...newFilters } };
+      }),
 
     resetFilters: () => set({ filters: defaultFilters }),
 
@@ -281,6 +289,32 @@ export const useDashboardStore = create<DashboardState>()(
         }));
       } catch (error) {
         console.error("[DashboardStore] updateLeadDetails error:", error);
+        throw error;
+      }
+    },
+
+    claimLead: async (id, profile) => {
+      try {
+        const currentLead = get().leads.find((lead) => lead.id === id);
+        if (!canPerformAction(profile, "update_lead_details")) {
+          throw new Error("User is not allowed to claim this lead.");
+        }
+        if (!canPerformAction(profile, "update_lead_status")) {
+          throw new Error("User is not allowed to update lead status.");
+        }
+        if (!currentLead || !isSameBrandScope(profile, currentLead)) {
+          throw new Error("Lead is outside the user's brand scope.");
+        }
+
+        const claimData = await DashboardService.claimLead(id, profile, currentLead);
+        set((state) => ({
+          leads: state.leads.map((lead) =>
+            lead.id === id ? { ...lead, ...claimData } : lead,
+          ),
+        }));
+        return claimData;
+      } catch (error) {
+        console.error("[DashboardStore] claimLead error:", error);
         throw error;
       }
     },
@@ -452,6 +486,23 @@ export const useDashboardStore = create<DashboardState>()(
               };
             }
             return lead;
+          }),
+          mentions: state.mentions.map((mention) => {
+            const isMatch =
+              request &&
+              (mention.id === request.mention_id ||
+                mention.id === request.source_id ||
+                mention.id === request.lead_id ||
+                (mention.parent_id && mention.parent_id === request.mention_id));
+            if (isMatch) {
+              return {
+                ...mention,
+                sentiment: normLabel.sentiment || mention.sentiment,
+                topic: (normLabel.topic[0] as any) || mention.topic,
+                labels: normLabel,
+              };
+            }
+            return mention;
           }),
         };
       });

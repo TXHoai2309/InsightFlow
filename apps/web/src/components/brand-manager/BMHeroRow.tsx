@@ -17,6 +17,7 @@ import {
 import { useTranslation } from "react-i18next";
 
 ChartJS.register(ArcElement, DoughnutController, Tooltip);
+ChartJS.defaults.font.family = 'Inter, "Segoe UI", Arial, sans-serif';
 
 interface BMHeroRowProps {
   score: number;       // 0–100
@@ -254,8 +255,8 @@ export function BMHeroRow({ score, trend, sentiment, totalMentions, onViewDetail
             </span>
           </div>
           <div>
-            <h2 className="bm-card-title">{t("bm.hero.healthScore")}</h2>
-            <p className="bm-card-sub">Brand Health Score</p>
+            <h2 className="bm-card-title">{t("bm.hero.healthScore", "Brand Health Score")}</h2>
+            <p className="bm-card-sub">{t("bm.hero.healthScoreSub", "Tổng quan sức khỏe thương hiệu")}</p>
           </div>
         </div>
 
@@ -330,7 +331,7 @@ export function BMHeroRow({ score, trend, sentiment, totalMentions, onViewDetail
           </div>
           <div>
             <h2 className="bm-card-title">{t("bm.hero.sentimentRatio")}</h2>
-            <p className="bm-card-sub">Sentiment Breakdown</p>
+            <p className="bm-card-sub">{t("bm.hero.sentimentRatioSub", "Tỷ lệ cảm xúc")}</p>
           </div>
         </div>
 
@@ -405,7 +406,7 @@ export function BMHeroRow({ score, trend, sentiment, totalMentions, onViewDetail
             </span>
           </div>
 
-          <p className="bm-ai-text">"{aiText}"</p>
+          <p className="bm-ai-text">“{aiText}”</p>
 
           <div className="bm-ai-metrics">
             <div className="bm-ai-metric">

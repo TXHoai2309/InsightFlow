@@ -2,24 +2,21 @@
 
 import React, { useState } from "react";
 import { useDashboardStore } from "@/stores/dashboard.store";
-import { PLATFORM_META, normalizeBrandName } from "@/lib/services/dashboard";
+import {
+  getLeadOperationErrorMessage,
+  PLATFORM_META,
+  normalizeBrandName,
+} from "@/lib/services/dashboard";
 import { useAuth } from "@/hooks/useAuth";
 import { canPerformAction } from "@/lib/rbac";
 import { isSameBrandScope } from "@/lib/brandScope";
 import { PlatformLogo } from "@/components/platform/PlatformLogo";
-import type { LabelChangeRequest, Lead } from "@/types/dashboard";
-import {
-  getLabelRequestStatusLabel,
-  getLabelRequestWorkflowLabel,
-  getQueueLabel,
-  isPendingLeadRerouteRequest,
-} from "@/lib/label-change";
+import type { Lead } from "@/types/dashboard";
 import {
   formatLeadSla,
   getLeadOwnershipMeta,
   getLeadWorkbenchMeta,
   getPrimaryLeadAction,
-  getLeadSourceAction,
 } from "@/lib/lead-workbench";
 
 interface LeadWorkbenchRowProps {
@@ -28,9 +25,9 @@ interface LeadWorkbenchRowProps {
   nowMs: number;
   selected?: boolean;
   highlighted?: boolean;
-  labelRequest?: LabelChangeRequest;
   staffList?: any[];
   detailPanelOpen?: boolean;
+  compact?: boolean;
   onSelect: (lead: Lead) => void;
   onStartedAction?: (lead: Lead) => void;
 }
@@ -77,14 +74,14 @@ export function LeadWorkbenchRow({
   nowMs,
   selected = false,
   highlighted = false,
-  labelRequest,
   staffList = [],
   detailPanelOpen = false,
+  compact = false,
   onSelect,
   onStartedAction,
 }: LeadWorkbenchRowProps) {
   const { profile } = useAuth();
-  const { updateLeadDetails } = useDashboardStore();
+  const { updateLeadDetails, claimLead } = useDashboardStore();
   const [isOpening, setIsOpening] = useState(false);
   const [error, setError] = useState("");
   const [showMenu, setShowMenu] = useState(false);
@@ -96,9 +93,7 @@ export function LeadWorkbenchRow({
   const meta = getLeadWorkbenchMeta(lead, nowMs);
   const ownership = getLeadOwnershipMeta(lead, profile);
   const primaryAction = getPrimaryLeadAction(lead);
-  const sourceAction = getLeadSourceAction(lead);
   const platformMeta = PLATFORM_META[lead.platform];
-  const isLeadWorkflowBlocked = isPendingLeadRerouteRequest(labelRequest);
   const canEdit =
     isSameBrandScope(profile, lead) &&
     canPerformAction(profile, "update_lead_details");
@@ -115,56 +110,34 @@ export function LeadWorkbenchRow({
         ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/30 dark:bg-amber-950/20 dark:text-amber-300"
         : "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-800/30 dark:bg-slate-900/20 dark:text-slate-400";
 
-  const ctaLabel = isLeadWorkflowBlocked
-    ? "Xem trạng thái"
-    : ownership.canClaim
+  const ctaLabel = ownership.canClaim
       ? "Nhận xử lý"
       : !ownership.canWork
         ? "Xem chi tiết"
         : meta.needsResultCapture
           ? "Ghi nhận kết quả"
           : meta.nextActionLabel;
-  const ctaIcon = isLeadWorkflowBlocked
-    ? "lock_clock"
-    : ownership.canClaim
+  const ctaIcon = ownership.canClaim
       ? "person_add"
       : !ownership.canWork
         ? "visibility"
         : meta.needsResultCapture
           ? "task_alt"
-          : primaryAction?.icon || sourceAction?.icon || "open_in_new";
+          : primaryAction?.icon || "open_in_new";
 
   const getOwnerName = () =>
     profile?.displayName || profile?.email || "Nhân viên xử lý";
 
   const handleClaim = async () => {
     if (!canEdit || !profile) return;
-    if (isLeadWorkflowBlocked) {
-      onSelect(lead);
-      return;
-    }
-    const nowIso = new Date().toISOString();
-    const ownerData: Partial<Lead> = {
-      owner_id: profile.uid,
-      owner_name: getOwnerName(),
-      owner_email: profile.email,
-      assigned_at: nowIso,
-      assigned_by: profile.uid,
-      claimed_at: nowIso,
-    };
-    await updateLeadDetails(lead.id, ownerData, profile);
-    const updatedLead = { ...lead, ...ownerData };
+    const claimData = await claimLead(lead.id, profile);
+    const updatedLead = { ...lead, ...claimData };
     onStartedAction?.(updatedLead);
     onSelect(updatedLead);
   };
 
   const handlePrimaryAction = async (event: React.MouseEvent) => {
     event.stopPropagation();
-
-    if (isLeadWorkflowBlocked) {
-      onSelect(lead);
-      return;
-    }
 
     if (ownership.canClaim) {
       try {
@@ -173,7 +146,12 @@ export function LeadWorkbenchRow({
         await handleClaim();
       } catch (err) {
         console.error(err);
-        setError("Không thể nhận xử lý lead này.");
+        setError(
+          getLeadOperationErrorMessage(
+            err,
+            "Không thể nhận xử lý lead này.",
+          ),
+        );
       } finally {
         setIsOpening(false);
       }
@@ -229,7 +207,12 @@ export function LeadWorkbenchRow({
       onSelect(updatedLead);
     } catch (err) {
       console.error(err);
-      setError("Không thể ghi nhận thao tác trước khi mở liên hệ.");
+      setError(
+        getLeadOperationErrorMessage(
+          err,
+          "Không thể ghi nhận thao tác trước khi mở liên hệ.",
+        ),
+      );
     } finally {
       setIsOpening(false);
     }
@@ -243,9 +226,7 @@ export function LeadWorkbenchRow({
     onSelect(lead);
   };
 
-  const buttonStyle = isLeadWorkflowBlocked
-    ? "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-600 border border-slate-200 dark:border-slate-700 cursor-not-allowed"
-    : ownership.canClaim
+  const buttonStyle = ownership.canClaim
       ? "border border-[var(--color-brand)] text-[var(--color-brand)] bg-transparent hover:bg-[var(--color-brand-subtle)] hover:shadow-sm"
       : meta.needsResultCapture
         ? "bg-amber-500 hover:bg-amber-600 text-white hover:shadow-md"
@@ -271,6 +252,88 @@ export function LeadWorkbenchRow({
 
   const leadTimeAgo = formatLeadTimeAgo(lead.posted_at || lead.created_at, nowMs);
   const intentLabel = lead.intent === "none" ? "N/A" : lead.intent.toUpperCase();
+
+  if (compact) {
+    return (
+      <div
+        id={`lead-row-${lead.id}`}
+        data-lead-id={lead.id}
+        data-tour={rank === 1 ? "lead-row-first" : undefined}
+        role="button"
+        tabIndex={0}
+        aria-current={selected ? "true" : undefined}
+        onClick={() => onSelect(lead)}
+        onKeyDown={handleRowKeyDown}
+        className={`relative w-full cursor-pointer overflow-hidden rounded-lg border bg-[var(--color-bg-surface)] p-[4%] text-left transition duration-200 hover:border-[var(--color-brand-border)] hover:bg-[var(--color-bg-surface-raised)] ${cardStateClass}`}
+      >
+        <span className={`absolute inset-y-0 left-0 w-[1.25%] min-w-1 ${accentClass}`} />
+
+        <div className="flex min-w-0 items-start gap-[3%] pl-[1%]">
+          <div className="relative shrink-0">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-sm font-black text-[var(--color-brand)]">
+              {(lead.author || "KH").slice(0, 2).toUpperCase()}
+            </div>
+            <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border border-[var(--color-bg-surface)] bg-[var(--color-bg-surface)] shadow-sm">
+              <PlatformLogo platform={lead.platform} size="xs" />
+            </span>
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-[3%]">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-black text-[var(--color-text-primary)]">
+                  {lead.author || "Khách hàng"}
+                </p>
+                <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
+                  <span className="rounded-md bg-[var(--color-bg-surface-high)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--color-brand)]">
+                    {platformMeta?.label || lead.platform}
+                  </span>
+                  <span className={`max-w-full truncate rounded-full border px-2 py-0.5 text-[10px] font-bold ${ownerChipClass}`}>
+                    {ownership.label}
+                  </span>
+                </div>
+              </div>
+              <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black ${INTENT_STYLE[lead.intent]}`}>
+                {intentLabel}
+              </span>
+            </div>
+
+            <p className="mt-[3%] line-clamp-2 text-xs font-semibold leading-5 text-[var(--color-text-primary)]">
+              {leadReason}
+            </p>
+            <p className="mt-[2%] line-clamp-2 text-xs leading-5 text-[var(--color-text-secondary)]">
+              {lead.content}
+            </p>
+
+            <div className="mt-[3%] flex items-end justify-between gap-[4%] border-t border-[var(--color-border)] pt-[3%]">
+              <div className="min-w-0">
+                <p className={`truncate text-xs font-black ${meta.isOverdue || meta.isUrgent ? "text-[var(--color-error)]" : "text-[var(--color-text-primary)]"}`}>
+                  {formatLeadSla(meta)}
+                </p>
+                <p className="mt-0.5 truncate text-[10px] font-semibold text-[var(--color-text-muted)]">
+                  {meta.needsResultCapture ? "Cần ghi nhận kết quả" : leadTimeAgo || "SLA xử lý"}
+                </p>
+              </div>
+              <div className="shrink-0 text-right">
+                <p className="text-lg font-black leading-none text-[var(--color-brand)]">
+                  {meta.priorityScore}
+                </p>
+                <p className="mt-0.5 text-[10px] font-semibold text-[var(--color-text-muted)]">
+                  Điểm ưu tiên
+                </p>
+              </div>
+            </div>
+
+            {error && (
+              <p className="mt-2 text-xs font-semibold text-[var(--color-error)]">
+                {error}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!detailPanelOpen) {
     return (
@@ -329,18 +392,6 @@ export function LeadWorkbenchRow({
                 <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-bold ${ownerChipClass}`}>
                   {ownership.label}
                 </span>
-                {labelRequest && (
-                  <span
-                    className={`min-w-0 truncate rounded-full border px-2 py-0.5 text-[11px] font-bold ${isLeadWorkflowBlocked
-                        ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/30 dark:bg-amber-950/20 dark:text-amber-300"
-                        : labelRequest.status === "pending"
-                          ? "border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] text-[var(--color-brand)]"
-                          : "border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]"
-                      }`}
-                  >
-                    {getLabelRequestStatusLabel(labelRequest.status)} · {getLabelRequestWorkflowLabel(labelRequest)}
-                  </span>
-                )}
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
@@ -354,12 +405,6 @@ export function LeadWorkbenchRow({
                 {lead.content}
               </p>
 
-              {labelRequest && (
-                <div className="mt-1 max-w-fit rounded-lg border border-slate-100 bg-slate-50 p-2 text-xs font-semibold text-[var(--color-text-secondary)] dark:border-slate-800/50 dark:bg-slate-900/30">
-                  Yêu cầu sửa nhãn: <span className="text-[var(--color-brand)]">{getQueueLabel(labelRequest.current_queue)}</span> → <span className="text-[var(--color-success)]">{getQueueLabel(labelRequest.requested_queue)}</span>
-                  {labelRequest.review_note ? ` · ${labelRequest.review_note}` : ""}
-                </div>
-              )}
               {error && (
                 <p className="text-xs font-semibold text-[var(--color-error)]">
                   {error}
@@ -474,18 +519,6 @@ export function LeadWorkbenchRow({
                 <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-bold ${ownerChipClass}`}>
                   {ownership.label}
                 </span>
-                {labelRequest && (
-                  <span
-                    className={`min-w-0 truncate rounded-full border px-2.5 py-1 text-xs font-bold ${isLeadWorkflowBlocked
-                        ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/30 dark:bg-amber-950/20 dark:text-amber-300"
-                        : labelRequest.status === "pending"
-                          ? "border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] text-[var(--color-brand)]"
-                          : "border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]"
-                      }`}
-                  >
-                    {getLabelRequestStatusLabel(labelRequest.status)} · {getLabelRequestWorkflowLabel(labelRequest)}
-                  </span>
-                )}
               </div>
             </div>
 
@@ -611,7 +644,13 @@ export function LeadWorkbenchRow({
                           onSelect?.(updatedLead);
                         } catch (err: any) {
                           console.error(err);
-                          showToast(`Không thể hủy gán việc: ${err?.message || "Lỗi kết nối"}`, "error");
+                          showToast(
+                            getLeadOperationErrorMessage(
+                              err,
+                              "Không thể hủy gán việc.",
+                            ),
+                            "error",
+                          );
                         }
                       }}
                       className="w-full text-left px-3 py-2 text-xs text-[#BA1A1A] hover:bg-[#FFDAD6]/30 font-bold transition-colors"
@@ -647,7 +686,13 @@ export function LeadWorkbenchRow({
                           onSelect?.(updatedLead);
                         } catch (err: any) {
                           console.error(err);
-                          showToast(`Không thể giao việc: ${err?.message || "Lỗi kết nối"}`, "error");
+                          showToast(
+                            getLeadOperationErrorMessage(
+                              err,
+                              "Không thể giao việc.",
+                            ),
+                            "error",
+                          );
                         }
                       }}
                       className="w-full text-left px-3 py-2 text-xs text-[#1A1B20] hover:bg-[#F4F3FA] font-medium transition-colors border-t border-[#F4F3FA]"
@@ -675,34 +720,8 @@ export function LeadWorkbenchRow({
                   {leadTimeAgo}
                 </span>
               )}
-              {sourceAction && (
-                <a
-                  href={sourceAction.href}
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={(event) => event.stopPropagation()}
-                  className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-blue-600 transition hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-950/20"
-                >
-                  Xem trên {platformMeta?.label || lead.platform}
-                  <span className="material-symbols-outlined text-[16px]">open_in_new</span>
-                </a>
-              )}
             </div>
           </div>
-
-          {labelRequest && (
-            <div className="inline-flex w-fit max-w-full flex-wrap items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2 text-xs font-bold text-[var(--color-text-primary)]">
-              <span>Yêu cầu sửa nhãn:</span>
-              <span className="text-[var(--color-brand)]">{getQueueLabel(labelRequest.current_queue)}</span>
-              <span className="text-[var(--color-text-muted)]">→</span>
-              <span className="text-green-600 dark:text-green-300">{getQueueLabel(labelRequest.requested_queue)}</span>
-              {labelRequest.review_note && (
-                <span className="min-w-0 text-[var(--color-text-secondary)]">
-                  · {labelRequest.review_note}
-                </span>
-              )}
-            </div>
-          )}
 
           {error && (
             <p className="text-sm font-bold text-[var(--color-error)]">

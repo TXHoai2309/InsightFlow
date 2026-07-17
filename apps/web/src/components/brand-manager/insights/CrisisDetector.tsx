@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTranslation } from "react-i18next";
 import type { CrisisSignal } from "./insightEngine";
 
 interface CrisisDetectorProps {
@@ -20,6 +21,8 @@ const PLATFORM_LABEL: Record<string, string> = {
 };
 
 export function CrisisDetector({ signals, loading }: CrisisDetectorProps) {
+  const { t } = useTranslation();
+
   if (loading) {
     return (
       <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-5">
@@ -35,13 +38,13 @@ export function CrisisDetector({ signals, loading }: CrisisDetectorProps) {
         <div>
           <h3 className="text-[15px] font-bold text-[var(--color-text-primary)] flex items-center gap-2">
             <span className="text-[18px]">⚠️</span>
-            AI phát hiện{" "}
+            {t("bm.crisis.aiDetected", "AI phát hiện")}{" "}
             <span className={signals.length > 0 ? "text-red-600" : "text-[var(--color-text-secondary)]"}>
-              {signals.length} tín hiệu bất thường
+              {signals.length} {t("bm.crisis.abnormalSignals", "tín hiệu bất thường")}
             </span>
           </h3>
           <p className="text-[12px] text-[var(--color-text-muted)] mt-0.5">
-            % tăng so với baseline — không phải % tĩnh tổng thảo luận
+            {t("bm.crisis.baselineDesc", "% tăng so với baseline — không phải % tĩnh tổng thảo luận")}
           </p>
         </div>
       </div>
@@ -49,8 +52,8 @@ export function CrisisDetector({ signals, loading }: CrisisDetectorProps) {
       {signals.length === 0 ? (
         <div className="flex flex-col items-center py-8 text-center">
           <span className="text-3xl mb-2">✅</span>
-          <p className="text-[13px] font-semibold text-[var(--color-text-secondary)]">Không phát hiện tín hiệu bất thường</p>
-          <p className="text-[12px] text-[var(--color-text-muted)] mt-1">AI chưa thấy gì đáng lo ngại trong khoảng thời gian này</p>
+          <p className="text-[13px] font-semibold text-[var(--color-text-secondary)]">{t("bm.crisis.noSignals", "Không phát hiện tín hiệu bất thường")}</p>
+          <p className="text-[12px] text-[var(--color-text-muted)] mt-1">{t("bm.crisis.noSignalsDesc", "AI chưa thấy gì đáng lo ngại trong khoảng thời gian này")}</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -64,22 +67,22 @@ export function CrisisDetector({ signals, loading }: CrisisDetectorProps) {
                     <span className="text-[14px] font-bold text-[var(--color-text-primary)]">{sig.label}</span>
                   </div>
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${style.badge}`}>
-                    {sig.severity === "critical" ? "NGHIÊM TRỌNG" : sig.severity === "high" ? "CAO" : sig.severity === "medium" ? "TRUNG BÌNH" : "THẤP"}
+                    {sig.severity === "critical" ? t("bm.crisis.critical", "NGHIÊM TRỌNG") : sig.severity === "high" ? t("bm.crisis.high", "CAO") : sig.severity === "medium" ? t("bm.crisis.medium", "TRUNG BÌNH") : t("bm.crisis.low", "THẤP")}
                   </span>
                 </div>
                 <div className="flex items-center gap-3 text-[13px]">
                   <span className="text-red-600 font-black text-[15px]">
-                    ↑ +{sig.deltaPercent === 999 ? "Mới xuất hiện" : `${sig.deltaPercent}%`}
+                    ↑ +{sig.deltaPercent === 999 ? t("bm.crisis.newlyAppeared", "Mới xuất hiện") : `${sig.deltaPercent}%`}
                   </span>
-                  <span className="text-[var(--color-text-muted)]">lượt phàn nàn bất thường</span>
+                  <span className="text-[var(--color-text-muted)]">{t("bm.crisis.abnormalComplaints", "lượt phàn nàn bất thường")}</span>
                 </div>
                 {sig.contentSample && (
                   <p className="mt-2 text-[11px] text-[var(--color-text-muted)] italic bg-white/70 rounded-lg p-2 border border-white line-clamp-2">
-                    "{sig.contentSample}"
+                    “{sig.contentSample}”
                   </p>
                 )}
                 <div className="mt-2 text-[11px] text-[var(--color-text-muted)]">
-                  Nền tảng mẫu: <span className="font-semibold">{PLATFORM_LABEL[sig.platformSample] || sig.platformSample}</span>
+                  {t("bm.crisis.samplePlatform", "Nền tảng mẫu:")} <span className="font-semibold">{PLATFORM_LABEL[sig.platformSample] || (sig.platformSample === "other" ? t("common.other", "Khác") : sig.platformSample)}</span>
                 </div>
               </div>
             );

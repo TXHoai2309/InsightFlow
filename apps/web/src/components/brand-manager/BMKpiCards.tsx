@@ -89,7 +89,11 @@ export function BMKpiCards({
       icon: "warning",
       label: t("bm.kpi.alerts"),
       value: alertsTotal,
-      sub: alertsHigh > 0 ? `${alertsHigh} ${t("bm.kpi.highLevel")}` : t("bm.kpi.noAlerts"),
+      sub: alertsHigh > 0
+        ? `${alertsHigh} ${t("bm.kpi.highLevel")} · ${t("bm.kpi.last30Days")}`
+        : alertsTotal > 0
+          ? t("bm.kpi.last30Days")
+          : t("bm.kpi.noAlerts"),
       subColor: alertsHigh > 0 ? "#EF4444" : "#22C55E",
       status: alertsHigh > 0 ? "warning" : "neutral",
       href: "/alerts",

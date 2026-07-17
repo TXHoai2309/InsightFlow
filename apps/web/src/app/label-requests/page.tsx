@@ -5,8 +5,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { filterByBrandScope } from "@/lib/brandScope";
 import { auth } from "@/lib/firebase";
 import { DashboardService } from "@/lib/services/dashboard";
+import { supabaseClient } from "@/lib/supabaseClient";
 import { useDashboardStore } from "@/stores/dashboard.store";
-import { normalizeClassificationLabel } from "@/lib/label-change";
 
 type Sentiment = "positive" | "negative" | "neutral" | null;
 type Urgency = "none" | "low" | "medium" | "high" | "urgent" | null;
@@ -36,6 +36,8 @@ interface LabelRequest {
   brand_id?: string;
   brand_name?: string;
   workspace_id?: string;
+  source_id?: string;
+  lead_id?: string;
   mention_id: string;
   requested_by_name: string;
   requested_by_email?: string;
@@ -46,6 +48,9 @@ interface LabelRequest {
   final_label?: LabelValue;
   mention: {
     id: string;
+    entity_key?: string | null;
+    post_id?: string | null;
+    comment_id?: string | null;
     parent_id?: string | null;
     platform: string;
     content_type: "post" | "comment" | "reply";
@@ -397,8 +402,8 @@ function LabelDiffStrip({
         <div key={stop.key} className="flex flex-1 items-stretch">
           <div
             className={`flex flex-1 flex-col gap-3 rounded-2xl border px-5 py-4 ${stop.emphasis
-                ? "border-[var(--color-brand)]/40 bg-[var(--color-brand-subtle)]/30"
-                : "border-[var(--color-border)] bg-[var(--color-bg-surface)]"
+              ? "border-[var(--color-brand)]/40 bg-[var(--color-brand-subtle)]/30"
+              : "border-[var(--color-border)] bg-[var(--color-bg-surface)]"
               }`}
           >
             <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-text-muted)]">
@@ -628,6 +633,7 @@ export default function LabelRequestsPage() {
     status: "all",
   });
   const [staffNames, setStaffNames] = useState<string[]>([]);
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -658,7 +664,6 @@ export default function LabelRequestsPage() {
     let active = true;
 
     async function loadRequests() {
-      setLoading(true);
       try {
         const { requests: rawRequests, history: rawHistory } =
           await DashboardService.fetchLabelChangeRequests(
@@ -668,9 +673,10 @@ export default function LabelRequestsPage() {
         const mapLabelField = (raw: unknown, fallback: LabelValue): LabelValue => {
           if (!raw || typeof raw !== "object") return fallback;
           const r = raw as Record<string, unknown>;
+          const rawTopic = Array.isArray(r.topic) ? r.topic[0] : r.topic;
           return {
             sentiment: (r.sentiment as Sentiment) ?? fallback.sentiment ?? null,
-            topic: (r.topic as string) ?? fallback.topic ?? "other",
+            topic: (rawTopic as string) ?? fallback.topic ?? "other",
             relevance: r.relevance !== undefined ? (r.relevance as boolean | null) : (fallback.relevance ?? null),
             urgency: (r.urgency as Urgency) ?? fallback.urgency ?? null,
             intent: (r.intent as Intent) ?? fallback.intent ?? null,
@@ -691,10 +697,10 @@ export default function LabelRequestsPage() {
           const mentionRaw = (data.mention ?? {}) as Record<string, unknown>;
           const content = String(
             mentionRaw.content ||
-              data.content_preview ||
-              data.mention_content ||
-              data.content ||
-              "",
+            data.content_preview ||
+            data.mention_content ||
+            data.content ||
+            "",
           );
           const contentType = normalizeContentType(mentionRaw.content_type || data.source_type);
 
@@ -704,6 +710,8 @@ export default function LabelRequestsPage() {
             brand_id: String(data.brand_id || data.workspace_id || ""),
             brand_name: String(data.brand_name || data.workspace_name || data.workspace_id || ""),
             workspace_id: String(data.workspace_id || data.brand_id || data.brand_name || data.workspace_name || ""),
+            source_id: data.source_id ? String(data.source_id) : undefined,
+            lead_id: data.lead_id ? String(data.lead_id) : undefined,
             mention_id: String(data.mention_id || data.source_id || mentionRaw.id || id),
             requested_by_name: String(data.requested_by_name || data.requested_by_email || "Nhân viên"),
             requested_by_email: data.requested_by_email ? String(data.requested_by_email) : undefined,
@@ -716,6 +724,15 @@ export default function LabelRequestsPage() {
             final_label: data.final_label ? mapLabelField(data.final_label, proposedLabel) : undefined,
             mention: {
               id: String(mentionRaw.id || data.mention_id || data.source_id || id),
+              entity_key: (mentionRaw.entity_key || data.mention_id || data.source_id)
+                ? String(mentionRaw.entity_key || data.mention_id || data.source_id)
+                : null,
+              post_id: (mentionRaw.post_id || data.post_id)
+                ? String(mentionRaw.post_id || data.post_id)
+                : null,
+              comment_id: (mentionRaw.comment_id || data.comment_id)
+                ? String(mentionRaw.comment_id || data.comment_id)
+                : null,
               parent_id: (mentionRaw.parent_id as string) || null,
               platform: String(mentionRaw.platform || data.platform || data.source || "unknown"),
               content_type: contentType,
@@ -738,9 +755,10 @@ export default function LabelRequestsPage() {
           const mapLbl = (raw: unknown) => {
             if (!raw || typeof raw !== "object") return fallbackLabel;
             const r = raw as Record<string, unknown>;
+            const rawTopic = Array.isArray(r.topic) ? r.topic[0] : r.topic;
             return {
               sentiment: (r.sentiment as Sentiment) ?? fallbackLabel.sentiment,
-              topic: (r.topic as string) ?? fallbackLabel.topic,
+              topic: (rawTopic as string) ?? fallbackLabel.topic,
               relevance: r.relevance !== undefined ? (r.relevance as boolean | null) : null,
               urgency: (r.urgency as Urgency) ?? null,
               intent: (r.intent as Intent) ?? null,
@@ -781,7 +799,11 @@ export default function LabelRequestsPage() {
 
         if (active) {
           setRequests(scopedRows);
-          setSelectedId(scopedRows[0]?.id || null);
+          setSelectedId((current) =>
+            current && scopedRows.some((item) => item.id === current)
+              ? current
+              : scopedRows[0]?.id || null,
+          );
           setAuditEntries([
             ...persistedAuditEntries,
             ...scopedRows.flatMap(requestToAuditEntries),
@@ -803,7 +825,34 @@ export default function LabelRequestsPage() {
     return () => {
       active = false;
     };
-  }, [profile?.brandId, profile?.brandName]);
+  }, [profile?.brandId, profile?.brandName, reloadToken]);
+
+  useEffect(() => {
+    const refresh = () => setReloadToken((current) => current + 1);
+    const interval = window.setInterval(refresh, 8000);
+    let channel: ReturnType<NonNullable<typeof supabaseClient>["channel"]> | null = null;
+
+    if (supabaseClient) {
+      const ch = supabaseClient.channel(`label-requests-review-${profile?.brandId || "all"}`);
+      ch.on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "label_change_requests" },
+        refresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "label_change_history" },
+        refresh,
+      )
+      .subscribe();
+      channel = ch;
+    }
+
+    return () => {
+      window.clearInterval(interval);
+      if (channel && supabaseClient) supabaseClient.removeChannel(channel);
+    };
+  }, [profile?.brandId]);
 
   const displayedRequests = useMemo(
     () => requests.filter((item) => isWithinRequestTimeRange(item, requestTimeRange)).sort(compareRequests),
@@ -915,8 +964,11 @@ export default function LabelRequestsPage() {
               platform: selectedRequest.mention.platform,
               contentType: selectedRequest.mention.content_type,
               parentId: selectedRequest.mention.parent_id,
+              entityKey: selectedRequest.mention.entity_key || selectedRequest.mention_id,
+              postId: selectedRequest.mention.post_id,
+              commentId: selectedRequest.mention.comment_id,
             },
-            selectedRequest.mention_id,
+            selectedRequest.lead_id || selectedRequest.source_id || selectedRequest.mention_id,
             {
               uid: profile?.uid || "",
               displayName: profile?.displayName,
@@ -961,13 +1013,13 @@ export default function LabelRequestsPage() {
           useDashboardStore.getState().setLeads(
             useDashboardStore.getState().leads.map((lead: any) =>
               lead.id === selectedRequest.id ||
-              lead.id === selectedRequest.mention_id ||
-              lead.pending_label_request_id === selectedRequest.id
+                lead.id === selectedRequest.mention_id ||
+                lead.pending_label_request_id === selectedRequest.id
                 ? {
-                    ...lead,
-                    label_correction_status: "none",
-                    pending_label_request_id: undefined,
-                  }
+                  ...lead,
+                  label_correction_status: "none",
+                  pending_label_request_id: undefined,
+                }
                 : lead
             )
           );
@@ -1005,7 +1057,7 @@ export default function LabelRequestsPage() {
 
   return (
     <div className="p-4 md:p-8">
-      
+
 
       {/* Header */}
       <div className="mb-7 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -1077,8 +1129,8 @@ export default function LabelRequestsPage() {
                       </p>
                       <span
                         className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${item.status === "pending"
-                            ? "bg-[var(--color-warning-subtle)] text-[var(--color-warning)]"
-                            : "bg-[var(--color-success-subtle)] text-[var(--color-success)]"
+                          ? "bg-[var(--color-warning-subtle)] text-[var(--color-warning)]"
+                          : "bg-[var(--color-success-subtle)] text-[var(--color-success)]"
                           }`}
                       >
                         {STATUS_LABELS[item.status]}
@@ -1136,8 +1188,8 @@ export default function LabelRequestsPage() {
                     type="button"
                     onClick={() => setMode(item.key as typeof mode)}
                     className={`rounded-lg px-3.5 py-2 text-xs font-semibold transition ${mode === item.key
-                        ? "bg-[var(--color-brand)] text-white shadow-sm"
-                        : "text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface)]"
+                      ? "bg-[var(--color-brand)] text-white shadow-sm"
+                      : "text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface)]"
                       }`}
                   >
                     {item.label}
@@ -1233,7 +1285,7 @@ export default function LabelRequestsPage() {
                             ))}
                           </select>
                         </label>
-                        
+
                         <label className="block space-y-2">
                           <span className="text-xs font-semibold text-[var(--color-text-secondary)]">Liên quan</span>
                           <select
@@ -1342,61 +1394,61 @@ export default function LabelRequestsPage() {
                     <p className="mb-4 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-text-muted)]">
                       Lịch sử riêng của yêu cầu đang chọn
                     </p>
-                  {(selectedRequest.history || []).length === 0 ? (
-                    <p className="rounded-xl border border-dashed border-[var(--color-border)] p-6 text-center text-sm text-[var(--color-text-muted)]">
-                      Chưa có lịch sử sửa nhãn.
-                    </p>
-                  ) : (
-                    selectedRequest.history?.map((item, index) => {
-                      const isLast = index === (selectedRequest.history?.length || 0) - 1;
-                      return (
-                        <div key={`${item.action}-${index}`} className="relative flex gap-4 pb-6 last:pb-0">
-                          <div className="flex flex-col items-center">
-                            <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-[var(--color-brand)]" />
-                            {!isLast && <span className="w-px flex-1 bg-[var(--color-border)]" />}
-                          </div>
-                          <div className="flex-1 rounded-xl border border-[var(--color-border)] p-4">
-                            <div className="flex flex-col gap-1 md:flex-row md:items-start md:justify-between">
-                              <div>
-                                <p className="text-base font-semibold capitalize text-[var(--color-text-primary)]">
-                                  {item.action}
-                                </p>
-                                <p className="text-sm text-[var(--color-text-secondary)]">
-                                  {item.by_name || item.by_email || "Hệ thống"}
-                                </p>
+                    {(selectedRequest.history || []).length === 0 ? (
+                      <p className="rounded-xl border border-dashed border-[var(--color-border)] p-6 text-center text-sm text-[var(--color-text-muted)]">
+                        Chưa có lịch sử sửa nhãn.
+                      </p>
+                    ) : (
+                      selectedRequest.history?.map((item, index) => {
+                        const isLast = index === (selectedRequest.history?.length || 0) - 1;
+                        return (
+                          <div key={`${item.action}-${index}`} className="relative flex gap-4 pb-6 last:pb-0">
+                            <div className="flex flex-col items-center">
+                              <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-[var(--color-brand)]" />
+                              {!isLast && <span className="w-px flex-1 bg-[var(--color-border)]" />}
+                            </div>
+                            <div className="flex-1 rounded-xl border border-[var(--color-border)] p-4">
+                              <div className="flex flex-col gap-1 md:flex-row md:items-start md:justify-between">
+                                <div>
+                                  <p className="text-base font-semibold capitalize text-[var(--color-text-primary)]">
+                                    {item.action}
+                                  </p>
+                                  <p className="text-sm text-[var(--color-text-secondary)]">
+                                    {item.by_name || item.by_email || "Hệ thống"}
+                                  </p>
+                                </div>
+                                <span className="text-[11px] text-[var(--color-text-muted)]">
+                                  {formatDate(item.at)}
+                                </span>
                               </div>
-                              <span className="text-[11px] text-[var(--color-text-muted)]">
-                                {formatDate(item.at)}
-                              </span>
-                            </div>
-                            <div className="mt-3 grid gap-3 md:grid-cols-2">
-                              {item.from && (
-                                <div>
-                                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">
-                                    Từ
-                                  </p>
-                                  <LabelPill label={item.from} size="sm" />
-                                </div>
+                              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                                {item.from && (
+                                  <div>
+                                    <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">
+                                      Từ
+                                    </p>
+                                    <LabelPill label={item.from} size="sm" />
+                                  </div>
+                                )}
+                                {item.to && (
+                                  <div>
+                                    <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">
+                                      Thành
+                                    </p>
+                                    <LabelPill label={item.to} size="sm" />
+                                  </div>
+                                )}
+                              </div>
+                              {item.note && (
+                                <p className="mt-3 text-sm leading-6 text-[var(--color-text-secondary)]">
+                                  {item.note}
+                                </p>
                               )}
-                              {item.to && (
-                                <div>
-                                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">
-                                    Thành
-                                  </p>
-                                  <LabelPill label={item.to} size="sm" />
-                                </div>
-                              )}
                             </div>
-                            {item.note && (
-                              <p className="mt-3 text-sm leading-6 text-[var(--color-text-secondary)]">
-                                {item.note}
-                              </p>
-                            )}
                           </div>
-                        </div>
-                      );
-                    })
-                  )}
+                        );
+                      })
+                    )}
                   </div>
                 </div>
               )}

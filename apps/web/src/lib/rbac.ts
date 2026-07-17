@@ -7,6 +7,12 @@ export type UserRole =
 type LegacyUserRole = "crisis_staff" | "lead_staff";
 type RoleInput = UserRole | LegacyUserRole;
 
+export type EmployeeBusinessScope =
+  | "crisis"
+  | "lead"
+  | "dual"
+  | "unassigned";
+
 export interface UserRoleProfile {
   uid: string;
   email: string;
@@ -93,7 +99,6 @@ const ROLE_BUSINESS_ACTIONS: Record<UserRole, BusinessAction[]> = {
     "view_crisis_queue",
     "update_crisis_status",
     "view_reports",
-    "create_label_request",
   ],
   lead_employee: [
     "view_mentions",
@@ -101,8 +106,23 @@ const ROLE_BUSINESS_ACTIONS: Record<UserRole, BusinessAction[]> = {
     "update_lead_status",
     "update_lead_details",
     "view_reports",
-    "create_label_request",
   ],
+};
+
+const ACTION_PERMISSION_MAP: Partial<Record<BusinessAction, string>> = {
+  view_dashboard: "dashboard",
+  view_mentions: "mentions",
+  view_crisis_queue: "alerts",
+  update_crisis_status: "alerts",
+  view_leads: "leads",
+  update_lead_status: "leads",
+  update_lead_details: "leads",
+  view_reports: "reports",
+  manage_staff: "staff_management",
+  manage_brand_settings: "brand_settings",
+  review_labels: "label_request_review",
+  create_label_request: "label_request_create",
+  label_request_review: "label_request_review",
 };
 
 export const ROLE_CONFIG: Record<UserRole, RoleConfig> = {
@@ -119,7 +139,7 @@ export const ROLE_CONFIG: Record<UserRole, RoleConfig> = {
     defaultRoute: "/admin",
   },
   brand_manager: {
-    label: "Quan ly thuong hieu",
+    label: "Quản lý thương hiệu",
     permissions: [
       "dashboard",
       "mentions",
@@ -134,17 +154,16 @@ export const ROLE_CONFIG: Record<UserRole, RoleConfig> = {
     defaultRoute: "/dashboard",
   },
   crisis_employee: {
-    label: "Nhan vien xu ly khung hoang",
+    label: "Nhân viên xử lý khủng hoảng",
     permissions: [
       "mentions",
       "alerts",
       "reports",
-      "label_request_create",
     ],
     defaultRoute: "/alerts",
   },
   lead_employee: {
-    label: "Nhan vien xu ly khach hang tiem nang",
+    label: "Nhân viên xử lý khách hàng tiềm năng",
     permissions: ["mentions", "leads", "reports"],
     defaultRoute: "/leads",
   },
@@ -166,8 +185,16 @@ const ROUTE_POLICIES: RoutePolicy[] = [
   },
   { route: "/admin", roles: ["admin"], permission: "admin_panel" },
   { route: "/labeling_tool", roles: ["admin"] },
+  {
+    route: "/overview",
+    roles: ["crisis_employee", "lead_employee"],
+  },
   { route: "/team", roles: ["brand_manager"], permission: "staff_management" },
   { route: "/label-requests", roles: ["brand_manager"] },
+  {
+    route: "/dashboard/agent",
+    roles: ["crisis_employee", "lead_employee"],
+  },
   {
     route: "/dashboard",
     roles: ["brand_manager"],
@@ -180,28 +207,32 @@ const ROUTE_POLICIES: RoutePolicy[] = [
   },
   {
     route: "/alerts",
-    roles: ["brand_manager", "crisis_employee"],
+    roles: ["brand_manager", "crisis_employee", "lead_employee"],
     permission: "alerts",
   },
   {
     route: "/crisis-monitoring",
-    roles: ["brand_manager", "crisis_employee"],
+    roles: ["brand_manager", "crisis_employee", "lead_employee"],
     permission: "alerts",
   },
   {
     route: "/leads",
-    roles: ["brand_manager", "lead_employee"],
+    roles: ["brand_manager", "crisis_employee", "lead_employee"],
     permission: "leads",
   },
   {
     route: "/lead-monitoring",
-    roles: ["brand_manager", "lead_employee"],
+    roles: ["brand_manager", "crisis_employee", "lead_employee"],
     permission: "leads",
   },
   {
     route: "/reports",
     roles: ["brand_manager", "crisis_employee", "lead_employee"],
     permission: "reports",
+  },
+  {
+    route: "/operations",
+    roles: ["crisis_employee", "lead_employee"],
   },
   {
     route: "/settings",
@@ -219,6 +250,48 @@ export function normalizeRole(role: unknown): UserRole | null {
 
 export function isValidRole(role: unknown): role is UserRole {
   return normalizeRole(role) === role;
+}
+
+export function getEmployeeBusinessScope(profile?: {
+  role?: unknown;
+  permissions?: string[] | null;
+} | null): EmployeeBusinessScope {
+  if (!profile) return "unassigned";
+  const permissions = new Set(
+    Array.isArray(profile.permissions)
+      ? profile.permissions.filter((permission) => typeof permission === "string")
+      : [],
+  );
+  const hasCrisis = permissions.has("alerts");
+  const hasLead = permissions.has("leads");
+
+  if (hasCrisis && hasLead) return "dual";
+  if (hasCrisis) return "crisis";
+  if (hasLead) return "lead";
+
+  const role = normalizeRole(profile.role);
+  if (role === "crisis_employee") return "crisis";
+  if (role === "lead_employee") return "lead";
+  return "unassigned";
+}
+
+export function getProfileRoleLabel(profile?: {
+  role?: unknown;
+  permissions?: string[] | null;
+} | null) {
+  const role = normalizeRole(profile?.role);
+  if (!role) return "Khách";
+  if (role === "admin" || role === "brand_manager") {
+    return ROLE_CONFIG[role].label;
+  }
+
+  const scope = getEmployeeBusinessScope(profile);
+  if (scope === "dual") {
+    return "Nhân viên xử lý khủng hoảng & khách hàng tiềm năng";
+  }
+  if (scope === "crisis") return ROLE_CONFIG.crisis_employee.label;
+  if (scope === "lead") return ROLE_CONFIG.lead_employee.label;
+  return ROLE_CONFIG[role].label;
 }
 
 function pathMatchesRoute(pathname: string, route: string) {
@@ -242,10 +315,12 @@ export function getDefaultRouteForRole(role?: RoleInput | null) {
 }
 
 export function canPerformAction(
-  profile: Pick<UserRoleProfile, "role"> | null | undefined,
+  profile: Pick<UserRoleProfile, "role" | "permissions"> | null | undefined,
   action: BusinessAction,
 ) {
   if (!profile) return false;
+  const permission = ACTION_PERMISSION_MAP[action];
+  if (permission && profile.permissions?.includes(permission)) return true;
   return ROLE_BUSINESS_ACTIONS[profile.role]?.includes(action) ?? false;
 }
 

@@ -1,15 +1,18 @@
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 import { dbSecond } from "@/lib/firebase";
-import { collection, doc, limit, query, updateDoc, onSnapshot, addDoc } from "firebase/firestore";
+import { collection, doc, updateDoc, addDoc } from "firebase/firestore";
 import { isRecordInBrandScope, isSameBrandScope, getScopedBrandKey } from "@/lib/brandScope";
 import { normalizeBrandName, DashboardService } from "@/lib/services/dashboard";
 import { canPerformAction, type UserRoleProfile } from "@/lib/rbac";
-import { updateSupabaseAlertLabel } from "@/lib/supabase";
+import { fetchSupabaseAlerts, updateSupabaseAlertLabel, supabaseRequest } from "@/lib/supabase";
 import { supabaseClient } from "@/lib/supabaseClient";
+import { normalizeClassificationLabel } from "@/lib/label-change";
 import { calculateNegativityScore } from "@/lib/negativityScore";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import type { Mention } from "@/types/dashboard";
+import { getPersistedAlertStatus, isResolvedAlert } from "@/lib/alertWorkflow";
+import { canAlertBeVisibleToUser } from "@/lib/alert-visibility";
 
 function getResolverName(emailOrId: string | null | undefined): string {
   if (!emailOrId) return "";
@@ -51,6 +54,17 @@ export interface InternalNote {
   note: string;
   author: string;
   timestamp: string;
+}
+
+export interface CustomerContactAttempt {
+  opened_at: string;
+  opened_by?: string;
+  template?: string;
+  note: string;
+  evidence_image: string;
+  response_result: "positive" | "no_response" | "still_upset" | "not_suitable";
+  completed_at: string;
+  outcome_status: "resolved" | "contact_waiting" | "contact_failed";
 }
 
 export interface EscalationData {
@@ -115,6 +129,13 @@ export interface AlertData {
   monitoring_initial_comments?: number;
   monitoring_initial_likes?: number;
   monitoring_initial_shares?: number;
+  customer_contact_opened_at?: string;
+  customer_contact_opened_by?: string;
+  customer_contact_template?: string;
+  customer_contact_note?: string;
+  customer_contact_evidence_image?: string;
+  customer_response_result?: "positive" | "no_response" | "still_upset" | "not_suitable";
+  customer_contact_history?: CustomerContactAttempt[];
 }
 
 export interface AlertFilters {
@@ -170,6 +191,14 @@ interface AlertState {
       image_url?: string;
       escalation?: EscalationData | null;
       monitoring_duration_hours?: number;
+      customer_contact_opened_at?: string;
+      customer_contact_opened_by?: string;
+      customer_contact_template?: string;
+      customer_contact_note?: string;
+      customer_contact_evidence_image?: string;
+      customer_response_result?: AlertData["customer_response_result"];
+      customer_contact_history?: CustomerContactAttempt[];
+      reset_customer_contact?: boolean;
     },
     brandFallback?: string
   ) => Promise<void>;
@@ -317,7 +346,7 @@ function mentionToAlertData(m: Mention): AlertData {
     severity,
     negativity_score: negativity.score,
     created_at: m.posted_at || m.created_at,
-    status: String(labelObj.resolution_status || "new"),
+    status: resolveAlertStatusFromLabel(labelObj),
     resolved_at: labelObj.resolved_at,
     collectionName: "annotations",
     url: m.url || "",
@@ -350,40 +379,53 @@ function mentionToAlertData(m: Mention): AlertData {
     monitoring_initial_comments: labelObj.monitoring_initial_comments,
     monitoring_initial_likes: labelObj.monitoring_initial_likes,
     monitoring_initial_shares: labelObj.monitoring_initial_shares,
+    customer_contact_opened_at: labelObj.customer_contact_opened_at,
+    customer_contact_opened_by: labelObj.customer_contact_opened_by,
+    customer_contact_template: labelObj.customer_contact_template,
+    customer_contact_note: labelObj.customer_contact_note,
+    customer_contact_evidence_image: labelObj.customer_contact_evidence_image,
+    customer_response_result: labelObj.customer_response_result,
+    customer_contact_history: Array.isArray(labelObj.customer_contact_history)
+      ? labelObj.customer_contact_history
+      : [],
   };
 }
 
-function buildAlertsFromMentions(mentions: Mention[], scopedBrandKey?: string | null): AlertData[] {
-  return mentions
-    .filter((m) => m.sentiment === "negative")
-    .map(mentionToAlertData)
-    .filter((alert) =>
-      isWithinAlertReviewWindow(alert.created_at) &&
-      isRecordInBrandScope({ brand: alert.brand }, scopedBrandKey ?? null)
-    );
+function isSameAlertRecord(alert: AlertData, id: string): boolean {
+  return (
+    alert.id === id ||
+    alert.source_id === id ||
+    alert.post_id === id ||
+    alert.comment_id === id
+  );
 }
 
-function loadDashboardCachedMentions(scopedBrandKey?: string | null): Mention[] {
-  if (typeof window === "undefined") return [];
-  const brandKey = scopedBrandKey && scopedBrandKey !== "global" ? scopedBrandKey : "global";
-  const keys = [
-    `insightflow_dashboard_cache_${brandKey}`,
-    "insightflow_dashboard_cache_global",
-  ];
+function resolveAlertStatusFromLabel(labelObj: any): string {
+  return getPersistedAlertStatus(labelObj);
+}
 
-  for (const key of keys) {
-    try {
-      const cached = localStorage.getItem(key);
-      if (!cached) continue;
-      const { data } = JSON.parse(cached);
-      if (Array.isArray(data?.mentions) && data.mentions.length > 0) {
-        return data.mentions as Mention[];
-      }
-    } catch (error) {
-      console.warn("[AlertStore] Failed to read dashboard cache:", error);
-    }
-  }
-  return [];
+function buildAlertsFromMentions(
+  mentions: Mention[],
+  scopedBrandKey?: string | null,
+): AlertData[] {
+  return mentions
+    .filter((mention) => mention.sentiment === "negative")
+    .map(mentionToAlertData)
+    .filter((alert) => {
+      const history = Array.isArray(alert.resolution_history) ? alert.resolution_history : [];
+      const completedAt =
+        alert.resolved_at ||
+        alert.monitoring_started_at ||
+        history[history.length - 1]?.timestamp;
+      const reviewTimestamp = isResolvedAlert(alert)
+        ? completedAt || alert.created_at
+        : alert.created_at;
+
+      return (
+        isWithinAlertReviewWindow(reviewTimestamp) &&
+        isRecordInBrandScope({ brand: alert.brand }, scopedBrandKey ?? null)
+      );
+    });
 }
 
 function setAlertsFromDashboardCache(
@@ -392,9 +434,9 @@ function setAlertsFromDashboardCache(
   scopedBrandKey?: string | null,
 ): boolean {
   const dashboardMentions = useDashboardStore.getState().mentions;
-  const mentions = dashboardMentions.length > 0
-    ? dashboardMentions
-    : loadDashboardCachedMentions(scopedBrandKey);
+  // The dashboard cache is scoped by user. Reuse only the in-memory store here;
+  // reading legacy brand-only localStorage keys can expose another employee's queue.
+  const mentions = dashboardMentions;
   if (mentions.length === 0) return false;
 
   const recentLocks = getState().recentLocks || {};
@@ -422,17 +464,77 @@ function setAlertsFromDashboardCache(
     alerts: applyFilters(fetched, state.filters),
     brands: scopedBrands.length ? scopedBrands : fallbackBrands,
     error: null,
-    isLoading: false,
-    lastFetchedAt: Date.now(),
   }));
   return fetched.length > 0;
 }
 
+function applyRealtimeAnnotationUpdate(
+  setState: typeof useAlertStore.setState,
+  getState: typeof useAlertStore.getState,
+  row: Record<string, any> | null | undefined,
+) {
+  if (!row) return;
+
+  let labelObj: Record<string, any> = {};
+  try {
+    labelObj = typeof row.label === "string" ? JSON.parse(row.label) : (row.label || {});
+  } catch {
+    return;
+  }
+
+  const lookupIds = [row.entity_key, row.annotation_id, row.comment_id, row.post_id]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+  if (lookupIds.length === 0) return;
+
+  setState((state) => {
+    let changed = false;
+    const nextRecentLocks = { ...state.recentLocks };
+    const nextRawAlerts = state.rawAlerts.map((alert) => {
+      if (!lookupIds.some((lookupId) => isSameAlertRecord(alert, lookupId))) return alert;
+      changed = true;
+      nextRecentLocks[alert.id] = {
+        email: labelObj.being_resolved_by || null,
+        timestamp: Date.now(),
+      };
+      return {
+        ...alert,
+        status: resolveAlertStatusFromLabel(labelObj),
+        resolved_at: labelObj.resolved_at || undefined,
+        being_resolved_by: labelObj.being_resolved_by || null,
+        being_resolved_at: labelObj.being_resolved_at || null,
+        resolved_by_email: labelObj.resolved_by_email || null,
+        resolved_by_name: labelObj.resolved_by_name || null,
+        resolution_history: Array.isArray(labelObj.resolution_history)
+          ? labelObj.resolution_history
+          : alert.resolution_history,
+        customer_contact_opened_at: labelObj.customer_contact_opened_at || undefined,
+        customer_contact_opened_by: labelObj.customer_contact_opened_by || undefined,
+        customer_contact_template: labelObj.customer_contact_template || undefined,
+        customer_contact_note: labelObj.customer_contact_note || undefined,
+        customer_contact_evidence_image: labelObj.customer_contact_evidence_image || undefined,
+        customer_response_result: labelObj.customer_response_result || undefined,
+        customer_contact_history: Array.isArray(labelObj.customer_contact_history)
+          ? labelObj.customer_contact_history
+          : alert.customer_contact_history,
+      };
+    });
+
+    if (!changed) return state;
+    return {
+      rawAlerts: nextRawAlerts,
+      alerts: applyFilters(nextRawAlerts, state.filters),
+      recentLocks: nextRecentLocks,
+    };
+  });
+}
+
 let activeUnsubscribe: (() => void) | null = null;
-let activeRequestsUnsubscribe: (() => void) | null = null;
+let activeRequestsUnsubscribe: (() => Promise<void>) | null = null;
+let activeRequestsScope: string | null = null;
 const ALERT_REVIEW_WINDOW_DAYS = 30;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
-const ALERT_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
+const ALERT_REFRESH_INTERVAL_MS = 60 * 1000;
 
 export function getAlertReviewSinceIso(days = ALERT_REVIEW_WINDOW_DAYS): string {
   return new Date(Date.now() - days * MS_PER_DAY).toISOString();
@@ -484,8 +586,11 @@ export const useAlertStore = create<AlertState>()(
         return;
       }
 
-      if (!force && setAlertsFromDashboardCache(set, get, scopedBrandKey)) {
-        return;
+      // Dashboard cache is only an immediate visual fallback. Always continue
+      // to the authoritative Supabase load because older cached mentions may
+      // not contain workflow fields such as resolution_status/resolved_at.
+      if (!force) {
+        setAlertsFromDashboardCache(set, get, scopedBrandKey);
       }
 
       // Clean up any existing subscription/interval
@@ -527,51 +632,6 @@ export const useAlertStore = create<AlertState>()(
             return fetchedAlert;
           });
 
-          // Auto-closure check
-          const monitoringAlerts = merged.filter(a => a.status === "monitoring");
-          if (monitoringAlerts.length > 0) {
-            monitoringAlerts.forEach((alert) => {
-              const startedAt = alert.monitoring_started_at ? new Date(alert.monitoring_started_at).getTime() : new Date(alert.created_at).getTime();
-              const durationMs = (alert.monitoring_duration_hours ?? 72) * 60 * 60 * 1000;
-              const now = Date.now();
-              if (now - startedAt >= durationMs) {
-                const initialComments = alert.monitoring_initial_comments ?? 0;
-                const initialLikes = alert.monitoring_initial_likes ?? 0;
-                const initialShares = alert.monitoring_initial_shares ?? 0;
-
-                const currentComments = alert.comments ?? 0;
-                const currentLikes = alert.likes ?? 0;
-                const currentShares = alert.shares ?? 0;
-
-                const hasNewActivity = currentComments > initialComments || currentLikes > (initialLikes + 5) || currentShares > initialShares;
-
-                if (!hasNewActivity) {
-                  console.log(`[AlertStore] Auto-closing alert ${alert.id}`);
-                  updateSupabaseAlertLabel(alert.id, (existingLabel) => {
-                    return {
-                      ...existingLabel,
-                      resolution_status: "resolved",
-                      resolved_at: new Date().toISOString(),
-                      resolved_by_email: "system@insightflow.ai",
-                      resolved_by_name: "Hệ thống tự động",
-                      resolution_history: [
-                        ...(existingLabel.resolution_history || []),
-                        {
-                          attempt_number: (existingLabel.resolution_history?.length || 0) + 1,
-                          timestamp: new Date().toISOString(),
-                          note: "Hệ thống tự động đóng vụ việc sau thời gian theo dõi không phát sinh hoạt động bất thường.",
-                          resolved_by_email: "system@insightflow.ai",
-                          resolved_by_name: "Hệ thống tự động"
-                        }
-                      ],
-                      updated_at: new Date().toISOString()
-                    };
-                  }).catch(err => console.error("[AlertStore] Auto-close failed:", err));
-                }
-              }
-            });
-          }
-
           set({
             rawAlerts: merged,
             alerts: applyFilters(merged, get().filters),
@@ -598,21 +658,31 @@ export const useAlertStore = create<AlertState>()(
         // This gives sub-second updates to ALL connected clients simultaneously.
         if (supabaseClient) {
           try {
+            let realtimeReloadTimer: ReturnType<typeof setTimeout> | null = null;
             const channel = supabaseClient
               .channel("alert-annotations-global")
               .on(
                 "postgres_changes",
-                { event: "UPDATE", schema: "public", table: "annotations" },
-                () => {
-                  // Push notification received — reload full list
-                  loadAlerts();
+                { event: "*", schema: "public", table: "annotations" },
+                (payload: any) => {
+                  // Reflect ownership/status immediately in every open session,
+                  // then reconcile the full row from the authoritative REST data.
+                  applyRealtimeAnnotationUpdate(set, get, payload?.new);
+                  if (realtimeReloadTimer) clearTimeout(realtimeReloadTimer);
+                  realtimeReloadTimer = setTimeout(() => {
+                    loadAlerts();
+                    realtimeReloadTimer = null;
+                  }, 250);
                 }
               )
               .subscribe((status: any) => {
                 console.log("[AlertStore] Realtime subscription status:", status);
               });
 
-            cleanupFns.push(() => { if (supabaseClient) supabaseClient.removeChannel(channel); });
+            cleanupFns.push(() => {
+              if (realtimeReloadTimer) clearTimeout(realtimeReloadTimer);
+              if (supabaseClient) supabaseClient.removeChannel(channel);
+            });
 
             console.log("[AlertStore] ✅ Supabase Realtime active — instant cross-client sync enabled");
           } catch (realtimeErr) {
@@ -620,7 +690,7 @@ export const useAlertStore = create<AlertState>()(
           }
         }
 
-        // ===== STRATEGY 2: Fallback polling (30 min) =====
+        // ===== STRATEGY 2: Fallback polling (60 sec) =====
         const intervalId = setInterval(loadAlerts, ALERT_REFRESH_INTERVAL_MS);
         cleanupFns.push(() => clearInterval(intervalId));
 
@@ -634,13 +704,55 @@ export const useAlertStore = create<AlertState>()(
     },
 
     updateAlertStatus: async (id, newStatus, profile, attempt, brandFallback) => {
+      // Persist only the three-state workflow, even when an older screen sends
+      // a legacy value such as pending_approval, responded, or monitoring.
+      newStatus = getPersistedAlertStatus({ resolution_status: newStatus });
       console.log("[AlertStore] updateAlertStatus called:", { id, newStatus, profileEmail: profile?.email, profileRole: profile?.role });
-      const currentAlert = get().rawAlerts.find((alert) => alert.id === id);
+      const currentAlert = get().rawAlerts.find((alert) => isSameAlertRecord(alert, id));
       console.log("[AlertStore] currentAlert found:", currentAlert);
+
+      if (
+        newStatus === "resolving" &&
+        currentAlert?.being_resolved_by &&
+        currentAlert.being_resolved_by !== profile?.email
+      ) {
+        throw new Error(`Vụ việc đã được ${getResolverName(currentAlert.being_resolved_by)} nhận xử lý.`);
+      }
 
       if (!profile || !canPerformAction(profile, "update_crisis_status")) {
         console.error("[AlertStore] Permission check failed:", { profileExists: !!profile, hasPermission: profile ? canPerformAction(profile, "update_crisis_status") : false });
         throw new Error("User is not allowed to update crisis status.");
+      }
+
+      if (currentAlert && !canAlertBeVisibleToUser(currentAlert, profile)) {
+        throw new Error("Cảnh báo không thuộc phạm vi xử lý của bạn.");
+      }
+
+      if (["resolved", "contact_waiting", "contact_failed"].includes(newStatus)) {
+        const hasOpenedContact = Boolean(
+          attempt?.customer_contact_opened_at || currentAlert?.customer_contact_opened_at
+        );
+        const hasContactNote = Boolean(
+          attempt?.customer_contact_note?.trim() || currentAlert?.customer_contact_note?.trim()
+        );
+        const hasContactEvidence = Boolean(
+          attempt?.customer_contact_evidence_image || currentAlert?.customer_contact_evidence_image
+        );
+        const hasResponseResult = Boolean(
+          attempt?.customer_response_result || currentAlert?.customer_response_result
+        );
+        if (!hasOpenedContact || !hasContactNote || !hasContactEvidence || !hasResponseResult) {
+          throw new Error(
+            "Phải mở liên kết liên hệ, nhập ghi chú, thêm ảnh minh chứng và ghi nhận kết quả phản hồi."
+          );
+        }
+        const responseResult = attempt?.customer_response_result || currentAlert?.customer_response_result;
+        if (newStatus === "contact_waiting" && responseResult !== "no_response") {
+          throw new Error("Chỉ kết quả ‘Chưa phản hồi’ mới được chuyển sang chờ phản hồi.");
+        }
+        if (newStatus === "contact_failed" && responseResult !== "still_upset") {
+          throw new Error("Chỉ kết quả ‘Khách hàng vẫn bức xúc’ mới được chuyển sang liên hệ không thành.");
+        }
       }
 
       const resolvedBrand = currentAlert?.brand || brandFallback;
@@ -672,7 +784,7 @@ export const useAlertStore = create<AlertState>()(
 
       set((state) => {
         const nextRawAlerts = state.rawAlerts.map((alert) => {
-          if (alert.id === id) {
+          if (isSameAlertRecord(alert, id)) {
             // When restoring to 'new' (Khôi phục), clear history so the alert starts fresh
             if (newStatus === "new") {
               return {
@@ -683,6 +795,18 @@ export const useAlertStore = create<AlertState>()(
                 resolved_by_email: null,
                 resolved_by_name: null,
                 escalation: null,
+                monitoring_started_at: undefined,
+                monitoring_duration_hours: undefined,
+                monitoring_initial_comments: undefined,
+                monitoring_initial_likes: undefined,
+                monitoring_initial_shares: undefined,
+                customer_contact_opened_at: undefined,
+                customer_contact_opened_by: undefined,
+                customer_contact_template: undefined,
+                customer_contact_note: undefined,
+                customer_contact_evidence_image: undefined,
+                customer_response_result: undefined,
+                customer_contact_history: undefined,
               };
             }
 
@@ -706,6 +830,13 @@ export const useAlertStore = create<AlertState>()(
               resolved_by_email: resolvedAt ? profile.email : null,
               resolved_by_name: resolvedAt ? profile.displayName : null,
               escalation: attempt?.escalation !== undefined ? attempt.escalation : alert.escalation,
+              customer_contact_opened_at: attempt?.reset_customer_contact ? undefined : attempt?.customer_contact_opened_at ?? alert.customer_contact_opened_at,
+              customer_contact_opened_by: attempt?.reset_customer_contact ? undefined : attempt?.customer_contact_opened_by ?? alert.customer_contact_opened_by,
+              customer_contact_template: attempt?.reset_customer_contact ? undefined : attempt?.customer_contact_template ?? alert.customer_contact_template,
+              customer_contact_note: attempt?.reset_customer_contact ? undefined : attempt?.customer_contact_note ?? alert.customer_contact_note,
+              customer_contact_evidence_image: attempt?.reset_customer_contact ? undefined : attempt?.customer_contact_evidence_image ?? alert.customer_contact_evidence_image,
+              customer_response_result: attempt?.reset_customer_contact ? undefined : attempt?.customer_response_result ?? alert.customer_response_result,
+              customer_contact_history: attempt?.customer_contact_history ?? alert.customer_contact_history,
               // When claiming a task, set being_resolved_by immediately in local state
               // so the filter hides it from other officers instantly
               ...(newStatus === "resolving" ? {
@@ -716,13 +847,13 @@ export const useAlertStore = create<AlertState>()(
               ...(newStatus === "resolved" ? {
                 being_resolved_by: null,
                 being_resolved_at: null,
-              } : {}),
-              ...(newStatus === "monitoring" ? {
-                monitoring_started_at: new Date().toISOString(),
-                monitoring_duration_hours: attempt?.monitoring_duration_hours ?? 72,
-                monitoring_initial_comments: alert.comments || 0,
-                monitoring_initial_likes: alert.likes || 0,
-                monitoring_initial_shares: alert.shares || 0,
+                ...(attempt?.monitoring_duration_hours ? {
+                  monitoring_started_at: new Date().toISOString(),
+                  monitoring_duration_hours: attempt.monitoring_duration_hours,
+                  monitoring_initial_comments: alert.comments || 0,
+                  monitoring_initial_likes: alert.likes || 0,
+                  monitoring_initial_shares: alert.shares || 0,
+                } : {}),
               } : {}),
             };
           }
@@ -737,6 +868,14 @@ export const useAlertStore = create<AlertState>()(
 
       try {
         await updateSupabaseAlertLabel(id, (existingLabel) => {
+          if (
+            newStatus === "resolving" &&
+            existingLabel.being_resolved_by &&
+            existingLabel.being_resolved_by !== profile.email
+          ) {
+            throw new Error(`Vụ việc đã được ${getResolverName(existingLabel.being_resolved_by)} nhận xử lý.`);
+          }
+
           let nextHistory = existingLabel.resolution_history ? [...existingLabel.resolution_history] : [];
           if (attempt) {
             nextHistory.push({
@@ -757,6 +896,20 @@ export const useAlertStore = create<AlertState>()(
               resolved_at: null,
               resolved_by_email: null,
               resolved_by_name: null,
+              being_resolved_by: null,
+              being_resolved_at: null,
+              monitoring_started_at: null,
+              monitoring_duration_hours: null,
+              monitoring_initial_comments: null,
+              monitoring_initial_likes: null,
+              monitoring_initial_shares: null,
+              customer_contact_opened_at: null,
+              customer_contact_opened_by: null,
+              customer_contact_template: null,
+              customer_contact_note: null,
+              customer_contact_evidence_image: null,
+              customer_response_result: null,
+              customer_contact_history: [],
               updated_by: profile.uid,
               updated_by_role: profile.role,
               updated_at: new Date().toISOString(),
@@ -773,12 +926,28 @@ export const useAlertStore = create<AlertState>()(
             resolved_by_email: resolvedAt ? profile.email : null,
             resolved_by_name: resolvedAt ? profile.displayName : null,
             escalation: attempt?.escalation !== undefined ? attempt.escalation : existingLabel.escalation ?? null,
+            customer_contact_opened_at: attempt?.customer_contact_opened_at ?? existingLabel.customer_contact_opened_at ?? null,
+            customer_contact_opened_by: attempt?.customer_contact_opened_by ?? existingLabel.customer_contact_opened_by ?? null,
+            customer_contact_template: attempt?.customer_contact_template ?? existingLabel.customer_contact_template ?? null,
+            customer_contact_note: attempt?.customer_contact_note ?? existingLabel.customer_contact_note ?? null,
+            customer_contact_evidence_image: attempt?.customer_contact_evidence_image ?? existingLabel.customer_contact_evidence_image ?? null,
+            customer_response_result: attempt?.customer_response_result ?? existingLabel.customer_response_result ?? null,
+            customer_contact_history: attempt?.customer_contact_history ?? existingLabel.customer_contact_history ?? [],
             updated_by: profile.uid,
             updated_by_role: profile.role,
             updated_at: new Date().toISOString(),
           };
 
-          if (newStatus === "monitoring") {
+          if (attempt?.reset_customer_contact) {
+            updateObj.customer_contact_opened_at = null;
+            updateObj.customer_contact_opened_by = null;
+            updateObj.customer_contact_template = null;
+            updateObj.customer_contact_note = null;
+            updateObj.customer_contact_evidence_image = null;
+            updateObj.customer_response_result = null;
+          }
+
+          if (newStatus === "resolved" && attempt?.monitoring_duration_hours) {
             updateObj.monitoring_started_at = new Date().toISOString();
             updateObj.monitoring_duration_hours = attempt?.monitoring_duration_hours ?? 72;
             updateObj.monitoring_initial_comments = currentAlert?.comments || 0;
@@ -786,14 +955,31 @@ export const useAlertStore = create<AlertState>()(
             updateObj.monitoring_initial_shares = currentAlert?.shares || 0;
           }
 
+          if (newStatus === "resolved") {
+            updateObj.being_resolved_by = null;
+            updateObj.being_resolved_at = null;
+          } else if (newStatus === "resolving") {
+            // Persist ownership together with the workflow status. The Alert
+            // list and detail page then agree after a single "Nhận xử lý" click.
+            updateObj.being_resolved_by = existingLabel.being_resolved_by || profile.email;
+            updateObj.being_resolved_at = existingLabel.being_resolved_at || new Date().toISOString();
+          }
+
           return updateObj;
         });
+
+        // Terminal/contact outcome changes affect the summary counters. Reload
+        // from Supabase before returning so the Alert page never renders a
+        // stale cached queue after navigation from the detail screen.
+        if (["resolved", "contact_waiting", "contact_failed"].includes(newStatus)) {
+          await get().fetchAlerts(getScopedBrandKey(profile), true);
+        }
       } catch (error) {
         console.error("[AlertStore] Failed to persist alert status:", error);
         // Revert local state update
         set((state) => {
           const nextRawAlerts = state.rawAlerts.map((alert) => {
-            if (alert.id === id && currentAlert) {
+            if (isSameAlertRecord(alert, id) && currentAlert) {
               return currentAlert;
             }
             return alert;
@@ -808,55 +994,65 @@ export const useAlertStore = create<AlertState>()(
     },
 
     fetchCorrectionRequests: async (scopedBrandKey = null, force = false) => {
-      if (activeRequestsUnsubscribe && !force) {
+      const requestScope = scopedBrandKey || null;
+
+      if (activeRequestsUnsubscribe && activeRequestsScope === requestScope && !force) {
         return;
       }
+
+      // A brand scope change needs a different callback closure. Remove the
+      // previous channel before loading/subscribing for the new scope.
+      if (activeRequestsUnsubscribe && activeRequestsScope !== requestScope) {
+        await activeRequestsUnsubscribe();
+        activeRequestsUnsubscribe = null;
+        activeRequestsScope = null;
+      }
+
       set({ isLoadingRequests: true });
       try {
-        if (!dbSecond) throw new Error("Firebase data project is not configured.");
-
-        const q = query(collection(dbSecond, "label_change_requests"), limit(500));
-
-        if (activeRequestsUnsubscribe) {
-          activeRequestsUnsubscribe();
-        }
-
-        activeRequestsUnsubscribe = onSnapshot(q, (snapshot) => {
+        const loadFromSupabase = async () => {
+          const rows = await supabaseRequest<Record<string, any>[]>(
+            "label_change_requests",
+            "order=created_at.desc&limit=500",
+          );
           const requests: CorrectionRequest[] = [];
-          snapshot.docs.forEach((docSnap) => {
-            const data = docSnap.data();
-            let recordBrand = data.brand_name || data.brand;
+          rows.forEach((data) => {
+            let recordBrand = data.brand_name || data.brand || data.workspace_id || data.brand_id;
             if (!recordBrand) {
               const email = String(data.requested_by_email || data.requester_email || "").toLowerCase();
               if (email.includes("highland")) recordBrand = "Highlands Coffee";
               else if (email.includes("starbuck")) recordBrand = "Starbucks";
               else if (email.includes("mixue")) recordBrand = "Mixue";
             }
+            const currentLabel = normalizeClassificationLabel(data.current_labels || data.old_label);
+            const requestedLabel = normalizeClassificationLabel(data.requested_labels || data.proposed_label, currentLabel);
+            const firstCurrentTopic = currentLabel.topic[0] || "other";
+            const firstRequestedTopic = requestedLabel.topic[0] || firstCurrentTopic;
 
             const req = {
-              id: docSnap.id,
-              alert_id: data.mention_id || data.alert_id,
+              id: String(data.id || ""),
+              alert_id: String(data.mention_id || data.source_id || data.alert_id || ""),
               brand: recordBrand || "",
               requester_uid: data.requested_by_uid || data.requester_uid || "",
               requester_email: data.requested_by_email || data.requester_email || "",
-              created_at: data.created_at,
-              status: data.status,
-              original_sentiment: data.old_label?.sentiment || data.original_sentiment || "neutral",
-              new_sentiment: data.proposed_label?.sentiment || data.new_sentiment || "neutral",
-              original_severity: data.old_label?.urgency || data.original_severity || "medium",
-              new_severity: data.proposed_label?.urgency || data.new_severity || "medium",
-              original_topic: data.old_label?.topic || data.original_topic || "other",
-              new_topic: data.proposed_label?.topic || data.new_topic || "other",
-              original_relevance: data.old_label?.relevance !== undefined ? data.old_label.relevance : (data.original_relevance !== undefined ? data.original_relevance : null),
-              new_relevance: data.proposed_label?.relevance !== undefined ? data.proposed_label.relevance : (data.new_relevance !== undefined ? data.new_relevance : null),
-              original_urgency: data.old_label?.urgency || data.original_urgency || "medium",
-              new_urgency: data.proposed_label?.urgency || data.new_urgency || "medium",
-              original_intent: data.old_label?.intent || data.original_intent || "none",
-              new_intent: data.proposed_label?.intent || data.new_intent || "none",
-              reason: data.reason,
+              created_at: parseDate(data.requested_at || data.created_at),
+              status: data.status || "pending",
+              original_sentiment: currentLabel.sentiment || "neutral",
+              new_sentiment: requestedLabel.sentiment || currentLabel.sentiment || "neutral",
+              original_severity: currentLabel.urgency || "medium",
+              new_severity: requestedLabel.urgency || currentLabel.urgency || "medium",
+              original_topic: firstCurrentTopic,
+              new_topic: firstRequestedTopic,
+              original_relevance: currentLabel.relevance,
+              new_relevance: requestedLabel.relevance,
+              original_urgency: currentLabel.urgency || "medium",
+              new_urgency: requestedLabel.urgency || currentLabel.urgency || "medium",
+              original_intent: currentLabel.intent || "none",
+              new_intent: requestedLabel.intent || currentLabel.intent || "none",
+              reason: data.reason_note || data.reason || data.reason_code || "",
               resolved_by: data.reviewed_by_uid || data.resolved_by || "",
               resolved_at: data.reviewed_at || data.resolved_at || "",
-              alert_text: data.mention?.content || data.alert_text || "",
+              alert_text: data.content_preview || data.mention_content || data.alert_text || "",
             } as CorrectionRequest;
 
             if (!isRecordInBrandScope({ brand: req.brand }, scopedBrandKey)) return;
@@ -867,10 +1063,48 @@ export const useAlertStore = create<AlertState>()(
           requests.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
           set({ correctionRequests: requests, isLoadingRequests: false });
-        }, (error) => {
-          console.error("[AlertStore] fetchCorrectionRequests error:", error);
-          set({ isLoadingRequests: false });
-        });
+        };
+
+        await loadFromSupabase();
+
+        if (supabaseClient) {
+          const realtimeClient = supabaseClient;
+
+          // A forced refresh only reloads the rows; the existing subscription
+          // is already listening for the same scope and must not be registered again.
+          if (activeRequestsUnsubscribe && activeRequestsScope === requestScope) {
+            return;
+          }
+
+          const channelName = `alert-label-change-requests-${requestScope || "all"}`;
+
+          // During Next.js hot reload the module-level cleanup can be reset while
+          // the singleton Supabase client still owns the subscribed channel.
+          const staleChannel = realtimeClient
+            .getChannels()
+            .find((existingChannel) => existingChannel.topic === `realtime:${channelName}`);
+          if (staleChannel) {
+            await realtimeClient.removeChannel(staleChannel);
+          }
+
+          const channel = realtimeClient
+            .channel(channelName)
+            .on(
+              "postgres_changes",
+              { event: "*", schema: "public", table: "label_change_requests" },
+              () => {
+                loadFromSupabase().catch((error) => {
+                  console.error("[AlertStore] fetchCorrectionRequests realtime error:", error);
+                });
+              },
+            )
+            .subscribe();
+
+          activeRequestsScope = requestScope;
+          activeRequestsUnsubscribe = async () => {
+            await realtimeClient.removeChannel(channel);
+          };
+        }
       } catch (error) {
         console.error("[AlertStore] fetchCorrectionRequests error:", error);
         set({ isLoadingRequests: false });
@@ -878,8 +1112,6 @@ export const useAlertStore = create<AlertState>()(
     },
 
     createCorrectionRequest: async (requestData: any) => {
-      if (!dbSecond) throw new Error("Firebase data project is not configured.");
-
       const alert = requestData.alert_full;
       const cleanBrandId = normalizeBrandId(requestData.brand || "");
 
@@ -908,7 +1140,10 @@ export const useAlertStore = create<AlertState>()(
         },
         mention: {
           id: requestData.alert_id,
+          entity_key: requestData.alert_id,
           parent_id: alert?.parent_id || null,
+          post_id: alert?.post_id || null,
+          comment_id: alert?.content_type === "comment" || alert?.content_type === "reply" ? requestData.alert_id : null,
           platform: alert?.source || "unknown",
           content_type: alert?.content_type || "post",
           content: alert?.text || "",
@@ -943,7 +1178,81 @@ export const useAlertStore = create<AlertState>()(
         created_at: new Date().toISOString(),
       };
 
-      await addDoc(collection(dbSecond, "label_change_requests"), newDoc);
+      // Supabase is the source of truth for manager review.
+      const supabasePayload = {
+        source_type: alert?.content_type || "post",
+        source_id: requestData.alert_id,
+        mention_id: requestData.alert_id,
+        lead_id: requestData.alert_id,
+        workspace_id: cleanBrandId,
+        platform: alert?.source || "unknown",
+        author: alert?.author || "Không rõ tác giả",
+        content_preview: (alert?.text || "").slice(0, 300),
+        source_url: alert?.url || "",
+        current_labels: newDoc.old_label,
+        requested_labels: newDoc.proposed_label,
+        changed_fields: ["sentiment", "topic", "relevance", "urgency", "intent"],
+        current_queue: "review",
+        requested_queue: requestData.new_urgency === "urgent" || requestData.new_severity === "urgent" ? "crisis" : "review",
+        reason_code: "alert_label_correction",
+        reason_note: requestData.reason || "",
+        evidence_checked: true,
+        status: "pending",
+        brand_id: cleanBrandId,
+        brand_name: requestData.brand || "",
+        requested_by: requestData.requester_uid || "",
+        requested_by_name: getResolverName(requestData.requester_email || ""),
+        requested_by_email: requestData.requester_email || "",
+        requested_by_role: "crisis_employee",
+        requested_at: newDoc.created_at,
+        created_at: newDoc.created_at,
+        updated_at: newDoc.created_at,
+        history: newDoc.history,
+      };
+
+      const insertedRows = await supabaseRequest<Array<{ id?: string }>>("label_change_requests", "", {
+        method: "POST",
+        body: JSON.stringify([supabasePayload]),
+        headers: { Prefer: "return=representation" },
+      });
+
+      if (dbSecond) {
+        await addDoc(collection(dbSecond, "label_change_requests"), {
+          ...newDoc,
+          supabase_request_id: insertedRows?.[0]?.id || null,
+        });
+      }
+
+      const createdRequest: CorrectionRequest = {
+        id: insertedRows?.[0]?.id || requestData.alert_id,
+        alert_id: requestData.alert_id,
+        brand: requestData.brand || "",
+        requester_uid: requestData.requester_uid || "",
+        requester_email: requestData.requester_email || "",
+        created_at: newDoc.created_at,
+        status: "pending",
+        original_sentiment: newDoc.old_label.sentiment,
+        new_sentiment: newDoc.proposed_label.sentiment,
+        original_severity: newDoc.old_label.urgency,
+        new_severity: newDoc.proposed_label.urgency,
+        original_topic: newDoc.old_label.topic,
+        new_topic: newDoc.proposed_label.topic,
+        original_relevance: newDoc.old_label.relevance,
+        new_relevance: newDoc.proposed_label.relevance,
+        original_urgency: newDoc.old_label.urgency,
+        new_urgency: newDoc.proposed_label.urgency,
+        original_intent: newDoc.old_label.intent,
+        new_intent: newDoc.proposed_label.intent,
+        reason: newDoc.reason,
+        alert_text: alert?.text || "",
+      };
+      set((state) => ({
+        correctionRequests: [
+          createdRequest,
+          ...state.correctionRequests.filter((request) => request.id !== createdRequest.id),
+        ],
+      }));
+
     },
 
     resolveCorrectionRequest: async (requestId, alertId, decision, profile) => {
@@ -1024,6 +1333,26 @@ export const useAlertStore = create<AlertState>()(
         created_at: changedAt,
       });
 
+      // Add real-time notification for the crisis employee who requested it
+      if (req?.requester_email) {
+        const notifyTitle = decision === "approved" ? "Yêu cầu sửa nhãn đã được duyệt" : "Yêu cầu sửa nhãn bị từ chối";
+        const notifyMsg = decision === "approved"
+          ? `Brand Manager đã duyệt yêu cầu sửa nhãn của bạn cho vụ việc #${alertId.slice(-4)}.`
+          : `Brand Manager đã từ chối yêu cầu sửa nhãn của bạn cho vụ việc #${alertId.slice(-4)}.`;
+
+        await addDoc(collection(dbSecond, "notifications"), {
+          title: notifyTitle,
+          message: notifyMsg,
+          type: "correction_result",
+          alert_id: alertId,
+          brand: req.brand || "",
+          created_at: new Date().toISOString(),
+          read: false,
+          recipient_role: "crisis_employee",
+          recipient_email: req.requester_email,
+        });
+      }
+
       if (decision === "approved" && req) {
         await updateSupabaseAlertLabel(alertId, (existingLabel) => ({
           ...existingLabel,
@@ -1035,6 +1364,26 @@ export const useAlertStore = create<AlertState>()(
           intent: req.new_intent,
         }));
       }
+
+      // Sync the request resolution back to Supabase label_change_requests table
+      try {
+        await supabaseRequest<void>(
+          "label_change_requests",
+          `mention_id=eq.${encodeURIComponent(alertId)}&status=eq.pending`,
+          {
+            method: "PATCH",
+            body: JSON.stringify({
+              status: decision,
+              reviewed_by: profile.uid,
+              reviewed_by_name: profile.displayName || profile.email || "",
+              reviewed_at: changedAt,
+              updated_at: changedAt,
+            }),
+          }
+        );
+      } catch (supabaseErr) {
+        console.warn("[AlertStore] Failed to update request status in Supabase:", supabaseErr);
+      }
     },
 
     lockAlertForResolution: async (id, profile) => {
@@ -1044,7 +1393,7 @@ export const useAlertStore = create<AlertState>()(
       // Update local state immediately
       set((state) => {
         const nextRawAlerts = state.rawAlerts.map((alert) => {
-          if (alert.id === id) {
+          if (isSameAlertRecord(alert, id)) {
             return {
               ...alert,
               being_resolved_by: profile.email,
@@ -1079,7 +1428,7 @@ export const useAlertStore = create<AlertState>()(
       // Update local state immediately
       set((state) => {
         const nextRawAlerts = state.rawAlerts.map((alert) => {
-          if (alert.id === id) {
+          if (isSameAlertRecord(alert, id)) {
             return {
               ...alert,
               being_resolved_by: null,

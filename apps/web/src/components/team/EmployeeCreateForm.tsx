@@ -13,7 +13,7 @@ import {
   Target,
   UserPlus,
 } from "lucide-react";
-import type { StaffRole, OperationOption } from "./types";
+import type { OperationOption, RoleAssignmentOption, StaffRole } from "./types";
 import { validateStrongPassword } from "@/lib/passwordPolicy";
 
 interface EmployeeCreateFormProps {
@@ -23,8 +23,8 @@ interface EmployeeCreateFormProps {
   setEmailLocalPart: (val: string) => void;
   brandEmailDomain: string;
   fullEmail: string;
-  staffRole: StaffRole;
-  setStaffRole: (val: StaffRole) => void;
+  selectedRoleOptions: StaffRole[];
+  onToggleRoleOption: (val: RoleAssignmentOption["value"]) => void;
   operations: string[];
   toggleOperation: (val: string) => void;
   availableOperations: OperationOption[];
@@ -35,7 +35,7 @@ interface EmployeeCreateFormProps {
   error: string;
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
   onBack: () => void;
-  roleOptions: Array<{ value: StaffRole; labelKey: string; descriptionKey: string }>;
+  roleOptions: RoleAssignmentOption[];
   t: (key: string) => string;
 }
 
@@ -76,7 +76,7 @@ function PasswordStrength({ password, t }: { password: string; t: (key: string) 
   );
 }
 
-function RoleIcon({ role }: { role: StaffRole }) {
+function RoleIcon({ role }: { role: RoleAssignmentOption["value"] }) {
   if (role === "crisis_employee") {
     return <AlertTriangle className="h-5 w-5 text-orange-500" />;
   }
@@ -90,8 +90,8 @@ export function EmployeeCreateForm({
   setEmailLocalPart,
   brandEmailDomain,
   fullEmail,
-  staffRole,
-  setStaffRole,
+  selectedRoleOptions,
+  onToggleRoleOption,
   operations,
   toggleOperation,
   availableOperations,
@@ -123,10 +123,7 @@ export function EmployeeCreateForm({
               <h2 className="text-[24px] font-bold text-gray-900">{t("team.form.title")}</h2>
               <p className="mt-1 max-w-xl text-[14px] leading-relaxed text-gray-500">{t("team.form.subtitle")}</p>
             </div>
-            <div className="inline-flex items-center gap-2 self-start rounded-full border border-[#6C5CE7]/20 bg-[#6C5CE7]/5 px-4 py-2 text-[13px] font-medium text-[#6C5CE7]">
-              <UserPlus className="h-4 w-4" />
-              Tài khoản mới
-            </div>
+
           </div>
 
           <div className="mt-6 hidden gap-2 sm:grid sm:grid-cols-3">
@@ -198,12 +195,12 @@ export function EmployeeCreateForm({
                 <h3 className="text-[16px] font-bold text-gray-900">Vai trò & quyền truy cập</h3>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2">
                 {roleOptions.map((option) => (
                   <label
                     key={option.value}
                     className={`cursor-pointer rounded-xl border-2 p-4 transition-all ${
-                      staffRole === option.value
+                      selectedRoleOptions.includes(option.value)
                         ? "border-[#6C5CE7] bg-[#6C5CE7]/5 shadow-sm"
                         : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
                     }`}
@@ -214,10 +211,10 @@ export function EmployeeCreateForm({
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <span className={`text-[15px] font-bold ${staffRole === option.value ? "text-[#6C5CE7]" : "text-gray-900"}`}>
+                          <span className={`text-[15px] font-bold ${selectedRoleOptions.includes(option.value) ? "text-[#6C5CE7]" : "text-gray-900"}`}>
                             {t(option.labelKey)}
                           </span>
-                          {staffRole === option.value && (
+                          {selectedRoleOptions.includes(option.value) && (
                             <CheckCircle2 className="h-4 w-4 shrink-0 text-[#6C5CE7]" />
                           )}
                         </div>
@@ -227,10 +224,10 @@ export function EmployeeCreateForm({
                       </div>
                     </div>
                     <input
-                      type="radio"
+                      type="checkbox"
                       className="sr-only"
-                      checked={staffRole === option.value}
-                      onChange={() => setStaffRole(option.value)}
+                      checked={selectedRoleOptions.includes(option.value)}
+                      onChange={() => onToggleRoleOption(option.value)}
                     />
                   </label>
                 ))}
@@ -287,7 +284,7 @@ export function EmployeeCreateForm({
                       onChange={(e) => setTemporaryPassword(e.target.value)}
                       required
                       minLength={10}
-                      className="w-full rounded-xl border border-gray-200 bg-gray-50/50 py-3 pl-10 pr-4 font-mono text-[14px] text-gray-900 outline-none transition-all focus:border-[#6C5CE7] focus:bg-white focus:ring-1 focus:ring-[#6C5CE7]"
+                      className="w-full rounded-xl border border-gray-200 bg-gray-50/50 py-3 pl-10 pr-4 font-sans text-[14px] text-gray-900 outline-none transition-all focus:border-[#6C5CE7] focus:bg-white focus:ring-1 focus:ring-[#6C5CE7]"
                     />
                   </div>
                   <button

@@ -16,8 +16,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { PlatformLogo } from "@/components/platform/PlatformLogo";
 import { useDashboardStore } from "@/stores/dashboard.store";
+import { getPersistedAlertStatus } from "@/lib/alertWorkflow";
+import { calculateNegativityScore } from "@/lib/negativityScore";
 import { cn } from "@/lib/utils";
-import { CrisisTable } from "./CrisisTable";
+import { CrisisTable, type CrisisTableAlert } from "./CrisisTable";
 import { LiveCrisisFeed } from "./LiveCrisisFeed";
 
 type AnyMention = {
@@ -28,14 +30,6 @@ type AnyMention = {
   content?: string | null;
   posted_at?: string;
   created_at?: string;
-};
-
-type AnyAlert = {
-  id?: string;
-  severity?: string;
-  status?: string;
-  created_at?: string;
-  assigned_to?: string | null;
 };
 
 type CountStat = {
@@ -116,6 +110,21 @@ function buildRiskScore(negativeCount: number, criticalCount: number, overdueCou
   return Math.min(98, 32 + Math.min(negativeCount, 80) * 0.45 + criticalCount * 12 + overdueCount * 8 + negativeRatio * 0.25);
 }
 
+function normalizeCrisisSeverity(severity?: string) {
+  const value = String(severity || "").toLowerCase();
+  if (value === "critical" || value === "urgent") return "critical";
+  if (value === "high") return "high";
+  if (value === "medium" || value === "normal") return "medium";
+  return "low";
+}
+
+function normalizeCrisisStatus(status?: string) {
+  const value = String(status || "").toLowerCase();
+  if (value === "resolved" || value === "contact_failed") return "resolved";
+  if (value === "new" || value === "pending" || !value) return "new";
+  return "acknowledged";
+}
+
 const kpiCardClass = "rounded-lg border-[#DDD9E8] bg-white shadow-[0_8px_24px_rgba(30,31,36,0.06)]";
 
 function KpiCard({ icon: Icon, label, value, tone, meta }: { icon: React.ElementType; label: string; value: string; tone: string; meta: string }) {
@@ -138,11 +147,43 @@ function KpiCard({ icon: Icon, label, value, tone, meta }: { icon: React.Element
 }
 
 export function CrisisCommandCenter() {
-  const { getFilteredMentions, getFilteredAlerts } = useDashboardStore();
+  const dashboardMentions = useDashboardStore((state) => state.mentions);
+
+  const mentions = useMemo(() => {
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    return dashboardMentions.filter((mention) => {
+      const timestamp = new Date(mention.posted_at || mention.created_at || "").getTime();
+      return Number.isFinite(timestamp) && timestamp >= cutoff;
+    });
+  }, [dashboardMentions]);
+
+  const alerts = useMemo<CrisisTableAlert[]>(() => mentions
+    .filter((mention) => mention.sentiment === "negative")
+    .map((mention) => {
+      const labels = (mention.labels || {}) as Record<string, any>;
+      const negativity = calculateNegativityScore({
+        sentiment: mention.sentiment,
+        topic: mention.topic || "other",
+        urgency: labels.urgency || "normal",
+        likeCount: mention.star_count || 0,
+        commentCount: 0,
+        shareCount: 0,
+        platform: mention.platform || "",
+        text: mention.content || "",
+      });
+      const severity = labels.urgency || (negativity.score > 80 ? "high" : negativity.severity);
+
+      return {
+        id: mention.entity_key || mention.id,
+        message: mention.content || "Sự vụ tiêu cực cần xử lý",
+        severity: normalizeCrisisSeverity(severity),
+        status: normalizeCrisisStatus(getPersistedAlertStatus(labels)),
+        created_at: mention.posted_at || mention.created_at,
+        assigned_to: labels.being_resolved_by || null,
+      };
+    }), [mentions]);
 
   const data = useMemo(() => {
-    const mentions = getFilteredMentions() as AnyMention[];
-    const alerts = getFilteredAlerts() as AnyAlert[];
     const negativeMentions = mentions.filter((mention) => mention.sentiment === "negative");
     const activeAlerts = alerts.filter((alert) => alert.status === "new" || alert.status === "acknowledged");
     const criticalAlerts = alerts.filter((alert) => alert.severity === "critical" || alert.severity === "high");
@@ -170,7 +211,7 @@ export function CrisisCommandCenter() {
       topMention,
       riskScore,
     };
-  }, [getFilteredMentions, getFilteredAlerts]);
+  }, [mentions, alerts]);
 
   const topPlatform = data.platformStats[0];
   const topTopic = data.topicStats[0];
@@ -320,7 +361,7 @@ export function CrisisCommandCenter() {
           </Card>
         )}
 
-        <CrisisTable />
+        <CrisisTable alerts={data.alerts} mentions={data.mentions} />
       </div>
 
       <aside className="lg:col-span-4 lg:sticky lg:top-4">
@@ -350,7 +391,7 @@ export function CrisisCommandCenter() {
               </div>
             </CardContent>
           </Card>
-          <LiveCrisisFeed />
+          <LiveCrisisFeed mentions={data.mentions} />
         </div>
       </aside>
     </div>

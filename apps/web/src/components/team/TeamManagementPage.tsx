@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -10,7 +10,7 @@ import { validateStrongPassword } from "@/lib/passwordPolicy";
 import { buildBrandEmail, getBrandEmailDomain } from "@/lib/brandEmail";
 import { Shield } from "lucide-react";
 
-import type { StaffAccount, StaffRole, StaffRoleValue, OperationOption } from "./types";
+import type { RoleAssignmentOption, StaffAccount, StaffRole, StaffRoleValue, OperationOption } from "./types";
 import { TeamPageHeader } from "./TeamPageHeader";
 import { TeamStatsCards } from "./TeamStatsCards";
 import { TeamTabs } from "./TeamTabs";
@@ -19,26 +19,32 @@ import { EmployeeTable } from "./EmployeeTable";
 import { EmployeeEmptyState } from "./EmployeeEmptyState";
 import { EmployeeCreateForm } from "./EmployeeCreateForm";
 import { EmployeeCreateHandoff } from "./EmployeeCreateHandoff";
+import { getBusinessRoleLabel, getStaffBusinessRole } from "./utils";
+import { ExportPreviewModal } from "./ExportPreviewModal";
 
-const roleOptions: Array<{ value: StaffRole; labelKey: string; descriptionKey: string }> = [
+const roleOptions: RoleAssignmentOption[] = [
   {
     value: "crisis_employee",
+    staffRole: "crisis_employee",
     labelKey: "team.roles.crisis.label",
     descriptionKey: "team.roles.crisis.description",
+    defaultOperations: ["dashboard", "mentions", "alerts", "reports"],
   },
   {
     value: "lead_employee",
+    staffRole: "lead_employee",
     labelKey: "team.roles.lead.label",
     descriptionKey: "team.roles.lead.description",
+    defaultOperations: ["dashboard", "mentions", "leads", "reports"],
   },
 ];
 
 const operationOptions: OperationOption[] = [
   { value: "dashboard", labelKey: "team.operations.dashboard", roles: ["crisis_employee", "lead_employee"] },
   { value: "mentions", labelKey: "team.operations.mentions", roles: ["crisis_employee", "lead_employee"] },
-  { value: "alerts", labelKey: "team.operations.alerts", roles: ["crisis_employee"] },
+  { value: "alerts", labelKey: "team.operations.alerts", roles: ["crisis_employee", "lead_employee"] },
   { value: "reports", labelKey: "team.operations.reports", roles: ["crisis_employee", "lead_employee"] },
-  { value: "leads", labelKey: "team.operations.leads", roles: ["lead_employee"] },
+  { value: "leads", labelKey: "team.operations.leads", roles: ["crisis_employee", "lead_employee"] },
 ];
 
 function generateTemporaryPassword() {
@@ -84,6 +90,7 @@ export function TeamManagementPage({ initialTab = "list" }: TeamManagementPagePr
   const [listError, setListError] = useState("");
   const [createError, setCreateError] = useState("");
   const [actionError, setActionError] = useState("");
+  const [showExportPreview, setShowExportPreview] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
@@ -111,15 +118,16 @@ export function TeamManagementPage({ initialTab = "list" }: TeamManagementPagePr
   const [revealLoading, setRevealLoading] = useState(false);
   const [revealError, setRevealError] = useState("");
 
-  const availableOperations = useMemo(
-    () => operationOptions.filter((operation) => operation.roles.includes(staffRole)),
-    [staffRole],
-  );
-
-  const availableEditOperations = useMemo(
-    () => operationOptions.filter((operation) => operation.roles.includes(editStaffRole)),
-    [editStaffRole],
-  );
+  const availableOperations = useMemo(() => operationOptions, []);
+  const availableEditOperations = useMemo(() => operationOptions, []);
+  const selectedRoleOptions = useMemo<StaffRole[]>(() => [
+    ...(operations.includes("alerts") ? ["crisis_employee" as const] : []),
+    ...(operations.includes("leads") ? ["lead_employee" as const] : []),
+  ], [operations]);
+  const selectedEditRoleOptions = useMemo<StaffRole[]>(() => [
+    ...(editOperations.includes("alerts") ? ["crisis_employee" as const] : []),
+    ...(editOperations.includes("leads") ? ["lead_employee" as const] : []),
+  ], [editOperations]);
 
   const brandEmailDomain = getBrandEmailDomain(profile?.brandName, profile?.companyDomain);
   const fullEmail = buildBrandEmail(emailLocalPart, brandEmailDomain);
@@ -133,14 +141,6 @@ export function TeamManagementPage({ initialTab = "list" }: TeamManagementPagePr
     if (role === "crisis") setRoleFilter("crisis_employee");
     else if (role === "lead") setRoleFilter("lead_employee");
   }, [searchParams]);
-
-  useEffect(() => {
-    const defaults =
-      staffRole === "crisis_employee"
-        ? ["dashboard", "mentions", "alerts", "reports"]
-        : ["dashboard", "mentions", "leads", "reports"];
-    setOperations(defaults);
-  }, [staffRole]);
 
   const loadStaff = async () => {
     if (isLoadingStaffRef.current) return;
@@ -189,6 +189,44 @@ export function TeamManagementPage({ initialTab = "list" }: TeamManagementPagePr
   const toggleOperation = (op: string) => setOperations((curr) => curr.includes(op) ? curr.filter(i => i !== op) : [...curr, op]);
   const toggleEditOperation = (op: string) => setEditOperations((curr) => curr.includes(op) ? curr.filter(i => i !== op) : [...curr, op]);
 
+  useEffect(() => {
+    const hasCrisis = operations.includes("alerts");
+    const hasLead = operations.includes("leads");
+    if (hasCrisis && !hasLead && staffRole !== "crisis_employee") {
+      setStaffRole("crisis_employee");
+    } else if (hasLead && !hasCrisis && staffRole !== "lead_employee") {
+      setStaffRole("lead_employee");
+    }
+  }, [operations, staffRole]);
+
+  useEffect(() => {
+    const hasCrisis = editOperations.includes("alerts");
+    const hasLead = editOperations.includes("leads");
+    if (hasCrisis && !hasLead && editStaffRole !== "crisis_employee") {
+      setEditStaffRole("crisis_employee");
+    } else if (hasLead && !hasCrisis && editStaffRole !== "lead_employee") {
+      setEditStaffRole("lead_employee");
+    }
+  }, [editOperations, editStaffRole]);
+
+  const toggleRoleAssignment = (value: RoleAssignmentOption["value"]) => {
+    const option = roleOptions.find((item) => item.value === value);
+    if (!option) return;
+    const accessOperation = value === "crisis_employee" ? "alerts" : "leads";
+    setOperations((current) => current.includes(accessOperation)
+      ? current.filter((operation) => operation !== accessOperation)
+      : Array.from(new Set([...current, ...option.defaultOperations])));
+  };
+
+  const toggleEditRoleAssignment = (value: RoleAssignmentOption["value"]) => {
+    const option = roleOptions.find((item) => item.value === value);
+    if (!option) return;
+    const accessOperation = value === "crisis_employee" ? "alerts" : "leads";
+    setEditOperations((current) => current.includes(accessOperation)
+      ? current.filter((operation) => operation !== accessOperation)
+      : Array.from(new Set([...current, ...option.defaultOperations])));
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setLoading(true);
@@ -196,6 +234,9 @@ export function TeamManagementPage({ initialTab = "list" }: TeamManagementPagePr
     try {
       const policy = validateStrongPassword(temporaryPassword);
       if (!policy.valid) throw new Error(policy.errors.map(k => t(k)).join(" "));
+      if (!operations.includes("alerts") && !operations.includes("leads")) {
+        throw new Error("Vui lòng chọn ít nhất một nghiệp vụ xử lý: Tiềm năng hoặc Khủng hoảng.");
+      }
       const token = await auth.currentUser?.getIdToken();
       const res = await fetch("/api/staff", {
         method: "POST",
@@ -282,6 +323,9 @@ export function TeamManagementPage({ initialTab = "list" }: TeamManagementPagePr
     setSavingEdit(true);
     setActionError("");
     try {
+      if (!editOperations.includes("alerts") && !editOperations.includes("leads")) {
+        throw new Error("Vui lòng chọn ít nhất một nghiệp vụ xử lý: Tiềm năng hoặc Khủng hoảng.");
+      }
       const token = await auth.currentUser?.getIdToken();
       const res = await fetch(`/api/staff/${editingStaff.uid}`, {
         method: "PATCH",
@@ -311,13 +355,7 @@ export function TeamManagementPage({ initialTab = "list" }: TeamManagementPagePr
   };
 
   const handleExport = () => {
-    const headers = ["Há» vÃ  tÃªn", "Email", "Vai trÃ²", "Tráº¡ng thÃ¡i"];
-    const rows = filteredStaff.map(s => [s.displayName, s.email, s.role, s.disabled ? "ÄÃ£ khÃ³a" : "Äang hoáº¡t Ä‘á»™ng"]);
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
-    const link = document.createElement("a");
-    link.setAttribute("href", encodeURI(csvContent));
-    link.setAttribute("download", "danh_sach_nhan_vien.csv");
-    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    setShowExportPreview(true);
   };
 
   const filteredStaff = useMemo(() => {
@@ -325,8 +363,13 @@ export function TeamManagementPage({ initialTab = "list" }: TeamManagementPagePr
       const searchMatch = !searchQuery
         || (s.displayName || "").toLowerCase().includes(searchQuery.toLowerCase())
         || (s.email || "").toLowerCase().includes(searchQuery.toLowerCase());
-      const normalizedRole = isCrisisRole(s.role) ? "crisis_employee" : "lead_employee";
-      const roleMatch = roleFilter === "all" || normalizedRole === roleFilter;
+      const permissions = s.permissions || [];
+      const businessRole = getStaffBusinessRole(permissions, s.role);
+      const roleMatch =
+        roleFilter === "all" ||
+        (roleFilter === "crisis_employee" && (businessRole === "crisis_employee" || businessRole === "dual_employee")) ||
+        (roleFilter === "lead_employee" && (businessRole === "lead_employee" || businessRole === "dual_employee")) ||
+        (roleFilter === "dual_employee" && businessRole === "dual_employee");
       const statusMatch = statusFilter === "all" || (statusFilter === "active" && !s.disabled) || (statusFilter === "disabled" && s.disabled);
       return searchMatch && roleMatch && statusMatch;
     });
@@ -334,10 +377,13 @@ export function TeamManagementPage({ initialTab = "list" }: TeamManagementPagePr
 
   const openEditModal = (account: StaffAccount) => {
     const normalizedRole = isCrisisRole(account.role) ? "crisis_employee" : "lead_employee";
+    const businessRole = getStaffBusinessRole(account.permissions, account.role);
+    const selectedOption = roleOptions.find((option) => option.value === businessRole);
+    setActionError("");
     setEditingStaff(account);
     setEditFullName(account.displayName || "");
-    setEditStaffRole(normalizedRole);
-    setEditOperations(account.permissions?.length ? account.permissions : normalizedRole === "crisis_employee" ? ["dashboard", "mentions", "alerts", "reports"] : ["dashboard", "mentions", "leads", "reports"]);
+    setEditStaffRole(selectedOption?.staffRole || normalizedRole);
+    setEditOperations(account.permissions?.length ? account.permissions : selectedOption?.defaultOperations || (normalizedRole === "crisis_employee" ? ["dashboard", "mentions", "alerts", "reports"] : ["dashboard", "mentions", "leads", "reports"]));
   };
 
   return (
@@ -383,8 +429,8 @@ export function TeamManagementPage({ initialTab = "list" }: TeamManagementPagePr
             setEmailLocalPart={setEmailLocalPart}
             brandEmailDomain={brandEmailDomain}
             fullEmail={fullEmail}
-            staffRole={staffRole}
-            setStaffRole={setStaffRole}
+            selectedRoleOptions={selectedRoleOptions}
+            onToggleRoleOption={toggleRoleAssignment}
             operations={operations}
             toggleOperation={toggleOperation}
             availableOperations={availableOperations}
@@ -463,6 +509,12 @@ export function TeamManagementPage({ initialTab = "list" }: TeamManagementPagePr
             <h3 className="text-[20px] font-bold text-gray-900">Chỉnh sửa nhân viên</h3>
             <p className="mt-1 text-[14px] text-gray-500">{editingStaff.email}</p>
 
+            {actionError && (
+              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[14px] text-red-700">
+                {actionError}
+              </div>
+            )}
+
             <label className="mt-6 block">
               <span className="text-[14px] font-semibold text-gray-900">Họ tên</span>
               <input value={editFullName} onChange={(e) => setEditFullName(e.target.value)} className="mt-2 w-full rounded-xl border border-gray-200 p-3 text-[14px] outline-none focus:border-[#6C5CE7] focus:ring-1 focus:ring-[#6C5CE7]" />
@@ -472,8 +524,8 @@ export function TeamManagementPage({ initialTab = "list" }: TeamManagementPagePr
               <span className="text-[14px] font-semibold text-gray-900">Vai trò</span>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 {roleOptions.map((opt) => (
-                  <label key={opt.value} className={`cursor-pointer rounded-xl border-2 p-4 transition-all ${editStaffRole === opt.value ? "border-[#6C5CE7] bg-[#6C5CE7]/5" : "border-gray-200 hover:border-gray-300"}`}>
-                    <input type="radio" className="sr-only" checked={editStaffRole === opt.value} onChange={() => { setEditStaffRole(opt.value); setEditOperations(opt.value === "crisis_employee" ? ["dashboard", "mentions", "alerts", "reports"] : ["dashboard", "mentions", "leads", "reports"]); }} />
+                  <label key={opt.value} className={`cursor-pointer rounded-xl border-2 p-4 transition-all ${selectedEditRoleOptions.includes(opt.value) ? "border-[#6C5CE7] bg-[#6C5CE7]/5" : "border-gray-200 hover:border-gray-300"}`}>
+                    <input type="checkbox" className="sr-only" checked={selectedEditRoleOptions.includes(opt.value)} onChange={() => toggleEditRoleAssignment(opt.value)} />
                     <span className="block text-[14px] font-semibold text-gray-900">{t(opt.labelKey)}</span>
                     <span className="mt-1 block text-[12px] text-gray-500">{t(opt.descriptionKey)}</span>
                   </label>
@@ -506,6 +558,12 @@ export function TeamManagementPage({ initialTab = "list" }: TeamManagementPagePr
           </div>
         </div>
       )}
+
+      <ExportPreviewModal
+        isOpen={showExportPreview}
+        onClose={() => setShowExportPreview(false)}
+        staffData={filteredStaff}
+      />
     </div>
   );
 }

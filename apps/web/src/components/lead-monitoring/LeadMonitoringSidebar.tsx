@@ -13,7 +13,6 @@ export function LeadMonitoringSidebar() {
     { href: "/team", label: "Quản lý đội ngũ", icon: Users },
     { href: "/crisis-monitoring", label: "Cảnh báo", icon: Bell },
     { href: "/lead-monitoring", label: "Báo cáo", icon: BarChart2 },
-    { href: "/settings/brand", label: "Cấu hình Brand", icon: Settings },
   ];
 
   return (
@@ -23,7 +22,7 @@ export function LeadMonitoringSidebar() {
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#5B4FCF]">
             <BarChart2 className="h-6 w-6 text-white" />
           </div>
-          <span className="font-['Hanken_Grotesk'] text-[24px] font-bold text-[#4234B6] tracking-tight">
+          <span className="font-sans text-[24px] font-bold text-[#4234B6] tracking-tight">
             InsightFlow
           </span>
         </Link>

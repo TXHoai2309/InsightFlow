@@ -1,6 +1,15 @@
 export type StaffRole = "crisis_employee" | "lead_employee";
 export type LegacyStaffRole = "crisis_staff" | "lead_staff";
 export type StaffRoleValue = StaffRole | LegacyStaffRole;
+export type StaffBusinessRole = StaffRole | "dual_employee" | "unassigned";
+
+export interface RoleAssignmentOption {
+  value: StaffRole;
+  staffRole: StaffRole;
+  labelKey: string;
+  descriptionKey: string;
+  defaultOperations: string[];
+}
 
 export interface StaffAccount {
   uid: string;

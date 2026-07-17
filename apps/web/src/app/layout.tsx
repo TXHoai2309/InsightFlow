@@ -9,6 +9,7 @@ import "./globals.css";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { MobileNav } from "@/components/layout/MobileNav";
+import { NativeSelectEnhancer } from "@/components/ui/NativeSelectEnhancer";
 import Footer from "@/components/home/Footer";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { ThemeProvider } from "@/contexts/ThemeContext";
@@ -142,20 +143,19 @@ export default function RootLayout({
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link
           rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
         />
         <link
           rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
         />
         <link
           rel="stylesheet"
           href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css"
         />
-        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
       </head>
       <body
-        className={pathname === "/" ? "home-times-new-roman" : undefined}
+        className="overflow-x-hidden"
         style={{
           margin: 0,
           padding: 0,
@@ -165,6 +165,7 @@ export default function RootLayout({
         <I18nextProvider i18n={i18nInstance}>
           <ThemeProvider>
             <LanguageProvider>
+              <NativeSelectEnhancer />
               {isAuthPage ? (
                 /* Trang đăng nhập/đăng ký/quên mật khẩu — không có footer */
                 <main className="flex-1">{children}</main>
@@ -178,14 +179,14 @@ export default function RootLayout({
                 /* Trang app (Dashboard, Mentions...) — có sidebar */
                 <ProtectedRoute>
                   <div
-                    className="flex h-screen w-screen overflow-hidden"
+                    className="flex h-screen w-full overflow-hidden"
                     style={{ backgroundColor: "var(--color-bg-primary)" }}
                   >
                     <Sidebar
                       isOpen={sidebarOpen}
                       onClose={() => setSidebarOpen(false)}
                     />
-                    <div className="flex flex-col flex-1 md:ml-64">
+                    <div className="flex flex-col flex-1 min-w-0 md:ml-64">
                       <Header
                         onMenuToggle={() => setSidebarOpen((prev) => !prev)}
                       />

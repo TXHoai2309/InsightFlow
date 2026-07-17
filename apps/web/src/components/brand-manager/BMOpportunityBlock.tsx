@@ -17,6 +17,10 @@ const TOPIC_LABELS: Record<string, string> = {
   experience: "Trải nghiệm không gian", competitor: "Đối thủ", other: "Chủ đề khác",
 };
 
+const getTopicLabel = (topic: string, t: any) => {
+  return t(`dashboard.topics.${topic}`, TOPIC_LABELS[topic] || topic);
+};
+
 export function BMOpportunityBlock({ currentMentions, previousMentions }: BMOpportunityBlockProps) {
   const { t } = useTranslation();
   const [selectedVenue, setSelectedVenue] = useState<string | null>(null);
@@ -61,7 +65,7 @@ export function BMOpportunityBlock({ currentMentions, previousMentions }: BMOppo
           trend: data.count - data.prevCount,
           rating,
           ratingTrend: parseFloat(ratingTrend),
-          topTopic: TOPIC_LABELS[topTopicKey] || topTopicKey,
+          topTopicKey,
         };
       })
       .sort((a, b) => b.count - a.count)
@@ -96,7 +100,7 @@ export function BMOpportunityBlock({ currentMentions, previousMentions }: BMOppo
   return (
     <div className="flex h-full flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 relative">
       <div className="absolute top-4 right-6 text-[11px] text-[var(--color-text-muted)] font-medium">
-        Cập nhật lúc: {new Date().toLocaleTimeString("vi-VN", { hour: '2-digit', minute: '2-digit' })}
+        {t("bm.opportunity.updatedAt", "Cập nhật lúc:")} {new Date().toLocaleTimeString(t("common.locale", "vi-VN"), { hour: '2-digit', minute: '2-digit' })}
       </div>
       
       {/* Header */}
@@ -112,10 +116,10 @@ export function BMOpportunityBlock({ currentMentions, previousMentions }: BMOppo
         </div>
         <div className="text-right flex items-center gap-4">
           <button 
-            onClick={() => alert("Đã tải xuống Báo cáo Cơ hội (PDF)!")}
+            onClick={() => alert(t("bm.opportunity.downloadAlert", "Đã tải xuống Báo cáo Cơ hội (PDF)!"))}
             className="hidden md:flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-[12px] font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)] transition"
           >
-            <i className="ti ti-download"></i> Xuất báo cáo
+            <i className="ti ti-download"></i> {t("bm.opportunity.exportReport", "Xuất báo cáo")}
           </button>
           <div>
             <div className="text-[24px] font-bold text-[var(--color-text-primary)]">
@@ -123,7 +127,7 @@ export function BMOpportunityBlock({ currentMentions, previousMentions }: BMOppo
             </div>
             <div className={`text-[12px] font-medium ${isUp ? "text-green-600" : "text-red-500"}`}>
               <i className={`ti ti-arrow-${isUp ? "up" : "down"} mr-1`}></i>
-              {Math.abs(trend)} địa điểm tăng trưởng
+              {Math.abs(trend)} {t("bm.opportunity.growthLocations", "địa điểm tăng trưởng")}
             </div>
           </div>
         </div>
@@ -144,7 +148,7 @@ export function BMOpportunityBlock({ currentMentions, previousMentions }: BMOppo
           </h3>
           <ul className="space-y-3">
             {topVenues.length === 0 ? (
-              <li className="text-[13px] text-[var(--color-text-secondary)]">Không có dữ liệu tích cực</li>
+              <li className="text-[13px] text-[var(--color-text-secondary)]">{t("bm.opportunity.noData", "Không có dữ liệu tích cực")}</li>
             ) : (
               topVenues.map((venue, i) => (
                 <li 
@@ -165,7 +169,7 @@ export function BMOpportunityBlock({ currentMentions, previousMentions }: BMOppo
                         ({venue.ratingTrend > 0 ? "+" : ""}{venue.ratingTrend})
                       </span>
                     </div>
-                    <span className="text-[var(--color-text-muted)] max-w-[150px] truncate" title={venue.topTopic}>Khen: {venue.topTopic}</span>
+                    <span className="text-[var(--color-text-muted)] max-w-[150px] truncate" title={getTopicLabel(venue.topTopicKey, t)}>{t("bm.opportunity.praised", "Khen:")} {getTopicLabel(venue.topTopicKey, t)}</span>
                   </div>
                 </li>
               ))
@@ -195,7 +199,7 @@ export function BMOpportunityBlock({ currentMentions, previousMentions }: BMOppo
                     .map((key, idx) => (
                       <Area
                         key={key}
-                        name={TOPIC_LABELS[key] || key}
+                        name={getTopicLabel(key, t)}
                         type="monotone"
                         dataKey={key}
                         stroke={["#22c55e", "#3b82f6", "#f59e0b"][idx % 3]}
@@ -208,7 +212,7 @@ export function BMOpportunityBlock({ currentMentions, previousMentions }: BMOppo
               </ResponsiveContainer>
             ) : (
               <div className="flex h-full items-center justify-center text-[13px] text-[var(--color-text-secondary)] border border-dashed border-[var(--color-border)] rounded-lg">
-                Chưa đủ dữ liệu biểu đồ
+                {t("bm.opportunity.notEnoughData", "Chưa đủ dữ liệu biểu đồ")}
               </div>
             )}
           </div>
@@ -221,7 +225,7 @@ export function BMOpportunityBlock({ currentMentions, previousMentions }: BMOppo
           <div className="w-[500px] max-w-[90vw] rounded-xl bg-[var(--color-bg-surface)] p-6 shadow-2xl">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-[18px] font-bold text-[var(--color-text-primary)]">
-                Review tích cực: {selectedVenue}
+                {t("bm.opportunity.positiveReviews", "Review tích cực:")} {selectedVenue}
               </h3>
               <button onClick={() => setSelectedVenue(null)} className="text-[var(--color-text-muted)] hover:text-red-500">
                 <i className="ti ti-x text-xl"></i>

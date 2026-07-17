@@ -8,6 +8,10 @@ import { DashboardService } from "@/lib/services/dashboard";
 import { useAuth } from "@/hooks/useAuth";
 import { filterByBusinessPolicy, getScopedBrandKey, isRecordInBrandScope } from "@/lib/brandScope";
 import { LeadEmployeeReportPage } from "@/components/lead-monitoring/LeadEmployeeReportPage";
+import { CrisisEmployeeReportPage } from "@/components/crisis-monitoring/CrisisEmployeeReportPage";
+import { DualOperationsEmployeeReportPage } from "@/components/dual-operations-report/DualOperationsEmployeeReportPage";
+import { ReportExportPreviewModal } from "@/components/reports/ReportExportPreviewModal";
+import { canPerformAction, getEmployeeBusinessScope } from "@/lib/rbac";
 
 
 /**
@@ -45,113 +49,128 @@ interface DailyReport {
 function ReportPreviewModal({
   report,
   onClose,
-  onExport,
+  onExportPDF,
+  onExportExcel,
   isExporting,
 }: {
   report: DailyReport;
   onClose: () => void;
-  onExport: () => void;
+  onExportPDF: () => void;
+  onExportExcel: () => void;
   isExporting: boolean;
 }) {
-  const { t } = useTranslation();
-  // Calculate basic stats for the preview
-  const total = report.mentions.length;
-  let pos = 0,
-    neu = 0,
-    neg = 0;
-  const topics: Record<string, number> = {};
+  const { t, i18n } = useTranslation();
+  const [format, setFormat] = useState<"pdf" | "excel">("pdf");
+  const [excelSheet, setExcelSheet] = useState<"dashboard" | "evidence">("dashboard");
+  const [pdfUrl, setPdfUrl] = useState("");
+  const [excelSheets, setExcelSheets] = useState<{ dashboardHtml: string; evidenceHtml: string } | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+  const lang = i18n.resolvedLanguage || i18n.language || "vi";
 
-  report.mentions.forEach((m) => {
-    const s = m.sentiment.toLowerCase();
-    if (s.includes("pos")) pos++;
-    else if (s.includes("neg")) neg++;
-    else neu++;
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl = "";
+    setIsLoading(true);
+    setError("");
 
-    const topicKey = m.topic.toLowerCase();
-    topics[topicKey] = (topics[topicKey] || 0) + 1;
-  });
+    const buildPreview = async () => {
+      const params = {
+        brandName: report.brand,
+        startDate: report.dateStr,
+        endDate: report.dateStr,
+        mentions: report.mentions,
+        filtersSummary: lang.startsWith("vi") ? "Báo cáo theo ngày" : "Daily report",
+        insights: "",
+        t,
+        lang,
+        download: false,
+      };
 
-  const topTopics = Object.entries(topics)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3);
+      try {
+        if (format === "pdf") {
+          const result = await generateWeeklyBrandReportPDF(params);
+          if (!result || cancelled) return;
+          objectUrl = URL.createObjectURL(result.blob);
+          setPdfUrl(objectUrl);
+        } else {
+          const result = await generateWeeklyBrandReportExcel(params);
+          if (!result || cancelled) return;
+          setExcelSheets({ dashboardHtml: result.dashboardHtml, evidenceHtml: result.evidenceHtml });
+        }
+      } catch (previewError) {
+        console.error("Error previewing report:", previewError);
+        if (!cancelled) setError("Không thể tạo bản xem trước. Vui lòng thử lại.");
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+
+    void buildPreview();
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [format, lang, report, t]);
+
+  const excelBody = excelSheet === "dashboard" ? excelSheets?.dashboardHtml : excelSheets?.evidenceHtml;
+  const excelDocument = excelBody
+    ? `<!doctype html><html><head><meta charset="utf-8"><style>
+        body{font-family:Inter,"Segoe UI",Arial,sans-serif;color:#172033;margin:0;padding:22px;background:#fff}
+        h1{font-size:22px;margin:0 0 4px;color:#1f2937}.subtitle{color:#64748b;margin:0 0 14px}
+        table{border-collapse:collapse;margin:12px 0 18px;width:100%}th,td{border:1px solid #cbd5e1;padding:7px 8px;vertical-align:top;font-size:12px}
+        th,.section-title{background:#3730a3;color:#fff;font-weight:700;text-align:left}.header-row td,.header-row th{background:#eef2ff;color:#1e1b4b;font-weight:700}
+        .kpi-row td:nth-child(odd){background:#f8fafc;font-weight:700;color:#475569;width:160px}.wrap td{white-space:normal}
+        .bar-wrap{position:relative;width:220px;height:18px;background:#e2e8f0;border-radius:3px;overflow:hidden}.bar{height:18px}.bar-wrap span{position:absolute;left:8px;top:1px;font-size:11px;color:#111827;font-weight:700}
+      </style></head><body>${excelBody}</body></html>`
+    : "";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] p-6 rounded-2xl shadow-xl w-full max-w-lg flex flex-col gap-5">
-        <div className="flex justify-between items-center border-b border-[var(--color-border)] pb-3">
-          <h2 className="text-xl font-bold text-[var(--color-text-primary)]">
-            Xem trước Báo cáo
-          </h2>
+      <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl shadow-xl w-full max-w-6xl h-[92vh] flex flex-col overflow-hidden">
+        <div className="flex justify-between items-center border-b border-[var(--color-border)] px-5 py-4">
+          <div>
+            <h2 className="text-xl font-bold text-[var(--color-text-primary)]">Xem trước Báo cáo</h2>
+            <p className="text-sm text-[var(--color-text-muted)] mt-0.5">{report.brand} · {report.dateStr} · {report.mentions.length} mention</p>
+          </div>
           <button
             onClick={onClose}
+            aria-label="Đóng xem trước"
             className="p-2 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-raised)] rounded-full"
           >
             <span className="material-symbols-outlined">close</span>
           </button>
         </div>
 
-        <div className="flex flex-col gap-4">
-          <div>
-            <p className="text-sm text-[var(--color-text-muted)] font-medium">
-              Thương hiệu
-            </p>
-            <p className="font-bold text-lg text-[var(--color-brand)] capitalize">
-              {report.brand}
-            </p>
-          </div>
-          <div>
-            <p className="text-sm text-[var(--color-text-muted)] font-medium">
-              Ngày báo cáo
-            </p>
-            <p className="font-bold text-lg text-[var(--color-text-primary)]">
-              {report.dateStr}
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-[var(--color-bg-surface-raised)] p-4 rounded-xl border border-[var(--color-border)]">
-              <p className="text-xs text-[var(--color-text-muted)] font-bold uppercase">
-                Tổng lượt đề cập
-              </p>
-              <p className="text-2xl font-bold text-[var(--color-text-primary)] mt-1">
-                {total}
-              </p>
-            </div>
-            <div className="bg-[var(--color-bg-surface-raised)] p-4 rounded-xl border border-[var(--color-border)]">
-              <p className="text-xs text-[var(--color-text-muted)] font-bold uppercase">
-                Chỉ số Cảm xúc
-              </p>
-              <div className="flex gap-2 text-sm mt-1 font-medium">
-                <span className="text-[var(--color-success)]">
-                  {pos} {t("reports.preview.pos", { defaultValue: "Tốt" })}
-                </span>
-                <span className="text-[var(--color-error)]">
-                  {neg} {t("reports.preview.neg", { defaultValue: "Xấu" })}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {topTopics.length > 0 && (
-            <div className="bg-[var(--color-bg-surface-raised)] p-4 rounded-xl border border-[var(--color-border)]">
-              <p className="text-xs text-[var(--color-text-muted)] font-bold uppercase mb-2">
-                Chủ đề nổi bật
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {topTopics.map(([t, count]) => (
-                  <span
-                    key={t}
-                    className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] px-2 py-1 rounded text-xs font-semibold capitalize text-[var(--color-text-primary)]"
-                  >
-                    {t}: {count}
-                  </span>
-                ))}
-              </div>
+        <div className="px-5 pt-3 flex flex-wrap items-center gap-2 border-b border-[var(--color-border)]">
+          {(["pdf", "excel"] as const).map((item) => (
+            <button key={item} onClick={() => setFormat(item)} className={`px-4 py-2.5 text-sm font-bold border-b-2 ${format === item ? "border-[var(--color-brand)] text-[var(--color-brand)]" : "border-transparent text-[var(--color-text-muted)]"}`}>
+              {item === "pdf" ? "Bản PDF" : "Bản Excel"}
+            </button>
+          ))}
+          {format === "excel" && !isLoading && excelSheets && (
+            <div className="ml-auto flex gap-1 pb-2">
+              <button onClick={() => setExcelSheet("dashboard")} className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${excelSheet === "dashboard" ? "bg-[var(--color-brand)] text-white" : "bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]"}`}>Tổng quan</button>
+              <button onClick={() => setExcelSheet("evidence")} className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${excelSheet === "evidence" ? "bg-[var(--color-brand)] text-white" : "bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]"}`}>Dữ liệu mention</button>
             </div>
           )}
         </div>
 
-        <div className="flex justify-end gap-3 mt-2">
+        <div className="flex-1 min-h-0 bg-slate-100 dark:bg-slate-950 p-3 md:p-5">
+          {isLoading ? (
+            <div className="h-full flex flex-col items-center justify-center gap-3 text-[var(--color-text-muted)]"><span className="w-8 h-8 border-4 border-[var(--color-brand)] border-t-transparent rounded-full animate-spin"/><p>Đang tạo bản xem trước...</p></div>
+          ) : error ? (
+            <div className="h-full flex items-center justify-center text-[var(--color-error)]">{error}</div>
+          ) : format === "pdf" && pdfUrl ? (
+            <iframe src={pdfUrl} title="Bản xem trước báo cáo PDF" className="w-full h-full rounded-lg bg-white border border-slate-300" />
+          ) : format === "excel" && excelDocument ? (
+            <iframe srcDoc={excelDocument} title={`Bản xem trước Excel - ${excelSheet}`} className="w-full h-full rounded-lg bg-white border border-slate-300" />
+          ) : (
+            <div className="h-full flex items-center justify-center text-[var(--color-text-muted)]">Không có dữ liệu để xem trước.</div>
+          )}
+        </div>
+
+        <div className="flex flex-wrap justify-end gap-3 px-5 py-4 border-t border-[var(--color-border)]">
           <button
             onClick={onClose}
             className="px-4 py-2 rounded-xl text-[var(--color-text-secondary)] font-bold hover:bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)]"
@@ -159,17 +178,19 @@ function ReportPreviewModal({
             Đóng
           </button>
           <button
-            onClick={onExport}
+            onClick={onExportExcel}
+            disabled={isExporting}
+            className="flex items-center gap-2 px-5 py-2 border border-[var(--color-brand)] text-[var(--color-brand)] rounded-xl font-bold disabled:opacity-50"
+          >
+            <span className="material-symbols-outlined text-lg">download</span>
+            Tải Excel
+          </button>
+          <button
+            onClick={onExportPDF}
             disabled={isExporting}
             className="flex items-center gap-2 px-5 py-2 bg-[var(--color-brand)] text-white rounded-xl font-bold shadow-sm hover:bg-[var(--color-brand-hover)] disabled:opacity-50"
           >
-            {isExporting ? (
-              <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></span>
-            ) : (
-              <span className="material-symbols-outlined text-lg">
-                download
-              </span>
-            )}
+            {isExporting ? <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <span className="material-symbols-outlined text-lg">download</span>}
             Tải PDF
           </button>
         </div>
@@ -197,6 +218,19 @@ interface ArchivedReport {
     score: number;
   };
   mentions?: Mention[];
+}
+
+type ManagerExportConfig = {
+  type: "periodic" | "range" | "custom" | "archive";
+  data: any;
+};
+
+function getMentionStatsForPreview(items: Mention[]) {
+  const positive = items.filter((item) => item.sentiment.toLowerCase().includes("pos")).length;
+  const negative = items.filter((item) => item.sentiment.toLowerCase().includes("neg")).length;
+  const neutral = Math.max(0, items.length - positive - negative);
+  const net = items.length > 0 ? Math.round(((positive - negative) / items.length) * 100) : 0;
+  return { positive, negative, neutral, net };
 }
 
 function ArchivedReportDetailModal({
@@ -1078,6 +1112,7 @@ function LanguageSelectModal({
 
 export default function ReportsPage() {
   const { profile, loading: authLoading } = useAuth();
+  const hasDualOperations = getEmployeeBusinessScope(profile) === "dual";
 
   if (authLoading) {
     return (
@@ -1085,6 +1120,14 @@ export default function ReportsPage() {
         Dang tai bao cao...
       </div>
     );
+  }
+
+  if (!authLoading && hasDualOperations) {
+    return <DualOperationsEmployeeReportPage />;
+  }
+
+  if (!authLoading && profile?.role === "crisis_employee" && canPerformAction(profile, "view_crisis_queue")) {
+    return <CrisisEmployeeReportPage />;
   }
 
   if (!authLoading && profile?.role === "lead_employee") {
@@ -1110,10 +1153,9 @@ function LegacyReportsPage() {
 
   const [generatingPdfId, setGeneratingPdfId] = useState<string | null>(null);
   const [previewReport, setPreviewReport] = useState<DailyReport | null>(null);
-  const [exportConfig, setExportConfig] = useState<{
-    type: "periodic" | "range" | "custom" | "archive";
-    data: any;
-  } | null>(null);
+  const [pendingExportConfig, setPendingExportConfig] =
+    useState<ManagerExportConfig | null>(null);
+  const [exportConfig, setExportConfig] = useState<ManagerExportConfig | null>(null);
   const [exportFormat, setExportFormat] = useState<"pdf" | "excel">("pdf");
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -1491,7 +1533,15 @@ function LegacyReportsPage() {
     };
   }, [mentions, reportsList]);
 
-  const openExport = (format: "pdf" | "excel", config: { type: "periodic" | "range" | "custom" | "archive"; data: any }) => {
+  const openExport = (format: "pdf" | "excel", config: ManagerExportConfig) => {
+    setExportFormat(format);
+    setPendingExportConfig(config);
+  };
+
+  const confirmExportWithoutPreview = (
+    format: "pdf" | "excel",
+    config: ManagerExportConfig,
+  ) => {
     setExportFormat(format);
     setExportConfig(config);
   };
@@ -1845,6 +1895,156 @@ function LegacyReportsPage() {
     });
   }, [archivedReports, archiveSearchQuery, archiveBrandFilter, scopedBrandKey]);
 
+  const pendingExportPreview = useMemo(() => {
+    if (!pendingExportConfig) return null;
+
+    const { type, data } = pendingExportConfig;
+    const reportMentions: Mention[] = data.mentions || [];
+    const mentionStats = getMentionStatsForPreview(reportMentions);
+    const formatLabel = exportFormat === "excel" ? "Excel" : "PDF";
+    const baseStats = [
+      { label: "Tong mention", value: reportMentions.length },
+      { label: "Tich cuc", value: mentionStats.positive, tone: "good" as const },
+      { label: "Tieu cuc", value: mentionStats.negative, tone: mentionStats.negative > 0 ? "danger" as const : "default" as const },
+      { label: "Net sentiment", value: `${mentionStats.net >= 0 ? "+" : ""}${mentionStats.net}%` },
+    ];
+
+    if (type === "periodic") {
+      const dateFormatted = new Date(data.dateObj || new Date()).toLocaleDateString("vi-VN");
+      return {
+        title: `Bao cao ngay - ${data.brand}`,
+        subtitle: `File ${formatLabel} cho ngay ${dateFormatted}`,
+        generatedAt: new Date().toISOString(),
+        stats: baseStats,
+        summary: generateAIInsights(data.brand, reportMentions, "", i18n.language),
+        sections: [
+          {
+            title: "Pham vi",
+            rows: [
+              { label: "Thuong hieu", value: data.brand },
+              { label: "Ngay bao cao", value: dateFormatted },
+              { label: "Dinh dang", value: formatLabel },
+            ],
+          },
+        ],
+        sampleRows: reportMentions.slice(0, 6).map((mention) => ({
+          label: mention.author || mention.source || "Mention",
+          meta: `${mention.source} · ${mention.sentiment} · ${mention.topic}`,
+          badge: mention.content_type,
+          description: mention.content,
+        })),
+      };
+    }
+
+    if (type === "range") {
+      const startFormatted = new Date(data.startDate).toLocaleDateString("vi-VN");
+      const endFormatted = new Date(data.endDate).toLocaleDateString("vi-VN");
+      return {
+        title: `Bao cao ${data.rangeLabel}`,
+        subtitle: `${data.brand} · ${startFormatted} - ${endFormatted}`,
+        generatedAt: new Date().toISOString(),
+        stats: baseStats,
+        summary: generateAIInsights(data.brand, reportMentions, "", i18n.language),
+        sections: [
+          {
+            title: "Pham vi",
+            rows: [
+              { label: "Thuong hieu", value: data.brand },
+              { label: "Khoang thoi gian", value: data.rangeLabel },
+              { label: "Dinh dang", value: formatLabel },
+            ],
+          },
+        ],
+        sampleRows: reportMentions.slice(0, 6).map((mention) => ({
+          label: mention.author || mention.source || "Mention",
+          meta: `${mention.source} · ${mention.sentiment} · ${mention.topic}`,
+          badge: mention.content_type,
+          description: mention.content,
+        })),
+      };
+    }
+
+    if (type === "custom") {
+      return {
+        title: customBrand === "all" ? "Bao cao tuy chinh - Tat ca nhan hang" : `Bao cao tuy chinh - ${customBrand}`,
+        subtitle: `${new Date(customStartDate).toLocaleDateString("vi-VN")} - ${new Date(customEndDate).toLocaleDateString("vi-VN")}`,
+        generatedAt: new Date().toISOString(),
+        stats: [
+          { label: "Tong mention", value: reportMentions.length },
+          { label: "Tich cuc", value: data.stats?.positive ?? mentionStats.positive, tone: "good" as const },
+          { label: "Tieu cuc", value: data.stats?.negative ?? mentionStats.negative, tone: (data.stats?.negative ?? mentionStats.negative) > 0 ? "danger" as const : "default" as const },
+          { label: "Diem cam xuc", value: `${data.stats?.score ?? mentionStats.net}%` },
+        ],
+        summary: data.aiInsights || generateAIInsights(customBrand, reportMentions, customPrompt, i18n.language),
+        sections: [
+          {
+            title: "Bo loc",
+            rows: [
+              { label: "Nguon", value: customPlatforms.length },
+              { label: "Chu de", value: customTopics.length },
+              { label: "Sac thai", value: customSentiments.length },
+            ],
+          },
+          {
+            title: "Dinh dang",
+            rows: [
+              { label: "File", value: formatLabel },
+              { label: "Thuong hieu", value: customBrand === "all" ? "Tat ca" : customBrand },
+            ],
+          },
+        ],
+        sampleRows: reportMentions.slice(0, 6).map((mention) => ({
+          label: mention.author || mention.source || "Mention",
+          meta: `${mention.source} · ${mention.sentiment} · ${mention.topic}`,
+          badge: mention.content_type,
+          description: mention.content,
+        })),
+      };
+    }
+
+    const archiveMentions: Mention[] = data.mentions || [];
+    const archiveStats = getMentionStatsForPreview(archiveMentions);
+    return {
+      title: data.title || `Bao cao luu tru - ${data.brand}`,
+      subtitle: data.filtersSummary || "Bao cao da luu tru",
+      generatedAt: new Date().toISOString(),
+      stats: [
+        { label: "Tong mention", value: data.mentionsCount ?? archiveMentions.length },
+        { label: "Tich cuc", value: data.stats?.positive ?? archiveStats.positive, tone: "good" as const },
+        { label: "Tieu cuc", value: data.stats?.negative ?? archiveStats.negative, tone: (data.stats?.negative ?? archiveStats.negative) > 0 ? "danger" as const : "default" as const },
+        { label: "Net sentiment", value: `${data.stats?.score ?? archiveStats.net}%` },
+      ],
+      summary: data.insights || generateAIInsights(data.brand, archiveMentions, "", i18n.language),
+      sections: [
+        {
+          title: "Pham vi",
+          rows: [
+            { label: "Thuong hieu", value: data.brand },
+            { label: "Ngay luu", value: data.dateStr || "--" },
+            { label: "Dinh dang", value: formatLabel },
+          ],
+        },
+      ],
+      sampleRows: archiveMentions.slice(0, 6).map((mention) => ({
+        label: mention.author || mention.source || "Mention",
+        meta: `${mention.source} · ${mention.sentiment} · ${mention.topic}`,
+        badge: mention.content_type,
+        description: mention.content,
+      })),
+    };
+  }, [
+    customBrand,
+    customEndDate,
+    customPlatforms.length,
+    customPrompt,
+    customSentiments.length,
+    customStartDate,
+    customTopics.length,
+    exportFormat,
+    i18n.language,
+    pendingExportConfig,
+  ]);
+
   const loadingMessages = [
     "Đang phân tích các bộ lọc và tìm kiếm đề cập tương thích...",
     "Đang tính toán chỉ số sắc thái và xu hướng cảm xúc...",
@@ -1858,18 +2058,39 @@ function LegacyReportsPage() {
         <ReportPreviewModal
           report={previewReport}
           onClose={() => setPreviewReport(null)}
-          onExport={() => {
-            handleExportPDF(previewReport);
-          }}
+          onExportPDF={() => handleExportPDF(previewReport)}
+          onExportExcel={() => handleExportExcel(previewReport)}
           isExporting={generatingPdfId === previewReport.id}
         />
       )}
+
+      {pendingExportConfig && pendingExportPreview ? (
+        <ReportExportPreviewModal
+          title={pendingExportPreview.title}
+          subtitle={pendingExportPreview.subtitle}
+          generatedAt={pendingExportPreview.generatedAt}
+          formatLabel={exportFormat === "excel" ? "Excel" : "PDF"}
+          stats={pendingExportPreview.stats}
+          summary={pendingExportPreview.summary}
+          sections={pendingExportPreview.sections}
+          sampleRows={pendingExportPreview.sampleRows}
+          isExporting={!!generatingPdfId}
+          onClose={() => setPendingExportConfig(null)}
+          onConfirm={() => {
+            setExportConfig(pendingExportConfig);
+            setPendingExportConfig(null);
+          }}
+        />
+      ) : null}
 
       {previewArchiveReport && (
         <ArchivedReportDetailModal
           report={previewArchiveReport}
           onClose={() => setPreviewArchiveReport(null)}
-          onExport={() => setExportConfig({ type: "archive", data: previewArchiveReport })}
+          onExport={() => {
+            confirmExportWithoutPreview("pdf", { type: "archive", data: previewArchiveReport });
+            setPreviewArchiveReport(null);
+          }}
           isExporting={generatingPdfId === previewArchiveReport.id}
           onDelete={() => handleDeleteArchive(previewArchiveReport.id)}
         />
@@ -2006,23 +2227,7 @@ function LegacyReportsPage() {
           {/* Filters */}
           {activeTab === "periodic" && (
             <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-              <div className="flex items-center gap-2 flex-1 md:flex-none min-w-[140px]">
-                <span className="text-[11px] text-[var(--color-text-muted)] font-bold uppercase tracking-wider hidden sm:block">
-                  Thương hiệu:
-                </span>
-                <select
-                  value={selectedBrand}
-                  onChange={(e) => setSelectedBrand(e.target.value)}
-                  className="select-app border border-[var(--color-border)] rounded-lg text-xs py-2 px-3 outline-none font-bold focus:ring-2 focus:ring-[var(--color-brand)]/20 w-full"
-                >
-                  <option value="all">Tất cả nhãn hàng</option>
-                  {brands.map((b) => (
-                    <option key={b} value={b} className="capitalize">
-                      {b}
-                    </option>
-                  ))}
-                </select>
-              </div>
+
               <div className="flex items-center gap-2 flex-1 md:flex-none min-w-[120px]">
                 <span className="text-[11px] text-[var(--color-text-muted)] font-bold uppercase tracking-wider hidden sm:block">
                   Thời gian:
@@ -2989,66 +3194,7 @@ function LegacyReportsPage() {
         )}
       </div>
 
-      {/* ── Promotional Banners ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 pb-4">
-        {/* Email Banner */}
-        <div className="relative overflow-hidden rounded-2xl bg-[var(--color-brand)] text-white p-6 md:p-8 flex flex-col justify-center min-h-[180px] md:min-h-[220px]">
-          <div className="relative z-10">
-            <p className="text-[10px] font-bold uppercase tracking-widest opacity-60 mb-2">
-              Tự động hóa
-            </p>
-            <h3 className="text-xl md:text-2xl font-bold mb-2">
-              Gửi báo cáo qua Email
-            </h3>
-            <p className="text-sm opacity-80 mb-5 max-w-sm">
-              Cấu hình gửi báo cáo AI tự động vào hộp thư lúc 8:00 sáng mỗi
-              ngày.
-            </p>
-            <button className="bg-white text-[var(--color-brand)] px-6 py-2.5 rounded-xl font-bold text-sm hover:shadow-lg active:scale-95 transition-all w-fit">
-              {t("reports.banner.setupBtn", { defaultValue: "Thiết lập ngay" })}
-            </button>
-          </div>
-          <span
-            className="material-symbols-outlined absolute -right-6 -top-6 text-[130px] md:text-[180px] opacity-10 rotate-12 pointer-events-none"
-            style={{ fontVariationSettings: "'FILL' 1" }}
-          >
-            mail
-          </span>
-        </div>
 
-        {/* AI Trend Banner */}
-        <div className="relative overflow-hidden rounded-2xl bg-[var(--color-bg-surface-high)] border border-[var(--color-border)] p-6 md:p-8 flex flex-col sm:flex-row items-center gap-5 min-h-[180px] md:min-h-[220px]">
-          <div className="flex-1 relative z-10 text-center sm:text-left">
-            <div className="inline-flex items-center gap-2 mb-3">
-              <span className="bg-[var(--color-brand)] text-white text-[9px] font-bold uppercase tracking-widest px-2 py-1 rounded-lg">
-                Mới
-              </span>
-            </div>
-            <h3 className="text-xl md:text-2xl font-bold mb-2 text-[var(--color-text-primary)]">
-              Phân tích Xu hướng AI
-            </h3>
-            <p className="text-sm text-[var(--color-text-secondary)] opacity-75 mb-5">
-              {t("reports.banner.trendDesc", { defaultValue: "Dùng LLM tóm tắt biến động thị trường quan trọng nhất trong tuần." })}
-            </p>
-            <a
-              href="#"
-              className="inline-flex items-center gap-1 text-[var(--color-brand)] hover:text-[var(--color-brand-hover)] font-bold text-sm transition-colors"
-            >
-              Khám phá ngay
-              <span className="material-symbols-outlined text-lg">
-                arrow_forward
-              </span>
-            </a>
-          </div>
-          <div className="w-24 h-24 md:w-32 md:h-32 rounded-2xl overflow-hidden shadow-2xl border-2 border-[var(--color-border)] flex-shrink-0 rotate-3 hidden sm:block relative z-10">
-            <img
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDFCABMvUN8JyM7a3E2elTgaODiz73B5O5e6t0CG4tqShjMiOpQt34ZqJsvkeVwSxzqY0Cq4Ev06YARyRjjEyW1vN2-3_33fBGzU12y6RBh0xm8_ZNFF5LAn3l7k0Yt3zdPvTj5Lmd6tlyM2dwsDzs4MIZNaXD76ohyzbXFkcNWO-hKAYON9biih5GUW4oV3RfVXy04Zc3FAfQuioapcW7o_sjM2865Oh8xGp62uIWVdNouDsgCvqGRdJihgGOCo9T26pmf4QIDXkY"
-              alt="AI Visualization"
-              className="w-full h-full object-cover"
-            />
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

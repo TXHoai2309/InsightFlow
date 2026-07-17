@@ -41,9 +41,9 @@
   "team.form.submit": "Tạo tài khoản nhân viên",
   "team.form.submitting": "Đang tạo tài khoản...",
   "team.roles.crisis.label": "Nhân viên xử lý khủng hoảng",
-  "team.roles.crisis.description": "Có thể xử lý mentions, cảnh báo và báo cáo. Không truy cập Leads.",
+  "team.roles.crisis.description": "Cho phép xử lý cảnh báo khủng hoảng. Có thể chọn cùng nghiệp vụ Khách hàng tiềm năng.",
   "team.roles.lead.label": "Nhân viên xử lý khách hàng tiềm năng",
-  "team.roles.lead.description": "Có thể xử lý mentions, leads và báo cáo. Không truy cập Alerts.",
+  "team.roles.lead.description": "Cho phép xử lý khách hàng tiềm năng. Có thể chọn cùng nghiệp vụ Khủng hoảng.",
   "team.operations.dashboard": "Theo dõi dữ liệu",
   "team.operations.mentions": "Kiểm tra mention",
   "team.operations.alerts": "Xử lý cảnh báo",
@@ -623,7 +623,7 @@
   "dashboard.filters.negative": "Tiêu cực",
   "dashboard.filters.neutral": "Trung lập",
   "dashboard.filters.news": "Báo chí",
-  "dashboard.filters.platform": "Nền tảng",
+  "dashboard.filters.platform": "NỀN TẢNG",
   "dashboard.filters.platformLabel": "Nền tảng:",
   "dashboard.filters.positive": "Tích cực",
   "dashboard.filters.sentimentLabel": "Sắc thái:",
@@ -726,13 +726,13 @@
   "bm.topics.legend.neutral": "Trung lập",
   "bm.topics.legend.negative": "Tiêu cực",
   "bm.topics.legend.barDesc": "Thanh màu bên trái = Sắc thái chủ đạo của chủ đề",
-  "bm.opportunity.title": "Cơ Hội Tiềm Năng",
-  "bm.opportunity.subtitle": "Địa điểm & Chủ đề có tín hiệu tích cực",
+  "bm.opportunity.title": "Phân tích Cơ hội",
+  "bm.opportunity.subtitle": "Khám phá các địa điểm và chủ đề có tiềm năng tăng trưởng cao.",
   "bm.opportunity.growth": "địa điểm tăng trưởng tích cực",
-  "bm.opportunity.topVenues": "Top 5 địa điểm tiềm năng",
-  "bm.opportunity.topTopics": "Xu hướng chủ đề được khen",
-  "bm.opportunity.actionLabel": "Gợi ý hành động:",
-  "bm.opportunity.actionDesc": "Cân nhắc đẩy mạnh truyền thông tại các địa điểm đang được đánh giá cao.",
+  "bm.opportunity.topVenues": "Top Địa điểm Tăng trưởng Tích cực",
+  "bm.opportunity.topTopics": "Xu hướng Chủ đề Khen Ngợi",
+  "bm.opportunity.actionLabel": "Khuyến nghị:",
+  "bm.opportunity.actionDesc": "Tập trung marketing vào các chi nhánh đang tăng trưởng.",
   "bm.crisis.title": "Cảnh Báo Khủng Hoảng",
   "bm.crisis.subtitle": "Phát hiện sớm rủi ro truyền thông",
   "bm.crisis.newAlerts": "cảnh báo rủi ro cao mới",
@@ -797,7 +797,6 @@
   "team.op.leads": "Xử lý khách hàng tiềm năng",
   "dashboard.filters.brand": "THƯƠNG HIỆU",
   "dashboard.filters.time": "THỜI GIAN",
-  "dashboard.filters.platform": "NỀN TẢNG",
   "dashboard.filters.allBrandsOption": "Tất cả thương hiệu",
   "dashboard.filters.allPlatformsOption": "Tất cả nền tảng",
   "dashboard.topSources.negativeTitle": "Nguồn Thảo Luận Chính",
@@ -1170,7 +1169,6 @@
   "mentions.table.topic": "Chủ đề",
   "mentions.table.unknownTime": "Không rõ",
   "mentions.table.unknownTimeDesc": "Thời gian không xác định",
-  "mentions.table.yearsAgo": "{{count}} năm trước",
   "metadata.about.desc": "Tìm hiểu về đội ngũ, sứ mệnh và các giá trị cốt lõi của InsightFlow.",
   "metadata.about.title": "Về chúng tôi | InsightFlow",
   "metadata.alerts.title": "Cảnh báo | InsightFlow",
@@ -1202,6 +1200,12 @@
   "nav.logout": "Đăng xuất",
   "nav.mentions": "Đề cập",
   "nav.reports": "Báo cáo",
+  "nav.admin_create_brand": "Tạo tài khoản Brand",
+  "nav.admin_brand_list": "Danh sách Brand",
+  "nav.admin_consultations": "Yêu cầu tư vấn",
+  "nav.labeling_tool": "Gắn nhãn dữ liệu",
+  "nav.operations": "Vận hành",
+  "nav.team": "Đội ngũ",
   "notifications.actions.cancel": "Hủy",
   "notifications.actions.save": "Lưu thay đổi",
   "notifications.actions.saved": "Đã lưu!",
@@ -1567,8 +1571,9 @@
       "vsLastPeriod": "so với kỳ trước",
       "negative": "Tiêu cực",
       "needsAction": "bài cần xử lý",
-      "alerts": "Cảnh báo AI",
-      "highLevel": "Mức cao",
+      "alerts": "Cảnh báo khủng hoảng",
+      "highLevel": "mức cao/khẩn cấp",
+      "last30Days": "30 ngày gần nhất",
       "noAlerts": "Không có báo động",
       "unprocessed": "Contact chưa xử lý",
       "crises": "Khủng hoảng",
@@ -1734,5 +1739,201 @@
       "detail.source": "Nguồn:",
       "detail.created": "Được tạo lúc:"
     }
-  }
+  },
+  "agentDashboard": {
+    "title": "Công việc hôm nay",
+    "subtitle": "Chào mừng trở lại! Dưới đây là tổng quan các nhiệm vụ và lịch trình của bạn.",
+    "stats": {
+      "todo": "Việc cần xử lý hôm nay",
+      "processing": "Đang xử lý",
+      "waiting": "Khách hàng đang chờ",
+      "overdue": "Sắp quá hạn",
+      "completion": "Tỷ lệ hoàn thành",
+      "vsYesterday": "+2 so với hôm qua",
+      "onTrack": "Đúng tiến độ",
+      "waitingTime": "1 chờ hơn 30p",
+      "dueBefore": "Cần xử lý trước 11:00",
+      "vsLastWeek": "+5% so với tuần trước"
+    },
+    "progress": {
+      "title": "Tiến độ hôm nay",
+      "subtitle": "Bạn đã xuất sắc hoàn thành <1>{{completed}}/{{total}}</1> khối lượng công việc.",
+      "goodPerf": "Hiệu suất Tốt",
+      "start": "Khởi động (0%)",
+      "celebrationTitle": "Hoàn thành toàn bộ công việc hôm nay",
+      "celebrationSub": "{{completed}}/{{total}} nhiệm vụ đã hoàn thành. Bạn hoàn thành sớm hơn 1 giờ 20 phút.",
+      "viewHistory": "Xem lịch sử",
+      "getNewTask": "Nhận nhiệm vụ mới"
+    },
+    "kanban": {
+      "urgent": "Cần xử lý ngay",
+      "processing": "Đang xử lý",
+      "waiting": "Chờ khách phản hồi",
+      "completed": "Nhật ký hoàn thành",
+      "emptyTitle": "Không còn công việc",
+      "emptySub": "Tuyệt vời, hãy xem mục khác!",
+      "completedCount": "Đã hoàn thành {{count}} nhiệm vụ",
+      "reply": "Trả lời",
+      "contact": "Liên hệ",
+      "done": "Xong"
+    },
+    "next": {
+      "title": "Việc tiếp theo",
+      "priority": "ƯU TIÊN",
+      "currentStreak": "Chuỗi hiện tại:",
+      "streakVal": "{{count}} liên tiếp",
+      "weeklyPerf": "Hiệu suất tuần này:",
+      "start": "Bắt đầu xử lý ngay"
+    },
+    "schedule": {
+      "title": "Lịch làm việc"
+    },
+    "notifications": {
+      "title": "Thông báo",
+      "new": "{{count}} Mới"
+    },
+    "mockData": {
+      "nextTasks": {
+        "t1": {
+          "title": "Video tiêu cực Mixue",
+          "time": "Còn 20 phút"
+        },
+        "t2": {
+          "title": "Khiếu nại giao hàng",
+          "time": "Còn 45 phút"
+        },
+        "t3": {
+          "title": "Câu hỏi khuyến mãi",
+          "time": "14:00"
+        }
+      },
+      "notifications": {
+        "n1": {
+          "title": "Khách hàng mới",
+          "desc": "Nguyễn Văn A vừa đăng ký tư vấn.",
+          "time": "5 phút trước"
+        },
+        "n2": {
+          "title": "Công việc được giao",
+          "desc": "Quản lý đã giao cho bạn 1 công việc mới.",
+          "time": "30 phút trước"
+        },
+        "n3": {
+          "title": "Sắp quá hạn",
+          "desc": "Nhiệm vụ 'Xác nhận lịch hẹn' sắp hết hạn.",
+          "time": "1 giờ trước"
+        },
+        "n4": {
+          "title": "Phản hồi mới",
+          "desc": "Khách hàng B vừa trả lời tin nhắn của bạn.",
+          "time": "2 giờ trước"
+        }
+      },
+      "kanban": {
+        "k1": {
+          "title": "Video tiêu cực về Mixue",
+          "trend": "Tăng 320% lượt đề cập trong 2 giờ",
+          "time": "Còn 20 phút"
+        },
+        "k2": {
+          "title": "Khách hàng VIP khiếu nại",
+          "trend": "Chưa có phản hồi sau 1 tiếng",
+          "time": "Còn 45 phút"
+        },
+        "k5": {
+          "title": "Xử lý bão 1 sao",
+          "time": "08:30"
+        },
+        "k6": {
+          "title": "Trả lời tin nhắn khách VIP",
+          "time": "10:15"
+        },
+        "k7": {
+          "title": "Gửi báo giá dịch vụ",
+          "time": "13:20"
+        }
+      },
+      "schedule": {
+        "s1": {
+          "title": "Trả lời khách hàng ca sáng",
+          "time": "09:00"
+        },
+        "s2": {
+          "title": "Xử lý khiếu nại phát sinh",
+          "time": "10:30"
+        },
+        "s3": {
+          "title": "Hỗ trợ chương trình khuyến mãi",
+          "time": "14:00"
+        },
+        "s4": {
+          "title": "Tổng hợp báo cáo ngày",
+          "time": "16:00"
+        }
+      }
+    }
+  },
+  "bm.tabs.overview": "Tổng quan",
+  "bm.tabs.crisis": "Crisis Monitoring",
+  "bm.tabs.lead": "Lead Monitoring",
+  "bm.crisis.aiDetected": "AI phát hiện",
+  "bm.crisis.abnormalSignals": "tín hiệu bất thường",
+  "bm.crisis.baselineDesc": "% tăng so với baseline — không phải % tĩnh tổng thảo luận",
+  "bm.crisis.noSignals": "Không phát hiện tín hiệu bất thường",
+  "bm.crisis.noSignalsDesc": "AI chưa thấy gì đáng lo ngại trong khoảng thời gian này",
+  "bm.crisis.critical": "NGHIÊM TRỌNG",
+  "bm.crisis.high": "CAO",
+  "bm.crisis.medium": "TRUNG BÌNH",
+  "bm.crisis.low": "THẤP",
+  "bm.crisis.newlyAppeared": "Mới xuất hiện",
+  "bm.crisis.abnormalComplaints": "lượt phàn nàn bất thường",
+  "bm.crisis.samplePlatform": "Nền tảng mẫu:",
+  "bm.heatmap.title": "Heatmap Cảnh báo Rủi ro theo Ngày",
+  "bm.heatmap.subtitle": "Độ đậm màu đỏ tương ứng mức độ phàn nàn từng ngày (13 tuần gần nhất)",
+  "bm.heatmap.less": "Ít",
+  "bm.heatmap.more": "Nhiều",
+  "bm.heatmap.noRisks": "Không có cảnh báo rủi ro",
+  "bm.heatmap.noRisksDesc": "Chưa có dữ liệu tiêu cực trong khoảng thời gian này",
+  "bm.heatmap.complaints": "phàn nàn",
+  "bm.heatmap.noComplaints": "Không có phàn nàn",
+  "bm.opportunity.updatedAt": "Cập nhật lúc:",
+  "bm.opportunity.downloadAlert": "Đã tải xuống Báo cáo Cơ hội (PDF)!",
+  "bm.opportunity.exportReport": "Xuất báo cáo",
+  "bm.opportunity.growthLocations": "địa điểm tăng trưởng",
+  "bm.opportunity.noData": "Không có dữ liệu tích cực",
+  "bm.opportunity.praised": "Khen:",
+  "bm.opportunity.notEnoughData": "Chưa đủ dữ liệu biểu đồ",
+  "bm.opportunity.positiveReviews": "Review tích cực:",
+  "bm.aiRec.title": "AI Khuyến nghị hành động",
+  "bm.aiRec.subtitle": "Tổng hợp từ phân tích tiềm năng & khủng hoảng",
+  "bm.aiRec.opportunity": "Nên tận dụng ngay",
+  "bm.aiRec.noOpp": "Chưa phát hiện cơ hội đáng kể",
+  "bm.aiRec.oppAction": "đang tăng bất thường, nên đẩy truyền thông ngay",
+  "bm.aiRec.crisis": "Cần xử lý khẩn",
+  "bm.aiRec.noCrisis": "Chưa phát hiện rủi ro cần xử lý",
+  "bm.aiRec.crisisAction": "tín hiệu tiêu cực đang leo thang, cần phân công xử lý",
+  "bm.aiRec.noData": "AI chưa có đủ tín hiệu để đưa ra khuyến nghị trong khoảng thời gian này",
+  "bm.viral.mockDraft": "Xin chào Quý khách, chúng tôi đã ghi nhận phản hồi về {{topic}} và sẽ khắc phục ngay. Chân thành cảm ơn!",
+  "bm.viral.quickReply": "Soạn phản hồi nhanh",
+  "bm.viral.sent": "Đã gửi phản hồi!",
+  "bm.viral.send": "Gửi phản hồi",
+  "bm.viral.title": "Viral Risk — Nội dung sắp bùng phát tiêu cực",
+  "bm.viral.noRisk": "Không phát hiện nguy cơ viral tiêu cực",
+  "bm.viral.underControl": "Tất cả nội dung đang trong tầm kiểm soát",
+  "bm.viral.riskWarning": "Nguy cơ Viral",
+  "bm.viral.complaints": "Phàn nàn",
+  "bm.viral.abnormalIncrease": "Tăng bất thường",
+  "bm.viral.projectedViews": "Dự phóng view",
+  "bm.viral.trendWarning": "Nếu tiếp tục xu hướng này, có thể đạt {{views}} view trong 48h",
+  "bm.viral.track": "Theo dõi",
+  "bm.viral.assign": "Phân công",
+  "bm.viral.reply": "Phản hồi",
+  "bm.timeline.title": "Timeline Diễn biến Sự kiện",
+  "bm.timeline.noEvents": "Hiện chưa có diễn biến nào cần theo dõi liên tục",
+  "bm.timeline.noEventsDesc": "Timeline sẽ hiện khi AI phát hiện sự kiện đang leo thang liên tục",
+  "bm.timeline.escalating": "Timeline Diễn biến — Đang leo thang",
+  "bm.timeline.peakComplaints": "Đỉnh điểm phàn nàn",
+  "bm.timeline.escalatingWarning": "AI phát hiện xu hướng leo thang liên tục trong 3+ ngày gần nhất. Cần phân công xử lý ngay.",
+  "common.other": "Khác",
+  "common.locale": "vi-VN"
 }

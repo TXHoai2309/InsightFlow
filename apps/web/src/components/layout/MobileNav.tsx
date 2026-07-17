@@ -14,6 +14,7 @@ import { useAuth } from "@/hooks/useAuth";
 
 const mobileNavItems = [
   { href: "/dashboard", label: "nav.dashboard", icon: "dashboard" },
+  { href: "/operations", label: "Tổng quan", icon: "space_dashboard" },
   { href: "/mentions", label: "nav.mentions", icon: "forum" },
   { href: "/alerts", label: "nav.alerts", icon: "notifications_active" },
   { href: "/leads", label: "nav.leads", icon: "leaderboard" },

@@ -7,8 +7,10 @@ import { useDashboardStore } from "@/stores/dashboard.store";
 import {
   getAlertReviewSinceIso,
   useAlertStore,
-  type CorrectionRequest,
+  type CustomerContactAttempt,
 } from "@/stores/alert.store";
+import { AlertWorkbench } from "@/components/alerts/AlertWorkbench";
+import type { AlertDetailPanelTab } from "@/components/alerts/AlertDetailPanel";
 import { useDashboard } from "@/hooks/useDashboardData";
 import { dbSecond } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
@@ -20,6 +22,14 @@ import {
   isRecordInBrandScope,
 } from "@/lib/brandScope";
 import { canPerformAction } from "@/lib/rbac";
+import { getAlertWorkflowStatus, isResolvedAlert } from "@/lib/alertWorkflow";
+import {
+  canAccessAlertQueue,
+  canAlertBeVisibleToUser,
+  isAlertOwnedByUser,
+} from "@/lib/alert-visibility";
+
+const ALERTS_PER_PAGE = 5;
 import { collection, getDocs, doc, getDoc } from "firebase/firestore";
 import {
   Chart as ChartJS,
@@ -188,8 +198,8 @@ function MonitoringCountdown({ alert }: MonitoringCountdownProps) {
 
   return (
     <span className={`text-[10px] font-bold px-2 py-0.5 rounded border flex items-center gap-1 ${hasActivity
-        ? "bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900/30 animate-pulse font-black"
-        : "bg-cyan-50 dark:bg-cyan-950/20 text-cyan-600 dark:text-cyan-400 border-cyan-200 dark:border-cyan-900/30"
+      ? "bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900/30 animate-pulse font-black"
+      : "bg-cyan-50 dark:bg-cyan-950/20 text-cyan-600 dark:text-cyan-400 border-cyan-200 dark:border-cyan-900/30"
       }`}>
       <span className="material-symbols-outlined text-[12px]">{hasActivity ? "warning" : "visibility"}</span>
       {text}
@@ -206,13 +216,13 @@ function MonitoringCountdown({ alert }: MonitoringCountdownProps) {
 export default function AlertsPage() {
   const router = useRouter();
   const { profile, loading: authLoading } = useAuth();
-  const isManager = profile?.role === "admin" || profile?.role === "brand_manager";
+  const isManager = profile?.role === "brand_manager";
   const scopedBrandKey = getScopedBrandKey(profile);
-  const canViewCrisisQueue = canPerformAction(profile, "view_crisis_queue");
+  const canViewCrisisQueue = canAccessAlertQueue(profile);
   const canUpdateCrisisStatus =
     hasBusinessBrandScope(profile) &&
     canPerformAction(profile, "update_crisis_status");
-  const brandFilterLocked = Boolean(profile && profile.role !== "admin");
+  const brandFilterLocked = Boolean(profile && canViewCrisisQueue);
   const { t, i18n } = useTranslation();
   const [spikeValue, setSpikeValue] = useState(40);
   const [reachValue, setReachValue] = useState(105000);
@@ -222,38 +232,43 @@ export default function AlertsPage() {
   const [loadingParent, setLoadingParent] = useState(false);
   const [copied, setCopied] = useState(false);
   const [trendAlert, setTrendAlert] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<"priority" | "new" | "resolving" | "resolved" | "requests">("priority");
-  const [resolvingAlert, setResolvingAlert] = useState<any>(null);
-  const [viewingHistoryAlert, setViewingHistoryAlert] = useState<any>(null);
-  const [reportModalItem, setReportModalItem] = useState<any>(null);
-  const [showReportToast, setShowReportToast] = useState(false);
+  const [activeTab, setActiveTab] = useState<"priority" | "new" | "resolving" | "resolved">("priority");
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
   const [correctionModalItem, setCorrectionModalItem] = useState<any>(null);
+  const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
+  const [pendingClaimSelectionId, setPendingClaimSelectionId] = useState<string | null>(null);
+  const [isDetailPanelCollapsed, setIsDetailPanelCollapsed] = useState(false);
+  const [detailPanelTab, setDetailPanelTab] = useState<AlertDetailPanelTab>("action");
+
   const hasLoadedRef = useRef(false);
   // New states for the redesigned Priority Process List
   const [searchText, setSearchText] = useState("");
   const [severityFilter, setSeverityFilter] = useState<string>("all");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [contentTypeFilter, setContentTypeFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "processing" | "contact_failed" | "resolved">("all");
   const [showMineOnly, setShowMineOnly] = useState(false);
   const [sortBy, setSortBy] = useState<"risk" | "newest" | "reach">("risk");
+  const [alertPage, setAlertPage] = useState(1);
   const [isResolvedExpanded, setIsResolvedExpanded] = useState(false);
   const [isRequestsExpanded, setIsRequestsExpanded] = useState(false);
-  const [timeFilter, setTimeFilter] = useState<string>("24h");
+  const [timeFilter, setTimeFilter] = useState<string>("all");
   const [singleDate, setSingleDate] = useState<string>("");
   const [customStartDate, setCustomStartDate] = useState<string>("");
   const [customEndDate, setCustomEndDate] = useState<string>("");
   const [showDatePopover, setShowDatePopover] = useState(false);
   const [activeTrending, setActiveTrending] = useState<{ name: string; matchIds: string[] } | null>(null);
 
+  useEffect(() => {
+    if (!isManager) setShowMineOnly(false);
+  }, [isManager]);
+
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
+  const alertIdParam = searchParams.get("alertId");
+  const handledAlertIdParamRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    if (tabParam === "requests") {
-      setActiveTab("requests");
-    }
-  }, [tabParam]);
+
 
 
   // Active configs for thesis presentation
@@ -314,8 +329,6 @@ export default function AlertsPage() {
     resolveCorrectionRequest,
     correctionRequests,
     isLoadingRequests,
-    lockAlertForResolution,
-    unlockAlertForResolution,
   } = useAlertStore();
   // Filter alerts by currently selected brand filter for dashboard overview calculations
   const brandFilteredAlerts = useMemo(() => {
@@ -338,6 +351,22 @@ export default function AlertsPage() {
         return aKey === tKey;
       });
     }
+
+    // Hàng đợi và lịch sử chỉ giữ các vụ việc trong cửa sổ 30 ngày.
+    // Vụ việc đang mở tính theo ngày phát hiện; vụ việc hoàn tất tính theo
+    // thời điểm giải quyết gần nhất.
+    const activeCutoffMs = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    result = result.filter((alert) => {
+      const isCompleted = isResolvedAlert(alert);
+      const lastHistoryAt = Array.isArray(alert.resolution_history) && alert.resolution_history.length > 0
+        ? alert.resolution_history[alert.resolution_history.length - 1]?.timestamp
+        : undefined;
+      const relevantAt = isCompleted
+        ? alert.resolved_at || alert.monitoring_started_at || lastHistoryAt || alert.created_at
+        : alert.created_at;
+      const relevantAtMs = new Date(relevantAt).getTime();
+      return Number.isFinite(relevantAtMs) && relevantAtMs >= activeCutoffMs && relevantAtMs <= Date.now();
+    });
 
     if (timeFilter !== "all") {
       const now = new Date();
@@ -381,11 +410,20 @@ export default function AlertsPage() {
 
       if (startDate || endDate) {
         result = result.filter(a => {
-          const alertDate = new Date(a.created_at);
-          // Exclude alerts with invalid/missing date when filtering by time
-          if (!a.created_at || isNaN(alertDate.getTime())) return false;
-          if (startDate && alertDate < startDate) return false;
-          if (endDate && alertDate > endDate) return false;
+          const isCompleted = isResolvedAlert(a);
+          // Việc còn mở trong 30 ngày luôn hiện; bộ lọc ngày chỉ áp dụng
+          // cho lịch sử cảnh báo đã hoàn tất.
+          if (!isCompleted) return true;
+
+          const lastHistoryAt = Array.isArray(a.resolution_history) && a.resolution_history.length > 0
+            ? a.resolution_history[a.resolution_history.length - 1]?.timestamp
+            : undefined;
+          const completedAt = a.resolved_at || a.monitoring_started_at || lastHistoryAt || a.created_at;
+          const completedDate = new Date(completedAt);
+          if (!completedAt || isNaN(completedDate.getTime())) return false;
+
+          if (startDate && completedDate < startDate) return false;
+          if (endDate && completedDate > endDate) return false;
           return true;
         });
       }
@@ -412,30 +450,76 @@ export default function AlertsPage() {
     return alert.negativity_score ?? 0;
   };
 
-  // Filter alerts into active, resolved, and requests
-  // Tasks being handled by OTHERS are hidden from the shared list
-  // They only appear in the "Mine Only" view of the assigned person
+  const visibleBaseAlerts = useMemo(
+    () => brandFilteredAlerts.filter((alert) => canAlertBeVisibleToUser(alert, profile)),
+    [brandFilteredAlerts, profile],
+  );
+
   const activeAlerts = useMemo(() => {
-    return brandFilteredAlerts.filter(a => {
-      if (a.status.toLowerCase() === "resolved") return false;
-      // Hide from shared list if someone ELSE already claimed this task
-      if (
-        a.being_resolved_by &&
-        a.being_resolved_by !== profile?.email &&
-        (a.status.toLowerCase() === "resolving" || a.status.toLowerCase() === "pending_approval" || a.status.toLowerCase() === "monitoring")
-      ) {
-        return false;
-      }
+    return visibleBaseAlerts.filter(a => {
+      const status = getAlertWorkflowStatus(a);
+      if (status === "resolved") return false;
       return true;
     });
-  }, [brandFilteredAlerts, profile?.email]);
+  }, [visibleBaseAlerts]);
 
   const resolvedAlerts = useMemo(() => {
-    return brandFilteredAlerts.filter(a => a.status.toLowerCase() === "resolved");
-  }, [brandFilteredAlerts]);
+    return visibleBaseAlerts.filter(isResolvedAlert);
+  }, [visibleBaseAlerts]);
+
+  useEffect(() => {
+    if (!alertIdParam) {
+      handledAlertIdParamRef.current = null;
+      return;
+    }
+    if (handledAlertIdParamRef.current === alertIdParam) return;
+
+    const targetAlert = visibleBaseAlerts.find((alert) => {
+      return [alert.id, alert.source_id, alert.post_id, alert.comment_id]
+        .filter(Boolean)
+        .some((id) => String(id) === alertIdParam);
+    });
+    if (!targetAlert) return;
+
+    handledAlertIdParamRef.current = alertIdParam;
+    const workflowStatus = getAlertWorkflowStatus(targetAlert);
+
+    // A deep link must reveal the requested record even if the user left
+    // restrictive queue filters active during the previous visit.
+    setSearchText("");
+    setSeverityFilter("all");
+    setSourceFilter("all");
+    setContentTypeFilter("all");
+    setShowMineOnly(false);
+    setStatusFilter(
+      workflowStatus === "resolved"
+        ? "resolved"
+        : workflowStatus === "contact_failed"
+          ? "contact_failed"
+          : "all",
+    );
+    setAlertPage(1);
+    setDetailPanelTab("action");
+    setIsDetailPanelCollapsed(false);
+    setPendingClaimSelectionId(targetAlert.id);
+  }, [alertIdParam, visibleBaseAlerts]);
 
   const processedActiveAlerts = useMemo(() => {
-    let result = [...activeAlerts];
+    let result = statusFilter === "resolved" ? [...resolvedAlerts] : [...activeAlerts];
+
+    // Lọc theo trạng thái nghiệp vụ. "all" là toàn bộ hàng đợi đang mở;
+    // cảnh báo đã giải quyết chỉ xuất hiện khi chọn riêng trạng thái resolved.
+    if (statusFilter === "pending") {
+      result = result.filter((alert) => {
+        return getAlertWorkflowStatus(alert) === "pending";
+      });
+    } else if (statusFilter === "processing") {
+      result = result.filter((alert) => getAlertWorkflowStatus(alert) === "processing");
+    } else if (statusFilter === "contact_failed") {
+      result = result.filter((alert) => getAlertWorkflowStatus(alert) === "contact_failed");
+    } else if (statusFilter === "resolved") {
+      result = result.filter(isResolvedAlert);
+    }
 
     // 1. Search text filter
     if (searchText.trim()) {
@@ -462,14 +546,28 @@ export default function AlertsPage() {
     }
 
     // 4. Mine only filter
-    if (showMineOnly && profile?.email) {
-      result = result.filter(a => a.being_resolved_by === profile.email);
+    if (showMineOnly) {
+      result = result.filter(a => isAlertOwnedByUser(a, profile));
     }
 
-    // 5. Sorting
+    // 5. Sorting. Risk priority is severity first, then the detailed risk
+    // score, then recency so urgent mentions are always at the top.
     result.sort((a, b) => {
       if (sortBy === "risk") {
-        return getRiskScore(b) - getRiskScore(a);
+        const severityRank: Record<string, number> = {
+          critical: 4,
+          high: 3,
+          medium: 2,
+          low: 1,
+        };
+        const severityDelta =
+          (severityRank[String(b.severity || "").toLowerCase()] || 0) -
+          (severityRank[String(a.severity || "").toLowerCase()] || 0);
+        if (severityDelta !== 0) return severityDelta;
+
+        const riskDelta = getRiskScore(b) - getRiskScore(a);
+        if (riskDelta !== 0) return riskDelta;
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       }
       if (sortBy === "reach") {
         return (b.reach || 0) - (a.reach || 0);
@@ -479,7 +577,69 @@ export default function AlertsPage() {
     });
 
     return result;
-  }, [activeAlerts, searchText, severityFilter, sourceFilter, contentTypeFilter, showMineOnly, sortBy, profile]);
+  }, [activeAlerts, resolvedAlerts, statusFilter, searchText, severityFilter, sourceFilter, contentTypeFilter, showMineOnly, sortBy, profile]);
+
+  const totalAlertPages = Math.max(1, Math.ceil(processedActiveAlerts.length / ALERTS_PER_PAGE));
+  const paginatedActiveAlerts = useMemo(() => {
+    const startIndex = (alertPage - 1) * ALERTS_PER_PAGE;
+    return processedActiveAlerts.slice(startIndex, startIndex + ALERTS_PER_PAGE);
+  }, [processedActiveAlerts, alertPage]);
+
+  const selectedAlert = useMemo(() => {
+    if (!selectedAlertId) return null;
+    return processedActiveAlerts.find((alert) => alert.id === selectedAlertId) || null;
+  }, [processedActiveAlerts, selectedAlertId]);
+
+  useEffect(() => {
+    if (!pendingClaimSelectionId) return;
+    const claimedAlertIndex = processedActiveAlerts.findIndex((alert) => alert.id === pendingClaimSelectionId);
+    if (claimedAlertIndex < 0) return;
+
+    const claimedAlertPage = Math.floor(claimedAlertIndex / ALERTS_PER_PAGE) + 1;
+    setSelectedAlertId(pendingClaimSelectionId);
+    if (alertPage !== claimedAlertPage) {
+      setAlertPage(claimedAlertPage);
+      return;
+    }
+
+    setPendingClaimSelectionId(null);
+    window.requestAnimationFrame(() => {
+      document.querySelector('[data-tour="alert-detail-panel"]')?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [alertPage, pendingClaimSelectionId, processedActiveAlerts]);
+
+  useEffect(() => {
+    if (pendingClaimSelectionId) return;
+    if (paginatedActiveAlerts.length === 0) {
+      setSelectedAlertId(null);
+      return;
+    }
+    if (!selectedAlertId || !paginatedActiveAlerts.some((alert) => alert.id === selectedAlertId)) {
+      setSelectedAlertId(paginatedActiveAlerts[0].id);
+      setDetailPanelTab("action");
+    }
+  }, [paginatedActiveAlerts, pendingClaimSelectionId, selectedAlertId]);
+
+  const visibleAlertPages = useMemo(() => {
+    const startPage = Math.max(1, Math.min(alertPage - 2, totalAlertPages - 4));
+    const endPage = Math.min(totalAlertPages, startPage + 4);
+    return Array.from({ length: endPage - startPage + 1 }, (_, index) => startPage + index);
+  }, [alertPage, totalAlertPages]);
+
+  useEffect(() => {
+    setAlertPage(1);
+  }, [statusFilter, searchText, severityFilter, sourceFilter, contentTypeFilter, showMineOnly, sortBy, filters.brand]);
+
+  useEffect(() => {
+    setAlertPage((current) => Math.min(current, totalAlertPages));
+  }, [totalAlertPages]);
+
+  const goToAlertPage = (pageNumber: number) => {
+    setAlertPage(Math.max(1, Math.min(totalAlertPages, pageNumber)));
+    window.requestAnimationFrame(() => {
+      document.querySelector('[data-tour="alerts-queue-list"]')?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
 
   // Helper: map email/uid to display name for resolvers
   const getResolverName = (emailOrId: string | null | undefined): string => {
@@ -502,7 +662,7 @@ export default function AlertsPage() {
   // Harvest resolution log logs from actual alert histories
   const teamActivities = useMemo(() => {
     const list: any[] = [];
-    brandFilteredAlerts.forEach(a => {
+    visibleBaseAlerts.forEach(a => {
       if (a.resolution_history) {
         a.resolution_history.forEach((h: any) => {
           // Priority: stored name > stored email (mapped) > current lock holder > fallback
@@ -538,16 +698,16 @@ export default function AlertsPage() {
     }
 
     return list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 5);
-  }, [brandFilteredAlerts, t]);
+  }, [visibleBaseAlerts, t]);
 
   // Shift Performance resolved ratio calculation
   const shiftPerformanceStats = useMemo(() => {
-    const resolved = brandFilteredAlerts.filter(a => a.status === "resolved").length;
-    const total = brandFilteredAlerts.length;
+    const resolved = visibleBaseAlerts.filter(isResolvedAlert).length;
+    const total = visibleBaseAlerts.length;
     // We default to 100% KPI completion if there are no alerts to handle
     const percentage = total === 0 ? 100 : Math.round((resolved / total) * 100);
     return { percentage, resolved, total };
-  }, [brandFilteredAlerts]);
+  }, [visibleBaseAlerts]);
 
   const shiftPerformance = shiftPerformanceStats.percentage;
 
@@ -800,8 +960,8 @@ export default function AlertsPage() {
   // Compute lists of high-risk items for the Crisis Priority Center (unified Sự vụ & Bài viết & Thông tin liên hệ)
   const highRiskIncidents = useMemo(() => {
     // 1. Get unresolved critical/high alerts
-    const activeAlerts = alerts.filter(
-      a => (a.severity.toLowerCase() === "critical" || a.severity.toLowerCase() === "high") && a.status.toLowerCase() !== "resolved"
+    const activeAlerts = visibleBaseAlerts.filter(
+      a => (a.severity.toLowerCase() === "critical" || a.severity.toLowerCase() === "high") && !isResolvedAlert(a)
     );
 
     // 2. Enrich with lead contact details if author or content matches
@@ -829,7 +989,7 @@ export default function AlertsPage() {
         rawLead: matchingLead
       };
     });
-  }, [alerts, dashboardStore.leads]);
+  }, [visibleBaseAlerts, dashboardStore.leads, t]);
 
   // Count cases, posts, and contacts from highRiskIncidents
   const { casesCount, postsCount, contactsCount } = useMemo(() => {
@@ -873,7 +1033,7 @@ export default function AlertsPage() {
   useEffect(() => {
     if (authLoading || !canViewCrisisQueue) return;
     setFilters({ status: "all" });
-    fetchAlerts(scopedBrandKey);
+    fetchAlerts(scopedBrandKey, true);
     fetchCorrectionRequests(scopedBrandKey);
   }, [authLoading, canViewCrisisQueue, scopedBrandKey, fetchAlerts, fetchCorrectionRequests, setFilters]);
 
@@ -920,850 +1080,160 @@ export default function AlertsPage() {
     );
   }
 
-  // Calculate counts for tabs based on current filters (brand, severity, signal)
-  const newCountForTab = alerts.filter((alert) => {
-    let matchSignal = true;
-    if (signalFilter === "spike") {
-      matchSignal = (
-        alert.text.toLowerCase().includes("đột biến") ||
-        alert.text.toLowerCase().includes("tăng") ||
-        alert.text.toLowerCase().includes("spike")
-      );
-    } else if (signalFilter === "reach") {
-      matchSignal = (
-        alert.text.toLowerCase().includes("tiếp cận") ||
-        alert.text.toLowerCase().includes("reach") ||
-        alert.text.toLowerCase().includes("người")
-      );
-    } else if (signalFilter === "sensitive") {
-      matchSignal = alert.sentiment === "negative" || alert.severity === "critical" || alert.severity === "high";
-    }
-    const status = alert.status.toLowerCase();
-    return status !== "resolving" && status !== "resolved" && matchSignal;
-  }).length;
-
-  const resolvingCountForTab = alerts.filter((alert) => {
-    let matchSignal = true;
-    if (signalFilter === "spike") {
-      matchSignal = (
-        alert.text.toLowerCase().includes("đột biến") ||
-        alert.text.toLowerCase().includes("tăng") ||
-        alert.text.toLowerCase().includes("spike")
-      );
-    } else if (signalFilter === "reach") {
-      matchSignal = (
-        alert.text.toLowerCase().includes("tiếp cận") ||
-        alert.text.toLowerCase().includes("reach") ||
-        alert.text.toLowerCase().includes("người")
-      );
-    } else if (signalFilter === "sensitive") {
-      matchSignal = alert.sentiment === "negative" || alert.severity === "critical" || alert.severity === "high";
-    }
-    return alert.status.toLowerCase() === "resolving" && matchSignal;
-  }).length;
-
-  const resolvedCountForTab = alerts.filter((alert) => {
-    let matchSignal = true;
-    if (signalFilter === "spike") {
-      matchSignal = (
-        alert.text.toLowerCase().includes("đột biến") ||
-        alert.text.toLowerCase().includes("tăng") ||
-        alert.text.toLowerCase().includes("spike")
-      );
-    } else if (signalFilter === "reach") {
-      matchSignal = (
-        alert.text.toLowerCase().includes("tiếp cận") ||
-        alert.text.toLowerCase().includes("reach") ||
-        alert.text.toLowerCase().includes("người")
-      );
-    } else if (signalFilter === "sensitive") {
-      matchSignal = alert.sentiment === "negative" || alert.severity === "critical" || alert.severity === "high";
-    }
-    return alert.status.toLowerCase() === "resolved" && matchSignal;
-  }).length;
-
-  // Filter alerts locally based on both Tab status and "Tín hiệu" (signal) dropdown
-  const filteredAlerts = alerts.filter((alert) => {
-    // 1. Tab filtering
-    if (activeTab === "new") {
-      const status = alert.status.toLowerCase();
-      if (status === "resolving" || status === "resolved") {
-        return false;
-      }
-    }
-    if (activeTab === "resolving" && alert.status.toLowerCase() !== "resolving") {
-      return false;
-    }
-    if (activeTab === "resolved" && alert.status.toLowerCase() !== "resolved") {
-      return false;
-    }
-
-    // 2. Signal filtering
-    if (signalFilter === "spike") {
-      return (
-        alert.text.toLowerCase().includes("đột biến") ||
-        alert.text.toLowerCase().includes("tăng") ||
-        alert.text.toLowerCase().includes("spike")
-      );
-    }
-    if (signalFilter === "reach") {
-      return (
-        alert.text.toLowerCase().includes("tiếp cận") ||
-        alert.text.toLowerCase().includes("reach") ||
-        alert.text.toLowerCase().includes("người")
-      );
-    }
-    if (signalFilter === "sensitive") {
-      return alert.sentiment === "negative" || alert.severity === "critical" || alert.severity === "high";
-    }
-    return true;
-  });
-
-  // Sort alerts:
-  // - resolved tab: resolved_at descending (most recently resolved first)
-  // - resolving tab: timestamp of last resolution attempt descending (most recently updated first)
-  // - new tab: created_at descending (newest first)
-  const sortedAlerts = useMemo(() => {
-    return [...filteredAlerts].sort((a, b) => {
-      if (activeTab === "resolved") {
-        const timeA = a.resolved_at ? new Date(a.resolved_at).getTime() : 0;
-        const timeB = b.resolved_at ? new Date(b.resolved_at).getTime() : 0;
-        if (timeA !== timeB) {
-          return timeB - timeA;
-        }
-      }
-      if (activeTab === "resolving") {
-        const lastAttemptA = a.resolution_history && a.resolution_history.length > 0
-          ? new Date(a.resolution_history[a.resolution_history.length - 1].timestamp).getTime()
-          : new Date(a.created_at).getTime();
-        const lastAttemptB = b.resolution_history && b.resolution_history.length > 0
-          ? new Date(b.resolution_history[b.resolution_history.length - 1].timestamp).getTime()
-          : new Date(b.created_at).getTime();
-        if (lastAttemptA !== lastAttemptB) {
-          return lastAttemptB - lastAttemptA;
-        }
-      }
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-    });
-  }, [filteredAlerts, activeTab]);
-
-
-
   return (
     <div data-tour="alerts-page" className="p-4 md:p-6 lg:p-8 space-y-6 bg-[var(--color-bg-base)] text-[var(--color-text-primary)] animate-fade-in">
 
       {/* Redesigned Grid Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+      <AlertWorkbench
+        alerts={visibleBaseAlerts}
+        pageAlerts={paginatedActiveAlerts}
+        selectedAlert={selectedAlert}
+        selectedAlertId={selectedAlertId}
+        panelCollapsed={isDetailPanelCollapsed}
+        detailTab={detailPanelTab}
+        isLoading={isLoading}
+        isRefreshing={isLoading || isLoadingRequests}
+        error={error}
+        statusFilter={statusFilter}
+        searchText={searchText}
+        severityFilter={severityFilter}
+        sourceFilter={sourceFilter}
+        contentTypeFilter={contentTypeFilter}
+        showMineOnly={showMineOnly}
+        sortBy={sortBy}
+        timeFilter={timeFilter}
+        singleDate={singleDate}
+        customStartDate={customStartDate}
+        customEndDate={customEndDate}
+        brandFilterLocked={brandFilterLocked}
+        canViewAllAssignments={isManager}
+        brands={brands}
+        filters={filters}
+        currentPage={alertPage}
+        totalPages={totalAlertPages}
+        totalFiltered={processedActiveAlerts.length}
+        profileEmail={profile?.email}
+        canUpdate={canUpdateCrisisStatus}
+        getResolverName={getResolverName}
+        onRefresh={async () => {
+          try {
+            await fetchAlerts(scopedBrandKey, true);
+            await fetchCorrectionRequests(scopedBrandKey, true);
+            triggerToast("Đã làm mới dữ liệu.");
+          } catch (refreshError) {
+            triggerToast("Không thể làm mới dữ liệu.");
+          }
+        }}
+        onSelectAlert={(alert) => {
+          setSelectedAlertId(alert.id);
+          setDetailPanelTab("action");
+          setIsDetailPanelCollapsed(false);
+        }}
+        onCollapsePanel={() => setIsDetailPanelCollapsed(true)}
+        onOpenPanel={() => setIsDetailPanelCollapsed(false)}
+        onDetailTabChange={setDetailPanelTab}
+        onClaim={async (alert) => {
+          const previousStatusFilter = statusFilter;
+          try {
+            setPendingClaimSelectionId(alert.id);
+            const claimRequest = updateAlertStatus(alert.id, "resolving", profile, { note: "Đã tiếp nhận xử lý" }, alert.brand);
+            setStatusFilter("processing");
+            setSelectedAlertId(alert.id);
+            setDetailPanelTab("action");
+            setIsDetailPanelCollapsed(false);
+            await claimRequest;
+            triggerToast("Đã nhận xử lý cảnh báo.");
+          } catch (claimError) {
+            setPendingClaimSelectionId(null);
+            setStatusFilter(previousStatusFilter);
+            triggerToast(claimError instanceof Error ? claimError.message : "Không thể nhận xử lý cảnh báo.");
+            throw claimError;
+          }
+        }}
+        onRecordResult={async (alert) => {
+          if (
+            !alert.customer_contact_opened_at ||
+            !alert.customer_contact_note?.trim() ||
+            !alert.customer_contact_evidence_image ||
+            !alert.customer_response_result
+          ) {
+            const missingEvidenceError = new Error("Cần có minh chứng liên hệ và kết quả phản hồi của khách hàng.");
+            triggerToast(missingEvidenceError.message);
+            throw missingEvidenceError;
+          }
 
-        {/* Left Column: Priority Process Queue List */}
-        <div className="lg:col-span-2 space-y-6">
+          const outcomeStatus: CustomerContactAttempt["outcome_status"] = alert.customer_response_result === "no_response"
+            ? "contact_waiting"
+            : alert.customer_response_result === "still_upset"
+              ? "contact_failed"
+              : "resolved";
+          const nextContactHistory: CustomerContactAttempt[] = [
+            ...(alert.customer_contact_history || []),
+            {
+              opened_at: alert.customer_contact_opened_at,
+              opened_by: alert.customer_contact_opened_by,
+              template: alert.customer_contact_template,
+              note: alert.customer_contact_note,
+              evidence_image: alert.customer_contact_evidence_image,
+              response_result: alert.customer_response_result,
+              completed_at: new Date().toISOString(),
+              outcome_status: outcomeStatus,
+            },
+          ];
+          const targetStatus = outcomeStatus === "contact_waiting"
+            ? "contact_waiting"
+            : outcomeStatus === "contact_failed"
+              ? "contact_failed"
+              : "resolved";
+          const resultLabel = alert.customer_response_result === "positive"
+            ? "Khách hàng phản hồi tích cực"
+            : alert.customer_response_result === "no_response"
+              ? "Chưa phản hồi"
+              : alert.customer_response_result === "still_upset"
+                ? "Khách hàng vẫn bức xúc"
+                : "Không phù hợp";
 
-          {/* ── HEADER ROW ── */}
-          <div data-tour="alerts-queue-header" className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            {/* Title + Critical badge */}
-            <div className="flex items-center gap-3">
-              <h1 className="text-xl md:text-2xl font-black tracking-tight text-[var(--color-text-primary)] uppercase">
-                {t("alerts.page.title")}
-              </h1>
-              {activeAlerts.filter(a => a.severity.toLowerCase() === "critical").length > 0 && (
-                <span className="bg-red-100 dark:bg-red-950/20 text-red-600 dark:text-red-400 text-[10px] px-2.5 py-1 rounded-full font-black animate-pulse flex items-center gap-1 border border-red-200 dark:border-red-900/30">
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping"></span>
-                  {t("alerts.page.criticalCount", { count: activeAlerts.filter(a => a.severity.toLowerCase() === "critical").length })}
-                </span>
-              )}
-            </div>
-
-            {/* Right controls: Search + Time + Reload */}
-            <div className="flex flex-wrap items-center gap-2 self-end sm:self-auto">
-              {/* Search */}
-              <div className="relative">
-                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">search</span>
-                <input
-                  type="text"
-                  placeholder={t("alerts.page.searchPlaceholder")}
-                  value={searchText}
-                  onChange={(e) => setSearchText(e.target.value)}
-                  className="pl-8 pr-3 py-1.5 w-52 border border-[var(--color-border)] rounded-xl text-xs bg-[var(--color-bg-surface-raised)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 text-[var(--color-text-primary)] font-medium"
-                />
-              </div>
-
-              {/* Brand Selector (admin only) */}
-              {!brandFilterLocked && (
-                <select
-                  value={filters.brand}
-                  onChange={(e) => setFilters({ brand: e.target.value })}
-                  className="select-app border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 pl-3 pr-8 bg-white dark:bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] focus:outline-none cursor-pointer"
-                >
-                  <option value="all">{t("alerts.page.allBrands")}</option>
-                  {brands.map(b => (
-                    <option key={b} value={b}>{b}</option>
-                  ))}
-                </select>
-              )}
-
-              {/* Time Range */}
-              <div className="flex items-center gap-1.5">
-                <select
-                  value={timeFilter}
-                  onChange={(e) => setTimeFilter(e.target.value)}
-                  className="select-app border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 pl-3 pr-8 bg-white dark:bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] focus:outline-none cursor-pointer"
-                >
-                  <option value="24h">Hôm nay</option>
-                  <option value="2d">2 ngày</option>
-                  <option value="3d">3 ngày</option>
-                  <option value="5d">5 ngày</option>
-                  <option value="7d">7 ngày qua</option>
-                  <option value="30d">30 ngày qua</option>
-                  <option value="all">Toàn thời gian</option>
-                  <option value="single">Ngày cụ thể</option>
-                  <option value="custom">Tự chọn ngày</option>
-                </select>
-                {timeFilter === "single" && (
-                  <input type="date" value={singleDate} onChange={(e) => setSingleDate(e.target.value)}
-                    className="border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 px-3 bg-white dark:bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] focus:outline-none cursor-pointer" />
-                )}
-                {timeFilter === "custom" && (
-                  <div className="flex items-center gap-1">
-                    <input type="date" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)}
-                      className="border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 px-2 bg-white dark:bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] focus:outline-none cursor-pointer" />
-                    <span className="text-[10px] text-[var(--color-text-muted)] font-bold">→</span>
-                    <input type="date" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)}
-                      className="border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 px-2 bg-white dark:bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] focus:outline-none cursor-pointer" />
-                  </div>
-                )}
-              </div>
-
-              {/* Reload */}
-              <button
-                onClick={async () => {
-                  try {
-                    await fetchAlerts(scopedBrandKey, true);
-                    await fetchCorrectionRequests(scopedBrandKey, true);
-                    triggerToast("Đã làm mới dữ liệu!");
-                  } catch (e) {
-                    triggerToast("Lỗi làm mới dữ liệu!");
-                  }
-                }}
-                disabled={isLoading || isLoadingRequests}
-                title="Làm mới dữ liệu"
-                className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold border border-[var(--color-border)] text-[var(--color-text-secondary)] bg-white dark:bg-[var(--color-bg-surface-raised)] hover:bg-slate-50 transition-all cursor-pointer disabled:opacity-50"
-              >
-                <span className={`material-symbols-outlined text-sm ${(isLoading || isLoadingRequests) ? 'animate-spin' : ''}`}>refresh</span>
-                <span className="hidden sm:inline">Làm mới</span>
-              </button>
-            </div>
-          </div>
-
-          {/* ── STATS SUMMARY BAR ── */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[
-              {
-                label: "Chưa xử lý",
-                value: brandFilteredAlerts.filter(a => a.status !== "resolving" && a.status !== "resolved" && a.status !== "pending_approval" && a.status !== "monitoring").length,
-                icon: "warning",
-                colorClass: "text-red-600 dark:text-red-400",
-                bgClass: "bg-red-50 dark:bg-red-950/30",
-                borderClass: "border-red-100 dark:border-red-900/30",
-              },
-              {
-                label: "Đang xử lý",
-                value: brandFilteredAlerts.filter(a => a.status === "resolving" || a.status === "monitoring").length,
-                icon: "autorenew",
-                colorClass: "text-orange-600 dark:text-orange-400",
-                bgClass: "bg-orange-50 dark:bg-orange-950/30",
-                borderClass: "border-orange-100 dark:border-orange-900/30",
-              },
-              {
-                label: "Chờ duyệt",
-                value: brandFilteredAlerts.filter(a => a.status === "pending_approval").length,
-                icon: "pending_actions",
-                colorClass: "text-amber-600 dark:text-amber-400",
-                bgClass: "bg-amber-50 dark:bg-amber-950/30",
-                borderClass: "border-amber-100 dark:border-amber-900/30",
-              },
-              {
-                label: "Đã giải quyết",
-                value: brandFilteredAlerts.filter(a => a.status === "resolved").length,
-                icon: "check_circle",
-                colorClass: "text-green-600 dark:text-green-400",
-                bgClass: "bg-green-50 dark:bg-green-950/30",
-                borderClass: "border-green-100 dark:border-green-900/30",
-              },
-            ].map(stat => (
-              <div key={stat.label} className={`flex items-center gap-3 p-3 rounded-xl border ${stat.bgClass} ${stat.borderClass}`}>
-                <span className={`material-symbols-outlined text-xl ${stat.colorClass}`}>{stat.icon}</span>
-                <div>
-                  <p className={`text-xl font-black leading-none ${stat.colorClass}`}>{stat.value}</p>
-                  <p className="text-[10px] text-[var(--color-text-muted)] font-semibold mt-0.5">{stat.label}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* ── FILTER ROW ── */}
-          <div data-tour="alerts-filters" className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)]/50 pb-3">
-            {/* Severity pills */}
-            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/50 p-1 rounded-xl">
-              {[
-                { id: "all", label: t("alerts.page.severityAll"), activeClass: "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm" },
-                { id: "critical", label: t("alerts.page.severityCritical"), activeClass: "bg-red-600 text-white shadow-sm" },
-                { id: "high", label: t("alerts.page.severityHigh"), activeClass: "bg-orange-500 text-white shadow-sm" },
-                { id: "medium", label: t("alerts.page.severityMedium"), activeClass: "bg-yellow-500 text-white shadow-sm" },
-                { id: "low", label: t("alerts.page.severityLow"), activeClass: "bg-slate-500 text-white shadow-sm" }
-              ].map(pill => (
-                <button
-                  key={pill.id}
-                  onClick={() => setSeverityFilter(pill.id)}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    severityFilter === pill.id ? pill.activeClass : "text-slate-500 dark:text-slate-400 hover:text-slate-800"
-                  }`}
-                >
-                  {pill.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Divider */}
-            <span className="w-px h-5 bg-[var(--color-border)] hidden sm:block"></span>
-
-            {/* Source */}
-            <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}
-              className="border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 pl-3 pr-7 bg-white dark:bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] focus:outline-none cursor-pointer">
-              <option value="all">{t("alerts.page.sourceAll")}</option>
-              <option value="facebook">{t("alerts.page.sourceFacebook")}</option>
-              <option value="tiktok">{t("alerts.page.sourceTiktok")}</option>
-              <option value="youtube">{t("alerts.page.sourceYoutube")}</option>
-              <option value="google_maps">{t("alerts.page.sourceGoogleMaps")}</option>
-              <option value="befood">{t("alerts.page.sourceBefood")}</option>
-              <option value="thread">{t("alerts.page.sourceThreads")}</option>
-              <option value="news">{t("alerts.page.sourceNews")}</option>
-            </select>
-
-            {/* Content type */}
-            <select value={contentTypeFilter} onChange={(e) => setContentTypeFilter(e.target.value)}
-              className="border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 pl-3 pr-7 bg-white dark:bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] focus:outline-none cursor-pointer">
-              <option value="all">{t("alerts.page.contentTypeAll")}</option>
-              <option value="post">{t("alerts.page.contentTypePost")}</option>
-              <option value="comment">{t("alerts.page.contentTypeComment")}</option>
-            </select>
-
-            {/* Mine only */}
-            <button onClick={() => setShowMineOnly(!showMineOnly)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                showMineOnly
-                  ? "bg-[var(--color-brand)]/10 border-[var(--color-brand)] text-[var(--color-brand)]"
-                  : "border-[var(--color-border)] text-[var(--color-text-secondary)] bg-white dark:bg-[var(--color-bg-surface-raised)] hover:bg-slate-50"
-              }`}>
-              {t("alerts.page.mineOnly")}
-            </button>
-
-            {/* Sort — pushed to the end */}
-            <div className="flex items-center gap-1.5 ml-auto text-xs">
-              <span className="text-[var(--color-text-muted)] font-bold uppercase tracking-wider hidden sm:inline">{t("alerts.page.sortBy")}</span>
-              <select value={sortBy} onChange={(e: any) => setSortBy(e.target.value)}
-                className="bg-transparent border border-[var(--color-border)] rounded-xl text-xs font-bold py-1.5 pl-3 pr-7 focus:outline-none cursor-pointer text-[var(--color-text-primary)]">
-                <option value="risk">{t("alerts.page.sortRisk")}</option>
-                <option value="newest">{t("alerts.page.sortNewest")}</option>
-                <option value="reach">{t("alerts.page.sortReach")}</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Alert Queue Cards list */}
-          <div data-tour="alerts-queue-list" className="space-y-4">
-            {isLoading ? (
-              <div data-tour="alerts-card-actions" className="flex flex-col items-center justify-center p-12 space-y-3">
-                <svg className="animate-spin h-8 w-8 text-[var(--color-brand)]" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                </svg>
-                <p className="text-xs text-[var(--color-text-secondary)] font-bold">{t("alerts.page.loading")}</p>
-              </div>
-            ) : processedActiveAlerts.length === 0 ? (
-              <div data-tour="alerts-card-actions" className="glass-card p-12 text-center rounded-2xl border border-[var(--color-border)]/60 flex flex-col items-center justify-center gap-3">
-                <span className="material-symbols-outlined text-slate-300 text-5xl">inbox</span>
-                <p className="text-xs text-[var(--color-text-secondary)] font-bold">{t("alerts.page.emptyFilter")}</p>
-              </div>
-            ) : (
-              processedActiveAlerts.map(alert => {
-                const riskScore = getRiskScore(alert);
-                const isResolving = alert.status === "resolving";
-                const isPendingApproval = alert.status === "pending_approval";
-
-                // Card severity aesthetics mapping
-                let borderClass = "border-l-4 border-slate-300";
-                let textClass = "text-slate-500";
-                let dotClass = "bg-slate-400";
-
-                if (alert.severity.toLowerCase() === "critical") {
-                  borderClass = "border-l-4 border-red-500";
-                  textClass = "text-red-600";
-                  dotClass = "bg-red-600";
-                } else if (alert.severity.toLowerCase() === "high") {
-                  borderClass = "border-l-4 border-orange-500";
-                  textClass = "text-orange-600";
-                  dotClass = "bg-orange-500";
-                } else if (alert.severity.toLowerCase() === "medium") {
-                  borderClass = "border-l-4 border-yellow-500";
-                  textClass = "text-yellow-600";
-                  dotClass = "bg-yellow-500";
-                }
-
-                return (
-                  <div
-                    key={alert.id}
-                    className={`glass-card bg-white dark:bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] shadow-sm rounded-2xl flex flex-col md:flex-row hover:border-[var(--color-brand)]/40 transition-all overflow-hidden ${borderClass}`}
-                  >
-
-                    {/* Leftmost panel showing Risk Score & level */}
-                    <div className="p-4 md:p-5 md:w-28 flex-shrink-0 flex md:flex-col items-center justify-center border-b md:border-b-0 md:border-r border-[var(--color-border)]/50 gap-2 text-center bg-slate-50/50 dark:bg-slate-800/10">
-                      <div className="flex flex-col items-center justify-center w-full">
-                        <span className={`text-3xl font-black ${textClass} tracking-tight leading-none`}>
-                          {riskScore}
-                        </span>
-                        <span className="text-[9px] font-black text-[var(--color-text-muted)] uppercase tracking-wider mt-1">
-                          {alert.severity.toLowerCase() === "critical" ? t("alerts.page.riskCritical") :
-                            alert.severity.toLowerCase() === "high" ? t("alerts.page.riskHigh") :
-                              alert.severity.toLowerCase() === "medium" ? t("alerts.page.riskMedium") : t("alerts.page.riskLow")}
-                        </span>
-                        {/* Progress bar */}
-                        <div className="w-full mt-2 bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all duration-500 ${
-                              alert.severity.toLowerCase() === "critical" ? "bg-red-500" :
-                              alert.severity.toLowerCase() === "high" ? "bg-orange-500" :
-                              alert.severity.toLowerCase() === "medium" ? "bg-yellow-500" : "bg-slate-400"
-                            }`}
-                            style={{ width: `${Math.min(100, riskScore)}%` }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Middle panel showing metadata & text preview */}
-                    <div className="p-5 flex-grow flex flex-col gap-3 min-w-0">
-                      {/* Row 1: Author info + brand + time */}
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 border border-[var(--color-border)] flex items-center justify-center overflow-hidden flex-shrink-0">
-                          {alert.social_profile_url && alert.social_profile_url !== "#" ? (
-                            <img src={alert.social_profile_url} alt={alert.author} className="w-full h-full object-cover" />
-                          ) : (
-                            <span className="text-[10px] font-bold text-slate-500">
-                              {String(alert.author || "A").substring(0, 2).toUpperCase()}
-                            </span>
-                          )}
-                        </div>
-                        <div className="min-w-0 flex-grow">
-                          <div className="flex items-center gap-2">
-                            <p className="font-bold text-xs text-[var(--color-text-primary)] truncate max-w-[160px]">
-                              {alert.author || t("alerts.page.anonymous")}
-                            </p>
-                            <span className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/20 px-1.5 py-0.5 rounded border border-indigo-100 dark:border-indigo-900/30 flex-shrink-0">
-                              {formatBrandName(alert.brand)}
-                            </span>
-                          </div>
-                          <p className="text-[9px] text-[var(--color-text-muted)] font-semibold mt-0.5">
-                            {getRelativeTime(alert.created_at, t)}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Row 2: Platform + topic + sentiment + status badges */}
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          <PlatformLogo platform={alert.source} size="sm" />
-                          <span className="text-[9px] font-bold text-[var(--color-text-muted)] uppercase">
-                            {alert.source === "google_maps" ? "Google Maps" : alert.source === "thread" ? "Threads" : alert.source === "befood" ? "BeFood" : alert.source.charAt(0).toUpperCase() + alert.source.slice(1)}
-                            {alert.content_type && ` · ${alert.content_type.toUpperCase()}`}
-                          </span>
-                        </div>
-                        <span className="text-slate-300 dark:text-slate-600">·</span>
-                        <span className="bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 text-[9px] font-bold px-1.5 py-0.5 rounded border border-blue-100 dark:border-blue-900/30">
-                          {t(`dashboard.topics.${alert.topic}`, { defaultValue: alert.topic })}
-                        </span>
-                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${alert.sentiment === "negative"
-                          ? "bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border-red-100 dark:border-red-900/30"
-                          : alert.sentiment === "positive"
-                            ? "bg-green-50 dark:bg-green-950/20 text-green-600 dark:text-green-400 border-green-100 dark:border-green-900/30"
-                            : "bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700"
-                          }`}>
-                          {alert.sentiment === "negative" ? t("alerts.page.sentimentNegative") : alert.sentiment === "positive" ? t("alerts.page.sentimentPositive") : t("alerts.page.sentimentNeutral")}
-                        </span>
-                        {(alert.reach ?? 0) > 50000 && (
-                          <span className="bg-pink-50 dark:bg-pink-950/20 text-pink-600 text-[9px] font-bold px-1.5 py-0.5 rounded border border-pink-100 dark:border-pink-900/30">
-                            {t("alerts.page.bigKol")}
-                          </span>
-                        )}
-                        {(alert.reach ?? 0) > 10000 && (alert.reach ?? 0) <= 50000 && (
-                          <span className="bg-orange-50 dark:bg-orange-950/20 text-orange-600 text-[9px] font-bold px-1.5 py-0.5 rounded border border-orange-100 dark:border-orange-900/30">
-                            {t("alerts.page.fastSpread")}
-                          </span>
-                        )}
-                        {isResolving && (
-                          <span className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[9px] font-bold px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
-                            {t("alerts.page.statusResolving")}
-                          </span>
-                        )}
-                        {isPendingApproval && (
-                          <span className="bg-orange-50 dark:bg-orange-950/20 text-orange-700 dark:text-orange-300 text-[9px] font-bold px-1.5 py-0.5 rounded border border-orange-100 dark:border-orange-900/30 animate-pulse">
-                            Cho duyet phuong an
-                          </span>
-                        )}
-                        {!isResolving && !isPendingApproval && alert.status !== "monitoring" && alert.status !== "resolved" && (
-                          <span className="bg-red-50 dark:bg-red-950/20 text-red-600 text-[9px] font-bold px-1.5 py-0.5 rounded border border-red-100 dark:border-red-900/30">
-                            {t("alerts.page.statusPending")}
-                          </span>
-                        )}
-                        {alert.status === "monitoring" && (
-                          <MonitoringCountdown alert={alert} />
-                        )}
-                      </div>
-
-                      {/* Row 3: Content with truncation */}
-                      <p className="text-xs md:text-sm text-[var(--color-text-secondary)] font-medium leading-relaxed break-words line-clamp-3">
-                        {alert.text}
-                      </p>
-                    </div>
-
-                    {/* Right action controls */}
-                    <div className="p-4 flex md:flex-col justify-center items-center gap-2 flex-shrink-0 md:w-36 border-t md:border-t-0 md:border-l border-[var(--color-border)]/50 bg-slate-50/20 dark:bg-slate-800/10">
-                      {isResolving || isPendingApproval || alert.status === "monitoring" ? (
-                        <div className="w-full space-y-2 text-center">
-                          {/* Assignee chip */}
-                          <div className="flex items-center gap-1.5 justify-center bg-white dark:bg-slate-800 border border-[var(--color-border)] rounded-lg px-2 py-1">
-                            <div className="w-4 h-4 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center overflow-hidden flex-shrink-0">
-                              <span className="material-symbols-outlined text-[10px] text-slate-500">person</span>
-                            </div>
-                            <span className="text-[10px] text-[var(--color-text-secondary)] font-bold truncate max-w-[100px]">
-                              {getResolverName(alert.being_resolved_by) || t("alerts.page.member")}
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => router.push(`/alerts/${encodeURIComponent(alert.id)}`)}
-                            className={`w-full py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
-                              isPendingApproval && isManager
-                                ? "bg-orange-600 hover:bg-orange-700 text-white border-orange-600"
-                                : "bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[var(--color-text-primary)] border-[var(--color-border)]"
-                            }`}
-                          >
-                            {isPendingApproval && isManager ? "Xem duyệt" : t("alerts.page.details")}
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="w-full space-y-2">
-                          {/* Primary CTA */}
-                          <button
-                            onClick={async () => {
-                              try {
-                                await updateAlertStatus(alert.id, "resolving", profile, { note: "Đã tiếp nhận xử lý" }, alert.brand);
-                                await lockAlertForResolution(alert.id, profile);
-                                triggerToast("✅ Đã tiếp nhận vụ việc. Vào mục 'Của tôi' để xem.");
-                              } catch (err: any) {
-                                triggerToast("❌ " + (err?.message || "Không thể tiếp nhận vụ việc."));
-                              }
-                            }}
-                            className="w-full py-2 rounded-xl bg-[#0f172a] hover:bg-[#1e293b] dark:bg-slate-800 dark:hover:bg-slate-700 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
-                          >
-                            {t("alerts.page.acceptTask")}
-                          </button>
-
-                          {/* Secondary actions: detail link + escalate condensed */}
-                          <div className="flex gap-1.5">
-                            <button
-                              onClick={() => router.push(`/alerts/${encodeURIComponent(alert.id)}`)}
-                              className="flex-1 py-1.5 text-center text-[var(--color-brand)] hover:bg-[var(--color-brand)]/5 border border-[var(--color-brand)]/30 rounded-xl text-[10px] font-bold cursor-pointer transition-colors"
-                            >
-                              {t("alerts.page.viewDetails")}
-                            </button>
-                            <button
-                              onClick={() => setReportModalItem(alert)}
-                              title={t("alerts.page.escalateNow")}
-                              className="px-2 py-1.5 text-red-500 hover:bg-red-50 border border-red-200 dark:border-red-900/30 rounded-xl text-[10px] font-bold cursor-pointer transition-colors flex items-center gap-0.5"
-                            >
-                              <span className="material-symbols-outlined text-[13px]">priority_high</span>
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-
-          {/* Accordion list: RECENTLY RESOLVED */}
-          <div className="glass-card rounded-2xl border border-[var(--color-border)] overflow-hidden shadow-sm bg-white dark:bg-[var(--color-bg-surface-raised)]">
-            <button
-              onClick={() => setIsResolvedExpanded(!isResolvedExpanded)}
-              className="w-full p-4 flex items-center justify-between font-black text-xs md:text-sm uppercase tracking-wider text-[var(--color-text-primary)] hover:bg-slate-50 transition-colors cursor-pointer"
-            >
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-green-500">check_circle</span>
-                <span>{t("alerts.page.recentlyResolved")} ({resolvedAlerts.length})</span>
-              </div>
-              <span className="material-symbols-outlined transition-transform duration-300" style={{ transform: isResolvedExpanded ? "rotate(180deg)" : "rotate(0deg)" }}>
-                expand_more
-              </span>
-            </button>
-
-            {isResolvedExpanded && (
-              <div className="p-4 border-t border-[var(--color-border)]/50 space-y-3 bg-slate-50/20">
-                {resolvedAlerts.length === 0 ? (
-                  <p className="text-xs text-[var(--color-text-muted)] italic text-center py-4">{t("alerts.page.noResolved")}</p>
-                ) : (
-                  resolvedAlerts.map(alert => (
-                    <div key={alert.id} className="flex items-center justify-between gap-4 p-3 bg-white dark:bg-slate-800 rounded-xl border border-[var(--color-border)] text-xs">
-                      <div className="min-w-0 flex-grow">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-[var(--color-text-primary)]">@{alert.author || t("alerts.page.anonymous")}</span>
-                          <span className="text-[10px] text-[var(--color-text-muted)]">({formatBrandName(alert.brand)})</span>
-                          <span className="text-[10px] bg-green-50 text-green-600 font-bold px-1.5 py-0.5 rounded">{t("alerts.page.resolvedBadge")}</span>
-                        </div>
-                        <p className="text-[var(--color-text-secondary)] truncate mt-1">{alert.text}</p>
-                      </div>
-                      <button
-                        onClick={() => router.push(`/alerts/${encodeURIComponent(alert.id)}`)}
-                        className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg font-bold text-slate-700 cursor-pointer flex-shrink-0"
-                      >
-                        {t("alerts.page.details")}
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Accordion list: LABEL CORRECTION REQUESTS */}
-          {isManager && (
-            <div className="glass-card rounded-2xl border border-[var(--color-border)] overflow-hidden shadow-sm bg-white dark:bg-[var(--color-bg-surface-raised)]">
-              <button
-                onClick={() => setIsRequestsExpanded(!isRequestsExpanded)}
-                className="w-full p-4 flex items-center justify-between font-black text-xs md:text-sm uppercase tracking-wider text-[var(--color-text-primary)] hover:bg-slate-50 transition-colors cursor-pointer"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-blue-500">edit_document</span>
-                  <span>{t("alerts.page.correctionRequests")} ({correctionRequests.filter(r => r.status === "pending").length})</span>
-                </div>
-                <span className="material-symbols-outlined transition-transform duration-300" style={{ transform: isRequestsExpanded ? "rotate(180deg)" : "rotate(0deg)" }}>
-                  expand_more
-                </span>
-              </button>
-
-              {isRequestsExpanded && (
-                <div className="p-4 border-t border-[var(--color-border)]/50 space-y-3 bg-slate-50/20">
-                  {correctionRequests.length === 0 ? (
-                    <p className="text-xs text-[var(--color-text-muted)] italic text-center py-4">{t("alerts.page.noCorrections")}</p>
-                  ) : (
-                    correctionRequests.map(req => (
-                      <div key={req.id} className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-[var(--color-border)] text-xs space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-[var(--color-text-primary)]">{req.requester_email}</span>
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${req.status === "pending" ? "bg-amber-50 text-amber-600" :
-                            req.status === "approved" ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"
-                            }`}>
-                            {req.status === "pending" ? t("alerts.page.correctionPending") : req.status === "approved" ? t("alerts.page.correctionApproved") : t("alerts.page.correctionRejected")}
-                          </span>
-                        </div>
-                        <p className="text-[var(--color-text-secondary)] italic">"{req.reason}"</p>
-                        {req.status === "pending" && (
-                          <div className="flex justify-end gap-2 pt-1 border-t border-slate-100">
-                            <button
-                              onClick={() => resolveCorrectionRequest(req.id, req.alert_id, "rejected", profile)}
-                              className="px-2.5 py-1 text-[10px] bg-red-50 text-red-600 hover:bg-red-100 rounded font-bold cursor-pointer"
-                            >
-                              {t("alerts.page.reject")}
-                            </button>
-                            <button
-                              onClick={() => resolveCorrectionRequest(req.id, req.alert_id, "approved", profile)}
-                              className="px-2.5 py-1 text-[10px] bg-green-600 text-white hover:bg-green-700 rounded font-bold cursor-pointer"
-                            >
-                              {t("alerts.page.approve")}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-        </div>
-
-        {/* Right Column: Sidebar Widgets */}
-        <div className="space-y-5">
-
-          {/* Trending now tags */}
-          <div className="glass-card rounded-2xl p-5 bg-white dark:bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] shadow-sm space-y-3">
-            <h3 className="text-xs font-black text-[var(--color-text-primary)] uppercase tracking-wider flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-orange-500 text-lg">trending_up</span>
-              {t("alerts.page.trendingTitle")}
-            </h3>
-            <div className="space-y-2">
-              {trendingTags.length === 0 && (
-                <p className="text-xs text-[var(--color-text-muted)] italic">{t("alerts.page.noTrending")}</p>
-              )}
-              {trendingTags.map((tag, i) => (
-                <button
-                  key={i}
-                  onClick={() => setActiveTrending(activeTrending?.name === tag.name ? null : { name: tag.name, matchIds: tag.matchIds })}
-                  className={`w-full p-3 rounded-xl flex items-center justify-between transition-all cursor-pointer hover:scale-[1.02] hover:shadow-md active:scale-[0.99] text-left ${activeTrending?.name === tag.name
-                      ? `${tag.bg} ring-2 ring-current ring-offset-1`
-                      : tag.bg
-                    }`}
-                >
-                  <span className="text-xs font-black flex items-center gap-1">
-                    {activeTrending?.name === tag.name && (
-                      <span className="material-symbols-outlined text-[14px]">filter_alt</span>
-                    )}
-                    {tag.name}
-                  </span>
-                  <span className="text-[10px] font-black">{tag.pct}</span>
-                </button>
-              ))}
-
-              {/* Related alerts panel */}
-              {activeTrending && (() => {
-                const related = rawAlerts.filter(a => activeTrending.matchIds.includes(a.id)).slice(0, 5);
-                return (
-                  <div className="mt-2 border-t border-[var(--color-border)] pt-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-black uppercase tracking-wider text-[var(--color-text-muted)]">
-                        {t("alerts.page.relatedPosts", { count: related.length, tag: activeTrending.name })}
-                      </span>
-                      <button onClick={() => setActiveTrending(null)} className="material-symbols-outlined text-base text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] cursor-pointer">close</button>
-                    </div>
-                    {related.length === 0 && (
-                      <p className="text-xs text-[var(--color-text-muted)] italic">{t("alerts.page.noRelatedPosts")}</p>
-                    )}
-                    {related.map((a) => (
-                      <a
-                        key={a.id}
-                        href={`/alerts/${a.id}`}
-                        className="block p-2.5 rounded-xl bg-[var(--color-bg-base)] border border-[var(--color-border)] hover:border-[var(--color-brand)]/50 hover:shadow-sm transition-all group"
-                      >
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${a.severity?.toLowerCase() === "critical" ? "bg-red-100 text-red-600" :
-                              a.severity?.toLowerCase() === "high" ? "bg-orange-100 text-orange-600" :
-                                "bg-slate-100 text-slate-500"
-                            }`}>{a.severity?.toUpperCase()}</span>
-                          <span className="text-[10px] text-[var(--color-text-muted)] font-semibold">{formatBrandName(a.brand)}</span>
-                        </div>
-                        <p className="text-xs text-[var(--color-text-primary)] line-clamp-2 leading-snug group-hover:text-[var(--color-brand)] transition-colors">
-                          {a.text || a.comment_content || t("alerts.page.noContent")}
-                        </p>
-                      </a>
-                    ))}
-                  </div>
-                );
-              })()}
-            </div>
-          </div>
-
-          {/* Shift performance — compact, shown after trending */}
-          <div className="glass-card rounded-2xl p-4 bg-white dark:bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] shadow-sm space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-widest flex items-center gap-1">
-                <span className="material-symbols-outlined text-indigo-500 text-base">insights</span>
-                {t("alerts.page.shiftPerformance")}
-              </span>
-              <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border ${
-                shiftPerformance === 0
-                  ? "bg-slate-50 dark:bg-slate-800 text-slate-500 border-slate-200/50 dark:border-slate-700/50"
-                  : shiftPerformance >= 90
-                  ? "bg-green-50 dark:bg-green-950/20 text-green-600 dark:text-green-400 border-green-100/50"
-                  : "bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border-amber-100/50"
-              }`}>
-                {shiftPerformance === 0 ? "Chưa có dữ liệu" : shiftPerformance >= 90 ? "Đạt KPI" : "Cần cải thiện"}
-              </span>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-black text-[var(--color-text-primary)]">{shiftPerformance}%</span>
-              <span className="text-[10px] font-semibold text-[var(--color-text-muted)]">
-                {shiftPerformanceStats.resolved} / {shiftPerformanceStats.total} {t("alerts.page.processed")}
-              </span>
-            </div>
-            <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
-              <div className="bg-gradient-to-r from-blue-500 to-indigo-500 h-full rounded-full transition-all duration-500" style={{ width: `${shiftPerformance}%` }}></div>
-            </div>
-          </div>
-
-          {/* Team resolution log feed */}
-          <div className="glass-card rounded-2xl p-5 bg-white dark:bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] shadow-sm space-y-3">
-            <h3 className="text-xs font-black text-[var(--color-text-primary)] uppercase tracking-wider flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-blue-500 text-lg">group</span>
-              {t("alerts.page.teamActivity")}
-            </h3>
-            <div className="space-y-3">
-              {teamActivities.map((act, i) => (
-                <div key={i} className="flex gap-3 text-xs items-start">
-                  <div className="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-600 font-bold flex items-center justify-center flex-shrink-0 text-[10px]">
-                    {act.author.slice(0, 2).toUpperCase()}
-                  </div>
-                  <div className="min-w-0 flex-grow">
-                    <p className="text-[var(--color-text-primary)] leading-snug">
-                      <span className="font-bold">{act.author}</span> {act.action}
-                    </p>
-                    <span className="text-[10px] text-[var(--color-text-muted)] font-semibold mt-0.5 block">
-                      {getRelativeTime(act.timestamp, t)}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-        </div>
-
-      </div>
+          try {
+            await updateAlertStatus(alert.id, targetStatus, profile, {
+              note: `Hoàn tất ghi nhận kết quả liên hệ: ${resultLabel}.`,
+              customer_contact_opened_at: alert.customer_contact_opened_at,
+              customer_contact_opened_by: alert.customer_contact_opened_by,
+              customer_contact_template: alert.customer_contact_template,
+              customer_contact_note: alert.customer_contact_note,
+              customer_contact_evidence_image: alert.customer_contact_evidence_image,
+              customer_response_result: alert.customer_response_result,
+              customer_contact_history: nextContactHistory,
+              reset_customer_contact: outcomeStatus !== "resolved",
+            }, alert.brand);
+            triggerToast(
+              outcomeStatus === "resolved"
+                ? "Đã ghi nhận và hoàn tất xử lý cảnh báo."
+                : outcomeStatus === "contact_failed"
+                  ? "Đã chuyển cảnh báo sang luồng Giải quyết thất bại."
+                  : "Đã ghi nhận liên hệ và chuyển sang chờ phản hồi."
+            );
+          } catch (recordError) {
+            triggerToast(recordError instanceof Error ? recordError.message : "Không thể ghi nhận kết quả cảnh báo.");
+            throw recordError;
+          }
+        }}
+        onOpenSource={(alert) => void handleAccessSource(alert.url || "#", alert.text || alert.comment_content || "")}
+        onStatusFilterChange={setStatusFilter}
+        onSearchTextChange={setSearchText}
+        onSeverityFilterChange={setSeverityFilter}
+        onSourceFilterChange={setSourceFilter}
+        onContentTypeFilterChange={setContentTypeFilter}
+        onMineOnlyChange={setShowMineOnly}
+        onSortChange={setSortBy}
+        onTimeFilterChange={setTimeFilter}
+        onSingleDateChange={setSingleDate}
+        onCustomStartDateChange={setCustomStartDate}
+        onCustomEndDateChange={setCustomEndDate}
+        onFiltersChange={setFilters}
+        onPageChange={goToAlertPage}
+      />
 
       {/* Modals rendering at root level */}
-      {resolvingAlert && (
-        <ResolutionModal
-          alert={resolvingAlert}
-          onClose={() => {
-            // KHÔNG unlock khi đóng modal — task vẫn được gán cho người nhận
-            setResolvingAlert(null);
-          }}
-          onSave={async (id, note, imageUrl, targetStatus = "resolving", monitoringDurationHours) => {
-            await updateAlertStatus(id, targetStatus, profile, { note, image_url: imageUrl, monitoring_duration_hours: monitoringDurationHours }, resolvingAlert.brand);
-            // Chỉ unlock khi đã resolved hoàn toàn
-            if (targetStatus === "resolved") {
-              unlockAlertForResolution(id);
-            }
-            setResolvingAlert(null);
-          }}
-        />
-      )}
-
-      {viewingHistoryAlert && (
-        <HistoryModal
-          alert={viewingHistoryAlert}
-          onClose={() => setViewingHistoryAlert(null)}
-        />
-      )}
-
-      {reportModalItem && (
-        <IncidentReportModal
-          item={reportModalItem}
-          onClose={() => setReportModalItem(null)}
-          triggerToast={triggerToast}
-        />
-      )}
-
-      {correctionModalItem && (
-        <CorrectionRequestModal
-          item={correctionModalItem}
-          onClose={() => setCorrectionModalItem(null)}
-          triggerToast={triggerToast}
-          createCorrectionRequest={createCorrectionRequest}
-          profile={profile}
-        />
-      )}
-
       {selectedEvidence && (
         <TrendModal
           alert={selectedEvidence}
@@ -1966,6 +1436,7 @@ function TrendModal({ alert, onClose }: TrendModalProps) {
         ChartLegend,
         ChartFiller
       );
+      ChartJS.defaults.font.family = 'Inter, "Segoe UI", Arial, sans-serif';
 
       if (!canvasRef.current) return;
 
@@ -2132,451 +1603,6 @@ function TrendModal({ alert, onClose }: TrendModalProps) {
   );
 }
 
-// ── Resolution Modal Component ──
-interface ResolutionModalProps {
-  alert: any;
-  onClose: () => void;
-  onSave: (id: string, note: string, imageUrl?: string, targetStatus?: string, monitoringDurationHours?: number) => Promise<void>;
-}
-
-function ResolutionModal({ alert, onClose, onSave }: ResolutionModalProps) {
-  const { t } = useTranslation();
-  const [note, setNote] = useState("");
-  const [duration, setDuration] = useState("72");
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Profile link search fallbacks if alert.social_profile_url is empty
-  const profileUrl = alert.social_profile_url?.trim() || (() => {
-    const authorName = alert.author || "";
-    const source = alert.source?.toLowerCase() || "";
-    if (source === "facebook" || source === "fb") {
-      return `https://www.facebook.com/search/top/?q=${encodeURIComponent(authorName)}`;
-    }
-    if (source === "tiktok" || source === "tt") {
-      return `https://www.tiktok.com/search?q=${encodeURIComponent(authorName)}`;
-    }
-    if (source === "youtube" || source === "yt") {
-      return `https://www.youtube.com/results?search_query=${encodeURIComponent(authorName)}`;
-    }
-    return `https://www.google.com/search?q=${encodeURIComponent(authorName)}`;
-  })();
-
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith("image/")) {
-      setError(t("alerts.resolution.errorInvalidImage", { defaultValue: "Vui lòng chọn tệp hình ảnh hợp lệ." }));
-      return;
-    }
-
-    if (file.size > 2 * 1024 * 1024) {
-      setError(t("alerts.resolution.errorImageSize", { defaultValue: "Hình ảnh quá lớn. Vui lòng chọn tệp nhỏ hơn 2MB." }));
-      return;
-    }
-
-    setError(null);
-    setImageFile(file);
-
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const ctx = canvas.getContext("2d");
-
-        const MAX_DIM = 600;
-        let width = img.width;
-        let height = img.height;
-
-        if (width > height) {
-          if (width > MAX_DIM) {
-            height *= MAX_DIM / width;
-            width = MAX_DIM;
-          }
-        } else {
-          if (height > MAX_DIM) {
-            width *= MAX_DIM / height;
-            height = MAX_DIM;
-          }
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        ctx?.drawImage(img, 0, 0, width, height);
-
-        const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7);
-        setImagePreview(compressedBase64);
-      };
-      img.src = reader.result as string;
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleAction = async (targetStatus: "resolving" | "resolved") => {
-    if (!note.trim()) {
-      setError(t("alerts.resolution.errorEmptyNote", { defaultValue: "Vui lòng nhập ghi chú hoặc bằng chứng giải quyết." }));
-      return;
-    }
-
-    setIsSaving(true);
-    setError(null);
-
-    try {
-      let finalStatus: string = targetStatus;
-      let finalDuration: number | undefined = undefined;
-
-      if (targetStatus === "resolved") {
-        const parsedDuration = parseFloat(duration);
-        if (parsedDuration > 0) {
-          finalStatus = "monitoring";
-          finalDuration = parsedDuration;
-        }
-      }
-
-      await onSave(alert.id, note.trim(), imagePreview || undefined, finalStatus, finalDuration);
-      onClose();
-    } catch (err: any) {
-      setError(t("alerts.resolution.errorSaveFailed", { defaultValue: "Không thể lưu bằng chứng giải quyết. Vui lòng thử lại." }));
-      console.error("[ResolutionModal] Save error:", err);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const attemptNumber = (alert.resolution_history?.length || 0) + 1;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
-        onClick={onClose}
-      />
-
-      <div className="glass-card w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl relative z-10 border border-app/30 flex flex-col max-h-[90vh] bg-app-surface">
-        {/* Header */}
-        <div className="p-4 md:p-6 border-b border-app/30 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-app-brand text-xl">pending_actions</span>
-            <h3 className="font-bold text-app text-base md:text-lg">
-              {t("alerts.resolution.title", { attempt: attemptNumber, defaultValue: `Giải quyết Cảnh báo (Lần ${attemptNumber})` })}
-            </h3>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-app-text-secondary hover:bg-app-surface-raised transition-colors"
-          >
-            <span className="material-symbols-outlined text-base">close</span>
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="p-4 md:p-6 space-y-4 overflow-y-auto">
-          {/* Author contact section */}
-          <div className="bg-[var(--color-bg-surface-raised)]/50 p-4 rounded-xl border border-[var(--color-border)] space-y-2">
-            <p className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-wider">
-              {t("alerts.resolution.authorContact", { defaultValue: "Thông tin liên hệ tác giả" })}
-            </p>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[var(--color-brand)] text-base">person</span>
-                <span className="text-sm font-bold text-[var(--color-text-primary)]">{alert.author || t("alerts.card.anonymous", { defaultValue: "Ẩn danh" })}</span>
-                <span className="text-xs text-[var(--color-text-secondary)]">({alert.source})</span>
-              </div>
-              <a
-                href={profileUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[var(--color-brand)] font-bold text-xs bg-[var(--color-brand-subtle)] px-3 py-1.5 rounded-lg flex items-center gap-1 hover:bg-[var(--color-brand-border)] transition-colors cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-sm">open_in_new</span>
-                {t("alerts.resolution.contactProfile", { defaultValue: "Liên hệ Profile" })}
-              </a>
-            </div>
-          </div>
-
-          {/* Previous attempts history (if any) */}
-          {alert.resolution_history && alert.resolution_history.length > 0 && (
-            <div className="space-y-3 bg-[var(--color-bg-surface-raised)]/30 p-4 rounded-xl border border-[var(--color-border)]/50">
-              <p className="text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-wider flex items-center gap-1">
-                <span className="material-symbols-outlined text-xs">history</span>
-                {t("alerts.resolution.previousHistory", { count: alert.resolution_history.length, defaultValue: `Lịch sử giải quyết cũ (${alert.resolution_history.length} lần)` })}
-              </p>
-              <div className="space-y-4 max-h-48 overflow-y-auto pr-1">
-                {alert.resolution_history.map((item: any, idx: number) => {
-                  const dateText = new Date(item.timestamp).toLocaleString("vi-VN", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    day: "2-digit",
-                    month: "2-digit",
-                  });
-                  return (
-                    <div key={idx} className="text-xs border-l-2 border-[var(--color-brand)]/40 pl-3 py-0.5 space-y-1">
-                      <div className="flex items-center justify-between text-[10px]">
-                        <span className="font-bold text-[var(--color-brand)]">
-                          {t("alerts.resolution.attemptTitle", { attempt: item.attempt_number || (idx + 1), defaultValue: `Lần ${item.attempt_number || (idx + 1)}` })}
-                        </span>
-                        <span className="text-[var(--color-text-muted)]">{dateText}</span>
-                      </div>
-                      <p className="text-[var(--color-text-secondary)] whitespace-pre-wrap">{item.note}</p>
-                      {item.image_url && (
-                        <div className="mt-1 w-24 h-16 rounded overflow-hidden border border-[var(--color-border)] bg-black/5 flex items-center justify-center">
-                          <img
-                            src={item.image_url}
-                            alt={`Attempt ${idx + 1}`}
-                            className="max-h-full max-w-full object-contain cursor-zoom-in"
-                            onClick={() => window.open(item.image_url, '_blank')}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* New resolution attempt input */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-[var(--color-text-primary)]">
-              {t("alerts.resolution.noteLabel", { defaultValue: "Mô tả / Ghi chú bằng chứng" })} <span className="text-[var(--color-error)]">*</span>
-            </label>
-            <textarea
-              rows={3}
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder={t("alerts.resolution.notePlaceholder", { defaultValue: "Nhập ghi chú chi tiết hoặc bằng chứng xử lý tại đây..." })}
-              className="w-full bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] rounded-xl text-xs py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 text-[var(--color-text-primary)]"
-            />
-          </div>
-
-          {/* Image Upload */}
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-[var(--color-text-primary)]">
-              {t("alerts.resolution.imageLabel", { defaultValue: "Hình ảnh bằng chứng (Tùy chọn)" })}
-            </label>
-
-            <div className="flex items-center gap-3">
-              <label className="flex items-center justify-center gap-1.5 px-4 py-2 border border-dashed border-[var(--color-brand)]/40 rounded-xl bg-[var(--color-brand-subtle)]/10 text-[var(--color-brand)] text-xs font-bold hover:bg-[var(--color-brand-subtle)]/20 transition-all cursor-pointer">
-                <span className="material-symbols-outlined text-sm">upload_file</span>
-                {t("alerts.resolution.chooseImage", { defaultValue: "Chọn ảnh chụp màn hình" })}
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleImageChange}
-                />
-              </label>
-
-              {imageFile && (
-                <span className="text-xs text-[var(--color-text-secondary)] truncate max-w-[200px]">
-                  {imageFile.name}
-                </span>
-              )}
-            </div>
-
-            {imagePreview && (
-              <div className="relative w-full max-h-48 overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] flex items-center justify-center p-2">
-                <img
-                  src={imagePreview}
-                  alt="Evidence preview"
-                  className="max-h-40 max-w-full object-contain rounded-lg"
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setImageFile(null);
-                    setImagePreview(null);
-                  }}
-                  className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full w-6 h-6 flex items-center justify-center transition-colors cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-sm">close</span>
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Monitoring Duration Select */}
-          <div className="space-y-1.5 mt-3">
-            <label className="text-xs font-bold text-[var(--color-text-primary)]">
-              Thời gian theo dõi thêm sau khi giải quyết
-            </label>
-            <select
-              value={duration}
-              onChange={(e) => setDuration(e.target.value)}
-              className="w-full bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] rounded-xl text-xs py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 text-[var(--color-text-primary)] font-medium select-app"
-            >
-              <option value="72">72 giờ (Khuyên dùng)</option>
-              <option value="24">24 giờ</option>
-              <option value="1">1 giờ</option>
-              <option value="0.166">10 phút</option>
-              <option value="0.033">2 phút (Để test nhanh)</option>
-              <option value="0">Đóng ngay (Không theo dõi)</option>
-            </select>
-          </div>
-
-          {error && (
-            <div className="text-xs text-[var(--color-error)] bg-[var(--color-error)]/5 border border-[var(--color-error)]/20 p-3 rounded-xl flex items-start gap-1.5">
-              <span className="material-symbols-outlined text-sm mt-0.5">error</span>
-              <span>{error}</span>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="p-4 border-t border-app/30 flex justify-end gap-2 bg-app-surface-raised/20">
-          <button
-            type="button"
-            disabled={isSaving}
-            onClick={onClose}
-            className="px-4 py-2.5 rounded-xl text-xs font-bold text-app-text-secondary bg-app-surface-raised hover:bg-app-surface-high transition-all cursor-pointer"
-          >
-            {t("alerts.resolution.close", { defaultValue: "Đóng" })}
-          </button>
-
-          <button
-            type="button"
-            disabled={isSaving}
-            onClick={() => handleAction("resolving")}
-            className="px-4 py-2.5 rounded-xl text-xs font-bold bg-[var(--color-bg-surface-raised)] border border-[var(--color-brand)]/30 text-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)] active:scale-95 transition-all flex items-center gap-1 shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isSaving
-              ? t("alerts.resolution.saving", { defaultValue: "Đang lưu..." })
-              : t("alerts.resolution.saveProgress", { defaultValue: "Lưu tiến độ" })}
-          </button>
-
-          <button
-            type="button"
-            disabled={isSaving}
-            onClick={() => handleAction("resolved")}
-            className="px-5 py-2.5 rounded-xl text-xs font-bold bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand-hover)] active:scale-95 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isSaving
-              ? t("alerts.resolution.saving", { defaultValue: "Đang lưu..." })
-              : t("alerts.resolution.complete", { defaultValue: "Giải quyết xong" })}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── History Modal Component ──
-interface HistoryModalProps {
-  alert: any;
-  onClose: () => void;
-}
-
-function HistoryModal({ alert, onClose }: HistoryModalProps) {
-  const { t } = useTranslation();
-
-  const historyList = alert.resolution_history || [];
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
-        onClick={onClose}
-      />
-
-      <div className="glass-card w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl relative z-10 border border-app/30 flex flex-col max-h-[90vh] bg-app-surface">
-        <div className="p-4 md:p-6 border-b border-app/30 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-app-brand text-xl">history</span>
-            <h3 className="font-bold text-app text-base md:text-lg">
-              {t("alerts.history.title", { defaultValue: "Lịch sử giải quyết" })}
-            </h3>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-app-text-secondary hover:bg-app-surface-raised transition-colors"
-          >
-            <span className="material-symbols-outlined text-base">close</span>
-          </button>
-        </div>
-
-        <div className="p-4 md:p-6 space-y-4 overflow-y-auto">
-          <div className="space-y-1 bg-[var(--color-bg-surface-raised)]/30 p-3 rounded-xl border border-[var(--color-border)]/50">
-            <p className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider font-bold">
-              {t("alerts.history.incidentInfo", { defaultValue: "Thông tin sự cố" })}
-            </p>
-            <p className="text-sm font-bold text-[var(--color-text-primary)]">
-              {formatBrandName(alert.brand)} - {alert.topic}
-            </p>
-            <p className="text-xs text-[var(--color-text-secondary)] italic">
-              "{alert.text}"
-            </p>
-          </div>
-
-          {historyList.length === 0 ? (
-            <div className="flex flex-col items-center justify-center p-8 space-y-2 text-center">
-              <span className="material-symbols-outlined text-[var(--color-text-muted)] text-3xl">info</span>
-              <p className="text-xs text-[var(--color-text-secondary)]">
-                {t("alerts.history.noHistory", { defaultValue: "Không tìm thấy nhật ký ghi nhận giải quyết." })}
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-6 relative before:absolute before:top-2 before:bottom-2 before:left-[17px] before:w-[2px] before:bg-[var(--color-border)]">
-              {historyList.map((item: any, idx: number) => {
-                const dateText = new Date(item.timestamp).toLocaleString("vi-VN", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  day: "2-digit",
-                  month: "2-digit",
-                  year: "numeric",
-                });
-                return (
-                  <div key={idx} className="relative pl-10 flex flex-col gap-1">
-                    <div className="absolute left-2.5 top-1.5 w-4 h-4 rounded-full bg-[var(--color-brand)] border-2 border-white dark:border-[var(--color-bg-surface)] flex items-center justify-center">
-                      <div className="w-1.5 h-1.5 rounded-full bg-white" />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-black text-[var(--color-brand)] uppercase tracking-wider">
-                        {t("alerts.history.attemptTitle", { attempt: item.attempt_number || (idx + 1), defaultValue: `Giải quyết lần ${item.attempt_number || (idx + 1)}` })}
-                      </span>
-                      <span className="text-[10px] text-[var(--color-text-secondary)] font-bold bg-[var(--color-bg-surface-raised)] px-2 py-0.5 rounded">
-                        {dateText}
-                      </span>
-                    </div>
-
-                    <p className="text-xs text-[var(--color-text-primary)] leading-relaxed mt-1 whitespace-pre-wrap bg-[var(--color-bg-surface-raised)] p-3 rounded-xl border border-[var(--color-border)]">
-                      {item.note}
-                    </p>
-
-                    {item.image_url && (
-                      <div className="mt-2 w-full max-h-48 overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] flex items-center justify-center p-2">
-                        <img
-                          src={item.image_url}
-                          alt={`Evidence attempt ${idx + 1}`}
-                          className="max-h-40 max-w-full object-contain rounded-lg"
-                        />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        <div className="p-4 border-t border-app/30 flex justify-end bg-app-surface-raised/20">
-          <button
-            onClick={onClose}
-            className="px-5 py-2 rounded-xl text-xs font-bold text-app-text-secondary bg-app-surface-raised hover:bg-app-surface-high transition-all active:scale-95 cursor-pointer"
-          >
-            {t("alerts.history.close", { defaultValue: "Đóng" })}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── Incident Report Modal Component ──
 interface IncidentReportModalProps {
   item: any;
@@ -2694,7 +1720,7 @@ function IncidentReportModal({ item, onClose, triggerToast }: IncidentReportModa
           <div className="space-y-1">
             <label className="text-xs font-bold text-[var(--color-text-primary)]">{t("alerts.report.desc")}</label>
             <div className="p-3 bg-[var(--color-bg-surface-raised)] rounded-xl border border-[var(--color-border)] text-xs text-[var(--color-text-secondary)] italic">
-              "{item.text || item.content}"
+              “{item.text || item.content}”
             </div>
           </div>
 
@@ -2775,394 +1801,6 @@ function IncidentReportModal({ item, onClose, triggerToast }: IncidentReportModa
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-// ── Correction Request Modal Component ──
-interface CorrectionRequestModalProps {
-  item: any;
-  onClose: () => void;
-  triggerToast: (msg: string) => void;
-  createCorrectionRequest: (data: any) => Promise<void>;
-  profile: any;
-}
-
-function CorrectionRequestModal({ item, onClose, triggerToast, createCorrectionRequest, profile }: CorrectionRequestModalProps) {
-  const { t } = useTranslation();
-  const [sentiment, setSentiment] = useState(item.sentiment || "neutral");
-  const [severity, setSeverity] = useState(item.severity || "medium");
-  const [topic, setTopic] = useState(item.topic || "other");
-  const [reason, setReason] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!reason.trim()) {
-      triggerToast(t("alerts.correction.reasonRequired"));
-      return;
-    }
-    setSubmitting(true);
-    try {
-      await createCorrectionRequest({
-        alert_id: item.id,
-        brand: item.brand,
-        requester_uid: profile?.uid || "unknown",
-        requester_email: profile?.email || "unknown",
-        original_sentiment: item.sentiment || "neutral",
-        new_sentiment: sentiment,
-        original_severity: item.severity || "medium",
-        new_severity: severity,
-        original_topic: item.topic || "other",
-        new_topic: topic,
-        reason: reason.trim(),
-        alert_text: item.text || item.content || "",
-      });
-      triggerToast(t("alerts.correction.success"));
-      onClose();
-    } catch (err) {
-      console.error(err);
-      triggerToast(t("alerts.correction.error"));
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
-
-      {/* Modal Container */}
-      <form
-        onSubmit={handleSubmit}
-        className="glass-card w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl relative z-10 border border-app/30 flex flex-col max-h-[90vh] bg-[var(--color-bg-surface)] text-[var(--color-text-primary)]"
-      >
-        {/* Header */}
-        <div className="p-4 md:p-6 border-b border-[var(--color-border)] flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-[var(--color-brand)] text-xl">edit_square</span>
-            <h3 className="font-bold text-base md:text-lg">{t("alerts.correction.title")}</h3>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)] transition-colors"
-          >
-            <span className="material-symbols-outlined text-base">close</span>
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="p-4 md:p-6 space-y-4 overflow-y-auto">
-          <div className="p-3 bg-[var(--color-bg-surface-raised)] rounded-xl border border-[var(--color-border)] text-xs text-[var(--color-text-secondary)] italic">
-            "{item.text || item.content}"
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {/* Sentiment */}
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">{t("alerts.correction.sentimentLabel")}</label>
-              <select
-                value={sentiment}
-                onChange={(e) => setSentiment(e.target.value)}
-                className="w-full bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] rounded-xl text-xs py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 font-medium text-[var(--color-text-primary)] select-app"
-              >
-                <option value="positive">{t("alerts.correction.sentimentPositive")}</option>
-                <option value="neutral">{t("alerts.correction.sentimentNeutral")}</option>
-                <option value="negative">{t("alerts.correction.sentimentNegative")}</option>
-              </select>
-            </div>
-
-            {/* Severity */}
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">{t("alerts.correction.severityLabel")}</label>
-              <select
-                value={severity}
-                onChange={(e) => setSeverity(e.target.value)}
-                className="w-full bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] rounded-xl text-xs py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 font-medium text-[var(--color-text-primary)] select-app"
-              >
-                <option value="low">{t("alerts.correction.severityLow")}</option>
-                <option value="medium">{t("alerts.correction.severityMedium")}</option>
-                <option value="high">{t("alerts.correction.severityHigh")}</option>
-                <option value="critical">{t("alerts.correction.severityCritical")}</option>
-              </select>
-            </div>
-
-            {/* Topic */}
-            <div className="space-y-1">
-              <label className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">{t("alerts.correction.topicLabel")}</label>
-              <select
-                value={topic}
-                onChange={(e) => setTopic(e.target.value)}
-                className="w-full bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] rounded-xl text-xs py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 font-medium text-[var(--color-text-primary)] select-app"
-              >
-                <option value="quality">{t("alerts.correction.topicQuality")}</option>
-                <option value="price">{t("alerts.correction.topicPrice")}</option>
-                <option value="service">{t("alerts.correction.topicService")}</option>
-                <option value="staff">{t("alerts.correction.topicStaff")}</option>
-                <option value="delivery">{t("alerts.correction.topicDelivery")}</option>
-                <option value="experience">{t("alerts.correction.topicExperience")}</option>
-                <option value="legal">{t("alerts.correction.topicLegal")}</option>
-                <option value="operation">{t("alerts.correction.topicOperation")}</option>
-                <option value="competitor">{t("alerts.correction.topicCompetitor")}</option>
-                <option value="other">{t("alerts.correction.topicOther")}</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Reason */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-[var(--color-text-primary)] flex items-center gap-1">
-              <span className="material-symbols-outlined text-[14px] text-[var(--color-error)]">rate_review</span>
-              {t("alerts.correction.reasonLabel")}
-            </label>
-            <textarea
-              rows={3}
-              required
-              placeholder={t("alerts.correction.reasonPlaceholder")}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              className="w-full bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] rounded-xl text-xs py-2 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 text-[var(--color-text-primary)]"
-            />
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="p-4 border-t border-[var(--color-border)] flex justify-end gap-2 bg-[var(--color-bg-surface-raised)]/20">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2.5 rounded-xl text-xs font-bold text-[var(--color-text-secondary)] bg-[var(--color-bg-surface-raised)] hover:bg-[var(--color-bg-surface-high)] border border-[var(--color-border)] transition-all cursor-pointer"
-          >
-            {t("alerts.correction.close")}
-          </button>
-          <button
-            type="submit"
-            disabled={submitting}
-            className="px-4 py-2.5 rounded-xl text-xs font-bold bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand-hover)] active:scale-95 transition-all shadow-sm flex items-center gap-1 cursor-pointer"
-          >
-            {submitting ? t("alerts.correction.submitting") : t("alerts.correction.submit")}
-          </button>
-        </div>
-      </form>
-    </div>
-  );
-}
-// ── Correction Requests List Component ──
-interface CorrectionRequestsListProps {
-  requests: CorrectionRequest[];
-  resolveCorrectionRequest: (requestId: string, alertId: string, decision: "approved" | "rejected", profile: any) => Promise<void>;
-  isLoadingRequests: boolean;
-  profile: any;
-  triggerToast: (msg: string) => void;
-}
-
-function CorrectionRequestsList({ requests, resolveCorrectionRequest, isLoadingRequests, profile, triggerToast }: CorrectionRequestsListProps) {
-  const { t } = useTranslation();
-  const [resolvingId, setResolvingId] = useState<string | null>(null);
-  const [subFilter, setSubFilter] = useState<"pending" | "resolved">("pending");
-
-  const isManager = profile?.role === "brand_manager" || profile?.role === "admin";
-
-  const handleResolve = async (requestId: string, alertId: string, decision: "approved" | "rejected") => {
-    setResolvingId(requestId);
-    try {
-      await resolveCorrectionRequest(requestId, alertId, decision, profile);
-      triggerToast(decision === "approved" ? t("alerts.correctionList.approvedToast") : t("alerts.correctionList.rejectedToast"));
-    } catch (err) {
-      console.error(err);
-      triggerToast(t("alerts.correctionList.errorToast"));
-    } finally {
-      setResolvingId(null);
-    }
-  };
-
-  const filteredRequests = useMemo(() => {
-    if (subFilter === "pending") {
-      return requests.filter((r) => r.status === "pending");
-    } else {
-      return requests.filter((r) => r.status === "approved" || r.status === "rejected");
-    }
-  }, [requests, subFilter]);
-
-  if (isLoadingRequests) {
-    return (
-      <div className="flex flex-col items-center justify-center p-12 space-y-4 glass-card rounded-2xl">
-        <svg className="animate-spin h-8 w-8 text-primary" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-        </svg>
-        <p className="text-sm font-medium animate-pulse text-[var(--color-text-secondary)]">
-          {t("alerts.correctionList.loading")}
-        </p>
-      </div>
-    );
-  }
-
-  const pendingCount = requests.filter(r => r.status === "pending").length;
-  const resolvedCount = requests.filter(r => r.status !== "pending").length;
-
-  return (
-    <div className="space-y-4">
-      {/* Sub-tabs header */}
-      <div className="flex gap-2 border-b border-[var(--color-border)]/50 pb-3">
-        <button
-          onClick={() => setSubFilter("pending")}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${subFilter === "pending"
-            ? "bg-[var(--color-brand)] text-white border-[var(--color-brand)] shadow-sm"
-            : "text-[var(--color-text-secondary)] bg-[var(--color-bg-surface-raised)] border-[var(--color-border)] hover:bg-[var(--color-bg-surface-high)]"
-            }`}
-        >
-          <span className="material-symbols-outlined text-[15px]">pending_actions</span>
-          {t("alerts.correctionList.pendingTab")} ({pendingCount})
-        </button>
-
-        <button
-          onClick={() => setSubFilter("resolved")}
-          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${subFilter === "resolved"
-            ? "bg-[var(--color-brand)] text-white border-[var(--color-brand)] shadow-sm"
-            : "text-[var(--color-text-secondary)] bg-[var(--color-bg-surface-raised)] border-[var(--color-border)] hover:bg-[var(--color-bg-surface-high)]"
-            }`}
-        >
-          <span className="material-symbols-outlined text-[15px]">history</span>
-          {t("alerts.correctionList.resolvedTab")} ({resolvedCount})
-        </button>
-      </div>
-
-      {filteredRequests.length === 0 ? (
-        <div className="flex flex-col items-center justify-center p-12 space-y-3 glass-card rounded-2xl">
-          <span className="material-symbols-outlined text-[var(--color-text-secondary)] text-4xl">folder_off</span>
-          <p className="text-sm font-bold text-[var(--color-text-primary)]">
-            {subFilter === "pending" ? t("alerts.correctionList.emptyPending") : t("alerts.correctionList.emptyResolved")}
-          </p>
-          <p className="text-xs text-[var(--color-text-secondary)] text-center">
-            {subFilter === "pending"
-              ? t("alerts.correctionList.emptyPendingDesc")
-              : t("alerts.correctionList.emptyResolvedDesc")}
-          </p>
-        </div>
-      ) : (
-        filteredRequests.map((req) => {
-          const dateText = new Date(req.created_at).toLocaleString("vi-VN");
-          const statusColors =
-            req.status === "approved"
-              ? "bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-400 border-green-200/50"
-              : req.status === "rejected"
-                ? "bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400 border-red-200/50"
-                : "bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200/50";
-
-          const statusLabel =
-            req.status === "approved"
-              ? t("alerts.correctionList.approved")
-              : req.status === "rejected"
-                ? t("alerts.correctionList.rejected")
-                : t("alerts.correctionList.pending");
-
-          return (
-            <div
-              key={req.id}
-              className="glass-card rounded-2xl overflow-hidden border border-[var(--color-border)] p-4 md:p-6 space-y-4 hover:shadow-md transition-shadow bg-[var(--color-bg-surface-raised)]/20"
-            >
-              {/* Header row */}
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[var(--color-border)] pb-3">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-black text-[var(--color-text-primary)]">@{req.requester_email.split("@")[0]}</span>
-                    <span className="text-[10px] text-[var(--color-text-secondary)]">({req.requester_email})</span>
-                  </div>
-                  <p className="text-[10px] text-[var(--color-text-secondary)] font-medium">
-                    {t("alerts.correctionList.sentAt", { date: dateText })}
-                  </p>
-                </div>
-                <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider border ${statusColors}`}>
-                  {statusLabel}
-                </span>
-              </div>
-
-              {/* Alert context */}
-              <div className="space-y-1">
-                <span className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">{t("alerts.correctionList.contentLabel")}</span>
-                <div className="p-3 bg-[var(--color-bg-surface-raised)] rounded-xl border border-[var(--color-border)] text-xs text-[var(--color-text-secondary)] italic">
-                  "{req.alert_text}"
-                </div>
-              </div>
-
-              {/* Changes Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-[var(--color-bg-surface-raised)]/50 p-4 rounded-xl border border-[var(--color-border)]">
-                {/* Sentiment */}
-                <div>
-                  <p className="text-[9px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">{t("alerts.correctionList.sentiment")}</p>
-                  <div className="flex items-center gap-1.5 mt-1 text-xs font-bold">
-                    <span className="text-red-500 font-bold uppercase">{req.original_sentiment}</span>
-                    <span className="material-symbols-outlined text-[12px] text-[var(--color-text-secondary)]">arrow_forward</span>
-                    <span className="text-green-500 font-black uppercase">{req.new_sentiment}</span>
-                  </div>
-                </div>
-
-                {/* Severity */}
-                <div>
-                  <p className="text-[9px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">{t("alerts.correctionList.severity")}</p>
-                  <div className="flex items-center gap-1.5 mt-1 text-xs font-bold">
-                    <span className="text-amber-600 font-bold uppercase">{req.original_severity}</span>
-                    <span className="material-symbols-outlined text-[12px] text-[var(--color-text-secondary)]">arrow_forward</span>
-                    <span className="text-red-600 font-black uppercase">{req.new_severity}</span>
-                  </div>
-                </div>
-
-                {/* Topic */}
-                <div>
-                  <p className="text-[9px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">{t("alerts.correctionList.topic")}</p>
-                  <div className="flex items-center gap-1.5 mt-1 text-xs font-bold">
-                    <span className="text-[var(--color-text-secondary)] font-bold uppercase">{req.original_topic}</span>
-                    <span className="material-symbols-outlined text-[12px] text-[var(--color-text-secondary)]">arrow_forward</span>
-                    <span className="text-[var(--color-brand)] font-black uppercase">{req.new_topic}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Reason */}
-              <div className="space-y-1">
-                <span className="text-[10px] font-black uppercase text-[var(--color-text-muted)] tracking-wider">{t("alerts.correctionList.reason")}</span>
-                <p className="text-xs text-[var(--color-text-primary)] font-medium bg-[var(--color-bg-surface-raised)]/30 p-2.5 rounded-lg border border-[var(--color-border)]/50">
-                  {req.reason}
-                </p>
-              </div>
-
-              {/* Decision Log / Management Actions */}
-              {req.status === "pending" ? (
-                isManager ? (
-                  <div className="flex justify-end gap-2 pt-3 border-t border-[var(--color-border)]">
-                    <button
-                      disabled={resolvingId !== null}
-                      onClick={() => handleResolve(req.id, req.alert_id, "rejected")}
-                      className="px-4 py-2 rounded-xl text-xs font-bold border border-red-500/30 text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
-                    >
-                      {resolvingId === req.id ? t("alerts.correctionList.processing") : t("alerts.correctionList.rejectBtn")}
-                    </button>
-                    <button
-                      disabled={resolvingId !== null}
-                      onClick={() => handleResolve(req.id, req.alert_id, "approved")}
-                      className="px-4 py-2 rounded-xl text-xs font-bold bg-green-600 text-white hover:bg-green-700 active:scale-95 transition-all shadow-sm cursor-pointer"
-                    >
-                      {resolvingId === req.id ? t("alerts.correctionList.processing") : t("alerts.correctionList.approveBtn")}
-                    </button>
-                  </div>
-                ) : (
-                  <p className="text-[10px] text-amber-600 font-bold text-right italic">
-                    {t("alerts.correctionList.waitingApproval")}
-                  </p>
-                )
-              ) : (
-                <div className="pt-2 border-t border-[var(--color-border)]/50 flex items-center justify-between text-[10px] text-[var(--color-text-secondary)] font-medium">
-                  <span>{t("alerts.correctionList.reviewer", { uid: req.resolved_by?.slice(0, 8) })}</span>
-                  <span>{t("alerts.correctionList.resolvedTime", { time: req.resolved_at ? new Date(req.resolved_at).toLocaleString("vi-VN") : "" })}</span>
-                </div>
-              )}
-            </div>
-          );
-        })
-      )}
     </div>
   );
 }

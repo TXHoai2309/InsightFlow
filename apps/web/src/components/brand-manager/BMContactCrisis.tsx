@@ -134,7 +134,7 @@ export function BMContactCrisis() {
                           </span>
                           <span className="truncate max-w-[150px]" title={contact.author}>{contact.author}</span>
                         </div>
-                        <p className="text-sm font-semibold text-[var(--color-text-primary)] line-clamp-2 mt-1">"{contact.content}"</p>
+                        <p className="text-sm font-semibold text-[var(--color-text-primary)] line-clamp-2 mt-1">“{contact.content}”</p>
                       </div>
                     </td>
                     <td className="py-4 px-6">
@@ -222,7 +222,7 @@ export function BMContactCrisis() {
                     <span className="text-xs font-bold text-[var(--color-text-primary)]">{crisis.author}</span>
                   </div>
                   <p className="text-sm text-[var(--color-text-primary)] font-medium line-clamp-3 mb-4">
-                    "{crisis.content}"
+                    “{crisis.content}”
                   </p>
                   
                   {/* SLA Bar */}
@@ -292,7 +292,7 @@ export function BMContactCrisis() {
                     {t("bm.contact.riskTitle")}
                   </div>
                   <p className="text-xs text-[var(--color-error)] opacity-80 leading-relaxed">
-                    Contact này chứa các từ khóa nhạy cảm: "Tẩy chay", "Báo chí", "Nguy hiểm". Tốc độ lan truyền cao trên nền tảng. Yêu cầu ưu tiên phản hồi trong vòng 30 phút.
+                    Contact này chứa các từ khóa nhạy cảm: “Tẩy chay”, “Báo chí”, “Nguy hiểm”. Tốc độ lan truyền cao trên nền tảng. Yêu cầu ưu tiên phản hồi trong vòng 30 phút.
                   </p>
                 </div>
               )}
@@ -315,7 +315,7 @@ export function BMContactCrisis() {
                 
                 <div className="p-4 bg-[var(--color-bg-surface-raised)] rounded-xl border border-[var(--color-border)]">
                   <p className="text-sm font-medium text-[var(--color-text-primary)] italic leading-relaxed">
-                    "{activeContact.content}"
+                    “{activeContact.content}”
                   </p>
                   <p className="text-[10px] text-[var(--color-text-muted)] mt-2">{t("bm.contact.detail.created")} {new Date(activeContact.createdAt).toLocaleString('vi-VN')}</p>
                 </div>
@@ -346,7 +346,7 @@ export function BMContactCrisis() {
                       <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] shadow-sm">
                         <div className="flex items-center justify-between mb-1">
                           <span className="font-bold text-xs text-[var(--color-text-primary)]">{event.user}</span>
-                          <span className="text-[10px] text-[var(--color-text-muted)] font-mono">{event.time}</span>
+                          <span className="text-[10px] text-[var(--color-text-muted)] font-sans">{event.time}</span>
                         </div>
                         <p className="text-xs text-[var(--color-text-secondary)]">{event.text}</p>
                       </div>

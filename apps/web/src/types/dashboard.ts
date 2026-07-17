@@ -160,13 +160,14 @@ export interface Lead {
   intent_signals: string[];
   status: "new" | "processing" | "completed" | "skipped";
   created_at: string;
+  updated_at?: string;
   expiry_at?: string;
   url?: string;
   source_url?: string;
   label_correction_status?: "none" | "pending" | "approved" | "rejected";
   pending_label_request_id?: string;
   last_label_corrected_at?: string;
-  
+
   // Contact Info
   phone?: string;
   email?: string;
@@ -175,18 +176,18 @@ export interface Lead {
   social_profile_url?: string;
   
   // CRM Tracking
-  owner_id?: string;
-  owner_name?: string;
-  owner_email?: string;
-  assigned_at?: string;
-  assigned_by?: string;
-  claimed_at?: string;
+  owner_id?: string | null;
+  owner_name?: string | null;
+  owner_email?: string | null;
+  assigned_at?: string | null;
+  assigned_by?: string | null;
+  claimed_at?: string | null;
   first_contacted_at?: string;
   contact_attempts?: number;
   last_contact_at?: string;
   pending_result?: boolean;
   last_action_at?: string;
-  last_action_type?: "open_source" | "message" | "call" | "email" | "open_profile" | "note";
+  last_action_type?: "open_source" | "message" | "call" | "email" | "open_profile" | "note" | "skip";
   last_contact_channel?: string;
   result_type?:
     | "positive"

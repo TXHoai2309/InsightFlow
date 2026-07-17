@@ -11,9 +11,9 @@ import {
   formatBrandDisplayName,
 } from "@/lib/services/dashboard";
 import {
-  resolveMentionDetailTarget,
-  resolveMentionDisplayPost,
-} from "@/lib/mention-navigation";
+  buildMentionThreadContext,
+  type MentionThreadNode as CommentNode,
+} from "@/lib/mention-thread";
 import { PlatformLogo } from "@/components/platform/PlatformLogo";
 import type { Mention } from "@/types/dashboard";
 
@@ -43,10 +43,6 @@ const sentimentMeta: Record<
     bg: "bg-[var(--color-error-subtle)]",
     icon: "sentiment_very_dissatisfied",
   },
-};
-
-type CommentNode = Mention & {
-  children: CommentNode[];
 };
 
 type CommentSentimentFilter = "all" | Mention["sentiment"];
@@ -329,58 +325,19 @@ export default function MentionDetailPage() {
       };
     }
 
-    const postMention = resolveMentionDisplayPost(threadSeedMention, mentionById);
-    const threadTarget = resolveMentionDetailTarget(threadSeedMention, mentionById);
-    const threadRootId = threadTarget.detailId;
-
-    const isDescendantOf = (item: Mention, rootId: string) => {
-      if (item.id === rootId) return false;
-      let cursor: Mention | undefined = item;
-      const seen = new Set<string>();
-
-      while (cursor?.parent_id) {
-        if (cursor.parent_id === rootId) return true;
-        if (seen.has(cursor.id)) return false;
-        seen.add(cursor.id);
-        cursor = mentionById.get(cursor.parent_id);
-      }
-
-      return false;
-    };
-
-    const sortByPostedAt = (a: Mention, b: Mention) =>
-      new Date(a.posted_at).getTime() - new Date(b.posted_at).getTime();
-
-    const comments = mentions
-      .filter((item) => isDescendantOf(item, threadRootId))
-      .sort(sortByPostedAt);
-
-    const childrenByParent = new Map<string, Mention[]>();
-    comments.forEach((item) => {
-      const parentId = item.parent_id || threadRootId;
-      const list = childrenByParent.get(parentId) || [];
-      list.push(item);
-      childrenByParent.set(parentId, list);
+    const context = buildMentionThreadContext(mentions, {
+      targetId: threadSeedMention.id,
+      postId: threadSeedMention.post_id,
     });
-    childrenByParent.forEach((items) => items.sort(sortByPostedAt));
-
-    const buildTree = (parentId: string): CommentNode[] => {
-      return (childrenByParent.get(parentId) || []).map((item) => ({
-        ...item,
-        children: buildTree(item.id),
-      }));
-    };
-
-    const tree = buildTree(threadRootId);
 
     return {
-      post: postMention,
-      rootParentId: threadRootId,
-      comments,
-      tree,
-      total: comments.length,
+      post: context.post,
+      rootParentId: context.postId,
+      comments: context.comments,
+      tree: context.tree,
+      total: context.total,
     };
-  }, [mentionById, mentions, threadSeedMention]);
+  }, [mentions, threadSeedMention]);
 
   const sentimentStats = useMemo(() => {
     const pool = postContext.post
