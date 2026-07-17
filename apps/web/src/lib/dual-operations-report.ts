@@ -34,6 +34,17 @@ export interface DualOperationsPriorityRow {
   content: string;
   href: string;
   score: number;
+  urgencyLevel: "urgent" | "attention" | "normal";
+  urgencyReasons: string[];
+}
+
+export interface DualOperationsAttentionItem {
+  key: "crisis_overdue" | "lead_overdue" | "lead_need_result" | "crisis_pending";
+  title: string;
+  description: string;
+  count: number;
+  href: string;
+  tone: "danger" | "warn" | "info";
 }
 
 export interface DualOperationsReportData {
@@ -43,6 +54,8 @@ export interface DualOperationsReportData {
   kpis: DualOperationsKpi;
   workloadDistribution: DualOperationsBucket[];
   priorityRows: DualOperationsPriorityRow[];
+  attentionItems: DualOperationsAttentionItem[];
+  recommendations: string[];
   aiSummary: string;
 }
 
@@ -66,6 +79,11 @@ function mapLeadPriorityRow(row: LeadReportDetailRow): DualOperationsPriorityRow
   const slaScore = isBadSla(row.slaStatus) ? 55 : row.slaStatus === "Trong SLA" ? 8 : 0;
   const intentScore = row.intent === "hot" ? 45 : row.intent === "warm" ? 25 : row.intent === "cold" ? 8 : 0;
   const resultScore = !row.resultType && row.contactAttempts > 0 && row.status === "processing" ? 25 : 0;
+  const urgencyReasons = [
+    ...(isBadSla(row.slaStatus) ? [row.slaStatus] : []),
+    ...(row.intent === "hot" ? ["Hot Lead cần phản hồi sớm"] : []),
+    ...(resultScore > 0 ? ["Đã liên hệ nhưng chưa ghi nhận kết quả"] : []),
+  ];
 
   return {
     id: row.id,
@@ -79,6 +97,12 @@ function mapLeadPriorityRow(row: LeadReportDetailRow): DualOperationsPriorityRow
     content: row.content,
     href: `/leads?leadId=${encodeURIComponent(row.id)}`,
     score: row.priorityScore + slaScore + intentScore + resultScore,
+    urgencyLevel: isBadSla(row.slaStatus)
+      ? "urgent"
+      : row.intent === "hot" || resultScore > 0
+        ? "attention"
+        : "normal",
+    urgencyReasons,
   };
 }
 
@@ -86,6 +110,12 @@ function mapCrisisPriorityRow(row: CrisisReportDetailRow): DualOperationsPriorit
   const severityScore = row.severity === "critical" ? 90 : row.severity === "high" ? 60 : row.severity === "medium" ? 25 : 8;
   const slaScore = isBadSla(row.slaStatus) ? 70 : row.slaStatus === "Trong SLA" ? 15 : 0;
   const escalationScore = row.escalated ? 35 : 0;
+  const urgencyReasons = [
+    ...(isBadSla(row.slaStatus) ? [row.slaStatus] : []),
+    ...(row.severity === "critical" ? ["Cảnh báo mức nguy cấp"] : []),
+    ...(row.severity === "high" ? ["Cảnh báo mức cao"] : []),
+    ...(row.escalated ? ["Đang escalation hoặc chờ duyệt"] : []),
+  ];
 
   return {
     id: row.id,
@@ -99,6 +129,13 @@ function mapCrisisPriorityRow(row: CrisisReportDetailRow): DualOperationsPriorit
     content: row.content,
     href: `/alerts?alertId=${encodeURIComponent(row.id)}`,
     score: row.negativityScore + severityScore + slaScore + escalationScore,
+    urgencyLevel:
+      isBadSla(row.slaStatus) || row.severity === "critical"
+        ? "urgent"
+        : row.severity === "high" || row.escalated
+          ? "attention"
+          : "normal",
+    urgencyReasons,
   };
 }
 
@@ -110,9 +147,57 @@ function buildPriorityRows(lead: LeadReportData, crisis: CrisisReportData) {
     .filter((row) => row.status !== "resolved")
     .map(mapCrisisPriorityRow);
 
+  const urgencyRank = { urgent: 3, attention: 2, normal: 1 } as const;
   return [...leadRows, ...crisisRows]
-    .sort((a, b) => b.score - a.score)
+    .sort(
+      (a, b) =>
+        urgencyRank[b.urgencyLevel] - urgencyRank[a.urgencyLevel] ||
+        b.score - a.score,
+    )
     .slice(0, 80);
+}
+
+function buildAttentionItems(
+  lead: LeadReportData,
+  crisis: CrisisReportData,
+): DualOperationsAttentionItem[] {
+  const items: DualOperationsAttentionItem[] = [
+    {
+      key: "crisis_overdue",
+      title: "Cảnh báo quá hạn",
+      description: "Case khủng hoảng cần được xử lý hoặc rà soát SLA ngay.",
+      count: crisis.kpis.overdue,
+      href: "/alerts?reportFilter=overdue",
+      tone: "danger",
+    },
+    {
+      key: "lead_overdue",
+      title: "Lead trễ SLA",
+      description: "Khách hàng tiềm năng có nguy cơ mất cơ hội chuyển đổi.",
+      count: lead.kpis.slaBreached,
+      href: "/leads?reportFilter=overdue",
+      tone: "warn",
+    },
+    {
+      key: "lead_need_result",
+      title: "Chưa ghi nhận kết quả",
+      description: "Lead đã mở liên hệ nhưng chưa hoàn tất kết quả xử lý.",
+      count: lead.kpis.needResult,
+      href: "/leads?reportFilter=need_result",
+      tone: "info",
+    },
+    {
+      key: "crisis_pending",
+      title: "Đang chờ duyệt",
+      description: "Case cần theo dõi quyết định hoặc phản hồi tiếp theo.",
+      count: crisis.kpis.pendingApproval,
+      href: "/alerts?reportFilter=pending_approval",
+      tone: "warn",
+    },
+  ];
+  return items
+    .filter((item) => item.count > 0)
+    .sort((a, b) => b.count - a.count);
 }
 
 function buildAiSummary(report: {
@@ -141,6 +226,42 @@ function buildAiSummary(report: {
   }
 
   return parts.join(" ");
+}
+
+function buildRecommendations(
+  lead: LeadReportData,
+  crisis: CrisisReportData,
+  kpis: DualOperationsKpi,
+) {
+  const recommendations: string[] = [];
+  if (crisis.kpis.overdue > 0) {
+    recommendations.push(
+      `Ưu tiên xử lý ${crisis.kpis.overdue} cảnh báo quá hạn trước khi nhận thêm case mới.`,
+    );
+  }
+  if (lead.kpis.slaBreached > 0) {
+    recommendations.push(
+      `Liên hệ lại ${lead.kpis.slaBreached} Lead trễ SLA để giảm nguy cơ mất cơ hội.`,
+    );
+  }
+  if (lead.kpis.needResult > 0) {
+    recommendations.push(
+      `Hoàn tất ghi nhận kết quả cho ${lead.kpis.needResult} Lead đã được liên hệ.`,
+    );
+  }
+  if (crisis.kpis.pendingApproval > 0) {
+    recommendations.push(
+      `Theo dõi ${crisis.kpis.pendingApproval} case đang chờ duyệt để không gián đoạn xử lý.`,
+    );
+  }
+  if (recommendations.length === 0) {
+    recommendations.push(
+      kpis.pendingTasks > 0
+        ? `Tiếp tục xử lý ${kpis.pendingTasks} công việc còn mở theo hạn SLA gần nhất.`
+        : "Không có rủi ro nổi bật trong kỳ; duy trì nhịp xử lý hiện tại.",
+    );
+  }
+  return recommendations.slice(0, 3);
 }
 
 export function buildDualOperationsReportData(
@@ -195,6 +316,8 @@ export function buildDualOperationsReportData(
       },
     ],
     priorityRows,
+    attentionItems: buildAttentionItems(lead, crisis),
+    recommendations: buildRecommendations(lead, crisis, kpis),
     aiSummary: buildAiSummary({ lead, crisis, kpis, priorityRows }),
   };
 }

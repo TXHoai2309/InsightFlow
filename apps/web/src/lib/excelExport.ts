@@ -855,94 +855,177 @@ export function exportCrisisReportCsv(report: CrisisReportData, filename = "Cris
   );
 }
 
-function getDualOperationsOverviewRows(report: DualOperationsReportData) {
-  const { kpis } = report;
-  return [
-    ["Chi so", "Gia tri"],
-    ["Thoi gian xuat", report.generatedAt],
-    ["Tong viec", kpis.totalTasks],
-    ["Tong lead", kpis.leadTotal],
-    ["Tong case khung hoang", kpis.crisisTotal],
-    ["Da hoan tat", kpis.completedTasks],
-    ["Dang mo", kpis.pendingTasks],
-    ["Qua han/Tre SLA", kpis.overdueTasks],
-    ["Uu tien cao", kpis.priorityTasks],
-    ["Ty le chuyen doi lead", `${kpis.leadConversionRate}%`],
-    ["Ty le xu ly khung hoang", `${kpis.crisisResolvedRate}%`],
-    ["Ty le dung SLA tong hop", `${kpis.slaOnTimeRate}%`],
-    ["Lead hot", report.lead.kpis.hot],
-    ["Lead can ghi ket qua", report.lead.kpis.needResult],
-    ["Crisis critical/high", report.crisis.kpis.critical + report.crisis.kpis.high],
-    ["Crisis escalation", report.crisis.kpis.escalated],
-    ["Tom tat", report.aiSummary],
-  ];
+export interface DualOperationsExcelViewOptions {
+  periodLabel?: string;
+  filterLabel?: string;
+  operation?: "all" | "lead" | "crisis";
 }
 
-function getDualOperationsWorkloadRows(report: DualOperationsReportData) {
-  return [
-    ["Nghiep vu", "So luong", "Ty le"],
-    ...report.workloadDistribution.map((row) => [
-      row.label,
-      row.count,
-      `${row.percentage}%`,
-    ]),
-  ];
+function dualMetricCell(label: string, value: unknown, tone = "") {
+  return `<td class="metric ${tone}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></td>`;
 }
 
-function getDualOperationsPriorityRows(report: DualOperationsReportData) {
-  return [
-    [
-      "Loai",
-      "ID",
-      "Tieu de",
-      "Muc uu tien",
-      "Trang thai",
-      "SLA",
-      "Nguoi phu trach",
-      "Diem uu tien",
-      "Noi dung",
-      "Duong dan trong he thong",
-    ],
-    ...report.priorityRows.map((row) => [
-      row.typeLabel,
-      row.id,
-      row.title,
-      row.priority,
-      row.status,
-      row.slaStatus,
-      row.ownerName,
-      row.score,
-      row.content,
-      row.href,
-    ]),
-  ];
+function dualDetailTable(title: string, headers: string[], rows: unknown[][]) {
+  return `
+    <section class="report-section details">
+      <h2>${escapeHtml(title)}</h2>
+      <table class="data-table">
+        <thead><tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead>
+        <tbody>
+          ${rows.length > 0
+            ? rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("")
+            : `<tr><td colspan="${headers.length}" class="empty">Không có dữ liệu phù hợp.</td></tr>`}
+        </tbody>
+      </table>
+    </section>`;
+}
+
+export function buildDualOperationsReportExcelDocument(
+  report: DualOperationsReportData,
+  options: DualOperationsExcelViewOptions = {},
+) {
+  const periodLabel = options.periodLabel || "Theo phạm vi dữ liệu đã chọn";
+  const filterLabel = options.filterLabel || "Tất cả nghiệp vụ";
+  const showLead = options.operation !== "crisis";
+  const showCrisis = options.operation !== "lead";
+  const leadRows = report.lead.detailRows.map((row) => [
+    row.id,
+    row.customer,
+    row.intent.toUpperCase(),
+    row.status,
+    row.slaStatus,
+    row.ownerName,
+    row.content,
+  ]);
+  const crisisRows = report.crisis.detailRows.map((row) => [
+    row.id,
+    row.topic,
+    row.severity.toUpperCase(),
+    row.status,
+    row.slaStatus,
+    row.assigneeName,
+    row.content,
+  ]);
+
+  return `<!doctype html>
+  <html xmlns:o="urn:schemas-microsoft-com:office:office"
+    xmlns:x="urn:schemas-microsoft-com:office:excel"
+    xmlns="http://www.w3.org/TR/REC-html40">
+    <head>
+      <meta charset="utf-8" />
+      <style>
+        body { margin: 0; padding: 28px; background: #f7f7fc; color: #17152b; font-family: Arial, sans-serif; }
+        .report { width: 1120px; margin: 0 auto; background: #fff; border: 1px solid #dedcea; }
+        .hero { padding: 28px 32px; color: #fff; background: #4f46e5; }
+        .eyebrow { margin: 0 0 8px; font-size: 11px; font-weight: 700; letter-spacing: 1.8px; text-transform: uppercase; }
+        h1 { margin: 0; font-size: 28px; } .hero p { margin: 10px 0 0; font-size: 13px; }
+        .meta { margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.3); }
+        .report-section { padding: 22px 32px; border-bottom: 1px solid #e6e4ef; }
+        h2 { margin: 0 0 14px; font-size: 17px; } h3 { margin: 0 0 6px; font-size: 14px; }
+        table { width: 100%; border-collapse: separate; border-spacing: 10px; }
+        td { vertical-align: top; }
+        .attention { width: 25%; padding: 14px; border: 1px solid #f0c7c7; background: #fff8f7; }
+        .attention strong { display: block; margin-top: 8px; color: #b42318; font-size: 24px; }
+        .attention span, .metric span { display: block; color: #6f6b7e; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+        .attention p { margin: 8px 0 0; color: #5d596b; font-size: 11px; line-height: 1.5; }
+        .metric { width: 25%; padding: 16px; border: 1px solid #dedcea; background: #fafaff; }
+        .metric strong { display: block; margin-top: 8px; color: #4f46e5; font-size: 26px; }
+        .metric.good strong { color: #157347; } .metric.warn strong { color: #b45309; } .metric.danger strong { color: #b42318; }
+        .operation { width: 50%; padding: 18px; border: 1px solid #dedcea; background: #fff; }
+        .operation-grid { border-spacing: 0; margin-top: 10px; }
+        .operation-grid td { padding: 7px 0; border-bottom: 1px solid #efedf5; font-size: 12px; }
+        .operation-grid td:last-child { text-align: right; font-weight: 700; }
+        .recommendation { margin: 8px 0; padding: 11px 13px; border-left: 4px solid #4f46e5; background: #f4f3ff; font-size: 12px; }
+        .data-table { border-spacing: 0; table-layout: fixed; }
+        .data-table th { padding: 9px; color: #fff; background: #4f46e5; border: 1px solid #3932bd; font-size: 11px; text-align: left; }
+        .data-table td { padding: 8px; border: 1px solid #dedcea; font-size: 10px; white-space: normal; word-break: break-word; }
+        .data-table tr:nth-child(even) td { background: #f8f7fc; }
+        .empty { padding: 20px !important; color: #6f6b7e; text-align: center; }
+        .footer { padding: 16px 32px; color: #6f6b7e; background: #f7f7fc; font-size: 10px; }
+      </style>
+    </head>
+    <body>
+      <main class="report">
+        <header class="hero">
+          <p class="eyebrow">Báo cáo công việc cá nhân</p>
+          <h1>Lead &amp; Khủng hoảng</h1>
+          <p>Bản báo cáo tập trung vào kết quả, rủi ro cần chú ý và dữ liệu đối soát.</p>
+          <p class="meta"><strong>Kỳ báo cáo:</strong> ${escapeHtml(periodLabel)} &nbsp;·&nbsp; <strong>Phạm vi:</strong> ${escapeHtml(filterLabel)} &nbsp;·&nbsp; <strong>Cập nhật:</strong> ${escapeHtml(new Date(report.generatedAt).toLocaleString("vi-VN"))}</p>
+        </header>
+
+        <section class="report-section">
+          <h2>Cần chú ý</h2>
+          <table><tr>
+            ${report.attentionItems.length > 0
+              ? report.attentionItems.slice(0, 4).map((item) => `<td class="attention"><span>${escapeHtml(item.title)}</span><strong>${item.count}</strong><p>${escapeHtml(item.description)}</p></td>`).join("")
+              : `<td class="attention"><span>Trạng thái</span><strong>0</strong><p>Không có rủi ro nổi bật trong phạm vi báo cáo.</p></td>`}
+          </tr></table>
+        </section>
+
+        <section class="report-section">
+          <h2>Kết quả trong kỳ</h2>
+          <table><tr>
+            ${dualMetricCell("Đã hoàn tất", report.kpis.completedTasks, "good")}
+            ${dualMetricCell("Đúng SLA", `${report.kpis.slaOnTimeRate}%`)}
+            ${dualMetricCell("Còn mở", report.kpis.pendingTasks, "warn")}
+            ${dualMetricCell("Quá hạn", report.kpis.overdueTasks, report.kpis.overdueTasks > 0 ? "danger" : "good")}
+          </tr></table>
+        </section>
+
+        <section class="report-section">
+          <h2>Kết quả theo nghiệp vụ</h2>
+          <table><tr>
+            ${showLead ? `<td class="operation">
+              <h3>Khách hàng tiềm năng</h3>
+              <table class="operation-grid">
+                <tr><td>Đã liên hệ</td><td>${report.lead.kpis.contacted}/${report.lead.kpis.total}</td></tr>
+                <tr><td>Tỷ lệ chuyển đổi</td><td>${report.lead.kpis.conversionRate}%</td></tr>
+                <tr><td>Chưa ghi kết quả</td><td>${report.lead.kpis.needResult}</td></tr>
+                <tr><td>Trễ SLA</td><td>${report.lead.kpis.slaBreached}</td></tr>
+              </table>
+            </td>` : ""}
+            ${showCrisis ? `<td class="operation">
+              <h3>Khủng hoảng</h3>
+              <table class="operation-grid">
+                <tr><td>Đã giải quyết</td><td>${report.crisis.kpis.resolved}/${report.crisis.kpis.total}</td></tr>
+                <tr><td>Critical/High còn mở</td><td>${report.crisis.kpis.critical + report.crisis.kpis.high}</td></tr>
+                <tr><td>Chờ duyệt</td><td>${report.crisis.kpis.pendingApproval}</td></tr>
+                <tr><td>Quá hạn</td><td>${report.crisis.kpis.overdue}</td></tr>
+              </table>
+            </td>` : ""}
+          </tr></table>
+        </section>
+
+        <section class="report-section">
+          <h2>Nhận định và đề xuất</h2>
+          ${report.recommendations.map((item) => `<p class="recommendation">${escapeHtml(item)}</p>`).join("")}
+        </section>
+
+        ${showLead ? dualDetailTable("Chi tiết Lead", ["ID", "Khách hàng", "Intent", "Trạng thái", "SLA", "Phụ trách", "Nội dung"], leadRows) : ""}
+        ${showCrisis ? dualDetailTable("Chi tiết Khủng hoảng", ["ID", "Chủ đề", "Mức độ", "Trạng thái", "SLA", "Phụ trách", "Nội dung"], crisisRows) : ""}
+        <footer class="footer">InsightFlow · Nội dung trong bản xem trước và file Excel được tạo từ cùng một tài liệu.</footer>
+      </main>
+    </body>
+  </html>`;
 }
 
 export function exportDualOperationsReportExcel(
   report: DualOperationsReportData,
   filename = "Dual_Operations_Report",
+  options: DualOperationsExcelViewOptions = {},
 ) {
-  downloadExcelSheets(`${safeFilePart(filename)}.xls`, [
-    { name: "Tong quan 2 nghiep vu", rows: getDualOperationsOverviewRows(report) },
-    { name: "Phan bo khoi luong", rows: getDualOperationsWorkloadRows(report) },
-    { name: "Viec uu tien", rows: getDualOperationsPriorityRows(report) },
-    { name: "Tong quan Lead", rows: getLeadReportOverviewRows(report.lead) },
-    { name: "Chi tiet Lead", rows: getLeadReportDetailRows(report.lead) },
-    { name: "Tong quan Khung hoang", rows: getCrisisReportOverviewRows(report.crisis) },
-    { name: "Chi tiet Khung hoang", rows: getCrisisReportDetailRows(report.crisis) },
-  ]);
-}
-
-export function exportDualOperationsReportCsv(
-  report: DualOperationsReportData,
-  filename = "Dual_Operations_Report",
-) {
-  const csv = rowsToCsv(getDualOperationsPriorityRows(report));
-  downloadBlob(
-    `${safeFilePart(filename)}.csv`,
-    `\uFEFF${csv}`,
-    "text/csv;charset=utf-8",
-  );
+  const excelDocument = buildDualOperationsReportExcelDocument(report, options);
+  const blob = new Blob([excelDocument], {
+    type: "application/vnd.ms-excel;charset=utf-8",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = window.document.createElement("a");
+  link.href = url;
+  link.download = `${safeFilePart(filename)}.xls`;
+  window.document.body.appendChild(link);
+  link.click();
+  window.document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }
 
 export async function generateDailyReportExcel(
