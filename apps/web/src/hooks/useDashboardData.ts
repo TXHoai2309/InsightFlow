@@ -20,7 +20,51 @@ interface UseDashboardOptions {
   refetchInterval?: number;
 }
 
-// Module-level in-memory cache time tracking to avoid duplicate fetching during menu transitions
+const DASHBOARD_CACHE_PREFIX = "insightflow_dashboard_cache_";
+const DASHBOARD_CACHE_LIMITS = {
+  mentions: 150,
+  alerts: 150,
+  leads: 500,
+  labelChangeRequests: 100,
+};
+
+function isStorageQuotaError(error: unknown) {
+  return (
+    error instanceof DOMException &&
+    (error.name === "QuotaExceededError" || error.name === "NS_ERROR_DOM_QUOTA_REACHED")
+  );
+}
+
+function clearDashboardCaches(exceptKey?: string) {
+  const keys: string[] = [];
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const key = localStorage.key(index);
+    if (key?.startsWith(DASHBOARD_CACHE_PREFIX) && key !== exceptKey) keys.push(key);
+  }
+  keys.forEach((key) => localStorage.removeItem(key));
+}
+
+function saveDashboardCache(cacheKey: string, primaryValue: unknown, fallbackValue: unknown) {
+  try {
+    localStorage.setItem(cacheKey, JSON.stringify(primaryValue));
+  } catch (error) {
+    if (!isStorageQuotaError(error)) {
+      console.warn("[useDashboard] Save cache error:", error);
+      return;
+    }
+
+    // Cache is only a rendering optimization. Remove older dashboard scopes and
+    // retry with a minimal snapshot instead of allowing quota failures to affect
+    // the live Supabase data or Lead operations.
+    clearDashboardCaches(cacheKey);
+    localStorage.removeItem(cacheKey);
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify(fallbackValue));
+    } catch (retryError) {
+      console.warn("[useDashboard] Minimal cache save skipped:", retryError);
+    }
+  }
+}
 
 
 export function useDashboard(options: UseDashboardOptions = {}) {
@@ -62,7 +106,7 @@ export function useDashboard(options: UseDashboardOptions = {}) {
         const cached = localStorage.getItem(cacheKey);
         if (cached) {
           try {
-            const { timestamp, data } = JSON.parse(cached);
+            const { timestamp, data, partial } = JSON.parse(cached);
             setWorkspaces(data.workspaces || []);
             setMentions(data.mentions || []);
             setAlerts(data.alerts || []);
@@ -77,7 +121,7 @@ export function useDashboard(options: UseDashboardOptions = {}) {
 
             const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes fresh cache window
             const hasCachedMentions = data.mentions && data.mentions.length > 0;
-            if (hasCachedMentions && Date.now() - timestamp < CACHE_DURATION) {
+            if (!partial && hasCachedMentions && Date.now() - timestamp < CACHE_DURATION) {
               setLastFetchedAt(fetchScopeKey, timestamp);
               setLoading(false);
               return;
@@ -135,27 +179,38 @@ export function useDashboard(options: UseDashboardOptions = {}) {
 
       // Save to localStorage cache
       if (typeof window !== "undefined") {
-        try {
-          localStorage.setItem(
-            cacheKey,
-            JSON.stringify({
-              timestamp: Date.now(),
-              data: {
-                workspaces,
-                mentions,
-                alerts,
-                leads,
-                labelChangeRequests,
-                stats,
-                topSources,
-                topTopics,
-                trendData,
-              },
-            }),
-          );
-        } catch (saveCacheError) {
-          console.warn("[useDashboard] Save cache error:", saveCacheError);
-        }
+        const timestamp = Date.now();
+        const compactData = {
+          workspaces,
+          mentions: mentions.slice(0, DASHBOARD_CACHE_LIMITS.mentions),
+          alerts: alerts.slice(0, DASHBOARD_CACHE_LIMITS.alerts),
+          leads: leads.slice(0, DASHBOARD_CACHE_LIMITS.leads),
+          labelChangeRequests: labelChangeRequests.slice(0, DASHBOARD_CACHE_LIMITS.labelChangeRequests),
+          stats,
+          topSources,
+          topTopics,
+          trendData,
+        };
+        const partial =
+          mentions.length > compactData.mentions.length ||
+          alerts.length > compactData.alerts.length ||
+          leads.length > compactData.leads.length ||
+          labelChangeRequests.length > compactData.labelChangeRequests.length;
+        saveDashboardCache(
+          cacheKey,
+          { timestamp, partial, data: compactData },
+          {
+            timestamp,
+            partial: true,
+            data: {
+              ...compactData,
+              mentions: [],
+              alerts: [],
+              leads: compactData.leads.slice(0, 100),
+              labelChangeRequests: [],
+            },
+          },
+        );
       }
 
       setLastFetchedAt(fetchScopeKey, Date.now());
@@ -250,8 +305,9 @@ export function useDashboard(options: UseDashboardOptions = {}) {
 
     if (supabaseClient) {
       console.log("[useDashboard] Initializing Realtime leads subscription");
+      const channelId = `realtime-leads-dashboard-${Math.random().toString(36).substring(2, 10)}`;
       const channel = supabaseClient
-        .channel("realtime-leads-dashboard")
+        .channel(channelId)
         .on(
           "postgres_changes",
           { event: "*", schema: "public", table: "leads" },

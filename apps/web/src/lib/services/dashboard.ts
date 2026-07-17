@@ -48,6 +48,7 @@ import {
 } from "@/lib/label-change";
 import { filterByBrandScope } from "@/lib/brandScope";
 import { isIntentLead, isQualifiedLeadIntent } from "@/lib/lead-intent";
+import { withOptionalColumnFallback } from "@/lib/lead-schema-compat";
 
 // ─── Collection names ────────────────────────────────────────────────────────
 export const COLLECTION_NAMES = {
@@ -543,10 +544,28 @@ export class SupabaseServiceError extends Error {
   }
 }
 
+export class LeadAlreadyClaimedError extends Error {
+  ownerName?: string;
+
+  constructor(ownerName?: string) {
+    super("Lead has already been claimed by another employee.");
+    this.name = "LeadAlreadyClaimedError";
+    this.ownerName = ownerName;
+  }
+}
+
 export function getLeadOperationErrorMessage(
   error: unknown,
   fallback = "Không thể cập nhật dữ liệu lead. Vui lòng thử lại.",
 ): string {
+  if (error instanceof LeadAlreadyClaimedError) {
+    return error.ownerName
+      ? `Lead này đã được ${error.ownerName} nhận xử lý.`
+      : "Lead này đã được nhân viên khác nhận xử lý.";
+  }
+  if (error instanceof SupabaseServiceError && [401, 403].includes(error.status)) {
+    return "Bạn không có quyền cập nhật Lead này.";
+  }
   if (error instanceof SupabaseServiceError && error.code === "PGRST204") {
     return "Cấu hình dữ liệu chưa được đồng bộ. Vui lòng liên hệ quản trị viên.";
   }
@@ -625,19 +644,93 @@ async function supabaseWrite<T = unknown>(
   return (await response.json()) as T;
 }
 
+const unsupportedLeadAuditColumns = new Set<string>();
+
+async function withLeadAuditSchemaFallback<T>(
+  payload: Record<string, unknown>,
+  writer: (compatiblePayload: Record<string, unknown>) => Promise<T>,
+) {
+  return withOptionalColumnFallback({
+    payload,
+    column: "updated_by_name",
+    knownUnsupported: unsupportedLeadAuditColumns,
+    writer,
+  });
+}
+
 async function upsertSupabaseLead(
   config: SupabaseConfig,
   id: string,
   payload: Record<string, unknown>,
 ) {
-  await supabaseWrite(
-    config,
-    "leads",
-    "POST",
-    [stripUndefinedFields({ id, ...payload })],
-    "on_conflict=id",
-    false,
-    "resolution=merge-duplicates,return=minimal",
+  const writeLead = (nextPayload: Record<string, unknown>) =>
+    supabaseWrite(
+      config,
+      "leads",
+      "POST",
+      [stripUndefinedFields({ id, ...nextPayload })],
+      "on_conflict=id",
+      false,
+      "resolution=merge-duplicates,return=minimal",
+    );
+
+  await withLeadAuditSchemaFallback(payload, writeLead);
+}
+
+async function claimSupabaseLead(
+  config: SupabaseConfig,
+  id: string,
+  payload: Record<string, unknown>,
+  claimantId: string,
+) {
+  const encodedId = encodeURIComponent(id);
+  const readCurrentOwner = async () =>
+    supabaseRequest<SupabaseRow[]>(
+      config,
+      "leads",
+      `select=id,owner_id,owner_name,owner_email&id=eq.${encodedId}&limit=1`,
+    );
+
+  const patchRows = await withLeadAuditSchemaFallback(payload, (compatiblePayload) =>
+    supabaseWrite<SupabaseRow[]>(
+      config,
+      "leads",
+      "PATCH",
+      stripUndefinedFields(compatiblePayload),
+      `id=eq.${encodedId}&or=(owner_id.is.null,owner_id.eq.)`,
+      true,
+      "return=representation",
+    ),
+  );
+  if (patchRows.length > 0) return;
+
+  const existingRows = await readCurrentOwner();
+  const existing = existingRows[0];
+  if (existing) {
+    if (String(existing.owner_id || "") === claimantId) return;
+    throw new LeadAlreadyClaimedError(
+      String(existing.owner_name || existing.owner_email || "").trim() || undefined,
+    );
+  }
+
+  const insertedRows = await withLeadAuditSchemaFallback(payload, (compatiblePayload) =>
+    supabaseWrite<SupabaseRow[]>(
+      config,
+      "leads",
+      "POST",
+      [stripUndefinedFields({ id, ...compatiblePayload })],
+      "on_conflict=id",
+      true,
+      "resolution=ignore-duplicates,return=representation",
+    ),
+  );
+  if (insertedRows.length > 0) return;
+
+  const winningRows = await readCurrentOwner();
+  const winner = winningRows[0];
+  if (String(winner?.owner_id || "") === claimantId) return;
+  throw new LeadAlreadyClaimedError(
+    String(winner?.owner_name || winner?.owner_email || "").trim() || undefined,
   );
 }
 
@@ -2136,6 +2229,43 @@ export class DashboardService {
   }
 
   /**
+   * Nhận xử lý Lead theo điều kiện owner_id đang trống. PATCH/INSERT đều dùng
+   * điều kiện cạnh tranh để hai nhân viên không thể cùng ghi đè người phụ trách.
+   */
+  static async claimLead(
+    id: string,
+    profile: UserRoleProfile | null | undefined,
+    lead?: Lead,
+  ): Promise<Partial<Lead>> {
+    if (!profile || !canPerformAction(profile, "update_lead_details")) {
+      throw new Error("User is not allowed to claim this lead.");
+    }
+    if (!canPerformAction(profile, "update_lead_status")) {
+      throw new Error("User is not allowed to update lead status.");
+    }
+
+    const nowIso = new Date().toISOString();
+    const claimData: Partial<Lead> = {
+      status: lead?.status === "new" ? "processing" : lead?.status || "processing",
+      owner_id: profile.uid,
+      owner_name: getProfileDisplayName(profile),
+      owner_email: profile.email,
+      assigned_at: nowIso,
+      assigned_by: profile.uid,
+      claimed_at: nowIso,
+    };
+    const auditFields = {
+      updated_by: profile.uid,
+      updated_by_name: getProfileDisplayName(profile),
+      updated_by_role: profile.role,
+      updated_at: nowIso,
+    };
+    const payload = buildLeadWorkflowPayload(lead, claimData, profile, auditFields);
+    await claimSupabaseLead(getSupabaseConfig(), id, payload, profile.uid);
+    return claimData;
+  }
+
+  /**
    * Cập nhật trạng thái của lead trên Supabase
    */
   static async updateLeadStatus(
@@ -2150,6 +2280,7 @@ export class DashboardService {
 
     const auditFields = {
       updated_by: profile.uid,
+      updated_by_name: getProfileDisplayName(profile),
       updated_by_role: profile.role,
       updated_at: new Date().toISOString(),
     };
@@ -2186,6 +2317,7 @@ export class DashboardService {
 
     const auditFields = {
       updated_by: profile.uid,
+      updated_by_name: getProfileDisplayName(profile),
       updated_by_role: profile.role,
       updated_at: new Date().toISOString(),
     };

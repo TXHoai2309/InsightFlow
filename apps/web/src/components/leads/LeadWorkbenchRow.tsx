@@ -81,7 +81,7 @@ export function LeadWorkbenchRow({
   onStartedAction,
 }: LeadWorkbenchRowProps) {
   const { profile } = useAuth();
-  const { updateLeadDetails } = useDashboardStore();
+  const { updateLeadDetails, claimLead } = useDashboardStore();
   const [isOpening, setIsOpening] = useState(false);
   const [error, setError] = useState("");
   const [showMenu, setShowMenu] = useState(false);
@@ -130,17 +130,8 @@ export function LeadWorkbenchRow({
 
   const handleClaim = async () => {
     if (!canEdit || !profile) return;
-    const nowIso = new Date().toISOString();
-    const ownerData: Partial<Lead> = {
-      owner_id: profile.uid,
-      owner_name: getOwnerName(),
-      owner_email: profile.email,
-      assigned_at: nowIso,
-      assigned_by: profile.uid,
-      claimed_at: nowIso,
-    };
-    await updateLeadDetails(lead.id, ownerData, profile);
-    const updatedLead = { ...lead, ...ownerData };
+    const claimData = await claimLead(lead.id, profile);
+    const updatedLead = { ...lead, ...claimData };
     onStartedAction?.(updatedLead);
     onSelect(updatedLead);
   };

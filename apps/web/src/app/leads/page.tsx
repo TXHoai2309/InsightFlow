@@ -31,6 +31,14 @@ import {
 } from "@/lib/lead-return-context";
 import { normalizeBrandName } from "@/lib/services/dashboard";
 import { isIntentLead } from "@/lib/lead-intent";
+import {
+  DEFAULT_LEAD_WORKBENCH_FILTERS,
+  countActiveLeadFilters,
+  filterLeadWorkbenchItems,
+  readLeadWorkbenchFilters,
+  writeLeadWorkbenchFilters,
+  type LeadWorkbenchFilters,
+} from "@/lib/lead-filters";
 
 const LEADS_PAGE_SIZE = 5;
 const APP_SCROLL_ROOT_SELECTOR = '[data-app-scroll-root="true"]';
@@ -80,6 +88,9 @@ export default function LeadsPage() {
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [leadFilters, setLeadFilters] = useState<LeadWorkbenchFilters>(
+    DEFAULT_LEAD_WORKBENCH_FILTERS,
+  );
   const [currentPage, setCurrentPage] = useState(1);
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [detailTab, setDetailTab] = useState<LeadDetailPanelTab>("action");
@@ -92,6 +103,7 @@ export default function LeadsPage() {
   const pendingRestoreScrollTop = useRef<number | null>(null);
   const pendingRestorePanelScrollTop = useRef<number | null>(null);
   const hasReconciledRestoreLead = useRef(false);
+  const hasInitializedLeadFilters = useRef(false);
   const canViewLeads = canPerformAction(profile, "view_leads");
   const hasBrandScope = hasBusinessBrandScope(profile);
 
@@ -109,33 +121,32 @@ export default function LeadsPage() {
 
   const {
     workspaces,
-    filters,
     leads,
     mentions,
     isLoading,
     error,
-    setFilters,
   } = useDashboardStore();
 
   useEffect(() => {
     if (!profile || profile.role === "admin" || workspaces.length === 0) return;
-    if (filters.workspace_id !== "all") return;
     const profileBrandKey = normalizeBrandName(profile.brandName || profile.brandId || "");
     const scopedWorkspace = workspaces.find(
       (workspace) =>
         normalizeBrandName(workspace.id) === profileBrandKey ||
         normalizeBrandName(workspace.brand_name) === profileBrandKey,
     );
-    setFilters({
-      workspace_id:
-        scopedWorkspace?.id || profile.brandId || profile.brandName || "all",
-    });
+    const workspaceId =
+      scopedWorkspace?.id || profile.brandId || profile.brandName || "all";
+    setLeadFilters((current) =>
+      current.workspaceId === workspaceId
+        ? current
+        : { ...current, workspaceId },
+    );
   }, [
-    filters.workspace_id,
+    leadFilters.workspaceId,
     profile,
     profile?.brandId,
     profile?.brandName,
-    setFilters,
     workspaces,
   ]);
 
@@ -156,11 +167,12 @@ export default function LeadsPage() {
 
   const baseLeads = useMemo(() => {
     const normFilter =
-      filters.workspace_id !== "all" ? normalizeBrandName(filters.workspace_id) : null;
+      leadFilters.workspaceId !== "all"
+        ? normalizeBrandName(leadFilters.workspaceId)
+        : null;
     const filteredLeads = leads.filter((lead) => {
       if (!isIntentLead(lead)) return false;
       if (normFilter && normalizeBrandName(lead.workspace_id) !== normFilter) return false;
-      if (filters.platform !== "all" && lead.platform !== filters.platform) return false;
       return true;
     });
     if (Object.keys(optimisticLeadsById).length === 0) return filteredLeads;
@@ -170,8 +182,7 @@ export default function LeadsPage() {
       return optimisticLead ? { ...lead, ...optimisticLead } : lead;
     });
   }, [
-    filters.workspace_id,
-    filters.platform,
+    leadFilters.workspaceId,
     leads,
     optimisticLeadsById,
   ]);
@@ -211,10 +222,17 @@ export default function LeadsPage() {
       returnContext?.leadId ||
       requestedLeadId;
 
-    if (requestedFilters && Object.keys(requestedFilters).length > 0) {
-      skipNextPageReset.current = true;
-      setFilters(requestedFilters);
-    }
+    const urlFilters = readLeadWorkbenchFilters(params);
+    const restoredFilters: LeadWorkbenchFilters = requestedFilters
+      ? {
+          ...urlFilters,
+          workspaceId:
+            requestedFilters.workspace_id || urlFilters.workspaceId,
+          platform: requestedFilters.platform || urlFilters.platform,
+        }
+      : urlFilters;
+    skipNextPageReset.current = true;
+    setLeadFilters(restoredFilters);
 
     if (requestedPanelTab) {
       setDetailTab(requestedPanelTab === "suggestion" ? "action" : requestedPanelTab);
@@ -239,8 +257,29 @@ export default function LeadsPage() {
     }
 
     hasRestoredReturnContext.current = true;
+    hasInitializedLeadFilters.current = true;
     clearLeadReturnContext(returnToken);
-  }, [setFilters, workbenchViews]);
+  }, [workbenchViews]);
+
+  useEffect(() => {
+    if (!hasInitializedLeadFilters.current) return;
+
+    const params = new URLSearchParams(window.location.search);
+    writeLeadWorkbenchFilters(params, leadFilters);
+    params.set("view", activeView);
+    if (currentPage > 1) params.set("page", String(currentPage));
+    else params.delete("page");
+    if (selectedLeadId) params.set("leadId", selectedLeadId);
+    else params.delete("leadId");
+    params.delete("returnToken");
+
+    const query = params.toString();
+    window.history.replaceState(
+      window.history.state,
+      "",
+      query ? `${window.location.pathname}?${query}` : window.location.pathname,
+    );
+  }, [activeView, currentPage, leadFilters, selectedLeadId]);
 
   const visibleBaseLeads = useMemo(
     () => baseLeads.filter((lead) => canLeadBeVisibleToUser(lead, profile)),
@@ -269,11 +308,27 @@ export default function LeadsPage() {
     visibleBaseLeads,
   ]);
 
-  const visibleLeads = useMemo(() => {
+  const leadsInActiveView = useMemo(() => {
     return sortedLeads.filter((lead) =>
       matchesLeadWorkbenchView(lead, activeView, currentTime, profile),
     );
   }, [activeView, currentTime, profile, sortedLeads]);
+
+  const visibleLeads = useMemo(
+    () =>
+      filterLeadWorkbenchItems(
+        leadsInActiveView,
+        { ...leadFilters, workspaceId: "all" },
+        currentTime,
+        profile?.uid,
+      ),
+    [currentTime, leadFilters, leadsInActiveView, profile?.uid],
+  );
+
+  const activeFilterCount = countActiveLeadFilters(
+    leadFilters,
+    profile?.role === "admin",
+  );
 
   const totalPages = Math.max(1, Math.ceil(visibleLeads.length / LEADS_PAGE_SIZE));
 
@@ -283,7 +338,7 @@ export default function LeadsPage() {
       return;
     }
     setCurrentPage(1);
-  }, [activeView, filters.workspace_id, filters.platform]);
+  }, [activeView, leadFilters]);
 
   useEffect(() => {
     setCurrentPage((page) => Math.min(Math.max(1, page), totalPages));
@@ -429,6 +484,24 @@ export default function LeadsPage() {
 
   const brandPlatformFilteredLeads = visibleBaseLeads;
   const isDetailPanelOpen = Boolean(selectedLead && !isPanelCollapsed);
+  const brandLocked = profile?.role !== "admin";
+  const selectedWorkspace = workspaces.find(
+    (workspace) =>
+      normalizeBrandName(workspace.id) ===
+        normalizeBrandName(leadFilters.workspaceId) ||
+      normalizeBrandName(workspace.brand_name) ===
+        normalizeBrandName(leadFilters.workspaceId),
+  );
+  const activeViewLabel =
+    workbenchViews.find((view) => view.id === activeView)?.label ||
+    "Hàng chờ hiện tại";
+
+  const resetLeadFilters = () => {
+    setLeadFilters({
+      ...DEFAULT_LEAD_WORKBENCH_FILTERS,
+      workspaceId: brandLocked ? leadFilters.workspaceId : "all",
+    });
+  };
 
   const pendingResultLead = useMemo(() => {
     return sortedLeads.find((lead) =>
@@ -436,8 +509,9 @@ export default function LeadsPage() {
     );
   }, [sortedLeads, currentTime, profile]);
 
-  const handleStartedAction = (lead: Lead) => {
+  const handleStartedAction = (lead: Lead, preventJump = false) => {
     rememberOptimisticLead(lead);
+    if (preventJump) return;
     setSelectedLeadId(lead.id);
     setDetailTab("action");
     setIsPanelCollapsed(false);
@@ -613,6 +687,11 @@ export default function LeadsPage() {
             >
               <span className="material-symbols-outlined text-base">tune</span>
               Bộ lọc
+              {activeFilterCount > 0 && (
+                <span className="rounded-full bg-[var(--color-brand)] px-1.5 py-0.5 text-[10px] font-black leading-none text-white">
+                  {activeFilterCount}
+                </span>
+              )}
             </button>
             {selectedLead && isPanelCollapsed && (
               <button
@@ -630,7 +709,19 @@ export default function LeadsPage() {
           {showFilters && (
             <LeadFilters
               workspaces={workspaces}
-              brandLocked={profile?.role !== "admin"}
+              value={leadFilters}
+              activeViewLabel={activeViewLabel}
+              resultCount={visibleLeads.length}
+              brandLocked={brandLocked}
+              brandLabel={
+                selectedWorkspace?.brand_name ||
+                profile?.brandName ||
+                profile?.brandId
+              }
+              staffList={staffList}
+              canSelectStaff={canLoadStaffList}
+              onChange={setLeadFilters}
+              onReset={resetLeadFilters}
             />
           )}
 
@@ -647,7 +738,7 @@ export default function LeadsPage() {
                 : "grid-cols-1"
               }`}
           >
-            <main className="flex min-w-0 flex-col self-start rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm">
+            <main className="flex min-w-0 flex-col self-start rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm min-[1100px]:sticky min-[1100px]:top-4 min-[1100px]:max-h-[calc(100vh-100px)]">
               <header className="flex shrink-0 items-center justify-between gap-[4%] border-b border-[var(--color-border)] px-[4%] py-[3%]">
                 <div className="min-w-0">
                   <h2 className="text-sm font-black text-[var(--color-text-primary)]">
@@ -662,7 +753,7 @@ export default function LeadsPage() {
                 </span>
               </header>
 
-              <div className="space-y-[2.5%] p-[3%]">
+              <div className="flex-1 space-y-[2.5%] overflow-y-auto p-[3%] min-h-0">
                 {isLoading && visibleLeads.length === 0 ? (
                   [0, 1, 2].map((item) => (
                     <div
@@ -676,11 +767,25 @@ export default function LeadsPage() {
                       inbox
                     </span>
                     <h3 className="mt-3 text-base font-bold text-[var(--color-text-primary)]">
-                      Không có lead trong nhóm này
+                      {activeFilterCount > 0
+                        ? "Không có khách hàng phù hợp"
+                        : "Không có lead trong nhóm này"}
                     </h3>
                     <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-                      Chuyển quick view hoặc mở bộ lọc để xem nhóm lead khác.
+                      {activeFilterCount > 0
+                        ? "Hãy điều chỉnh hoặc xóa các điều kiện lọc đang áp dụng."
+                        : "Chuyển hàng chờ để xem nhóm lead khác."}
                     </p>
+                    {activeFilterCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={resetLeadFilters}
+                        className="mt-4 inline-flex items-center gap-1 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] px-3 py-2 text-sm font-bold text-[var(--color-brand)]"
+                      >
+                        <span className="material-symbols-outlined text-base">filter_alt_off</span>
+                        Xóa bộ lọc
+                      </button>
+                    )}
                   </div>
                 ) : (
                   paginatedLeads.map((lead, index) => (
@@ -755,7 +860,10 @@ export default function LeadsPage() {
                   view: activeView,
                   page: currentPage,
                   selectedLeadId,
-                  filters,
+                  filters: {
+                    workspace_id: leadFilters.workspaceId,
+                    platform: leadFilters.platform,
+                  },
                   listScrollTop: getLeadListScrollTop(),
                 }}
                 activeTab={detailTab}

@@ -8,7 +8,7 @@ import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useTranslation } from "react-i18next";
-import { getDefaultRouteForRole, ROLE_CONFIG } from "@/lib/rbac";
+import { getDefaultRouteForRole, getProfileRoleLabel } from "@/lib/rbac";
 
 export default function TopNavBar() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -20,7 +20,9 @@ export default function TopNavBar() {
   const pathname = usePathname();
   const isDark = theme === "dark";
   const appRoute = profile?.defaultRoute || getDefaultRouteForRole(role);
-  const roleLabel = role ? ROLE_CONFIG[role].label : t("header.guest");
+  const roleLabel = role
+    ? getProfileRoleLabel({ role, permissions: profile?.permissions })
+    : t("header.guest");
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -162,11 +164,16 @@ export default function TopNavBar() {
                       .slice(0, 2)
                       .toUpperCase()}
                   </div>
-                  <div className="flex flex-col items-start leading-tight">
-                    <span className="text-[14px] font-semibold text-[var(--color-text-primary)] group-hover:text-[var(--color-brand)] transition-colors">
+                  <div className="flex max-w-[280px] flex-col items-start leading-tight">
+                    <span className="max-w-full truncate text-[14px] font-semibold text-[var(--color-text-primary)] transition-colors group-hover:text-[var(--color-brand)]">
                       {user.displayName || user.email}
                     </span>
-                    <span className="text-[12px] text-[var(--color-text-muted)]">{roleLabel}</span>
+                    <span
+                      className="max-w-full truncate text-[12px] text-[var(--color-text-muted)]"
+                      title={roleLabel}
+                    >
+                      {roleLabel}
+                    </span>
                   </div>
                 </Link>
               </div>

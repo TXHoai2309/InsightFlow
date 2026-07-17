@@ -7,6 +7,12 @@ export type UserRole =
 type LegacyUserRole = "crisis_staff" | "lead_staff";
 type RoleInput = UserRole | LegacyUserRole;
 
+export type EmployeeBusinessScope =
+  | "crisis"
+  | "lead"
+  | "dual"
+  | "unassigned";
+
 export interface UserRoleProfile {
   uid: string;
   email: string;
@@ -133,7 +139,7 @@ export const ROLE_CONFIG: Record<UserRole, RoleConfig> = {
     defaultRoute: "/admin",
   },
   brand_manager: {
-    label: "Quan ly thuong hieu",
+    label: "Quản lý thương hiệu",
     permissions: [
       "dashboard",
       "mentions",
@@ -148,7 +154,7 @@ export const ROLE_CONFIG: Record<UserRole, RoleConfig> = {
     defaultRoute: "/dashboard",
   },
   crisis_employee: {
-    label: "Nhan vien xu ly khung hoang",
+    label: "Nhân viên xử lý khủng hoảng",
     permissions: [
       "mentions",
       "alerts",
@@ -157,7 +163,7 @@ export const ROLE_CONFIG: Record<UserRole, RoleConfig> = {
     defaultRoute: "/alerts",
   },
   lead_employee: {
-    label: "Nhan vien xu ly khach hang tiem nang",
+    label: "Nhân viên xử lý khách hàng tiềm năng",
     permissions: ["mentions", "leads", "reports"],
     defaultRoute: "/leads",
   },
@@ -244,6 +250,48 @@ export function normalizeRole(role: unknown): UserRole | null {
 
 export function isValidRole(role: unknown): role is UserRole {
   return normalizeRole(role) === role;
+}
+
+export function getEmployeeBusinessScope(profile?: {
+  role?: unknown;
+  permissions?: string[] | null;
+} | null): EmployeeBusinessScope {
+  if (!profile) return "unassigned";
+  const permissions = new Set(
+    Array.isArray(profile.permissions)
+      ? profile.permissions.filter((permission) => typeof permission === "string")
+      : [],
+  );
+  const hasCrisis = permissions.has("alerts");
+  const hasLead = permissions.has("leads");
+
+  if (hasCrisis && hasLead) return "dual";
+  if (hasCrisis) return "crisis";
+  if (hasLead) return "lead";
+
+  const role = normalizeRole(profile.role);
+  if (role === "crisis_employee") return "crisis";
+  if (role === "lead_employee") return "lead";
+  return "unassigned";
+}
+
+export function getProfileRoleLabel(profile?: {
+  role?: unknown;
+  permissions?: string[] | null;
+} | null) {
+  const role = normalizeRole(profile?.role);
+  if (!role) return "Khách";
+  if (role === "admin" || role === "brand_manager") {
+    return ROLE_CONFIG[role].label;
+  }
+
+  const scope = getEmployeeBusinessScope(profile);
+  if (scope === "dual") {
+    return "Nhân viên xử lý khủng hoảng & khách hàng tiềm năng";
+  }
+  if (scope === "crisis") return ROLE_CONFIG.crisis_employee.label;
+  if (scope === "lead") return ROLE_CONFIG.lead_employee.label;
+  return ROLE_CONFIG[role].label;
 }
 
 function pathMatchesRoute(pathname: string, route: string) {
