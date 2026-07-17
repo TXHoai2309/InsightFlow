@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { ArrowRight, ArrowLeft, ShieldAlert, Target, Loader2, Sparkles, CheckCircle2, Activity, PieChart, Briefcase, AtSign } from "lucide-react";
+import { ArrowRight, ArrowLeft, ShieldAlert, Target, Loader2, Sparkles, CheckCircle2, Activity, PieChart, Briefcase, AtSign, Info } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export interface ConfigurationData {
@@ -38,7 +38,7 @@ function isValidEmailDomain(value: string) {
 
 export function ConfigurationWizard({ onSubmit, onBack, initialData, submissionError = "" }: ConfigurationWizardProps) {
   const [formData, setFormData] = useState<ConfigurationData>({
-    channels: initialData?.channels || [],
+    channels: initialData?.channels ?? CHANNELS.map((channel) => channel.id),
     keywords: initialData?.keywords || [],
     companyEmailDomain: initialData?.companyEmailDomain || "",
   });
@@ -66,6 +66,14 @@ export function ConfigurationWizard({ onSubmit, onBack, initialData, submissionE
       channels: prev.channels.includes(val)
         ? prev.channels.filter((c) => c !== val)
         : [...prev.channels, val],
+    }));
+  };
+
+  const allChannelsSelected = formData.channels.length === CHANNELS.length;
+  const toggleAllChannels = () => {
+    setFormData((previous) => ({
+      ...previous,
+      channels: allChannelsSelected ? [] : CHANNELS.map((channel) => channel.id),
     }));
   };
 
@@ -129,8 +137,12 @@ export function ConfigurationWizard({ onSubmit, onBack, initialData, submissionE
           {/* Company email domain */}
           <div className="mb-10">
             <div className="mb-4">
-              <h3 className="text-[15px] font-bold text-[#0F172A]">Đuôi email doanh nghiệp <span className="text-[#EF4444]">*</span></h3>
-              <p className="mt-1 text-[13px] text-[#64748B]">Dùng để xác định tài khoản thuộc công ty / thương hiệu khi cấp quyền dùng thử.</p>
+              <h3 className="text-[15px] font-bold text-[#0F172A] dark:text-gray-100">Đuôi email doanh nghiệp <span className="text-[#EF4444]">*</span></h3>
+              <p className="mt-1 text-[13px] text-[#64748B] dark:text-gray-400">Phần nằm sau dấu @ trong email công việc, dùng để xác định tài khoản thuộc doanh nghiệp.</p>
+              <div className="mt-3 flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3.5 py-3 text-[12px] leading-5 text-blue-700 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-300">
+                <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>Ví dụ email là <strong>lan@highlandcoffee.com</strong> thì chỉ nhập <strong>highlandcoffee.com</strong>. Không nhập dấu @ và không dùng Gmail/Yahoo cá nhân.</span>
+              </div>
             </div>
             <div className={`relative rounded-[16px] border-[1.5px] bg-white shadow-sm transition-all focus-within:ring-2 ${formData.companyEmailDomain && !emailDomainValid ? "border-[#EF4444] focus-within:ring-red-100" : "border-[#E2E8F0] focus-within:border-[#6D5EF6] focus-within:ring-[#EEF2FF]"}`}>
               <AtSign className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#94A3B8]" />
@@ -150,8 +162,18 @@ export function ConfigurationWizard({ onSubmit, onBack, initialData, submissionE
 
           {/* Section 1: Data Sources */}
           <div className="mb-12">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-[15px] font-bold text-[#0F172A] dark:text-gray-100">Kênh muốn theo dõi</h3>
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <div>
+                <h3 className="text-[15px] font-bold text-[#0F172A] dark:text-gray-100">Kênh muốn theo dõi</h3>
+                <p className="mt-1 text-[12px] text-[#64748B] dark:text-gray-400">Mặc định đã chọn tất cả. Bỏ chọn toàn bộ nếu bạn muốn tự chọn từng kênh.</p>
+              </div>
+              <button
+                type="button"
+                onClick={toggleAllChannels}
+                className="shrink-0 rounded-[10px] border border-[#C7D2FE] bg-[#EEF2FF] px-3 py-2 text-[12px] font-bold text-[#4F46E5] transition hover:bg-[#E0E7FF] dark:border-[#8E83FA]/30 dark:bg-[#6D5EF6]/15 dark:text-[#A599FF] dark:hover:bg-[#6D5EF6]/25"
+              >
+                {allChannelsSelected ? "Bỏ chọn tất cả" : "Chọn tất cả"}
+              </button>
             </div>
             
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -176,8 +198,13 @@ export function ConfigurationWizard({ onSubmit, onBack, initialData, submissionE
 
           {/* Section 3: Keywords */}
           <div>
-            <div className="flex items-center justify-between mb-4">
+            <div className="mb-4">
               <h3 className="text-[15px] font-bold text-[#0F172A] dark:text-gray-100">Từ khóa quan trọng</h3>
+              <p className="mt-1 text-[12px] leading-5 text-[#64748B] dark:text-gray-400">Nhập những cụm từ khách hàng thường dùng khi nhắc đến bạn: tên thương hiệu, sản phẩm, chiến dịch, người đại diện hoặc tên viết sai phổ biến. Nhấn <strong>Enter</strong> sau mỗi từ khóa.</p>
+              <div className="mt-2 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-[12px] leading-5 text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
+                <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>Ví dụ: <strong>Highlands Coffee</strong>, <strong>Freeze trà xanh</strong>, <strong>#HighlandsCoffee</strong>. Bạn có thể bấm các gợi ý bên dưới để thêm nhanh.</span>
+              </div>
             </div>
             
             <div className="min-h-[56px] p-2.5 rounded-[16px] border-[1.5px] border-[#E2E8F0] dark:border-white/5 bg-white/50 dark:bg-[#1B1C2A] backdrop-blur-md flex flex-wrap gap-2 items-center focus-within:border-[#6D5EF6] dark:focus-within:border-[#8E83FA] focus-within:bg-white dark:focus-within:bg-[#1F202E] focus-within:ring-2 focus-within:ring-[#EEF2FF] dark:focus-within:ring-[#8E83FA]/10 transition-all cursor-text shadow-sm" onClick={() => document.getElementById("keyword-input")?.focus()}>

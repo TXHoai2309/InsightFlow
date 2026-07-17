@@ -7,7 +7,7 @@ import { motion } from "framer-motion";
 interface SuccessStepProps {
   requestId: string;
   email: string;
-  onFillConsultation?: () => void;
+  onRestart?: () => void;
   consultationCompleted?: boolean;
   consultationEmailSent?: boolean | null;
 }
@@ -15,7 +15,7 @@ interface SuccessStepProps {
 export function SuccessStep({
   requestId,
   email,
-  onFillConsultation,
+  onRestart,
   consultationCompleted = false,
   consultationEmailSent = null,
 }: SuccessStepProps) {
@@ -134,20 +134,20 @@ export function SuccessStep({
         </div>
       </div>
 
-      {!consultationCompleted && onFillConsultation && (
+      {onRestart && (
         <div className="relative z-10 mt-8 flex flex-col items-center rounded-[20px] border border-[#C7D2FE] bg-[#EEF2FF] p-5 text-center sm:flex-row sm:justify-between sm:text-left">
           <div>
             <p className="flex items-center justify-center gap-2 text-[15px] font-extrabold text-[#3730A3] sm:justify-start">
-              <MessageSquareText className="h-5 w-5" /> Bạn cần chuyên viên hỗ trợ thêm?
+              <MessageSquareText className="h-5 w-5" /> Bạn muốn gửi thêm một yêu cầu?
             </p>
-            <p className="mt-1 text-[13px] leading-5 text-[#4F46E5]">Bổ sung nhu cầu chính và ghi chú để nhận tư vấn sát với bài toán doanh nghiệp.</p>
+            <p className="mt-1 text-[13px] leading-5 text-[#4F46E5]">Quay lại form ban đầu để bắt đầu một đăng ký dùng thử mới.</p>
           </div>
           <button
             type="button"
-            onClick={onFillConsultation}
+            onClick={onRestart}
             className="mt-4 inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-[14px] bg-[#6D5EF6] px-6 text-[14px] font-bold text-white shadow-[0_10px_22px_rgba(109,94,246,0.22)] transition hover:-translate-y-0.5 hover:bg-[#5B4DF5] sm:mt-0 sm:ml-5"
           >
-            Điền thêm form tư vấn <ArrowRight className="h-4 w-4" />
+            Điền form đăng ký mới <ArrowRight className="h-4 w-4" />
           </button>
         </div>
       )}

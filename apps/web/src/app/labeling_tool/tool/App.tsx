@@ -405,7 +405,7 @@ export default function App() {
   }, [
     goNext, goPrev, currentThread, skipThread, completeThread,
     threadItems, focusedItemIndex, focusedItemId,
-    getLabel, setLabel, setFocusedItemId,
+    getLabel, setLabel, setItemSkipped, setFocusedItemId,
   ]);
 
   const handleSupabaseLoad = useCallback(async (restoreThreadId?: string | null) => {
@@ -440,7 +440,6 @@ export default function App() {
     assignmentView,
     currentThread,
     loadFromSupabase,
-    person,
     platformFilter,
     queueDateFrom,
     queueDateTo,

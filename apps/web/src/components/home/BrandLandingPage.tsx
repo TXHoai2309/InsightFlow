@@ -1204,9 +1204,6 @@ export default function BrandLandingPage() {
             <Link href="#consultation" className="inline-flex h-[60px] items-center justify-center rounded-[18px] bg-white px-[36px] text-[16px] font-extrabold text-linear-primary shadow-[0_20px_40px_rgba(0,0,0,0.15)] transition-all duration-300 hover:scale-[1.04] hover:-translate-y-[3px] hover:shadow-[0_30px_60px_rgba(0,0,0,0.2)]">
               Đặt lịch Demo
             </Link>
-            <Link href="/dashboard" className="inline-flex h-[60px] items-center justify-center rounded-[18px] border border-white/30 bg-white/10 px-[36px] text-[16px] font-extrabold text-white backdrop-blur-md transition-all duration-300 hover:scale-[1.04] hover:-translate-y-[3px] hover:bg-white/20">
-              Liên hệ
-            </Link>
           </div>
 
           <div className="mt-10 md:mt-12 flex flex-wrap items-center justify-center gap-6 md:gap-16 border-t border-white/20 pt-8 md:pt-10">
