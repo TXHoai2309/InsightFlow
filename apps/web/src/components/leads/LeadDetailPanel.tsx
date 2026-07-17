@@ -100,22 +100,14 @@ export function LeadDetailPanel({
   isCollapsed,
   onCollapseToggle,
 }: LeadDetailPanelProps) {
-  const { profile, role, user } = useAuth();
+  const { profile } = useAuth();
   const { updateLeadDetails, claimLead } = useDashboardStore();
   const [internalActiveTab, setInternalActiveTab] = useState<PanelTab>("action");
-  const [staffList, setStaffList] = useState<{uid: string, displayName: string, email: string}[]>([]);
-  const [loadingStaff, setLoadingStaff] = useState(false);
-  const [assigningUid, setAssigningUid] = useState<string | null>(null);
-  const [isAssignDropdownOpen, setIsAssignDropdownOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
   const [isResultDropdownOpen, setIsResultDropdownOpen] = useState(false);
   const resultDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsAssignDropdownOpen(false);
-      }
       if (resultDropdownRef.current && !resultDropdownRef.current.contains(event.target as Node)) {
         setIsResultDropdownOpen(false);
       }
@@ -123,60 +115,6 @@ export function LeadDetailPanel({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
-
-  useEffect(() => {
-    if (role === 'brand_manager' && workbenchView === "unassigned") {
-      const loadStaff = async () => {
-        setLoadingStaff(true);
-        try {
-          const token = await user?.getIdToken();
-          const res = await fetch("/api/staff", { headers: { Authorization: `Bearer ${token}` } });
-          const data = await res.json();
-          if (res.ok && data.data) {
-            setStaffList(data.data.filter((s: any) => !s.disabled && (s.permissions || []).includes("leads")));
-          }
-        } catch (e) {
-          console.error(e);
-        }
-        setLoadingStaff(false);
-      };
-      loadStaff();
-    }
-  }, [role, workbenchView, user]);
-
-  const handleAssignTo = async (uid: string) => {
-    if (!uid || !canEdit || !profile) return;
-    const selectedStaff = staffList.find(s => s.uid === uid);
-    if (!selectedStaff) return;
-    
-    try {
-      setAssigningUid(uid);
-      setSaveError("");
-      const nowIso = new Date().toISOString();
-      const ownerData: Partial<Lead> = {
-        owner_id: selectedStaff.uid,
-        owner_name: selectedStaff.displayName || selectedStaff.email || "Nhân viên",
-        owner_email: selectedStaff.email,
-        assigned_at: nowIso,
-        assigned_by: profile.uid,
-        claimed_at: nowIso,
-      };
-
-      await updateLeadDetails(lead.id, ownerData, profile);
-      onStartedAction?.({ ...lead, ...ownerData }, true);
-      showToast(`Đã giao việc cho ${ownerData.owner_name}`, "success");
-    } catch (error: any) {
-      console.error(error);
-      const message = getLeadOperationErrorMessage(
-        error,
-        "Không thể giao việc cho nhân viên.",
-      );
-      setSaveError(message);
-      showToast(message, "error");
-    } finally {
-      setAssigningUid(null);
-    }
-  };
   const [selectedResult, setSelectedResult] = useState<ResultAction | null>(null);
   const [showSkipForm, setShowSkipForm] = useState(false);
   const [skipReason, setSkipReason] = useState("");
