@@ -13,7 +13,6 @@ export function LeadMonitoringSidebar() {
     { href: "/team", label: "Quản lý đội ngũ", icon: Users },
     { href: "/crisis-monitoring", label: "Cảnh báo", icon: Bell },
     { href: "/lead-monitoring", label: "Báo cáo", icon: BarChart2 },
-    { href: "/settings/brand", label: "Cấu hình Brand", icon: Settings },
   ];
 
   return (

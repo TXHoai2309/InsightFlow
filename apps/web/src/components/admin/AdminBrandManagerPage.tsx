@@ -3,9 +3,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useTranslation } from "react-i18next";
-import { collection, getDocs, limit, query } from "firebase/firestore";
+import { collection, getDocs, limit, query, doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
-import { auth, dbData } from "@/lib/firebase";
+import { auth, dbData, db } from "@/lib/firebase";
 import { validateStrongPassword } from "@/lib/passwordPolicy";
 import { buildBrandEmail, getBrandEmailDomain, slugifyBrandDomain, type BrandOption } from "@/lib/brandEmail";
 import { formatBrandDisplayName } from "@/lib/services/dashboard";
@@ -441,6 +441,31 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
     }
   };
 
+  const handleToggleStatusDirect = async (account: BrandManagerAccount) => {
+    setActionError("");
+
+    try {
+      if (!auth.currentUser) throw new Error(t("admin.brandManager.errors.needAdmin"));
+
+      const disabled = !account.disabled;
+      const updatedAccount = { ...account, disabled };
+
+      await setDoc(
+        doc(db, "users", account.uid),
+        {
+          disabled,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      setBrandManagers((current) =>
+        current.map((item) => (item.uid === account.uid ? updatedAccount : item)),
+      );
+    } catch (err: any) {
+      setActionError(err.message || "Không thể cập nhật trạng thái tài khoản.");
+    }
+  };
   const openPasswordRequest = (uid: string, mode: "reveal" | "reset") => {
     setPasswordRequestUid(uid);
     setPasswordRequestMode(mode);

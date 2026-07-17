@@ -140,8 +140,8 @@ export default function LoginForm() {
             boxShadow: "0 8px 32px 0 rgba(70,72,212,0.04)",
           }}
         >
-          <header className="mb-8">
-            <h1 className={`font-sans text-[32px] leading-[40px] font-bold tracking-[-0.02em] mb-2 ${isDark ? "text-white" : "text-[#111c2d]"}`}>{t("auth.login.welcome")}</h1>
+          <header className="mb-8 text-center">
+            <h1 className={`font-['Hanken_Grotesk'] text-[32px] leading-[40px] font-bold tracking-[-0.02em] mb-2 ${isDark ? "text-white" : "text-[#111c2d]"}`}>{t("auth.login.welcome")}</h1>
             <p className={`text-[16px] ${isDark ? "text-gray-300" : "text-[#464554]"}`}>{t("auth.login.subtitle")}</p>
           </header>
 
