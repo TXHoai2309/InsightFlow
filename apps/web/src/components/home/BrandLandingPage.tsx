@@ -427,7 +427,7 @@ export default function BrandLandingPage() {
   const activeRole = roleStories.find((story) => story.id === selectedRole) ?? roleStories[0];
 
   return (
-    <main className="overflow-hidden bg-[#FCFBFF] font-sans text-[#1B1B4A] selection:bg-[#9B8CFF]/30 selection:text-[#6D5EF6]">
+    <main className="overflow-hidden bg-[#FCFBFF] dark:bg-[#13141f] font-sans text-[#1B1B4A] dark:text-white selection:bg-[#9B8CFF]/30 selection:text-[#6D5EF6]">
       <section className="relative isolate min-h-[720px] overflow-hidden pt-[88px] pb-[88px] md:pt-[120px] md:pb-[88px]">
         {/* Nền tổng thể */}
         <div className="absolute inset-0 -z-20 hero-bg-gradient" />
@@ -460,7 +460,7 @@ export default function BrandLandingPage() {
                   Đăng ký tư vấn dùng thử <ArrowRight className="h-5 w-5 shrink-0" />
                 </Link>
               )}
-              <Link href="#workflow" className="inline-flex h-[52px] px-8 items-center justify-center gap-2 rounded-[24px] bg-white/80 border border-[#ECE9FF] text-[16px] font-bold text-[#1B1B4A] whitespace-nowrap backdrop-blur-sm shadow-[0_18px_50px_rgba(109,94,246,0.04)] transition-all duration-300 hover:-translate-y-1 hover:border-[#6D5EF6]/30">
+              <Link href="#workflow" className="inline-flex h-[52px] px-8 items-center justify-center gap-2 rounded-[24px] bg-white/80 dark:bg-white/10 border border-[#ECE9FF] dark:border-white/20 text-[16px] font-bold text-[#1B1B4A] dark:text-white whitespace-nowrap backdrop-blur-md shadow-[0_18px_50px_rgba(109,94,246,0.04)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.3)] transition-all duration-300 hover:-translate-y-1 hover:border-[#6D5EF6]/30 dark:hover:border-[#6D5EF6]/50 dark:hover:bg-white/20">
                 Xem Demo <ChevronRight className="h-5 w-5 shrink-0" />
               </Link>
             </div>
@@ -475,10 +475,10 @@ export default function BrandLandingPage() {
               ].map((stat, i) => {
                 const Icon = stat.icon;
                 return (
-                  <motion.div key={i} whileHover={{ y: -4 }} className="rounded-[24px] border border-[#ECE9FF] bg-white/50 p-4 shadow-[0_18px_50px_rgba(109,94,246,0.04)] backdrop-blur-sm transition-shadow hover:shadow-[0_30px_60px_rgba(109,94,246,0.08)] group flex flex-col items-start justify-center">
+                  <motion.div key={i} whileHover={{ y: -4 }} className="rounded-[24px] border border-[#ECE9FF] dark:border-white/10 bg-white/50 dark:bg-white/5 p-4 shadow-[0_18px_50px_rgba(109,94,246,0.04)] dark:shadow-[0_18px_50px_rgba(0,0,0,0.4)] backdrop-blur-sm transition-shadow hover:shadow-[0_30px_60px_rgba(109,94,246,0.08)] group flex flex-col items-start justify-center">
                     <Icon className="h-6 w-6 text-[#9B8CFF] mb-2 transition-transform group-hover:scale-110" />
-                    <p className="font-display text-[22px] font-extrabold text-[#1B1B4A] leading-[1.1]">{stat.value}</p>
-                    <p className="mt-1 text-[13px] font-medium text-[#6B7090]">{stat.label}</p>
+                    <p className="font-display text-[22px] font-extrabold text-[#1B1B4A] dark:text-white leading-[1.1]">{stat.value}</p>
+                    <p className="mt-1 text-[13px] font-medium text-[#6B7090] dark:text-slate-400">{stat.label}</p>
                   </motion.div>
                 );
               })}
@@ -489,7 +489,7 @@ export default function BrandLandingPage() {
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.8, delay: 0.2 }} className="relative mt-12 lg:mt-0 z-10 hidden sm:block w-full">
             {/* Dashboard Mockup - Pure CSS */}
             <div className="relative w-full rounded-[24px] border border-white/60 dark:border-white/10 bg-white/40 dark:bg-black/40 p-2 shadow-[0_40px_80px_rgba(109,94,246,0.15)] backdrop-blur-2xl transition-transform duration-500 hover:-translate-y-2">
-              <div className="overflow-hidden rounded-[16px] border border-[#ECE9FF] dark:border-white/10 bg-[#FCFBFF] dark:bg-[#0A0612] shadow-inner flex flex-col h-[400px] md:h-[500px]">
+              <div className="overflow-hidden rounded-[16px] border border-[#ECE9FF] dark:border-white/10 bg-[#FCFBFF] dark:bg-[#1e1e2d] shadow-inner flex flex-col h-[400px] md:h-[500px]">
                 {/* Header */}
                 <div className="flex h-12 items-center justify-between border-b border-[#ECE9FF] dark:border-white/10 px-4 bg-white/50 dark:bg-white/5">
                   <div className="flex gap-2">
@@ -1115,9 +1115,9 @@ export default function BrandLandingPage() {
                   const Icon = story.icon;
                   const active = story.id === selectedRole;
                   return (
-                    <button key={story.id} type="button" onClick={() => setSelectedRole(story.id)} className={`group relative flex w-full items-center gap-4 rounded-[16px] px-5 py-5 text-left transition-all duration-300 ${active ? "border border-[#ECE9FF] bg-gradient-to-r from-[#F5F3FF] to-white text-[#111827] shadow-sm dark:from-white dark:to-white dark:text-[#111827]" : "border border-transparent text-[#6B7090] hover:bg-[#F5F3FF]/50 hover:text-[#111827] dark:text-slate-200 dark:hover:bg-white dark:hover:text-[#111827]"}`}>
+                    <button key={story.id} type="button" onClick={() => setSelectedRole(story.id)} className={`group relative flex w-full items-center gap-4 rounded-[16px] px-5 py-5 text-left transition-all duration-300 ${active ? "border border-[#ECE9FF] dark:border-white/10 bg-gradient-to-r from-[#F5F3FF] to-white dark:from-white/10 dark:to-white/5 text-[#111827] dark:text-white shadow-sm" : "border border-transparent text-[#6B7090] hover:bg-[#F5F3FF]/50 hover:text-[#111827] dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-white"}`}>
                       {active && <span className="absolute left-0 top-1/2 h-8 w-1 -translate-y-1/2 rounded-r-full bg-[#6D5EF6]" />}
-                      <div className={`flex h-12 w-12 items-center justify-center rounded-[12px] transition-colors ${active ? "bg-[#6D5EF6] text-white shadow-md" : "bg-[#F5F3FF] text-[#6D5EF6] group-hover:bg-[#6D5EF6]/10 dark:bg-black/40 dark:text-[#9B8CFF] dark:group-hover:bg-[#6D5EF6]/10 dark:group-hover:text-[#6D5EF6]"}`}>
+                      <div className={`flex h-12 w-12 items-center justify-center rounded-[12px] transition-colors ${active ? "bg-[#6D5EF6] text-white shadow-md" : "bg-[#F5F3FF] text-[#6D5EF6] group-hover:bg-[#6D5EF6]/10 dark:bg-white/5 dark:text-slate-300 dark:group-hover:bg-white/10 dark:group-hover:text-white"}`}>
                         <Icon className="h-5 w-5" />
                       </div>
                       <span className="text-[17px] font-extrabold text-current transition-colors">{story.label}</span>
@@ -1133,15 +1133,15 @@ export default function BrandLandingPage() {
               initial={{ opacity: 0, scale: 0.98, x: reduceMotion ? 0 : 20 }}
               animate={{ opacity: 1, scale: 1, x: 0 }}
               transition={{ duration: reduceMotion ? 0 : 0.4, ease: "easeOut" }}
-              className="relative overflow-hidden rounded-[24px] border border-[#ECE9FF] bg-white p-8 shadow-[0_30px_60px_rgba(109,94,246,0.12)] md:p-12 lg:w-full"
+              className="relative overflow-hidden rounded-[24px] border border-[#ECE9FF] dark:border-white/10 bg-white dark:bg-[#1e1e2d] p-8 shadow-[0_30px_60px_rgba(109,94,246,0.12)] md:p-12 lg:w-full"
             >
               {/* Decorative background in panel */}
               <div className="absolute -right-20 -top-20 w-[400px] h-[400px] rounded-full bg-gradient-to-br from-[#6D5EF6] to-[#9B8CFF] blur-[100px] opacity-[0.15] pointer-events-none" />
 
               <div className="relative z-10 flex flex-col h-full">
                 <p className="text-[13px] font-extrabold uppercase tracking-[0.16em] text-[#6D5EF6]">{activeRole.eyebrow}</p>
-                <h3 className="mt-4 max-w-[670px] font-display text-[32px] font-bold leading-[1.2] md:text-[36px] text-[#1B1B4A]">{activeRole.title}</h3>
-                <p className="mt-6 max-w-[700px] text-[17px] leading-[1.7] text-[#6B7090]">{activeRole.description}</p>
+                <h3 className="mt-4 max-w-[670px] font-display text-[32px] font-bold leading-[1.2] md:text-[36px] text-[#1B1B4A] dark:text-white">{activeRole.title}</h3>
+                <p className="mt-6 max-w-[700px] text-[17px] leading-[1.7] text-[#6B7090] dark:text-slate-300">{activeRole.description}</p>
 
                 <div className="mt-auto pt-12 grid gap-4 sm:grid-cols-3">
                   {activeRole.metrics.map(([label, value, delta]) => {

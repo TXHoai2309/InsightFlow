@@ -37,7 +37,6 @@ const navItems: NavItem[] = [
   { href: "/alerts", label: "nav.alerts", fallback: "Cảnh báo", icon: "ti-bell" },
   { href: "/leads", label: "nav.leads", fallback: "Khách hàng", icon: "ti-chart-bar" },
   { href: "/reports", label: "nav.reports", fallback: "Báo cáo", icon: "ti-file-analytics" },
-  { href: "/settings/brand", label: "nav.brands", fallback: "Cấu hình thương hiệu", icon: "ti-settings" },
 ];
 
 
