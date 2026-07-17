@@ -5,6 +5,7 @@ import {
   getCustomerInteractionHistory,
   type InteractionSourceType,
 } from "../services/customer_interaction_service";
+import { canUseCustomerInteractionSource } from "../lib/customer_interaction_access";
 
 type HistoryQuery = {
   sourceType?: string;
@@ -17,12 +18,6 @@ function normalizeRole(value: unknown) {
   if (value === "crisis_staff") return "crisis_employee";
   if (value === "lead_staff") return "lead_employee";
   return String(value || "");
-}
-
-function canUseSource(role: string, sourceType: InteractionSourceType) {
-  if (role === "brand_manager") return true;
-  if (sourceType === "alert") return role === "crisis_employee";
-  return role === "lead_employee";
 }
 
 export default async function customerInteractionRoutes(
@@ -56,7 +51,14 @@ export default async function customerInteractionRoutes(
     }
 
     const role = normalizeRole(profile.role);
-    if (!canUseSource(role, sourceType)) {
+    const permissions = Array.isArray(profile.permissions)
+      ? profile.permissions
+      : (request as any).user?.permissions;
+    if (!canUseCustomerInteractionSource({
+      role,
+      permissions,
+      sourceType,
+    })) {
       return reply.status(403).send({
         success: false,
         code: "ACCESS_DENIED",
