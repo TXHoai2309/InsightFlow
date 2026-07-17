@@ -1,12 +1,13 @@
 import fs from "fs";
 import path from "path";
-import { initializeApp, getApps, cert, applicationDefault } from "firebase-admin/app";
+import { initializeApp, getApps, cert } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 
 const SERVICE_ACCOUNT_PATHS = [
   path.join(process.cwd(), "service-account.json"),
   path.join(process.cwd(), "..", "api", "service-account.json"),
+  path.join(process.cwd(), "apps", "api", "service-account.json"),
 ];
 
 const possiblePaths = [
@@ -57,44 +58,39 @@ function loadServiceAccountFromFile(): Record<string, unknown> | null {
 }
 
 function initFirebaseAdmin() {
-  if (getApps().length > 0) return;
-
+  let serviceAccount: Record<string, unknown> | null = null;
   const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-
   if (serviceAccountJson) {
     try {
-      const serviceAccount = JSON.parse(serviceAccountJson);
-      const projId1 = serviceAccount.project_id || primaryProjectId;
-      initializeApp({ credential: cert(serviceAccount), projectId: projId1 });
-      initializeApp({ credential: cert(serviceAccount), projectId: secondaryProjectId }, "datainsight");
-      return;
+      serviceAccount = JSON.parse(serviceAccountJson) as Record<string, unknown>;
     } catch {
-      // fall through
+      serviceAccount = null;
     }
   }
+  serviceAccount ||= loadServiceAccountFromFile();
 
-  const serviceAccount = loadServiceAccountFromFile();
+  let adminCredential: ReturnType<typeof cert> | undefined;
   if (serviceAccount) {
     try {
-      const projId1 = (serviceAccount.project_id as string) || primaryProjectId;
-      initializeApp({ credential: cert(serviceAccount), projectId: projId1 });
-      initializeApp({ credential: cert(serviceAccount), projectId: secondaryProjectId }, "datainsight");
-      return;
+      adminCredential = cert(serviceAccount as Parameters<typeof cert>[0]);
     } catch {
-      // fall through
+      adminCredential = undefined;
     }
   }
 
-  try {
-    initializeApp({ projectId: primaryProjectId });
-    initializeApp({ projectId: secondaryProjectId }, "datainsight");
-  } catch {
-    try {
-      initializeApp({ credential: applicationDefault(), projectId: primaryProjectId });
-      initializeApp({ credential: applicationDefault(), projectId: secondaryProjectId }, "datainsight");
-    } catch {
-      // last resort
-    }
+  const apps = getApps();
+  if (!apps.some((app) => app.name === "[DEFAULT]")) {
+    initializeApp({
+      ...(adminCredential ? { credential: adminCredential } : {}),
+      projectId: (serviceAccount?.project_id as string) || primaryProjectId,
+    });
+  }
+
+  if (!getApps().some((app) => app.name === "datainsight")) {
+    initializeApp({
+      ...(adminCredential ? { credential: adminCredential } : {}),
+      projectId: secondaryProjectId,
+    }, "datainsight");
   }
 }
 

@@ -1,8 +1,7 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
-import { collection, doc, updateDoc, onSnapshot, query, orderBy } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { auth } from "@/lib/firebase";
 import {
   Search,
   User,
@@ -18,11 +17,12 @@ import {
   Copy,
   ExternalLink,
   Filter,
-  MessageSquare,
   HelpCircle,
-  Users,
   AlertTriangle,
-  Play
+  Play,
+  RefreshCw,
+  KeyRound,
+  XCircle,
 } from "lucide-react";
 
 interface ConsultationRequest {
@@ -31,17 +31,33 @@ interface ConsultationRequest {
   email: string;
   phone: string;
   company: string;
+  taxId?: string;
   industry?: string;
-  channels?: string;
   need: string;
-  teamSize?: string;
-  status: "pending" | "contacting" | "completed" | "unreachable";
+  companyEmailDomain?: string;
+  keywords?: string[];
+  platforms?: string[];
+  configurationNotes?: string;
+  consultationNotes?: string;
+  consultationRequested?: boolean;
+  requestSource?: string;
+  approvedAccountEmail?: string;
+  trialEndsAt?: string;
+  decisionEmailStatus?: string;
+  status: "pending" | "contacting" | "completed" | "unreachable" | "not_approved";
   notes?: string;
   contactPlan?: string;
   createdAt: any;
 }
 
-type StatusType = "pending" | "contacting" | "completed" | "unreachable";
+type StatusType = "pending" | "contacting" | "completed" | "unreachable" | "not_approved";
+type EditableStatus = "" | StatusType;
+
+interface GeneratedCredentials {
+  email: string;
+  temporaryPassword: string;
+  trialEndsAt: string;
+}
 
 const statusConfig: Record<StatusType, { label: string; bg: string; text: string; border: string; icon: any }> = {
   pending: {
@@ -59,7 +75,7 @@ const statusConfig: Record<StatusType, { label: string; bg: string; text: string
     icon: Play,
   },
   completed: {
-    label: "Đã xử lý",
+    label: "Được duyệt",
     bg: "bg-emerald-500/10 dark:bg-emerald-500/10",
     text: "text-emerald-600 dark:text-emerald-400",
     border: "border-emerald-500/20",
@@ -71,6 +87,13 @@ const statusConfig: Record<StatusType, { label: string; bg: string; text: string
     text: "text-rose-600 dark:text-rose-400",
     border: "border-rose-500/20",
     icon: AlertTriangle,
+  },
+  not_approved: {
+    label: "Không được duyệt",
+    bg: "bg-rose-500/10 dark:bg-rose-500/10",
+    text: "text-rose-600 dark:text-rose-400",
+    border: "border-rose-500/20",
+    icon: XCircle,
   },
 };
 
@@ -87,6 +110,18 @@ function getInitials(name: string) {
   if (parts.length === 0) return "?";
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function getAutomaticAccountPreview(fullName: string, domain?: string) {
+  const localPart = fullName
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/gi, "d")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ".")
+    .replace(/^\.+|\.+$/g, "")
+    .slice(0, 48) || "brand.manager";
+  return domain ? `${localPart}@${domain}` : "Chưa có đuôi email doanh nghiệp";
 }
 
 function CopyButton({ value, label }: { value: string; label: string }) {
@@ -123,47 +158,45 @@ export default function AdminConsultationsPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
   // Form edit states (strictly state-controlled)
-  const [editStatus, setEditStatus] = useState<StatusType>("pending");
+  const [editStatus, setEditStatus] = useState<EditableStatus>("");
   const [editNotes, setEditNotes] = useState("");
   const [editContactPlan, setEditContactPlan] = useState("");
+  const [generatedCredentials, setGeneratedCredentials] = useState<GeneratedCredentials | null>(null);
+  const [approvalError, setApprovalError] = useState("");
 
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [loadError, setLoadError] = useState("");
 
-  // Load consultations from Firestore in real-time
-  useEffect(() => {
-    const q = query(collection(db, "consultations"), orderBy("createdAt", "desc"));
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const loaded: ConsultationRequest[] = snapshot.docs.map((doc) => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            fullName: data.fullName || "",
-            email: data.email || "",
-            phone: data.phone || "",
-            company: data.company || "",
-            industry: data.industry || "",
-            channels: data.channels || "",
-            need: data.need || "",
-            teamSize: data.teamSize || "",
-            status: data.status || "pending",
-            notes: data.notes || "",
-            contactPlan: data.contactPlan || "",
-            createdAt: data.createdAt,
-          } as ConsultationRequest;
-        });
-        setRequests(loaded);
-        setLoading(false);
-      },
-      (error) => {
-        console.error("Error loading consultations:", error);
-        setLoading(false);
-      }
-    );
-    return () => unsubscribe();
+  const loadConsultations = useCallback(async () => {
+    setLoading(true);
+    setLoadError("");
+    try {
+      await auth.authStateReady();
+      const user = auth.currentUser;
+      if (!user) throw new Error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+      const token = await user.getIdToken();
+      const response = await fetch("/api/admin/consultations", {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Không thể tải yêu cầu tư vấn.");
+
+      const loaded = (result.consultations || []) as ConsultationRequest[];
+      setRequests(loaded);
+      setSelectedId((current) => current && loaded.some((item) => item.id === current) ? current : loaded[0]?.id || null);
+    } catch (error: any) {
+      console.error("Error loading consultations:", error);
+      setLoadError(error?.message || "Không thể tải yêu cầu tư vấn.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadConsultations();
+  }, [loadConsultations]);
 
   // Filter and search computation
   const filteredRequests = useMemo(() => {
@@ -172,7 +205,9 @@ export default function AdminConsultationsPage() {
         req.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         req.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
         req.phone.includes(searchTerm) ||
-        req.company.toLowerCase().includes(searchTerm.toLowerCase());
+        req.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (req.taxId || "").includes(searchTerm) ||
+        (req.keywords || []).some((keyword) => keyword.toLowerCase().includes(searchTerm.toLowerCase()));
 
       const matchesStatus = statusFilter === "all" || req.status === statusFilter;
 
@@ -193,35 +228,73 @@ export default function AdminConsultationsPage() {
   const selectedRequest = useMemo(() => {
     return requests.find((req) => req.id === selectedId) || null;
   }, [requests, selectedId]);
+  const isFinalDecision = selectedRequest?.status === "completed" || selectedRequest?.status === "not_approved";
+  const willAutoCreateAccount = editStatus === "completed" && selectedRequest?.status !== "completed";
 
   // Initialize edit inputs whenever selected item changes
   useEffect(() => {
     if (selectedRequest) {
-      setEditStatus(selectedRequest.status);
+      setEditStatus(
+        selectedRequest.status === "completed" || selectedRequest.status === "not_approved"
+          ? selectedRequest.status
+          : "",
+      );
       setEditNotes(selectedRequest.notes || "");
       setEditContactPlan(selectedRequest.contactPlan || "");
+      setGeneratedCredentials(null);
+      setApprovalError("");
       setSaveSuccess(false);
     }
-  }, [selectedRequest]);
+  }, [selectedId]);
 
-  // Save updates to Firestore
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedId) return;
+    if (!selectedId || !selectedRequest) return;
+    if (!editStatus) {
+      setApprovalError("Vui lòng chọn trạng thái hiện tại trước khi cập nhật yêu cầu.");
+      return;
+    }
 
     setSaving(true);
     setSaveSuccess(false);
+    setApprovalError("");
     try {
-      const docRef = doc(db, "consultations", selectedId);
-      await updateDoc(docRef, {
+      await auth.authStateReady();
+      const user = auth.currentUser;
+      if (!user) throw new Error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+      const token = await user.getIdToken();
+      const response = await fetch("/api/admin/consultations", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          id: selectedId,
+          status: editStatus,
+          notes: editNotes,
+          contactPlan: editContactPlan,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Không thể cập nhật yêu cầu tư vấn.");
+      setRequests((current) => current.map((item) => item.id === selectedId ? {
+        ...item,
         status: editStatus,
         notes: editNotes.trim(),
         contactPlan: editContactPlan,
-      });
+        ...(editStatus === "completed" ? {
+          approvedAccountEmail: result.credentials?.email || item.approvedAccountEmail,
+          trialEndsAt: result.credentials?.trialEndsAt || item.trialEndsAt,
+          decisionEmailStatus: "sent",
+        } : {}),
+        ...(editStatus === "not_approved" ? { decisionEmailStatus: "sent" } : {}),
+      } : item));
+      if (result.credentials) {
+        setGeneratedCredentials(result.credentials as GeneratedCredentials);
+      }
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating consultation:", error);
+      setApprovalError(error?.message || "Không thể cập nhật yêu cầu tư vấn.");
     } finally {
       setSaving(false);
     }
@@ -278,11 +351,20 @@ export default function AdminConsultationsPage() {
             </div>
             <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2 text-center min-w-[70px]">
               <p className="text-[18px] font-extrabold text-emerald-500">{stats.completed}</p>
-              <p className="mt-0.5 text-[10px] font-medium text-[var(--color-text-muted)]">Đã xử lý</p>
+              <p className="mt-0.5 text-[10px] font-medium text-[var(--color-text-muted)]">Đã duyệt</p>
             </div>
           </div>
         </div>
       </section>
+
+      {loadError && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-[13px] text-rose-600 dark:text-rose-400">
+          <span>{loadError}</span>
+          <button type="button" onClick={() => void loadConsultations()} className="inline-flex items-center gap-1.5 rounded-lg border border-rose-500/20 bg-white/60 px-3 py-1.5 font-bold transition hover:bg-white dark:bg-black/10 dark:hover:bg-black/20">
+            <RefreshCw className="h-3.5 w-3.5" /> Thử tải lại
+          </button>
+        </div>
+      )}
 
       {/* Main workspace */}
       {loading ? (
@@ -320,8 +402,9 @@ export default function AdminConsultationsPage() {
                   <option value="all">Tất cả</option>
                   <option value="pending">Chưa xử lý</option>
                   <option value="contacting">Đang liên hệ</option>
-                  <option value="completed">Đã xử lý</option>
+                  <option value="completed">Yêu cầu được duyệt</option>
                   <option value="unreachable">Không liên lạc được</option>
+                  <option value="not_approved">Yêu cầu không được duyệt</option>
                 </select>
               </div>
             </div>
@@ -343,9 +426,8 @@ export default function AdminConsultationsPage() {
                       <button
                         key={req.id}
                         onClick={() => setSelectedId(req.id)}
-                        className={`w-full text-left p-4 transition-colors flex flex-col gap-2 hover:bg-[var(--color-bg-surface-raised)] ${
-                          isSelected ? "bg-[var(--color-brand-subtle)]/30 hover:bg-[var(--color-brand-subtle)]/40" : ""
-                        }`}
+                        className={`w-full text-left p-4 transition-colors flex flex-col gap-2 hover:bg-[var(--color-bg-surface-raised)] ${isSelected ? "bg-[var(--color-brand-subtle)]/30 hover:bg-[var(--color-brand-subtle)]/40" : ""
+                          }`}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <h3 className="font-semibold text-[14px] text-[var(--color-text-primary)] line-clamp-1">
@@ -458,15 +540,25 @@ export default function AdminConsultationsPage() {
 
                   <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-3 space-y-1">
                     <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
-                      <Users className="h-3.5 w-3.5" />
-                      Quy mô đội ngũ
+                      <Mail className="h-3.5 w-3.5" />
+                      Đuôi email doanh nghiệp
                     </span>
                     <p className="text-[13px] font-medium text-[var(--color-text-primary)]">
-                      {selectedRequest.teamSize ? `${selectedRequest.teamSize} người` : "Chưa cung cấp"}
+                      {selectedRequest.companyEmailDomain ? `@${selectedRequest.companyEmailDomain}` : "Chưa cung cấp"}
                     </p>
                   </div>
 
-                  <div className="rounded-xl border border(--color-border) bg-[var(--color-bg-surface-raised)] p-3 space-y-1 sm:col-span-2">
+                  <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-3 space-y-1">
+                    <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
+                      <Building className="h-3.5 w-3.5" />
+                      Mã số thuế
+                    </span>
+                    <p className="text-[13px] font-medium text-[var(--color-text-primary)]">
+                      {selectedRequest.taxId || "Chưa cung cấp"}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-3 space-y-1 sm:col-span-2">
                     <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
                       <HelpCircle className="h-3.5 w-3.5" />
                       Nhu cầu chính
@@ -476,23 +568,61 @@ export default function AdminConsultationsPage() {
                     </p>
                   </div>
 
-                  <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-3 space-y-1 sm:col-span-2">
-                    <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
-                      <MessageSquare className="h-3.5 w-3.5" />
-                      Kênh muốn giám sát
-                    </span>
-                    <div className="flex flex-wrap gap-1.5 mt-1">
-                      {selectedRequest.channels ? (
-                        selectedRequest.channels.split(",").filter(Boolean).map((ch) => (
-                          <span key={ch} className="text-[11px] px-2 py-0.5 rounded-md font-bold border bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20">
-                            {ch}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-[12px] text-[var(--color-text-muted)] font-medium">Chưa gán kênh nào</span>
+                  {selectedRequest.consultationRequested && (
+                    <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 sm:col-span-2">
+                      <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                        <HelpCircle className="h-3.5 w-3.5" />
+                        Nội dung đăng ký tư vấn thêm
+                      </span>
+                      <p className="mt-2 whitespace-pre-wrap text-[13px] leading-5 text-[var(--color-text-secondary)]">
+                        {selectedRequest.consultationNotes || "Khách hàng chưa để lại ghi chú bổ sung."}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="space-y-4 rounded-xl border border-[var(--color-brand)]/20 bg-[var(--color-brand-subtle)]/30 p-4 sm:col-span-2">
+                      <div className="flex items-center gap-2 border-b border-[var(--color-border)] pb-3">
+                        <Layers className="h-4 w-4 text-[var(--color-brand)]" />
+                        <span className="text-[12px] font-extrabold uppercase tracking-wider text-[var(--color-brand)]">Cấu hình thương hiệu</span>
+                      </div>
+                      <div>
+                        <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
+                          <Layers className="h-3.5 w-3.5" />
+                          Kênh theo dõi
+                        </span>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {(selectedRequest.platforms || []).length > 0 ? selectedRequest.platforms?.map((platform) => (
+                            <span key={platform} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-base)] px-2.5 py-1 text-[12px] font-semibold text-[var(--color-text-primary)]">
+                              {platform}
+                            </span>
+                          )) : <span className="text-[12px] text-[var(--color-text-muted)]">Chưa chọn kênh.</span>}
+                        </div>
+                      </div>
+
+                      <div>
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">Từ khóa quan trọng</span>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {(selectedRequest.keywords || []).length > 0 ? selectedRequest.keywords?.map((keyword) => (
+                            <span key={keyword} className="rounded-full bg-[var(--color-brand-subtle)] px-2.5 py-1 text-[12px] font-semibold text-[var(--color-brand)]">
+                              {keyword}
+                            </span>
+                          )) : <span className="text-[12px] text-[var(--color-text-muted)]">Chưa nhập từ khóa.</span>}
+                        </div>
+                      </div>
+
+                      {selectedRequest.configurationNotes && (
+                        <div>
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">Ghi chú cấu hình</span>
+                          <p className="mt-2 whitespace-pre-wrap text-[13px] leading-5 text-[var(--color-text-secondary)]">{selectedRequest.configurationNotes}</p>
+                        </div>
+                      )}
+                      {!selectedRequest.configurationNotes && (
+                        <div>
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">Ghi chú cấu hình</span>
+                          <p className="mt-2 text-[12px] text-[var(--color-text-muted)]">Không có ghi chú cấu hình.</p>
+                        </div>
                       )}
                     </div>
-                  </div>
                 </div>
 
                 {/* Edit Form - Plan and Status */}
@@ -505,7 +635,20 @@ export default function AdminConsultationsPage() {
                   {saveSuccess && (
                     <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 px-3 py-2.5 text-[13px] text-emerald-700 dark:text-emerald-400">
                       <Check className="h-4 w-4 shrink-0" />
-                      <span>Cập nhật phương án & trạng thái thành công!</span>
+                      <span>
+                        {editStatus === "completed"
+                          ? "Đã duyệt yêu cầu, tạo tài khoản và gửi email thành công!"
+                          : editStatus === "not_approved"
+                            ? "Đã từ chối yêu cầu và gửi email thông báo!"
+                            : "Cập nhật phương án & trạng thái thành công!"}
+                      </span>
+                    </div>
+                  )}
+
+                  {approvalError && (
+                    <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-[13px] text-rose-700 dark:border-rose-500/20 dark:bg-rose-950/20 dark:text-rose-400">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>{approvalError}</span>
                     </div>
                   )}
 
@@ -514,14 +657,22 @@ export default function AdminConsultationsPage() {
                       <span className="text-[12px] font-bold text-[var(--color-text-secondary)]">Trạng thái hiện tại</span>
                       <select
                         value={editStatus}
-                        onChange={(e) => setEditStatus(e.target.value as StatusType)}
+                        onChange={(e) => {
+                          setEditStatus(e.target.value as EditableStatus);
+                          setApprovalError("");
+                          setGeneratedCredentials(null);
+                        }}
+                        disabled={isFinalDecision}
                         className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]/15"
                       >
+                        {!isFinalDecision && <option value="">-- Chọn trạng thái --</option>}
                         <option value="pending">Chưa xử lý</option>
                         <option value="contacting">Đang liên hệ</option>
-                        <option value="completed">Đã xử lý xong</option>
+                        <option value="completed">Yêu cầu được duyệt</option>
                         <option value="unreachable">Không liên lạc được</option>
+                        <option value="not_approved">Yêu cầu không được duyệt</option>
                       </select>
+                      {isFinalDecision && <p className="text-[11px] font-medium text-[var(--color-text-muted)]">Quyết định cuối cùng đã được gửi qua email và không thể đổi trạng thái.</p>}
                     </label>
 
                     <label className="space-y-1.5">
@@ -541,6 +692,63 @@ export default function AdminConsultationsPage() {
                     </label>
                   </div>
 
+                  {willAutoCreateAccount && (
+                    <div className="space-y-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+                      <div>
+                        <p className="flex items-center gap-2 text-[13px] font-bold text-emerald-700 dark:text-emerald-400">
+                          <KeyRound className="h-4 w-4" /> Tài khoản dùng thử sẽ được tạo tự động
+                        </p>
+                        <p className="mt-1 text-[12px] leading-5 text-[var(--color-text-secondary)]">
+                          Sau khi cập nhật, hệ thống tự tạo tài khoản Brand Manager, mật khẩu tạm thời và gửi email cho người đăng ký.
+                        </p>
+                      </div>
+
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="rounded-lg border border-emerald-500/15 bg-white/60 p-3 dark:bg-black/10">
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">Email dự kiến</p>
+                          <p className="mt-1 break-all text-[13px] font-bold text-[var(--color-text-primary)]">
+                            {getAutomaticAccountPreview(selectedRequest.fullName, selectedRequest.companyEmailDomain)}
+                          </p>
+                        </div>
+                        <div className="rounded-lg border border-emerald-500/15 bg-white/60 p-3 dark:bg-black/10">
+                          <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">Thương hiệu & thời hạn</p>
+                          <p className="mt-1 text-[13px] font-bold text-[var(--color-text-primary)]">{selectedRequest.company}</p>
+                          <p className="mt-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">Dùng thử miễn phí 14 ngày</p>
+                        </div>
+                      </div>
+                      <p className="text-[11px] leading-5 text-[var(--color-text-muted)]">
+                        Nếu email dự kiến đã tồn tại, hệ thống sẽ tự thêm số phía sau tên. Mật khẩu đáp ứng chính sách bảo mật và phải được đổi ở lần đăng nhập đầu tiên.
+                      </p>
+                    </div>
+                  )}
+
+                  {generatedCredentials && (
+                    <div className="space-y-3 rounded-xl border border-emerald-500/30 bg-emerald-50 p-4 dark:bg-emerald-950/20">
+                      <p className="flex items-center gap-2 text-[13px] font-extrabold text-emerald-700 dark:text-emerald-400">
+                        <CheckCircle2 className="h-4 w-4" /> Tài khoản dùng thử đã được tạo
+                      </p>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="rounded-lg bg-white p-3 dark:bg-black/10">
+                          <p className="text-[11px] font-bold uppercase text-[var(--color-text-muted)]">Email đăng nhập</p>
+                          <div className="mt-1 flex items-center justify-between gap-2">
+                            <span className="break-all font-mono text-[13px] font-bold text-[var(--color-text-primary)]">{generatedCredentials.email}</span>
+                            <CopyButton value={generatedCredentials.email} label="email tài khoản" />
+                          </div>
+                        </div>
+                        <div className="rounded-lg bg-white p-3 dark:bg-black/10">
+                          <p className="text-[11px] font-bold uppercase text-[var(--color-text-muted)]">Mật khẩu tạm thời</p>
+                          <div className="mt-1 flex items-center justify-between gap-2">
+                            <span className="font-mono text-[13px] font-bold text-[var(--color-text-primary)]">{generatedCredentials.temporaryPassword}</span>
+                            <CopyButton value={generatedCredentials.temporaryPassword} label="mật khẩu tạm thời" />
+                          </div>
+                        </div>
+                      </div>
+                      <p className="text-[12px] font-medium text-emerald-700 dark:text-emerald-400">
+                        Hạn dùng thử: {formatTimestamp(generatedCredentials.trialEndsAt)}. Email cảm ơn và thông tin đăng nhập đã được gửi cho khách hàng.
+                      </p>
+                    </div>
+                  )}
+
                   <label className="block space-y-1.5">
                     <span className="text-[12px] font-bold text-[var(--color-text-secondary)]">Ghi chú cuộc gọi / Kế hoạch chi tiết</span>
                     <textarea
@@ -555,7 +763,7 @@ export default function AdminConsultationsPage() {
                   <div className="flex justify-end pt-1">
                     <button
                       type="submit"
-                      disabled={saving}
+                      disabled={saving || !editStatus}
                       className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] hover:bg-[var(--color-brand)]/90 px-4 text-[13px] font-bold text-white shadow-sm transition disabled:opacity-50"
                     >
                       {saving ? (
@@ -564,7 +772,11 @@ export default function AdminConsultationsPage() {
                           Đang cập nhật...
                         </>
                       ) : (
-                        "Cập nhật yêu cầu"
+                        editStatus === "completed"
+                          ? "Duyệt & gửi tài khoản"
+                          : editStatus === "not_approved"
+                            ? "Từ chối & gửi email"
+                            : "Cập nhật yêu cầu"
                       )}
                     </button>
                   </div>

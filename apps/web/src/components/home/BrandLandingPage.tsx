@@ -41,32 +41,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { getDefaultRouteForRole } from "@/lib/rbac";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
-
-type FormState = {
-  fullName: string;
-  email: string;
-  phone: string;
-  company: string;
-  industry: string;
-  channels: string;
-  need: string;
-  teamSize: string;
-};
-
-const initialFormState: FormState = {
-  fullName: "",
-  email: "",
-  phone: "",
-  company: "",
-  industry: "",
-  channels: "",
-  need: "Phát hiện khách hàng tiềm năng",
-  teamSize: "",
-};
-
-const channels = ["Facebook", "TikTok", "YouTube", "Review", "Tin tức", "Website"];
+import { TrialRegistrationFlow } from "./trial-registration";
 
 const heatmapOpacities = [
   0.72, 0.9, 1, 0.58, 0.66, 0.86, 0.62,
@@ -279,18 +254,18 @@ function LiveIntelligenceSection() {
           {/* Main CSS Dashboard Abstraction (Replacing Image) */}
           <div className="relative w-full rounded-[24px] glass-panel p-2 md:p-3 shadow-[0_40px_100px_rgba(109,94,246,0.15)] backdrop-blur-2xl transition-transform duration-500 hover:-translate-y-2">
             <div className="overflow-hidden rounded-[16px] border border-white/40 dark:border-white/10 bg-[#FCFBFF]/90 dark:bg-[#0A0612]/90 shadow-inner flex flex-col min-h-[500px]">
-              
+
               {/* Header with Avatars & Running Counter */}
               <div className="flex items-center justify-between border-b border-[#ECE9FF] dark:border-white/10 px-4 md:px-6 py-4 bg-white/50 dark:bg-white/5">
                 <div className="flex gap-4 items-center">
-                   <span className="text-[16px] md:text-[18px] font-display font-bold bg-gradient-to-r from-[#6D5EF6] to-[#9B8CFF] bg-clip-text text-transparent hidden sm:block">Live Command Center</span>
-                   <div className="h-6 w-px bg-slate-200 dark:bg-white/10 hidden sm:block" />
-                   {/* Counter */}
-                   <span className="font-mono font-bold text-[#1B1B4A] dark:text-white flex items-center gap-2">
-                     <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#34D399] opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-[#34D399]"></span></span>
-                     <span className="tabular-nums opacity-90 text-[14px] md:text-[16px]">2,459,102</span>
-                     <span className="text-[11px] text-[#6B7090] font-sans ml-1 uppercase tracking-wider hidden sm:inline-block">Mentions</span>
-                   </span>
+                  <span className="text-[16px] md:text-[18px] font-display font-bold bg-gradient-to-r from-[#6D5EF6] to-[#9B8CFF] bg-clip-text text-transparent hidden sm:block">Live Command Center</span>
+                  <div className="h-6 w-px bg-slate-200 dark:bg-white/10 hidden sm:block" />
+                  {/* Counter */}
+                  <span className="font-mono font-bold text-[#1B1B4A] dark:text-white flex items-center gap-2">
+                    <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#34D399] opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-[#34D399]"></span></span>
+                    <span className="tabular-nums opacity-90 text-[14px] md:text-[16px]">2,459,102</span>
+                    <span className="text-[11px] text-[#6B7090] font-sans ml-1 uppercase tracking-wider hidden sm:inline-block">Mentions</span>
+                  </span>
                 </div>
                 {/* Avatars */}
                 <div className="flex -space-x-3 group relative cursor-pointer hidden sm:flex">
@@ -306,112 +281,112 @@ function LiveIntelligenceSection() {
               <div className="bg-vercel-grid flex flex-col md:flex-row flex-1 p-4 md:p-6 gap-6 opacity-[0.99] dark:opacity-90">
                 {/* Left: Glowing Line Chart & KPI */}
                 <div className="flex-1 flex flex-col gap-6">
-                   <div className="flex gap-4">
-                     <div className="flex-1 glass-panel rounded-[16px] p-4 md:p-5">
-                       <p className="text-[12px] font-bold uppercase tracking-wider text-[#6B7090] dark:text-slate-400">Total Mentions</p>
-                       <p className="text-[28px] md:text-[36px] font-bold text-[#1B1B4A] dark:text-white font-display mt-1">45.2K</p>
-                       <div className="flex items-center gap-1 text-[#34D399] text-[12px] font-bold mt-2"><TrendingUp className="w-3 h-3" /> +12.5%</div>
-                     </div>
-                     <div className="flex-1 glass-panel rounded-[16px] p-4 md:p-5">
-                       <p className="text-[12px] font-bold uppercase tracking-wider text-[#6B7090] dark:text-slate-400">Brand Health</p>
-                       <p className="text-[28px] md:text-[36px] font-bold text-[#1B1B4A] dark:text-white font-display mt-1">92<span className="text-[16px] text-[#6B7090]">/100</span></p>
-                       <div className="flex items-center gap-1 text-[#34D399] text-[12px] font-bold mt-2"><TrendingUp className="w-3 h-3" /> Tích cực</div>
-                     </div>
-                   </div>
-                   
-                   {/* Glowing Line Chart Area */}
-                   <div className="flex-1 glass-panel rounded-[16px] p-5 relative overflow-hidden flex flex-col min-h-[220px]">
-                      <div className="flex justify-between items-center mb-4">
-                        <p className="text-[14px] font-bold text-[#1B1B4A] dark:text-white">Sentiment Trend</p>
-                        <div className="flex gap-4">
-                          <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-[#6D5EF6] shadow-[0_0_8px_#6D5EF6]" /><span className="text-[10px] font-bold text-[#6B7090]">Điểm hiện tại</span></div>
-                          <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-[#34D399] shadow-[0_0_8px_#34D399]" /><span className="text-[10px] font-bold text-[#6B7090]">Trung bình 7 ngày</span></div>
-                        </div>
+                  <div className="flex gap-4">
+                    <div className="flex-1 glass-panel rounded-[16px] p-4 md:p-5">
+                      <p className="text-[12px] font-bold uppercase tracking-wider text-[#6B7090] dark:text-slate-400">Total Mentions</p>
+                      <p className="text-[28px] md:text-[36px] font-bold text-[#1B1B4A] dark:text-white font-display mt-1">45.2K</p>
+                      <div className="flex items-center gap-1 text-[#34D399] text-[12px] font-bold mt-2"><TrendingUp className="w-3 h-3" /> +12.5%</div>
+                    </div>
+                    <div className="flex-1 glass-panel rounded-[16px] p-4 md:p-5">
+                      <p className="text-[12px] font-bold uppercase tracking-wider text-[#6B7090] dark:text-slate-400">Brand Health</p>
+                      <p className="text-[28px] md:text-[36px] font-bold text-[#1B1B4A] dark:text-white font-display mt-1">92<span className="text-[16px] text-[#6B7090]">/100</span></p>
+                      <div className="flex items-center gap-1 text-[#34D399] text-[12px] font-bold mt-2"><TrendingUp className="w-3 h-3" /> Tích cực</div>
+                    </div>
+                  </div>
+
+                  {/* Glowing Line Chart Area */}
+                  <div className="flex-1 glass-panel rounded-[16px] p-5 relative overflow-hidden flex flex-col min-h-[220px]">
+                    <div className="flex justify-between items-center mb-4">
+                      <p className="text-[14px] font-bold text-[#1B1B4A] dark:text-white">Sentiment Trend</p>
+                      <div className="flex gap-4">
+                        <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-[#6D5EF6] shadow-[0_0_8px_#6D5EF6]" /><span className="text-[10px] font-bold text-[#6B7090]">Điểm hiện tại</span></div>
+                        <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-[#34D399] shadow-[0_0_8px_#34D399]" /><span className="text-[10px] font-bold text-[#6B7090]">Trung bình 7 ngày</span></div>
                       </div>
-                      
-                      <div className="flex-1 w-full relative">
-                        <div className="absolute inset-0 flex flex-col justify-between opacity-10">
-                          <div className="h-px w-full bg-[#1B1B4A] dark:bg-white" />
-                          <div className="h-px w-full bg-[#1B1B4A] dark:bg-white" />
-                          <div className="h-px w-full bg-[#1B1B4A] dark:bg-white" />
-                          <div className="h-px w-full bg-[#1B1B4A] dark:bg-white" />
-                        </div>
-                        {/* Smooth curved SVG line chart */}
-                        <svg viewBox="0 0 400 120" className="w-full h-full preserve-3d overflow-visible relative z-10">
-                          <defs>
-                            <linearGradient id="glow" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor="#9B8CFF" stopOpacity="0.4" />
-                              <stop offset="100%" stopColor="#6D5EF6" stopOpacity="0" />
-                            </linearGradient>
-                          </defs>
-                          <path d="M0 100 Q 50 20, 100 60 T 200 40 T 300 80 T 400 20 L 400 120 L 0 120 Z" fill="url(#glow)" />
-                          <path d="M0 100 Q 50 20, 100 60 T 200 40 T 300 80 T 400 20" fill="none" stroke="#6D5EF6" strokeWidth="4" className="drop-shadow-[0_0_12px_rgba(109,94,246,0.6)]" />
-                          
-                          <circle cx="200" cy="40" r="5" fill="#fff" stroke="#6D5EF6" strokeWidth="3" className="animate-pulse shadow-[0_0_15px_#6D5EF6]" />
-                          <circle cx="400" cy="20" r="5" fill="#fff" stroke="#6D5EF6" strokeWidth="3" className="animate-pulse shadow-[0_0_15px_#6D5EF6]" />
-                        </svg>
+                    </div>
+
+                    <div className="flex-1 w-full relative">
+                      <div className="absolute inset-0 flex flex-col justify-between opacity-10">
+                        <div className="h-px w-full bg-[#1B1B4A] dark:bg-white" />
+                        <div className="h-px w-full bg-[#1B1B4A] dark:bg-white" />
+                        <div className="h-px w-full bg-[#1B1B4A] dark:bg-white" />
+                        <div className="h-px w-full bg-[#1B1B4A] dark:bg-white" />
                       </div>
-                   </div>
+                      {/* Smooth curved SVG line chart */}
+                      <svg viewBox="0 0 400 120" className="w-full h-full preserve-3d overflow-visible relative z-10">
+                        <defs>
+                          <linearGradient id="glow" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#9B8CFF" stopOpacity="0.4" />
+                            <stop offset="100%" stopColor="#6D5EF6" stopOpacity="0" />
+                          </linearGradient>
+                        </defs>
+                        <path d="M0 100 Q 50 20, 100 60 T 200 40 T 300 80 T 400 20 L 400 120 L 0 120 Z" fill="url(#glow)" />
+                        <path d="M0 100 Q 50 20, 100 60 T 200 40 T 300 80 T 400 20" fill="none" stroke="#6D5EF6" strokeWidth="4" className="drop-shadow-[0_0_12px_rgba(109,94,246,0.6)]" />
+
+                        <circle cx="200" cy="40" r="5" fill="#fff" stroke="#6D5EF6" strokeWidth="3" className="animate-pulse shadow-[0_0_15px_#6D5EF6]" />
+                        <circle cx="400" cy="20" r="5" fill="#fff" stroke="#6D5EF6" strokeWidth="3" className="animate-pulse shadow-[0_0_15px_#6D5EF6]" />
+                      </svg>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Right: Live Feed & Heatmap */}
                 <div className="w-full md:w-[300px] flex flex-col gap-6">
-                   {/* Heatmap Abstraction */}
-                   <div className="glass-panel rounded-[16px] p-5">
-                     <p className="text-[14px] font-bold text-[#1B1B4A] dark:text-white mb-3">Activity Heatmap</p>
-                     <div className="grid grid-cols-7 gap-1.5">
-                       {Array.from({length: 28}).map((_, i) => (
-                         <div key={i} className={`h-4 md:h-5 rounded-[4px] ${[2,7,12,14,20,25].includes(i) ? 'bg-[#6D5EF6]' : [1,5,8,15,22,27].includes(i) ? 'bg-[#9B8CFF]' : 'bg-[#ECE9FF] dark:bg-white/10'}`} style={{ opacity: heatmapOpacities[i], animation: `pulse 3s infinite ${i * 0.15}s` }} />
-                       ))}
-                     </div>
-                      <div className="grid grid-cols-7 gap-1.5 mt-1.5">
-                        {['T2','T3','T4','T5','T6','T7','CN'].map(day => (
-                          <div key={day} className="text-[9px] font-bold text-[#6B7090] text-center">{day}</div>
-                        ))}
+                  {/* Heatmap Abstraction */}
+                  <div className="glass-panel rounded-[16px] p-5">
+                    <p className="text-[14px] font-bold text-[#1B1B4A] dark:text-white mb-3">Activity Heatmap</p>
+                    <div className="grid grid-cols-7 gap-1.5">
+                      {Array.from({ length: 28 }).map((_, i) => (
+                        <div key={i} className={`h-4 md:h-5 rounded-[4px] ${[2, 7, 12, 14, 20, 25].includes(i) ? 'bg-[#6D5EF6]' : [1, 5, 8, 15, 22, 27].includes(i) ? 'bg-[#9B8CFF]' : 'bg-[#ECE9FF] dark:bg-white/10'}`} style={{ opacity: heatmapOpacities[i], animation: `pulse 3s infinite ${i * 0.15}s` }} />
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-7 gap-1.5 mt-1.5">
+                      {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map(day => (
+                        <div key={day} className="text-[9px] font-bold text-[#6B7090] text-center">{day}</div>
+                      ))}
+                    </div>
+                    <div className="flex items-center justify-between mt-3 text-[9px] font-bold text-[#6B7090]">
+                      <span>Thấp</span>
+                      <div className="flex gap-1">
+                        <div className="w-2.5 h-2.5 rounded-[2px] bg-[#ECE9FF] dark:bg-white/10" />
+                        <div className="w-2.5 h-2.5 rounded-[2px] bg-[#9B8CFF]" />
+                        <div className="w-2.5 h-2.5 rounded-[2px] bg-[#6D5EF6]" />
                       </div>
-                      <div className="flex items-center justify-between mt-3 text-[9px] font-bold text-[#6B7090]">
-                        <span>Thấp</span>
-                        <div className="flex gap-1">
-                          <div className="w-2.5 h-2.5 rounded-[2px] bg-[#ECE9FF] dark:bg-white/10" />
-                          <div className="w-2.5 h-2.5 rounded-[2px] bg-[#9B8CFF]" />
-                          <div className="w-2.5 h-2.5 rounded-[2px] bg-[#6D5EF6]" />
+                      <span>Cao</span>
+                    </div>
+                  </div>
+
+                  {/* Live Comments Feed */}
+                  <div className="flex-1 glass-panel rounded-[16px] p-5 flex flex-col gap-3 overflow-hidden relative">
+                    <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-white dark:from-[#0A0612] to-transparent z-10 rounded-b-[16px]" />
+                    <p className="text-[14px] font-bold text-[#1B1B4A] dark:text-white mb-2 flex justify-between items-center">
+                      <span>Live Feed</span>
+                      <span className="flex h-2.5 w-2.5 rounded-full bg-[#ef4444] animate-ping shadow-[0_0_8px_#ef4444]" />
+                    </p>
+
+                    <div className="flex flex-col gap-3 relative z-0">
+                      <div className="p-3 rounded-[12px] bg-white/80 dark:bg-white/5 border border-white/60 dark:border-white/10 shadow-sm text-[12px] text-[#6B7090] dark:text-slate-300 transform transition-transform hover:scale-[1.02]">
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="font-bold text-[#1B1B4A] dark:text-white">@nguyen_minh</p>
+                          <span className="text-[10px] text-[#34D399] font-bold bg-[#34D399]/10 px-2 py-0.5 rounded-full">Positive</span>
                         </div>
-                        <span>Cao</span>
+                        Dịch vụ dạo này tốt lên hẳn, đáng khen 👍
                       </div>
-                   </div>
-                   
-                   {/* Live Comments Feed */}
-                   <div className="flex-1 glass-panel rounded-[16px] p-5 flex flex-col gap-3 overflow-hidden relative">
-                     <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-white dark:from-[#0A0612] to-transparent z-10 rounded-b-[16px]" />
-                     <p className="text-[14px] font-bold text-[#1B1B4A] dark:text-white mb-2 flex justify-between items-center">
-                       <span>Live Feed</span> 
-                       <span className="flex h-2.5 w-2.5 rounded-full bg-[#ef4444] animate-ping shadow-[0_0_8px_#ef4444]" />
-                     </p>
-                     
-                     <div className="flex flex-col gap-3 relative z-0">
-                       <div className="p-3 rounded-[12px] bg-white/80 dark:bg-white/5 border border-white/60 dark:border-white/10 shadow-sm text-[12px] text-[#6B7090] dark:text-slate-300 transform transition-transform hover:scale-[1.02]">
-                         <div className="flex items-center justify-between mb-1">
-                           <p className="font-bold text-[#1B1B4A] dark:text-white">@nguyen_minh</p>
-                           <span className="text-[10px] text-[#34D399] font-bold bg-[#34D399]/10 px-2 py-0.5 rounded-full">Positive</span>
-                         </div>
-                         Dịch vụ dạo này tốt lên hẳn, đáng khen 👍
-                       </div>
-                       <div className="p-3 rounded-[12px] bg-white/80 dark:bg-white/5 border border-white/60 dark:border-white/10 shadow-sm text-[12px] text-[#6B7090] dark:text-slate-300 transform transition-transform hover:scale-[1.02]">
-                         <div className="flex items-center justify-between mb-1">
-                           <p className="font-bold text-[#1B1B4A] dark:text-white">@tuananh9x</p>
-                           <span className="text-[10px] text-[#ef4444] font-bold bg-[#ef4444]/10 px-2 py-0.5 rounded-full">Negative</span>
-                         </div>
-                         App bị lỗi gì mà không login được?
-                       </div>
-                       <div className="p-3 rounded-[12px] bg-white/80 dark:bg-white/5 border border-white/60 dark:border-white/10 shadow-sm text-[12px] text-[#6B7090] dark:text-slate-300 transform transition-transform hover:scale-[1.02]">
-                         <div className="flex items-center justify-between mb-1">
-                           <p className="font-bold text-[#1B1B4A] dark:text-white">@hoanglan_pr</p>
-                           <span className="text-[10px] text-[#34D399] font-bold bg-[#34D399]/10 px-2 py-0.5 rounded-full">Positive</span>
-                         </div>
-                         Thiết kế mới đẹp xuất sắc!
-                       </div>
-                     </div>
-                   </div>
+                      <div className="p-3 rounded-[12px] bg-white/80 dark:bg-white/5 border border-white/60 dark:border-white/10 shadow-sm text-[12px] text-[#6B7090] dark:text-slate-300 transform transition-transform hover:scale-[1.02]">
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="font-bold text-[#1B1B4A] dark:text-white">@tuananh9x</p>
+                          <span className="text-[10px] text-[#ef4444] font-bold bg-[#ef4444]/10 px-2 py-0.5 rounded-full">Negative</span>
+                        </div>
+                        App bị lỗi gì mà không login được?
+                      </div>
+                      <div className="p-3 rounded-[12px] bg-white/80 dark:bg-white/5 border border-white/60 dark:border-white/10 shadow-sm text-[12px] text-[#6B7090] dark:text-slate-300 transform transition-transform hover:scale-[1.02]">
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="font-bold text-[#1B1B4A] dark:text-white">@hoanglan_pr</p>
+                          <span className="text-[10px] text-[#34D399] font-bold bg-[#34D399]/10 px-2 py-0.5 rounded-full">Positive</span>
+                        </div>
+                        Thiết kế mới đẹp xuất sắc!
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -426,7 +401,7 @@ function LiveIntelligenceSection() {
                 </div>
               </div>
             </div>
-             
+
             <div className="absolute top-[40%] -right-6 md:-right-8 animate-float-delayed z-20 hidden lg:flex" style={{ animationDelay: '1.5s' }}>
               <div className="glass-panel rounded-[16px] px-4 py-3 flex items-center gap-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#6D5EF6]/10 text-[#6D5EF6]"><CheckCircle2 className="h-4 w-4" /></div>
@@ -448,50 +423,8 @@ export default function BrandLandingPage() {
   const { user, profile, role, loading } = useAuth();
   const reduceMotion = useReducedMotion();
   const appRoute = profile?.defaultRoute || getDefaultRouteForRole(role);
-  const [form, setForm] = useState<FormState>(initialFormState);
-  const [submitted, setSubmitted] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState("");
   const [selectedRole, setSelectedRole] = useState<RoleId>("brand");
   const activeRole = roleStories.find((story) => story.id === selectedRole) ?? roleStories[0];
-
-  const missingRequired = useMemo(
-    () => !form.fullName || !form.email || !form.phone || !form.company || !form.need,
-    [form],
-  );
-
-  const updateForm = (field: keyof FormState, value: string) => setForm((current) => ({ ...current, [field]: value }));
-
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (missingRequired) return;
-    setSubmitting(true);
-    setSubmitError("");
-    try {
-      await addDoc(collection(db, "consultations"), {
-        fullName: form.fullName.trim(),
-        email: form.email.trim(),
-        phone: form.phone.trim(),
-        company: form.company.trim(),
-        industry: form.industry.trim() || "",
-        channels: form.channels || "",
-        need: form.need,
-        teamSize: form.teamSize || "",
-        status: "pending",
-        notes: "",
-        contactPlan: "",
-        createdAt: serverTimestamp(),
-      });
-      setSubmitted(true);
-    } catch (err: any) {
-      console.error("Error submitting consultation request:", err);
-      setSubmitError("Đã xảy ra lỗi khi gửi yêu cầu. Vui lòng thử lại sau.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const inputClass = "h-12 w-full rounded-[8px] border border-[#d8e2ec] bg-white px-4 text-[14px] font-medium text-[#1c2d40] outline-none transition placeholder:text-[#95a3b4] focus:border-[#0f766e] focus:ring-4 focus:ring-[#ccfbf1]";
 
   return (
     <main className="overflow-hidden bg-[#FCFBFF] font-sans text-[#1B1B4A] selection:bg-[#9B8CFF]/30 selection:text-[#6D5EF6]">
@@ -507,16 +440,16 @@ export default function BrandLandingPage() {
             <div className="inline-flex items-center gap-2 rounded-full border border-[#6D5EF6]/20 bg-[#6D5EF6]/10 px-4 py-2 text-[13px] font-bold text-[#6D5EF6] backdrop-blur-sm mb-6">
               ✨ AI Brand Monitoring
             </div>
-            
+
             <h1 className="font-display text-[38px] md:text-[56px] font-extrabold leading-[1.1] text-[#1B1B4A] tracking-tight">
               Hiểu khách hàng <br className="hidden lg:block" />
               <span className="bg-gradient-to-r from-[#6D5EF6] to-[#9B8CFF] bg-clip-text text-transparent">trước khi họ lên tiếng.</span>
             </h1>
-            
+
             <p className="mt-6 max-w-[610px] text-[17px] leading-[1.7] text-[#6B7090]">
               InsightFlow biến những cuộc trò chuyện rải rác thành tín hiệu rõ ràng để thương hiệu tìm thấy cơ hội, phản hồi nhanh và lớn lên cùng khách hàng.
             </p>
-            
+
             <div className="mt-10 flex flex-col gap-4 sm:flex-row">
               {!loading && user ? (
                 <Link href={appRoute} className="inline-flex h-[52px] px-8 items-center justify-center gap-2 rounded-[24px] bg-gradient-to-br from-[#6D5EF6] to-[#5B4FE0] text-[16px] font-bold text-white shadow-[0_18px_50px_rgba(109,94,246,0.08)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_30px_60px_rgba(109,94,246,0.12)]">
@@ -605,12 +538,12 @@ export default function BrandLandingPage() {
                         <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#34D399] to-transparent opacity-50" />
                       </div>
                       <div className="h-24 flex-1 rounded-[12px] bg-white dark:bg-white/5 border border-[#ECE9FF] dark:border-white/10 p-4 shadow-sm relative overflow-hidden flex flex-col justify-center">
-                         <div className="flex items-center gap-2 mb-1">
-                           <div className="w-6 h-6 rounded-full bg-[#ef4444]/10 text-[#ef4444] flex items-center justify-center"><AlertTriangle className="w-3 h-3" /></div>
-                           <span className="text-[11px] font-bold text-[#6B7090]">Cảnh báo rủi ro</span>
-                         </div>
-                         <div className="text-[20px] font-extrabold text-[#1B1B4A] dark:text-white">2</div>
-                         <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#ef4444] to-transparent opacity-50" />
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className="w-6 h-6 rounded-full bg-[#ef4444]/10 text-[#ef4444] flex items-center justify-center"><AlertTriangle className="w-3 h-3" /></div>
+                          <span className="text-[11px] font-bold text-[#6B7090]">Cảnh báo rủi ro</span>
+                        </div>
+                        <div className="text-[20px] font-extrabold text-[#1B1B4A] dark:text-white">2</div>
+                        <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#ef4444] to-transparent opacity-50" />
                       </div>
                     </div>
                     {/* Big Chart Area */}
@@ -714,107 +647,107 @@ export default function BrandLandingPage() {
         {/* Dashboard Mini Illustration */}
         <div className="mx-auto max-w-[1000px] mt-12 relative z-10 hidden sm:block">
           <Reveal delay={0.2} className="relative mx-auto w-[80%] max-w-[800px]">
-             {/* Advanced Insights UI */}
-             <div className="rounded-[24px] border border-white/80 dark:border-white/10 bg-white/50 dark:bg-black/40 p-4 shadow-[0_40px_80px_rgba(109,94,246,0.12)] backdrop-blur-xl">
-               <div className="flex flex-col md:flex-row gap-6">
-                 {/* Left Column: Data Stream Pipeline */}
-                 <div className="w-full md:w-1/3 flex flex-col gap-4">
-                   <div className="glass-panel p-5 rounded-[16px] flex flex-col gap-4">
-                     <p className="text-[14px] font-bold text-[#1B1B4A] dark:text-white">Nguồn dữ liệu Realtime</p>
-                     
-                     <div className="flex flex-col gap-3">
-                       {/* Facebook */}
-                       <div className="flex items-start gap-3 bg-white/80 dark:bg-white/5 border border-[#ECE9FF] dark:border-white/10 p-3 rounded-[12px] hover:-translate-y-1 transition-transform relative shadow-sm">
-                         <div className="w-8 h-8 rounded-full bg-[#1877F2]/10 text-[#1877F2] flex shrink-0 items-center justify-center text-[14px] font-bold mt-0.5">f</div>
-                         <div className="flex-1">
-                           <div className="flex justify-between items-start mb-1">
-                             <div className="flex flex-col">
-                               <div className="flex items-center gap-2"><span className="text-[11px] font-bold text-[#1B1B4A] dark:text-white">Live Reviews</span><span className="text-[9px] bg-slate-100 dark:bg-white/10 px-1.5 py-0.5 rounded text-[#6B7090]">Facebook</span></div>
-                               <p className="text-[12px] leading-snug text-[#6B7090] dark:text-slate-300 mt-1 line-clamp-2">Sản phẩm này rất đáng tiền, điểm 10 cho dịch vụ!</p>
-                             </div>
-                             <PulseDot className="bg-[#1877F2] shrink-0 ml-2 mt-1" />
-                           </div>
-                         </div>
-                       </div>
-                       
-                       {/* X/Twitter */}
-                       <div className="flex items-start gap-3 bg-white/80 dark:bg-white/5 border border-[#ECE9FF] dark:border-white/10 p-3 rounded-[12px] hover:-translate-y-1 transition-transform relative shadow-sm">
-                         <div className="w-8 h-8 rounded-full bg-black/5 dark:bg-white/10 text-black dark:text-white flex shrink-0 items-center justify-center text-[14px] font-bold mt-0.5">𝕏</div>
-                         <div className="flex-1">
-                           <div className="flex justify-between items-start mb-1">
-                             <div className="flex flex-col">
-                               <div className="flex items-center gap-2"><span className="text-[11px] font-bold text-[#1B1B4A] dark:text-white">Feedback</span><span className="text-[9px] bg-slate-100 dark:bg-white/10 px-1.5 py-0.5 rounded text-[#6B7090]">X</span></div>
-                               <p className="text-[12px] leading-snug text-[#6B7090] dark:text-slate-300 mt-1 line-clamp-2">Giao diện mới nhìn sang hẳn 👍</p>
-                             </div>
-                             <PulseDot className="bg-black dark:bg-white shrink-0 ml-2 mt-1" />
-                           </div>
-                         </div>
-                       </div>
-                       
-                       {/* Mention (Crisis) */}
-                       <div className="flex items-start gap-3 bg-[#ef4444]/5 border border-[#ef4444]/20 p-3 rounded-[12px] hover:-translate-y-1 transition-transform relative shadow-sm">
-                         <div className="w-8 h-8 rounded-full bg-[#ef4444]/10 text-[#ef4444] flex shrink-0 items-center justify-center mt-0.5"><AlertTriangle className="w-4 h-4" /></div>
-                         <div className="flex-1">
-                           <div className="flex justify-between items-start mb-1">
-                             <div className="flex flex-col">
-                               <div className="flex items-center gap-2"><span className="text-[11px] font-bold text-[#ef4444]">Crisis Detected</span><span className="text-[9px] bg-[#ef4444]/10 px-1.5 py-0.5 rounded text-[#ef4444]">Mention</span></div>
-                               <p className="text-[12px] leading-snug text-[#ef4444]/90 mt-1 line-clamp-2">Ai dùng app này rồi review giúp mình với, thấy dạo này lỗi nhiều quá?</p>
-                             </div>
-                             <PulseDot className="bg-[#ef4444] shrink-0 ml-2 mt-1" />
-                           </div>
-                         </div>
-                       </div>
-                     </div>
-                   </div>
-                 </div>
-                 
-                 {/* Right Column: Sentiment Line Chart */}
-                 <div className="w-full md:w-2/3 glass-panel p-6 rounded-[16px] flex flex-col min-h-[300px]">
-                   <div className="flex items-center justify-between mb-8">
-                     <div>
-                       <p className="text-[18px] font-bold text-[#1B1B4A] dark:text-white">Xu hướng cảm xúc</p>
-                       <p className="text-[13px] text-[#6B7090] dark:text-slate-400 mt-1">24 giờ qua</p>
-                     </div>
-                     <div className="flex gap-4 text-[13px] font-medium text-[#1B1B4A] dark:text-slate-200">
-                       <span className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-[#34D399] shadow-[0_0_10px_rgba(52,211,153,0.5)]" /> Tích cực</span>
-                       <span className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-[#ef4444] shadow-[0_0_10px_rgba(239,68,68,0.5)]" /> Tiêu cực</span>
-                     </div>
-                   </div>
-                   <div className="flex-1 w-full h-full relative">
-                     <ResponsiveContainer width="100%" height="100%" minHeight={200}>
-                       <LineChart data={intelligenceData}>
-                         <Tooltip 
-                           contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.1)', background: 'var(--color-bg-surface)', color: 'var(--color-text-primary)' }}
-                           itemStyle={{ fontWeight: 'bold' }}
-                         />
-                         <Line type="monotone" dataKey="positive" name="Tích cực" stroke="#34D399" strokeWidth={4} dot={false} activeDot={{ r: 6, strokeWidth: 0 }} />
-                         <Line type="monotone" dataKey="negative" name="Tiêu cực" stroke="#ef4444" strokeWidth={4} dot={false} activeDot={{ r: 6, strokeWidth: 0 }} />
-                       </LineChart>
-                     </ResponsiveContainer>
-                   </div>
-                 </div>
-               </div>
-             </div>
-             
-             {/* Floating Mini Cards */}
-             <div className="absolute -left-12 top-1/4 animate-float hidden md:flex">
-               <div className="glass-panel items-center gap-3 rounded-full px-5 py-3 flex">
-                 <span className="text-[18px]">💬</span>
-                 <span className="text-[13px] font-bold text-[#1B1B4A] dark:text-white">Live Reviews</span>
-               </div>
-             </div>
-             <div className="absolute -right-10 top-1/3 animate-float-delayed z-20 hidden md:flex">
-               <div className="glass-panel items-center gap-3 rounded-full px-5 py-3 flex">
-                 <div className="w-2 h-2 rounded-full bg-[#34D399] animate-pulse" />
-                 <span className="text-[13px] font-bold text-[#34D399]">1.2M Data points</span>
-               </div>
-             </div>
-             <div className="absolute -left-6 bottom-10 animate-float z-20 hidden md:flex" style={{ animationDelay: '1s' }}>
-               <div className="glass-panel items-center gap-3 rounded-full px-5 py-3 flex">
-                 <span className="text-[18px]">⚠️</span>
-                 <span className="text-[13px] font-bold text-[#ef4444]">Crisis Detected</span>
-               </div>
-             </div>
+            {/* Advanced Insights UI */}
+            <div className="rounded-[24px] border border-white/80 dark:border-white/10 bg-white/50 dark:bg-black/40 p-4 shadow-[0_40px_80px_rgba(109,94,246,0.12)] backdrop-blur-xl">
+              <div className="flex flex-col md:flex-row gap-6">
+                {/* Left Column: Data Stream Pipeline */}
+                <div className="w-full md:w-1/3 flex flex-col gap-4">
+                  <div className="glass-panel p-5 rounded-[16px] flex flex-col gap-4">
+                    <p className="text-[14px] font-bold text-[#1B1B4A] dark:text-white">Nguồn dữ liệu Realtime</p>
+
+                    <div className="flex flex-col gap-3">
+                      {/* Facebook */}
+                      <div className="flex items-start gap-3 bg-white/80 dark:bg-white/5 border border-[#ECE9FF] dark:border-white/10 p-3 rounded-[12px] hover:-translate-y-1 transition-transform relative shadow-sm">
+                        <div className="w-8 h-8 rounded-full bg-[#1877F2]/10 text-[#1877F2] flex shrink-0 items-center justify-center text-[14px] font-bold mt-0.5">f</div>
+                        <div className="flex-1">
+                          <div className="flex justify-between items-start mb-1">
+                            <div className="flex flex-col">
+                              <div className="flex items-center gap-2"><span className="text-[11px] font-bold text-[#1B1B4A] dark:text-white">Live Reviews</span><span className="text-[9px] bg-slate-100 dark:bg-white/10 px-1.5 py-0.5 rounded text-[#6B7090]">Facebook</span></div>
+                              <p className="text-[12px] leading-snug text-[#6B7090] dark:text-slate-300 mt-1 line-clamp-2">Sản phẩm này rất đáng tiền, điểm 10 cho dịch vụ!</p>
+                            </div>
+                            <PulseDot className="bg-[#1877F2] shrink-0 ml-2 mt-1" />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* X/Twitter */}
+                      <div className="flex items-start gap-3 bg-white/80 dark:bg-white/5 border border-[#ECE9FF] dark:border-white/10 p-3 rounded-[12px] hover:-translate-y-1 transition-transform relative shadow-sm">
+                        <div className="w-8 h-8 rounded-full bg-black/5 dark:bg-white/10 text-black dark:text-white flex shrink-0 items-center justify-center text-[14px] font-bold mt-0.5">𝕏</div>
+                        <div className="flex-1">
+                          <div className="flex justify-between items-start mb-1">
+                            <div className="flex flex-col">
+                              <div className="flex items-center gap-2"><span className="text-[11px] font-bold text-[#1B1B4A] dark:text-white">Feedback</span><span className="text-[9px] bg-slate-100 dark:bg-white/10 px-1.5 py-0.5 rounded text-[#6B7090]">X</span></div>
+                              <p className="text-[12px] leading-snug text-[#6B7090] dark:text-slate-300 mt-1 line-clamp-2">Giao diện mới nhìn sang hẳn 👍</p>
+                            </div>
+                            <PulseDot className="bg-black dark:bg-white shrink-0 ml-2 mt-1" />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Mention (Crisis) */}
+                      <div className="flex items-start gap-3 bg-[#ef4444]/5 border border-[#ef4444]/20 p-3 rounded-[12px] hover:-translate-y-1 transition-transform relative shadow-sm">
+                        <div className="w-8 h-8 rounded-full bg-[#ef4444]/10 text-[#ef4444] flex shrink-0 items-center justify-center mt-0.5"><AlertTriangle className="w-4 h-4" /></div>
+                        <div className="flex-1">
+                          <div className="flex justify-between items-start mb-1">
+                            <div className="flex flex-col">
+                              <div className="flex items-center gap-2"><span className="text-[11px] font-bold text-[#ef4444]">Crisis Detected</span><span className="text-[9px] bg-[#ef4444]/10 px-1.5 py-0.5 rounded text-[#ef4444]">Mention</span></div>
+                              <p className="text-[12px] leading-snug text-[#ef4444]/90 mt-1 line-clamp-2">Ai dùng app này rồi review giúp mình với, thấy dạo này lỗi nhiều quá?</p>
+                            </div>
+                            <PulseDot className="bg-[#ef4444] shrink-0 ml-2 mt-1" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Column: Sentiment Line Chart */}
+                <div className="w-full md:w-2/3 glass-panel p-6 rounded-[16px] flex flex-col min-h-[300px]">
+                  <div className="flex items-center justify-between mb-8">
+                    <div>
+                      <p className="text-[18px] font-bold text-[#1B1B4A] dark:text-white">Xu hướng cảm xúc</p>
+                      <p className="text-[13px] text-[#6B7090] dark:text-slate-400 mt-1">24 giờ qua</p>
+                    </div>
+                    <div className="flex gap-4 text-[13px] font-medium text-[#1B1B4A] dark:text-slate-200">
+                      <span className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-[#34D399] shadow-[0_0_10px_rgba(52,211,153,0.5)]" /> Tích cực</span>
+                      <span className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-[#ef4444] shadow-[0_0_10px_rgba(239,68,68,0.5)]" /> Tiêu cực</span>
+                    </div>
+                  </div>
+                  <div className="flex-1 w-full h-full relative">
+                    <ResponsiveContainer width="100%" height="100%" minHeight={200}>
+                      <LineChart data={intelligenceData}>
+                        <Tooltip
+                          contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.1)', background: 'var(--color-bg-surface)', color: 'var(--color-text-primary)' }}
+                          itemStyle={{ fontWeight: 'bold' }}
+                        />
+                        <Line type="monotone" dataKey="positive" name="Tích cực" stroke="#34D399" strokeWidth={4} dot={false} activeDot={{ r: 6, strokeWidth: 0 }} />
+                        <Line type="monotone" dataKey="negative" name="Tiêu cực" stroke="#ef4444" strokeWidth={4} dot={false} activeDot={{ r: 6, strokeWidth: 0 }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Floating Mini Cards */}
+            <div className="absolute -left-12 top-1/4 animate-float hidden md:flex">
+              <div className="glass-panel items-center gap-3 rounded-full px-5 py-3 flex">
+                <span className="text-[18px]">💬</span>
+                <span className="text-[13px] font-bold text-[#1B1B4A] dark:text-white">Live Reviews</span>
+              </div>
+            </div>
+            <div className="absolute -right-10 top-1/3 animate-float-delayed z-20 hidden md:flex">
+              <div className="glass-panel items-center gap-3 rounded-full px-5 py-3 flex">
+                <div className="w-2 h-2 rounded-full bg-[#34D399] animate-pulse" />
+                <span className="text-[13px] font-bold text-[#34D399]">1.2M Data points</span>
+              </div>
+            </div>
+            <div className="absolute -left-6 bottom-10 animate-float z-20 hidden md:flex" style={{ animationDelay: '1s' }}>
+              <div className="glass-panel items-center gap-3 rounded-full px-5 py-3 flex">
+                <span className="text-[18px]">⚠️</span>
+                <span className="text-[13px] font-bold text-[#ef4444]">Crisis Detected</span>
+              </div>
+            </div>
           </Reveal>
         </div>
 
@@ -841,10 +774,10 @@ export default function BrandLandingPage() {
                     </div>
                     {/* Small illustration abstraction */}
                     <div className="w-full h-1.5 rounded-full bg-gradient-to-r from-[#F5F3FF] to-transparent mb-6 group-hover:from-[#9B8CFF]/20 transition-colors" />
-                    
+
                     <h3 className="font-display text-[22px] font-bold text-[#1B1B4A] mb-3">{title as string}</h3>
                     <p className="text-[17px] leading-[1.7] text-[#6B7090] mb-6 flex-1">{description as string}</p>
-                    
+
                     <div className="mt-auto flex items-center text-[15px] font-bold text-[#6D5EF6] opacity-80 transition-opacity group-hover:opacity-100">
                       Khám phá <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
                     </div>
@@ -879,11 +812,11 @@ export default function BrandLandingPage() {
               {/* Background Glow */}
               <div className="absolute top-0 right-1/4 w-[400px] h-[400px] bg-[#34D399] blur-[150px] opacity-[0.1] rounded-full pointer-events-none" />
               <div className="absolute bottom-0 left-1/4 w-[400px] h-[400px] bg-[#6D5EF6] blur-[150px] opacity-[0.1] rounded-full pointer-events-none" />
-              
+
               {/* Animated Connecting Line */}
               <div className="absolute top-1/2 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#ECE9FF] dark:via-white/10 to-transparent -z-10 hidden md:block" />
               <div className="absolute top-1/2 left-[15%] w-[30%] h-1 bg-gradient-to-r from-transparent via-[#6D5EF6] to-transparent -z-10 hidden md:block" style={{ animation: 'slideRight 3s infinite linear' }} />
-              
+
               {/* Step 1: Sources */}
               <div className="flex flex-col items-center gap-4 z-10 w-full md:w-auto mb-8 md:mb-0">
                 <div className="flex gap-2">
@@ -937,9 +870,9 @@ export default function BrandLandingPage() {
 
       <section id="workflow" className="relative border-y border-[#ECE9FF] dark:border-white/10 bg-gradient-to-b from-[#F7F5FF] to-white dark:from-[#0A0612]/50 dark:to-[#0A0612] px-6 py-24 md:py-32 overflow-hidden">
         <div className="absolute inset-0 bg-vercel-grid opacity-[0.04] dark:opacity-[0.02] pointer-events-none" />
-        
+
         <SectionIntro eyebrow="Quy trình sống" title="Từ tín hiệu đầu tiên đến một phản hồi tạo khác biệt." description="InsightFlow giúp mọi đội chung một ngôn ngữ: nhìn thấy điều quan trọng, hiểu nó có ý nghĩa gì, rồi hành động có trách nhiệm." />
-        
+
         <div className="relative z-10 mx-auto mt-28 max-w-[1200px]">
           {/* Connecting Line with Animation */}
           <div className="hidden lg:block absolute top-[48px] left-[10%] right-[10%] h-[2px] bg-gradient-to-r from-transparent via-[#ECE9FF] dark:via-white/10 to-transparent -z-10 overflow-hidden">
@@ -961,7 +894,7 @@ export default function BrandLandingPage() {
                     <div className={`w-full h-full rounded-[32px] glass-panel p-8 md:p-10 transition-all duration-500 flex flex-col ${isCenter ? 'border border-[#6D5EF6]/30 dark:border-[#6D5EF6]/30 shadow-[0_30px_80px_rgba(109,94,246,0.15)] group-hover:shadow-[0_40px_100px_rgba(109,94,246,0.25)] group-hover:-translate-y-3' : 'border border-[#ECE9FF] dark:border-white/10 shadow-[0_18px_50px_rgba(109,94,246,0.04)] group-hover:shadow-[0_30px_60px_rgba(109,94,246,0.12)] group-hover:-translate-y-2'}`}>
                       <h3 className="font-display text-[24px] font-bold text-[#1B1B4A] dark:text-white">{step.title}</h3>
                       <p className="mt-5 text-[17px] leading-[1.7] text-[#6B7090] dark:text-slate-400 flex-1">{step.description}</p>
-                      
+
                       <div className={`mt-8 inline-flex mx-auto items-center gap-2 rounded-full px-5 py-2.5 text-[13px] md:text-[14px] font-bold uppercase tracking-[0.11em] transition-colors ${isCenter ? 'bg-gradient-to-r from-[#6D5EF6] to-[#9B8CFF] text-white shadow-md' : 'bg-[#F5F3FF] dark:bg-white/5 text-[#6D5EF6] dark:text-[#9B8CFF]'}`}>
                         {step.detail}
                       </div>
@@ -986,25 +919,25 @@ export default function BrandLandingPage() {
               const Icon = module.icon;
               return (
                 <Reveal key={module.title} delay={index * 0.1}>
-                  <motion.article 
+                  <motion.article
                     initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true, amount: 0.1 }}
                     transition={{ delay: index * 0.1, duration: 0.5 }}
-                    whileHover={{ y: -8 }} 
+                    whileHover={{ y: -8 }}
                     className="group relative h-full flex flex-col min-h-[460px] overflow-hidden rounded-[32px] glass-panel border border-[#ECE9FF] dark:border-white/10 p-8 transition-all duration-300 hover:-translate-y-[4px] hover:border-[#7C5CFF]/30 hover:shadow-[0_30px_60px_rgba(109,94,246,0.12)]"
                   >
                     <div className="absolute -right-12 -top-12 w-40 h-40 rounded-full bg-gradient-to-br from-[#6D5EF6]/20 to-transparent blur-[30px] group-hover:scale-150 transition-transform duration-700 pointer-events-none" />
-                    
+
                     <div className="flex flex-col gap-6 mb-8 relative z-10">
                       <div className="flex h-[64px] w-[64px] items-center justify-center rounded-[20px] bg-gradient-to-br from-[#6D5EF6] to-[#9B8CFF] shadow-[0_10px_30px_rgba(109,94,246,0.3)] transition-all duration-300 group-hover:scale-110 group-hover:-rotate-3">
                         <Icon className="h-8 w-8 text-white" />
                       </div>
                       <h3 className="font-display text-[24px] font-bold text-[#1B1B4A] dark:text-white">{module.title}</h3>
                     </div>
-                    
+
                     <p className="text-[16px] leading-[1.7] text-[#6B7090] dark:text-slate-400 mb-10 flex-1 relative z-10">{module.description}</p>
-                    
+
                     {/* Dynamic Mini UI Preview */}
                     <div className="mt-auto mb-8 h-[100px] w-full rounded-[20px] border border-[#ECE9FF] dark:border-white/10 bg-[#F5F3FF] dark:bg-white/5 p-4 relative overflow-hidden group-hover:bg-white dark:group-hover:bg-white/10 transition-colors z-10 shadow-inner flex flex-col justify-center">
                       {index === 0 && (
@@ -1023,7 +956,7 @@ export default function BrandLandingPage() {
                           </div>
                         </div>
                       )}
-                      
+
                       {index === 1 && (
                         <div className="flex flex-col justify-center gap-2.5 w-full px-2">
                           <div className="flex items-start gap-2 max-w-[85%]">
@@ -1038,7 +971,7 @@ export default function BrandLandingPage() {
                               </div>
                             </div>
                           </div>
-                          
+
                           <div className="flex items-start gap-2 max-w-[85%] ml-auto flex-row-reverse">
                             <div className="w-6 h-6 rounded-full bg-[#6D5EF6]/10 text-[#6D5EF6] shrink-0 mt-0.5 flex items-center justify-center"><Bot className="w-3 h-3" /></div>
                             <div className="flex flex-col gap-1 items-end">
@@ -1138,12 +1071,12 @@ export default function BrandLandingPage() {
                               <div className="w-12 h-1.5 rounded-full bg-slate-100 dark:bg-white/10" />
                             </div>
                           </div>
-                          
+
                           <div className="flex items-center gap-2 ml-1">
                             <div className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-white/20 shrink-0" />
                             <div className="w-3/4 h-2 rounded-full bg-slate-200 dark:bg-white/10" />
                           </div>
-                          
+
                           <div className="flex items-start gap-2 ml-1 bg-[#6D5EF6]/5 border border-[#6D5EF6]/10 p-2 rounded-lg relative overflow-hidden mt-1">
                             <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-[#6D5EF6]" />
                             <div className="w-1.5 h-1.5 rounded-full bg-[#6D5EF6] mt-1 shrink-0" />
@@ -1174,7 +1107,7 @@ export default function BrandLandingPage() {
 
         <div className="relative z-10 mx-auto max-w-[1200px]">
           <SectionIntro eyebrow="Một nền tảng, một góc nhìn cho từng vai trò" title="Cùng một sự thật. Mỗi đội thấy đúng điều họ cần làm tiếp." description="Chọn vai trò để xem InsightFlow giúp đội ngũ chuyển từ theo dõi sang chủ động ra sao." />
-          
+
           <div className="mt-20 grid gap-8 lg:grid-cols-[320px_1fr]">
             <Reveal>
               <div className="flex flex-col gap-2 rounded-[24px] border border-[#ECE9FF] bg-white p-4 shadow-[0_18px_50px_rgba(109,94,246,0.04)] dark:border-white/10 dark:bg-white/5">
@@ -1195,11 +1128,11 @@ export default function BrandLandingPage() {
               </div>
             </Reveal>
 
-            <motion.div 
-              key={activeRole.id} 
-              initial={{ opacity: 0, scale: 0.98, x: reduceMotion ? 0 : 20 }} 
-              animate={{ opacity: 1, scale: 1, x: 0 }} 
-              transition={{ duration: reduceMotion ? 0 : 0.4, ease: "easeOut" }} 
+            <motion.div
+              key={activeRole.id}
+              initial={{ opacity: 0, scale: 0.98, x: reduceMotion ? 0 : 20 }}
+              animate={{ opacity: 1, scale: 1, x: 0 }}
+              transition={{ duration: reduceMotion ? 0 : 0.4, ease: "easeOut" }}
               className="relative overflow-hidden rounded-[24px] border border-[#ECE9FF] bg-white p-8 shadow-[0_30px_60px_rgba(109,94,246,0.12)] md:p-12 lg:w-full"
             >
               {/* Decorative background in panel */}
@@ -1209,12 +1142,12 @@ export default function BrandLandingPage() {
                 <p className="text-[13px] font-extrabold uppercase tracking-[0.16em] text-[#6D5EF6]">{activeRole.eyebrow}</p>
                 <h3 className="mt-4 max-w-[670px] font-display text-[32px] font-bold leading-[1.2] md:text-[36px] text-[#1B1B4A]">{activeRole.title}</h3>
                 <p className="mt-6 max-w-[700px] text-[17px] leading-[1.7] text-[#6B7090]">{activeRole.description}</p>
-                
+
                 <div className="mt-auto pt-12 grid gap-4 sm:grid-cols-3">
                   {activeRole.metrics.map(([label, value, delta]) => {
                     const isPositive = delta.includes('+') || delta.includes('Tăng');
                     const isNeutral = delta.includes('Tuần này') || delta.includes('Cần xử lý') || delta.includes('Cần xem') || delta.includes('phân khúc') || delta.includes('ngày');
-                    
+
                     return (
                       <div key={label} className="rounded-[20px] border border-[#ECE9FF] dark:border-white/10 bg-[#F7F9FF] dark:bg-white/5 p-5 shadow-sm transition-all duration-300 hover:shadow-[0_20px_40px_rgba(109,94,246,0.1)] hover:-translate-y-1 hover:bg-white dark:hover:bg-white/10">
                         <div className="flex items-center gap-2 mb-3 text-[#6B7090] dark:text-slate-400">
@@ -1238,162 +1171,15 @@ export default function BrandLandingPage() {
         </div>
       </section>
 
-      <section id="consultation" className="relative border-y border-[#ECE9FF] dark:border-white/10 bg-gradient-to-b from-white to-[#F5F3FF] dark:from-[#0A0612] dark:to-[#0A0612]/50 px-6 pt-12 pb-24 md:pt-16 md:pb-32 overflow-hidden">
+      <section id="consultation" className="relative border-y border-[#ECE9FF] dark:border-white/10 bg-gradient-to-b from-[#F8F9FF] to-white dark:from-[#0A0612] dark:to-[#0A0612]/50 px-6 pt-12 pb-24 md:pt-16 md:pb-32 overflow-hidden">
         {/* Subtle Background Elements */}
         <div className="absolute top-[20%] left-[-100px] w-[600px] h-[600px] bg-[#9B8CFF] blur-[200px] opacity-[0.1] rounded-full pointer-events-none" />
         <div className="absolute bottom-[20%] right-[-100px] w-[600px] h-[600px] bg-[#6D5EF6] blur-[200px] opacity-[0.1] rounded-full pointer-events-none" />
 
-        <div className="mx-auto grid max-w-[1200px] gap-12 lg:grid-cols-[0.82fr_1.18fr] lg:items-start relative z-10">
-          <Reveal className="lg:sticky lg:top-28">
-            <p className="text-[13px] font-extrabold uppercase tracking-[0.16em] text-[#6D5EF6]">Dùng thử có định hướng</p>
-            <h2 className="mt-4 font-display text-[32px] md:text-[42px] font-bold leading-[1.1] text-[#1B1B4A] dark:text-white">Mỗi thương hiệu cần một cách bắt đầu riêng.</h2>
-            <p className="mt-6 max-w-[510px] text-[17px] leading-[1.7] text-[#6B7090] dark:text-slate-300">Để buổi demo thực sự hữu ích, đội InsightFlow sẽ đọc bài toán của bạn trước: kênh cần theo dõi, nhu cầu ưu tiên và cách triển khai phù hợp.</p>
-            <div className="mt-10 space-y-5">
-              {["Đề xuất quy trình theo ngành hàng và mô hình đội ngũ", "Chọn chỉ số, kênh theo dõi và tình huống ưu tiên", "Demo xoay quanh bài toán thật, không phải bản trình diễn chung chung"].map((item) => (
-                <div key={item} className="flex gap-4 text-[16px] font-medium leading-[1.6] text-[#1B1B4A] dark:text-white">
-                  <div className="flex-shrink-0 mt-1 h-6 w-6 rounded-full bg-[#34D399]/20 text-[#34D399] flex items-center justify-center">
-                    <CheckCircle2 className="h-4 w-4" />
-                  </div>
-                  {item}
-                </div>
-              ))}
-            </div>
-
-            {/* Enhanced Social Proof & Trust Signal */}
-            <div className="mt-12 rounded-[32px] bg-white dark:bg-white/5 p-8 border border-[#ECE9FF] dark:border-white/10 max-w-[460px] shadow-[0_30px_60px_rgba(109,94,246,0.08)] transition-all duration-500 hover:shadow-[0_40px_80px_rgba(109,94,246,0.12)]">
-              <div className="flex items-center gap-5 mb-6">
-                <div className="flex -space-x-4">
-                  {[
-                    "https://i.pravatar.cc/100?img=1",
-                    "https://i.pravatar.cc/100?img=2",
-                    "https://i.pravatar.cc/100?img=3",
-                    "https://i.pravatar.cc/100?img=4",
-                    "https://i.pravatar.cc/100?img=5"
-                  ].map((src, i) => (
-                    <img key={i} src={src} alt="User avatar" className="h-14 w-14 rounded-full border-[3px] border-white dark:border-[#0A0612] object-cover shadow-sm transition-transform hover:-translate-y-1 hover:z-10 relative" />
-                  ))}
-                </div>
-                <div className="flex flex-col justify-center">
-                  <div className="flex gap-1 text-[#f59e0b] text-[18px]">
-                    ★★★★★
-                  </div>
-                  <span className="text-[14px] font-bold text-[#1B1B4A] dark:text-white mt-1">Hơn 300+ thương hiệu</span>
-                  <span className="text-[12px] font-medium text-[#6B7090] dark:text-slate-400">đã tin tưởng sử dụng</span>
-                </div>
-              </div>
-              
-              <div className="pt-6 border-t border-[#ECE9FF] dark:border-white/10">
-                <p className="text-[12px] font-bold uppercase tracking-wider text-[#6B7090] dark:text-slate-400 mb-4">Các đối tác tiêu biểu</p>
-                <div className="flex items-center gap-6">
-                  {/* Generic Logos replacing real ones */}
-                  <div className="flex items-center gap-2 grayscale opacity-60 hover:grayscale-0 hover:opacity-100 transition-all cursor-default">
-                    <div className="w-6 h-6 bg-[#2563eb] rounded-md shadow-sm" />
-                    <span className="font-bold text-[#1B1B4A] dark:text-white text-[15px]">Techcom</span>
-                  </div>
-                  <div className="flex items-center gap-2 grayscale opacity-60 hover:grayscale-0 hover:opacity-100 transition-all cursor-default">
-                    <div className="w-6 h-6 bg-[#ef4444] rounded-full shadow-sm" />
-                    <span className="font-bold text-[#1B1B4A] dark:text-white text-[15px]">VinFast</span>
-                  </div>
-                  <div className="flex items-center gap-2 grayscale opacity-60 hover:grayscale-0 hover:opacity-100 transition-all cursor-default">
-                    <div className="w-6 h-6 bg-[#10b981] rounded-sm rotate-45 scale-75 shadow-sm" />
-                    <span className="font-bold text-[#1B1B4A] dark:text-white text-[15px]">Mobi</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </Reveal>
-
+        <div className="mx-auto max-w-[1400px] relative z-10">
           <Reveal delay={0.1}>
-            <div className="w-full max-w-[600px] mx-auto lg:ml-auto rounded-[28px] border border-white/80 dark:border-white/10 bg-white/70 dark:bg-[#0A0612]/60 p-8 shadow-[0_30px_60px_rgba(109,94,246,0.12)] backdrop-blur-xl md:p-10">
-              {submitted ? (
-                <div className="flex min-h-[500px] flex-col items-center justify-center text-center">
-                  <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#34D399]/10 text-[#34D399] mb-6">
-                    <CheckCircle2 className="h-10 w-10" />
-                  </div>
-                  <h3 className="font-display text-[32px] font-extrabold text-[#1B1B4A] dark:text-white">Thông tin của bạn đã đến nơi.</h3>
-                  <p className="mt-4 max-w-[440px] text-[17px] leading-[1.7] text-[#6B7090] dark:text-slate-300">Đội InsightFlow sẽ liên hệ để tìm hiểu bài toán và sắp xếp buổi tư vấn phù hợp.</p>
-                  <button type="button" onClick={() => { setSubmitted(false); setForm(initialFormState); }} className="mt-8 rounded-full border border-[#ECE9FF] dark:border-white/10 bg-white dark:bg-white/5 px-8 py-4 text-[15px] font-bold text-[#1B1B4A] dark:text-white transition-all hover:bg-[#F5F3FF] dark:hover:bg-white/10 hover:border-[#6D5EF6]/30 shadow-sm">Gửi một yêu cầu khác</button>
-                </div>
-              ) : (
-                <form onSubmit={handleSubmit} className="grid gap-6">
-                  <div className="grid gap-6 md:grid-cols-2">
-                    <label className="grid gap-2 text-[14px] font-extrabold text-[#1B1B4A] dark:text-white">
-                      Họ và tên *
-                      <input value={form.fullName} onChange={(event) => updateForm("fullName", event.target.value)} className="h-14 rounded-[16px] border border-[#ECE9FF] dark:border-white/10 bg-white dark:bg-[#0A0612]/50 px-4 text-[15px] text-[#1B1B4A] dark:text-white outline-none transition focus:border-[#6D5EF6] focus:ring-4 focus:ring-[#6D5EF6]/10 placeholder:text-slate-400" placeholder="Nguyễn Văn A" />
-                    </label>
-                    <label className="grid gap-2 text-[14px] font-extrabold text-[#1B1B4A] dark:text-white">
-                      Email công việc *
-                      <input type="email" value={form.email} onChange={(event) => updateForm("email", event.target.value)} className="h-14 rounded-[16px] border border-[#ECE9FF] dark:border-white/10 bg-white dark:bg-[#0A0612]/50 px-4 text-[15px] text-[#1B1B4A] dark:text-white outline-none transition focus:border-[#6D5EF6] focus:ring-4 focus:ring-[#6D5EF6]/10 placeholder:text-slate-400" placeholder="name@company.com" />
-                    </label>
-                  </div>
-                  <div className="grid gap-6 md:grid-cols-2">
-                    <label className="grid gap-2 text-[14px] font-extrabold text-[#1B1B4A] dark:text-white">
-                      Số điện thoại *
-                      <input value={form.phone} onChange={(event) => updateForm("phone", event.target.value)} className="h-14 rounded-[16px] border border-[#ECE9FF] dark:border-white/10 bg-white dark:bg-[#0A0612]/50 px-4 text-[15px] text-[#1B1B4A] dark:text-white outline-none transition focus:border-[#6D5EF6] focus:ring-4 focus:ring-[#6D5EF6]/10 placeholder:text-slate-400" placeholder="090..." />
-                    </label>
-                    <label className="grid gap-2 text-[14px] font-extrabold text-[#1B1B4A] dark:text-white">
-                      Thương hiệu / doanh nghiệp *
-                      <input value={form.company} onChange={(event) => updateForm("company", event.target.value)} className="h-14 rounded-[16px] border border-[#ECE9FF] dark:border-white/10 bg-white dark:bg-[#0A0612]/50 px-4 text-[15px] text-[#1B1B4A] dark:text-white outline-none transition focus:border-[#6D5EF6] focus:ring-4 focus:ring-[#6D5EF6]/10 placeholder:text-slate-400" placeholder="Tên doanh nghiệp" />
-                    </label>
-                  </div>
-                  <div className="grid gap-6 md:grid-cols-2">
-                    <label className="grid gap-2 text-[14px] font-extrabold text-[#1B1B4A] dark:text-white">
-                      Ngành hàng
-                      <input value={form.industry} onChange={(event) => updateForm("industry", event.target.value)} className="h-14 rounded-[16px] border border-[#ECE9FF] dark:border-white/10 bg-white dark:bg-[#0A0612]/50 px-4 text-[15px] text-[#1B1B4A] dark:text-white outline-none transition focus:border-[#6D5EF6] focus:ring-4 focus:ring-[#6D5EF6]/10 placeholder:text-slate-400" placeholder="F&B, bán lẻ..." />
-                    </label>
-                    <label className="grid gap-2 text-[14px] font-extrabold text-[#1B1B4A] dark:text-white">
-                      Quy mô đội ngũ
-                      <select value={form.teamSize} onChange={(event) => updateForm("teamSize", event.target.value)} className="h-14 rounded-[16px] border border-[#ECE9FF] dark:border-white/10 bg-white dark:bg-[#0A0612]/50 px-4 text-[15px] text-[#6B7090] dark:text-slate-300 outline-none transition focus:border-[#6D5EF6] focus:ring-4 focus:ring-[#6D5EF6]/10">
-                        <option value="">Chọn quy mô</option>
-                        <option value="1-10">1-10 người</option>
-                        <option value="11-50">11-50 người</option>
-                        <option value="51-200">51-200 người</option>
-                        <option value="200+">Trên 200 người</option>
-                      </select>
-                    </label>
-                  </div>
-                  <div className="grid gap-3">
-                    <span className="text-[14px] font-extrabold text-[#1B1B4A] dark:text-white">Kênh muốn theo dõi</span>
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      {channels.map((channel) => {
-                        const selected = form.channels.split(",").filter(Boolean).includes(channel);
-                        return (
-                          <button key={channel} type="button" onClick={() => { const current = form.channels.split(",").filter(Boolean); updateForm("channels", (selected ? current.filter((item) => item !== channel) : [...current, channel]).join(",")); }} className={`h-12 rounded-[12px] border text-[14px] font-bold transition-all ${selected ? "border-[#6D5EF6] bg-[#6D5EF6]/10 text-[#6D5EF6]" : "border-[#ECE9FF] dark:border-white/10 bg-white dark:bg-[#0A0612]/50 text-[#6B7090] dark:text-slate-300 hover:border-[#6D5EF6]/40"}`}>
-                            {channel}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  <label className="grid gap-2 text-[14px] font-extrabold text-[#1B1B4A] dark:text-white">
-                    Nhu cầu chính *
-                    <select value={form.need} onChange={(event) => updateForm("need", event.target.value)} className="h-14 rounded-[16px] border border-[#ECE9FF] dark:border-white/10 bg-white dark:bg-[#0A0612]/50 px-4 text-[15px] text-[#6B7090] dark:text-slate-300 outline-none transition focus:border-[#6D5EF6] focus:ring-4 focus:ring-[#6D5EF6]/10">
-                      <option>Phát hiện khách hàng tiềm năng</option>
-                      <option>Theo dõi sức khỏe thương hiệu</option>
-                      <option>Cảnh báo khủng hoảng truyền thông</option>
-                      <option>Báo cáo AI cho ban lãnh đạo</option>
-                      <option>Tư vấn quy trình tổng thể</option>
-                    </select>
-                  </label>
-                  {submitError && (
-                    <div className="rounded-xl border border-red-500/20 bg-[#ef4444]/5 p-4 text-[14px] text-red-500 dark:text-red-400">
-                      {submitError}
-                    </div>
-                  )}
-                  <button type="submit" disabled={missingRequired || submitting} className="mt-6 inline-flex h-[56px] w-full items-center justify-center gap-2 rounded-full bg-[#1B1B4A] hover:bg-[#2A2A6A] px-8 text-[16px] font-bold text-white shadow-[0_12px_24px_rgba(27,27,74,0.15)] transition-all hover:-translate-y-1 hover:shadow-[0_20px_40px_rgba(27,27,74,0.25)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none">
-                    {submitting ? "Đang gửi yêu cầu..." : "Gửi thông tin để nhận tư vấn"}
-                    {submitting ? (
-                      <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                    ) : (
-                      <Send className="h-5 w-5" />
-                    )}
-                  </button>
-                  <p className="mt-3 text-center text-[13px] leading-[1.6] text-[#6B7090]">Khi gửi biểu mẫu, bạn đồng ý để InsightFlow liên hệ nhằm tư vấn về nhu cầu dùng thử và cách triển khai phù hợp.</p>
-                </form>
-              )}
+            <div className="w-full mx-auto relative z-20">
+              <TrialRegistrationFlow />
             </div>
           </Reveal>
         </div>
@@ -1402,7 +1188,7 @@ export default function BrandLandingPage() {
       <section className="relative overflow-hidden bg-gradient-to-br from-[#6D5DF6] via-[#8B5CF6] to-[#5B4BDB] px-6 py-12 md:py-16 text-white md:px-10" style={{ boxShadow: "0 0 120px rgba(109,93,246,0.35)" }}>
         <div className="absolute inset-0 bg-vercel-grid opacity-10 pointer-events-none" />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[800px] h-[400px] rounded-full bg-white blur-[150px] opacity-10 pointer-events-none" />
-        
+
         <Reveal className="relative z-10 mx-auto flex max-w-[900px] flex-col items-center text-center">
           <p className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-1.5 text-[14px] font-bold text-white backdrop-blur-md">
             <span className="text-[16px]">🚀</span> Theo dõi thương hiệu bằng AI
@@ -1413,7 +1199,7 @@ export default function BrandLandingPage() {
           <p className="mt-4 md:mt-6 text-[16px] md:text-[18px] text-white/80 max-w-[600px]">
             Phát hiện khủng hoảng sớm • Theo dõi cảm xúc • Báo cáo AI • Không cần cài đặt
           </p>
-          
+
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link href="#consultation" className="inline-flex h-[60px] items-center justify-center rounded-[18px] bg-white px-[36px] text-[16px] font-extrabold text-linear-primary shadow-[0_20px_40px_rgba(0,0,0,0.15)] transition-all duration-300 hover:scale-[1.04] hover:-translate-y-[3px] hover:shadow-[0_30px_60px_rgba(0,0,0,0.2)]">
               Đặt lịch Demo
