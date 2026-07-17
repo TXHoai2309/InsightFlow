@@ -13,7 +13,10 @@ interface BMAlertBannerProps {
   alerts: Alert[];
 }
 
+import { useTranslation } from "react-i18next";
+
 export function BMAlertBanner({ alerts }: BMAlertBannerProps) {
+  const { t } = useTranslation();
   const [dismissed, setDismissed] = useState(false);
   if (dismissed || alerts.length === 0) return null;
 
@@ -53,16 +56,16 @@ export function BMAlertBanner({ alerts }: BMAlertBannerProps) {
         <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#991B1B" }}
            className="dark:!text-red-300">
           {criticalCount > 0 && (
-            <span className="bm-badge-critical">{criticalCount} Khẩn cấp</span>
+            <span className="bm-badge-critical">{criticalCount} {t("bm.alert.critical", "Khẩn cấp")}</span>
           )}
           {highCount > 0 && (
-            <span className="bm-badge-high">{highCount} Cao</span>
+            <span className="bm-badge-high">{highCount} {t("bm.alert.high", "Cao")}</span>
           )}
-          &nbsp;cảnh báo mới cần xử lý ngay
+          &nbsp;{t("bm.alert.newAlerts", "cảnh báo mới cần xử lý ngay")}
         </p>
         <p style={{ margin: "2px 0 0", fontSize: 13, color: "#B45309" }}
            className="dark:!text-orange-300">
-          {alerts[0]?.message ?? "AI phát hiện dấu hiệu bất thường trong dữ liệu thương hiệu"}
+          {alerts[0]?.message ?? t("bm.alert.aiAnomaly", "AI phát hiện dấu hiệu bất thường trong dữ liệu thương hiệu")}
         </p>
       </div>
 
@@ -85,7 +88,7 @@ export function BMAlertBanner({ alerts }: BMAlertBannerProps) {
         onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.opacity = "0.85")}
         onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.opacity = "1")}
       >
-        Xem cảnh báo →
+        {t("bm.alert.viewAlerts", "Xem cảnh báo")} →
       </Link>
 
       {/* Dismiss */}

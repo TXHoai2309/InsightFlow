@@ -121,7 +121,7 @@ export default function LoginForm() {
       <main className="w-full max-w-[480px]">
 
         {/* Logo */}
-        <div className="flex flex-col items-center mb-2">
+        <div className="flex flex-col items-center mb-[-56px] relative z-10">
           <Link href="/" className="flex items-center justify-center hover:opacity-80 transition-opacity">
             <img
               src={isDark ? "/logo.png" : "/logo-dark.png"}
@@ -133,7 +133,7 @@ export default function LoginForm() {
 
         {/* Card */}
         <div
-          className="border border-[#c7c4d7] rounded-xl p-8 md:p-12 transition-all duration-300"
+          className="border border-[#c7c4d7] rounded-xl px-8 py-8 md:px-12 md:py-10 transition-all duration-300"
           style={{
             background: isDark ? "rgba(31,41,55,0.95)" : "rgba(255,255,255,0.95)",
             backdropFilter: "blur(10px)",

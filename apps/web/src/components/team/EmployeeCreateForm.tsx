@@ -123,10 +123,7 @@ export function EmployeeCreateForm({
               <h2 className="text-[24px] font-bold text-gray-900">{t("team.form.title")}</h2>
               <p className="mt-1 max-w-xl text-[14px] leading-relaxed text-gray-500">{t("team.form.subtitle")}</p>
             </div>
-            <div className="inline-flex items-center gap-2 self-start rounded-full border border-[#6C5CE7]/20 bg-[#6C5CE7]/5 px-4 py-2 text-[13px] font-medium text-[#6C5CE7]">
-              <UserPlus className="h-4 w-4" />
-              Tài khoản mới
-            </div>
+
           </div>
 
           <div className="mt-6 hidden gap-2 sm:grid sm:grid-cols-3">
