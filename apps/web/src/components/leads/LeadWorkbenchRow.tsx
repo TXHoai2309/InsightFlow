@@ -235,20 +235,16 @@ export function LeadWorkbenchRow({
   const cardStateClass = highlighted
     ? "border-[var(--color-brand)] bg-[var(--color-brand-subtle)] ring-4 ring-[var(--color-brand)]/20"
     : selected
-      ? "border-[var(--color-brand)] ring-2 ring-[var(--color-brand)]/10"
+      ? "border-[var(--color-brand)] bg-[var(--color-brand-subtle)]/55 ring-2 ring-[var(--color-brand)]/15"
       : meta.needsResultCapture
-        ? "border-amber-400/70 hover:border-amber-500"
+        ? "border-[var(--color-border)] hover:border-amber-400"
         : meta.isOverdue || meta.isUrgent
-          ? "border-red-400/70 hover:border-red-500"
+          ? "border-[var(--color-border)] hover:border-red-400"
           : "border-[var(--color-border)] hover:border-[var(--color-brand-border)]";
 
-  const accentClass = meta.needsResultCapture
-    ? "bg-amber-400"
-    : meta.isOverdue || meta.isUrgent
-      ? "bg-red-500"
-      : selected
-        ? "bg-[var(--color-brand)]"
-        : "bg-slate-200 dark:bg-slate-700";
+  const accentClass = selected || highlighted
+    ? "bg-[var(--color-brand)]"
+    : "bg-slate-200 dark:bg-slate-700";
 
   const leadTimeAgo = formatLeadTimeAgo(lead.posted_at || lead.created_at, nowMs);
   const intentLabel = lead.intent === "none" ? "N/A" : lead.intent.toUpperCase();
@@ -264,11 +260,11 @@ export function LeadWorkbenchRow({
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(lead)}
         onKeyDown={handleRowKeyDown}
-        className={`relative w-full cursor-pointer overflow-hidden rounded-lg border bg-[var(--color-bg-surface)] p-[4%] text-left transition duration-200 hover:border-[var(--color-brand-border)] hover:bg-[var(--color-bg-surface-raised)] ${cardStateClass}`}
+        className={`relative w-full cursor-pointer overflow-hidden rounded-lg border bg-[var(--color-bg-surface)] p-3 text-left transition duration-200 hover:bg-[var(--color-bg-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2 ${cardStateClass}`}
       >
-        <span className={`absolute inset-y-0 left-0 w-[1.25%] min-w-1 ${accentClass}`} />
+        <span className={`absolute inset-y-0 left-0 w-1 ${accentClass}`} />
 
-        <div className="flex min-w-0 items-start gap-[3%] pl-[1%]">
+        <div className="flex min-w-0 items-start gap-3 pl-1">
           <div className="relative shrink-0">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-sm font-black text-[var(--color-brand)]">
               {(lead.author || "KH").slice(0, 2).toUpperCase()}
@@ -279,38 +275,47 @@ export function LeadWorkbenchRow({
           </div>
 
           <div className="min-w-0 flex-1">
-            <div className="flex items-start justify-between gap-[3%]">
+            <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <p className="truncate text-sm font-black text-[var(--color-text-primary)]">
                   {lead.author || "Khách hàng"}
                 </p>
                 <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
-                  <span className="rounded-md bg-[var(--color-bg-surface-high)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--color-brand)]">
+                  <span className="rounded-md bg-[var(--color-bg-surface-high)] px-1.5 py-0.5 text-[11px] font-bold text-[var(--color-brand)]">
                     {platformMeta?.label || lead.platform}
                   </span>
-                  <span className={`max-w-full truncate rounded-full border px-2 py-0.5 text-[10px] font-bold ${ownerChipClass}`}>
+                  <span className={`max-w-full truncate rounded-full border px-2 py-0.5 text-[11px] font-bold ${ownerChipClass}`}>
                     {ownership.label}
                   </span>
                 </div>
               </div>
-              <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black ${INTENT_STYLE[lead.intent]}`}>
-                {intentLabel}
-              </span>
+              <div className="flex shrink-0 items-center gap-1.5">
+                {selected && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-brand)] px-2 py-0.5 text-[10px] font-black text-white">
+                    <span className="material-symbols-outlined text-xs">check</span>
+                    Đang xem
+                  </span>
+                )}
+                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black ${INTENT_STYLE[lead.intent]}`}>
+                  {intentLabel}
+                </span>
+              </div>
             </div>
 
-            <p className="mt-[3%] line-clamp-2 text-xs font-semibold leading-5 text-[var(--color-text-primary)]">
+            <p className="mt-2 line-clamp-1 text-[13px] font-semibold leading-5 text-[var(--color-text-primary)]">
               {leadReason}
             </p>
-            <p className="mt-[2%] line-clamp-2 text-xs leading-5 text-[var(--color-text-secondary)]">
+            <p className="mt-1 line-clamp-1 text-[13px] leading-5 text-[var(--color-text-secondary)]">
               {lead.content}
             </p>
 
-            <div className="mt-[3%] flex items-end justify-between gap-[4%] border-t border-[var(--color-border)] pt-[3%]">
+            <div className="mt-2.5 flex items-end justify-between gap-3 border-t border-[var(--color-border)] pt-2.5">
               <div className="min-w-0">
-                <p className={`truncate text-xs font-black ${meta.isOverdue || meta.isUrgent ? "text-[var(--color-error)]" : "text-[var(--color-text-primary)]"}`}>
-                  {formatLeadSla(meta)}
+                <p className={`flex items-center gap-1 truncate text-xs font-black ${meta.isOverdue || meta.isUrgent ? "text-[var(--color-error)]" : "text-[var(--color-text-primary)]"}`}>
+                  {(meta.isOverdue || meta.isUrgent) && <span className="material-symbols-outlined text-sm">schedule</span>}
+                  <span className="truncate">{formatLeadSla(meta)}</span>
                 </p>
-                <p className="mt-0.5 truncate text-[10px] font-semibold text-[var(--color-text-muted)]">
+                <p className="mt-0.5 truncate text-[11px] font-semibold text-[var(--color-text-muted)]">
                   {meta.needsResultCapture ? "Cần ghi nhận kết quả" : leadTimeAgo || "SLA xử lý"}
                 </p>
               </div>
@@ -318,7 +323,7 @@ export function LeadWorkbenchRow({
                 <p className="text-lg font-black leading-none text-[var(--color-brand)]">
                   {meta.priorityScore}
                 </p>
-                <p className="mt-0.5 text-[10px] font-semibold text-[var(--color-text-muted)]">
+                <p className="mt-0.5 text-[11px] font-semibold text-[var(--color-text-muted)]">
                   Điểm ưu tiên
                 </p>
               </div>

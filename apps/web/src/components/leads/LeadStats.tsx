@@ -123,11 +123,11 @@ export function LeadStats({ leads, isLoading, profile, onSelectView }: LeadStats
 
   if (isLoading) {
     return (
-      <div className="grid gap-[clamp(6px,0.55vw,10px)] md:grid-cols-3">
+      <div className="grid gap-2 md:grid-cols-3">
         {[0, 1, 2].map((item) => (
           <div
             key={item}
-            className="h-[66px] animate-pulse rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-2.5"
+            className="h-16 animate-pulse rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-3"
           >
             <div className="h-4 w-1/2 rounded bg-[var(--color-bg-surface-raised)]" />
             <div className="mt-3 h-7 w-16 rounded bg-[var(--color-bg-surface-high)]" />
@@ -138,24 +138,24 @@ export function LeadStats({ leads, isLoading, profile, onSelectView }: LeadStats
   }
 
   return (
-    <div className="grid gap-3 md:grid-cols-3">
+    <div className="grid gap-2 md:grid-cols-3">
       {cards.map((card, index) => (
         <button
           key={card.title}
           type="button"
           data-tour={index === 0 ? "lead-stats-priority" : undefined}
           onClick={() => onSelectView?.(card.view)}
-          className="group relative overflow-hidden flex min-h-[76px] items-center justify-between gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-4 text-left shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-[var(--color-brand-border)] hover:shadow-md dark:bg-slate-900/40"
+          className="group relative flex min-h-16 items-center justify-between gap-3 overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2.5 text-left shadow-sm transition duration-200 hover:border-[var(--color-brand-border)] hover:bg-[var(--color-bg-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2 dark:bg-slate-900/40"
         >
           <div className="flex items-center gap-3 min-w-0">
             <span
-              className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-xl shadow-sm transition-transform duration-300 group-hover:scale-105"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
               style={{ backgroundColor: card.bg, color: card.color }}
             >
-              <span className="material-symbols-outlined text-[22px]">{card.icon}</span>
+              <span className="material-symbols-outlined text-xl">{card.icon}</span>
             </span>
             <div className="min-w-0">
-              <p className="text-[14px] font-bold tracking-tight text-[var(--color-text-primary)]">
+              <p className="text-sm font-bold tracking-tight text-[var(--color-text-primary)]">
                 {card.title}
               </p>
               <p className="truncate text-xs text-[var(--color-text-secondary)] mt-0.5">
@@ -164,7 +164,7 @@ export function LeadStats({ leads, isLoading, profile, onSelectView }: LeadStats
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1.5 pl-2">
-            <span className="text-3xl font-extrabold leading-none tabular-nums" style={{ color: card.color }}>
+            <span className="text-2xl font-extrabold leading-none tabular-nums" style={{ color: card.color }}>
               {card.value}
             </span>
             <span className="material-symbols-outlined text-[var(--color-text-muted)] transition-transform duration-300 group-hover:translate-x-0.5">

@@ -242,7 +242,7 @@ export function LeadHistoryTab({ lead, meta, slaLabel }: LeadHistoryTabProps) {
                 type="button"
                 onClick={() => setActiveFilter(filter.key)}
                 aria-pressed={activeFilter === filter.key}
-                className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-bold transition-colors ${
+                className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-1 ${
                   activeFilter === filter.key
                     ? "border-[var(--color-brand)] bg-[var(--color-brand-subtle)] text-[var(--color-brand)]"
                     : "border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)]"
@@ -279,7 +279,7 @@ export function LeadHistoryTab({ lead, meta, slaLabel }: LeadHistoryTabProps) {
           )}
         </section>
 
-        <aside className="space-y-3 rounded-lg border border-[var(--color-border)] p-3">
+        <aside className="space-y-3 rounded-lg bg-[var(--color-bg-surface-raised)] p-3">
           <h3 className="text-sm font-bold text-[var(--color-text-primary)]">Tóm tắt quy trình</h3>
           <dl className="space-y-3 text-xs">
             <div>

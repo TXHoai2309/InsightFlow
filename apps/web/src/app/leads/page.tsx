@@ -42,6 +42,11 @@ import {
 
 const LEADS_PAGE_SIZE = 5;
 const APP_SCROLL_ROOT_SELECTOR = '[data-app-scroll-root="true"]';
+type LeadSortMode = "recommended" | "overdue" | "sla" | "newest";
+
+function isLeadSortMode(value: string | null): value is LeadSortMode {
+  return value === "recommended" || value === "overdue" || value === "sla" || value === "newest";
+}
 
 function getAppScrollRoot() {
   return document.querySelector<HTMLElement>(APP_SCROLL_ROOT_SELECTOR);
@@ -92,6 +97,7 @@ export default function LeadsPage() {
     DEFAULT_LEAD_WORKBENCH_FILTERS,
   );
   const [currentPage, setCurrentPage] = useState(1);
+  const [sortMode, setSortMode] = useState<LeadSortMode>("recommended");
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [detailTab, setDetailTab] = useState<LeadDetailPanelTab>("action");
   const [highlightedLeadId, setHighlightedLeadId] = useState<string | null>(null);
@@ -215,6 +221,7 @@ export default function LeadsPage() {
     const requestedView = params.get("view") as LeadWorkbenchView | null;
     const requestedPage = Number(params.get("page") || "1");
     const requestedLeadId = params.get("leadId");
+    const requestedSort = params.get("sort");
     const nextView = returnContext?.view || requestedView;
     const nextPage = returnContext?.page || requestedPage;
     const nextLeadId =
@@ -233,6 +240,7 @@ export default function LeadsPage() {
       : urlFilters;
     skipNextPageReset.current = true;
     setLeadFilters(restoredFilters);
+    if (isLeadSortMode(requestedSort)) setSortMode(requestedSort);
 
     if (requestedPanelTab) {
       setDetailTab(requestedPanelTab === "suggestion" ? "action" : requestedPanelTab);
@@ -271,6 +279,8 @@ export default function LeadsPage() {
     else params.delete("page");
     if (selectedLeadId) params.set("leadId", selectedLeadId);
     else params.delete("leadId");
+    if (sortMode !== "recommended") params.set("sort", sortMode);
+    else params.delete("sort");
     params.delete("returnToken");
 
     const query = params.toString();
@@ -279,7 +289,7 @@ export default function LeadsPage() {
       "",
       query ? `${window.location.pathname}?${query}` : window.location.pathname,
     );
-  }, [activeView, currentPage, leadFilters, selectedLeadId]);
+  }, [activeView, currentPage, leadFilters, selectedLeadId, sortMode]);
 
   const visibleBaseLeads = useMemo(
     () => baseLeads.filter((lead) => canLeadBeVisibleToUser(lead, profile)),
@@ -314,16 +324,30 @@ export default function LeadsPage() {
     );
   }, [activeView, currentTime, profile, sortedLeads]);
 
-  const visibleLeads = useMemo(
-    () =>
-      filterLeadWorkbenchItems(
+  const visibleLeads = useMemo(() => {
+    const filtered = filterLeadWorkbenchItems(
         leadsInActiveView,
         { ...leadFilters, workspaceId: "all" },
         currentTime,
         profile?.uid,
-      ),
-    [currentTime, leadFilters, leadsInActiveView, profile?.uid],
-  );
+      );
+    if (sortMode === "recommended") return filtered;
+
+    return [...filtered].sort((left, right) => {
+      if (sortMode === "newest") {
+        const leftTime = new Date(left.posted_at || left.created_at || 0).getTime();
+        const rightTime = new Date(right.posted_at || right.created_at || 0).getTime();
+        return rightTime - leftTime;
+      }
+
+      const leftMeta = getLeadWorkbenchMeta(left, currentTime);
+      const rightMeta = getLeadWorkbenchMeta(right, currentTime);
+      if (sortMode === "overdue") {
+        if (leftMeta.isOverdue !== rightMeta.isOverdue) return leftMeta.isOverdue ? -1 : 1;
+      }
+      return leftMeta.remainingMs - rightMeta.remainingMs;
+    });
+  }, [currentTime, leadFilters, leadsInActiveView, profile?.uid, sortMode]);
 
   const activeFilterCount = countActiveLeadFilters(
     leadFilters,
@@ -338,7 +362,7 @@ export default function LeadsPage() {
       return;
     }
     setCurrentPage(1);
-  }, [activeView, leadFilters]);
+  }, [activeView, leadFilters, sortMode]);
 
   useEffect(() => {
     setCurrentPage((page) => Math.min(Math.max(1, page), totalPages));
@@ -590,7 +614,7 @@ export default function LeadsPage() {
   return (
     <div
       data-tour="leads-page"
-      className="min-h-full max-w-full space-y-[clamp(6px,0.55vw,10px)] overflow-x-hidden p-[clamp(6px,0.6vw,12px)]"
+      className="min-h-full max-w-full space-y-2 overflow-x-hidden p-3"
     >
       <LeadStats
         leads={brandPlatformFilteredLeads}
@@ -613,8 +637,8 @@ export default function LeadsPage() {
       )}
 
       {pendingResultLead && (
-        <section className="flex flex-col gap-2 rounded-xl border border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] p-3 md:flex-row md:items-center md:justify-between">
-          <div className="flex min-w-0 items-start gap-3">
+        <section className="flex flex-col gap-2 rounded-xl border border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] px-3 py-2.5 md:flex-row md:items-center md:justify-between">
+          <div className="flex min-w-0 items-center gap-2.5">
             <span className="material-symbols-outlined text-[var(--color-warning)]">
               pending_actions
             </span>
@@ -622,7 +646,7 @@ export default function LeadsPage() {
               <p className="text-sm font-bold text-[var(--color-text-primary)]">
                 Có {viewCounts.need_result || 0} lead đang chờ ghi nhận kết quả
               </p>
-              <p className="truncate text-sm text-[var(--color-text-secondary)]">
+              <p className="truncate text-xs text-[var(--color-text-secondary)]">
                 Gần nhất: {pendingResultLead.author || "khách hàng"} · sau khi mở liên hệ, hãy ghi nhận kết quả để không mất dấu.
               </p>
             </div>
@@ -637,7 +661,7 @@ export default function LeadsPage() {
                 setDetailTab("action");
                 setIsPanelCollapsed(false);
               }}
-              className="rounded-lg border border-[var(--color-warning)]/40 bg-[var(--color-bg-surface)] px-3 py-2 text-sm font-bold text-[var(--color-text-primary)]"
+              className="rounded-lg border border-[var(--color-warning)]/40 bg-[var(--color-bg-surface)] px-3 py-1.5 text-sm font-bold text-[var(--color-text-primary)] transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-warning)]"
             >
               Ghi nhận ngay
             </button>
@@ -645,16 +669,16 @@ export default function LeadsPage() {
         </section>
       )}
 
-      <section className="space-y-[clamp(6px,0.55vw,10px)]">
-        <div className="flex flex-col gap-2 min-[1500px]:flex-row min-[1500px]:items-center min-[1500px]:justify-between">
-          <div data-tour="lead-view-tabs" className="flex flex-wrap gap-2">
+      <section className="space-y-2">
+        <div className="flex flex-col gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-2 shadow-sm min-[1180px]:flex-row min-[1180px]:items-center min-[1180px]:justify-between">
+          <div data-tour="lead-view-tabs" className="flex min-w-0 flex-wrap gap-1.5">
             {workbenchViews.map((view) => (
               <button
                 key={view.id}
                 type="button"
                 onClick={() => setActiveView(view.id)}
-                className={`inline-flex items-center rounded-xl border px-3.5 py-2 text-sm font-bold tracking-tight transition-all duration-200 ${activeView === view.id
-                  ? "border-[var(--color-brand)] bg-[var(--color-brand)] text-white shadow-md shadow-[var(--color-brand)]/10"
+                className={`inline-flex min-h-9 items-center rounded-lg border px-3 py-1.5 text-sm font-bold tracking-tight transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-1 ${activeView === view.id
+                  ? "border-[var(--color-brand)] bg-[var(--color-brand)] text-white shadow-sm"
                   : "border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-strong)] dark:bg-slate-900/40"
                   }`}
               >
@@ -668,22 +692,50 @@ export default function LeadsPage() {
               </button>
             ))}
           </div>
-          <div className="flex w-fit flex-wrap items-center gap-2">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2 min-[1180px]:max-w-xl">
+            <label className="relative min-w-52 flex-1" htmlFor="lead-toolbar-search">
+              <span className="sr-only">Tìm kiếm khách hàng hoặc nội dung</span>
+              <span className="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-base text-[var(--color-text-muted)]">search</span>
+              <input
+                id="lead-toolbar-search"
+                type="search"
+                value={leadFilters.query}
+                onChange={(event) => setLeadFilters((current) => ({ ...current, query: event.target.value }))}
+                placeholder="Tìm tên hoặc nội dung"
+                className="h-9 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] pl-9 pr-3 text-sm text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/20"
+              />
+            </label>
+            <label className="relative" htmlFor="lead-sort-mode">
+              <span className="sr-only">Sắp xếp danh sách</span>
+              <select
+                id="lead-sort-mode"
+                value={sortMode}
+                onChange={(event) => setSortMode(event.target.value as LeadSortMode)}
+                className="h-9 appearance-none rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] py-0 pl-3 pr-8 text-sm font-semibold text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/20"
+              >
+                <option value="recommended">Ưu tiên hệ thống</option>
+                <option value="overdue">Quá hạn lâu nhất</option>
+                <option value="sla">SLA gần nhất</option>
+                <option value="newest">Mới nhất</option>
+              </select>
+              <span className="material-symbols-outlined pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-base text-[var(--color-text-muted)]">expand_more</span>
+            </label>
             <button
               type="button"
               data-tour="lead-refresh-button"
               onClick={() => refetch(true)}
               disabled={isLoading}
-              className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-4 py-2 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)] disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] transition hover:bg-[var(--color-bg-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] disabled:cursor-not-allowed disabled:opacity-60"
+              aria-label="Làm mới danh sách"
+              title="Làm mới"
             >
               <span className="material-symbols-outlined text-base">refresh</span>
-              Làm mới
             </button>
             <button
               type="button"
               data-tour="lead-filter-button"
               onClick={() => setShowFilters((value) => !value)}
-              className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-2.5 py-1.5 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)]"
+              className={`inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] ${showFilters || activeFilterCount > 0 ? "border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] text-[var(--color-brand)]" : "border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)]"}`}
             >
               <span className="material-symbols-outlined text-base">tune</span>
               Bộ lọc
@@ -734,12 +786,12 @@ export default function LeadsPage() {
 
         <div
           className={`grid w-full items-start gap-y-[1vh] ${isDetailPanelOpen
-            ? "min-[1100px]:grid-cols-[32%_minmax(0,1fr)] min-[1100px]:gap-x-[0.75%]"
+            ? "min-[1100px]:grid-cols-[clamp(410px,27vw,460px)_minmax(0,1fr)] min-[1100px]:gap-x-3"
             : "grid-cols-1"
             }`}
         >
-          <main className="flex min-w-0 flex-col self-start rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm min-[1100px]:sticky min-[1100px]:top-4 min-[1100px]:max-h-[calc(100vh-100px)]">
-            <header className="flex shrink-0 items-center justify-between gap-[4%] border-b border-[var(--color-border)] px-[4%] py-[3%]">
+          <main className="flex min-w-0 flex-col self-start rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm min-[1100px]:sticky min-[1100px]:top-3 min-[1100px]:max-h-[calc(100vh-88px)]">
+            <header className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--color-border)] px-4 py-3">
               <div className="min-w-0">
                 <h2 className="text-sm font-black text-[var(--color-text-primary)]">
                   Danh sách khách hàng
@@ -753,12 +805,12 @@ export default function LeadsPage() {
               </span>
             </header>
 
-            <div className="flex-1 space-y-[2.5%] overflow-y-auto p-[3%] min-h-0">
+            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3 [scrollbar-gutter:stable]">
               {isLoading && visibleLeads.length === 0 ? (
                 [0, 1, 2].map((item) => (
                   <div
                     key={item}
-                    className="h-[18vh] animate-pulse rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)]"
+                    className="h-32 animate-pulse rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)]"
                   />
                 ))
               ) : visibleLeads.length === 0 ? (
@@ -814,7 +866,7 @@ export default function LeadsPage() {
             </div>
 
             {visibleLeads.length > 0 && (
-              <footer className="flex shrink-0 flex-col gap-2 border-t border-[var(--color-border)] px-[4%] py-[3%] text-xs text-[var(--color-text-secondary)] sm:flex-row sm:items-center sm:justify-between">
+              <footer className="flex shrink-0 flex-col gap-2 border-t border-[var(--color-border)] px-4 py-2.5 text-xs text-[var(--color-text-secondary)] sm:flex-row sm:items-center sm:justify-between">
                 <span>
                   {firstLeadNumber}-{lastLeadNumber} / {visibleLeads.length} lead
                 </span>
