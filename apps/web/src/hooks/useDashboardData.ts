@@ -21,6 +21,7 @@ interface UseDashboardOptions {
 }
 
 const DASHBOARD_CACHE_PREFIX = "insightflow_dashboard_cache_";
+const DASHBOARD_CACHE_VERSION = "v3";
 const DASHBOARD_CACHE_LIMITS = {
   mentions: 150,
   alerts: 150,
@@ -96,8 +97,8 @@ export function useDashboard(options: UseDashboardOptions = {}) {
     // otherwise render another employee's assigned work after account changes
     // in the same browser.
     const profileKey = profile?.uid || profile?.role || "anonymous";
-    const fetchScopeKey = `${brandKey}:${profileKey}`;
-    const cacheKey = `insightflow_dashboard_cache_${brandKey}_${profileKey}`;
+    const fetchScopeKey = `${DASHBOARD_CACHE_VERSION}:${brandKey}:${profileKey}`;
+    const cacheKey = `${DASHBOARD_CACHE_PREFIX}${DASHBOARD_CACHE_VERSION}_${brandKey}_${profileKey}`;
     try {
       let hasRenderedCache = false;
 
@@ -268,7 +269,7 @@ export function useDashboard(options: UseDashboardOptions = {}) {
 
     const brandKey = getScopedBrandKey(profile) || "global";
     const profileKey = profile?.uid || profile?.role || "anonymous";
-    const fetchScopeKey = `${brandKey}:${profileKey}`;
+    const fetchScopeKey = `${DASHBOARD_CACHE_VERSION}:${brandKey}:${profileKey}`;
     const lastFetched = lastFetchedAtMap[fetchScopeKey] || 0;
     const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes cache window
 

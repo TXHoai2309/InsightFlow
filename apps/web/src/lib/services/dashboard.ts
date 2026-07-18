@@ -47,8 +47,16 @@ import {
   normalizeClassificationLabel,
 } from "@/lib/label-change";
 import { filterByBrandScope } from "@/lib/brandScope";
-import { isIntentLead, isQualifiedLeadIntent } from "@/lib/lead-intent";
+import {
+  isIntentLead,
+  isQualifiedLeadClassification,
+} from "@/lib/lead-intent";
 import { withOptionalColumnFallback } from "@/lib/lead-schema-compat";
+import {
+  getAnnotationPlatformFilter,
+  isLocationReviewPlatform,
+  parseVietnameseRelativeDate,
+} from "@/lib/dashboard-display";
 
 // ─── Collection names ────────────────────────────────────────────────────────
 export const COLLECTION_NAMES = {
@@ -74,6 +82,8 @@ const SOURCE_TO_PLATFORM: Record<string, Platform> = {
   googlemap: "google_maps",
   // Báo điện tử / tin tức
   news: "news",
+  news_html: "news",
+  news_rss: "news",
 };
 
 export function mapSourceToPlatform(source: string): Platform {
@@ -978,19 +988,20 @@ async function loadSupabaseRowsByIds<T extends SupabaseRow>(
   if (!ids || ids.length === 0) return [];
   const unique = Array.from(new Set(ids.filter(Boolean)));
   const pageSize = 50;
-  const isAnnotationTable = table === "annotations";
-  const cappedUnique = isAnnotationTable ? unique.slice(0, 1000) : unique;
-  const chunks = chunkValues(cappedUnique, pageSize);
+  const chunks = chunkValues(unique, pageSize);
 
   const results = await mapWithConcurrency(chunks, 3, async (chunk) => {
     const formattedIds = chunk.map((id) => `"${id.replace(/"/g, '\\"')}"`);
-    const requestParams = new URLSearchParams({
-      ...extraParams,
-      [idField]: `in.(${formattedIds.join(",")})`,
-      select: columns.join(","),
-      limit: String(maxRows), // Fetch up to maxRows to ensure complete candidate list
-    });
-    return supabaseRequest<T[]>(config, table, requestParams.toString());
+    return loadSupabaseRows<T>(
+      config,
+      table,
+      {
+        ...extraParams,
+        [idField]: `in.(${formattedIds.join(",")})`,
+        select: columns.join(","),
+      },
+      maxRows,
+    );
   });
   let finalResults = results.flat();
 
@@ -1045,6 +1056,15 @@ function readPayload(row: SupabaseRow): SupabaseRow {
 
 function readFirstText(...values: unknown[]): string {
   return normalizeText(values.find((value) => String(value || "").trim()) || "").trim();
+}
+
+function readOptionalNumber(...values: unknown[]): number | null {
+  for (const value of values) {
+    if (value === null || value === undefined || value === "") continue;
+    const parsed = typeof value === "number" ? value : Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
 }
 
 function parseAnnotationLabel(row: SupabaseRow | undefined): Record<string, any> {
@@ -1160,7 +1180,7 @@ function supabasePostToMention(row: SupabaseRow, annotationByKey: Map<string, Su
   const label = getSupabaseLabel(row, annotation, {
     sentiment: mapSentiment(row.baseline_sentiment ?? row.sentiment ?? payload.sentiment),
     topic: [],
-    relevance: true,
+    relevance: null,
   });
 
   return {
@@ -1183,9 +1203,16 @@ function supabasePostToMention(row: SupabaseRow, annotationByKey: Map<string, Su
         ? Math.round(row.baseline_confidence * 100)
         : 100,
     created_at: parseDate(row.updated_at || row.created_at || row.crawled_at || row.posted_at),
-    posted_at: parseDate(row.posted_at || payload.thoi_gian_dang || payload.posted_at || row.created_at),
+    posted_at: parseDate(
+      row.posted_at || payload.thoi_gian_dang || payload.posted_at || row.created_at,
+      row.created_at,
+    ),
     url: normalizeOptionalUrl(row.url, row.post_url, row.source_url, payload.url),
     contact: normalizeOptionalText(row.contact || payload.contact),
+    star_count: readOptionalNumber(row.star_count, payload.star_count, payload.rating),
+    location_name: normalizeOptionalText(
+      payload.location_name || payload.branch_name || payload.store_name || postContent,
+    ),
     labels: label,
   };
 }
@@ -1213,7 +1240,7 @@ function supabaseCommentToMention(
   const label = getSupabaseLabel(row, annotation, {
     sentiment: mapSentiment(row.baseline_sentiment ?? row.sentiment ?? payload.sentiment),
     topic: [],
-    relevance: true,
+    relevance: null,
   });
 
   return {
@@ -1237,9 +1264,20 @@ function supabaseCommentToMention(
         ? Math.round(row.baseline_confidence * 100)
         : 100,
     created_at: parseDate(row.updated_at || row.created_at || row.crawled_at || row.posted_at),
-    posted_at: parseDate(row.posted_at || payload.gio_comment || payload.posted_at || row.created_at),
+    posted_at: parseDate(
+      row.posted_at || payload.gio_comment || payload.posted_at || row.created_at,
+      row.created_at,
+    ),
     url: normalizeOptionalUrl(row.url, post?.url, payload.url),
     contact: normalizeOptionalText(row.contact || payload.contact),
+    star_count: readOptionalNumber(row.star_count, payload.star_count, payload.rating),
+    location_name: normalizeOptionalText(
+      payload.location_name ||
+        payload.branch_name ||
+        payload.store_name ||
+        post?.location_name ||
+        post?.post_content,
+    ),
     labels: label,
   };
 }
@@ -1256,6 +1294,7 @@ const SUPABASE_POST_COLUMNS = [
   "posted_at",
   "created_at",
   "url",
+  "star_count",
   "payload_json",
 ];
 
@@ -1270,6 +1309,7 @@ const SUPABASE_COMMENT_COLUMNS = [
   "posted_at",
   "created_at",
   "url",
+  "star_count",
   "payload_json",
 ];
 
@@ -1289,7 +1329,7 @@ const SUPABASE_ANNOTATION_COLUMNS = [
 
 async function fetchSupabaseMentionsUncached(opts: FetchOptions): Promise<Mention[]> {
   const config = getSupabaseConfig();
-  const maxMentions = opts.maxMentions || 2500;
+  const maxMentions = opts.maxMentions || 30000;
   const brandKey = opts.brandKey ? opts.brandKey.toLowerCase().replace(/[\s\-_.]/g, "").trim() : "";
   let annotationRows: SupabaseRow[] = [];
   
@@ -1310,14 +1350,13 @@ async function fetchSupabaseMentionsUncached(opts: FetchOptions): Promise<Mentio
         searchTerm = "mixue";
         displayBrandName = "Mixue";
       }
-      const fetchBrandPosts = (column: "brand_slug" | "brand", value: string) => {
-        const query = new URLSearchParams({
-          select: "post_id",
-          limit: String(Math.min(500, maxMentions)),
-        });
-        query.set(column, `eq.${value}`);
-        return supabaseRequest<SupabaseRow[]>(config, "posts", query.toString());
-      };
+      const fetchBrandPosts = (column: "brand_slug" | "brand", value: string) =>
+        loadSupabaseRows<SupabaseRow>(
+          config,
+          "posts",
+          { select: "post_id", [column]: `eq.${value}` },
+          maxMentions,
+        );
 
       // Avoid both cross-column `OR` and `ORDER BY` during the ID lookup. The
       // current production table does not yet have the composite brand/time
@@ -1338,7 +1377,7 @@ async function fetchSupabaseMentionsUncached(opts: FetchOptions): Promise<Mentio
     // 2. Fetch completed annotations corresponding to these post IDs per platform
     try {
       const platforms = ["facebook", "tiktok", "youtube", "thread", "be", "google_maps", "news"];
-      const perPlatformLimit = Math.min(400, Math.max(120, Math.ceil(maxMentions / platforms.length)));
+      const perPlatformLimit = maxMentions;
       const results = await mapWithConcurrency(platforms, 2, (p) =>
         loadSupabaseRowsByIds<SupabaseRow>(
           config,
@@ -1346,7 +1385,7 @@ async function fetchSupabaseMentionsUncached(opts: FetchOptions): Promise<Mentio
           "post_id",
           postIds,
           SUPABASE_ANNOTATION_COLUMNS,
-          { platform: p === "be" ? "in.(be,befood)" : (p === "thread" ? "in.(thread,threads)" : `eq.${p}`), status: "eq.completed", order: "updated_at.desc.nullslast" },
+          { platform: getAnnotationPlatformFilter(p), status: "eq.completed", order: "updated_at.desc.nullslast" },
           perPlatformLimit,
         ).catch((err: any) => {
           console.warn(`[DashboardService] Failed to fetch annotations for platform ${p}:`, err);
@@ -1362,12 +1401,12 @@ async function fetchSupabaseMentionsUncached(opts: FetchOptions): Promise<Mentio
     // ── Global Strategy (Fallback) ───────────────────────────────────
     try {
       const platforms = ["facebook", "tiktok", "youtube", "thread", "be", "google_maps", "news"];
-      const perPlatformLimit = Math.min(400, Math.max(120, Math.ceil(maxMentions / platforms.length)));
+      const perPlatformLimit = maxMentions;
       const results = await mapWithConcurrency(platforms, 2, (p) =>
         loadSupabaseRows<SupabaseRow>(
           config,
           "annotations",
-          { platform: p === "be" ? "in.(be,befood)" : (p === "thread" ? "in.(thread,threads)" : `eq.${p}`), status: "eq.completed", order: "updated_at.desc.nullslast" },
+          { platform: getAnnotationPlatformFilter(p), status: "eq.completed", order: "updated_at.desc.nullslast" },
           perPlatformLimit,
         ).catch((err: any) => {
           console.warn(`[DashboardService] Failed to fetch annotations for platform ${p}:`, err);
@@ -1394,11 +1433,27 @@ async function fetchSupabaseMentionsUncached(opts: FetchOptions): Promise<Mentio
   ).filter(Boolean);
 
   const [postRows, commentRows] = await Promise.all([
-    loadSupabaseRowsByIds<SupabaseRow>(config, "posts", "post_id", postIds, SUPABASE_POST_COLUMNS).catch((err: any) => {
+    loadSupabaseRowsByIds<SupabaseRow>(
+      config,
+      "posts",
+      "post_id",
+      postIds,
+      SUPABASE_POST_COLUMNS,
+      {},
+      maxMentions,
+    ).catch((err: any) => {
       console.warn("[DashboardService] Failed to fetch post details:", err);
       return [] as SupabaseRow[];
     }),
-    loadSupabaseRowsByIds<SupabaseRow>(config, "comments", "comment_id", commentIds, SUPABASE_COMMENT_COLUMNS).catch((err: any) => {
+    loadSupabaseRowsByIds<SupabaseRow>(
+      config,
+      "comments",
+      "comment_id",
+      commentIds,
+      SUPABASE_COMMENT_COLUMNS,
+      {},
+      maxMentions,
+    ).catch((err: any) => {
       console.warn("[DashboardService] Failed to fetch comment details:", err);
       return [] as SupabaseRow[];
     }),
@@ -1439,7 +1494,8 @@ async function fetchSupabaseMentionsUncached(opts: FetchOptions): Promise<Mentio
     annotationRows
       .filter(
         (row: SupabaseRow) =>
-          row.entity_type === "post" || (!row.entity_type && !row.comment_id),
+          (row.entity_type === "post" || (!row.entity_type && !row.comment_id)) &&
+          !isLocationReviewPlatform(row.platform),
       )
       .map((row: SupabaseRow) => String(row.post_id || "").trim())
       .filter(Boolean),
@@ -1558,7 +1614,7 @@ async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
 }
 
 // ─── Date parser ─────────────────────────────────────────────────────────────
-function parseDate(field: unknown): string {
+function parseDate(field: unknown, referenceField?: unknown): string {
   if (!field) return new Date().toISOString();
   if (typeof (field as any).toDate === "function") {
     return (field as any).toDate().toISOString();
@@ -1587,6 +1643,9 @@ function parseDate(field: unknown): string {
   }
 
   // "2026-06-18T15:06:16.555779" — no timezone → assume UTC
+  const relativeDate = parseVietnameseRelativeDate(s, referenceField);
+  if (relativeDate) return relativeDate;
+
   return s.includes("+") || s.endsWith("Z") ? s : s + "Z";
 }
 
@@ -1699,7 +1758,7 @@ export interface FetchOptions {
   after?: QueryDocumentSnapshot<DocumentData>;
   /** Optional normalized brand scope key passed by dashboard hooks */
   brandKey?: string;
-  /** Set a max limit (default: no limit — fetches ALL records) */
+  /** Set a max limit (default: 30,000 rows per fetch stage) */
   maxMentions?: number;
 }
 
@@ -1940,7 +1999,12 @@ export class DashboardService {
           labels,
           m.labels,
         );
-        if (intent === "none" || derivedLeadById.has(m.id)) return;
+        if (
+          !isQualifiedLeadClassification(intent, labels) ||
+          derivedLeadById.has(m.id)
+        ) {
+          return;
+        }
 
         const parsed = parseContactString(m.contact);
         const baseLead: Lead = {
@@ -2006,7 +2070,7 @@ export class DashboardService {
         if (d) {
           const { labels: mergedLabels, intent: mergedIntent } =
             resolveSupabaseLeadClassification(d, baseLead.labels);
-          if (!isQualifiedLeadIntent(mergedIntent)) return;
+          if (!isQualifiedLeadClassification(mergedIntent, mergedLabels)) return;
           const persistedLastAction = normalizeOptionalText(d.last_action_type);
           const lastActionWasLegacyTransfer = persistedLastAction === "transfer_business";
 
@@ -2107,7 +2171,7 @@ export class DashboardService {
           row,
           sourceMention?.labels,
         );
-        if (!isQualifiedLeadIntent(intent)) continue;
+        if (!isQualifiedLeadClassification(intent, labels)) continue;
 
         const id = String(row.id || row.mention_id || row.source_mention_id).trim();
         const rawContentType = String(

@@ -7,7 +7,10 @@ import { normalizeBrandName, DashboardService } from "@/lib/services/dashboard";
 import { canPerformAction, type UserRoleProfile } from "@/lib/rbac";
 import { fetchSupabaseAlerts, updateSupabaseAlertLabel, supabaseRequest } from "@/lib/supabase";
 import { supabaseClient } from "@/lib/supabaseClient";
-import { normalizeClassificationLabel } from "@/lib/label-change";
+import {
+  isCrisisClassificationLabel,
+  normalizeClassificationLabel,
+} from "@/lib/label-change";
 import { calculateNegativityScore } from "@/lib/negativityScore";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import type { Mention } from "@/types/dashboard";
@@ -370,7 +373,7 @@ function mentionToAlertData(m: Mention): AlertData {
     comment_id: m.comment_id || undefined,
     post_url: m.url || "",
     post_like_count: m.star_count || 0,
-    relevance: typeof labelObj.relevance === "boolean" ? labelObj.relevance : true,
+    relevance: typeof labelObj.relevance === "boolean" ? labelObj.relevance : null,
     urgency: labelObj.urgency || "none",
     intent: labelObj.intent || "none",
     escalation: labelObj.escalation || null,
@@ -409,7 +412,14 @@ function buildAlertsFromMentions(
   scopedBrandKey?: string | null,
 ): AlertData[] {
   return mentions
-    .filter((mention) => mention.sentiment === "negative")
+    .filter((mention) =>
+      isCrisisClassificationLabel(mention.labels, {
+        sentiment: mention.sentiment,
+        relevance: mention.labels?.relevance ?? null,
+        urgency: mention.labels?.urgency ?? "none",
+        intent: mention.labels?.intent ?? "none",
+      }),
+    )
     .map(mentionToAlertData)
     .filter((alert) => {
       const history = Array.isArray(alert.resolution_history) ? alert.resolution_history : [];
