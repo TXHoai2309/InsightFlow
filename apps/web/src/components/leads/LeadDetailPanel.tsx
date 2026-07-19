@@ -15,6 +15,7 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { canPerformAction } from "@/lib/rbac";
 import { isSameBrandScope } from "@/lib/brandScope";
+import { buildLeadHistoryEvents } from "@/lib/lead-history";
 import {
   LEAD_DETAIL_PANEL_SCROLL_ID,
   type LeadDetailPanelTab,
@@ -92,6 +93,17 @@ function toDateInputValue(dateIso?: string) {
 function toTimeInputValue(dateIso?: string) {
   if (!dateIso) return "";
   return new Date(dateIso).toTimeString().slice(0, 5);
+}
+
+function formatCompactEventTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Chưa có thời gian";
+  return date.toLocaleString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export function LeadDetailPanel({
@@ -530,21 +542,22 @@ export function LeadDetailPanel({
       active: meta.needsResultCapture && !isResultFinished,
     },
   ];
+  const recentHistoryEvents = buildLeadHistoryEvents(lead).slice(0, 3);
 
   return (
     <aside
       data-tour="lead-detail-panel"
       className="flex min-w-0 shrink-0 flex-col self-start rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm min-[1100px]:sticky min-[1100px]:top-3 min-[1100px]:max-h-[calc(100vh-88px)]"
     >
-      <div className="shrink-0 border-b border-[var(--color-border)] px-4 pb-0 pt-3">
+      <div className="shrink-0 border-b border-[var(--color-border)] px-3 pb-0 pt-2.5">
         <div className="flex items-start justify-between gap-2.5">
           <div className="flex min-w-0 items-center gap-2.5">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-sm font-bold text-[var(--color-brand)]">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-xs font-bold text-[var(--color-brand)]">
               {(lead.author || "KH").slice(0, 2).toUpperCase()}
             </div>
             <div className="min-w-0">
               <div className="flex min-w-0 items-center gap-2">
-                <h3 className="truncate text-base font-bold text-[var(--color-text-primary)]">
+                <h3 className="truncate text-sm font-bold text-[var(--color-text-primary)]">
                   {lead.author || "Khách hàng"}
                 </h3>
                 <span className="shrink-0 rounded-md border border-[#FFB4B4] bg-[#FFE5E5] px-2 py-0.5 text-xs font-bold uppercase text-[#D92D20]">
@@ -654,7 +667,7 @@ export function LeadDetailPanel({
           </div>
         </div>
 
-        <ol aria-label="Tiến trình xử lý lead" className="mt-3 grid grid-cols-4 gap-1 rounded-lg bg-[var(--color-bg-surface-raised)] p-2">
+        <ol aria-label="Tiến trình xử lý lead" className="mt-2 grid grid-cols-4 gap-1 rounded-lg bg-[var(--color-bg-surface-raised)] p-1.5">
           {workflowSteps.map((step, index) => (
             <li key={step.label} className="flex min-w-0 items-center">
               <div className="flex min-w-0 flex-1 items-center gap-1.5">
@@ -668,7 +681,7 @@ export function LeadDetailPanel({
           ))}
         </ol>
 
-        <div className="mt-2 flex gap-5 overflow-x-auto" role="tablist" aria-label="Chi tiết lead">
+        <div className="mt-1.5 flex gap-4 overflow-x-auto" role="tablist" aria-label="Chi tiết lead">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -677,7 +690,7 @@ export function LeadDetailPanel({
               onClick={() => handleTabChange(tab.id)}
               role="tab"
               aria-selected={activeTab === tab.id}
-              className={`relative min-h-9 shrink-0 border-b-2 px-1 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-1 ${
+              className={`relative min-h-8 shrink-0 border-b-2 px-1 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-1 ${
                 activeTab === tab.id
                   ? "border-[var(--color-brand)] text-[var(--color-brand)]"
                   : "border-transparent text-[var(--color-text-secondary)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-text-primary)]"
@@ -691,32 +704,65 @@ export function LeadDetailPanel({
 
       <div
         id={LEAD_DETAIL_PANEL_SCROLL_ID}
-        className="min-h-0 flex-1 overflow-y-auto p-3 [scrollbar-gutter:stable]"
+        className="min-h-0 flex-1 overflow-y-auto p-2.5 [scrollbar-gutter:stable]"
       >
         {activeTab === "action" && (
-          <div className="space-y-2.5">
+          <div className="grid items-start gap-2.5 min-[1600px]:grid-cols-[minmax(0,1fr)_300px]">
+            <div className="min-w-0">
+              <LeadContentContext lead={lead} mentions={mentions} />
+            </div>
 
-
-            <LeadContentContext lead={lead} mentions={mentions} />
-
-
-
+            <aside className="space-y-2 min-[1600px]:sticky min-[1600px]:top-0" aria-label="Thao tác nhanh với lead">
+              <section className="hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-2.5 min-[1600px]:block">
+                <div className="flex items-center justify-between gap-2">
+                  <h4 className="text-sm font-bold text-[var(--color-text-primary)]">Tổng quan xử lý</h4>
+                  <button type="button" onClick={() => handleTabChange("history")} className="rounded-md px-2 py-1 text-xs font-bold text-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]">
+                    Xem lịch sử
+                  </button>
+                </div>
+                <dl className="mt-2 grid grid-cols-2 gap-1.5">
+                  <div className="rounded-lg bg-[var(--color-bg-surface-raised)] p-2.5">
+                    <dt className="text-[11px] font-semibold text-[var(--color-text-muted)]">SLA hiện tại</dt>
+                    <dd className={`mt-1 text-sm font-black ${meta.isOverdue ? "text-[var(--color-error)]" : "text-[var(--color-text-primary)]"}`}>{formatLeadSla(meta)}</dd>
+                  </div>
+                  <div className="rounded-lg bg-[var(--color-bg-surface-raised)] p-2.5">
+                    <dt className="text-[11px] font-semibold text-[var(--color-text-muted)]">Điểm ưu tiên</dt>
+                    <dd className="mt-1 text-sm font-black text-[var(--color-brand)]">{meta.priorityScore}/100</dd>
+                  </div>
+                </dl>
+                <div className="mt-2 flex items-center justify-between gap-3 border-b border-[var(--color-border)] pb-2 text-xs">
+                  <span className="text-[var(--color-text-muted)]">Người phụ trách</span>
+                  <strong className="truncate text-right text-[var(--color-text-primary)]">{ownership.ownerName}</strong>
+                </div>
+                <div className="mt-2 space-y-2">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-text-muted)]">Hoạt động gần nhất</p>
+                  {recentHistoryEvents.map((event) => (
+                    <div key={event.id} className="flex gap-2 border-l-2 border-[var(--color-border)] pl-2.5">
+                      <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--color-brand)]" aria-hidden="true" />
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-bold text-[var(--color-text-primary)]">{event.title}</p>
+                        <p className="mt-0.5 truncate text-[11px] text-[var(--color-text-muted)]">{formatCompactEventTime(event.occurredAt)} · {event.badge}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
             <section
               ref={resultSectionRef}
               tabIndex={-1}
               data-tour="lead-detail-result-actions"
-              className={`scroll-mt-4 rounded-xl border p-4 outline-none transition-shadow duration-300 ${
+              className={`scroll-mt-3 rounded-xl border p-3 outline-none transition-shadow duration-300 ${
                 isResultSectionHighlighted
                   ? "border-[var(--color-brand)] ring-2 ring-[var(--color-brand)]/25 bg-white"
                   : "border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)]/30"
               }`}
             >
-              <div className="mb-4 flex items-center gap-3">
-                <h4 className="text-base font-bold text-[var(--color-text-primary)]">Ghi nhận kết quả nhanh</h4>
+              <div className="mb-3 flex items-center gap-2">
+                <h4 className="text-sm font-bold text-[var(--color-text-primary)]">Ghi nhận kết quả nhanh</h4>
                 {meta.needsResultCapture && <span className="rounded-full bg-[var(--color-brand-subtle)] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--color-brand)]">Chờ kết quả</span>}
               </div>
               {!canRecordResult && (
-                <div className="mb-4 flex flex-col gap-2 rounded-lg border border-[var(--color-border)] bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="mb-3 flex flex-col gap-2 rounded-lg border border-[var(--color-border)] bg-white p-2.5">
                   <p className="text-sm text-[var(--color-text-secondary)]">
                     {!lead.owner_id
                       ? "Bạn cần nhận xử lý trước khi có thể ghi nhận kết quả."
@@ -735,7 +781,7 @@ export function LeadDetailPanel({
                 </div>
               )}
               
-              <div className="grid gap-4 md:grid-cols-[2fr_3fr] items-start">
+              <div className="grid items-start gap-3">
                 <div className="relative min-w-0" ref={resultDropdownRef}>
                   <label className="mb-1.5 block text-xs font-bold text-[var(--color-text-secondary)]">Kết quả xử lý</label>
                   <button 
@@ -826,14 +872,14 @@ export function LeadDetailPanel({
                 
                 <div className="flex flex-col">
                   <label className="mb-1.5 block text-xs font-bold text-[var(--color-text-secondary)]">Ghi chú</label>
-                  <textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Nhập kết quả trao đổi với khách hàng...&#10;Ví dụ: khách hẹn liên hệ lại vào tuần sau." className="min-h-28 w-full flex-1 resize-y rounded-lg border border-[var(--color-border)] bg-white p-3 text-sm leading-relaxed text-[var(--color-text-primary)] outline-none transition focus-visible:border-[var(--color-brand)] focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/20" />
+                  <textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Nhập kết quả trao đổi với khách hàng..." className="min-h-20 w-full flex-1 resize-y rounded-lg border border-[var(--color-border)] bg-white p-2.5 text-sm leading-relaxed text-[var(--color-text-primary)] outline-none transition focus-visible:border-[var(--color-brand)] focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/20" />
                 </div>
               </div>
               
               {saveError && <p className="mt-3 text-xs font-semibold text-[var(--color-error)]">{saveError}</p>}
               
-              <div className="sticky bottom-0 -mx-4 -mb-4 mt-5 flex justify-end border-t border-[var(--color-border)] bg-white/95 p-3 backdrop-blur">
-                <button type="button" disabled={!selectedResult || isSaving || isSaveSuccess || !canRecordResult} onClick={handleSaveResult} className={`inline-flex min-h-10 items-center gap-2 rounded-lg px-6 text-sm font-bold text-white shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${isSaveSuccess ? "bg-emerald-500 focus-visible:ring-emerald-500" : "bg-[var(--color-brand)] hover:bg-[var(--color-brand-hover)] focus-visible:ring-[var(--color-brand)]"}`}>
+              <div className="-mx-3 -mb-3 mt-3 border-t border-[var(--color-border)] bg-white/95 p-2.5">
+                <button type="button" disabled={!selectedResult || isSaving || isSaveSuccess || !canRecordResult} onClick={handleSaveResult} className={`inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg px-5 text-sm font-bold text-white shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${isSaveSuccess ? "bg-emerald-500 focus-visible:ring-emerald-500" : "bg-[var(--color-brand)] hover:bg-[var(--color-brand-hover)] focus-visible:ring-[var(--color-brand)]"}`}>
                   {isSaveSuccess ? (
                     <>
                       <span className="material-symbols-outlined text-[20px] animate-bounce">check_circle</span>
@@ -849,7 +895,7 @@ export function LeadDetailPanel({
               </div>
             </section>
 
-            <section className="rounded-lg border border-red-200 bg-red-50/40 p-3 dark:border-red-900/40 dark:bg-red-950/10">
+            <section className="rounded-lg border border-red-200 bg-red-50/40 p-2.5 dark:border-red-900/40 dark:bg-red-950/10">
               <div className="flex items-start gap-2.5">
                 <span className="material-symbols-outlined text-xl text-red-500">block</span>
                 <div className="min-w-0 flex-1"><p className="text-sm font-bold text-[var(--color-text-primary)]">Bỏ qua / Không liên quan</p><p className="mt-0.5 text-xs leading-5 text-[var(--color-text-secondary)]">Đóng item không thuộc phạm vi xử lý và lưu lý do để tra cứu.</p></div>
@@ -865,6 +911,7 @@ export function LeadDetailPanel({
                 </div>
               )}
             </section>
+            </aside>
           </div>
         )}
 

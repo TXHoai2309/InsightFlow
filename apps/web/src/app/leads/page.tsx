@@ -614,7 +614,7 @@ export default function LeadsPage() {
   return (
     <div
       data-tour="leads-page"
-      className="min-h-full max-w-full space-y-2 overflow-x-hidden p-3"
+      className="mx-auto min-h-full w-full max-w-[1520px] space-y-2 overflow-x-hidden p-2.5"
     >
       <LeadStats
         leads={brandPlatformFilteredLeads}
@@ -786,7 +786,7 @@ export default function LeadsPage() {
 
         <div
           className={`grid w-full items-start gap-y-[1vh] ${isDetailPanelOpen
-            ? "min-[1100px]:grid-cols-[clamp(410px,27vw,460px)_minmax(0,1fr)] min-[1100px]:gap-x-3"
+            ? "min-[1100px]:grid-cols-[clamp(390px,25vw,420px)_minmax(0,1fr)] min-[1100px]:gap-x-2.5"
             : "grid-cols-1"
             }`}
         >

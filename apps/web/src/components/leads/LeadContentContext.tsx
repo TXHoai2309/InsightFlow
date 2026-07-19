@@ -76,7 +76,7 @@ function ContentNodeCard({
   return (
     <article
       id={`lead-context-${mention.id}`}
-      className={`rounded-xl border p-3.5 transition-all duration-300 ${
+      className={`rounded-lg border p-3 transition-all duration-300 ${
         isTarget
           ? "border-[var(--color-brand)] bg-white ring-2 ring-[var(--color-brand)]/20 shadow-md shadow-[var(--color-brand)]/5"
           : "border-[var(--color-border)] bg-[var(--color-bg-surface)]"
@@ -98,10 +98,10 @@ function ContentNodeCard({
           {formatContentTime(mention.posted_at || mention.created_at)}
         </time>
       </div>
-      <p className="mt-2.5 text-xs font-bold text-[var(--color-text-secondary)]">
+      <p className="mt-2 text-xs font-bold text-[var(--color-text-secondary)]">
         {mention.author || "Khách hàng"}
       </p>
-      <p className="mt-1.5 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-[var(--color-text-primary)]">
+      <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-[var(--color-text-primary)]">
         {content || "Không có nội dung hiển thị."}
       </p>
     </article>
@@ -231,11 +231,11 @@ export function LeadContentContext({ lead, mentions }: LeadContentContextProps) 
     target.content_type !== "post" && (!postContent || context.orphanedCount > 0);
 
   return (
-    <section className="rounded-xl border border-[var(--color-brand-border)] bg-white p-4 shadow-lg shadow-[var(--color-brand)]/10">
+    <section className="rounded-xl border border-[var(--color-brand-border)] bg-white p-3 shadow-sm">
       <div className="flex items-center justify-between gap-3 mb-1">
         <div className="flex items-center gap-2">
-          <span className="material-symbols-outlined text-[22px] text-[var(--color-brand)]">electric_bolt</span>
-          <h3 className="text-base font-bold text-[var(--color-text-primary)]">Nội dung cần xử lý</h3>
+          <span className="material-symbols-outlined text-xl text-[var(--color-brand)]">electric_bolt</span>
+          <h3 className="text-sm font-bold text-[var(--color-text-primary)]">Nội dung cần xử lý</h3>
         </div>
         {isLoading && (
           <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[var(--color-text-muted)]">
@@ -246,7 +246,7 @@ export function LeadContentContext({ lead, mentions }: LeadContentContextProps) 
       </div>
 
       {(context.post || postContent) && (
-        <article className="mt-3 rounded-xl border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] p-3.5">
+        <article className="mt-2 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] p-3">
           <div className="flex items-start justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2">
               <PlatformLogo platform={lead.platform} size="xs" />
@@ -269,14 +269,14 @@ export function LeadContentContext({ lead, mentions }: LeadContentContextProps) 
               {formatContentTime(context.post?.posted_at || context.post?.created_at)}
             </time>
           </div>
-          <p className="mt-2.5 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-[var(--color-text-primary)]">
+          <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-[var(--color-text-primary)]">
             {postContent || "Không có nội dung bài viết gốc."}
           </p>
         </article>
       )}
 
       {visiblePathNodes.length > 0 && (
-        <div className="mt-3 space-y-2 border-l-2 border-dashed border-[var(--color-brand-border)] pl-3">
+        <div className="mt-2 space-y-2 border-l-2 border-dashed border-[var(--color-brand-border)] pl-2.5">
           {showFullThread ? (
             <ThreadTree nodes={context.tree} targetId={targetId} />
           ) : (
@@ -296,7 +296,7 @@ export function LeadContentContext({ lead, mentions }: LeadContentContextProps) 
         <button
           type="button"
           onClick={() => setShowFullThread((current) => !current)}
-          className="mt-3 inline-flex w-full items-center justify-center gap-1 rounded-lg border border-[var(--color-border)] px-3 py-2 text-xs font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-brand-subtle)]"
+          className="mt-2 inline-flex w-full items-center justify-center gap-1 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-brand-subtle)]"
         >
           <span className="material-symbols-outlined text-base">
             {showFullThread ? "unfold_less" : "account_tree"}
