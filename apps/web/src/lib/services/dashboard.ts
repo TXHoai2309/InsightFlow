@@ -1123,11 +1123,11 @@ function getSupabaseLabel(
     ? mapIntent(annotationLabel.intent)
     : hasRowLabelIntent
       ? mapIntent(rowLabels.intent)
-    : inferLeadIntent(
-      row.intent,
-      row.lead_intent,
-      row.intent_type,
-    );
+      : inferLeadIntent(
+        row.intent,
+        row.lead_intent,
+        row.intent_type,
+      );
 
   const rawLabel = {
     ...rowLabels,
@@ -1273,10 +1273,10 @@ function supabaseCommentToMention(
     star_count: readOptionalNumber(row.star_count, payload.star_count, payload.rating),
     location_name: normalizeOptionalText(
       payload.location_name ||
-        payload.branch_name ||
-        payload.store_name ||
-        post?.location_name ||
-        post?.post_content,
+      payload.branch_name ||
+      payload.store_name ||
+      post?.location_name ||
+      post?.post_content,
     ),
     labels: label,
   };
@@ -1332,7 +1332,7 @@ async function fetchSupabaseMentionsUncached(opts: FetchOptions): Promise<Mentio
   const maxMentions = opts.maxMentions || 30000;
   const brandKey = opts.brandKey ? opts.brandKey.toLowerCase().replace(/[\s\-_.]/g, "").trim() : "";
   let annotationRows: SupabaseRow[] = [];
-  
+
   if (brandKey) {
     // ── Brand-First Strategy ──────────────────────────────────────────
     // 1. Fetch posts matching the brand key

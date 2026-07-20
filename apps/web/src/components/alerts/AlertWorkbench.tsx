@@ -83,7 +83,7 @@ export function AlertWorkbench(props: AlertWorkbenchProps) {
   const isPanelOpen = Boolean(props.selectedAlert && !props.panelCollapsed);
 
   const ALL_STATUS_VIEWS = [
-    { id: "all" as const, label: "Tất cả đang mở", count: counts.pending + counts.processing + counts.contact_failed },
+    { id: "all" as const, label: "Tất cả đang mở", count: counts.pending + counts.contact_failed },
     { id: "pending" as const, label: "Chưa phân công", count: counts.pending },
     { id: "processing" as const, label: "Đang xử lý", count: counts.processing },
     { id: "contact_failed" as const, label: "Cần liên hệ lại", count: counts.contact_failed },
