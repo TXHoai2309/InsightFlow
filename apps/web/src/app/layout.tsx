@@ -73,7 +73,8 @@ export default function RootLayout({
     "/ve-chung-toi",
     "/profile",
   ].includes(pathname || "");
-  const hideShell = isAuthPage || isPublicPage;
+  const isDemoPage = pathname === "/demo";
+  const hideShell = isAuthPage || isPublicPage || isDemoPage;
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -93,6 +94,8 @@ export default function RootLayout({
         return "metadata.profile.title";
       case "/dashboard":
         return "metadata.dashboard.title";
+      case "/demo":
+        return "InsightFlow Demo";
       case "/mentions":
         return "metadata.mentions.title";
       case "/alerts":
@@ -166,7 +169,9 @@ export default function RootLayout({
           <ThemeProvider>
             <LanguageProvider>
               <NativeSelectEnhancer />
-              {isAuthPage ? (
+              {isDemoPage ? (
+                <main className="min-h-screen">{children}</main>
+              ) : isAuthPage ? (
                 /* Trang đăng nhập/đăng ký/quên mật khẩu — không có footer */
                 <main className="flex-1">{children}</main>
               ) : hideShell ? (

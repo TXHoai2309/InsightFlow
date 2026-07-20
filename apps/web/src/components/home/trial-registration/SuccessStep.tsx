@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { ArrowRight, CheckCircle2, Clock, Mail, Hash, Calendar, MessageSquareText } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, CheckCircle2, Clock, Mail, Hash, Calendar, MessageSquareText, MonitorPlay, ShieldCheck } from "lucide-react";
 import { motion } from "framer-motion";
 
 interface SuccessStepProps {
@@ -131,6 +132,34 @@ export function SuccessStep({
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div className="relative z-10 mt-8 overflow-hidden rounded-[24px] border border-violet-200 bg-gradient-to-r from-[#F5F3FF] via-white to-[#EEF2FF] p-6 shadow-sm dark:border-violet-400/20 dark:from-violet-950/30 dark:via-[#1C1C2A] dark:to-indigo-950/30 md:p-8">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-start gap-4">
+            <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-lg shadow-violet-500/20">
+              <MonitorPlay className="h-7 w-7" />
+            </span>
+            <div>
+              <p className="flex flex-wrap items-center gap-2 text-[18px] font-extrabold text-[#0F172A] dark:text-white">
+                Khám phá InsightFlow trong lúc chờ
+                <span className="rounded-full bg-violet-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-violet-700 dark:bg-violet-400/15 dark:text-violet-300">Demo tương tác</span>
+              </p>
+              <p className="mt-2 max-w-2xl text-[14px] leading-6 text-[#64748B] dark:text-gray-400">
+                Xem tổng quan Dashboard, cảnh báo khủng hoảng, khách hàng tiềm năng và báo cáo với dữ liệu minh họa an toàn.
+              </p>
+              <p className="mt-2 flex items-center gap-1.5 text-[12px] font-bold text-emerald-700 dark:text-emerald-400"><ShieldCheck className="h-4 w-4" /> Không sử dụng dữ liệu khách hàng thật</p>
+            </div>
+          </div>
+          <Link
+            href="/demo"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex h-[52px] shrink-0 items-center justify-center gap-2 rounded-[14px] bg-gradient-to-r from-[#6D5EF6] to-[#4F46E5] px-7 py-3.5 text-[14px] font-extrabold text-white shadow-[0_12px_28px_rgba(109,94,246,0.28)] transition hover:-translate-y-0.5 hover:shadow-[0_16px_34px_rgba(109,94,246,0.34)]"
+          >
+            Xem bản demo ngay <ArrowRight className="h-4 w-4" />
+          </Link>
         </div>
       </div>
 
