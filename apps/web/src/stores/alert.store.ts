@@ -16,6 +16,7 @@ import { useDashboardStore } from "@/stores/dashboard.store";
 import type { Mention } from "@/types/dashboard";
 import { getPersistedAlertStatus, isResolvedAlert } from "@/lib/alertWorkflow";
 import { canAlertBeVisibleToUser } from "@/lib/alert-visibility";
+import { dummyMentions } from "@/lib/demoData";
 
 function getResolverName(emailOrId: string | null | undefined): string {
   if (!emailOrId) return "";
@@ -394,6 +395,19 @@ function mentionToAlertData(m: Mention): AlertData {
   };
 }
 
+export function buildDemoAlertData(): AlertData[] {
+  return dummyMentions
+    .filter((mention) => {
+      const labels = (mention.labels || {}) as Record<string, unknown>;
+      return (
+        labels.relevance === true &&
+        labels.sentiment === "negative" &&
+        (labels.urgency === "high" || labels.urgency === "urgent")
+      );
+    })
+    .map(mentionToAlertData);
+}
+
 function isSameAlertRecord(alert: AlertData, id: string): boolean {
   return (
     alert.id === id ||
@@ -583,6 +597,26 @@ export const useAlertStore = create<AlertState>()(
     },
 
     fetchAlerts: async (scopedBrandKey = null, force = false) => {
+      // Demo must be completely deterministic and must never depend on the
+      // production cache/realtime pipeline. Build the same alert view model
+      // used by the real page directly from the in-memory demo mentions.
+      if (typeof window !== "undefined" && window.location.pathname.startsWith("/demo")) {
+        const demoAlerts = buildDemoAlertData();
+        const demoBrands = Array.from(
+          new Set(demoAlerts.map((alert) => alert.brand)),
+        ).sort();
+
+        set((state) => ({
+          rawAlerts: demoAlerts,
+          alerts: applyFilters(demoAlerts, state.filters),
+          brands: demoBrands,
+          isLoading: false,
+          error: null,
+          lastFetchedAt: Date.now(),
+        }));
+        return;
+      }
+
       const now = Date.now();
       const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
       const hasData = get().rawAlerts.length > 0;
@@ -660,6 +694,12 @@ export const useAlertStore = create<AlertState>()(
       try {
         // Initial load
         await loadAlerts();
+
+        // Demo pages use DashboardService's in-memory sample data only. Do not
+        // attach realtime listeners or polling to the production data source.
+        if (typeof window !== "undefined" && window.location.pathname.startsWith("/demo")) {
+          return;
+        }
 
         const cleanupFns: (() => void)[] = [];
 
@@ -1004,6 +1044,11 @@ export const useAlertStore = create<AlertState>()(
     },
 
     fetchCorrectionRequests: async (scopedBrandKey = null, force = false) => {
+      if (typeof window !== "undefined" && window.location.pathname.startsWith("/demo")) {
+        set({ correctionRequests: [], isLoadingRequests: false });
+        return;
+      }
+
       const requestScope = scopedBrandKey || null;
 
       if (activeRequestsUnsubscribe && activeRequestsScope === requestScope && !force) {

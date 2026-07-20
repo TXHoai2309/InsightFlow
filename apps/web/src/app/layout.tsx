@@ -73,8 +73,8 @@ export default function RootLayout({
     "/ve-chung-toi",
     "/profile",
   ].includes(pathname || "");
-  const isDemoPage = pathname === "/demo";
-  const hideShell = isAuthPage || isPublicPage || isDemoPage;
+  const isDemoPage = pathname === "/demo" || pathname?.startsWith("/demo/") === true;
+  const hideShell = isAuthPage || isPublicPage;
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -170,7 +170,28 @@ export default function RootLayout({
             <LanguageProvider>
               <NativeSelectEnhancer />
               {isDemoPage ? (
-                <main className="min-h-screen">{children}</main>
+                <div
+                  className="flex h-screen w-full overflow-hidden"
+                  style={{ backgroundColor: "var(--color-bg-primary)" }}
+                >
+                  <Sidebar
+                    isOpen={sidebarOpen}
+                    onClose={() => setSidebarOpen(false)}
+                  />
+                  <div className="flex flex-col flex-1 min-w-0 md:ml-64">
+                    <Header
+                      onMenuToggle={() => setSidebarOpen((prev) => !prev)}
+                    />
+                    <main
+                      data-app-scroll-root="true"
+                      className="flex-1 overflow-y-auto mt-16 pb-16 md:pb-0"
+                      style={{ backgroundColor: "var(--color-bg-primary)" }}
+                    >
+                      {children}
+                    </main>
+                    <MobileNav />
+                  </div>
+                </div>
               ) : isAuthPage ? (
                 /* Trang đăng nhập/đăng ký/quên mật khẩu — không có footer */
                 <main className="flex-1">{children}</main>
@@ -180,9 +201,6 @@ export default function RootLayout({
                   <main className="flex-1">{children}</main>
                   <Footer />
                 </div>
-              ) : isDemoPage ? (
-                /* Trang demo — có layout riêng bên trong /demo/layout.tsx */
-                children
               ) : (
                 /* Trang app (Dashboard, Mentions...) — có sidebar */
                 <ProtectedRoute>

@@ -7,6 +7,13 @@
 
 import { useEffect, useState } from "react";
 import { useDashboardStore } from "@/stores/dashboard.store";
+import {
+  dummyAlerts,
+  dummyLabelChangeRequests,
+  dummyLeads,
+  dummyMentions,
+  dummyWorkspaces,
+} from "@/lib/demoData";
 import { DashboardService } from "@/lib/services/dashboard";
 import { filterByBusinessPolicy, getScopedBrandKey } from "@/lib/brandScope";
 import { useAuth } from "@/hooks/useAuth";
@@ -92,6 +99,8 @@ export function useDashboard(options: UseDashboardOptions = {}) {
   const [isInitialized, setIsInitialized] = useState(false);
 
   const fetchDashboardData = async (force: boolean = false) => {
+    const isDemoMode =
+      typeof window !== "undefined" && window.location.pathname.startsWith("/demo");
     const brandKey = getScopedBrandKey(profile) || "global";
     // Scope browser cache by user as well as brand. Brand-only cache keys can
     // otherwise render another employee's assigned work after account changes
@@ -103,7 +112,7 @@ export function useDashboard(options: UseDashboardOptions = {}) {
       let hasRenderedCache = false;
 
       // Check client-side localStorage cache if not forcing refresh
-      if (!force && typeof window !== "undefined") {
+      if (!force && !isDemoMode && typeof window !== "undefined") {
         const cached = localStorage.getItem(cacheKey);
         if (cached) {
           try {
@@ -140,8 +149,15 @@ export function useDashboard(options: UseDashboardOptions = {}) {
 
       // 1. Fetch raw data từ Supabase (lọc theo brand nếu có)
       const rawBrandKey = brandKey === "global" ? undefined : brandKey;
-      const rawData =
-        await DashboardService.fetchRawData({ brandKey: rawBrandKey });
+      const rawData = isDemoMode
+        ? {
+            workspaces: dummyWorkspaces,
+            mentions: dummyMentions,
+            alerts: dummyAlerts,
+            leads: dummyLeads,
+            labelChangeRequests: dummyLabelChangeRequests,
+          }
+        : await DashboardService.fetchRawData({ brandKey: rawBrandKey });
       const workspaces = filterByBusinessPolicy(
         rawData.workspaces.map((workspace) => ({
           ...workspace,
@@ -179,7 +195,7 @@ export function useDashboard(options: UseDashboardOptions = {}) {
       setTrendData(trendData);
 
       // Save to localStorage cache
-      if (typeof window !== "undefined") {
+      if (!isDemoMode && typeof window !== "undefined") {
         const timestamp = Date.now();
         const compactData = {
           workspaces,
@@ -272,11 +288,12 @@ export function useDashboard(options: UseDashboardOptions = {}) {
     const fetchScopeKey = `${DASHBOARD_CACHE_VERSION}:${brandKey}:${profileKey}`;
     const lastFetched = lastFetchedAtMap[fetchScopeKey] || 0;
     const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes cache window
+    const isDemoMode = window.location.pathname.startsWith("/demo");
 
     // Only fetch if we don't have data in the Zustand store or it is older than 30 minutes
     const hasData = useDashboardStore.getState().mentions.length > 0;
-    if (!hasData || Date.now() - lastFetched >= CACHE_DURATION) {
-      fetchDashboardData();
+    if (isDemoMode || !hasData || Date.now() - lastFetched >= CACHE_DURATION) {
+      fetchDashboardData(isDemoMode);
     }
 
     setIsInitialized(true);
@@ -289,7 +306,10 @@ export function useDashboard(options: UseDashboardOptions = {}) {
       const isAlertsFresh = Date.now() - alertStore.lastFetchedAt < 30 * 60 * 1000;
       if (!hasAlerts || !isAlertsFresh) {
         alertStore.fetchAlerts(brandKey === "global" ? null : brandKey);
-        alertStore.fetchCorrectionRequests(brandKey === "global" ? null : brandKey);
+        const isDemoMode = window.location.pathname.startsWith("/demo");
+        if (!isDemoMode) {
+          alertStore.fetchCorrectionRequests(brandKey === "global" ? null : brandKey);
+        }
       }
     }, 1500);
 
@@ -303,6 +323,7 @@ export function useDashboard(options: UseDashboardOptions = {}) {
   // Realtime subscription on leads table to sync assignee and status instantly
   useEffect(() => {
     if (!profile || authLoading || !canPerformAction(profile, "view_leads")) return;
+    if (window.location.pathname.startsWith("/demo")) return;
 
     if (supabaseClient) {
       console.log("[useDashboard] Initializing Realtime leads subscription");

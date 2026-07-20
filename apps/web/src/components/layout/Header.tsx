@@ -46,6 +46,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [showNotifications, setShowNotifications] = useState(false);
+  const isDemoMode = pathname.startsWith("/demo");
   const { user, role, profile } = useAuth();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const { t } = useTranslation();
@@ -90,6 +91,10 @@ export function Header({ onMenuToggle }: HeaderProps) {
   const scopedBrandKey = profile?.role === "admin" ? null : normalizeBrandName(profile?.brandName || profile?.brandId || "");
 
   useEffect(() => {
+    if (isDemoMode) {
+      setNotifications((current) => (current.length === 0 ? current : []));
+      return;
+    }
     if (!dbSecond || !profile) {
       setNotifications([]);
       return;
@@ -131,7 +136,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
       console.error("[Header] notifications snapshot error:", error);
       setNotifications([]);
     });
-  }, [profile, scopedBrandKey]);
+  }, [isDemoMode, profile, scopedBrandKey]);
 
   const unreadCount = useMemo(() => {
     return notifications.filter((notification) => !notification.read).length;
@@ -181,7 +186,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
 
       {/* Right Section */}
       <div className="flex items-center gap-4 md:gap-6">
-        {(role === "brand_manager" || role === "crisis_employee" || role === "lead_employee") && (
+        {!isDemoMode && (role === "brand_manager" || role === "crisis_employee" || role === "lead_employee") && (
           <button
             type="button"
             onClick={handleOpenGuide}

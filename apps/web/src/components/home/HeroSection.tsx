@@ -313,7 +313,7 @@ export default function HeroSection() {
                 </Link>
               )}
               <Link
-                href={user ? appRoute : "/login"}
+                href="/demo"
                 className="flex items-center justify-center gap-2 border-2 px-7 py-3.5 rounded-[12px] font-bold text-[15px] transition-all active:scale-95"
                 style={{ borderColor: "#6D4CFF", color: isDark ? "#9B8FF8" : "#6D4CFF" }}
               >

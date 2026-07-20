@@ -38,6 +38,14 @@ const navItems: NavItem[] = [
   { href: "/reports", label: "nav.reports", fallback: "Báo cáo", icon: "ti-file-analytics" },
 ];
 
+const demoNavRoutes: Record<string, string> = {
+  "/dashboard": "/demo",
+  "/mentions": "/demo/mentions",
+  "/alerts": "/demo/alerts",
+  "/leads": "/demo/leads",
+  "/reports": "/demo/reports",
+};
+
 
 interface SidebarProps {
   isOpen: boolean;
@@ -51,7 +59,12 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { theme } = useTheme();
   const { profile, role } = useAuth();
   const isDark = theme === "dark";
-  const accessibleNavItems = navItems.filter((item) => canAccessPath(role, item.href, profile?.permissions));
+  const isDemoMode = pathname.startsWith("/demo");
+  const accessibleNavItems = navItems.filter(
+    (item) =>
+      canAccessPath(role, item.href, profile?.permissions) &&
+      (!isDemoMode || Boolean(demoNavRoutes[item.href])),
+  );
 
   // Đóng sidebar khi chuyển trang trên mobile
   useEffect(() => {
@@ -69,6 +82,10 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   }, [isOpen]);
 
   const handleLogout = async () => {
+    if (isDemoMode) {
+      router.push("/");
+      return;
+    }
     try {
       await signOut(auth);
       router.push("/");
@@ -131,12 +148,14 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         {/* Navigation */}
         <nav className="flex-1 space-y-1 overflow-y-auto">
           {accessibleNavItems.map((item) => {
+            const navigationHref = isDemoMode ? demoNavRoutes[item.href] : item.href;
             const isActive =
-              pathname === item.href || pathname?.startsWith(item.href);
+              pathname === navigationHref ||
+              (navigationHref !== "/demo" && pathname?.startsWith(`${navigationHref}/`));
             return (
               <Link
                 key={item.href}
-                href={item.href}
+                href={navigationHref}
                 data-tour={`nav-${item.href.replace(/^\//, "").replace(/\//g, "-") || "home"}`}
                 className="w-full px-4 py-[14px] text-left text-[14px] transition-colors duration-200 flex items-center rounded-r-[10px]"
                 style={

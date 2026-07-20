@@ -294,10 +294,11 @@ export function BrandManagerOnboarding() {
 
   const shouldShow = useMemo(() => {
     if (loading || dismissed) return false;
+    if (pathname.startsWith("/demo")) return false;
     if (!profile || profile.role !== "brand_manager") return false;
     if (profile.temporaryPasswordIssued) return false;
     return manualOpen || !hasCompletedCurrentVersion;
-  }, [dismissed, hasCompletedCurrentVersion, loading, manualOpen, profile]);
+  }, [dismissed, hasCompletedCurrentVersion, loading, manualOpen, pathname, profile]);
 
   const step = tourSteps[currentStep];
   const isLastStep = currentStep === tourSteps.length - 1;
