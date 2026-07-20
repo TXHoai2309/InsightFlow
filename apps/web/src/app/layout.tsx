@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import dynamic from "next/dynamic";
 import { useTranslation, I18nextProvider } from "react-i18next";
@@ -77,6 +77,19 @@ export default function RootLayout({
   const hideShell = isAuthPage || isPublicPage;
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    setSidebarCollapsed(window.localStorage.getItem("insightflow-sidebar-collapsed") === "true");
+  }, []);
+
+  const toggleSidebarCollapsed = () => {
+    setSidebarCollapsed((current) => {
+      const next = !current;
+      window.localStorage.setItem("insightflow-sidebar-collapsed", String(next));
+      return next;
+    });
+  };
 
   const getPageTitleKey = (path: string) => {
     switch (path) {
@@ -177,10 +190,13 @@ export default function RootLayout({
                   <Sidebar
                     isOpen={sidebarOpen}
                     onClose={() => setSidebarOpen(false)}
+                    isCollapsed={sidebarCollapsed}
+                    onToggleCollapsed={toggleSidebarCollapsed}
                   />
-                  <div className="flex flex-col flex-1 min-w-0 md:ml-64">
+                  <div className={`flex min-w-0 flex-1 flex-col transition-[margin] duration-200 ${sidebarCollapsed ? "md:ml-[76px]" : "md:ml-[240px]"}`}>
                     <Header
                       onMenuToggle={() => setSidebarOpen((prev) => !prev)}
+                      isSidebarCollapsed={sidebarCollapsed}
                     />
                     <main
                       data-app-scroll-root="true"
@@ -211,10 +227,13 @@ export default function RootLayout({
                     <Sidebar
                       isOpen={sidebarOpen}
                       onClose={() => setSidebarOpen(false)}
+                      isCollapsed={sidebarCollapsed}
+                      onToggleCollapsed={toggleSidebarCollapsed}
                     />
-                    <div className="flex flex-col flex-1 min-w-0 md:ml-64">
+                    <div className={`flex min-w-0 flex-1 flex-col transition-[margin] duration-200 ${sidebarCollapsed ? "md:ml-[76px]" : "md:ml-[240px]"}`}>
                       <Header
                         onMenuToggle={() => setSidebarOpen((prev) => !prev)}
+                        isSidebarCollapsed={sidebarCollapsed}
                       />
                       <main
                         data-app-scroll-root="true"

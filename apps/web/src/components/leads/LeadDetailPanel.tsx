@@ -392,6 +392,14 @@ export function LeadDetailPanel({
       return;
     }
 
+    // Keep the source reusable while a result is pending, without recording
+    // another contact attempt every time the user reopens the same post.
+    if (countAsContact && meta.needsResultCapture) {
+      window.open(action.href, "_blank", "noopener,noreferrer");
+      showToast("Đã mở lại nguồn của khách hàng.");
+      return;
+    }
+
     try {
       setSaveError("");
       setIsOpening(action.label);
@@ -632,7 +640,21 @@ export function LeadDetailPanel({
                   <span className="hidden sm:inline">{isClaiming ? "Đang nhận..." : "Nhận xử lý"}</span>
                 </button>
               )
-            ) : meta.needsResultCapture ? (
+            ) : (
+              <>
+                {sourceAction && (
+                  <button
+                    type="button"
+                    disabled={!ownership.canWork || Boolean(isOpening)}
+                    onClick={() => handleOpenAction(sourceAction, true)}
+                    className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-bg-surface)] px-3 text-[13px] font-semibold text-[var(--color-brand)] shadow-sm transition hover:bg-[var(--color-brand-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    title="Mở lại nguồn của Lead"
+                  >
+                    <span className="material-symbols-outlined text-lg">open_in_new</span>
+                    <span className="hidden sm:inline">{isOpening === sourceAction.label ? "Đang mở..." : "Mở nguồn"}</span>
+                  </button>
+                )}
+                {meta.needsResultCapture && (
                 <button
                   type="button"
                   onClick={handleScrollToResult}
@@ -641,17 +663,9 @@ export function LeadDetailPanel({
                   <ClipboardCheck size={18} aria-hidden="true" />
                   <span className="hidden sm:inline">Ghi nhận kết quả</span>
                 </button>
-            ) : sourceAction ? (
-              <button
-                type="button"
-                disabled={!ownership.canWork || Boolean(isOpening)}
-                onClick={() => handleOpenAction(sourceAction, true)}
-                className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[var(--color-brand-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <span className="material-symbols-outlined text-lg">open_in_new</span>
-                <span className="hidden sm:inline">{isOpening === sourceAction.label ? "Đang mở..." : "Mở nguồn"}</span>
-              </button>
-            ) : null}
+                )}
+              </>
+            )}
             <div className="mx-1.5 h-6 w-px bg-[var(--color-border)]" />
 
             <button

@@ -50,9 +50,11 @@ const demoNavRoutes: Record<string, string> = {
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
+  isCollapsed?: boolean;
+  onToggleCollapsed?: () => void;
 }
 
-export function Sidebar({ isOpen, onClose }: SidebarProps) {
+export function Sidebar({ isOpen, onClose, isCollapsed = false, onToggleCollapsed }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { t } = useTranslation();
@@ -107,10 +109,11 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       {/* Sidebar panel */}
       <aside
         className={`
-          w-[240px] flex flex-col py-6 pr-4 shrink-0
+          w-[240px] flex flex-col py-6 shrink-0
           fixed h-screen left-0 top-0 z-40
-          transition-transform duration-200 ease-in-out
+          transition-[width,transform] duration-200 ease-in-out
           md:translate-x-0
+          ${isCollapsed ? "md:w-[76px] md:pr-2" : "md:w-[240px] md:pr-4"}
           ${isOpen ? "translate-x-0" : "-translate-x-full"}
         `}
         style={{
@@ -119,18 +122,40 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         }}
       >
         {/* Logo + Close button (mobile) */}
-        <div className="flex items-center justify-center mb-4 relative">
-          <Link href="/" className="flex items-center hover:scale-105 transition-transform duration-300">
+        <div className="relative mb-4 flex min-h-[80px] items-center justify-center">
+          <Link href="/" className="flex items-center transition-transform duration-300 hover:scale-105" title="InsightFlow">
             {/* Container crop giống nhau cho cả 2 chế độ */}
-            <div className="relative w-[300px] h-[80px] overflow-hidden flex items-center justify-center">
+            <div className={`relative h-[80px] w-[300px] items-center justify-center overflow-hidden ${isCollapsed ? "flex md:hidden" : "flex"}`}>
               <img
                 src={isDark ? "/logo.png" : "/logo-dark.png"}
                 alt="InsightFlow Logo"
-                className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[220px] max-w-none pointer-events-none"
+                className="pointer-events-none absolute left-1/2 top-1/2 h-[220px] max-w-none -translate-x-1/2 -translate-y-1/2"
                 style={isDark ? undefined : { mixBlendMode: "multiply" }}
               />
             </div>
+            {isCollapsed && (
+              <div className="relative hidden h-14 w-14 overflow-hidden rounded-2xl md:block" aria-label="InsightFlow">
+                <img
+                  src={isDark ? "/logo.png" : "/logo-dark.png"}
+                  alt=""
+                  className="pointer-events-none absolute left-[-4px] top-1/2 h-[160px] w-[160px] max-w-none -translate-y-1/2"
+                  style={isDark ? undefined : { mixBlendMode: "multiply" }}
+                />
+              </div>
+            )}
           </Link>
+
+          {onToggleCollapsed && (
+            <button
+              type="button"
+              onClick={onToggleCollapsed}
+              className={`fixed top-1/2 z-50 hidden h-8 w-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)] shadow-md transition-[left,background-color,border-color,color] duration-200 hover:border-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)] hover:text-[var(--color-brand)] md:flex ${isCollapsed ? "left-[76px]" : "left-[240px]"}`}
+              aria-label={isCollapsed ? "Mở rộng thanh điều hướng" : "Thu gọn thanh điều hướng"}
+              title={isCollapsed ? "Mở rộng thanh điều hướng" : "Thu gọn thanh điều hướng"}
+            >
+              <i className={`ti ${isCollapsed ? "ti-chevron-right" : "ti-chevron-left"} text-base`} aria-hidden="true" />
+            </button>
+          )}
 
           {/* Nút đóng — mobile only */}
           <button
@@ -146,7 +171,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 space-y-1 overflow-y-auto">
+        <nav className="flex-1 space-y-1 overflow-y-auto overflow-x-hidden">
           {accessibleNavItems.map((item) => {
             const navigationHref = isDemoMode ? demoNavRoutes[item.href] : item.href;
             const isActive =
@@ -157,7 +182,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                 key={item.href}
                 href={navigationHref}
                 data-tour={`nav-${item.href.replace(/^\//, "").replace(/\//g, "-") || "home"}`}
-                className="w-full px-4 py-[14px] text-left text-[14px] transition-colors duration-200 flex items-center rounded-r-[10px]"
+                className={`flex w-full items-center rounded-r-[10px] px-4 py-[14px] text-left text-[14px] transition-colors duration-200 ${isCollapsed ? "md:justify-center md:rounded-[10px] md:px-2" : ""}`}
+                title={isCollapsed ? t(item.label, item.fallback) : undefined}
                 style={
                   isActive
                     ? {
@@ -183,9 +209,9 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                   }
                 }}
               >
-                <i className={`ti ${item.icon} text-[18px] mr-[10px]`}></i>
-                <span className="flex-1">{t(item.label, item.fallback)}</span>
-                {item.badge && item.badge > 0 && (
+                <i className={`ti ${item.icon} mr-[10px] text-[18px] ${isCollapsed ? "md:mr-0" : ""}`}></i>
+                <span className={`flex-1 ${isCollapsed ? "md:hidden" : ""}`}>{t(item.label, item.fallback)}</span>
+                {item.badge && item.badge > 0 && !isCollapsed && (
                   <span
                     className="text-[11px] px-2 py-0.5 rounded-full text-white font-bold ml-2"
                     style={{ backgroundColor: "var(--color-brand)" }}
@@ -200,28 +226,29 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
         {/* Bottom Section */}
         <div
-          className="mt-auto space-y-3 pt-4 pl-4"
+          className={`mt-auto space-y-3 pl-4 pt-4 ${isCollapsed ? "md:pl-0" : ""}`}
           style={{ borderTop: "1px solid var(--color-border)" }}
         >
           <button
             onClick={handleLogout}
-            className="w-full px-4 py-[14px] text-left text-[14px] transition-colors duration-200 flex items-center rounded-r-[10px] font-medium border-l-[3px] border-transparent"
+            className={`flex w-full items-center rounded-r-[10px] border-l-[3px] border-transparent px-4 py-[14px] text-left text-[14px] font-medium transition-colors duration-200 ${isCollapsed ? "md:justify-center md:rounded-[10px] md:border-l-0 md:px-2" : ""}`}
+            title={isCollapsed ? t("nav.logout", "Đăng xuất") : undefined}
             style={{ color: "var(--color-error)" }}
             onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--color-error-subtle)")}
             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
           >
-            <i className="ti ti-logout text-[18px] mr-[10px]"></i>
-            <span className="flex-1 text-left font-medium">{t("nav.logout", "Đăng xuất")}</span>
+            <i className={`ti ti-logout mr-[10px] text-[18px] ${isCollapsed ? "md:mr-0" : ""}`}></i>
+            <span className={`flex-1 text-left font-medium ${isCollapsed ? "md:hidden" : ""}`}>{t("nav.logout", "Đăng xuất")}</span>
           </button>
 
 
           {/* System Status */}
           <div
-            className="flex items-center gap-2 px-3 py-2"
+            className={`flex items-center gap-2 px-3 py-2 ${isCollapsed ? "md:justify-center" : ""}`}
             style={{ color: "var(--color-text-muted)" }}
           >
             <span className="w-2 h-2 rounded-full bg-[#22C55E] animate-pulse"></span>
-            <span className="text-[12px] font-medium">{t("sidebar.systemActive", "Hệ thống Hoạt động 24/7")}</span>
+            <span className={`text-[12px] font-medium ${isCollapsed ? "md:hidden" : ""}`}>{t("sidebar.systemActive", "Hệ thống Hoạt động 24/7")}</span>
           </div>
         </div>
       </aside>
