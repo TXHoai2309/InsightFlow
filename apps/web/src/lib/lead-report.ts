@@ -353,7 +353,7 @@ export function buildLeadReportData(
     (lead) => lead.follow_up_at && lead.status !== "completed" && lead.status !== "skipped",
   ).length;
   const followUpOverdue = scopedLeads.filter((lead) => {
-    const followUpTime = toTime(lead.follow_up_at);
+    const followUpTime = toTime(lead.follow_up_at || undefined);
     return followUpTime !== null && followUpTime < nowMs && lead.status !== "completed" && lead.status !== "skipped";
   }).length;
 

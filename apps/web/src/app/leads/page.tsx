@@ -21,6 +21,8 @@ import {
   getLeadWorkbenchMeta,
   getLeadWorkbenchViews,
   matchesLeadWorkbenchView,
+  getLeadFollowUpMeta,
+  sortFollowUpLeads,
   sortLeadsForWorkbench,
   type LeadWorkbenchView,
 } from "@/lib/lead-workbench";
@@ -342,7 +344,7 @@ export default function LeadsPage() {
   );
 
   const viewCounts = useMemo(() => {
-    const allViews: LeadWorkbenchView[] = ["unassigned", "priority", "active", "closed", "need_result"];
+    const allViews: LeadWorkbenchView[] = ["unassigned", "priority", "active", "follow_up", "closed", "need_result"];
     return allViews.reduce(
       (acc, viewId) => {
         acc[viewId] = visibleBaseLeads.filter((lead) =>
@@ -371,6 +373,9 @@ export default function LeadsPage() {
         currentTime,
         profile?.uid,
       );
+    if (activeView === "follow_up") {
+      return sortFollowUpLeads(filtered, currentTime, profile);
+    }
     if (sortMode === "recommended") return filtered;
 
     return [...filtered].sort((left, right) => {
@@ -387,7 +392,31 @@ export default function LeadsPage() {
       }
       return leftMeta.remainingMs - rightMeta.remainingMs;
     });
-  }, [currentTime, leadFilters, leadsInActiveView, profile?.uid, sortMode]);
+  }, [activeView, currentTime, leadFilters, leadsInActiveView, profile, sortMode]);
+
+  const followUpQueue = useMemo(
+    () => sortFollowUpLeads(
+      visibleBaseLeads.filter((lead) =>
+        matchesLeadWorkbenchView(lead, "follow_up", currentTime, profile),
+      ),
+      currentTime,
+      profile,
+    ),
+    [currentTime, profile, visibleBaseLeads],
+  );
+
+  const followUpSummary = useMemo(() => {
+    const metadata = followUpQueue.map((lead) => getLeadFollowUpMeta(lead, currentTime));
+    const overdue = metadata.filter((item) => item.isOverdue).length;
+    const next = metadata.find((item) => !item.isOverdue && item.scheduledAt !== null);
+    return {
+      total: followUpQueue.length,
+      overdue,
+      nextLabel: next?.scheduledAt
+        ? new Date(next.scheduledAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })
+        : "Chưa có lịch tiếp theo",
+    };
+  }, [currentTime, followUpQueue]);
 
   const activeFilterCount = countActiveLeadFilters(
     leadFilters,
@@ -585,6 +614,37 @@ export default function LeadsPage() {
     );
   }, [sortedLeads, currentTime, profile]);
 
+  const handleSelectSummaryView = (view: LeadWorkbenchView) => {
+    setActiveView(view);
+    setCurrentPage(1);
+
+    if (view !== "follow_up") return;
+
+    setLeadFilters({
+      ...DEFAULT_LEAD_WORKBENCH_FILTERS,
+      workspaceId: leadFilters.workspaceId,
+    });
+    setSortMode("recommended");
+    const firstFollowUp = followUpQueue[0] || null;
+    setSelectedLeadId(firstFollowUp?.id || null);
+    setHighlightedLeadId(firstFollowUp?.id || null);
+    setDetailTab("action");
+    setIsPanelCollapsed(!firstFollowUp);
+    setRestoreNotice("");
+
+    window.setTimeout(() => {
+      document.getElementById("lead-follow-up-queue")?.scrollIntoView({
+        block: "start",
+        behavior: "smooth",
+      });
+    }, 80);
+    if (firstFollowUp) {
+      window.setTimeout(() => {
+        setHighlightedLeadId((current) => current === firstFollowUp.id ? null : current);
+      }, 4000);
+    }
+  };
+
   const handleStartedAction = (lead: Lead, preventJump = false) => {
     rememberOptimisticLead(lead);
     if (preventJump) return;
@@ -605,7 +665,7 @@ export default function LeadsPage() {
     );
   };
 
-  const handleAfterResult = () => {
+  const handleAfterResult = (resultType?: Lead["result_type"]) => {
     if (selectedLeadId) {
       setOptimisticLeadsById((current) => {
         if (!current[selectedLeadId]) return current;
@@ -613,6 +673,15 @@ export default function LeadsPage() {
         delete next[selectedLeadId];
         return next;
       });
+    }
+
+    if (activeView === "follow_up") {
+      const nextFollowUp = visibleLeads.find((lead) => lead.id !== selectedLeadId) || null;
+      setCurrentPage(1);
+      setSelectedLeadId(nextFollowUp?.id || null);
+      setHighlightedLeadId(nextFollowUp?.id || null);
+      if (!nextFollowUp && resultType !== "follow_up") setIsPanelCollapsed(true);
+      return;
     }
 
     const remainingNeedResult = sortedLeads.filter(
@@ -712,7 +781,7 @@ export default function LeadsPage() {
         leads={brandPlatformFilteredLeads}
         isLoading={isLoading}
         profile={profile}
-        onSelectView={(view) => setActiveView(view)}
+        onSelectView={handleSelectSummaryView}
       />
 
       {restoreNotice && (
@@ -725,6 +794,23 @@ export default function LeadsPage() {
           >
             Đóng
           </button>
+        </section>
+      )}
+
+      {activeView === "follow_up" && (
+        <section className="grid gap-3 rounded-xl border border-blue-200 bg-blue-50 p-3 text-blue-950 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] sm:items-center">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-blue-700 shadow-sm">
+              <span className="material-symbols-outlined">event_upcoming</span>
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-black">Hàng đợi Follow-up hôm nay</p>
+              <p className="mt-0.5 truncate text-xs text-blue-800">Ưu tiên lịch quá hẹn và lịch sắp đến giờ.</p>
+            </div>
+          </div>
+          <div className="rounded-lg bg-white px-3 py-2 text-center shadow-sm"><strong className="block text-lg text-blue-700">{followUpSummary.total}</strong><span className="text-[10px] font-bold uppercase text-blue-700">Cần xử lý</span></div>
+          <div className="rounded-lg bg-white px-3 py-2 text-center shadow-sm"><strong className="block text-lg text-red-700">{followUpSummary.overdue}</strong><span className="text-[10px] font-bold uppercase text-red-700">Quá hẹn</span></div>
+          <div className="rounded-lg bg-white px-3 py-2 text-center shadow-sm"><strong className="block text-sm text-blue-700">{followUpSummary.nextLabel}</strong><span className="text-[10px] font-bold uppercase text-blue-700">Lịch tiếp theo</span></div>
         </section>
       )}
 
@@ -761,7 +847,7 @@ export default function LeadsPage() {
         </section>
       )}
 
-      <section className="space-y-[clamp(6px,0.55vw,10px)]">
+      <section id="lead-follow-up-queue" className="scroll-mt-20 space-y-[clamp(6px,0.55vw,10px)]">
         <div className="flex items-center justify-between gap-4 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <div data-tour="lead-view-tabs" className="flex min-w-max shrink-0 items-center gap-2">
             {workbenchViews.map((view) => (
@@ -900,12 +986,16 @@ export default function LeadsPage() {
                     inbox
                   </span>
                   <h3 className="mt-3 text-base font-bold text-[var(--color-text-primary)]">
-                    {activeFilterCount > 0
+                    {activeView === "follow_up"
+                      ? "Không còn lịch follow-up cần xử lý hôm nay"
+                      : activeFilterCount > 0
                       ? "Không có khách hàng phù hợp"
                       : "Không có lead trong nhóm này"}
                   </h3>
                   <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-                    {activeFilterCount > 0
+                    {activeView === "follow_up"
+                      ? "Các lịch tương lai sẽ xuất hiện khi đến ngày hẹn; lịch đã hoàn tất được tự động loại khỏi hàng đợi."
+                      : activeFilterCount > 0
                       ? "Hãy điều chỉnh hoặc xóa các điều kiện lọc đang áp dụng."
                       : "Chuyển hàng chờ để xem nhóm lead khác."}
                   </p>

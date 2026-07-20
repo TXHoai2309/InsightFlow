@@ -197,7 +197,7 @@ export interface Lead {
     | "converted"
     | "transfer_sales";
   result_recorded_at?: string;
-  follow_up_at?: string;
+  follow_up_at?: string | null;
   closed_at?: string;
   sales_status?: "not_ready" | "ready_to_transfer" | "transferred";
   sales_owner_id?: string;

@@ -14,6 +14,8 @@ import { PlatformLogo } from "@/components/platform/PlatformLogo";
 import type { Lead } from "@/types/dashboard";
 import {
   formatLeadSla,
+  formatFollowUpTime,
+  getLeadFollowUpMeta,
   getLeadOwnershipMeta,
   getLeadWorkbenchMeta,
   getPrimaryLeadAction,
@@ -91,6 +93,17 @@ export function LeadWorkbenchRow({
     setTimeout(() => setToast(null), 3500);
   };
   const meta = getLeadWorkbenchMeta(lead, nowMs);
+  const followUpMeta = getLeadFollowUpMeta(lead, nowMs);
+  const isActionableFollowUp = followUpMeta.isDueToday;
+  const isUrgentFollowUp = followUpMeta.isOverdue || followUpMeta.isDueSoon;
+  const timingLabel = isActionableFollowUp
+    ? followUpMeta.relativeLabel
+    : formatLeadSla(meta);
+  const timingCaption = isActionableFollowUp
+    ? `Hẹn ${formatFollowUpTime(lead)}`
+    : meta.needsResultCapture
+      ? "Cần ghi nhận kết quả"
+      : "SLA còn lại";
   const ownership = getLeadOwnershipMeta(lead, profile);
   const primaryAction = getPrimaryLeadAction(lead);
   const platformMeta = PLATFORM_META[lead.platform];
@@ -116,14 +129,18 @@ export function LeadWorkbenchRow({
         ? "Xem chi tiết"
         : meta.needsResultCapture
           ? "Ghi nhận kết quả"
-          : meta.nextActionLabel;
+          : isActionableFollowUp
+            ? "Thực hiện follow-up"
+            : meta.nextActionLabel;
   const ctaIcon = ownership.canClaim
       ? "person_add"
       : !ownership.canWork
         ? "visibility"
         : meta.needsResultCapture
           ? "task_alt"
-          : primaryAction?.icon || "open_in_new";
+          : isActionableFollowUp
+            ? "event_upcoming"
+            : primaryAction?.icon || "open_in_new";
 
   const getOwnerName = () =>
     profile?.displayName || profile?.email || "Nhân viên xử lý";
@@ -230,7 +247,9 @@ export function LeadWorkbenchRow({
       ? "border border-[var(--color-brand)] text-[var(--color-brand)] bg-transparent hover:bg-[var(--color-brand-subtle)] hover:shadow-sm"
       : meta.needsResultCapture
         ? "bg-[var(--color-warning)] text-white hover:brightness-95 hover:shadow-md"
-        : "bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand-hover)] hover:shadow-md";
+        : isActionableFollowUp && followUpMeta.isOverdue
+          ? "bg-[var(--color-error)] text-white hover:brightness-95 hover:shadow-md"
+          : "bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand-hover)] hover:shadow-md";
 
   const cardStateClass = highlighted
     ? "border-[var(--color-brand)] bg-[var(--color-brand-subtle)] ring-4 ring-[var(--color-brand)]/20"
@@ -238,13 +257,17 @@ export function LeadWorkbenchRow({
       ? "border-[var(--color-brand)] bg-[var(--color-brand-subtle)]/55 ring-2 ring-[var(--color-brand)]/15"
       : meta.needsResultCapture
         ? "border-[var(--color-border)] hover:border-[var(--color-warning)]"
-        : meta.isOverdue || meta.isUrgent
-          ? "border-[var(--color-border)] hover:border-[var(--color-error)]"
-          : "border-[var(--color-border)] hover:border-[var(--color-brand-border)]";
+        : isActionableFollowUp
+          ? "border-[var(--color-info)]/50 hover:border-[var(--color-info)]"
+          : meta.isOverdue || meta.isUrgent
+            ? "border-[var(--color-border)] hover:border-[var(--color-error)]"
+            : "border-[var(--color-border)] hover:border-[var(--color-brand-border)]";
 
   const accentClass = selected || highlighted
     ? "bg-[var(--color-brand)]"
-    : "bg-[var(--color-border-strong)]";
+    : isActionableFollowUp
+      ? followUpMeta.isOverdue ? "bg-[var(--color-error)]" : "bg-[var(--color-info)]"
+      : "bg-[var(--color-border-strong)]";
 
   const leadTimeAgo = formatLeadTimeAgo(lead.posted_at || lead.created_at, nowMs);
   const intentLabel = lead.intent === "none" ? "N/A" : lead.intent.toUpperCase();
@@ -287,6 +310,12 @@ export function LeadWorkbenchRow({
                   <span className={`max-w-full truncate rounded-full border px-2 py-0.5 text-[11px] font-bold ${ownerChipClass}`}>
                     {ownership.label}
                   </span>
+                  {isActionableFollowUp && (
+                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-black ${isUrgentFollowUp ? "border-red-200 bg-red-50 text-red-700" : "border-blue-200 bg-blue-50 text-blue-700"}`}>
+                      <span className="material-symbols-outlined text-xs">event_upcoming</span>
+                      {followUpMeta.relativeLabel}
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
@@ -311,12 +340,12 @@ export function LeadWorkbenchRow({
 
             <div className="mt-2.5 flex items-end justify-between gap-3 border-t border-[var(--color-border)] pt-2.5">
               <div className="min-w-0">
-                <p className={`flex items-center gap-1 truncate text-xs font-black ${meta.isOverdue || meta.isUrgent ? "text-[var(--color-error)]" : "text-[var(--color-text-primary)]"}`}>
-                  {(meta.isOverdue || meta.isUrgent) && <span className="material-symbols-outlined text-sm">schedule</span>}
-                  <span className="truncate">{formatLeadSla(meta)}</span>
+                <p className={`flex items-center gap-1 truncate text-xs font-black ${isUrgentFollowUp || meta.isOverdue || meta.isUrgent ? "text-[var(--color-error)]" : isActionableFollowUp ? "text-[var(--color-info)]" : "text-[var(--color-text-primary)]"}`}>
+                  {(isActionableFollowUp || meta.isOverdue || meta.isUrgent) && <span className="material-symbols-outlined text-sm">{isActionableFollowUp ? "event_upcoming" : "schedule"}</span>}
+                  <span className="truncate">{timingLabel}</span>
                 </p>
                 <p className="mt-0.5 truncate text-[11px] font-semibold text-[var(--color-text-muted)]">
-                  {meta.needsResultCapture ? "Cần ghi nhận kết quả" : leadTimeAgo || "SLA xử lý"}
+                  {isActionableFollowUp ? timingCaption : meta.needsResultCapture ? "Cần ghi nhận kết quả" : leadTimeAgo || "SLA xử lý"}
                 </p>
               </div>
               <div className="shrink-0 text-right">
@@ -397,6 +426,12 @@ export function LeadWorkbenchRow({
                 <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-bold ${ownerChipClass}`}>
                   {ownership.label}
                 </span>
+                {isActionableFollowUp && (
+                  <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-black ${isUrgentFollowUp ? "border-red-200 bg-red-50 text-red-700" : "border-blue-200 bg-blue-50 text-blue-700"}`}>
+                    <span className="material-symbols-outlined text-xs">event_upcoming</span>
+                    {followUpMeta.relativeLabel}
+                  </span>
+                )}
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
@@ -437,15 +472,15 @@ export function LeadWorkbenchRow({
               <div className="flex items-center gap-1 lg:justify-end">
                 <span className={`material-symbols-outlined text-[16px] ${meta.isOverdue || meta.isUrgent ? "text-[var(--color-error)] animate-pulse" : "text-[var(--color-text-secondary)]"
                   }`}>
-                  {meta.needsResultCapture ? "task_alt" : "schedule"}
+                  {isActionableFollowUp ? "event_upcoming" : meta.needsResultCapture ? "task_alt" : "schedule"}
                 </span>
                 <span className={`text-sm font-extrabold tracking-tight ${meta.isOverdue || meta.isUrgent ? "text-[var(--color-error)]" : "text-[var(--color-text-secondary)]"
                   }`}>
-                  {formatLeadSla(meta)}
+                  {timingLabel}
                 </span>
               </div>
               <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
-                {meta.needsResultCapture ? "Cần ghi nhận" : "SLA còn lại"}
+                {timingCaption}
               </span>
             </div>
 
@@ -524,6 +559,12 @@ export function LeadWorkbenchRow({
                 <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-bold ${ownerChipClass}`}>
                   {ownership.label}
                 </span>
+                {isActionableFollowUp && (
+                  <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-black ${isUrgentFollowUp ? "border-red-200 bg-red-50 text-red-700" : "border-blue-200 bg-blue-50 text-blue-700"}`}>
+                    <span className="material-symbols-outlined text-xs">event_upcoming</span>
+                    {followUpMeta.relativeLabel}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -585,16 +626,16 @@ export function LeadWorkbenchRow({
                   : "bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]"
                 }`}>
                 <span className="material-symbols-outlined text-[20px]">
-                  {meta.needsResultCapture ? "task_alt" : "schedule"}
+                  {isActionableFollowUp ? "event_upcoming" : meta.needsResultCapture ? "task_alt" : "schedule"}
                 </span>
               </span>
               <div className="min-w-0">
                 <p className={`truncate text-sm font-black ${meta.isOverdue || meta.isUrgent ? "text-[var(--color-error)]" : "text-[var(--color-text-primary)]"
                   }`}>
-                  {formatLeadSla(meta)}
+                  {timingLabel}
                 </p>
                 <p className="mt-0.5 text-[11px] font-semibold text-[var(--color-text-muted)]">
-                  {meta.needsResultCapture ? "Cần ghi nhận kết quả" : "SLA còn lại"}
+                  {timingCaption}
                 </p>
               </div>
             </div>

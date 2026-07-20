@@ -41,7 +41,7 @@ interface LeadDetailPanelProps {
   nowMs: number;
   workbenchView: LeadWorkbenchView;
   onClose: () => void;
-  onAfterResult?: () => void;
+  onAfterResult?: (resultType?: Lead["result_type"]) => void;
   onStartedAction?: (lead: Lead, preventJump?: boolean) => void;
   returnContext?: {
     view: LeadWorkbenchView;
@@ -335,13 +335,14 @@ export function LeadDetailPanel({
         owner_name: lead.owner_name || getOwnerName(),
         owner_email: lead.owner_email || profile.email,
       };
+      skipData.follow_up_at = null;
 
       await updateLeadDetails(lead.id, skipData, profile);
       onStartedAction?.({ ...lead, ...skipData });
       setShowSkipForm(false);
       setSkipReason("");
       setSkipNote("");
-      onAfterResult?.();
+      onAfterResult?.("not_fit");
       showToast("Đã bỏ qua item và lưu lý do.", "success");
     } catch (error) {
       console.error(error);
@@ -479,9 +480,7 @@ export function LeadDetailPanel({
         last_contact_at: lead.last_contact_at || nowIso,
       };
 
-      if (followUpAt) {
-        resultData.follow_up_at = followUpAt;
-      }
+      resultData.follow_up_at = followUpAt || null;
 
       if (selectedResult === "not_fit" || selectedResult === "converted") {
         resultData.closed_at = nowIso;
@@ -501,7 +500,7 @@ export function LeadDetailPanel({
         setNote("");
         setFollowUpDate("");
         setFollowUpTime("");
-        onAfterResult?.();
+        onAfterResult?.(selectedResult);
       }, 2000);
     } catch (error: any) {
       console.error(error);
