@@ -46,7 +46,7 @@ export function SuccessStep({
           <CheckCircle2 className="w-10 h-10 text-white" />
         </motion.div>
         <h3 className="text-[32px] md:text-[40px] font-extrabold text-[#0F172A] dark:text-white tracking-tight mb-4 text-center">
-          {consultationCompleted ? "Thông tin tư vấn đã được bổ sung!" : "Yêu cầu đã được gửi thành công!"}
+          {consultationCompleted ? "Thông tin tư vấn đã được bổ sung!" : "Cảm ơn bạn đã đăng ký dùng thử!"}
         </h3>
         <p className="text-[#64748B] dark:text-gray-400 text-[16px] max-w-[650px] text-center leading-relaxed">
           {consultationCompleted
@@ -134,21 +134,40 @@ export function SuccessStep({
         </div>
       </div>
 
-      {!consultationCompleted && onFillConsultation && (
-        <div className="relative z-10 mt-8 flex flex-col items-center rounded-[20px] border border-[#C7D2FE] bg-[#EEF2FF] p-5 text-center sm:flex-row sm:justify-between sm:text-left">
-          <div>
-            <p className="flex items-center justify-center gap-2 text-[15px] font-extrabold text-[#3730A3] sm:justify-start">
-              <MessageSquareText className="h-5 w-5" /> Bạn cần chuyên viên hỗ trợ thêm?
-            </p>
-            <p className="mt-1 text-[13px] leading-5 text-[#4F46E5]">Bổ sung nhu cầu chính và ghi chú để nhận tư vấn sát với bài toán doanh nghiệp.</p>
+      {!consultationCompleted && (
+        <div className="relative z-10 mt-8 flex flex-col md:flex-row items-center gap-4 w-full">
+          {onFillConsultation && (
+            <div className="flex-1 flex flex-col items-center rounded-[20px] border border-[#C7D2FE] bg-[#EEF2FF] p-5 text-center sm:flex-row sm:justify-between sm:text-left w-full h-full">
+              <div>
+                <p className="flex items-center justify-center gap-2 text-[15px] font-extrabold text-[#3730A3] sm:justify-start">
+                  <MessageSquareText className="h-5 w-5" /> Cần tư vấn thêm?
+                </p>
+                <p className="mt-1 text-[13px] leading-5 text-[#4F46E5]">Bổ sung yêu cầu để nhận tư vấn sát nhất.</p>
+              </div>
+              <button
+                type="button"
+                onClick={onFillConsultation}
+                className="mt-4 inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-[12px] bg-[#6D5EF6] px-5 text-[14px] font-bold text-white shadow-[0_8px_16px_rgba(109,94,246,0.2)] transition hover:-translate-y-0.5 hover:bg-[#5B4DF5] sm:mt-0 sm:ml-4"
+              >
+                Gửi Form <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+
+          <div className="flex-1 flex flex-col items-center rounded-[20px] border border-[#A7F3D0] bg-[#ECFDF5] p-5 text-center sm:flex-row sm:justify-between sm:text-left w-full h-full">
+            <div>
+              <p className="flex items-center justify-center gap-2 text-[15px] font-extrabold text-[#065F46] sm:justify-start">
+                <span className="w-5 h-5 flex items-center justify-center bg-[#10B981] text-white rounded-full text-[12px]">🚀</span> Khám phá hệ thống
+              </p>
+              <p className="mt-1 text-[13px] leading-5 text-[#047857]">Trải nghiệm Dashboard với dữ liệu mẫu.</p>
+            </div>
+            <a
+              href="/demo"
+              className="mt-4 inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-[12px] bg-[#10B981] px-5 text-[14px] font-bold text-white shadow-[0_8px_16px_rgba(16,185,129,0.2)] transition hover:-translate-y-0.5 hover:bg-[#059669] sm:mt-0 sm:ml-4 whitespace-nowrap"
+            >
+              Xem Bản Demo <ArrowRight className="h-4 w-4" />
+            </a>
           </div>
-          <button
-            type="button"
-            onClick={onFillConsultation}
-            className="mt-4 inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-[14px] bg-[#6D5EF6] px-6 text-[14px] font-bold text-white shadow-[0_10px_22px_rgba(109,94,246,0.22)] transition hover:-translate-y-0.5 hover:bg-[#5B4DF5] sm:mt-0 sm:ml-5"
-          >
-            Điền thêm form tư vấn <ArrowRight className="h-4 w-4" />
-          </button>
         </div>
       )}
     </motion.div>

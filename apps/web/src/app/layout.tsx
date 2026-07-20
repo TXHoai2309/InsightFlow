@@ -73,6 +73,7 @@ export default function RootLayout({
     "/ve-chung-toi",
     "/profile",
   ].includes(pathname || "");
+  const isDemoPage = pathname?.startsWith("/demo");
   const hideShell = isAuthPage || isPublicPage;
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -176,6 +177,9 @@ export default function RootLayout({
                   <main className="flex-1">{children}</main>
                   <Footer />
                 </div>
+              ) : isDemoPage ? (
+                /* Trang demo — có layout riêng bên trong /demo/layout.tsx */
+                children
               ) : (
                 /* Trang app (Dashboard, Mentions...) — có sidebar */
                 <ProtectedRoute>

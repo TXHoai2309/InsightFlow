@@ -422,7 +422,7 @@ function LiveIntelligenceSection() {
 export default function BrandLandingPage() {
   const { user, profile, role, loading } = useAuth();
   const reduceMotion = useReducedMotion();
-  const appRoute = profile?.defaultRoute || getDefaultRouteForRole(role);
+  const appRoute = profile?.defaultRoute || getDefaultRouteForRole(role as any);
   const [selectedRole, setSelectedRole] = useState<RoleId>("brand");
   const activeRole = roleStories.find((story) => story.id === selectedRole) ?? roleStories[0];
 

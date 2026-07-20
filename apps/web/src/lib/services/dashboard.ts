@@ -1725,6 +1725,18 @@ export class DashboardService {
     labelChangeRequests: LabelChangeRequest[];
     lastMentionDoc?: QueryDocumentSnapshot<DocumentData>;
   }> {
+    // Demo Mode Interception
+    if (typeof window !== "undefined" && window.location.pathname.startsWith("/demo")) {
+      const { dummyWorkspaces, dummyMentions, dummyAlerts, dummyLeads, dummyLabelChangeRequests } = await import('@/lib/demoData');
+      return {
+        workspaces: dummyWorkspaces,
+        mentions: dummyMentions,
+        alerts: dummyAlerts,
+        leads: dummyLeads,
+        labelChangeRequests: dummyLabelChangeRequests,
+      };
+    }
+
     try {
       // ── Mentions ──────────────────────────────────────────────────────────
       // NOTE: No orderBy — avoids Firestore index requirement.
