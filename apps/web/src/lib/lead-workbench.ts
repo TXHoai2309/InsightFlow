@@ -6,6 +6,7 @@ export type LeadWorkbenchView =
   | "priority"
   | "active"
   | "closed"
+  | "skipped"
   | "urgent"
   | "follow_up"
   | "need_result";
@@ -49,6 +50,7 @@ export type LeadFollowUpBucket =
 export interface LeadFollowUpMeta {
   scheduledAt: number | null;
   isScheduled: boolean;
+  isActive: boolean;
   isDueToday: boolean;
   isOverdue: boolean;
   isDueSoon: boolean;
@@ -74,6 +76,7 @@ export const WORKBENCH_VIEWS: Array<{
   { id: "active", label: "Đang xử lý" },
   { id: "follow_up", label: "Follow-up" },
   { id: "closed", label: "Đã đóng" },
+  { id: "skipped", label: "Đã bỏ qua" },
 ];
 
 export const EMPLOYEE_PRIORITY_WORKBENCH_VIEWS: Array<{
@@ -310,11 +313,6 @@ function hasContactChannel(lead: Lead) {
   return getLeadContactActions(lead).length > 0 || Boolean(getLeadSourceAction(lead));
 }
 
-function hasFollowUpSignal(lead: Lead) {
-  if (!lead.follow_up_at) return false;
-  return Number.isFinite(new Date(lead.follow_up_at).getTime());
-}
-
 export function getLeadFollowUpMeta(
   lead: Lead,
   nowMs = Date.now(),
@@ -323,12 +321,15 @@ export function getLeadFollowUpMeta(
     ? new Date(lead.follow_up_at).getTime()
     : Number.NaN;
   const isScheduled = Number.isFinite(scheduledAt);
-  const isOpen = lead.status === "new" || lead.status === "processing";
+  const isOpen = lead.status === "processing";
+  const hasFollowUpResult = lead.result_type === "follow_up" || !lead.result_type;
+  const isActive = isScheduled && isOpen && hasFollowUpResult;
 
   if (!isScheduled) {
     return {
       scheduledAt: null,
       isScheduled: false,
+      isActive: false,
       isDueToday: false,
       isOverdue: false,
       isDueSoon: false,
@@ -340,8 +341,10 @@ export function getLeadFollowUpMeta(
   const now = new Date(nowMs);
   const endOfToday = new Date(now);
   endOfToday.setHours(23, 59, 59, 999);
-  const isOverdue = isOpen && scheduledAt <= nowMs;
-  const isDueToday = isOpen && scheduledAt <= endOfToday.getTime();
+  const isOverdue = isActive && scheduledAt <= nowMs;
+  // This is the actionable scope: overdue appointments are intentionally
+  // included together with appointments scheduled for the rest of today.
+  const isDueToday = isActive && scheduledAt <= endOfToday.getTime();
   const remainingMs = scheduledAt - nowMs;
   const isDueSoon = isDueToday && !isOverdue && remainingMs <= 30 * 60 * 1000;
   const absoluteMinutes = Math.max(1, Math.ceil(Math.abs(remainingMs) / 60000));
@@ -358,10 +361,19 @@ export function getLeadFollowUpMeta(
   return {
     scheduledAt,
     isScheduled: true,
+    isActive,
     isDueToday,
     isOverdue,
     isDueSoon,
-    bucket: isOverdue ? "overdue" : isDueSoon ? "due_soon" : isDueToday ? "today" : "future",
+    bucket: !isActive
+      ? "unscheduled"
+      : isOverdue
+        ? "overdue"
+        : isDueSoon
+          ? "due_soon"
+          : isDueToday
+            ? "today"
+            : "future",
     relativeLabel: isOverdue
       ? `Quá hẹn ${formatDuration(absoluteMinutes)}`
       : isDueSoon
@@ -403,7 +415,7 @@ function inferNextAction(lead: Lead) {
   if (lead.status === "completed") return "Đã chuyển đổi";
   if (lead.status === "skipped") return "Không tiềm năng";
   if (needsLeadResultCapture(lead)) return "Ghi nhận kết quả";
-  if (hasFollowUpSignal(lead)) return "Hẹn follow-up";
+  if (getLeadFollowUpMeta(lead).isActive) return "Hẹn follow-up";
   return getPrimaryLeadAction(lead)?.label || "Xem chi tiết";
 }
 
@@ -448,7 +460,7 @@ export function getLeadWorkbenchMeta(
         ? 2 * 60 * 60 * 1000
         : 24 * 60 * 60 * 1000;
   const isUrgent = isPending && remainingMs > 0 && remainingMs <= urgentWindow;
-  const isFollowUp = isPending && hasFollowUpSignal(lead);
+  const isFollowUp = getLeadFollowUpMeta(lead, nowMs).isActive;
   const contactable = hasContactChannel(lead);
   const needsResult = needsLeadResultCapture(lead);
   const isSalesHandoff = false;
@@ -547,6 +559,7 @@ export function matchesLeadWorkbenchView(
 
   if (view === "priority") {
     if (!meta.isPending) return false;
+    if (meta.isFollowUp) return false;
 
     // If Brand Manager: show if it has pending label correction
     const isManager = profile?.role === "admin" || profile?.role === "brand_manager";
@@ -565,18 +578,30 @@ export function matchesLeadWorkbenchView(
     const isMine = ownership.status === "assigned_to_me" || ownership.status === "manager_override";
     if (!isMine) return false;
 
+    // Follow-up is a dedicated work queue. Excluding an active appointment
+    // here prevents one lead from appearing in two primary workflow tabs.
+    if (getLeadFollowUpMeta(lead, nowMs).isActive) return false;
+
     // Active matches if the lead is mine and HAS been contacted
-    const hasBeenContacted = Boolean(lead.last_contact_at || (lead.contact_attempts && lead.contact_attempts > 0));
+    const hasBeenContacted = Boolean(
+      lead.last_contact_at ||
+      (lead.contact_attempts && lead.contact_attempts > 0) ||
+      lead.last_action_type === "restore",
+    );
     return hasBeenContacted;
   }
 
   if (view === "closed") {
-    return lead.status === "completed" || lead.status === "skipped";
+    return lead.status === "completed";
+  }
+
+  if (view === "skipped") {
+    return lead.status === "skipped";
   }
 
   // Supporting views for KPI calculations inside LeadStats:
   if (view === "urgent") return meta.isOverdue || meta.isUrgent;
-  if (view === "follow_up") return getLeadFollowUpMeta(lead, nowMs).isDueToday;
+  if (view === "follow_up") return getLeadFollowUpMeta(lead, nowMs).isActive;
   if (view === "need_result") return meta.needsResultCapture;
 
   return true;

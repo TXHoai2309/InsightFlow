@@ -2,6 +2,7 @@
 
 import { PlatformLogo } from "@/components/platform/PlatformLogo";
 import { getAlertWorkflowStatus } from "@/lib/alertWorkflow";
+import { getEffectiveAlertOwner } from "@/lib/alert-visibility";
 import type { AlertData } from "@/stores/alert.store";
 
 interface AlertWorkbenchRowProps {
@@ -35,7 +36,8 @@ function formatAge(createdAt: string) {
 
 function getStatusLabel(alert: AlertData) {
   const status = getAlertWorkflowStatus(alert);
-  if (status === "resolved") return "Đã giải quyết";
+  if (status === "resolved") return "Đã đóng";
+  if (status === "skipped") return "Đã bỏ qua";
   if (status === "contact_failed") return "Liên hệ không thành";
   if (status === "processing") return alert.status === "contact_waiting" ? "Chờ phản hồi" : "Đang xử lý";
   return "Chưa phân công";
@@ -44,7 +46,7 @@ function getStatusLabel(alert: AlertData) {
 export function AlertWorkbenchRow({ alert, selected, pinned = false, canPin = false, pinDisabled = false, onSelect, onTogglePin, getResolverName }: AlertWorkbenchRowProps) {
   const severityKey = String(alert.severity || "low").toLowerCase();
   const severity = SEVERITY_STYLE[severityKey] || SEVERITY_STYLE.low;
-  const owner = getResolverName(alert.being_resolved_by);
+  const owner = getResolverName(getEffectiveAlertOwner(alert));
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.currentTarget !== event.target) return;

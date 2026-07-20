@@ -41,7 +41,9 @@ interface LeadDetailPanelProps {
   nowMs: number;
   workbenchView: LeadWorkbenchView;
   onClose: () => void;
-  onAfterResult?: (resultType?: Lead["result_type"]) => void;
+  onAfterResult?: (updatedLead: Lead, resultType?: Lead["result_type"]) => void;
+  onAfterSkip?: (lead: Lead) => void;
+  onAfterRestore?: (lead: Lead) => void;
   onStartedAction?: (lead: Lead, preventJump?: boolean) => void;
   returnContext?: {
     view: LeadWorkbenchView;
@@ -87,7 +89,12 @@ const RESULT_OPTIONS: Array<{
 
 function toDateInputValue(dateIso?: string) {
   if (!dateIso) return "";
-  return new Date(dateIso).toISOString().slice(0, 10);
+  const date = new Date(dateIso);
+  if (Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function toTimeInputValue(dateIso?: string) {
@@ -113,6 +120,8 @@ export function LeadDetailPanel({
   workbenchView,
   onClose,
   onAfterResult,
+  onAfterSkip,
+  onAfterRestore,
   onStartedAction,
   activeTab: activeTabProp,
   onTabChange,
@@ -120,7 +129,7 @@ export function LeadDetailPanel({
   onCollapseToggle,
 }: LeadDetailPanelProps) {
   const { profile, role, user } = useAuth();
-  const { updateLeadDetails, claimLead } = useDashboardStore();
+  const { updateLeadDetails, claimLead, skipLead, restoreLead } = useDashboardStore();
   const [internalActiveTab, setInternalActiveTab] = useState<PanelTab>("action");
   const [staffList, setStaffList] = useState<AssignableStaff[]>([]);
   const [loadingStaff, setLoadingStaff] = useState(false);
@@ -185,10 +194,9 @@ export function LeadDetailPanel({
     return () => controller.abort();
   }, [role, user, workbenchView]);
   const [selectedResult, setSelectedResult] = useState<ResultAction | null>(null);
-  const [showSkipForm, setShowSkipForm] = useState(false);
-  const [skipReason, setSkipReason] = useState("");
-  const [skipNote, setSkipNote] = useState("");
+  const [showSkipConfirmation, setShowSkipConfirmation] = useState(false);
   const [isSkipping, setIsSkipping] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
   const [isClaiming, setIsClaiming] = useState(false);
   const [skipError, setSkipError] = useState("");
   const [note, setNote] = useState("");
@@ -206,6 +214,11 @@ export function LeadDetailPanel({
     setTimeout(() => setToast(null), 3500);
   };
   const activeTab = activeTabProp || internalActiveTab;
+
+  useEffect(() => {
+    setShowSkipConfirmation(false);
+    setSkipError("");
+  }, [lead?.id]);
 
   const meta = useMemo(
     () => (lead ? getLeadWorkbenchMeta(lead, nowMs) : null),
@@ -228,12 +241,27 @@ export function LeadDetailPanel({
     canEdit &&
     ownership.canWork &&
     meta.needsResultCapture;
+  const isTerminalLead = lead.status === "completed" || lead.status === "skipped";
   const canSkipLead =
     canEdit &&
-    (ownership.canClaim || ownership.canWork) &&
-    lead.status !== "completed" &&
-    lead.status !== "skipped";
+    workbenchView === "active" &&
+    ownership.status === "assigned_to_me" &&
+    lead.status === "processing";
+  const canRestoreLead =
+    canEdit &&
+    (workbenchView === "closed" || workbenchView === "skipped") &&
+    isTerminalLead &&
+    (ownership.status === "assigned_to_me" ||
+      ownership.status === "manager_override" ||
+      ownership.status === "unassigned");
   const sourceAction = getLeadSourceAction(lead);
+  const showTerminalSourceAction =
+    isTerminalLead &&
+    (workbenchView === "closed" || workbenchView === "skipped");
+  const canOpenTerminalSource =
+    showTerminalSourceAction &&
+    Boolean(sourceAction) &&
+    isSameBrandScope(profile, lead);
   const profileSourceHref = sourceAction?.href || "";
   const canOpenProfileSource = Boolean(sourceAction && ownership.canWork);
   const platformMeta = PLATFORM_META[lead.platform];
@@ -299,51 +327,15 @@ export function LeadDetailPanel({
       setSkipError("Bạn không có quyền bỏ qua item này.");
       return;
     }
-    if (!skipReason) {
-      setSkipError("Vui lòng chọn lý do bỏ qua.");
-      return;
-    }
 
     try {
       setIsSkipping(true);
       setSkipError("");
-      const nowIso = new Date().toISOString();
-      const reasonLabel =
-        {
-          not_relevant: "Không liên quan",
-          spam: "Spam/quảng cáo",
-          duplicate: "Trùng lặp",
-          not_a_lead: "Không phải khách hàng tiềm năng",
-          other: "Lý do khác",
-        }[skipReason] || skipReason;
-      const nextNote = [
-        lead.notes,
-        `[Bỏ qua] ${new Date().toLocaleString("vi-VN")} - ${reasonLabel}${skipNote.trim() ? `: ${skipNote.trim()}` : ""}`,
-      ]
-        .filter(Boolean)
-        .join("\n");
-      const skipData: Partial<Lead> = {
-        status: "skipped",
-        result_type: "not_fit",
-        notes: nextNote,
-        pending_result: false,
-        result_recorded_at: nowIso,
-        closed_at: nowIso,
-        last_action_at: nowIso,
-        last_action_type: "skip",
-        owner_id: lead.owner_id || profile.uid,
-        owner_name: lead.owner_name || getOwnerName(),
-        owner_email: lead.owner_email || profile.email,
-      };
-      skipData.follow_up_at = null;
-
-      await updateLeadDetails(lead.id, skipData, profile);
-      onStartedAction?.({ ...lead, ...skipData });
-      setShowSkipForm(false);
-      setSkipReason("");
-      setSkipNote("");
-      onAfterResult?.("not_fit");
-      showToast("Đã bỏ qua item và lưu lý do.", "success");
+      const skipData = await skipLead(lead.id, profile);
+      const skippedLead = { ...lead, ...skipData };
+      setShowSkipConfirmation(false);
+      showToast("Đã chuyển item sang Đã bỏ qua.", "success");
+      onAfterSkip?.(skippedLead);
     } catch (error) {
       console.error(error);
       setSkipError(
@@ -354,6 +346,32 @@ export function LeadDetailPanel({
       );
     } finally {
       setIsSkipping(false);
+    }
+  };
+
+  const handleRestoreLead = async () => {
+    if (!profile || !canRestoreLead) {
+      showToast("Bạn không có quyền khôi phục item này.", "error");
+      return;
+    }
+
+    try {
+      setIsRestoring(true);
+      const restoreData = await restoreLead(lead.id, profile);
+      const restoredLead = { ...lead, ...restoreData };
+      showToast("Đã khôi phục item về Đang xử lý.", "success");
+      onAfterRestore?.(restoredLead);
+    } catch (error) {
+      console.error(error);
+      showToast(
+        getLeadOperationErrorMessage(
+          error,
+          "Không thể khôi phục item này. Vui lòng thử lại.",
+        ),
+        "error",
+      );
+    } finally {
+      setIsRestoring(false);
     }
   };
 
@@ -450,6 +468,15 @@ export function LeadDetailPanel({
     }
   };
 
+  const handleOpenTerminalSource = () => {
+    if (!sourceAction || !canOpenTerminalSource) {
+      showToast("Item này không có liên kết nguồn hợp lệ.", "error");
+      return;
+    }
+
+    window.open(sourceAction.href, "_blank", "noopener,noreferrer");
+  };
+
   const handleSaveResult = async () => {
     if (!selectedResult) return;
     const option = RESULT_OPTIONS.find((item) => item.id === selectedResult);
@@ -465,13 +492,26 @@ export function LeadDetailPanel({
       return;
     }
 
+    const selectedFollowUpDate = selectedResult === "follow_up"
+      ? new Date(`${followUpDate}T${followUpTime}:00`)
+      : null;
+    if (
+      selectedResult === "follow_up" &&
+      (!selectedFollowUpDate ||
+        Number.isNaN(selectedFollowUpDate.getTime()) ||
+        selectedFollowUpDate.getTime() <= Date.now())
+    ) {
+      setSaveError("Thời điểm follow-up phải ở trong tương lai.");
+      return;
+    }
+
     try {
       setIsSaving(true);
       setSaveError("");
       const nowIso = new Date().toISOString();
       const followUpAt =
-        selectedResult === "follow_up"
-          ? new Date(`${followUpDate}T${followUpTime}:00`).toISOString()
+        selectedResult === "follow_up" && selectedFollowUpDate
+          ? selectedFollowUpDate.toISOString()
           : undefined;
       const nextNote = [
         lead.notes,
@@ -500,15 +540,27 @@ export function LeadDetailPanel({
         profile,
       );
 
+      const updatedLead = { ...lead, ...resultData };
       setIsSaveSuccess(true);
-      showToast("Ghi nhận kết quả thành công!", "success");
+      showToast(
+        selectedResult === "follow_up" && followUpAt
+          ? `Đã hẹn follow-up lúc ${new Date(followUpAt).toLocaleString("vi-VN", {
+              hour: "2-digit",
+              minute: "2-digit",
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+            })}.`
+          : "Ghi nhận kết quả thành công!",
+        "success",
+      );
+      onAfterResult?.(updatedLead, selectedResult);
       setTimeout(() => {
         setIsSaveSuccess(false);
         setSelectedResult(null);
         setNote("");
         setFollowUpDate("");
         setFollowUpTime("");
-        onAfterResult?.(selectedResult);
       }, 2000);
     } catch (error: any) {
       console.error(error);
@@ -529,7 +581,7 @@ export function LeadDetailPanel({
     { id: "interactions", label: "Tương tác" },
     { id: "history", label: "Lịch sử" },
   ];
-  const isResultFinished = lead.status === "completed" || lead.status === "skipped";
+  const isResultFinished = isTerminalLead;
   const workflowSteps = [
     { label: "Đã chọn", complete: true, active: false },
     {
@@ -576,7 +628,33 @@ export function LeadDetailPanel({
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            {!lead.owner_id ? (
+            {isTerminalLead ? (
+              <>
+                {showTerminalSourceAction && (
+                  <button
+                    type="button"
+                    onClick={handleOpenTerminalSource}
+                    disabled={!canOpenTerminalSource}
+                    title={canOpenTerminalSource ? "Mở nội dung trên nền tảng nguồn" : "Không có liên kết nguồn"}
+                    className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 text-[13px] font-semibold text-[var(--color-text-primary)] transition hover:border-[var(--color-brand)]/40 hover:bg-[var(--color-brand-subtle)] hover:text-[var(--color-brand)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined text-lg">open_in_new</span>
+                    <span className="hidden sm:inline">Mở nguồn</span>
+                  </button>
+                )}
+                {canRestoreLead && (
+                  <button
+                    type="button"
+                    onClick={() => void handleRestoreLead()}
+                    disabled={isRestoring}
+                    className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[var(--color-brand-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <span className="material-symbols-outlined text-lg">restore</span>
+                    <span className="hidden sm:inline">{isRestoring ? "Đang khôi phục..." : "Khôi phục"}</span>
+                  </button>
+                )}
+              </>
+            ) : !lead.owner_id ? (
               role === "brand_manager" ? (
                 <div className="flex items-center gap-2" ref={dropdownRef}>
                   <div className="relative">
@@ -665,6 +743,20 @@ export function LeadDetailPanel({
                 </button>
                 )}
               </>
+            )}
+            {canSkipLead && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSkipError("");
+                  setShowSkipConfirmation(true);
+                }}
+                disabled={isSkipping}
+                className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--color-error)]/35 bg-[var(--color-bg-surface)] px-3 text-[13px] font-semibold text-[var(--color-error)] transition hover:bg-[var(--color-error-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-error)]/30 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <span className="material-symbols-outlined text-lg">block</span>
+                <span className="hidden sm:inline">Bỏ qua</span>
+              </button>
             )}
             <div className="mx-1.5 h-6 w-px bg-[var(--color-border)]" />
 
@@ -820,7 +912,8 @@ export function LeadDetailPanel({
                               setSelectedResult(option.id);
                               setIsResultDropdownOpen(false);
                               if (option.id === "follow_up" && !followUpDate) {
-                                const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+                                const tomorrow = new Date();
+                                tomorrow.setDate(tomorrow.getDate() + 1);
                                 setFollowUpDate(toDateInputValue(tomorrow.toISOString()));
                                 setFollowUpTime(toTimeInputValue(tomorrow.toISOString()) || "09:00");
                               }
@@ -853,7 +946,7 @@ export function LeadDetailPanel({
                     <div data-tour="lead-detail-followup" className="mt-3 grid grid-cols-2 gap-2">
                       <div>
                         <label className="mb-1 block text-xs font-semibold text-[var(--color-text-secondary)]">Ngày follow-up</label>
-                        <input type="date" value={followUpDate} onChange={(event) => setFollowUpDate(event.target.value)} className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus-visible:border-[var(--color-brand)] focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/20" />
+                        <input type="date" min={toDateInputValue(new Date().toISOString())} value={followUpDate} onChange={(event) => setFollowUpDate(event.target.value)} className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus-visible:border-[var(--color-brand)] focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/20" />
                       </div>
                       <div>
                         <label className="mb-1 block text-xs font-semibold text-[var(--color-text-secondary)]">Giờ follow-up</label>
@@ -888,22 +981,6 @@ export function LeadDetailPanel({
               </div>
             </section>
 
-            <section className="rounded-lg border border-[var(--color-error)]/25 bg-[var(--color-error-subtle)] p-2.5">
-              <div className="flex items-start gap-2.5">
-                <span className="material-symbols-outlined text-xl text-[var(--color-error)]">block</span>
-                <div className="min-w-0 flex-1"><p className="text-sm font-bold text-[var(--color-text-primary)]">Bỏ qua / Không liên quan</p><p className="mt-0.5 text-xs leading-5 text-[var(--color-text-secondary)]">Đóng item không thuộc phạm vi xử lý và lưu lý do để tra cứu.</p></div>
-              </div>
-              {!showSkipForm ? (
-                <button type="button" onClick={() => { setShowSkipForm(true); setSkipError(""); }} disabled={!canSkipLead} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--color-error)]/35 px-3 py-2 text-sm font-bold text-[var(--color-error)] transition hover:bg-[var(--color-bg-surface)] disabled:cursor-not-allowed disabled:opacity-50">Bỏ qua item này<span className="material-symbols-outlined text-lg">arrow_forward</span></button>
-              ) : (
-                <div className="mt-3 space-y-3 border-t border-[var(--color-error)]/25 pt-3">
-                  <label className="block text-xs font-bold text-[var(--color-text-secondary)]">Lý do bỏ qua<select value={skipReason} onChange={(event) => setSkipReason(event.target.value)} className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus:border-[var(--color-error)] focus:ring-1 focus:ring-[var(--color-error)]"><option value="">Chọn lý do</option><option value="not_relevant">Không liên quan</option><option value="spam">Spam/quảng cáo</option><option value="duplicate">Trùng lặp</option><option value="not_a_lead">Không phải khách hàng tiềm năng</option><option value="other">Lý do khác</option></select></label>
-                  <label className="block text-xs font-bold text-[var(--color-text-secondary)]">Ghi chú <span className="font-normal">(không bắt buộc)</span><textarea value={skipNote} onChange={(event) => setSkipNote(event.target.value)} placeholder="Bổ sung lý do để tra cứu sau..." className="mt-1 min-h-[64px] w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-3 text-sm text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-error)] focus:ring-1 focus:ring-[var(--color-error)]" /></label>
-                  {skipError && <p className="text-xs font-semibold text-[var(--color-error)]">{skipError}</p>}
-                  <div className="flex justify-end gap-2"><button type="button" onClick={() => { setShowSkipForm(false); setSkipError(""); }} className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm font-bold text-[var(--color-text-primary)]">Hủy</button><button type="button" onClick={handleSkipLead} disabled={isSkipping || !skipReason} className="rounded-lg bg-[var(--color-error)] px-3 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{isSkipping ? "Đang xử lý..." : "Xác nhận bỏ qua"}</button></div>
-                </div>
-              )}
-            </section>
             </aside>
           </div>
         )}
@@ -935,6 +1012,72 @@ export function LeadDetailPanel({
         )}
 
       </div>
+
+      {showSkipConfirmation && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="lead-skip-confirmation-title"
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-[1px]"
+          onClick={() => {
+            if (!isSkipping) setShowSkipConfirmation(false);
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-5 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-error-subtle)] text-[var(--color-error)]">
+                <span className="material-symbols-outlined">block</span>
+              </span>
+              <div className="min-w-0">
+                <h2 id="lead-skip-confirmation-title" className="text-base font-black text-[var(--color-text-primary)]">
+                  Xác nhận bỏ qua khách hàng này?
+                </h2>
+                <p className="mt-1 text-sm leading-5 text-[var(--color-text-secondary)]">
+                  Item sẽ được chuyển sang tab Đã bỏ qua và có thể khôi phục lại sau.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-3">
+              <p className="truncate text-sm font-bold text-[var(--color-text-primary)]">
+                {lead.author || "Khách hàng"}
+              </p>
+              <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--color-text-secondary)]">
+                {lead.content || "Không có nội dung xem trước."}
+              </p>
+            </div>
+
+            {skipError && (
+              <p role="alert" className="mt-3 rounded-lg bg-[var(--color-error-subtle)] px-3 py-2 text-xs font-semibold text-[var(--color-error)]">
+                {skipError}
+              </p>
+            )}
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowSkipConfirmation(false)}
+                disabled={isSkipping}
+                className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm font-bold text-[var(--color-text-primary)] transition hover:bg-[var(--color-bg-surface-raised)] disabled:opacity-50"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSkipLead()}
+                disabled={isSkipping}
+                className="inline-flex items-center gap-2 rounded-lg bg-[var(--color-error)] px-4 py-2 text-sm font-bold text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <span className="material-symbols-outlined text-lg">block</span>
+                {isSkipping ? "Đang xử lý..." : "Xác nhận bỏ qua"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {toast && (
         <div className={`fixed bottom-6 right-6 z-[9999] flex items-center gap-2.5 rounded-xl border bg-[var(--color-bg-surface)] px-4 py-3.5 text-sm font-bold shadow-2xl animate-fade-in ${

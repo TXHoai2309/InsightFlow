@@ -9,7 +9,7 @@ import {
   useAlertStore,
   type CustomerContactAttempt,
 } from "@/stores/alert.store";
-import { AlertWorkbench } from "@/components/alerts/AlertWorkbench";
+import { AlertWorkbench, type AlertStatusFilter } from "@/components/alerts/AlertWorkbench";
 import type { AlertDetailPanelTab } from "@/components/alerts/AlertDetailPanel";
 import type { AlertContactResultDraft } from "@/components/alerts/AlertContactWorkflow";
 import { useDashboard } from "@/hooks/useDashboardData";
@@ -23,7 +23,12 @@ import {
   isRecordInBrandScope,
 } from "@/lib/brandScope";
 import { canPerformAction } from "@/lib/rbac";
-import { getAlertWorkflowStatus, isResolvedAlert } from "@/lib/alertWorkflow";
+import {
+  getAlertWorkflowStatus,
+  isResolvedAlert,
+  isSkippedAlert,
+  isTerminalAlert,
+} from "@/lib/alertWorkflow";
 import {
   canAccessAlertQueue,
   canAlertBeVisibleToUser,
@@ -201,7 +206,7 @@ export default function AlertsPage() {
   const [severityFilter, setSeverityFilter] = useState<string>("all");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [contentTypeFilter, setContentTypeFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "processing" | "contact_failed" | "resolved">("all");
+  const [statusFilter, setStatusFilter] = useState<AlertStatusFilter>("all");
   const [showMineOnly, setShowMineOnly] = useState(false);
   const [sortBy, setSortBy] = useState<"risk" | "newest" | "reach">("risk");
   const [alertPage, setAlertPage] = useState(1);
@@ -286,6 +291,8 @@ export default function AlertsPage() {
     setFilters,
     fetchAlerts,
     updateAlertStatus,
+    skipAlert,
+    restoreAlert,
     fetchCorrectionRequests,
     createCorrectionRequest,
     resolveCorrectionRequest,
@@ -319,12 +326,12 @@ export default function AlertsPage() {
     // thời điểm giải quyết gần nhất.
     const activeCutoffMs = Date.now() - 30 * 24 * 60 * 60 * 1000;
     result = result.filter((alert) => {
-      const isCompleted = isResolvedAlert(alert);
+      const isCompleted = isTerminalAlert(alert);
       const lastHistoryAt = Array.isArray(alert.resolution_history) && alert.resolution_history.length > 0
         ? alert.resolution_history[alert.resolution_history.length - 1]?.timestamp
         : undefined;
       const relevantAt = isCompleted
-        ? alert.resolved_at || alert.monitoring_started_at || lastHistoryAt || alert.created_at
+        ? alert.resolved_at || alert.skipped_at || alert.monitoring_started_at || lastHistoryAt || alert.created_at
         : alert.created_at;
       const relevantAtMs = new Date(relevantAt).getTime();
       return Number.isFinite(relevantAtMs) && relevantAtMs >= activeCutoffMs && relevantAtMs <= Date.now();
@@ -372,7 +379,7 @@ export default function AlertsPage() {
 
       if (startDate || endDate) {
         result = result.filter(a => {
-          const isCompleted = isResolvedAlert(a);
+          const isCompleted = isTerminalAlert(a);
           // Việc còn mở trong 30 ngày luôn hiện; bộ lọc ngày chỉ áp dụng
           // cho lịch sử cảnh báo đã hoàn tất.
           if (!isCompleted) return true;
@@ -380,7 +387,7 @@ export default function AlertsPage() {
           const lastHistoryAt = Array.isArray(a.resolution_history) && a.resolution_history.length > 0
             ? a.resolution_history[a.resolution_history.length - 1]?.timestamp
             : undefined;
-          const completedAt = a.resolved_at || a.monitoring_started_at || lastHistoryAt || a.created_at;
+          const completedAt = a.resolved_at || a.skipped_at || a.monitoring_started_at || lastHistoryAt || a.created_at;
           const completedDate = new Date(completedAt);
           if (!completedAt || isNaN(completedDate.getTime())) return false;
 
@@ -427,15 +434,15 @@ export default function AlertsPage() {
   }, [isLoading, prunePinnedAlerts, rawAlerts.length, visibleBaseAlerts]);
 
   const activeAlerts = useMemo(() => {
-    return visibleBaseAlerts.filter(a => {
-      const status = getAlertWorkflowStatus(a);
-      if (status === "resolved") return false;
-      return true;
-    });
+    return visibleBaseAlerts.filter((alert) => !isTerminalAlert(alert));
   }, [visibleBaseAlerts]);
 
   const resolvedAlerts = useMemo(() => {
     return visibleBaseAlerts.filter(isResolvedAlert);
+  }, [visibleBaseAlerts]);
+
+  const skippedAlerts = useMemo(() => {
+    return visibleBaseAlerts.filter(isSkippedAlert);
   }, [visibleBaseAlerts]);
 
   useEffect(() => {
@@ -466,6 +473,8 @@ export default function AlertsPage() {
     setStatusFilter(
       workflowStatus === "resolved"
         ? "resolved"
+        : workflowStatus === "skipped"
+          ? "skipped"
         : workflowStatus === "contact_failed"
           ? "contact_failed"
           : "all",
@@ -477,10 +486,13 @@ export default function AlertsPage() {
   }, [alertIdParam, mentionIdParam, visibleBaseAlerts]);
 
   const processedActiveAlerts = useMemo(() => {
-    let result = statusFilter === "resolved" ? [...resolvedAlerts] : [...activeAlerts];
+    let result = statusFilter === "resolved"
+      ? [...resolvedAlerts]
+      : statusFilter === "skipped"
+        ? [...skippedAlerts]
+        : [...activeAlerts];
 
-    // Lọc theo trạng thái nghiệp vụ. "all" là toàn bộ hàng đợi đang mở;
-    // cảnh báo đã giải quyết chỉ xuất hiện khi chọn riêng trạng thái resolved.
+    // "all" chỉ là hàng đợi đang mở; hai trạng thái kết thúc được tách riêng.
     if (statusFilter === "pending") {
       result = result.filter((alert) => {
         return getAlertWorkflowStatus(alert) === "pending";
@@ -491,6 +503,8 @@ export default function AlertsPage() {
       result = result.filter((alert) => getAlertWorkflowStatus(alert) === "contact_failed");
     } else if (statusFilter === "resolved") {
       result = result.filter(isResolvedAlert);
+    } else if (statusFilter === "skipped") {
+      result = result.filter(isSkippedAlert);
     }
 
     // 1. Search text filter
@@ -553,7 +567,7 @@ export default function AlertsPage() {
     });
 
     return result;
-  }, [activeAlerts, resolvedAlerts, statusFilter, searchText, severityFilter, sourceFilter, contentTypeFilter, showMineOnly, sortBy, profile, pinnedAlertIds]);
+  }, [activeAlerts, resolvedAlerts, skippedAlerts, statusFilter, searchText, severityFilter, sourceFilter, contentTypeFilter, showMineOnly, sortBy, profile, pinnedAlertIds]);
 
   const totalAlertPages = Math.max(1, Math.ceil(processedActiveAlerts.length / ALERTS_PER_PAGE));
   const paginatedActiveAlerts = useMemo(() => {
@@ -648,7 +662,11 @@ export default function AlertsPage() {
             || t("alerts.page.dutyStaff");
           list.push({
             author: authorName,
-            action: t("alerts.page.loggedResolution", { id: a.id.slice(-4) }),
+            action: h.action_type === "skip"
+              ? `đã bỏ qua cảnh báo #${a.id.slice(-4)}`
+              : h.action_type === "restore"
+                ? `đã khôi phục cảnh báo #${a.id.slice(-4)}`
+                : t("alerts.page.loggedResolution", { id: a.id.slice(-4) }),
             timestamp: h.timestamp,
             id: a.id
           });
@@ -679,7 +697,7 @@ export default function AlertsPage() {
   // Shift Performance resolved ratio calculation
   const shiftPerformanceStats = useMemo(() => {
     const resolved = visibleBaseAlerts.filter(isResolvedAlert).length;
-    const total = visibleBaseAlerts.length;
+    const total = visibleBaseAlerts.filter((alert) => !isSkippedAlert(alert)).length;
     // We default to 100% KPI completion if there are no alerts to handle
     const percentage = total === 0 ? 100 : Math.round((resolved / total) * 100);
     return { percentage, resolved, total };
@@ -874,7 +892,7 @@ export default function AlertsPage() {
 
 
   // NOTE: No auto-unlock on unmount — tasks stay claimed by the assigned officer
-  // Unlock only happens when status changes to "resolved"
+  // Ownership remains locked until the alert reaches a terminal status.
 
   // Resolve parent post/comment text for Evidence Detail Modal
   useEffect(() => {
@@ -937,7 +955,7 @@ export default function AlertsPage() {
   const highRiskIncidents = useMemo(() => {
     // 1. Get unresolved critical/high alerts
     const activeAlerts = visibleBaseAlerts.filter(
-      a => (a.severity.toLowerCase() === "critical" || a.severity.toLowerCase() === "high") && !isResolvedAlert(a)
+      a => (a.severity.toLowerCase() === "critical" || a.severity.toLowerCase() === "high") && !isTerminalAlert(a)
     );
 
     // 2. Enrich with lead contact details if author or content matches
@@ -1216,6 +1234,28 @@ export default function AlertsPage() {
             triggerToast(recordError instanceof Error ? recordError.message : "Không thể ghi nhận kết quả cảnh báo.");
             throw recordError;
           }
+        }}
+        onSkip={async (alert) => {
+          const currentIndex = paginatedActiveAlerts.findIndex((item) => item.id === alert.id);
+          const nextAlert = paginatedActiveAlerts[currentIndex + 1] || paginatedActiveAlerts[currentIndex - 1] || null;
+          await skipAlert(alert.id, profile, alert.brand);
+          setSelectedAlertId(nextAlert?.id || null);
+          setDetailPanelTab("action");
+          setIsDetailPanelCollapsed(false);
+        }}
+        onRestore={async (alert) => {
+          await restoreAlert(alert.id, profile, alert.brand);
+          setSearchText("");
+          setSeverityFilter("all");
+          setSourceFilter("all");
+          setContentTypeFilter("all");
+          setShowMineOnly(false);
+          setStatusFilter("processing");
+          setAlertPage(1);
+          setPendingClaimSelectionId(alert.id);
+          setSelectedAlertId(alert.id);
+          setDetailPanelTab("action");
+          setIsDetailPanelCollapsed(false);
         }}
         onOpenSource={(alert) => void handleAccessSource(alert)}
         onStatusFilterChange={setStatusFilter}

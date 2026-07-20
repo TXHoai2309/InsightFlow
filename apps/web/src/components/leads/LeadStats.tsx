@@ -26,11 +26,7 @@ function getOwnerScope(lead: Lead, profile?: UserRoleProfile | null) {
 export function LeadStats({ leads, isLoading, profile, onSelectView }: LeadStatsProps) {
   const stats = useMemo(() => {
     const nowMs = Date.now();
-    const splitView = (view: LeadWorkbenchView) => {
-      const matched = leads.filter((lead) =>
-        matchesLeadWorkbenchView(lead, view, nowMs, profile),
-      );
-
+    const splitItems = (matched: Lead[]) => {
       return {
         total: matched.length,
         mine: matched.filter((lead) => getOwnerScope(lead, profile) === "mine").length,
@@ -39,6 +35,12 @@ export function LeadStats({ leads, isLoading, profile, onSelectView }: LeadStats
         ).length,
       };
     };
+    const splitView = (view: LeadWorkbenchView) =>
+      splitItems(
+        leads.filter((lead) =>
+          matchesLeadWorkbenchView(lead, view, nowMs, profile),
+        ),
+      );
 
     const immediate = splitView("priority");
     const urgent = splitView("urgent");
@@ -79,7 +81,7 @@ export function LeadStats({ leads, isLoading, profile, onSelectView }: LeadStats
             view: "priority" as const,
           },
           {
-            title: "Follow-up hôm nay",
+            title: "Follow-up cần xử lý",
             value: stats.followUp.total,
             sub: scopeSub(stats.followUp),
             icon: "event",
@@ -111,9 +113,9 @@ export function LeadStats({ leads, isLoading, profile, onSelectView }: LeadStats
             view: "priority" as const,
           },
           {
-            title: "Follow-up hôm nay",
+            title: "Follow-up cần xử lý",
             value: stats.followUp.total,
-            sub: "Cần quay lại đúng hẹn",
+            sub: "Tất cả lịch follow-up đang mở",
             icon: "event",
             color: "var(--color-info)",
             bg: "var(--color-info-subtle)",

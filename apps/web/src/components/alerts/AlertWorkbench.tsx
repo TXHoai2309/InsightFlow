@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { getAlertWorkflowStatus, isResolvedAlert } from "@/lib/alertWorkflow";
+import { getAlertWorkflowStatus, isResolvedAlert, isSkippedAlert, isTerminalAlert } from "@/lib/alertWorkflow";
 import type { AlertData, AlertFilters } from "@/stores/alert.store";
 import { AlertDetailPanel, type AlertDetailPanelTab } from "./AlertDetailPanel";
 import type { AlertContactResultDraft } from "./AlertContactWorkflow";
 import { AlertWorkbenchRow } from "./AlertWorkbenchRow";
 
-type StatusFilter = "all" | "pending" | "processing" | "contact_failed" | "resolved";
+export type AlertStatusFilter = "all" | "pending" | "processing" | "contact_failed" | "resolved" | "skipped";
+type StatusFilter = AlertStatusFilter;
 type QueueStatus = Exclude<StatusFilter, "all">;
 
 interface AlertWorkbenchProps {
@@ -52,6 +53,8 @@ interface AlertWorkbenchProps {
   onDetailTabChange: (tab: AlertDetailPanelTab) => void;
   onClaim: (alert: AlertData) => Promise<void>;
   onRecordResult: (alert: AlertData, draft: AlertContactResultDraft) => Promise<void>;
+  onSkip: (alert: AlertData) => Promise<void>;
+  onRestore: (alert: AlertData) => Promise<void>;
   onOpenSource: (alert: AlertData) => void;
   onStatusFilterChange: (value: StatusFilter) => void;
   onSearchTextChange: (value: string) => void;
@@ -72,7 +75,8 @@ const STATUS_VIEWS: Array<{ id: QueueStatus; label: string }> = [
   { id: "pending", label: "Chưa phân công" },
   { id: "processing", label: "Đang xử lý" },
   { id: "contact_failed", label: "Cần liên hệ lại" },
-  { id: "resolved", label: "Đã giải quyết" },
+  { id: "resolved", label: "Đã đóng" },
+  { id: "skipped", label: "Đã bỏ qua" },
 ];
 
 export function AlertWorkbench(props: AlertWorkbenchProps) {
@@ -82,8 +86,9 @@ export function AlertWorkbench(props: AlertWorkbenchProps) {
     processing: props.alerts.filter((alert) => getAlertWorkflowStatus(alert) === "processing").length,
     contact_failed: props.alerts.filter((alert) => getAlertWorkflowStatus(alert) === "contact_failed").length,
     resolved: props.alerts.filter(isResolvedAlert).length,
+    skipped: props.alerts.filter(isSkippedAlert).length,
   };
-  const urgentCount = props.alerts.filter((alert) => !isResolvedAlert(alert) && ["critical", "high"].includes(String(alert.severity).toLowerCase())).length;
+  const urgentCount = props.alerts.filter((alert) => !isTerminalAlert(alert) && ["critical", "high"].includes(String(alert.severity).toLowerCase())).length;
   const isPanelOpen = Boolean(props.selectedAlert && !props.panelCollapsed);
 
   const ALL_STATUS_VIEWS = [
@@ -91,7 +96,8 @@ export function AlertWorkbench(props: AlertWorkbenchProps) {
     { id: "pending" as const, label: "Chưa phân công", count: counts.pending },
     { id: "processing" as const, label: "Đang xử lý", count: counts.processing },
     { id: "contact_failed" as const, label: "Cần liên hệ lại", count: counts.contact_failed },
-    { id: "resolved" as const, label: "Đã giải quyết", count: counts.resolved },
+    { id: "resolved" as const, label: "Đã đóng", count: counts.resolved },
+    { id: "skipped" as const, label: "Đã bỏ qua", count: counts.skipped },
   ];
 
   return (
@@ -202,7 +208,7 @@ export function AlertWorkbench(props: AlertWorkbenchProps) {
             {props.totalFiltered > 0 && <footer className="flex shrink-0 items-center justify-between border-t border-[var(--color-border)] px-[4%] py-[3%] text-xs text-[var(--color-text-secondary)]"><span>{props.totalFiltered} cảnh báo</span><div className="flex items-center gap-2"><button type="button" onClick={() => props.onPageChange(props.currentPage - 1)} disabled={props.currentPage === 1} className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--color-border)] disabled:opacity-40" title="Trang trước"><ChevronLeft size={16} /></button><span className="min-w-10 text-center font-black text-[var(--color-text-primary)]">{props.currentPage}/{props.totalPages}</span><button type="button" onClick={() => props.onPageChange(props.currentPage + 1)} disabled={props.currentPage === props.totalPages} className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--color-border)] disabled:opacity-40" title="Trang sau"><ChevronRight size={16} /></button></div></footer>}
           </main>
 
-          {props.selectedAlert && !props.panelCollapsed && <AlertDetailPanel alert={props.selectedAlert} activeTab={props.detailTab} onTabChange={props.onDetailTabChange} profileEmail={props.profileEmail} canUpdate={props.canUpdate} getResolverName={props.getResolverName} onClose={props.onCollapsePanel} onClaim={props.onClaim} onRecordResult={props.onRecordResult} onOpenSource={props.onOpenSource} />}
+          {props.selectedAlert && !props.panelCollapsed && <AlertDetailPanel alert={props.selectedAlert} activeTab={props.detailTab} statusFilter={props.statusFilter} onTabChange={props.onDetailTabChange} profileEmail={props.profileEmail} canUpdate={props.canUpdate} getResolverName={props.getResolverName} onClose={props.onCollapsePanel} onClaim={props.onClaim} onRecordResult={props.onRecordResult} onSkip={props.onSkip} onRestore={props.onRestore} onOpenSource={props.onOpenSource} />}
         </div>
       </section>
     </div>
