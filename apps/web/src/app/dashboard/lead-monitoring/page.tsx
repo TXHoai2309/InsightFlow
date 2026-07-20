@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect } from "react";
-import { AISummaryBanner } from "@/components/lead-monitoring/AISummaryBanner";
 import { LeadPriorityOverview } from "@/components/lead-monitoring/LeadPriorityOverview";
 import { LeadScoreDoughnutCard } from "@/components/lead-monitoring/LeadScoreDoughnutCard";
 import { LeadSourceBarCard } from "@/components/lead-monitoring/LeadSourceBarCard";
@@ -61,10 +60,6 @@ export default function DashboardLeadMonitoringPage() {
 
       <section data-tour="dashboard-lead-monitoring-priority">
         <LeadPriorityOverview />
-      </section>
-
-      <section data-tour="dashboard-lead-monitoring-summary">
-        <AISummaryBanner />
       </section>
 
       <section data-tour="dashboard-lead-monitoring-metrics" className="grid grid-cols-1 gap-6 lg:grid-cols-3">

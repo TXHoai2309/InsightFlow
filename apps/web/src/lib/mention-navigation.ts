@@ -1,4 +1,8 @@
 import type { Lead, Mention } from "@/types/dashboard";
+import {
+  appendDashboardReturnParams,
+  type DashboardReturnOrigin,
+} from "@/lib/dashboard-return-context";
 
 export type MentionDetailTarget = {
   detailId: string;
@@ -72,7 +76,7 @@ function normalizeLookupText(value: unknown) {
     .trim();
 }
 
-function getLeadMentionCandidateIds(lead: Lead) {
+export function getLeadMentionCandidateIds(lead: Lead) {
   return Array.from(
     new Set(
       [lead.mention_id, lead.source_mention_id, lead.post_id, lead.id]
@@ -80,6 +84,45 @@ function getLeadMentionCandidateIds(lead: Lead) {
         .filter(Boolean),
     ),
   );
+}
+
+export function getLeadPrimaryMentionId(lead: Lead) {
+  return getLeadMentionCandidateIds(lead)[0] || "";
+}
+
+export function createLeadWorkbenchHref(
+  lead: Lead,
+  dashboardReturn?: { origin: DashboardReturnOrigin; token: string },
+) {
+  const params = new URLSearchParams({ leadId: lead.id });
+  const mentionId = getLeadPrimaryMentionId(lead);
+  if (mentionId) params.set("mentionId", mentionId);
+  const href = `/leads?${params.toString()}`;
+  return dashboardReturn
+    ? appendDashboardReturnParams(href, dashboardReturn.origin, dashboardReturn.token)
+    : href;
+}
+
+export function findLeadByNavigationTarget(
+  leads: Lead[],
+  leadId?: string | null,
+  mentionId?: string | null,
+) {
+  const normalizedLeadId = String(leadId || "").trim();
+  const normalizedMentionId = String(mentionId || "").trim();
+
+  if (normalizedLeadId) {
+    const exactLead = leads.find((lead) => lead.id === normalizedLeadId);
+    if (exactLead) return exactLead;
+  }
+
+  const candidateIds = [normalizedMentionId, normalizedLeadId].filter(Boolean);
+  if (candidateIds.length === 0) return undefined;
+
+  return leads.find((lead) => {
+    const leadCandidateIds = new Set(getLeadMentionCandidateIds(lead));
+    return candidateIds.some((candidateId) => leadCandidateIds.has(candidateId));
+  });
 }
 
 function findMentionForLead(

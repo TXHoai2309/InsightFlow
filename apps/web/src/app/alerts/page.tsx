@@ -29,6 +29,8 @@ import {
   canAlertBeVisibleToUser,
   isAlertOwnedByUser,
 } from "@/lib/alert-visibility";
+import { findAlertByNavigationTarget } from "@/lib/alert-navigation";
+import { readDashboardReturnNavigation } from "@/lib/dashboard-return-context";
 
 const ALERTS_PER_PAGE = 5;
 import { collection, getDocs, doc, getDoc } from "firebase/firestore";
@@ -267,6 +269,11 @@ export default function AlertsPage() {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
   const alertIdParam = searchParams.get("alertId");
+  const mentionIdParam = searchParams.get("mentionId");
+  const dashboardReturnNavigation = useMemo(
+    () => readDashboardReturnNavigation(searchParams),
+    [searchParams],
+  );
   const handledAlertIdParamRef = useRef<string | null>(null);
 
 
@@ -469,20 +476,21 @@ export default function AlertsPage() {
   }, [visibleBaseAlerts]);
 
   useEffect(() => {
-    if (!alertIdParam) {
+    const navigationKey = [alertIdParam, mentionIdParam].filter(Boolean).join("::");
+    if (!navigationKey) {
       handledAlertIdParamRef.current = null;
       return;
     }
-    if (handledAlertIdParamRef.current === alertIdParam) return;
+    if (handledAlertIdParamRef.current === navigationKey) return;
 
-    const targetAlert = visibleBaseAlerts.find((alert) => {
-      return [alert.id, alert.source_id, alert.post_id, alert.comment_id]
-        .filter(Boolean)
-        .some((id) => String(id) === alertIdParam);
-    });
+    const targetAlert = findAlertByNavigationTarget(
+      visibleBaseAlerts,
+      alertIdParam,
+      mentionIdParam,
+    );
     if (!targetAlert) return;
 
-    handledAlertIdParamRef.current = alertIdParam;
+    handledAlertIdParamRef.current = navigationKey;
     const workflowStatus = getAlertWorkflowStatus(targetAlert);
 
     // A deep link must reveal the requested record even if the user left
@@ -503,7 +511,7 @@ export default function AlertsPage() {
     setDetailPanelTab("action");
     setIsDetailPanelCollapsed(false);
     setPendingClaimSelectionId(targetAlert.id);
-  }, [alertIdParam, visibleBaseAlerts]);
+  }, [alertIdParam, mentionIdParam, visibleBaseAlerts]);
 
   const processedActiveAlerts = useMemo(() => {
     let result = statusFilter === "resolved" ? [...resolvedAlerts] : [...activeAlerts];
@@ -1083,6 +1091,17 @@ export default function AlertsPage() {
 
   return (
     <div data-tour="alerts-page" className="space-y-6 bg-[var(--color-bg-base)] p-[clamp(12px,2vw,32px)] text-[var(--color-text-primary)] animate-fade-in">
+
+      {dashboardReturnNavigation && (
+        <button
+          type="button"
+          onClick={() => router.push(dashboardReturnNavigation.href)}
+          className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] px-3.5 text-sm font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-bg-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]"
+        >
+          <span className="material-symbols-outlined text-base">arrow_back</span>
+          {dashboardReturnNavigation.label}
+        </button>
+      )}
 
       {/* Redesigned Grid Section */}
       <AlertWorkbench

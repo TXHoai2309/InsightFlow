@@ -39,6 +39,23 @@ export interface LeadWorkbenchMeta {
   nextActionLabel: string;
 }
 
+export type LeadFollowUpBucket =
+  | "overdue"
+  | "due_soon"
+  | "today"
+  | "future"
+  | "unscheduled";
+
+export interface LeadFollowUpMeta {
+  scheduledAt: number | null;
+  isScheduled: boolean;
+  isDueToday: boolean;
+  isOverdue: boolean;
+  isDueSoon: boolean;
+  bucket: LeadFollowUpBucket;
+  relativeLabel: string;
+}
+
 export interface LeadActionLink {
   label: string;
   icon: string;
@@ -55,6 +72,7 @@ export const WORKBENCH_VIEWS: Array<{
   { id: "unassigned", label: "Chưa phân công" },
   { id: "priority", label: "Chờ xử lý" },
   { id: "active", label: "Đang xử lý" },
+  { id: "follow_up", label: "Follow-up" },
   { id: "closed", label: "Đã đóng" },
 ];
 
@@ -293,16 +311,65 @@ function hasContactChannel(lead: Lead) {
 }
 
 function hasFollowUpSignal(lead: Lead) {
-  if (lead.follow_up_at) return true;
+  if (!lead.follow_up_at) return false;
+  return Number.isFinite(new Date(lead.follow_up_at).getTime());
+}
 
-  const note = `${lead.notes || ""} ${lead.intent_signals.join(" ")}`.toLowerCase();
-  return (
-    note.includes("follow") ||
-    note.includes("hẹn") ||
-    note.includes("hen") ||
-    note.includes("gọi lại") ||
-    note.includes("goi lai")
-  );
+export function getLeadFollowUpMeta(
+  lead: Lead,
+  nowMs = Date.now(),
+): LeadFollowUpMeta {
+  const scheduledAt = lead.follow_up_at
+    ? new Date(lead.follow_up_at).getTime()
+    : Number.NaN;
+  const isScheduled = Number.isFinite(scheduledAt);
+  const isOpen = lead.status === "new" || lead.status === "processing";
+
+  if (!isScheduled) {
+    return {
+      scheduledAt: null,
+      isScheduled: false,
+      isDueToday: false,
+      isOverdue: false,
+      isDueSoon: false,
+      bucket: "unscheduled",
+      relativeLabel: "Chưa đặt giờ hẹn",
+    };
+  }
+
+  const now = new Date(nowMs);
+  const endOfToday = new Date(now);
+  endOfToday.setHours(23, 59, 59, 999);
+  const isOverdue = isOpen && scheduledAt <= nowMs;
+  const isDueToday = isOpen && scheduledAt <= endOfToday.getTime();
+  const remainingMs = scheduledAt - nowMs;
+  const isDueSoon = isDueToday && !isOverdue && remainingMs <= 30 * 60 * 1000;
+  const absoluteMinutes = Math.max(1, Math.ceil(Math.abs(remainingMs) / 60000));
+  const formatDuration = (minutes: number) => {
+    if (minutes < 60) return `${minutes} phút`;
+    const hours = Math.floor(minutes / 60);
+    const restMinutes = minutes % 60;
+    if (hours < 24) return restMinutes ? `${hours} giờ ${restMinutes} phút` : `${hours} giờ`;
+    const days = Math.floor(hours / 24);
+    const restHours = hours % 24;
+    return restHours ? `${days} ngày ${restHours} giờ` : `${days} ngày`;
+  };
+
+  return {
+    scheduledAt,
+    isScheduled: true,
+    isDueToday,
+    isOverdue,
+    isDueSoon,
+    bucket: isOverdue ? "overdue" : isDueSoon ? "due_soon" : isDueToday ? "today" : "future",
+    relativeLabel: isOverdue
+      ? `Quá hẹn ${formatDuration(absoluteMinutes)}`
+      : isDueSoon
+        ? `Còn ${formatDuration(absoluteMinutes)}`
+        : isDueToday
+          ? `Hôm nay lúc ${new Date(scheduledAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}`
+          : `Hẹn ${new Date(scheduledAt).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`,
+  };
 }
 
 function hasRecordedResult(lead: Lead) {
@@ -509,7 +576,7 @@ export function matchesLeadWorkbenchView(
 
   // Supporting views for KPI calculations inside LeadStats:
   if (view === "urgent") return meta.isOverdue || meta.isUrgent;
-  if (view === "follow_up") return meta.isFollowUp;
+  if (view === "follow_up") return getLeadFollowUpMeta(lead, nowMs).isDueToday;
   if (view === "need_result") return meta.needsResultCapture;
 
   return true;
@@ -551,5 +618,24 @@ export function sortLeadsForWorkbench(
     }
 
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+}
+
+export function sortFollowUpLeads(
+  leads: Lead[],
+  nowMs = Date.now(),
+  profile?: UserRoleProfile | null,
+) {
+  return [...leads].sort((left, right) => {
+    const leftFollowUp = getLeadFollowUpMeta(left, nowMs);
+    const rightFollowUp = getLeadFollowUpMeta(right, nowMs);
+    const leftTime = leftFollowUp.scheduledAt ?? Number.POSITIVE_INFINITY;
+    const rightTime = rightFollowUp.scheduledAt ?? Number.POSITIVE_INFINITY;
+    if (leftTime !== rightTime) return leftTime - rightTime;
+
+    const ownerRankDiff =
+      getLeadOwnerSortRank(left, profile) - getLeadOwnerSortRank(right, profile);
+    if (ownerRankDiff !== 0) return ownerRankDiff;
+    return new Date(left.created_at).getTime() - new Date(right.created_at).getTime();
   });
 }

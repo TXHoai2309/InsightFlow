@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useDashboard } from "@/hooks/useDashboardData";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import {
@@ -20,6 +21,8 @@ import {
   getLeadWorkbenchMeta,
   getLeadWorkbenchViews,
   matchesLeadWorkbenchView,
+  getLeadFollowUpMeta,
+  sortFollowUpLeads,
   sortLeadsForWorkbench,
   type LeadWorkbenchView,
 } from "@/lib/lead-workbench";
@@ -32,6 +35,10 @@ import {
 import { normalizeBrandName } from "@/lib/services/dashboard";
 import { isIntentLead } from "@/lib/lead-intent";
 import {
+  findLeadByNavigationTarget,
+  getLeadPrimaryMentionId,
+} from "@/lib/mention-navigation";
+import {
   DEFAULT_LEAD_WORKBENCH_FILTERS,
   countActiveLeadFilters,
   filterLeadWorkbenchItems,
@@ -39,6 +46,10 @@ import {
   writeLeadWorkbenchFilters,
   type LeadWorkbenchFilters,
 } from "@/lib/lead-filters";
+import {
+  readDashboardReturnNavigation,
+  type DashboardReturnNavigation,
+} from "@/lib/dashboard-return-context";
 
 const LEADS_PAGE_SIZE = 5;
 const APP_SCROLL_ROOT_SELECTOR = '[data-app-scroll-root="true"]';
@@ -58,6 +69,7 @@ function getLeadListScrollTop() {
 }
 
 export default function LeadsPage() {
+  const router = useRouter();
   const { profile, loading: authLoading } = useAuth();
   const [staffList, setStaffList] = useState<any[]>([]);
   const canLoadStaffList = canPerformAction(profile, "manage_staff");
@@ -103,9 +115,11 @@ export default function LeadsPage() {
   const [highlightedLeadId, setHighlightedLeadId] = useState<string | null>(null);
   const [restoreNotice, setRestoreNotice] = useState("");
   const [optimisticLeadsById, setOptimisticLeadsById] = useState<Record<string, Lead>>({});
+  const [dashboardReturnNavigation, setDashboardReturnNavigation] = useState<DashboardReturnNavigation | null>(null);
   const hasRestoredReturnContext = useRef(false);
   const skipNextPageReset = useRef(false);
   const pendingRestoreLeadId = useRef<string | null>(null);
+  const pendingRestoreMentionId = useRef<string | null>(null);
   const pendingRestoreScrollTop = useRef<number | null>(null);
   const pendingRestorePanelScrollTop = useRef<number | null>(null);
   const hasReconciledRestoreLead = useRef(false);
@@ -113,8 +127,15 @@ export default function LeadsPage() {
   const canViewLeads = canPerformAction(profile, "view_leads");
   const hasBrandScope = hasBusinessBrandScope(profile);
 
+  useEffect(() => {
+    setDashboardReturnNavigation(
+      readDashboardReturnNavigation(new URLSearchParams(window.location.search)),
+    );
+  }, []);
+
   const clearPendingRestore = useCallback((clearHighlight = false) => {
     pendingRestoreLeadId.current = null;
+    pendingRestoreMentionId.current = null;
     pendingRestoreScrollTop.current = null;
     pendingRestorePanelScrollTop.current = null;
     if (clearHighlight) setHighlightedLeadId(null);
@@ -221,6 +242,7 @@ export default function LeadsPage() {
     const requestedView = params.get("view") as LeadWorkbenchView | null;
     const requestedPage = Number(params.get("page") || "1");
     const requestedLeadId = params.get("leadId");
+    const requestedMentionId = params.get("mentionId");
     const requestedSort = params.get("sort");
     const nextView = returnContext?.view || requestedView;
     const nextPage = returnContext?.page || requestedPage;
@@ -255,13 +277,19 @@ export default function LeadsPage() {
       setCurrentPage(Math.floor(nextPage));
     }
 
-    if (nextLeadId) {
-      pendingRestoreLeadId.current = nextLeadId;
+    if (nextLeadId || requestedMentionId) {
+      const pendingLeadId = nextLeadId || requestedMentionId;
+      pendingRestoreLeadId.current = pendingLeadId;
+      pendingRestoreMentionId.current = requestedMentionId;
       pendingRestoreScrollTop.current = returnContext?.listScrollTop ?? null;
       pendingRestorePanelScrollTop.current = returnContext?.panelScrollTop ?? null;
-      setSelectedLeadId(nextLeadId);
-      setHighlightedLeadId(nextLeadId);
-      setRestoreNotice("Đã quay lại đúng lead bạn vừa kiểm tra.");
+      setSelectedLeadId(pendingLeadId);
+      setHighlightedLeadId(pendingLeadId);
+      setRestoreNotice(
+        requestedMentionId
+          ? "Đang mở đúng mention từ Lead Monitoring."
+          : "Đã quay lại đúng lead bạn vừa kiểm tra.",
+      );
     }
 
     hasRestoredReturnContext.current = true;
@@ -277,8 +305,22 @@ export default function LeadsPage() {
     params.set("view", activeView);
     if (currentPage > 1) params.set("page", String(currentPage));
     else params.delete("page");
-    if (selectedLeadId) params.set("leadId", selectedLeadId);
-    else params.delete("leadId");
+    if (selectedLeadId) {
+      params.set("leadId", selectedLeadId);
+      const selectedLead = findLeadByNavigationTarget(
+        leads,
+        selectedLeadId,
+        pendingRestoreMentionId.current,
+      );
+      const mentionId = selectedLead
+        ? getLeadPrimaryMentionId(selectedLead)
+        : pendingRestoreMentionId.current;
+      if (mentionId) params.set("mentionId", mentionId);
+      else params.delete("mentionId");
+    } else {
+      params.delete("leadId");
+      params.delete("mentionId");
+    }
     if (sortMode !== "recommended") params.set("sort", sortMode);
     else params.delete("sort");
     params.delete("returnToken");
@@ -289,7 +331,7 @@ export default function LeadsPage() {
       "",
       query ? `${window.location.pathname}?${query}` : window.location.pathname,
     );
-  }, [activeView, currentPage, leadFilters, selectedLeadId, sortMode]);
+  }, [activeView, currentPage, leadFilters, leads, selectedLeadId, sortMode]);
 
   const visibleBaseLeads = useMemo(
     () => baseLeads.filter((lead) => canLeadBeVisibleToUser(lead, profile)),
@@ -302,7 +344,7 @@ export default function LeadsPage() {
   );
 
   const viewCounts = useMemo(() => {
-    const allViews: LeadWorkbenchView[] = ["unassigned", "priority", "active", "closed", "need_result"];
+    const allViews: LeadWorkbenchView[] = ["unassigned", "priority", "active", "follow_up", "closed", "need_result"];
     return allViews.reduce(
       (acc, viewId) => {
         acc[viewId] = visibleBaseLeads.filter((lead) =>
@@ -331,6 +373,9 @@ export default function LeadsPage() {
         currentTime,
         profile?.uid,
       );
+    if (activeView === "follow_up") {
+      return sortFollowUpLeads(filtered, currentTime, profile);
+    }
     if (sortMode === "recommended") return filtered;
 
     return [...filtered].sort((left, right) => {
@@ -347,7 +392,31 @@ export default function LeadsPage() {
       }
       return leftMeta.remainingMs - rightMeta.remainingMs;
     });
-  }, [currentTime, leadFilters, leadsInActiveView, profile?.uid, sortMode]);
+  }, [activeView, currentTime, leadFilters, leadsInActiveView, profile, sortMode]);
+
+  const followUpQueue = useMemo(
+    () => sortFollowUpLeads(
+      visibleBaseLeads.filter((lead) =>
+        matchesLeadWorkbenchView(lead, "follow_up", currentTime, profile),
+      ),
+      currentTime,
+      profile,
+    ),
+    [currentTime, profile, visibleBaseLeads],
+  );
+
+  const followUpSummary = useMemo(() => {
+    const metadata = followUpQueue.map((lead) => getLeadFollowUpMeta(lead, currentTime));
+    const overdue = metadata.filter((item) => item.isOverdue).length;
+    const next = metadata.find((item) => !item.isOverdue && item.scheduledAt !== null);
+    return {
+      total: followUpQueue.length,
+      overdue,
+      nextLabel: next?.scheduledAt
+        ? new Date(next.scheduledAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })
+        : "Chưa có lịch tiếp theo",
+    };
+  }, [currentTime, followUpQueue]);
 
   const activeFilterCount = countActiveLeadFilters(
     leadFilters,
@@ -402,6 +471,7 @@ export default function LeadsPage() {
 
   useEffect(() => {
     const restoredLeadId = pendingRestoreLeadId.current;
+    const restoredMentionId = pendingRestoreMentionId.current;
     if (!restoredLeadId || hasReconciledRestoreLead.current || isLoading) return;
     if (visibleBaseLeads.length === 0 && leads.length > 0) {
       setRestoreNotice(
@@ -412,10 +482,21 @@ export default function LeadsPage() {
       return;
     }
 
-    const restoredLead = visibleBaseLeads.find((lead) => lead.id === restoredLeadId);
+    const restoredLead = findLeadByNavigationTarget(
+      visibleBaseLeads,
+      restoredLeadId,
+      restoredMentionId,
+    );
     if (!restoredLead) return;
+    const resolvedLeadId = restoredLead.id;
 
-    if (!visibleLeads.some((lead) => lead.id === restoredLeadId)) {
+    if (resolvedLeadId !== restoredLeadId) {
+      pendingRestoreLeadId.current = resolvedLeadId;
+      setSelectedLeadId(resolvedLeadId);
+      setHighlightedLeadId(resolvedLeadId);
+    }
+
+    if (!visibleLeads.some((lead) => lead.id === resolvedLeadId)) {
       const nextView = workbenchViews.find((view) =>
         matchesLeadWorkbenchView(restoredLead, view.id, currentTime, profile),
       );
@@ -437,7 +518,7 @@ export default function LeadsPage() {
       return;
     }
 
-    const visibleIndex = visibleLeads.findIndex((lead) => lead.id === restoredLeadId);
+    const visibleIndex = visibleLeads.findIndex((lead) => lead.id === resolvedLeadId);
     if (visibleIndex >= 0) {
       const pageForLead = Math.floor(visibleIndex / LEADS_PAGE_SIZE) + 1;
       if (pageForLead !== currentPage) {
@@ -533,6 +614,37 @@ export default function LeadsPage() {
     );
   }, [sortedLeads, currentTime, profile]);
 
+  const handleSelectSummaryView = (view: LeadWorkbenchView) => {
+    setActiveView(view);
+    setCurrentPage(1);
+
+    if (view !== "follow_up") return;
+
+    setLeadFilters({
+      ...DEFAULT_LEAD_WORKBENCH_FILTERS,
+      workspaceId: leadFilters.workspaceId,
+    });
+    setSortMode("recommended");
+    const firstFollowUp = followUpQueue[0] || null;
+    setSelectedLeadId(firstFollowUp?.id || null);
+    setHighlightedLeadId(firstFollowUp?.id || null);
+    setDetailTab("action");
+    setIsPanelCollapsed(!firstFollowUp);
+    setRestoreNotice("");
+
+    window.setTimeout(() => {
+      document.getElementById("lead-follow-up-queue")?.scrollIntoView({
+        block: "start",
+        behavior: "smooth",
+      });
+    }, 80);
+    if (firstFollowUp) {
+      window.setTimeout(() => {
+        setHighlightedLeadId((current) => current === firstFollowUp.id ? null : current);
+      }, 4000);
+    }
+  };
+
   const handleStartedAction = (lead: Lead, preventJump = false) => {
     rememberOptimisticLead(lead);
     if (preventJump) return;
@@ -553,7 +665,7 @@ export default function LeadsPage() {
     );
   };
 
-  const handleAfterResult = () => {
+  const handleAfterResult = (resultType?: Lead["result_type"]) => {
     if (selectedLeadId) {
       setOptimisticLeadsById((current) => {
         if (!current[selectedLeadId]) return current;
@@ -561,6 +673,15 @@ export default function LeadsPage() {
         delete next[selectedLeadId];
         return next;
       });
+    }
+
+    if (activeView === "follow_up") {
+      const nextFollowUp = visibleLeads.find((lead) => lead.id !== selectedLeadId) || null;
+      setCurrentPage(1);
+      setSelectedLeadId(nextFollowUp?.id || null);
+      setHighlightedLeadId(nextFollowUp?.id || null);
+      if (!nextFollowUp && resultType !== "follow_up") setIsPanelCollapsed(true);
+      return;
     }
 
     const remainingNeedResult = sortedLeads.filter(
@@ -616,6 +737,16 @@ export default function LeadsPage() {
       data-tour="leads-page"
       className="lead-workbench-theme min-h-full w-full space-y-[clamp(8px,0.8vw,14px)] overflow-x-hidden bg-[var(--color-bg-base)] p-[clamp(12px,2vw,32px)] text-[var(--color-text-primary)]"
     >
+      {dashboardReturnNavigation && (
+        <button
+          type="button"
+          onClick={() => router.push(dashboardReturnNavigation.href)}
+          className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] px-3.5 text-sm font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-bg-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]"
+        >
+          <span className="material-symbols-outlined text-base">arrow_back</span>
+          {dashboardReturnNavigation.label}
+        </button>
+      )}
       <header className="flex flex-col gap-3 min-[1320px]:flex-row min-[1320px]:items-center min-[1320px]:justify-between">
         <div className="min-w-0">
           <h1 className="text-xl font-black text-[var(--color-text-primary)] md:text-2xl">
@@ -650,7 +781,7 @@ export default function LeadsPage() {
         leads={brandPlatformFilteredLeads}
         isLoading={isLoading}
         profile={profile}
-        onSelectView={(view) => setActiveView(view)}
+        onSelectView={handleSelectSummaryView}
       />
 
       {restoreNotice && (
@@ -663,6 +794,23 @@ export default function LeadsPage() {
           >
             Đóng
           </button>
+        </section>
+      )}
+
+      {activeView === "follow_up" && (
+        <section className="grid gap-3 rounded-xl border border-blue-200 bg-blue-50 p-3 text-blue-950 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] sm:items-center">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-blue-700 shadow-sm">
+              <span className="material-symbols-outlined">event_upcoming</span>
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-black">Hàng đợi Follow-up hôm nay</p>
+              <p className="mt-0.5 truncate text-xs text-blue-800">Ưu tiên lịch quá hẹn và lịch sắp đến giờ.</p>
+            </div>
+          </div>
+          <div className="rounded-lg bg-white px-3 py-2 text-center shadow-sm"><strong className="block text-lg text-blue-700">{followUpSummary.total}</strong><span className="text-[10px] font-bold uppercase text-blue-700">Cần xử lý</span></div>
+          <div className="rounded-lg bg-white px-3 py-2 text-center shadow-sm"><strong className="block text-lg text-red-700">{followUpSummary.overdue}</strong><span className="text-[10px] font-bold uppercase text-red-700">Quá hẹn</span></div>
+          <div className="rounded-lg bg-white px-3 py-2 text-center shadow-sm"><strong className="block text-sm text-blue-700">{followUpSummary.nextLabel}</strong><span className="text-[10px] font-bold uppercase text-blue-700">Lịch tiếp theo</span></div>
         </section>
       )}
 
@@ -699,7 +847,7 @@ export default function LeadsPage() {
         </section>
       )}
 
-      <section className="space-y-[clamp(6px,0.55vw,10px)]">
+      <section id="lead-follow-up-queue" className="scroll-mt-20 space-y-[clamp(6px,0.55vw,10px)]">
         <div className="flex items-center justify-between gap-4 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <div data-tour="lead-view-tabs" className="flex min-w-max shrink-0 items-center gap-2">
             {workbenchViews.map((view) => (
@@ -838,12 +986,16 @@ export default function LeadsPage() {
                     inbox
                   </span>
                   <h3 className="mt-3 text-base font-bold text-[var(--color-text-primary)]">
-                    {activeFilterCount > 0
+                    {activeView === "follow_up"
+                      ? "Không còn lịch follow-up cần xử lý hôm nay"
+                      : activeFilterCount > 0
                       ? "Không có khách hàng phù hợp"
                       : "Không có lead trong nhóm này"}
                   </h3>
                   <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-                    {activeFilterCount > 0
+                    {activeView === "follow_up"
+                      ? "Các lịch tương lai sẽ xuất hiện khi đến ngày hẹn; lịch đã hoàn tất được tự động loại khỏi hàng đợi."
+                      : activeFilterCount > 0
                       ? "Hãy điều chỉnh hoặc xóa các điều kiện lọc đang áp dụng."
                       : "Chuyển hàng chờ để xem nhóm lead khác."}
                   </p>

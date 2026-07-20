@@ -1444,6 +1444,7 @@ export const useAlertStore = create<AlertState>()(
     lockAlertForResolution: async (id, profile) => {
       if (!profile) return;
       const now = new Date().toISOString();
+      const previousAlert = get().rawAlerts.find((alert) => isSameAlertRecord(alert, id));
 
       // Update local state immediately
       set((state) => {
@@ -1476,6 +1477,20 @@ export const useAlertStore = create<AlertState>()(
         }));
       } catch (error) {
         console.error("[AlertStore] Failed to lock alert:", error);
+        set((state) => {
+          const nextRawAlerts = state.rawAlerts.map((alert) => {
+            if (previousAlert && isSameAlertRecord(alert, id)) return previousAlert;
+            return alert;
+          });
+          const nextRecentLocks = { ...state.recentLocks };
+          delete nextRecentLocks[id];
+          return {
+            rawAlerts: nextRawAlerts,
+            alerts: applyFilters(nextRawAlerts, state.filters),
+            recentLocks: nextRecentLocks,
+          };
+        });
+        throw error;
       }
     },
 
