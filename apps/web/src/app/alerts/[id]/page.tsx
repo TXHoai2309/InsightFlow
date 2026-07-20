@@ -270,8 +270,9 @@ export default function AlertDetailPage() {
   const [newActivityDetails, setNewActivityDetails] = useState<{ comments: number; likes: number; shares: number } | null>(null);
   const [contactEvidenceNote, setContactEvidenceNote] = useState("");
   const [contactEvidenceImage, setContactEvidenceImage] = useState<string | null>(null);
+  const [selectedCustomerResponseResult, setSelectedCustomerResponseResult] = useState<CustomerResponseResult | null>(null);
   const [previewEvidenceImage, setPreviewEvidenceImage] = useState<string | null>(null);
-  const [savingContactEvidence, setSavingContactEvidence] = useState(false);
+  const [isRecordingContactResult, setIsRecordingContactResult] = useState(false);
 
   // Edit severity mode states
   const [editSeverityMode, setEditSeverityMode] = useState(false);
@@ -313,11 +314,17 @@ export default function AlertDetailPage() {
     }
   }, [alert]);
 
+  const storedContactAlertId = alert?.id;
+  const storedContactNote = alert?.customer_contact_note;
+  const storedContactImage = alert?.customer_contact_evidence_image;
+  const storedResponseResult = alert?.customer_response_result;
+
   useEffect(() => {
-    if (!alert) return;
-    setContactEvidenceNote(alert.customer_contact_note || "");
-    setContactEvidenceImage(alert.customer_contact_evidence_image || null);
-  }, [alert?.id, alert?.customer_contact_note, alert?.customer_contact_evidence_image]);
+    if (!storedContactAlertId) return;
+    setContactEvidenceNote(storedContactNote || "");
+    setContactEvidenceImage(storedContactImage || null);
+    setSelectedCustomerResponseResult(storedResponseResult || null);
+  }, [storedContactAlertId, storedContactNote, storedContactImage, storedResponseResult]);
 
   useEffect(() => {
     if (!alert || (alert.status !== "monitoring" && !alert.monitoring_started_at)) {
@@ -440,22 +447,6 @@ export default function AlertDetailPage() {
     }
   };
 
-  const handleCustomerResponseResult = async (result: CustomerResponseResult) => {
-    if (!alert?.customer_contact_opened_at || !alert.customer_contact_note || !alert.customer_contact_evidence_image) return;
-    const resultLabel = CUSTOMER_RESPONSE_OPTIONS.find((option) => option.value === result)?.label || result;
-    try {
-      await updateAlertStatus(alert.id, "resolving", profile, {
-        note: `Đã ghi nhận kết quả liên hệ: ${resultLabel}.`,
-        customer_response_result: result,
-      }, alert.brand);
-      setAlert({ ...alert, status: "resolving", customer_response_result: result });
-      triggerToast(`Đã lưu: ${resultLabel}.`);
-    } catch (error) {
-      triggerToast("Không thể lưu kết quả phản hồi. Vui lòng thử lại.");
-      console.error(error);
-    }
-  };
-
   const handleContactEvidenceImage = (file?: File) => {
     if (!file) return;
     if (!file.type.startsWith("image/")) {
@@ -484,42 +475,13 @@ export default function AlertDetailPage() {
     reader.readAsDataURL(file);
   };
 
-  const handleSaveContactEvidence = async () => {
-    if (!alert?.customer_contact_opened_at) {
-      triggerToast("Hãy bấm ‘Xem trên nền tảng’ trước.");
-      return;
-    }
-    if (!contactEvidenceNote.trim() || !contactEvidenceImage) {
-      triggerToast("Cần nhập ghi chú và thêm ảnh minh chứng.");
-      return;
-    }
-
-    setSavingContactEvidence(true);
-    try {
-      await updateAlertStatus(alert.id, "resolving", profile, {
-        note: `Đã bổ sung minh chứng liên hệ: ${contactEvidenceNote.trim()}`,
-        customer_contact_note: contactEvidenceNote.trim(),
-        customer_contact_evidence_image: contactEvidenceImage,
-      }, alert.brand);
-      setAlert({
-        ...alert,
-        status: "resolving",
-        customer_contact_note: contactEvidenceNote.trim(),
-        customer_contact_evidence_image: contactEvidenceImage,
-      });
-      triggerToast("Đã lưu minh chứng liên hệ.");
-    } catch (error) {
-      triggerToast("Không thể lưu minh chứng. Vui lòng thử lại.");
-      console.error(error);
-    } finally {
-      setSavingContactEvidence(false);
-    }
-  };
-
   const buildContactHistory = (
-    outcomeStatus: CustomerContactAttempt["outcome_status"]
+    outcomeStatus: CustomerContactAttempt["outcome_status"],
+    note: string,
+    evidenceImage: string,
+    responseResult: CustomerResponseResult,
   ): CustomerContactAttempt[] => {
-    if (!alert?.customer_contact_opened_at || !alert.customer_contact_note || !alert.customer_contact_evidence_image || !alert.customer_response_result) {
+    if (!alert?.customer_contact_opened_at) {
       return alert?.customer_contact_history || [];
     }
     return [
@@ -528,9 +490,9 @@ export default function AlertDetailPage() {
         opened_at: alert.customer_contact_opened_at,
         opened_by: alert.customer_contact_opened_by,
         template: alert.customer_contact_template,
-        note: alert.customer_contact_note,
-        evidence_image: alert.customer_contact_evidence_image,
-        response_result: alert.customer_response_result,
+        note,
+        evidence_image: evidenceImage,
+        response_result: responseResult,
         completed_at: new Date().toISOString(),
         outcome_status: outcomeStatus,
       },
@@ -539,40 +501,42 @@ export default function AlertDetailPage() {
 
   const handleCompleteAction = async () => {
     if (!alert) return;
-    if (!alert.customer_contact_opened_at || !alert.customer_contact_note || !alert.customer_contact_evidence_image || !alert.customer_response_result) {
+    const normalizedNote = contactEvidenceNote.trim();
+    if (!alert.customer_contact_opened_at || !normalizedNote || !contactEvidenceImage || !selectedCustomerResponseResult) {
       triggerToast("Chưa đủ liên kết, ghi chú, ảnh minh chứng và kết quả phản hồi.");
       return;
     }
 
     const resultLabel = CUSTOMER_RESPONSE_OPTIONS.find(
-      (option) => option.value === alert.customer_response_result
+      (option) => option.value === selectedCustomerResponseResult
     )?.label;
     const contactEvidencePayload = {
       customer_contact_opened_at: alert.customer_contact_opened_at,
       customer_contact_opened_by: alert.customer_contact_opened_by,
       customer_contact_template: alert.customer_contact_template,
-      customer_contact_note: alert.customer_contact_note,
-      customer_contact_evidence_image: alert.customer_contact_evidence_image,
-      customer_response_result: alert.customer_response_result,
+      customer_contact_note: normalizedNote,
+      customer_contact_evidence_image: contactEvidenceImage,
+      customer_response_result: selectedCustomerResponseResult,
     };
 
+    setIsRecordingContactResult(true);
     try {
-      if (alert.customer_response_result === "no_response") {
+      if (selectedCustomerResponseResult === "no_response") {
         await updateAlertStatus(alert.id, "contact_waiting", profile, {
           note: `Đã liên hệ khách hàng nhưng chưa nhận được phản hồi.${resultLabel ? ` Kết quả: ${resultLabel}.` : ""}`,
           ...contactEvidencePayload,
-          customer_contact_history: buildContactHistory("contact_waiting"),
+          customer_contact_history: buildContactHistory("contact_waiting", normalizedNote, contactEvidenceImage, selectedCustomerResponseResult),
           reset_customer_contact: true,
         }, alert.brand);
         router.push("/alerts");
         return;
       }
 
-      if (alert.customer_response_result === "still_upset") {
+      if (selectedCustomerResponseResult === "still_upset") {
         await updateAlertStatus(alert.id, "contact_failed", profile, {
           note: `Liên hệ trao đổi không thành; khách hàng vẫn bức xúc.${resultLabel ? ` Kết quả: ${resultLabel}.` : ""}`,
           ...contactEvidencePayload,
-          customer_contact_history: buildContactHistory("contact_failed"),
+          customer_contact_history: buildContactHistory("contact_failed", normalizedNote, contactEvidenceImage, selectedCustomerResponseResult),
           reset_customer_contact: true,
         }, alert.brand);
         router.push("/alerts");
@@ -584,12 +548,14 @@ export default function AlertDetailPage() {
           ? `Hoàn tất xử lý sau khi liên hệ khách hàng. Kết quả: ${resultLabel}.`
           : "Hoàn tất xử lý sau khi liên hệ khách hàng.",
         ...contactEvidencePayload,
-        customer_contact_history: buildContactHistory("resolved"),
+        customer_contact_history: buildContactHistory("resolved", normalizedNote, contactEvidenceImage, selectedCustomerResponseResult),
       }, alert.brand);
       router.push("/alerts");
     } catch (error) {
       triggerToast("Không thể cập nhật trạng thái liên hệ. Vui lòng thử lại.");
       console.error(error);
+    } finally {
+      setIsRecordingContactResult(false);
     }
   };
 
@@ -884,12 +850,12 @@ export default function AlertDetailPage() {
   const isLockedByOthers = alert.being_resolved_by && alert.being_resolved_by !== profile?.email;
   const isMine = alert.being_resolved_by === profile?.email;
   const workflowStatus = getAlertWorkflowStatus(alert);
-  const hasContactProof = Boolean(
+  const hasCompleteContactDraft = Boolean(
     alert.customer_contact_opened_at &&
-    alert.customer_contact_note?.trim() &&
-    alert.customer_contact_evidence_image
+    contactEvidenceNote.trim() &&
+    contactEvidenceImage &&
+    selectedCustomerResponseResult
   );
-  const canComplete = Boolean(hasContactProof && alert.customer_response_result);
 
   // Sentiment Color Mapping
   let sentimentBadge = "bg-slate-50 text-slate-600 border-slate-100";
@@ -1004,21 +970,6 @@ export default function AlertDetailPage() {
                 className="px-4 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all cursor-pointer"
               >
                 Nhận xử lý
-              </button>
-            )}
-
-            {isMine && (workflowStatus === "processing" || workflowStatus === "contact_failed") && (
-              <button
-                onClick={handleCompleteAction}
-                disabled={!canComplete}
-                title={!hasContactProof
-                  ? "Hãy mở liên kết, nhập ghi chú và thêm ảnh minh chứng"
-                  : !alert.customer_response_result
-                    ? "Hãy ghi nhận kết quả phản hồi của khách hàng"
-                    : "Hoàn tất xử lý"}
-                className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all cursor-pointer disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none"
-              >
-                Hoàn tất
               </button>
             )}
 
@@ -1583,29 +1534,21 @@ export default function AlertDetailPage() {
                       </div>
                     )}
                   </div>
-                  <button
-                    type="button"
-                    disabled={!alert.customer_contact_opened_at || !contactEvidenceNote.trim() || !contactEvidenceImage || savingContactEvidence}
-                    onClick={handleSaveContactEvidence}
-                    className="w-full rounded-xl bg-slate-900 py-2.5 text-xs font-bold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
-                  >
-                    {savingContactEvidence ? "Đang lưu..." : hasContactProof ? "Cập nhật minh chứng" : "Lưu minh chứng"}
-                  </button>
                 </div>
 
-                <fieldset disabled={!hasContactProof} className="space-y-2 disabled:opacity-50">
+                <fieldset disabled={!alert.customer_contact_opened_at} className="space-y-2 disabled:opacity-50">
                   <legend className="mb-2 text-[10px] font-black uppercase tracking-wider text-[var(--color-text-secondary)]">
                     Kết quả phản hồi của khách hàng
                   </legend>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {CUSTOMER_RESPONSE_OPTIONS.map((option) => {
-                      const selected = alert.customer_response_result === option.value;
+                      const selected = selectedCustomerResponseResult === option.value;
                       return (
                         <button
                           type="button"
                           key={option.value}
-                          disabled={!hasContactProof}
-                          onClick={() => handleCustomerResponseResult(option.value)}
+                          disabled={!alert.customer_contact_opened_at}
+                          onClick={() => setSelectedCustomerResponseResult(option.value)}
                           aria-pressed={selected}
                           className={`rounded-xl border p-2.5 text-left text-[11px] font-bold flex items-center gap-2 transition-all disabled:cursor-not-allowed ${
                             selected ? `${option.tone} ring-2 ring-offset-1 ring-current` : "border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)] hover:border-purple-300"
@@ -1618,6 +1561,18 @@ export default function AlertDetailPage() {
                     })}
                   </div>
                 </fieldset>
+
+                {hasCompleteContactDraft && (
+                  <button
+                    type="button"
+                    onClick={() => void handleCompleteAction()}
+                    disabled={isRecordingContactResult}
+                    className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-[var(--color-brand)] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[var(--color-brand-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <span className="material-symbols-outlined text-lg">task_alt</span>
+                    {isRecordingContactResult ? "Đang ghi nhận..." : "Ghi nhận kết quả"}
+                  </button>
+                )}
               </div>
             )}
 

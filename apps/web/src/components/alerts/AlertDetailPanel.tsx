@@ -18,7 +18,11 @@ import { getAlertWorkflowStatus } from "@/lib/alertWorkflow";
 import { useAlertStore, type AlertData } from "@/stores/alert.store";
 import { useAuth } from "@/hooks/useAuth";
 import { AlertContentContext } from "./AlertContentContext";
-import { AlertContactWorkflow, createDefaultContactTemplate } from "./AlertContactWorkflow";
+import {
+  AlertContactWorkflow,
+  createDefaultContactTemplate,
+  type AlertContactResultDraft,
+} from "./AlertContactWorkflow";
 import { CustomerInteractionHistoryPanel } from "@/components/customer-interactions/CustomerInteractionHistoryPanel";
 
 export type AlertDetailPanelTab = "action" | "profile" | "interactions" | "history";
@@ -32,7 +36,7 @@ interface AlertDetailPanelProps {
   getResolverName: (value: string | null | undefined) => string;
   onClose: () => void;
   onClaim: (alert: AlertData) => Promise<void>;
-  onRecordResult: (alert: AlertData) => Promise<void>;
+  onRecordResult: (alert: AlertData, draft: AlertContactResultDraft) => Promise<void>;
   onOpenSource: (alert: AlertData) => void;
 }
 
@@ -98,7 +102,6 @@ export function AlertDetailPanel({
 }: AlertDetailPanelProps) {
   const workflowStatus = getAlertWorkflowStatus(alert);
   const [optimisticClaimId, setOptimisticClaimId] = useState<string | null>(null);
-  const [isRecordingResult, setIsRecordingResult] = useState(false);
   const [isOpeningContact, setIsOpeningContact] = useState(false);
   const [previewHistoryImage, setPreviewHistoryImage] = useState<string | null>(null);
   const claimedOptimistically = optimisticClaimId === alert.id;
@@ -113,12 +116,6 @@ export function AlertDetailPanel({
   const contactUrl = [alert.social_profile_url, alert.url, alert.post_url]
     .find((url) => Boolean(url && url !== "#"));
   const canOpenContact = canRecord && !alert.customer_contact_opened_at;
-  const hasRequiredResultEvidence = Boolean(
-    alert.customer_contact_opened_at &&
-    alert.customer_contact_note?.trim() &&
-    alert.customer_contact_evidence_image &&
-    alert.customer_response_result
-  );
 
   const { role, profile, user } = useAuth();
   const [staffList, setStaffList] = useState<any[]>([]);
@@ -166,13 +163,13 @@ export function AlertDetailPanel({
     if (!uid || !canUpdate || !profile) return;
     const selectedStaff = staffList.find(s => s.uid === uid);
     if (!selectedStaff) return;
-    
+
     try {
       setAssigningUid(uid);
-      await useAlertStore.getState().lockAlertForResolution(alert.id, { 
-         email: selectedStaff.email, 
-         displayName: selectedStaff.displayName,
-         uid: selectedStaff.uid
+      await useAlertStore.getState().lockAlertForResolution(alert.id, {
+        email: selectedStaff.email,
+        displayName: selectedStaff.displayName,
+        uid: selectedStaff.uid
       } as any);
       showToast(`Đã giao việc cho ${selectedStaff.displayName || selectedStaff.email}`, "success");
       setIsAssignDropdownOpen(false);
@@ -317,7 +314,6 @@ export function AlertDetailPanel({
 
   useEffect(() => {
     setOptimisticClaimId(null);
-    setIsRecordingResult(false);
     setIsOpeningContact(false);
     setPreviewHistoryImage(null);
   }, [alert.id]);
@@ -338,16 +334,6 @@ export function AlertDetailPanel({
       }
       return;
     }
-
-    if (!canRecord || !hasRequiredResultEvidence || isRecordingResult) return;
-    setIsRecordingResult(true);
-    try {
-      await onRecordResult(alert);
-    } catch {
-      // The page-level handler already reports the failure to the user.
-    } finally {
-      setIsRecordingResult(false);
-    }
   };
   const tabs: Array<{ id: AlertDetailPanelTab; label: string }> = [
     { id: "action", label: "Xử lý" },
@@ -364,14 +350,14 @@ export function AlertDetailPanel({
       active: Boolean(effectiveOwner) && !alert.customer_contact_opened_at && effectiveWorkflowStatus !== "resolved",
     },
     {
-      label: "Lưu kết quả",
+      label: "Ghi nhận kết quả",
       complete: effectiveWorkflowStatus === "resolved",
       active: Boolean(alert.customer_contact_opened_at) && effectiveWorkflowStatus !== "resolved",
     },
   ];
 
   return (
-    <aside data-tour="alert-detail-panel" className="flex min-w-0 shrink-0 flex-col self-start rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm min-[1100px]:sticky min-[1100px]:top-3 min-[1100px]:max-h-[calc(100vh-88px)]">
+    <aside data-tour="alert-detail-panel" className="flex min-w-0 shrink-0 flex-col self-start rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm min-[1100px]:sticky min-[1100px]:top-3 min-[1100px]:h-[calc(100vh-88px)] min-[1100px]:max-h-[calc(100vh-88px)]">
       <header className="shrink-0 border-b border-[var(--color-border)] px-3 pb-0 pt-2.5">
         <div className="flex items-start justify-between gap-2.5">
           <div className="flex min-w-0 items-center gap-2.5">
@@ -433,11 +419,6 @@ export function AlertDetailPanel({
                 <ExternalLink size={16} />
                 <span className="hidden sm:inline">{isOpeningContact ? "Đang mở..." : "Mở nguồn"}</span>
               </button>
-            ) : canRecord ? (
-              <button type="button" onClick={() => void handlePrimaryAction()} disabled={!hasRequiredResultEvidence || isRecordingResult} title={!hasRequiredResultEvidence ? "Cần có ghi chú, ảnh minh chứng và kết quả phản hồi của khách hàng" : undefined} className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 text-[13px] font-semibold text-white shadow-sm hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50">
-                <CheckCircle2 size={16} />
-                <span className="hidden sm:inline">{isRecordingResult ? "Đang ghi nhận..." : "Ghi nhận kết quả"}</span>
-              </button>
             ) : null}
             <div className="mx-1 h-6 w-px bg-[var(--color-border)]" />
             <button type="button" onClick={onClose} className="rounded-full p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-raised)]" title="Thu gọn panel" aria-label="Thu gọn panel">
@@ -467,10 +448,14 @@ export function AlertDetailPanel({
         </div>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-2.5 [scrollbar-gutter:stable]">
+      <div className={`min-h-0 flex-1 p-2.5 [scrollbar-gutter:stable] ${
+        activeTab === "action"
+          ? "overflow-y-auto min-[1280px]:overflow-hidden"
+          : "overflow-y-auto"
+      }`}>
         {activeTab === "action" && (
-          <div className="grid items-start gap-2 min-[1600px]:grid-cols-[minmax(0,1fr)_340px] min-[1850px]:grid-cols-[minmax(0,1fr)_360px]">
-            <div className="min-w-0 space-y-2">
+          <div className="grid items-start gap-2 min-[1280px]:h-full min-[1280px]:min-h-0 min-[1280px]:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] min-[1280px]:items-stretch">
+            <div className="min-w-0 space-y-2 min-[1280px]:min-h-0 min-[1280px]:overflow-y-auto min-[1280px]:pr-1 min-[1280px]:[scrollbar-gutter:stable]">
               <section className="rounded-xl border border-amber-200 bg-amber-50/70 p-3 dark:border-amber-900/40 dark:bg-amber-950/20">
                 <div className="flex items-start gap-2.5">
                   <ShieldAlert className="mt-0.5 shrink-0 text-amber-600" size={18} />
@@ -483,8 +468,8 @@ export function AlertDetailPanel({
               <AlertContentContext alert={alert} />
             </div>
 
-            <aside className="space-y-2 min-[1600px]:sticky min-[1600px]:top-0" aria-label="Công cụ xử lý cảnh báo">
-              <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-3 shadow-sm">
+            <aside className="space-y-2 min-[1280px]:min-h-0 min-[1280px]:overflow-y-auto min-[1280px]:pl-1 min-[1280px]:[scrollbar-gutter:stable]" aria-label="Công cụ xử lý cảnh báo">
+              {/* <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-3 shadow-sm">
                 <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-text-muted)]">Người phụ trách</p>
                 <div className="mt-2 flex items-center justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-2.5">
@@ -496,10 +481,14 @@ export function AlertDetailPanel({
                   </div>
                   <span className="shrink-0 rounded-full border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-2 py-1 text-[10px] font-bold text-[var(--color-text-secondary)]">{isMine ? "Của tôi" : workflowStatus === "pending" ? "Chưa phân công" : getStatusLabel(alert)}</span>
                 </div>
-              </section>
+              </section> */}
 
               {isMine && (effectiveWorkflowStatus === "processing" || effectiveWorkflowStatus === "contact_failed") ? (
-                <AlertContactWorkflow alert={alert} getResolverName={getResolverName} />
+                <AlertContactWorkflow
+                  alert={alert}
+                  getResolverName={getResolverName}
+                  onRecordResult={(draft) => onRecordResult(alert, draft)}
+                />
               ) : (
                 <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-3 shadow-sm">
                   <h3 className="text-sm font-bold text-[var(--color-text-primary)]">Xử lý cảnh báo</h3>
@@ -574,11 +563,10 @@ export function AlertDetailPanel({
 
       {toast && (
         <div
-          className={`fixed bottom-6 right-6 z-[9999] flex items-center gap-2.5 rounded-xl border bg-white px-4 py-3.5 text-sm font-bold shadow-2xl animate-fade-in ${
-            toast.type === "success"
+          className={`fixed bottom-6 right-6 z-[9999] flex items-center gap-2.5 rounded-xl border bg-white px-4 py-3.5 text-sm font-bold shadow-2xl animate-fade-in ${toast.type === "success"
               ? "border-emerald-200 text-emerald-700 dark:border-emerald-900/30 dark:bg-emerald-950/20 dark:text-emerald-400"
               : "border-red-200 text-red-700 dark:border-red-900/30 dark:bg-red-950/20 dark:text-red-400"
-          }`}
+            }`}
         >
           <span className="material-symbols-outlined text-[18px]">
             {toast.type === "success" ? "check_circle" : "error"}

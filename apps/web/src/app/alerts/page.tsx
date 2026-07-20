@@ -11,6 +11,7 @@ import {
 } from "@/stores/alert.store";
 import { AlertWorkbench } from "@/components/alerts/AlertWorkbench";
 import type { AlertDetailPanelTab } from "@/components/alerts/AlertDetailPanel";
+import type { AlertContactResultDraft } from "@/components/alerts/AlertContactWorkflow";
 import { useDashboard } from "@/hooks/useDashboardData";
 import { dbSecond } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
@@ -1081,7 +1082,7 @@ export default function AlertsPage() {
   }
 
   return (
-    <div data-tour="alerts-page" className="p-4 md:p-6 lg:p-8 space-y-6 bg-[var(--color-bg-base)] text-[var(--color-text-primary)] animate-fade-in">
+    <div data-tour="alerts-page" className="space-y-6 bg-[var(--color-bg-base)] p-[clamp(12px,2vw,32px)] text-[var(--color-text-primary)] animate-fade-in">
 
       {/* Redesigned Grid Section */}
       <AlertWorkbench
@@ -1150,21 +1151,21 @@ export default function AlertsPage() {
             throw claimError;
           }
         }}
-        onRecordResult={async (alert) => {
+        onRecordResult={async (alert, draft: AlertContactResultDraft) => {
           if (
             !alert.customer_contact_opened_at ||
-            !alert.customer_contact_note?.trim() ||
-            !alert.customer_contact_evidence_image ||
-            !alert.customer_response_result
+            !draft.note.trim() ||
+            !draft.evidenceImage ||
+            !draft.responseResult
           ) {
             const missingEvidenceError = new Error("Cần có minh chứng liên hệ và kết quả phản hồi của khách hàng.");
             triggerToast(missingEvidenceError.message);
             throw missingEvidenceError;
           }
 
-          const outcomeStatus: CustomerContactAttempt["outcome_status"] = alert.customer_response_result === "no_response"
+          const outcomeStatus: CustomerContactAttempt["outcome_status"] = draft.responseResult === "no_response"
             ? "contact_waiting"
-            : alert.customer_response_result === "still_upset"
+            : draft.responseResult === "still_upset"
               ? "contact_failed"
               : "resolved";
           const nextContactHistory: CustomerContactAttempt[] = [
@@ -1173,9 +1174,9 @@ export default function AlertsPage() {
               opened_at: alert.customer_contact_opened_at,
               opened_by: alert.customer_contact_opened_by,
               template: alert.customer_contact_template,
-              note: alert.customer_contact_note,
-              evidence_image: alert.customer_contact_evidence_image,
-              response_result: alert.customer_response_result,
+              note: draft.note,
+              evidence_image: draft.evidenceImage,
+              response_result: draft.responseResult,
               completed_at: new Date().toISOString(),
               outcome_status: outcomeStatus,
             },
@@ -1185,11 +1186,11 @@ export default function AlertsPage() {
             : outcomeStatus === "contact_failed"
               ? "contact_failed"
               : "resolved";
-          const resultLabel = alert.customer_response_result === "positive"
+          const resultLabel = draft.responseResult === "positive"
             ? "Khách hàng phản hồi tích cực"
-            : alert.customer_response_result === "no_response"
+            : draft.responseResult === "no_response"
               ? "Chưa phản hồi"
-              : alert.customer_response_result === "still_upset"
+              : draft.responseResult === "still_upset"
                 ? "Khách hàng vẫn bức xúc"
                 : "Không phù hợp";
 
@@ -1199,9 +1200,9 @@ export default function AlertsPage() {
               customer_contact_opened_at: alert.customer_contact_opened_at,
               customer_contact_opened_by: alert.customer_contact_opened_by,
               customer_contact_template: alert.customer_contact_template,
-              customer_contact_note: alert.customer_contact_note,
-              customer_contact_evidence_image: alert.customer_contact_evidence_image,
-              customer_response_result: alert.customer_response_result,
+              customer_contact_note: draft.note,
+              customer_contact_evidence_image: draft.evidenceImage,
+              customer_response_result: draft.responseResult,
               customer_contact_history: nextContactHistory,
               reset_customer_contact: outcomeStatus !== "resolved",
             }, alert.brand);
