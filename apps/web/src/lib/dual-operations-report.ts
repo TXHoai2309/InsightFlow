@@ -167,7 +167,7 @@ function buildAttentionItems(
       title: "Cảnh báo quá hạn",
       description: "Case khủng hoảng cần được xử lý hoặc rà soát SLA ngay.",
       count: crisis.kpis.overdue,
-      href: "/alerts?reportFilter=overdue",
+      href: "/alerts?sla=overdue",
       tone: "danger",
     },
     {
@@ -175,7 +175,7 @@ function buildAttentionItems(
       title: "Lead trễ SLA",
       description: "Khách hàng tiềm năng có nguy cơ mất cơ hội chuyển đổi.",
       count: lead.kpis.slaBreached,
-      href: "/leads?reportFilter=overdue",
+      href: "/leads?sla=overdue",
       tone: "warn",
     },
     {
@@ -183,7 +183,7 @@ function buildAttentionItems(
       title: "Chưa ghi nhận kết quả",
       description: "Lead đã mở liên hệ nhưng chưa hoàn tất kết quả xử lý.",
       count: lead.kpis.needResult,
-      href: "/leads?reportFilter=need_result",
+      href: "/leads?view=active",
       tone: "info",
     },
     {
@@ -191,7 +191,7 @@ function buildAttentionItems(
       title: "Đang chờ duyệt",
       description: "Case cần theo dõi quyết định hoặc phản hồi tiếp theo.",
       count: crisis.kpis.pendingApproval,
-      href: "/alerts?reportFilter=pending_approval",
+      href: "/alerts?status=pending_approval",
       tone: "warn",
     },
   ];
