@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useDashboard } from "@/hooks/useDashboardData";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import {
@@ -43,6 +44,10 @@ import {
   writeLeadWorkbenchFilters,
   type LeadWorkbenchFilters,
 } from "@/lib/lead-filters";
+import {
+  readDashboardReturnNavigation,
+  type DashboardReturnNavigation,
+} from "@/lib/dashboard-return-context";
 
 const LEADS_PAGE_SIZE = 5;
 const APP_SCROLL_ROOT_SELECTOR = '[data-app-scroll-root="true"]';
@@ -62,6 +67,7 @@ function getLeadListScrollTop() {
 }
 
 export default function LeadsPage() {
+  const router = useRouter();
   const { profile, loading: authLoading } = useAuth();
   const [staffList, setStaffList] = useState<any[]>([]);
   const canLoadStaffList = canPerformAction(profile, "manage_staff");
@@ -107,6 +113,7 @@ export default function LeadsPage() {
   const [highlightedLeadId, setHighlightedLeadId] = useState<string | null>(null);
   const [restoreNotice, setRestoreNotice] = useState("");
   const [optimisticLeadsById, setOptimisticLeadsById] = useState<Record<string, Lead>>({});
+  const [dashboardReturnNavigation, setDashboardReturnNavigation] = useState<DashboardReturnNavigation | null>(null);
   const hasRestoredReturnContext = useRef(false);
   const skipNextPageReset = useRef(false);
   const pendingRestoreLeadId = useRef<string | null>(null);
@@ -117,6 +124,12 @@ export default function LeadsPage() {
   const hasInitializedLeadFilters = useRef(false);
   const canViewLeads = canPerformAction(profile, "view_leads");
   const hasBrandScope = hasBusinessBrandScope(profile);
+
+  useEffect(() => {
+    setDashboardReturnNavigation(
+      readDashboardReturnNavigation(new URLSearchParams(window.location.search)),
+    );
+  }, []);
 
   const clearPendingRestore = useCallback((clearHighlight = false) => {
     pendingRestoreLeadId.current = null;
@@ -655,6 +668,16 @@ export default function LeadsPage() {
       data-tour="leads-page"
       className="lead-workbench-theme min-h-full w-full space-y-[clamp(8px,0.8vw,14px)] overflow-x-hidden bg-[var(--color-bg-base)] p-[clamp(12px,2vw,32px)] text-[var(--color-text-primary)]"
     >
+      {dashboardReturnNavigation && (
+        <button
+          type="button"
+          onClick={() => router.push(dashboardReturnNavigation.href)}
+          className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] px-3.5 text-sm font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-bg-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]"
+        >
+          <span className="material-symbols-outlined text-base">arrow_back</span>
+          {dashboardReturnNavigation.label}
+        </button>
+      )}
       <header className="flex flex-col gap-3 min-[1320px]:flex-row min-[1320px]:items-center min-[1320px]:justify-between">
         <div className="min-w-0">
           <h1 className="text-xl font-black text-[var(--color-text-primary)] md:text-2xl">

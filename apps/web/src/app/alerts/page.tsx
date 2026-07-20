@@ -30,6 +30,7 @@ import {
   isAlertOwnedByUser,
 } from "@/lib/alert-visibility";
 import { findAlertByNavigationTarget } from "@/lib/alert-navigation";
+import { readDashboardReturnNavigation } from "@/lib/dashboard-return-context";
 
 const ALERTS_PER_PAGE = 5;
 import { collection, getDocs, doc, getDoc } from "firebase/firestore";
@@ -269,6 +270,10 @@ export default function AlertsPage() {
   const tabParam = searchParams.get("tab");
   const alertIdParam = searchParams.get("alertId");
   const mentionIdParam = searchParams.get("mentionId");
+  const dashboardReturnNavigation = useMemo(
+    () => readDashboardReturnNavigation(searchParams),
+    [searchParams],
+  );
   const handledAlertIdParamRef = useRef<string | null>(null);
 
 
@@ -1086,6 +1091,17 @@ export default function AlertsPage() {
 
   return (
     <div data-tour="alerts-page" className="space-y-6 bg-[var(--color-bg-base)] p-[clamp(12px,2vw,32px)] text-[var(--color-text-primary)] animate-fade-in">
+
+      {dashboardReturnNavigation && (
+        <button
+          type="button"
+          onClick={() => router.push(dashboardReturnNavigation.href)}
+          className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] px-3.5 text-sm font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-bg-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]"
+        >
+          <span className="material-symbols-outlined text-base">arrow_back</span>
+          {dashboardReturnNavigation.label}
+        </button>
+      )}
 
       {/* Redesigned Grid Section */}
       <AlertWorkbench

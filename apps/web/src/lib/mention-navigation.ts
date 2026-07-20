@@ -1,4 +1,8 @@
 import type { Lead, Mention } from "@/types/dashboard";
+import {
+  appendDashboardReturnParams,
+  type DashboardReturnOrigin,
+} from "@/lib/dashboard-return-context";
 
 export type MentionDetailTarget = {
   detailId: string;
@@ -86,11 +90,17 @@ export function getLeadPrimaryMentionId(lead: Lead) {
   return getLeadMentionCandidateIds(lead)[0] || "";
 }
 
-export function createLeadWorkbenchHref(lead: Lead) {
+export function createLeadWorkbenchHref(
+  lead: Lead,
+  dashboardReturn?: { origin: DashboardReturnOrigin; token: string },
+) {
   const params = new URLSearchParams({ leadId: lead.id });
   const mentionId = getLeadPrimaryMentionId(lead);
   if (mentionId) params.set("mentionId", mentionId);
-  return `/leads?${params.toString()}`;
+  const href = `/leads?${params.toString()}`;
+  return dashboardReturn
+    ? appendDashboardReturnParams(href, dashboardReturn.origin, dashboardReturn.token)
+    : href;
 }
 
 export function findLeadByNavigationTarget(

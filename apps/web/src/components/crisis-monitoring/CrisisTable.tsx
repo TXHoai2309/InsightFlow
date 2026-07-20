@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ChevronLeft,
@@ -17,6 +17,15 @@ import { getAlertWorkflowStatus } from "@/lib/alertWorkflow";
 import { canPerformAction } from "@/lib/rbac";
 import { useAlertStore, type AlertData } from "@/stores/alert.store";
 import { cn } from "@/lib/utils";
+import {
+  DASHBOARD_RETURN_CONFIG,
+  createDashboardReturnHref,
+  getAppScrollTop,
+  loadDashboardReturnContext,
+  removeDashboardReturnTokenFromCurrentUrl,
+  saveDashboardReturnContext,
+  type DashboardReturnContext,
+} from "@/lib/dashboard-return-context";
 
 const PAGE_SIZE = 10;
 
@@ -95,11 +104,30 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
   const [activeFilter, setActiveFilter] = useState<FilterId>("all");
   const [searchText, setSearchText] = useState("");
   const [page, setPage] = useState(1);
+  const [highlightedAlertId, setHighlightedAlertId] = useState<string | null>(null);
+  const pendingRestoreContext = useRef<DashboardReturnContext | null>(null);
+  const isRestoringContext = useRef(false);
   const [staff, setStaff] = useState<StaffOption[]>([]);
   const [assignmentAlertId, setAssignmentAlertId] = useState<string | null>(null);
   const [assigning, setAssigning] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; error?: boolean } | null>(null);
   const canAssign = profile?.role === "brand_manager" && canPerformAction(profile, "update_crisis_status");
+  const dashboardReturnToken = DASHBOARD_RETURN_CONFIG["crisis-monitoring"].token;
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const context = loadDashboardReturnContext(params.get("dashboardReturnToken"));
+    if (!context || context.origin !== "crisis-monitoring") return;
+    isRestoringContext.current = true;
+    if (FILTERS.some((filter) => filter.id === context.filter)) {
+      setActiveFilter(context.filter as FilterId);
+    }
+    setSearchText(context.searchText || "");
+    setPage(Math.max(1, Math.floor(context.page || 1)));
+    setHighlightedAlertId(context.selectedItemId || null);
+    pendingRestoreContext.current = context;
+    removeDashboardReturnTokenFromCurrentUrl();
+  }, []);
 
   useEffect(() => {
     if (!canAssign) return;
@@ -143,10 +171,54 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
   const safePage = Math.min(page, pageCount);
   const pageAlerts = filteredAlerts.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
-  useEffect(() => setPage(1), [activeFilter, searchText]);
   useEffect(() => {
-    if (page > pageCount) setPage(pageCount);
-  }, [page, pageCount]);
+    if (isRestoringContext.current) return;
+    setPage(1);
+  }, [activeFilter, searchText]);
+  useEffect(() => {
+    if (alerts.length > 0 && page > pageCount) setPage(pageCount);
+  }, [alerts.length, page, pageCount]);
+
+  useEffect(() => {
+    const context = pendingRestoreContext.current;
+    if (!context || alerts.length === 0) return;
+    const timer = window.setTimeout(() => {
+      const row = document.getElementById(`dashboard-alert-row-${context.selectedItemId}`);
+      if (row) {
+        row.scrollIntoView({ block: "center", behavior: "smooth" });
+      } else {
+        const scrollRoot = document.querySelector<HTMLElement>('[data-app-scroll-root="true"]');
+        if (scrollRoot) scrollRoot.scrollTo({ top: Math.max(0, context.scrollTop), behavior: "smooth" });
+        else window.scrollTo({ top: Math.max(0, context.scrollTop), behavior: "smooth" });
+      }
+      pendingRestoreContext.current = null;
+      isRestoringContext.current = false;
+    }, 160);
+    const highlightTimer = window.setTimeout(() => setHighlightedAlertId(null), 4000);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearTimeout(highlightTimer);
+    };
+  }, [activeFilter, alerts.length, page, pageAlerts, searchText]);
+
+  const rememberDashboardContext = (alert: AlertData) => {
+    saveDashboardReturnContext({
+      token: dashboardReturnToken,
+      origin: "crisis-monitoring",
+      returnPath: DASHBOARD_RETURN_CONFIG["crisis-monitoring"].path,
+      filter: activeFilter,
+      searchText,
+      page: safePage,
+      selectedItemId: alert.id,
+      scrollTop: getAppScrollTop(),
+      savedAt: new Date().toISOString(),
+    });
+    window.history.replaceState(
+      window.history.state,
+      "",
+      createDashboardReturnHref("crisis-monitoring", dashboardReturnToken),
+    );
+  };
 
   const handleAssign = async (alert: AlertData, staffUid: string) => {
     const selectedStaff = staff.find((item) => item.uid === staffUid);
@@ -209,9 +281,9 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
               const status = getStatusInfo(alert);
               const url = sourceUrl(alert);
               return (
-                <tr key={alert.id} className="align-middle hover:bg-[#FCFBFF]">
+                <tr id={`dashboard-alert-row-${alert.id}`} key={alert.id} className={cn("align-middle hover:bg-[#FCFBFF]", highlightedAlertId === alert.id && "bg-[#EEEBFF] ring-2 ring-inset ring-[#5B4FCF]")}>
                   <td className="max-w-[390px] px-5 py-4">
-                    <Link href={createAlertWorkbenchHref(alert)} className="group block">
+                    <Link href={createAlertWorkbenchHref(alert, { origin: "crisis-monitoring", token: dashboardReturnToken })} onClick={() => rememberDashboardContext(alert)} onAuxClick={() => rememberDashboardContext(alert)} onContextMenu={() => rememberDashboardContext(alert)} className="group block">
                       <div className="flex items-center gap-2">
                         <span className={cn("rounded-md px-2 py-0.5 text-[10px] font-black uppercase", severity.tone)}>{severity.label}</span>
                         <span className="text-[11px] font-semibold text-[#787585]">{alert.topic || "Khác"}</span>
