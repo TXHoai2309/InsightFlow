@@ -14,7 +14,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { PlatformLogo } from "@/components/platform/PlatformLogo";
-import { canSkipAlert, getAlertWorkflowStatus, type AlertWorkflowStatus } from "@/lib/alertWorkflow";
+import { canRestoreAlert, canSkipAlert, getAlertWorkflowStatus, type AlertWorkflowStatus } from "@/lib/alertWorkflow";
 import { useAlertStore, type AlertData } from "@/stores/alert.store";
 import { useAuth } from "@/hooks/useAuth";
 import { AlertContentContext } from "./AlertContentContext";
@@ -39,6 +39,7 @@ interface AlertDetailPanelProps {
   onClaim: (alert: AlertData) => Promise<void>;
   onRecordResult: (alert: AlertData, draft: AlertContactResultDraft) => Promise<void>;
   onSkip: (alert: AlertData) => Promise<void>;
+  onRestore: (alert: AlertData) => Promise<void>;
   onOpenSource: (alert: AlertData) => void;
 }
 
@@ -51,7 +52,7 @@ function formatDate(value?: string) {
 
 function getStatusLabel(alert: AlertData) {
   const status = getAlertWorkflowStatus(alert);
-  if (status === "resolved") return "Đã giải quyết";
+  if (status === "resolved") return "Đã đóng";
   if (status === "skipped") return "Đã bỏ qua";
   if (status === "contact_failed") return "Liên hệ không thành";
   if (status === "processing") return alert.status === "contact_waiting" ? "Đã liên hệ, chờ phản hồi" : "Đang xử lý";
@@ -103,14 +104,18 @@ export function AlertDetailPanel({
   onClaim,
   onRecordResult,
   onSkip,
+  onRestore,
   onOpenSource,
 }: AlertDetailPanelProps) {
+  const { role, profile, user } = useAuth();
   const workflowStatus = getAlertWorkflowStatus(alert);
+  const isTerminal = workflowStatus === "resolved" || workflowStatus === "skipped";
   const [optimisticClaimId, setOptimisticClaimId] = useState<string | null>(null);
   const [isOpeningContact, setIsOpeningContact] = useState(false);
   const [previewHistoryImage, setPreviewHistoryImage] = useState<string | null>(null);
   const [showSkipConfirmation, setShowSkipConfirmation] = useState(false);
   const [isSkipping, setIsSkipping] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
   const [skipError, setSkipError] = useState("");
   const claimedOptimistically = optimisticClaimId === alert.id;
   const normalizedOwner = String(alert.being_resolved_by || "").trim().toLowerCase();
@@ -121,7 +126,9 @@ export function AlertDetailPanel({
     ? profileEmail
     : workflowStatus === "skipped"
       ? alert.skipped_by_name || alert.skipped_by_email || alert.skipped_by_uid
-      : alert.being_resolved_by;
+      : workflowStatus === "resolved"
+        ? alert.resolved_by_name || alert.resolved_by_email || alert.resolved_by
+        : alert.being_resolved_by;
   const ownerName = getResolverName(effectiveOwner) || "Chưa có người phụ trách";
   const canClaim = canUpdate && !claimedOptimistically && workflowStatus === "pending" && !alert.being_resolved_by;
   const canRecord = canUpdate && isMine && (effectiveWorkflowStatus === "processing" || effectiveWorkflowStatus === "contact_failed");
@@ -130,11 +137,15 @@ export function AlertDetailPanel({
     statusFilter === "processing" &&
     canSkipAlert(alert, profileEmail) &&
     !claimedOptimistically;
-  const contactUrl = [alert.social_profile_url, alert.url, alert.post_url]
+  const sourceUrl = [alert.url, alert.post_url].find((url) => Boolean(url && url !== "#"));
+  const contactUrl = [alert.social_profile_url, sourceUrl]
     .find((url) => Boolean(url && url !== "#"));
   const canOpenContact = canRecord && !alert.customer_contact_opened_at;
-
-  const { role, profile, user } = useAuth();
+  const showTerminalActions = isTerminal && (statusFilter === "resolved" || statusFilter === "skipped");
+  const canRestore =
+    canUpdate &&
+    showTerminalActions &&
+    canRestoreAlert(alert, profile, role === "brand_manager");
   const [staffList, setStaffList] = useState<any[]>([]);
   const [loadingStaff, setLoadingStaff] = useState(false);
   const [assigningUid, setAssigningUid] = useState<string | null>(null);
@@ -246,14 +257,17 @@ export function AlertDetailPanel({
     (alert.resolution_history || []).forEach((entry, index) => {
       const actor = entry.resolved_by_name || getResolverName(entry.resolved_by_email) || "Nhân viên xử lý";
       const isSkipEntry = entry.action_type === "skip";
+      const isRestoreEntry = entry.action_type === "restore";
       entries.push({
         key: `resolution-${entry.timestamp}-${index}`,
         timestamp: entry.timestamp,
-        title: isSkipEntry ? "Đã bỏ qua cảnh báo" : actor,
+        title: isSkipEntry ? "Đã bỏ qua cảnh báo" : isRestoreEntry ? "Đã khôi phục cảnh báo" : actor,
         detail: isSkipEntry
           ? `${actor}\n${entry.note || "Cảnh báo được xác định là không liên quan."}`
-          : entry.note || "Đã cập nhật trạng thái xử lý.",
-        badge: isSkipEntry ? "Bỏ qua" : `Cập nhật ${entry.attempt_number || index + 1}`,
+          : isRestoreEntry
+            ? `${actor}\n${entry.note || "Chuyển cảnh báo về trạng thái Đang xử lý."}`
+            : entry.note || "Đã cập nhật trạng thái xử lý.",
+        badge: isSkipEntry ? "Bỏ qua" : isRestoreEntry ? "Khôi phục" : `Cập nhật ${entry.attempt_number || index + 1}`,
         imageUrl: entry.image_url,
         kind: "resolution",
       });
@@ -376,13 +390,26 @@ export function AlertDetailPanel({
       setIsSkipping(false);
     }
   };
+
+  const handleRestore = async () => {
+    if (!canRestore || isRestoring) return;
+
+    try {
+      setIsRestoring(true);
+      await onRestore(alert);
+      showToast("Cảnh báo đã được khôi phục và chuyển về Đang xử lý.");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Không thể khôi phục cảnh báo này.", "error");
+    } finally {
+      setIsRestoring(false);
+    }
+  };
   const tabs: Array<{ id: AlertDetailPanelTab; label: string }> = [
     { id: "action", label: "Xử lý" },
     { id: "profile", label: "Hồ sơ" },
     { id: "interactions", label: "Tương tác" },
     { id: "history", label: "Lịch sử" },
   ];
-  const isTerminal = effectiveWorkflowStatus === "resolved" || effectiveWorkflowStatus === "skipped";
   const workflowSteps = [
     { label: "Đã chọn", complete: true, active: false },
     { label: "Nhận xử lý", complete: Boolean(effectiveOwner), active: !effectiveOwner },
@@ -416,7 +443,31 @@ export function AlertDetailPanel({
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            {canClaim ? (
+            {showTerminalActions ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => onOpenSource(alert)}
+                  disabled={!sourceUrl}
+                  title={sourceUrl ? "Mở nội dung trên nền tảng nguồn" : "Không có liên kết nguồn"}
+                  className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 text-[13px] font-semibold text-[var(--color-text-primary)] transition hover:border-[var(--color-brand)]/40 hover:bg-[var(--color-brand-subtle)] hover:text-[var(--color-brand)] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <ExternalLink size={16} />
+                  <span className="hidden sm:inline">Mở nguồn</span>
+                </button>
+                {canRestore && (
+                  <button
+                    type="button"
+                    onClick={() => void handleRestore()}
+                    disabled={isRestoring}
+                    className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 text-[13px] font-semibold text-white shadow-sm hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <span className="material-symbols-outlined text-lg">restore</span>
+                    <span className="hidden sm:inline">{isRestoring ? "Đang khôi phục..." : "Khôi phục"}</span>
+                  </button>
+                )}
+              </>
+            ) : canClaim ? (
               role === "brand_manager" ? (
                 <div className="flex items-center gap-2" ref={dropdownRef}>
                   <div className="relative">
@@ -569,7 +620,7 @@ export function AlertDetailPanel({
               <div><p className="text-[10px] font-bold uppercase text-[var(--color-text-muted)]">Nền tảng</p><p className="mt-1 text-sm font-black text-[var(--color-text-primary)]">{alert.source || "Không rõ"}</p></div>
               <div><p className="text-[10px] font-bold uppercase text-[var(--color-text-muted)]">Điểm rủi ro</p><p className="mt-1 text-sm font-black text-[var(--color-brand)]">{Math.round(alert.negativity_score || 0)}/100</p></div>
               <div><p className="text-[10px] font-bold uppercase text-[var(--color-text-muted)]">Phạm vi tiếp cận</p><p className="mt-1 text-sm font-black text-[var(--color-text-primary)]">{(alert.reach || 0).toLocaleString("vi-VN")}</p></div>
-              <button type="button" onClick={() => onOpenSource(alert)} disabled={!alert.url || alert.url === "#"} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[var(--color-brand-border)] px-3 py-2 text-xs font-bold text-[var(--color-brand)] disabled:opacity-40">Mở nguồn gốc<ExternalLink size={15} /></button>
+              <button type="button" onClick={() => onOpenSource(alert)} disabled={!sourceUrl} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[var(--color-brand-border)] px-3 py-2 text-xs font-bold text-[var(--color-brand)] disabled:opacity-40">Mở nguồn gốc<ExternalLink size={15} /></button>
             </section>
             <div className="grid gap-3 lg:grid-cols-2">
               <InfoSection title="Thông tin cơ bản" rows={[["Tên hiển thị", alert.author || "Ẩn danh"], ["Thương hiệu", alert.brand], ["Chủ đề", alert.topic || "Chưa xác định"], ["Loại nội dung", alert.content_type || "mention"]]} />

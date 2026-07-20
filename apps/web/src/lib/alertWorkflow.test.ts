@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   canSkipAlert,
+  canRestoreAlert,
   getAlertWorkflowStatus,
   getPersistedAlertStatus,
   isResolvedAlert,
@@ -41,4 +42,14 @@ test("allows skip only for the owner of a processing alert", () => {
   assert.equal(canSkipAlert({ status: "resolving", being_resolved_by: "other@example.com" }, "crisis@example.com"), false);
   assert.equal(canSkipAlert({ status: "contact_failed", being_resolved_by: "crisis@example.com" }, "crisis@example.com"), false);
   assert.equal(canSkipAlert({ status: "new" }, "crisis@example.com"), false);
+});
+
+test("allows terminal alerts to be restored by the previous actor or a manager", () => {
+  const actor = { uid: "employee-1", email: "crisis@example.com", displayName: "Nhân viên Crisis" };
+
+  assert.equal(canRestoreAlert({ status: "resolved", resolved_by_email: actor.email }, actor), true);
+  assert.equal(canRestoreAlert({ status: "skipped", skipped_by_uid: actor.uid }, actor), true);
+  assert.equal(canRestoreAlert({ status: "resolved", resolved_by_email: "other@example.com" }, actor), false);
+  assert.equal(canRestoreAlert({ status: "new" }, actor, true), false);
+  assert.equal(canRestoreAlert({ status: "skipped", skipped_by_email: "other@example.com" }, actor, true), true);
 });

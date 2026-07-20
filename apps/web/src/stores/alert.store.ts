@@ -15,6 +15,7 @@ import { calculateNegativityScore } from "@/lib/negativityScore";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import type { Mention } from "@/types/dashboard";
 import {
+  canRestoreAlert,
   canSkipAlert,
   getAlertWorkflowStatus,
   getPersistedAlertStatus,
@@ -117,6 +118,7 @@ export interface AlertData {
   being_resolved_by?: string | null;
   being_resolved_at?: string | null;
   resolution_history?: ResolutionAttempt[];
+  resolved_by?: string | null;
   resolved_by_email?: string | null;
   resolved_by_name?: string | null;
   skipped_at?: string | null;
@@ -218,6 +220,11 @@ interface AlertState {
     brandFallback?: string
   ) => Promise<void>;
   skipAlert: (
+    id: string,
+    profile: UserRoleProfile | null | undefined,
+    brandFallback?: string,
+  ) => Promise<void>;
+  restoreAlert: (
     id: string,
     profile: UserRoleProfile | null | undefined,
     brandFallback?: string,
@@ -379,6 +386,7 @@ function mentionToAlertData(m: Mention): AlertData {
     being_resolved_by: labelObj.being_resolved_by || null,
     being_resolved_at: labelObj.being_resolved_at || null,
     resolution_history: labelObj.resolution_history || [],
+    resolved_by: labelObj.resolved_by || null,
     resolved_by_email: labelObj.resolved_by_email || null,
     resolved_by_name: labelObj.resolved_by_name || null,
     skipped_at: labelObj.skipped_at || null,
@@ -535,6 +543,7 @@ function applyRealtimeAnnotationUpdate(
         resolved_at: labelObj.resolved_at || undefined,
         being_resolved_by: labelObj.being_resolved_by || null,
         being_resolved_at: labelObj.being_resolved_at || null,
+        resolved_by: labelObj.resolved_by || null,
         resolved_by_email: labelObj.resolved_by_email || null,
         resolved_by_name: labelObj.resolved_by_name || null,
         skipped_at: labelObj.skipped_at || null,
@@ -744,10 +753,12 @@ export const useAlertStore = create<AlertState>()(
       newStatus = getPersistedAlertStatus({ resolution_status: newStatus });
       console.log("[AlertStore] updateAlertStatus called:", { id, newStatus, profileEmail: profile?.email, profileRole: profile?.role });
       const currentAlert = get().rawAlerts.find((alert) => isSameAlertRecord(alert, id));
+      const isRestore = attempt?.action_type === "restore";
       console.log("[AlertStore] currentAlert found:", currentAlert);
 
       if (
         newStatus === "resolving" &&
+        !isRestore &&
         currentAlert?.being_resolved_by &&
         currentAlert.being_resolved_by !== profile?.email
       ) {
@@ -761,6 +772,15 @@ export const useAlertStore = create<AlertState>()(
 
       if (currentAlert && !canAlertBeVisibleToUser(currentAlert, profile)) {
         throw new Error("Cảnh báo không thuộc phạm vi xử lý của bạn.");
+      }
+
+      if (isRestore) {
+        if (!currentAlert || !isTerminalAlert(currentAlert)) {
+          throw new Error("Chỉ có thể khôi phục cảnh báo đã đóng hoặc đã bỏ qua.");
+        }
+        if (!canRestoreAlert(currentAlert, profile, profile.role === "brand_manager")) {
+          throw new Error("Bạn không có quyền khôi phục cảnh báo này.");
+        }
       }
 
       if (newStatus === "skipped") {
@@ -833,6 +853,44 @@ export const useAlertStore = create<AlertState>()(
       set((state) => {
         const nextRawAlerts = state.rawAlerts.map((alert) => {
           if (isSameAlertRecord(alert, id)) {
+            if (isRestore) {
+              const nextHistory = alert.resolution_history ? [...alert.resolution_history] : [];
+              nextHistory.push({
+                attempt_number: nextHistory.length + 1,
+                timestamp: operationAt,
+                note: attempt?.note || "Khôi phục cảnh báo để tiếp tục xử lý.",
+                resolved_by_email: profile.email ?? undefined,
+                resolved_by_name: profile.displayName ?? undefined,
+                action_type: "restore",
+              });
+              return {
+                ...alert,
+                status: "resolving",
+                resolution_history: nextHistory,
+                resolved_at: undefined,
+                resolved_by: null,
+                resolved_by_email: null,
+                resolved_by_name: null,
+                skipped_at: null,
+                skipped_by_uid: null,
+                skipped_by_email: null,
+                skipped_by_name: null,
+                being_resolved_by: profile.email || profile.uid,
+                being_resolved_at: operationAt,
+                monitoring_started_at: undefined,
+                monitoring_duration_hours: undefined,
+                monitoring_initial_comments: undefined,
+                monitoring_initial_likes: undefined,
+                monitoring_initial_shares: undefined,
+                customer_contact_opened_at: undefined,
+                customer_contact_opened_by: undefined,
+                customer_contact_template: undefined,
+                customer_contact_note: undefined,
+                customer_contact_evidence_image: undefined,
+                customer_response_result: undefined,
+              };
+            }
+
             // When restoring to 'new' (Khôi phục), clear history so the alert starts fresh
             if (newStatus === "new") {
               return {
@@ -927,10 +985,20 @@ export const useAlertStore = create<AlertState>()(
         await updateSupabaseAlertLabel(id, (existingLabel) => {
           if (
             newStatus === "resolving" &&
+            !isRestore &&
             existingLabel.being_resolved_by &&
             existingLabel.being_resolved_by !== profile.email
           ) {
             throw new Error(`Vụ việc đã được ${getResolverName(existingLabel.being_resolved_by)} nhận xử lý.`);
+          }
+
+          if (isRestore) {
+            if (!isTerminalAlert(existingLabel)) {
+              throw new Error("Cảnh báo không còn ở trạng thái có thể khôi phục.");
+            }
+            if (!canRestoreAlert(existingLabel, profile, profile.role === "brand_manager")) {
+              throw new Error("Cảnh báo không còn thuộc quyền khôi phục của bạn.");
+            }
           }
 
           if (newStatus === "skipped") {
@@ -953,6 +1021,38 @@ export const useAlertStore = create<AlertState>()(
               action_type: attempt.action_type,
               ...(attempt.image_url ? { image_url: attempt.image_url } : {}),
             });
+          }
+
+          if (isRestore) {
+            return {
+              ...existingLabel,
+              resolution_status: "resolving",
+              resolution_history: nextHistory,
+              resolved_at: null,
+              resolved_by: null,
+              resolved_by_email: null,
+              resolved_by_name: null,
+              skipped_at: null,
+              skipped_by_uid: null,
+              skipped_by_email: null,
+              skipped_by_name: null,
+              being_resolved_by: profile.email || profile.uid,
+              being_resolved_at: operationAt,
+              monitoring_started_at: null,
+              monitoring_duration_hours: null,
+              monitoring_initial_comments: null,
+              monitoring_initial_likes: null,
+              monitoring_initial_shares: null,
+              customer_contact_opened_at: null,
+              customer_contact_opened_by: null,
+              customer_contact_template: null,
+              customer_contact_note: null,
+              customer_contact_evidence_image: null,
+              customer_response_result: null,
+              updated_by: profile.uid,
+              updated_by_role: profile.role,
+              updated_at: operationAt,
+            };
           }
 
           if (newStatus === "new") {
@@ -1046,7 +1146,7 @@ export const useAlertStore = create<AlertState>()(
         // Terminal/contact outcome changes affect the summary counters. Reload
         // from Supabase before returning so the Alert page never renders a
         // stale cached queue after navigation from the detail screen.
-        if (["resolved", "contact_waiting", "contact_failed", "skipped"].includes(newStatus)) {
+        if (isRestore || ["resolved", "contact_waiting", "contact_failed", "skipped"].includes(newStatus)) {
           await get().fetchAlerts(getScopedBrandKey(profile), true);
         }
       } catch (error) {
@@ -1076,6 +1176,20 @@ export const useAlertStore = create<AlertState>()(
         {
           note: "Đã bỏ qua cảnh báo không liên quan.",
           action_type: "skip",
+        },
+        brandFallback,
+      );
+    },
+
+    restoreAlert: async (id, profile, brandFallback) => {
+      await get().updateAlertStatus(
+        id,
+        "resolving",
+        profile,
+        {
+          note: "Khôi phục cảnh báo và chuyển về trạng thái Đang xử lý.",
+          action_type: "restore",
+          reset_customer_contact: true,
         },
         brandFallback,
       );

@@ -32,7 +32,7 @@ function formatAge(createdAt: string) {
 
 function getStatusLabel(alert: AlertData) {
   const status = getAlertWorkflowStatus(alert);
-  if (status === "resolved") return "Đã giải quyết";
+  if (status === "resolved") return "Đã đóng";
   if (status === "skipped") return "Đã bỏ qua";
   if (status === "contact_failed") return "Liên hệ không thành";
   if (status === "processing") return alert.status === "contact_waiting" ? "Chờ phản hồi" : "Đang xử lý";

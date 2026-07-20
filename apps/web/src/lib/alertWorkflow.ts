@@ -7,6 +7,12 @@ type AlertStatusSource = {
   monitoring_started_at?: string | null;
   being_resolved_by?: string | null;
   skipped_at?: string | null;
+  skipped_by_uid?: string | null;
+  skipped_by_email?: string | null;
+  skipped_by_name?: string | null;
+  resolved_by?: string | null;
+  resolved_by_email?: string | null;
+  resolved_by_name?: string | null;
 };
 
 const RESOLVED_STATUSES = new Set(["resolved", "completed", "monitoring", "responded"]);
@@ -71,4 +77,30 @@ export function canSkipAlert(
   const owner = String(alert.being_resolved_by || "").trim().toLowerCase();
   const actor = String(actorEmail || "").trim().toLowerCase();
   return getAlertWorkflowStatus(alert) === "processing" && Boolean(owner && actor && owner === actor);
+}
+
+export function canRestoreAlert(
+  alert: AlertStatusSource,
+  actor: { uid?: string | null; email?: string | null; displayName?: string | null } | null | undefined,
+  managerOverride = false,
+): boolean {
+  if (!isTerminalAlert(alert) || !actor) return false;
+  if (managerOverride) return true;
+
+  const actorIdentities = [actor.uid, actor.email, actor.displayName]
+    .map((value) => String(value || "").trim().toLowerCase())
+    .filter(Boolean);
+  const previousOwnerIdentities = [
+    alert.skipped_by_uid,
+    alert.skipped_by_email,
+    alert.skipped_by_name,
+    alert.resolved_by,
+    alert.resolved_by_email,
+    alert.resolved_by_name,
+    alert.being_resolved_by,
+  ]
+    .map((value) => String(value || "").trim().toLowerCase())
+    .filter(Boolean);
+
+  return actorIdentities.some((identity) => previousOwnerIdentities.includes(identity));
 }

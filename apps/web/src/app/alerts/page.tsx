@@ -338,6 +338,7 @@ export default function AlertsPage() {
     fetchAlerts,
     updateAlertStatus,
     skipAlert,
+    restoreAlert,
     fetchCorrectionRequests,
     createCorrectionRequest,
     resolveCorrectionRequest,
@@ -696,7 +697,9 @@ export default function AlertsPage() {
             author: authorName,
             action: h.action_type === "skip"
               ? `đã bỏ qua cảnh báo #${a.id.slice(-4)}`
-              : t("alerts.page.loggedResolution", { id: a.id.slice(-4) }),
+              : h.action_type === "restore"
+                ? `đã khôi phục cảnh báo #${a.id.slice(-4)}`
+                : t("alerts.page.loggedResolution", { id: a.id.slice(-4) }),
             timestamp: h.timestamp,
             id: a.id
           });
@@ -1260,7 +1263,21 @@ export default function AlertsPage() {
           setDetailPanelTab("action");
           setIsDetailPanelCollapsed(false);
         }}
-        onOpenSource={(alert) => void handleAccessSource(alert.url || "#", alert.text || alert.comment_content || "")}
+        onRestore={async (alert) => {
+          await restoreAlert(alert.id, profile, alert.brand);
+          setSearchText("");
+          setSeverityFilter("all");
+          setSourceFilter("all");
+          setContentTypeFilter("all");
+          setShowMineOnly(false);
+          setStatusFilter("processing");
+          setAlertPage(1);
+          setPendingClaimSelectionId(alert.id);
+          setSelectedAlertId(alert.id);
+          setDetailPanelTab("action");
+          setIsDetailPanelCollapsed(false);
+        }}
+        onOpenSource={(alert) => void handleAccessSource(alert.url || alert.post_url || "#", alert.text || alert.comment_content || "")}
         onStatusFilterChange={setStatusFilter}
         onSearchTextChange={setSearchText}
         onSeverityFilterChange={setSeverityFilter}
