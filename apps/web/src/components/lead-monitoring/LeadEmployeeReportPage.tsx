@@ -22,6 +22,16 @@ import type {
 import { ExcelDocumentPreviewModal } from "@/components/reports/ExcelDocumentPreviewModal";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { useLeadEmployeeReport } from "./useLeadMonitoringReport";
+import {
+  AlertTriangle,
+  ArrowRight,
+  CalendarDays,
+  CheckCircle2,
+  Filter,
+  Lightbulb,
+  Table2,
+  TrendingUp,
+} from "lucide-react";
 
 const DEFAULT_EMPLOYEE_FILTERS: LeadReportFilters = {
   ...DEFAULT_LEAD_REPORT_FILTERS,
@@ -41,7 +51,7 @@ const SOURCE_OPTIONS = [
 ];
 
 const inputClass =
-  "h-10 w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 text-sm font-semibold text-[var(--color-text-primary)] outline-none focus:ring-2 focus:ring-indigo-500/20";
+  "h-10 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 text-sm font-semibold text-[var(--color-text-primary)] outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20";
 
 function getPeriodLabel(filters: LeadReportFilters) {
   if (filters.timeRange === "today") return "Hôm nay";
@@ -64,44 +74,72 @@ function KpiCard({
   label: string;
   value: React.ReactNode;
   description: string;
-  tone?: "default" | "good" | "warn";
+  tone?: "default" | "good" | "warn" | "danger";
 }) {
-  const color =
+  const valueClass =
     tone === "good"
       ? "text-emerald-700"
       : tone === "warn"
         ? "text-amber-700"
-        : "text-[var(--color-brand)]";
+        : tone === "danger"
+          ? "text-red-700"
+          : "text-[var(--color-brand)]";
+  const dotClass =
+    tone === "good"
+      ? "bg-emerald-500"
+      : tone === "warn"
+        ? "bg-amber-500"
+        : tone === "danger"
+          ? "bg-red-500"
+          : "bg-[var(--color-brand)]";
   return (
-    <article className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-4 shadow-sm">
-      <p className="text-xs font-black uppercase tracking-wide text-[var(--color-text-muted)]">{label}</p>
-      <p className={`mt-2 text-3xl font-black leading-none ${color}`}>{value}</p>
-      <p className="mt-2 text-xs leading-5 text-[var(--color-text-secondary)]">{description}</p>
+    <article className="min-w-0 bg-[var(--color-bg-surface)] p-4">
+      <div className="flex items-center gap-2">
+        <span className={`h-2 w-2 rounded-full ${dotClass}`} />
+        <p className="text-[11px] font-extrabold uppercase text-[var(--color-text-muted)]">{label}</p>
+      </div>
+      <p className={`mt-2 text-2xl font-black leading-none ${valueClass}`}>{value}</p>
+      <p className="mt-2 line-clamp-2 text-[11px] leading-4 text-[var(--color-text-secondary)]">{description}</p>
     </article>
   );
 }
 
 function AttentionCard({ item }: { item: LeadAttentionItem }) {
-  const classes =
+  const toneClass =
     item.tone === "danger"
-      ? "border-red-200 bg-red-50 text-red-700"
+      ? "border-red-200 bg-red-50/65 text-red-700"
       : item.tone === "warn"
-        ? "border-amber-200 bg-amber-50 text-amber-700"
-        : "border-indigo-200 bg-indigo-50 text-indigo-700";
+        ? "border-amber-200 bg-amber-50/65 text-amber-700"
+        : "border-indigo-200 bg-indigo-50/65 text-indigo-700";
   return (
-    <Link href={item.href} className={`group rounded-2xl border p-4 transition hover:-translate-y-0.5 hover:shadow-md ${classes}`}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="font-black">{item.title}</p>
-          <p className="mt-1 text-xs leading-5 opacity-80">{item.description}</p>
+    <Link
+      href={item.href}
+      className={`group flex items-start gap-3 rounded-lg border p-3 transition hover:border-current hover:shadow-sm ${toneClass}`}
+    >
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-white/80 shadow-sm">
+        <AlertTriangle className="h-4 w-4" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-3">
+          <p className="font-extrabold text-[var(--color-text-primary)]">{item.title}</p>
+          <strong className="text-xl font-black">{item.count}</strong>
         </div>
-        <strong className="text-3xl font-black">{item.count}</strong>
+        <p className="mt-1 text-xs leading-5 text-[var(--color-text-secondary)]">{item.description}</p>
+        <p className="mt-2 flex items-center gap-1 text-[11px] font-bold">
+          Mở danh sách xử lý
+          <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+        </p>
       </div>
-      <p className="mt-3 flex items-center gap-1 text-xs font-bold">
-        Mở danh sách xử lý
-        <span className="material-symbols-outlined text-sm transition-transform group-hover:translate-x-0.5">arrow_forward</span>
-      </p>
     </Link>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] px-3 py-3 last:border-b-0">
+      <p className="text-xs font-bold text-[var(--color-text-secondary)]">{label}</p>
+      <p className="text-lg font-black text-[var(--color-text-primary)]">{value}</p>
+    </div>
   );
 }
 
@@ -114,10 +152,10 @@ function TrendChart({ rows }: { rows: Array<{ day: string; created: number; cont
         <span className="flex items-center gap-2"><i className="h-2.5 w-2.5 rounded-full bg-indigo-500" />Đã liên hệ</span>
         <span className="flex items-center gap-2"><i className="h-2.5 w-2.5 rounded-full bg-emerald-500" />Chuyển đổi</span>
       </div>
-      <div className="grid min-h-44 grid-cols-7 items-end gap-2">
+      <div className="grid min-h-40 grid-cols-7 items-end gap-2">
         {rows.map((row) => (
           <div key={row.day} className="flex h-full min-w-0 flex-col justify-end gap-1">
-            <div className="flex h-32 items-end justify-center gap-1">
+            <div className="flex h-28 items-end justify-center gap-1">
               {([
                 [row.created, "bg-slate-400", "Phát sinh"],
                 [row.contacted, "bg-indigo-500", "Đã liên hệ"],
@@ -237,25 +275,41 @@ export function LeadEmployeeReportPage() {
         />
       ) : null}
 
-      <header className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-5 shadow-sm">
+      {/* ── Header ── */}
+      <header className="border-b border-[var(--color-border)] pb-4">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="min-w-0">
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-[var(--color-brand)]">Báo cáo công việc cá nhân</p>
-            <h1 className="mt-2 text-2xl font-black text-[var(--color-text-primary)]">Xử lý khách hàng tiềm năng</h1>
-            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">Tập trung vào việc cần làm, kết quả trong kỳ và dữ liệu có thể đối soát.</p>
+            <h1 className="text-xl font-black text-[var(--color-text-primary)]">Xử lý khách hàng tiềm năng</h1>
+            <p className="mt-1 text-xs text-[var(--color-text-secondary)]">Tập trung vào việc cần làm, kết quả trong kỳ và dữ liệu có thể đối soát.</p>
           </div>
           <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap xl:w-auto xl:flex-nowrap xl:justify-end">
-            <select value={reportFilters.timeRange} onChange={(event) => updateFilter("timeRange", event.target.value as LeadReportFilters["timeRange"])} className={`${inputClass} sm:w-[170px] sm:shrink-0`} aria-label="Kỳ báo cáo">
-              <option value="today">Hôm nay</option><option value="7d">7 ngày gần nhất</option><option value="30d">30 ngày gần nhất</option><option value="custom">Tùy chọn</option><option value="all">Toàn bộ dữ liệu</option>
-            </select>
+            <div className="relative">
+              <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
+              <select
+                value={reportFilters.timeRange}
+                onChange={(event) => {
+                  const value = event.target.value as LeadReportFilters["timeRange"];
+                  updateFilter("timeRange", value);
+                  if (value === "custom") setShowAdvancedFilters(true);
+                }}
+                className={`${inputClass} pl-9 sm:w-48`}
+                aria-label="Kỳ báo cáo"
+              >
+                <option value="today">Hôm nay</option>
+                <option value="7d">7 ngày gần nhất</option>
+                <option value="30d">30 ngày gần nhất</option>
+                <option value="custom">Tùy chọn</option>
+                <option value="all">Toàn bộ dữ liệu</option>
+              </select>
+            </div>
             <button
               type="button"
               onClick={() => setShowAdvancedFilters((value) => !value)}
               aria-expanded={showAdvancedFilters}
               aria-controls="lead-report-advanced-filters"
-              className="inline-flex h-10 w-full shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-[var(--color-border)] px-4 text-sm font-bold transition-colors hover:bg-[var(--color-bg-surface-high)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30 sm:w-auto sm:min-w-[116px]"
+              className={`inline-flex h-10 w-full shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg border px-4 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/30 sm:w-auto sm:min-w-[116px] ${showAdvancedFilters || activeFilterCount > 0 ? "border-[var(--color-brand)]/35 bg-[var(--color-brand-subtle)] text-[var(--color-brand)]" : "border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-high)]"}`}
             >
-              <span className="material-symbols-outlined shrink-0 text-[19px]" aria-hidden="true">filter_list</span>
+              <Filter className="h-4 w-4 shrink-0" aria-hidden="true" />
               <span>Bộ lọc</span>
               {activeFilterCount > 0 ? (
                 <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-indigo-100 px-1.5 text-[11px] font-black text-indigo-700">
@@ -267,21 +321,34 @@ export function LeadEmployeeReportPage() {
               type="button"
               onClick={() => setShowExcelPreview(true)}
               aria-label="Xem trước báo cáo và xuất file Excel"
-              className="inline-flex h-10 w-full shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[var(--color-brand)] px-5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[var(--color-brand-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 focus-visible:ring-offset-2 sm:w-auto sm:min-w-[210px]"
+              className="inline-flex h-10 w-full shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-[var(--color-brand)] px-5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[var(--color-brand-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/40 focus-visible:ring-offset-2 sm:w-auto sm:min-w-[210px]"
             >
               <span className="material-symbols-outlined shrink-0 text-[19px]" aria-hidden="true">preview</span>
               <span>Xem trước &amp; xuất Excel</span>
             </button>
           </div>
         </div>
-        <div className="mt-4 flex flex-col gap-2 rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-xs text-indigo-800 sm:flex-row sm:items-center sm:justify-between">
-          <p><strong>Phạm vi cá nhân:</strong> KPI chỉ tính lead do {profile?.displayName || "bạn"} phụ trách; lead chưa phân công không được cộng vào hiệu suất.</p>
-          <Link href="/leads?reportFilter=unassigned" className="shrink-0 font-black">{report.personalKpis.claimable} lead có thể nhận xử lý →</Link>
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-[var(--color-text-secondary)]">
+            <strong>Phạm vi cá nhân:</strong> KPI chỉ tính lead do {profile?.displayName || "bạn"} phụ trách; lead chưa phân công không được cộng vào hiệu suất.
+          </p>
+          <Link href="/leads?reportFilter=unassigned" className="inline-flex items-center gap-2 text-xs font-black text-[var(--color-brand)]">
+            {report.personalKpis.claimable} lead có thể nhận xử lý
+            <span className="material-symbols-outlined text-sm">arrow_forward</span>
+          </Link>
         </div>
       </header>
 
+      {/* ── Bộ lọc nâng cao ── */}
       {showAdvancedFilters ? (
-        <section id="lead-report-advanced-filters" className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-4 shadow-sm">
+        <section id="lead-report-advanced-filters" className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-4 shadow-sm">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="font-black text-[var(--color-text-primary)]">Bộ lọc nâng cao</h2>
+              <p className="mt-1 text-xs text-[var(--color-text-secondary)]">Áp dụng cho KPI trong kỳ, phân tích và file Excel.</p>
+            </div>
+            <button type="button" onClick={() => setReportFilters(DEFAULT_EMPLOYEE_FILTERS)} className="text-sm font-bold text-[var(--color-brand)]">Đặt lại</button>
+          </div>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             <label className="space-y-1"><span className="text-xs font-bold text-[var(--color-text-muted)]">Trạng thái</span><select value={reportFilters.status} onChange={(event) => updateFilter("status", event.target.value as LeadReportFilters["status"])} className={inputClass}><option value="all">Tất cả</option><option value="new">Mới</option><option value="processing">Đang xử lý</option><option value="completed">Đã chuyển đổi</option><option value="skipped">Đã bỏ qua</option></select></label>
             <label className="space-y-1"><span className="text-xs font-bold text-[var(--color-text-muted)]">Mức độ tiềm năng</span><select value={reportFilters.intent} onChange={(event) => updateFilter("intent", event.target.value as LeadReportFilters["intent"])} className={inputClass}><option value="all">Tất cả</option><option value="hot">Hot</option><option value="warm">Warm</option><option value="cold">Cold</option><option value="none">Chưa xác định</option></select></label>
@@ -296,34 +363,116 @@ export function LeadEmployeeReportPage() {
       {isLoading && report.personalKpis.openCurrent === 0 ? <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-4 text-sm font-semibold text-[var(--color-text-secondary)]">Đang tải dữ liệu báo cáo lead...</div> : null}
       {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">Một phần dữ liệu chưa tải được: {error}</div> : null}
 
-      <section>
-        <div className="mb-3 flex items-end justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-wide text-amber-700">Cần xử lý ngay</p><h2 className="mt-1 text-xl font-black text-[var(--color-text-primary)]">Lead cần ưu tiên</h2></div><span className="text-xs text-[var(--color-text-muted)]">Snapshot hiện tại</span></div>
-        {attentionItems.length > 0 ? <div className="grid gap-3 lg:grid-cols-3">{attentionItems.map((item) => <AttentionCard key={item.key} item={item} />)}</div> : <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-sm font-semibold text-emerald-700">Không có tồn đọng nổi bật trong các lead đang thuộc trách nhiệm của bạn.</div>}
-      </section>
-
-      <section>
-        <div className="mb-3"><p className="text-xs font-black uppercase tracking-wide text-[var(--color-brand)]">Kết quả của tôi</p><h2 className="mt-1 text-xl font-black text-[var(--color-text-primary)]">Hiệu suất trong kỳ</h2><p className="mt-1 text-xs text-[var(--color-text-muted)]">{periodLabel}</p></div>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <KpiCard label="Đã liên hệ" value={report.personalKpis.contactedInPeriod} description={`Phản hồi đầu tiên trung bình ${formatMinutes(report.personalKpis.avgFirstResponseMinutes)}.`} />
-          <KpiCard label="Đã chuyển đổi" value={report.personalKpis.convertedInPeriod} description={`${report.personalKpis.conversionRate}% trên ${report.personalKpis.resultRecordedInPeriod} kết quả được ghi nhận trong kỳ.`} tone="good" />
+      {/* ── KPI Section ── */}
+      <section className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-border)] px-4 py-3">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-[var(--color-brand)]" />
+            <h2 className="text-sm font-extrabold text-[var(--color-text-primary)]">Kết quả của tôi</h2>
+          </div>
+          <span className="text-[11px] font-semibold text-[var(--color-text-muted)]">{periodLabel}</span>
+        </div>
+        <div className="grid gap-px bg-[var(--color-border)] sm:grid-cols-2 xl:grid-cols-4">
+          <KpiCard label="Đã liên hệ" value={report.personalKpis.contactedInPeriod} description={`Phản hồi đầu tiên trung bình ${formatMinutes(report.personalKpis.avgFirstResponseMinutes)}.`} tone="good" />
           <KpiCard label="Đúng SLA" value={report.personalKpis.contactedInPeriod > 0 ? `${report.personalKpis.slaOnTimeRate}%` : "—"} description="Tính theo thời điểm liên hệ đầu tiên phát sinh trong kỳ." />
+          <KpiCard label="Đã chuyển đổi" value={report.personalKpis.convertedInPeriod} description={`${report.personalKpis.conversionRate}% trên ${report.personalKpis.resultRecordedInPeriod} kết quả được ghi nhận trong kỳ.`} tone="good" />
           <KpiCard label="Lead còn mở" value={report.personalKpis.openCurrent} description={`${report.personalKpis.needResultCurrent} lead đang cần ghi nhận kết quả.`} tone={report.personalKpis.openCurrent > 0 ? "warn" : "good"} />
         </div>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-        <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-5 shadow-sm"><p className="text-xs font-black uppercase tracking-wide text-[var(--color-brand)]">Xu hướng xử lý</p><h2 className="mt-1 text-xl font-black text-[var(--color-text-primary)]">7 ngày gần nhất</h2><p className="mt-1 text-xs text-[var(--color-text-secondary)]">Lead phát sinh, thời điểm liên hệ và kết quả chuyển đổi của riêng bạn.</p><div className="mt-5"><TrendChart rows={report.activityTrend} /></div></div>
-        <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-5"><p className="text-xs font-black uppercase tracking-wide text-indigo-700">Nhận định và đề xuất</p><h2 className="mt-1 text-xl font-black text-slate-900">Hành động cải thiện</h2><div className="mt-4 space-y-3">{report.recommendations.map((item, index) => <div key={item} className="rounded-xl border border-indigo-100 bg-white p-4"><div className="flex gap-3"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-black text-indigo-700">{index + 1}</span><p className="text-sm font-semibold leading-6 text-slate-700">{item}</p></div></div>)}</div></div>
+      {/* ── Attention + Recommendations ── */}
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.75fr)]">
+        <section className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm">
+          <div className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] px-4 py-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-600" />
+              <div>
+                <h2 className="text-sm font-extrabold text-[var(--color-text-primary)]">Cần xử lý ngay</h2>
+                <p className="mt-0.5 text-[11px] text-[var(--color-text-secondary)]">Lead ưu tiên theo rủi ro và thời hạn xử lý.</p>
+              </div>
+            </div>
+            <span className="text-xs text-[var(--color-text-muted)]">Snapshot hiện tại</span>
+          </div>
+          <div className="space-y-2 p-3">
+            {attentionItems.length > 0
+              ? attentionItems.map((item) => <AttentionCard key={item.key} item={item} />)
+              : <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-700">Không có tồn đọng nổi bật trong các lead đang thuộc trách nhiệm của bạn.</div>
+            }
+          </div>
+        </section>
+
+        <section className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm">
+          <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-4 py-3">
+            <Lightbulb className="h-4 w-4 text-amber-600" />
+            <div>
+              <h2 className="text-sm font-extrabold text-[var(--color-text-primary)]">Hành động đề xuất</h2>
+              <p className="mt-0.5 text-[11px] text-[var(--color-text-secondary)]">Các bước nên thực hiện trong kỳ.</p>
+            </div>
+          </div>
+          <div className="divide-y divide-[var(--color-border)] px-4">
+            {report.recommendations.map((recommendation, index) => (
+              <div key={recommendation} className="flex gap-3 py-3">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-[11px] font-black text-[var(--color-brand)]">{index + 1}</span>
+                <p className="text-xs font-semibold leading-5 text-[var(--color-text-secondary)]">{recommendation}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      {/* ── Trend + Metrics ── */}
+      <section className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm">
+        <div className="flex flex-col gap-3 border-b border-[var(--color-border)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="h-4 w-4 text-[var(--color-brand)]" />
+            <div>
+              <h2 className="text-sm font-extrabold text-[var(--color-text-primary)]">Xu hướng xử lý</h2>
+              <p className="mt-0.5 text-[11px] text-[var(--color-text-secondary)]">Lead phát sinh, thời điểm liên hệ và kết quả chuyển đổi của riêng bạn.</p>
+            </div>
+          </div>
+          <span className="text-[11px] font-semibold text-[var(--color-text-muted)]">7 ngày gần nhất</span>
+        </div>
+        <div className="grid xl:grid-cols-[minmax(0,1fr)_300px]">
+          <div className="min-w-0 p-4 xl:border-r xl:border-[var(--color-border)]">
+            <TrendChart rows={report.activityTrend} />
+          </div>
+          <aside className="border-t border-[var(--color-border)] bg-[var(--color-bg-surface-high)]/45 xl:border-t-0">
+            <p className="px-3 pb-1 pt-3 text-[10px] font-extrabold uppercase text-[var(--color-text-muted)]">Chỉ số nghiệp vụ</p>
+            <Metric label="Đã liên hệ" value={`${report.personalKpis.contactedInPeriod}`} />
+            <Metric label="Tỷ lệ chuyển đổi" value={`${report.personalKpis.conversionRate}%`} />
+            <Metric label="Chưa ghi kết quả" value={report.personalKpis.needResultCurrent} />
+            <Metric label="Phản hồi trung bình" value={formatMinutes(report.personalKpis.avgFirstResponseMinutes)} />
+          </aside>
+        </div>
       </section>
 
-      <details className="group rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-5"><div><p className="font-black text-[var(--color-text-primary)]">Phân tích chi tiết</p><p className="mt-1 text-xs text-[var(--color-text-secondary)]">Mở khi cần đối soát lead ưu tiên, nguồn và trạng thái pipeline.</p></div><span className="material-symbols-outlined transition-transform group-open:rotate-180">expand_more</span></summary>
-        <div className="border-t border-[var(--color-border)]">
-          <div>{report.priorityRows.length > 0 ? report.priorityRows.slice(0, 10).map((row) => <PriorityRow key={row.id} row={row} />) : <p className="p-8 text-center text-sm text-[var(--color-text-secondary)]">Không có lead ưu tiên hiện tại.</p>}</div>
-          <div className="grid gap-4 border-t border-[var(--color-border)] p-4 lg:grid-cols-3"><DistributionSummary title="Mức độ tiềm năng" rows={report.intentDistribution} /><DistributionSummary title="Nguồn khách hàng" rows={report.sourceDistribution} /><DistributionSummary title="Pipeline" rows={report.pipeline} /></div>
-          <div className="border-t border-[var(--color-border)] p-4"><Link href="/leads" className="inline-flex rounded-xl border border-[var(--color-border)] px-4 py-2 text-sm font-bold text-[var(--color-brand)]">Mở trung tâm Khách hàng</Link></div>
+      {/* ── Priority Rows ── */}
+      <section className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm">
+        <div className="flex flex-col gap-3 border-b border-[var(--color-border)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+            <Table2 className="h-4 w-4 text-[var(--color-brand)]" />
+            <div>
+              <h2 className="text-sm font-extrabold text-[var(--color-text-primary)]">Chi tiết lead ưu tiên</h2>
+              <p className="mt-0.5 text-[11px] text-[var(--color-text-secondary)]">Mở từng mục để xử lý hoặc đối soát dữ liệu.</p>
+            </div>
+          </div>
+          <Link href="/leads" className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-brand-subtle)]">
+            Khách hàng <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
         </div>
-      </details>
+        <div>
+          {report.priorityRows.length > 0
+            ? report.priorityRows.slice(0, 10).map((row) => <PriorityRow key={row.id} row={row} />)
+            : <p className="p-8 text-center text-sm text-[var(--color-text-secondary)]">Không có lead ưu tiên hiện tại.</p>
+          }
+        </div>
+        {/* Distribution */}
+        <div className="grid gap-4 border-t border-[var(--color-border)] p-4 lg:grid-cols-3">
+          <DistributionSummary title="Mức độ tiềm năng" rows={report.intentDistribution} />
+          <DistributionSummary title="Nguồn khách hàng" rows={report.sourceDistribution} />
+          <DistributionSummary title="Pipeline" rows={report.pipeline} />
+        </div>
+      </section>
     </main>
   );
 }
