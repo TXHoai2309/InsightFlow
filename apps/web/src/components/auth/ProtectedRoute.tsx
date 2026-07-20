@@ -30,12 +30,12 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     }
 
     if (!profile?.temporaryPasswordIssued && pathname === "/change-password") {
-      router.replace(profile?.defaultRoute || getDefaultRouteForRole(role));
+      router.replace(profile?.defaultRoute || getDefaultRouteForRole(role as any));
       return;
     }
 
-    if (!canAccessPath(role, pathname || "", profile?.permissions)) {
-      router.replace(profile?.defaultRoute || getDefaultRouteForRole(role));
+    if (!canAccessPath(role as any, pathname || "", profile?.permissions)) {
+      router.replace(profile?.defaultRoute || getDefaultRouteForRole(role as any));
     }
   }, [loading, pathname, profile?.defaultRoute, profile?.permissions, profile?.temporaryPasswordIssued, role, router, user]);
 
@@ -59,7 +59,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     return null;
   }
 
-  if (!canAccessPath(role, pathname || "", profile?.permissions)) {
+  if (!canAccessPath(role as any, pathname || "", profile?.permissions)) {
     return null;
   }
 
