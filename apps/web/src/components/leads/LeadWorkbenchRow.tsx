@@ -30,7 +30,11 @@ interface LeadWorkbenchRowProps {
   staffList?: any[];
   detailPanelOpen?: boolean;
   compact?: boolean;
+  pinned?: boolean;
+  canPin?: boolean;
+  pinDisabled?: boolean;
   onSelect: (lead: Lead) => void;
+  onTogglePin?: (lead: Lead) => void;
   onStartedAction?: (lead: Lead) => void;
 }
 
@@ -79,7 +83,11 @@ export function LeadWorkbenchRow({
   staffList = [],
   detailPanelOpen = false,
   compact = false,
+  pinned = false,
+  canPin = false,
+  pinDisabled = false,
   onSelect,
+  onTogglePin,
   onStartedAction,
 }: LeadWorkbenchRowProps) {
   const { profile } = useAuth();
@@ -251,7 +259,9 @@ export function LeadWorkbenchRow({
           ? "bg-[var(--color-error)] text-white hover:brightness-95 hover:shadow-md"
           : "bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand-hover)] hover:shadow-md";
 
-  const cardStateClass = highlighted
+  const cardStateClass = pinned
+    ? "border-l-4 border-l-orange-500 border-[var(--color-brand)] p-[4%] shadow-sm ring-2 ring-[var(--color-brand)]/25 transition-colors"
+    : highlighted
     ? "border-[var(--color-brand)] bg-[var(--color-brand-subtle)] ring-4 ring-[var(--color-brand)]/20"
     : selected
       ? "border-[var(--color-brand)] bg-[var(--color-brand-subtle)]/55 ring-2 ring-[var(--color-brand)]/15"
@@ -263,7 +273,9 @@ export function LeadWorkbenchRow({
             ? "border-[var(--color-border)] hover:border-[var(--color-error)]"
             : "border-[var(--color-border)] hover:border-[var(--color-brand-border)]";
 
-  const accentClass = selected || highlighted
+  const accentClass = pinned
+    ? "bg-orange-500"
+    : selected || highlighted
     ? "bg-[var(--color-brand)]"
     : isActionableFollowUp
       ? followUpMeta.isOverdue ? "bg-[var(--color-error)]" : "bg-[var(--color-info)]"
@@ -271,6 +283,23 @@ export function LeadWorkbenchRow({
 
   const leadTimeAgo = formatLeadTimeAgo(lead.posted_at || lead.created_at, nowMs);
   const intentLabel = lead.intent === "none" ? "N/A" : lead.intent.toUpperCase();
+
+  const renderPinButton = () => canPin ? (
+    <button
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        onTogglePin?.(lead);
+      }}
+      disabled={pinDisabled && !pinned}
+      aria-pressed={pinned}
+      aria-label={pinned ? "Bỏ ghim khách hàng" : "Ghim khách hàng"}
+      title={pinDisabled && !pinned ? "Chỉ được ghim tối đa 3 khách hàng" : pinned ? "Bỏ ghim" : "Ghim lên đầu"}
+      className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${pinned ? "border-orange-300 bg-orange-50 text-orange-600 dark:border-orange-800 dark:bg-orange-950/30 dark:text-orange-300" : "border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[var(--color-text-muted)] hover:border-orange-300 hover:bg-orange-50 hover:text-orange-600"}`}
+    >
+      <span className="material-symbols-outlined text-[17px]">push_pin</span>
+    </button>
+  ) : null;
 
   if (compact) {
     return (
@@ -319,6 +348,7 @@ export function LeadWorkbenchRow({
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
+                {renderPinButton()}
                 {selected && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-brand)] px-2 py-0.5 text-[10px] font-black text-white">
                     <span className="material-symbols-outlined text-xs">check</span>
@@ -388,7 +418,7 @@ export function LeadWorkbenchRow({
                 : meta.isOverdue || meta.isUrgent
                   ? "border-[var(--color-error)]/45"
                   : "border-[var(--color-border)] hover:border-[var(--color-brand-border)]"
-          }`}
+          } ${pinned ? "border-l-4 border-l-orange-500 border-[var(--color-brand)] p-[4%] ring-2 ring-[var(--color-brand)]/25 transition-colors" : ""}`}
       >
         <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
           <div className="flex min-w-0 flex-1 items-start gap-4">
@@ -485,6 +515,7 @@ export function LeadWorkbenchRow({
             </div>
 
             <div className="flex min-w-[130px] items-center gap-2">
+              {renderPinButton()}
               <button
                 type="button"
                 data-tour={rank === 1 ? "lead-row-primary-action" : undefined}
@@ -575,6 +606,7 @@ export function LeadWorkbenchRow({
                   Lý do ưu tiên: {leadReason}
                 </span>
               </div>
+              {renderPinButton()}
               <button
                 type="button"
                 aria-label="Tùy chọn lead"

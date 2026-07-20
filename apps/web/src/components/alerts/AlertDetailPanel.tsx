@@ -24,6 +24,7 @@ import {
   type AlertContactResultDraft,
 } from "./AlertContactWorkflow";
 import { CustomerInteractionHistoryPanel } from "@/components/customer-interactions/CustomerInteractionHistoryPanel";
+import { getAlertSourceUrl } from "@/lib/alert-source-url";
 
 export type AlertDetailPanelTab = "action" | "profile" | "interactions" | "history";
 
@@ -113,9 +114,8 @@ export function AlertDetailPanel({
   const ownerName = getResolverName(effectiveOwner) || "Chưa có người phụ trách";
   const canClaim = canUpdate && !claimedOptimistically && workflowStatus === "pending" && !alert.being_resolved_by;
   const canRecord = canUpdate && isMine && (effectiveWorkflowStatus === "processing" || effectiveWorkflowStatus === "contact_failed");
-  const contactUrl = [alert.social_profile_url, alert.url, alert.post_url]
-    .find((url) => Boolean(url && url !== "#"));
-  const canOpenContact = canRecord && !alert.customer_contact_opened_at;
+  const sourceUrl = getAlertSourceUrl(alert);
+  const canOpenSource = canRecord;
 
   const { role, profile, user } = useAuth();
   const [staffList, setStaffList] = useState<any[]>([]);
@@ -182,15 +182,22 @@ export function AlertDetailPanel({
   };
 
   const handleOpenCustomerContact = async () => {
-    if (!canOpenContact || isOpeningContact) return;
-    if (!contactUrl) {
-      showToast("Cảnh báo này chưa có liên kết để liên hệ khách hàng.", "error");
+    if (!canOpenSource || isOpeningContact) return;
+    if (!sourceUrl) {
+      showToast("Cảnh báo này chưa có liên kết nguồn.", "error");
+      return;
+    }
+
+    onOpenSource(alert);
+
+    // Opening again should never hide the button or add duplicate workflow history.
+    if (alert.customer_contact_opened_at) {
+      showToast("Đã mở lại bài viết tại vị trí bình luận cảnh báo.");
       return;
     }
 
     const template = createDefaultContactTemplate(alert.author || "Anh/Chị", alert.brand);
     const openedAt = new Date().toISOString();
-    window.open(contactUrl, "_blank", "noopener,noreferrer");
 
     try {
       await navigator.clipboard.writeText(template);
@@ -414,8 +421,8 @@ export function AlertDetailPanel({
                   <span className="hidden sm:inline">Nhận xử lý</span>
                 </button>
               )
-            ) : canOpenContact ? (
-              <button type="button" onClick={() => void handleOpenCustomerContact()} disabled={!contactUrl || isOpeningContact} className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 text-[13px] font-semibold text-white shadow-sm hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50" title={!contactUrl ? "Cảnh báo chưa có liên kết nguồn" : undefined}>
+            ) : canOpenSource ? (
+              <button type="button" onClick={() => void handleOpenCustomerContact()} disabled={!sourceUrl || isOpeningContact} className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 text-[13px] font-semibold text-white shadow-sm hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50" title={!sourceUrl ? "Cảnh báo chưa có liên kết nguồn" : "Mở bài viết và đi tới bình luận cảnh báo"}>
                 <ExternalLink size={16} />
                 <span className="hidden sm:inline">{isOpeningContact ? "Đang mở..." : "Mở nguồn"}</span>
               </button>
@@ -511,7 +518,7 @@ export function AlertDetailPanel({
               <div><p className="text-[10px] font-bold uppercase text-[var(--color-text-muted)]">Nền tảng</p><p className="mt-1 text-sm font-black text-[var(--color-text-primary)]">{alert.source || "Không rõ"}</p></div>
               <div><p className="text-[10px] font-bold uppercase text-[var(--color-text-muted)]">Điểm rủi ro</p><p className="mt-1 text-sm font-black text-[var(--color-brand)]">{Math.round(alert.negativity_score || 0)}/100</p></div>
               <div><p className="text-[10px] font-bold uppercase text-[var(--color-text-muted)]">Phạm vi tiếp cận</p><p className="mt-1 text-sm font-black text-[var(--color-text-primary)]">{(alert.reach || 0).toLocaleString("vi-VN")}</p></div>
-              <button type="button" onClick={() => onOpenSource(alert)} disabled={!alert.url || alert.url === "#"} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[var(--color-brand-border)] px-3 py-2 text-xs font-bold text-[var(--color-brand)] disabled:opacity-40">Mở nguồn gốc<ExternalLink size={15} /></button>
+              <button type="button" onClick={() => onOpenSource(alert)} disabled={!sourceUrl} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[var(--color-brand-border)] px-3 py-2 text-xs font-bold text-[var(--color-brand)] disabled:opacity-40">Mở nguồn gốc<ExternalLink size={15} /></button>
             </section>
             <div className="grid gap-3 lg:grid-cols-2">
               <InfoSection title="Thông tin cơ bản" rows={[["Tên hiển thị", alert.author || "Ẩn danh"], ["Thương hiệu", alert.brand], ["Chủ đề", alert.topic || "Chưa xác định"], ["Loại nội dung", alert.content_type || "mention"]]} />

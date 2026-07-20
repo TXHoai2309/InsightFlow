@@ -39,11 +39,14 @@ interface AlertWorkbenchProps {
   currentPage: number;
   totalPages: number;
   totalFiltered: number;
+  pinnedAlertIds: string[];
+  maxPinnedAlerts: number;
   profileEmail?: string | null;
   canUpdate: boolean;
   getResolverName: (value: string | null | undefined) => string;
   onRefresh: () => Promise<void>;
   onSelectAlert: (alert: AlertData) => void;
+  onTogglePin: (alert: AlertData) => void;
   onCollapsePanel: () => void;
   onOpenPanel: () => void;
   onDetailTabChange: (tab: AlertDetailPanelTab) => void;
@@ -186,9 +189,15 @@ export function AlertWorkbench(props: AlertWorkbenchProps) {
 
         <div className={`grid w-full items-start gap-y-[1vh] ${isPanelOpen ? "min-[1100px]:grid-cols-[clamp(22rem,30%,32rem)_minmax(0,1fr)] min-[1100px]:gap-x-[1%]" : "grid-cols-1"}`}>
           <main data-tour="alerts-queue-list" className="flex min-w-0 scroll-mt-24 flex-col self-start rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm min-[1100px]:sticky min-[1100px]:top-3 min-[1100px]:max-h-[calc(100vh-88px)]">
-            <header className="flex shrink-0 items-center justify-between border-b border-[var(--color-border)] px-[4%] py-[3%]"><div><h2 className="text-sm font-black text-[var(--color-text-primary)]">Danh sách cảnh báo</h2><p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">{STATUS_VIEWS.find((view) => view.id === props.statusFilter)?.label || "Cảnh báo đang mở"}</p></div><span className="rounded-full bg-[var(--color-bg-surface-raised)] px-2.5 py-1 text-xs font-black text-[var(--color-text-primary)]">{props.totalFiltered}</span></header>
+            <header className="flex shrink-0 items-center justify-between border-b border-[var(--color-border)] px-[4%] py-[3%]">
+              <div><h2 className="text-sm font-black text-[var(--color-text-primary)]">Danh sách cảnh báo</h2><p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">{STATUS_VIEWS.find((view) => view.id === props.statusFilter)?.label || "Cảnh báo đang mở"}</p></div>
+              <div className="flex items-center gap-2">
+                {props.statusFilter === "processing" && <span className="inline-flex items-center gap-1 rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 text-[10px] font-black text-orange-700 dark:border-orange-900/50 dark:bg-orange-950/30 dark:text-orange-300"><span className="material-symbols-outlined text-xs">push_pin</span>{props.pinnedAlertIds.length}/{props.maxPinnedAlerts}</span>}
+                <span className="rounded-full bg-[var(--color-bg-surface-raised)] px-2.5 py-1 text-xs font-black text-[var(--color-text-primary)]">{props.totalFiltered}</span>
+              </div>
+            </header>
             <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3 [scrollbar-gutter:stable]">
-              {props.isLoading && props.pageAlerts.length === 0 ? [0, 1, 2].map((item) => <div key={item} className="h-[18vh] animate-pulse rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)]" />) : props.pageAlerts.length === 0 ? <div className="flex min-h-[45vh] flex-col items-center justify-center rounded-lg border border-dashed border-[var(--color-border)] p-[8%] text-center"><p className="text-sm font-black text-[var(--color-text-primary)]">Không có cảnh báo phù hợp</p><p className="mt-1 text-xs text-[var(--color-text-secondary)]">{props.canViewAllAssignments ? "Thử chọn trạng thái hoặc điều chỉnh bộ lọc." : "Không có cảnh báo nào đang chờ bạn xử lý."}</p></div> : props.pageAlerts.map((alert) => <AlertWorkbenchRow key={alert.id} alert={alert} selected={props.selectedAlertId === alert.id} onSelect={props.onSelectAlert} getResolverName={props.getResolverName} />)}
+              {props.isLoading && props.pageAlerts.length === 0 ? [0, 1, 2].map((item) => <div key={item} className="h-[18vh] animate-pulse rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)]" />) : props.pageAlerts.length === 0 ? <div className="flex min-h-[45vh] flex-col items-center justify-center rounded-lg border border-dashed border-[var(--color-border)] p-[8%] text-center"><p className="text-sm font-black text-[var(--color-text-primary)]">Không có cảnh báo phù hợp</p><p className="mt-1 text-xs text-[var(--color-text-secondary)]">{props.canViewAllAssignments ? "Thử chọn trạng thái hoặc điều chỉnh bộ lọc." : "Không có cảnh báo nào đang chờ bạn xử lý."}</p></div> : props.pageAlerts.map((alert) => <AlertWorkbenchRow key={alert.id} alert={alert} selected={props.selectedAlertId === alert.id} pinned={props.pinnedAlertIds.includes(alert.id)} canPin={props.statusFilter === "processing" && getAlertWorkflowStatus(alert) === "processing"} pinDisabled={props.pinnedAlertIds.length >= props.maxPinnedAlerts} onTogglePin={props.onTogglePin} onSelect={props.onSelectAlert} getResolverName={props.getResolverName} />)}
             </div>
             {props.totalFiltered > 0 && <footer className="flex shrink-0 items-center justify-between border-t border-[var(--color-border)] px-[4%] py-[3%] text-xs text-[var(--color-text-secondary)]"><span>{props.totalFiltered} cảnh báo</span><div className="flex items-center gap-2"><button type="button" onClick={() => props.onPageChange(props.currentPage - 1)} disabled={props.currentPage === 1} className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--color-border)] disabled:opacity-40" title="Trang trước"><ChevronLeft size={16} /></button><span className="min-w-10 text-center font-black text-[var(--color-text-primary)]">{props.currentPage}/{props.totalPages}</span><button type="button" onClick={() => props.onPageChange(props.currentPage + 1)} disabled={props.currentPage === props.totalPages} className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--color-border)] disabled:opacity-40" title="Trang sau"><ChevronRight size={16} /></button></div></footer>}
           </main>

@@ -46,6 +46,9 @@ export interface Mention {
   created_at: string;         // ISO string (từ crawled_at)
   posted_at: string;          // ISO string (ngày đăng bài thật: post_date / created_at từ nguồn)
   url?: string;
+  post_url?: string;
+  comment_url?: string;
+  source_url?: string;
   contact?: string;
   labels?: ClassificationLabel;
   star_count?: number | null;

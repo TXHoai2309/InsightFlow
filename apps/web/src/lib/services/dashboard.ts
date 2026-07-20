@@ -1208,6 +1208,8 @@ function supabasePostToMention(row: SupabaseRow, annotationByKey: Map<string, Su
       row.created_at,
     ),
     url: normalizeOptionalUrl(row.url, row.post_url, row.source_url, payload.url),
+    post_url: normalizeOptionalUrl(row.post_url, row.url, row.source_url, payload.url),
+    source_url: normalizeOptionalUrl(row.source_url),
     contact: normalizeOptionalText(row.contact || payload.contact),
     star_count: readOptionalNumber(row.star_count, payload.star_count, payload.rating),
     location_name: normalizeOptionalText(
@@ -1269,6 +1271,9 @@ function supabaseCommentToMention(
       row.created_at,
     ),
     url: normalizeOptionalUrl(row.url, post?.url, payload.url),
+    post_url: normalizeOptionalUrl(post?.post_url, post?.url, row.post_url, payload.post_url),
+    comment_url: normalizeOptionalUrl(row.url, payload.url),
+    source_url: normalizeOptionalUrl(row.source_url, payload.source_url),
     contact: normalizeOptionalText(row.contact || payload.contact),
     star_count: readOptionalNumber(row.star_count, payload.star_count, payload.rating),
     location_name: normalizeOptionalText(

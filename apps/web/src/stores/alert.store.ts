@@ -121,6 +121,8 @@ export interface AlertData {
   post_id?: string;
   comment_id?: string;
   post_url?: string;
+  comment_url?: string;
+  source_url?: string;
   post_like_count?: number;
   post_comment_count?: number;
   post_share_count?: number;
@@ -353,7 +355,7 @@ function mentionToAlertData(m: Mention): AlertData {
     status: resolveAlertStatusFromLabel(labelObj),
     resolved_at: labelObj.resolved_at,
     collectionName: "annotations",
-    url: m.url || "",
+    url: m.url || m.comment_url || m.post_url || m.source_url || "",
     reach: m.star_count || 0,
     likes: m.star_count || 0,
     comments: 0,
@@ -372,7 +374,9 @@ function mentionToAlertData(m: Mention): AlertData {
     internal_notes: labelObj.internal_notes || [],
     post_id: m.post_id || m.parent_id || m.id,
     comment_id: m.comment_id || undefined,
-    post_url: m.url || "",
+    post_url: m.post_url || m.source_url || m.url || "",
+    comment_url: m.comment_url || (m.content_type !== "post" ? m.url : undefined),
+    source_url: m.source_url,
     post_like_count: m.star_count || 0,
     relevance: typeof labelObj.relevance === "boolean" ? labelObj.relevance : null,
     urgency: labelObj.urgency || "none",

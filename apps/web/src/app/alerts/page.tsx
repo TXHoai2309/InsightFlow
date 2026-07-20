@@ -31,6 +31,8 @@ import {
 } from "@/lib/alert-visibility";
 import { findAlertByNavigationTarget } from "@/lib/alert-navigation";
 import { readDashboardReturnNavigation } from "@/lib/dashboard-return-context";
+import { usePinnedQueue } from "@/hooks/usePinnedQueue";
+import { getAlertSourceUrl } from "@/lib/alert-source-url";
 
 const ALERTS_PER_PAGE = 5;
 import { collection, getDocs, doc, getDoc } from "firebase/firestore";
@@ -105,63 +107,6 @@ function formatBrandName(brand: string): string {
     .join(" ");
 }
 
-// Helper function to append Chromium Scroll-to-Text Fragment target
-function getUrlWithTextFragment(url: string, text: string): string {
-  if (!url || url === "#") return "#";
-
-  // Clear quotes, parentheses and other special characters that might break fragments
-  const cleanText = text
-    .replace(/["'“”`\[\]\(\)]/g, "")
-    .trim();
-
-  if (!cleanText) return url;
-
-  // Take first sentence or first 60 characters to keep URL clean and unique
-  const sentence = cleanText.split(/[.!?]/)[0];
-  const fragment = sentence.length > 60 ? sentence.substring(0, 60).trim() : sentence.trim();
-
-  try {
-    if (url.includes("#")) {
-      if (url.includes(":~:text=")) {
-        return url;
-      }
-      return `${url}:~:text=${encodeURIComponent(fragment)}`;
-    }
-    return `${url}#:~:text=${encodeURIComponent(fragment)}`;
-  } catch (e) {
-    return url;
-  }
-}
-
-// Format source URL based on platform to target the comment directly
-function getFormattedSourceUrl(url: string, text: string): string {
-  if (!url || url === "#") return "#";
-
-  const lowerUrl = url.toLowerCase();
-  const isYoutube = lowerUrl.includes("youtu.be") || lowerUrl.includes("youtube.com");
-
-  if (isYoutube) {
-    // If the URL has a comment anchor like #comment_ID or #comment-ID
-    const commentMatch = url.match(/#comment[_]([a-zA-Z0-9\-_]+)/) || url.match(/#comment[-]([a-zA-Z0-9\-_]+)/);
-    if (commentMatch) {
-      const commentId = commentMatch[1];
-      const cleanUrl = url.split("#")[0];
-      const separator = cleanUrl.includes("?") ? "&" : "?";
-      return `${cleanUrl}${separator}lc=${commentId}`;
-    }
-  }
-
-  const isTiktok = lowerUrl.includes("tiktok.com");
-  if (isTiktok) {
-    // TikTok natively supports comment anchor directly (e.g. #comment-ID)
-    return url;
-  }
-
-  // Fallback for other sources (Befood, Facebook, Google Maps, News, etc.)
-  // Use Chromium Scroll-to-Text Fragment
-  return getUrlWithTextFragment(url, text);
-}
-
 interface MonitoringCountdownProps {
   alert: any;
 }
@@ -221,6 +166,13 @@ export default function AlertsPage() {
   const { profile, loading: authLoading } = useAuth();
   const isManager = profile?.role === "brand_manager";
   const scopedBrandKey = getScopedBrandKey(profile);
+  const alertPinStorageKey = `insightflow:pinned-alerts:${profile?.uid || "anonymous"}:${scopedBrandKey || "global"}`;
+  const {
+    pinnedIds: pinnedAlertIds,
+    maxItems: maxPinnedAlerts,
+    togglePinned: togglePinnedAlert,
+    prunePinned: prunePinnedAlerts,
+  } = usePinnedQueue(alertPinStorageKey);
   const canViewCrisisQueue = canAccessAlertQueue(profile);
   const canUpdateCrisisStatus =
     hasBusinessBrandScope(profile) &&
@@ -307,8 +259,13 @@ export default function AlertsPage() {
     triggerToast(t("alerts.toast.saved"));
   };
 
-  const handleAccessSource = async (url: string, text: string) => {
-    // 1. Copy full text to clipboard for manual Ctrl+F fallback
+  const handleAccessSource = async (alert: Parameters<typeof getAlertSourceUrl>[0]) => {
+    const text = alert.comment_content || alert.text || "";
+    // Open synchronously from the click event so browsers do not block the new tab.
+    const targetUrl = getAlertSourceUrl(alert);
+    if (targetUrl) window.open(targetUrl, "_blank", "noopener,noreferrer");
+
+    // Copy full text to clipboard for manual Ctrl+F fallback.
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -317,9 +274,6 @@ export default function AlertsPage() {
       console.warn("[AlertsPage] Failed to copy source text:", err);
     }
 
-    // 2. Format with anchor and open in new tab
-    const targetUrl = getFormattedSourceUrl(url, text);
-    window.open(targetUrl, "_blank", "noopener,noreferrer");
   };
 
   const {
@@ -463,6 +417,15 @@ export default function AlertsPage() {
     [brandFilteredAlerts, profile],
   );
 
+  useEffect(() => {
+    if (isLoading || rawAlerts.length === 0) return;
+    prunePinnedAlerts(
+      visibleBaseAlerts
+        .filter((alert) => getAlertWorkflowStatus(alert) === "processing")
+        .map((alert) => alert.id),
+    );
+  }, [isLoading, prunePinnedAlerts, rawAlerts.length, visibleBaseAlerts]);
+
   const activeAlerts = useMemo(() => {
     return visibleBaseAlerts.filter(a => {
       const status = getAlertWorkflowStatus(a);
@@ -562,6 +525,10 @@ export default function AlertsPage() {
     // 5. Sorting. Risk priority is severity first, then the detailed risk
     // score, then recency so urgent mentions are always at the top.
     result.sort((a, b) => {
+      if (statusFilter === "processing") {
+        const pinnedDelta = Number(pinnedAlertIds.includes(b.id)) - Number(pinnedAlertIds.includes(a.id));
+        if (pinnedDelta !== 0) return pinnedDelta;
+      }
       if (sortBy === "risk") {
         const severityRank: Record<string, number> = {
           critical: 4,
@@ -586,7 +553,7 @@ export default function AlertsPage() {
     });
 
     return result;
-  }, [activeAlerts, resolvedAlerts, statusFilter, searchText, severityFilter, sourceFilter, contentTypeFilter, showMineOnly, sortBy, profile]);
+  }, [activeAlerts, resolvedAlerts, statusFilter, searchText, severityFilter, sourceFilter, contentTypeFilter, showMineOnly, sortBy, profile, pinnedAlertIds]);
 
   const totalAlertPages = Math.max(1, Math.ceil(processedActiveAlerts.length / ALERTS_PER_PAGE));
   const paginatedActiveAlerts = useMemo(() => {
@@ -1132,6 +1099,8 @@ export default function AlertsPage() {
         currentPage={alertPage}
         totalPages={totalAlertPages}
         totalFiltered={processedActiveAlerts.length}
+        pinnedAlertIds={pinnedAlertIds}
+        maxPinnedAlerts={maxPinnedAlerts}
         profileEmail={profile?.email}
         canUpdate={canUpdateCrisisStatus}
         getResolverName={getResolverName}
@@ -1148,6 +1117,17 @@ export default function AlertsPage() {
           setSelectedAlertId(alert.id);
           setDetailPanelTab("action");
           setIsDetailPanelCollapsed(false);
+        }}
+        onTogglePin={(alert) => {
+          const wasPinned = pinnedAlertIds.includes(alert.id);
+          const changed = togglePinnedAlert(alert.id);
+          triggerToast(
+            changed
+              ? wasPinned
+                ? "Đã bỏ ghim cảnh báo."
+                : "Đã ghim cảnh báo lên đầu danh sách."
+              : `Chỉ được ghim tối đa ${maxPinnedAlerts} cảnh báo.`,
+          );
         }}
         onCollapsePanel={() => setIsDetailPanelCollapsed(true)}
         onOpenPanel={() => setIsDetailPanelCollapsed(false)}
@@ -1237,7 +1217,7 @@ export default function AlertsPage() {
             throw recordError;
           }
         }}
-        onOpenSource={(alert) => void handleAccessSource(alert.url || "#", alert.text || alert.comment_content || "")}
+        onOpenSource={(alert) => void handleAccessSource(alert)}
         onStatusFilterChange={setStatusFilter}
         onSearchTextChange={setSearchText}
         onSeverityFilterChange={setSeverityFilter}

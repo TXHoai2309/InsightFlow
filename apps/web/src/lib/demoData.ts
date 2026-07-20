@@ -53,7 +53,16 @@ export const dummyMentions: Mention[] = [
   },
   {
     id: "m3",
-    labels: { sentiment: "negative", topic: ["service"], relevance: true, urgency: "high", intent: "none" },
+    labels: {
+      sentiment: "negative",
+      topic: ["service"],
+      relevance: true,
+      urgency: "high",
+      intent: "none",
+      resolution_status: "resolving",
+      being_resolved_by: "demo@example.com",
+      being_resolved_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+    } as any,
     workspace_id: "Demo Brand",
     platform: "thread",
     post_id: "p3",

@@ -50,6 +50,7 @@ import {
   readDashboardReturnNavigation,
   type DashboardReturnNavigation,
 } from "@/lib/dashboard-return-context";
+import { usePinnedQueue } from "@/hooks/usePinnedQueue";
 
 const LEADS_PAGE_SIZE = 5;
 const APP_SCROLL_ROOT_SELECTOR = '[data-app-scroll-root="true"]';
@@ -71,6 +72,13 @@ function getLeadListScrollTop() {
 export default function LeadsPage() {
   const router = useRouter();
   const { profile, loading: authLoading } = useAuth();
+  const leadPinStorageKey = `insightflow:pinned-leads:${profile?.uid || "anonymous"}:${normalizeBrandName(profile?.brandName || profile?.brandId || "global")}`;
+  const {
+    pinnedIds: pinnedLeadIds,
+    maxItems: maxPinnedLeads,
+    togglePinned: togglePinnedLead,
+    prunePinned: prunePinnedLeads,
+  } = usePinnedQueue(leadPinStorageKey);
   const [staffList, setStaffList] = useState<any[]>([]);
   const canLoadStaffList = canPerformAction(profile, "manage_staff");
 
@@ -338,6 +346,15 @@ export default function LeadsPage() {
     [baseLeads, profile],
   );
 
+  useEffect(() => {
+    if (isLoading || leads.length === 0) return;
+    prunePinnedLeads(
+      visibleBaseLeads
+        .filter((lead) => matchesLeadWorkbenchView(lead, "active", currentTime, profile))
+        .map((lead) => lead.id),
+    );
+  }, [currentTime, isLoading, leads.length, profile, prunePinnedLeads, visibleBaseLeads]);
+
   const sortedLeads = useMemo(
     () => sortLeadsForWorkbench(visibleBaseLeads, currentTime, profile),
     [visibleBaseLeads, currentTime, profile],
@@ -373,26 +390,33 @@ export default function LeadsPage() {
         currentTime,
         profile?.uid,
       );
-    if (activeView === "follow_up") {
-      return sortFollowUpLeads(filtered, currentTime, profile);
+    let result = activeView === "follow_up"
+      ? sortFollowUpLeads(filtered, currentTime, profile)
+      : sortMode === "recommended"
+        ? filtered
+        : [...filtered].sort((left, right) => {
+            if (sortMode === "newest") {
+              const leftTime = new Date(left.posted_at || left.created_at || 0).getTime();
+              const rightTime = new Date(right.posted_at || right.created_at || 0).getTime();
+              return rightTime - leftTime;
+            }
+
+            const leftMeta = getLeadWorkbenchMeta(left, currentTime);
+            const rightMeta = getLeadWorkbenchMeta(right, currentTime);
+            if (sortMode === "overdue" && leftMeta.isOverdue !== rightMeta.isOverdue) {
+              return leftMeta.isOverdue ? -1 : 1;
+            }
+            return leftMeta.remainingMs - rightMeta.remainingMs;
+          });
+
+    if (activeView === "active") {
+      result = [...result].sort(
+        (left, right) =>
+          Number(pinnedLeadIds.includes(right.id)) - Number(pinnedLeadIds.includes(left.id)),
+      );
     }
-    if (sortMode === "recommended") return filtered;
-
-    return [...filtered].sort((left, right) => {
-      if (sortMode === "newest") {
-        const leftTime = new Date(left.posted_at || left.created_at || 0).getTime();
-        const rightTime = new Date(right.posted_at || right.created_at || 0).getTime();
-        return rightTime - leftTime;
-      }
-
-      const leftMeta = getLeadWorkbenchMeta(left, currentTime);
-      const rightMeta = getLeadWorkbenchMeta(right, currentTime);
-      if (sortMode === "overdue") {
-        if (leftMeta.isOverdue !== rightMeta.isOverdue) return leftMeta.isOverdue ? -1 : 1;
-      }
-      return leftMeta.remainingMs - rightMeta.remainingMs;
-    });
-  }, [activeView, currentTime, leadFilters, leadsInActiveView, profile, sortMode]);
+    return result;
+  }, [activeView, currentTime, leadFilters, leadsInActiveView, pinnedLeadIds, profile, sortMode]);
 
   const followUpQueue = useMemo(
     () => sortFollowUpLeads(
@@ -967,9 +991,17 @@ export default function LeadsPage() {
                   {workbenchViews.find((view) => view.id === activeView)?.label || "Hàng chờ hiện tại"}
                 </p>
               </div>
-              <span className="shrink-0 rounded-full bg-[var(--color-bg-surface-raised)] px-2.5 py-1 text-xs font-black text-[var(--color-text-primary)]">
-                {visibleLeads.length}
-              </span>
+              <div className="flex shrink-0 items-center gap-2">
+                {activeView === "active" && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 text-[10px] font-black text-orange-700 dark:border-orange-900/50 dark:bg-orange-950/30 dark:text-orange-300">
+                    <span className="material-symbols-outlined text-xs">push_pin</span>
+                    {pinnedLeadIds.length}/{maxPinnedLeads}
+                  </span>
+                )}
+                <span className="rounded-full bg-[var(--color-bg-surface-raised)] px-2.5 py-1 text-xs font-black text-[var(--color-text-primary)]">
+                  {visibleLeads.length}
+                </span>
+              </div>
             </header>
 
             <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3 [scrollbar-gutter:stable]">
@@ -1022,6 +1054,12 @@ export default function LeadsPage() {
                     staffList={staffList}
                     detailPanelOpen={isDetailPanelOpen}
                     compact={isDetailPanelOpen}
+                    pinned={pinnedLeadIds.includes(lead.id)}
+                    canPin={activeView === "active"}
+                    pinDisabled={pinnedLeadIds.length >= maxPinnedLeads}
+                    onTogglePin={(nextLead) => {
+                      togglePinnedLead(nextLead.id);
+                    }}
                     onSelect={(nextLead: Lead) => {
                       clearPendingRestore(true);
                       rememberOptimisticLead(nextLead);

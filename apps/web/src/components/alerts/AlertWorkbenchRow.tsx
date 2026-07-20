@@ -7,7 +7,11 @@ import type { AlertData } from "@/stores/alert.store";
 interface AlertWorkbenchRowProps {
   alert: AlertData;
   selected: boolean;
+  pinned?: boolean;
+  canPin?: boolean;
+  pinDisabled?: boolean;
   onSelect: (alert: AlertData) => void;
+  onTogglePin?: (alert: AlertData) => void;
   getResolverName: (value: string | null | undefined) => string;
 }
 
@@ -37,14 +41,21 @@ function getStatusLabel(alert: AlertData) {
   return "Chưa phân công";
 }
 
-export function AlertWorkbenchRow({ alert, selected, onSelect, getResolverName }: AlertWorkbenchRowProps) {
+export function AlertWorkbenchRow({ alert, selected, pinned = false, canPin = false, pinDisabled = false, onSelect, onTogglePin, getResolverName }: AlertWorkbenchRowProps) {
   const severityKey = String(alert.severity || "low").toLowerCase();
   const severity = SEVERITY_STYLE[severityKey] || SEVERITY_STYLE.low;
   const owner = getResolverName(alert.being_resolved_by);
 
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.currentTarget !== event.target) return;
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    onSelect(alert);
+  };
+
   return (
-    <button type="button" onClick={() => onSelect(alert)} aria-pressed={selected}
-      className={`w-full rounded-lg border border-l-4 ${severity.border} bg-[var(--color-bg-surface)] p-[4%] text-left shadow-sm transition-colors ${selected ? "border-[var(--color-brand)] ring-2 ring-[var(--color-brand)]/25" : "border-[var(--color-border)] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-bg-surface-raised)]"}`}>
+    <div role="button" tabIndex={0} onClick={() => onSelect(alert)} onKeyDown={handleKeyDown} aria-current={selected ? "true" : undefined}
+      className={`w-full cursor-pointer rounded-lg border border-l-4 ${pinned ? "border-l-orange-500" : severity.border} bg-[var(--color-bg-surface)] p-[4%] text-left shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] ${pinned || selected ? "border-[var(--color-brand)] ring-2 ring-[var(--color-brand)]/25" : "border-[var(--color-border)] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-bg-surface-raised)]"}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2.5">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-xs font-black text-[var(--color-brand)]">
@@ -58,7 +69,25 @@ export function AlertWorkbenchRow({ alert, selected, onSelect, getResolverName }
             </div>
           </div>
         </div>
-        <span className={`shrink-0 rounded-md border px-2 py-0.5 text-[9px] font-black ${severity.badge}`}>{severity.label}</span>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {canPin && (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onTogglePin?.(alert);
+              }}
+              disabled={pinDisabled && !pinned}
+              aria-pressed={pinned}
+              aria-label={pinned ? "Bỏ ghim cảnh báo" : "Ghim cảnh báo"}
+              title={pinDisabled && !pinned ? "Chỉ được ghim tối đa 3 cảnh báo" : pinned ? "Bỏ ghim" : "Ghim lên đầu"}
+              className={`inline-flex h-7 w-7 items-center justify-center rounded-lg border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${pinned ? "border-orange-300 bg-orange-50 text-orange-600 dark:border-orange-800 dark:bg-orange-950/30 dark:text-orange-300" : "border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-orange-300 hover:bg-orange-50 hover:text-orange-600"}`}
+            >
+              <span className="material-symbols-outlined text-[16px]">push_pin</span>
+            </button>
+          )}
+          <span className={`shrink-0 rounded-md border px-2 py-0.5 text-[9px] font-black ${severity.badge}`}>{severity.label}</span>
+        </div>
       </div>
 
       <p className="mt-3 text-xs font-bold text-[var(--color-text-primary)]">
@@ -78,6 +107,6 @@ export function AlertWorkbenchRow({ alert, selected, onSelect, getResolverName }
           </div>
         </div>
       </div>
-    </button>
+    </div>
   );
 }
