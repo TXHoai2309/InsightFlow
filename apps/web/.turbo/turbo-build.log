@@ -10,7 +10,7 @@
    Linting and checking validity of types ...
 
 ./src/app/alerts/page.tsx
-1515:6  Warning: React Hook useEffect has missing dependencies: 'generateTrendData', 'i18n.language', 'scopedBrandKey', and 't'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+1523:6  Warning: React Hook useEffect has missing dependencies: 'generateTrendData', 'i18n.language', 'scopedBrandKey', and 't'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
 
 ./src/app/alerts/[id]/page.tsx
 320:6  Warning: React Hook useEffect has a missing dependency: 'alert'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
@@ -65,9 +65,6 @@
 218:5  Warning: React Hook useMemo has a missing dependency: 'filters'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
 311:6  Warning: React Hook useMemo has a missing dependency: 't'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
 
-./src/components/crisis-monitoring/CrisisTable.tsx
-204:6  Warning: React Hook useMemo has a missing dependency: 'getLogsForAlert'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
-
 ./src/components/dashboard/Dashboard.tsx
 63:6  Warning: React Hook useEffect has missing dependencies: 'initialStats', 'initialWorkspaces', 'setFilters', 'setStats', and 'setWorkspaces'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
 135:61  Warning: React Hook useMemo has unnecessary dependencies: 'alerts' and 'filters'. Either exclude them or remove the dependency array.  react-hooks/exhaustive-deps
@@ -115,327 +112,29 @@
 100:17  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
 
 ./src/hooks/useDashboardData.ts
-301:6  Warning: React Hook useEffect has missing dependencies: 'fetchDashboardData', 'lastFetchedAtMap', and 'profile'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
-360:6  Warning: React Hook useEffect has a missing dependency: 'fetchDashboardData'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
-368:6  Warning: React Hook useEffect has a missing dependency: 'setTrendData'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+318:6  Warning: React Hook useEffect has missing dependencies: 'fetchDashboardData', 'lastFetchedAtMap', and 'profile'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+377:6  Warning: React Hook useEffect has a missing dependency: 'fetchDashboardData'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+385:6  Warning: React Hook useEffect has a missing dependency: 'setTrendData'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
 
 info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/basic-features/eslint#disabling-rules
    Collecting page data ...
-   Generating static pages (0/47) ...
-TypeError: Cannot read properties of undefined (reading 'call')
-    at Object.t [as require] (D:\Thuc_Tap\InsightFlow\apps\web\.next\server\webpack-runtime.js:1:143)
-    at require (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:17:18811)
-    at s (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:88330)
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:98875
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:98962
-    at t (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:99165)
-    at runNextTicks (node:internal/process/task_queues:65:5)
-    at listOnTimeout (node:internal/timers:549:9)
-    at process.processTimers (node:internal/timers:523:7) {
-  digest: '599097073'
-}
-TypeError: Cannot read properties of undefined (reading 'call')
-    at Object.t [as require] (D:\Thuc_Tap\InsightFlow\apps\web\.next\server\webpack-runtime.js:1:143)
-    at require (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:17:18811)
-    at A (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94398)
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:96726
-    at B._fromJSON (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:97164)
-    at JSON.parse (<anonymous>)
-    at I (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94119)
-    at t (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:100640)
-
-Error occurred prerendering page "/_not-found". Read more: https://nextjs.org/docs/messages/prerender-error
-
-TypeError: Cannot read properties of undefined (reading 'call')
-    at Object.t [as require] (D:\Thuc_Tap\InsightFlow\apps\web\.next\server\webpack-runtime.js:1:143)
-    at require (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:17:18811)
-    at A (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94398)
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:96726
-    at B._fromJSON (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:97164)
-    at JSON.parse (<anonymous>)
-    at I (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94119)
-    at t (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:100640)
-TypeError: Cannot read properties of undefined (reading 'call')
-    at Object.t [as require] (D:\Thuc_Tap\InsightFlow\apps\web\.next\server\webpack-runtime.js:1:143)
-    at require (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:17:18811)
-    at s (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:88330)
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:98875
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:98962
-    at t (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:99165) {
-  digest: '2286057047'
-}
-TypeError: Cannot read properties of undefined (reading 'call')
-    at Object.t [as require] (D:\Thuc_Tap\InsightFlow\apps\web\.next\server\webpack-runtime.js:1:143)
-    at require (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:17:18811)
-    at A (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94398)
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:96726
-    at B._fromJSON (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:97164)
-    at JSON.parse (<anonymous>)
-    at I (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94119)
-    at t (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:100640)
-
-Error occurred prerendering page "/admin/consultations". Read more: https://nextjs.org/docs/messages/prerender-error
-
-TypeError: Cannot read properties of undefined (reading 'call')
-    at Object.t [as require] (D:\Thuc_Tap\InsightFlow\apps\web\.next\server\webpack-runtime.js:1:143)
-    at require (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:17:18811)
-    at A (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94398)
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:96726
-    at B._fromJSON (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:97164)
-    at JSON.parse (<anonymous>)
-    at I (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94119)
-    at t (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:100640)
-TypeError: Cannot read properties of undefined (reading 'call')
-    at Object.t [as require] (D:\Thuc_Tap\InsightFlow\apps\web\.next\server\webpack-runtime.js:1:143)
-    at require (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:17:18811)
-    at s (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:88330)
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:98875
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:98962
-    at t (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:99165) {
-  digest: '2286057047'
-}
-TypeError: Cannot read properties of undefined (reading 'call')
-    at Object.t [as require] (D:\Thuc_Tap\InsightFlow\apps\web\.next\server\webpack-runtime.js:1:143)
-    at require (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:17:18811)
-    at A (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94398)
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:96726
-    at B._fromJSON (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:97164)
-    at JSON.parse (<anonymous>)
-    at I (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94119)
-    at t (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:100640)
-
-Error occurred prerendering page "/admin/brand-managers". Read more: https://nextjs.org/docs/messages/prerender-error
-
-TypeError: Cannot read properties of undefined (reading 'call')
-    at Object.t [as require] (D:\Thuc_Tap\InsightFlow\apps\web\.next\server\webpack-runtime.js:1:143)
-    at require (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:17:18811)
-    at A (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94398)
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:96726
-    at B._fromJSON (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:97164)
-    at JSON.parse (<anonymous>)
-    at I (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94119)
-    at t (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:100640)
-   Generating static pages (11/47) 
-
-Error occurred prerendering page "/404". Read more: https://nextjs.org/docs/messages/prerender-error
-
-PageNotFoundError: Cannot find module for page: /_document
+PageNotFoundError: Cannot find module for page: /admin
     at getPagePath (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\server\require.js:94:15)
     at requirePage (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\server\require.js:99:22)
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\server\load-components.js:72:65
-    at async Promise.all (index 0)
-    at async loadComponentsImpl (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\server\load-components.js:71:33)
-    at async exportPageImpl (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\export\worker.js:177:28)
-    at async Span.traceAsyncFn (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\trace\trace.js:154:20)
-    at async Object.exportPage (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\export\worker.js:237:20)
-
-Error occurred prerendering page "/500". Read more: https://nextjs.org/docs/messages/prerender-error
-
-PageNotFoundError: Cannot find module for page: /_document
-    at getPagePath (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\server\require.js:94:15)
-    at requirePage (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\server\require.js:99:22)
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\server\load-components.js:72:65
-    at async Promise.all (index 0)
-    at async loadComponentsImpl (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\server\load-components.js:71:33)
-    at async exportPageImpl (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\export\worker.js:177:28)
-    at async Span.traceAsyncFn (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\trace\trace.js:154:20)
-    at async Object.exportPage (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\export\worker.js:237:20)
-TypeError: Cannot read properties of undefined (reading 'call')
-    at Object.t [as require] (D:\Thuc_Tap\InsightFlow\apps\web\.next\server\webpack-runtime.js:1:143)
-    at require (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:17:18811)
-    at s (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:88330)
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:98875
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:98962
-    at t (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:99165) {
-  digest: '2286057047'
+    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\server\load-components.js:103:84
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async loadComponentsImpl (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\server\load-components.js:103:26)
+    at async D:\Thuc_Tap\InsightFlow\node_modules\next\dist\build\utils.js:1116:32
+    at async Span.traceAsyncFn (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\trace\trace.js:154:20) {
+  code: 'ENOENT'
 }
-TypeError: Cannot read properties of undefined (reading 'call')
-    at Object.t [as require] (D:\Thuc_Tap\InsightFlow\apps\web\.next\server\webpack-runtime.js:1:143)
-    at require (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:17:18811)
-    at A (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94398)
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:96726
-    at B._fromJSON (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:97164)
-    at JSON.parse (<anonymous>)
-    at I (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94119)
-    at t (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:100640)
 
-Error occurred prerendering page "/alerts". Read more: https://nextjs.org/docs/messages/prerender-error
-
-TypeError: Cannot read properties of undefined (reading 'call')
-    at Object.t [as require] (D:\Thuc_Tap\InsightFlow\apps\web\.next\server\webpack-runtime.js:1:143)
-    at require (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:17:18811)
-    at A (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94398)
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:96726
-    at B._fromJSON (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:97164)
-    at JSON.parse (<anonymous>)
-    at I (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94119)
-    at t (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:100640)
-TypeError: Cannot read properties of undefined (reading 'call')
-    at Object.t [as require] (D:\Thuc_Tap\InsightFlow\apps\web\.next\server\webpack-runtime.js:1:143)
-    at require (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:17:18811)
-    at s (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:88330)
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:98875
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:98962
-    at t (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:99165) {
-  digest: '2286057047'
+> Build error occurred
+Error: Failed to collect page data for /admin
+    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\build\utils.js:1269:15
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5) {
+  type: 'Error'
 }
-TypeError: Cannot read properties of undefined (reading 'call')
-    at Object.t [as require] (D:\Thuc_Tap\InsightFlow\apps\web\.next\server\webpack-runtime.js:1:143)
-    at require (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:17:18811)
-    at A (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94398)
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:96726
-    at B._fromJSON (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:97164)
-    at JSON.parse (<anonymous>)
-    at I (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94119)
-    at t (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:100640)
-
-Error occurred prerendering page "/labeling_tool". Read more: https://nextjs.org/docs/messages/prerender-error
-
-TypeError: Cannot read properties of undefined (reading 'call')
-    at Object.t [as require] (D:\Thuc_Tap\InsightFlow\apps\web\.next\server\webpack-runtime.js:1:143)
-    at require (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:17:18811)
-    at A (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94398)
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:96726
-    at B._fromJSON (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:97164)
-    at JSON.parse (<anonymous>)
-    at I (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94119)
-    at t (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:100640)
-TypeError: Cannot read properties of undefined (reading 'call')
-    at Object.t [as require] (D:\Thuc_Tap\InsightFlow\apps\web\.next\server\webpack-runtime.js:1:143)
-    at require (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:17:18811)
-    at s (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:88330)
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:98875
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:98962
-    at t (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:99165) {
-  digest: '2286057047'
-}
-TypeError: Cannot read properties of undefined (reading 'call')
-    at Object.t [as require] (D:\Thuc_Tap\InsightFlow\apps\web\.next\server\webpack-runtime.js:1:143)
-    at require (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:17:18811)
-    at A (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94398)
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:96726
-    at B._fromJSON (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:97164)
-    at JSON.parse (<anonymous>)
-    at I (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94119)
-    at t (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:100640)
-
-Error occurred prerendering page "/dashboard". Read more: https://nextjs.org/docs/messages/prerender-error
-
-TypeError: Cannot read properties of undefined (reading 'call')
-    at Object.t [as require] (D:\Thuc_Tap\InsightFlow\apps\web\.next\server\webpack-runtime.js:1:143)
-    at require (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:17:18811)
-    at A (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94398)
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:96726
-    at B._fromJSON (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:97164)
-    at JSON.parse (<anonymous>)
-    at I (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94119)
-    at t (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:100640)
-TypeError: Cannot read properties of undefined (reading 'call')
-    at Object.t [as require] (D:\Thuc_Tap\InsightFlow\apps\web\.next\server\webpack-runtime.js:1:143)
-    at require (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:17:18811)
-    at s (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:88330)
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:98875
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:98962
-    at t (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:99165) {
-  digest: '2286057047'
-}
-TypeError: Cannot read properties of undefined (reading 'call')
-    at Object.t [as require] (D:\Thuc_Tap\InsightFlow\apps\web\.next\server\webpack-runtime.js:1:143)
-    at require (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:17:18811)
-    at A (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94398)
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:96726
-    at B._fromJSON (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:97164)
-    at JSON.parse (<anonymous>)
-    at I (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94119)
-    at t (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:100640)
-
-Error occurred prerendering page "/mentions". Read more: https://nextjs.org/docs/messages/prerender-error
-
-TypeError: Cannot read properties of undefined (reading 'call')
-    at Object.t [as require] (D:\Thuc_Tap\InsightFlow\apps\web\.next\server\webpack-runtime.js:1:143)
-    at require (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:17:18811)
-    at A (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94398)
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:96726
-    at B._fromJSON (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:97164)
-    at JSON.parse (<anonymous>)
-    at I (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94119)
-    at t (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:100640)
-TypeError: Cannot read properties of undefined (reading 'call')
-    at Object.t [as require] (D:\Thuc_Tap\InsightFlow\apps\web\.next\server\webpack-runtime.js:1:143)
-    at require (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:17:18811)
-    at s (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:88330)
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:98875
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:98962
-    at t (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:99165) {
-  digest: '2286057047'
-}
-TypeError: Cannot read properties of undefined (reading 'call')
-    at Object.t [as require] (D:\Thuc_Tap\InsightFlow\apps\web\.next\server\webpack-runtime.js:1:143)
-    at require (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:17:18811)
-    at A (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94398)
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:96726
-    at B._fromJSON (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:97164)
-    at JSON.parse (<anonymous>)
-    at I (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94119)
-    at t (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:100640)
-
-Error occurred prerendering page "/". Read more: https://nextjs.org/docs/messages/prerender-error
-
-TypeError: Cannot read properties of undefined (reading 'call')
-    at Object.t [as require] (D:\Thuc_Tap\InsightFlow\apps\web\.next\server\webpack-runtime.js:1:143)
-    at require (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:17:18811)
-    at A (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94398)
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:96726
-    at B._fromJSON (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:97164)
-    at JSON.parse (<anonymous>)
-    at I (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94119)
-    at t (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:100640)
-   Generating static pages (23/47) 
-   Generating static pages (35/47) 
-TypeError: Cannot read properties of undefined (reading 'call')
-    at Object.t [as require] (D:\Thuc_Tap\InsightFlow\apps\web\.next\server\webpack-runtime.js:1:143)
-    at require (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:17:18811)
-    at s (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:88330)
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:98875
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:98962
-    at t (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:99165) {
-  digest: '2286057047'
-}
-TypeError: Cannot read properties of undefined (reading 'call')
-    at Object.t [as require] (D:\Thuc_Tap\InsightFlow\apps\web\.next\server\webpack-runtime.js:1:143)
-    at require (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:17:18811)
-    at A (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94398)
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:96726
-    at B._fromJSON (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:97164)
-    at JSON.parse (<anonymous>)
-    at I (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94119)
-    at t (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:100640)
-
-Error occurred prerendering page "/reports". Read more: https://nextjs.org/docs/messages/prerender-error
-
-TypeError: Cannot read properties of undefined (reading 'call')
-    at Object.t [as require] (D:\Thuc_Tap\InsightFlow\apps\web\.next\server\webpack-runtime.js:1:143)
-    at require (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:17:18811)
-    at A (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94398)
-    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:96726
-    at B._fromJSON (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:97164)
-    at JSON.parse (<anonymous>)
-    at I (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:94119)
-    at t (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\compiled\next-server\app-page.runtime.prod.js:12:100640)
- ✓ Generating static pages (47/47)
-
-> Export encountered errors on following paths:
-	/_error: /404
-	/_error: /500
-	/_not-found/page: /_not-found
-	/admin/brand-managers/page: /admin/brand-managers
-	/admin/consultations/page: /admin/consultations
-	/alerts/page: /alerts
-	/dashboard/page: /dashboard
-	/labeling_tool/page: /labeling_tool
-	/mentions/page: /mentions
-	/page: /
-	/reports/page: /reports
 npm error Lifecycle script `build` failed with error:
 npm error code 1
 npm error path D:\Thuc_Tap\InsightFlow\apps\web

@@ -1329,7 +1329,9 @@ const SUPABASE_ANNOTATION_COLUMNS = [
 
 async function fetchSupabaseMentionsUncached(opts: FetchOptions): Promise<Mention[]> {
   const config = getSupabaseConfig();
-  const maxMentions = opts.maxMentions || 30000;
+  // Keep the dashboard responsive and protect Supabase from multi-platform
+  // full scans. Detail/thread screens use their own larger, targeted query.
+  const maxMentions = opts.maxMentions || 10000;
   const brandKey = opts.brandKey ? opts.brandKey.toLowerCase().replace(/[\s\-_.]/g, "").trim() : "";
   let annotationRows: SupabaseRow[] = [];
 
@@ -1514,7 +1516,10 @@ const supabaseMentionCache = new Map<
   string,
   { expiresAt: number; promise: Promise<Mention[]> }
 >();
-const SUPABASE_MENTION_CACHE_MS = 15_000;
+// One shared snapshot serves dashboard/menu transitions for 30 minutes. A
+// manual mutation still updates Zustand optimistically; realtime handles new
+// workflow events without forcing a full scan.
+const SUPABASE_MENTION_CACHE_MS = 30 * 60_000;
 
 const supabaseMentionThreadCache = new Map<
   string,
@@ -1758,7 +1763,7 @@ export interface FetchOptions {
   after?: QueryDocumentSnapshot<DocumentData>;
   /** Optional normalized brand scope key passed by dashboard hooks */
   brandKey?: string;
-  /** Set a max limit (default: 30,000 rows per fetch stage) */
+  /** Set a max limit (default: 10,000 rows per fetch stage) */
   maxMentions?: number;
 }
 

@@ -560,7 +560,9 @@ let activeRequestsScope: string | null = null;
 let activeRealtimeChannel: ReturnType<NonNullable<typeof supabaseClient>["channel"]> | null = null;
 const ALERT_REVIEW_WINDOW_DAYS = 30;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
-const ALERT_REFRESH_INTERVAL_MS = 60 * 1000;
+// Realtime is the primary update path. Keep polling only as a safety net so a
+// transient channel failure does not turn every alert screen into a DB scan.
+const ALERT_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
 
 export function getAlertReviewSinceIso(days = ALERT_REVIEW_WINDOW_DAYS): string {
   return new Date(Date.now() - days * MS_PER_DAY).toISOString();

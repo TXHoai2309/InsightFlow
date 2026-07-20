@@ -353,7 +353,7 @@ export function DualOperationsEmployeeReportPage() {
   const error = dashboardError || alertError;
 
   return (
-    <main data-tour="reports-center" className="mx-auto max-w-[1480px] space-y-5 p-4 md:p-6 xl:p-8">
+    <main data-tour="reports-center" className="mx-auto w-full max-w-[1600px] space-y-5 p-4 md:p-6 min-[1100px]:p-8">
       {showExcelPreview ? (
         <ExcelDocumentPreviewModal
           title="Nội dung và hình thức sẽ được xuất nguyên bản"
@@ -364,7 +364,7 @@ export function DualOperationsEmployeeReportPage() {
       ) : null}
 
       <header className="border-b border-[var(--color-border)] pb-4">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex flex-col gap-4 min-[1100px]:flex-row min-[1100px]:items-center min-[1100px]:justify-between">
           <div>
             <h1 className="text-xl font-black text-[var(--color-text-primary)]">Lead &amp; Khủng hoảng</h1>
             <p className="mt-1 text-xs text-[var(--color-text-secondary)]">Theo dõi hiệu suất, rủi ro và việc cần xử lý trong kỳ báo cáo.</p>
@@ -434,7 +434,7 @@ export function DualOperationsEmployeeReportPage() {
             </div>
             <button type="button" onClick={() => setReportFilters(DEFAULT_DUAL_REPORT_FILTERS)} className="text-sm font-bold text-[var(--color-brand)]">Đặt lại</button>
           </div>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-3 md:grid-cols-2 min-[1100px]:grid-cols-4">
             <label className="space-y-1"><span className="text-xs font-bold text-[var(--color-text-muted)]">SLA</span><select value={reportFilters.sla} onChange={(event) => updateFilter("sla", event.target.value as DualReportFilters["sla"])} className={inputClass}><option value="all">Tất cả SLA</option><option value="in_sla">Trong/Đúng SLA</option><option value="overdue">Quá hạn</option><option value="late">Trễ SLA</option><option value="closed">Đã đóng</option></select></label>
             <label className="space-y-1"><span className="text-xs font-bold text-[var(--color-text-muted)]">Mức ưu tiên</span><select value={reportFilters.priority} onChange={(event) => updateFilter("priority", event.target.value as DualReportFilters["priority"])} className={inputClass}><option value="all">Tất cả mức độ</option><option value="high">Hot Lead / Crisis cao</option></select></label>
             <label className="space-y-1"><span className="text-xs font-bold text-[var(--color-text-muted)]">Nguồn</span><select value={reportFilters.source} onChange={(event) => updateFilter("source", event.target.value)} className={inputClass}>{SOURCE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
@@ -460,7 +460,7 @@ export function DualOperationsEmployeeReportPage() {
           </div>
           <span className="text-[11px] font-semibold text-[var(--color-text-muted)]">{periodLabel}</span>
         </div>
-        <div className="grid gap-px bg-[var(--color-border)] sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-px bg-[var(--color-border)] sm:grid-cols-2 min-[1100px]:grid-cols-4">
           <KpiCard label="Đã hoàn tất" value={report.kpis.completedTasks} description="Lead đã kết thúc và case đã giải quyết." tone="good" />
           <KpiCard label="Đúng SLA" value={`${report.kpis.slaOnTimeRate}%`} description="Tỷ lệ chung trên các việc có thể đánh giá SLA." />
           <KpiCard label="Còn mở" value={report.kpis.pendingTasks} description="Công việc vẫn cần tiếp tục xử lý." tone="warn" />
@@ -468,7 +468,7 @@ export function DualOperationsEmployeeReportPage() {
         </div>
       </section>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.75fr)]">
+      <div className="grid gap-4 min-[1100px]:grid-cols-[minmax(0,1.45fr)_minmax(300px,0.75fr)]">
         <section className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm">
           <div className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] px-4 py-3">
             <div className="flex items-center gap-2">
@@ -521,13 +521,13 @@ export function DualOperationsEmployeeReportPage() {
             ))}
           </div>
         </div>
-        <div className="grid xl:grid-cols-[minmax(0,1fr)_300px]">
-          <div className="min-w-0 p-4 xl:border-r xl:border-[var(--color-border)]">
+        <div className="grid min-[1100px]:grid-cols-[minmax(0,1fr)_280px]">
+          <div className="min-w-0 p-4 min-[1100px]:border-r min-[1100px]:border-[var(--color-border)]">
             <h3 className="mb-1 text-xs font-extrabold text-[var(--color-text-primary)]">Xu hướng 7 ngày</h3>
             <p className="mb-4 text-[11px] text-[var(--color-text-secondary)]">Dữ liệu phát sinh và kết quả hoàn thành theo ngày.</p>
             {activeOperation === "lead" ? <TrendBars rows={report.lead.responseTrend as unknown as Array<Record<string, string | number>>} primaryKey="created" secondaryKey="contacted" primaryLabel="Lead mới" secondaryLabel="Đã liên hệ" /> : <TrendBars rows={report.crisis.responseTrend as unknown as Array<Record<string, string | number>>} primaryKey="created" secondaryKey="resolved" primaryLabel="Case mới" secondaryLabel="Đã giải quyết" />}
           </div>
-          <aside className="border-t border-[var(--color-border)] bg-[var(--color-bg-surface-high)]/45 xl:border-t-0">
+          <aside className="border-t border-[var(--color-border)] bg-[var(--color-bg-surface-high)]/45 min-[1100px]:border-t-0">
             <p className="px-3 pb-1 pt-3 text-[10px] font-extrabold uppercase text-[var(--color-text-muted)]">Chỉ số nghiệp vụ</p>
             {activeOperation === "lead" ? <><Metric label="Đã liên hệ" value={`${report.lead.kpis.contacted}/${report.lead.kpis.total}`} /><Metric label="Tỷ lệ chuyển đổi" value={`${report.lead.kpis.conversionRate}%`} /><Metric label="Chưa ghi kết quả" value={report.lead.kpis.needResult} /><Metric label="Trễ SLA" value={report.lead.kpis.slaBreached} /></> : <><Metric label="Đã giải quyết" value={`${report.crisis.kpis.resolved}/${report.crisis.kpis.total}`} /><Metric label="Critical/High" value={report.crisis.kpis.critical + report.crisis.kpis.high} /><Metric label="Chờ duyệt" value={report.crisis.kpis.pendingApproval} /><Metric label="Quá hạn" value={report.crisis.kpis.overdue} /></>}
           </aside>

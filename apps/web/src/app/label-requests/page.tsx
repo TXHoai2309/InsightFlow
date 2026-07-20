@@ -829,7 +829,9 @@ export default function LabelRequestsPage() {
 
   useEffect(() => {
     const refresh = () => setReloadToken((current) => current + 1);
-    const interval = window.setInterval(refresh, 8000);
+    // Realtime is the primary update path; keep a 30-minute safety refresh
+    // instead of polling the review queue every few seconds.
+    const interval = window.setInterval(refresh, 30 * 60 * 1000);
     let channel: ReturnType<NonNullable<typeof supabaseClient>["channel"]> | null = null;
 
     if (supabaseClient) {

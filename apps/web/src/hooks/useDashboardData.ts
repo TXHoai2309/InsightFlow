@@ -29,6 +29,13 @@ const DASHBOARD_CACHE_LIMITS = {
   labelChangeRequests: 100,
 };
 
+// A tab transition can leave the previous request in flight while the next
+// page mounts. Keep a monotonically increasing generation per browser session
+// so a slower, older response can never overwrite the newest snapshot.
+const latestFetchGeneration = new Map<string, number>();
+let fetchGenerationCounter = 0;
+const activeDashboardFetches = new Set<string>();
+
 function isStorageQuotaError(error: unknown) {
   return (
     error instanceof DOMException &&
@@ -98,6 +105,13 @@ export function useDashboard(options: UseDashboardOptions = {}) {
     // in the same browser.
     const profileKey = profile?.uid || profile?.role || "anonymous";
     const fetchScopeKey = `${DASHBOARD_CACHE_VERSION}:${brandKey}:${profileKey}`;
+    // All dashboard pages share one Zustand store. Do not start another full
+    // raw-data scan while the same scope is already loading (including when a
+    // user clicks through menu items quickly).
+    if (activeDashboardFetches.has(fetchScopeKey)) return;
+    activeDashboardFetches.add(fetchScopeKey);
+    const generation = ++fetchGenerationCounter;
+    latestFetchGeneration.set(fetchScopeKey, generation);
     const cacheKey = `${DASHBOARD_CACHE_PREFIX}${DASHBOARD_CACHE_VERSION}_${brandKey}_${profileKey}`;
     try {
       let hasRenderedCache = false;
@@ -142,6 +156,8 @@ export function useDashboard(options: UseDashboardOptions = {}) {
       const rawBrandKey = brandKey === "global" ? undefined : brandKey;
       const rawData =
         await DashboardService.fetchRawData({ brandKey: rawBrandKey });
+      // Ignore stale responses from a previous navigation/refresh.
+      if (latestFetchGeneration.get(fetchScopeKey) !== generation) return;
       const workspaces = filterByBusinessPolicy(
         rawData.workspaces.map((workspace) => ({
           ...workspace,
@@ -260,6 +276,7 @@ export function useDashboard(options: UseDashboardOptions = {}) {
         setError(message);
       }
     } finally {
+      activeDashboardFetches.delete(fetchScopeKey);
       setLoading(false);
     }
   };
