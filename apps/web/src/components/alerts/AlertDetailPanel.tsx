@@ -207,11 +207,20 @@ export function AlertDetailPanel({
 
     setIsOpeningContact(true);
     try {
-      await useAlertStore.getState().updateAlertStatus(alert.id, "resolving", profile, {
+      // A follow-up item must remain in its current queue while the employee
+      // opens a new contact session. Otherwise the active status filter removes
+      // the alert (and its response form) before the result can be recorded.
+      const contactSessionStatus =
+        alert.status === "contact_failed" || alert.status === "contact_waiting"
+          ? alert.status
+          : "resolving";
+
+      await useAlertStore.getState().updateAlertStatus(alert.id, contactSessionStatus, profile, {
         note: "Đã mở liên kết liên hệ khách hàng và tạo mẫu phản hồi xin lỗi mặc định.",
         customer_contact_opened_at: openedAt,
         customer_contact_opened_by: profile?.email || profile?.uid || "unknown",
         customer_contact_template: template,
+        opening_contact_session: true,
       }, alert.brand);
       showToast("Đã sao chép mẫu xin lỗi và mở liên kết liên hệ.");
     } catch (error) {

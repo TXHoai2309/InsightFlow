@@ -205,6 +205,7 @@ interface AlertState {
       customer_response_result?: AlertData["customer_response_result"];
       customer_contact_history?: CustomerContactAttempt[];
       reset_customer_contact?: boolean;
+      opening_contact_session?: boolean;
     },
     brandFallback?: string
   ) => Promise<void>;
@@ -782,7 +783,11 @@ export const useAlertStore = create<AlertState>()(
         throw new Error("Cảnh báo không thuộc phạm vi xử lý của bạn.");
       }
 
-      if (["resolved", "contact_waiting", "contact_failed"].includes(newStatus)) {
+      const isOpeningContactSession =
+        attempt?.opening_contact_session === true &&
+        Boolean(attempt.customer_contact_opened_at);
+
+      if (["resolved", "contact_waiting", "contact_failed"].includes(newStatus) && !isOpeningContactSession) {
         const hasOpenedContact = Boolean(
           attempt?.customer_contact_opened_at || currentAlert?.customer_contact_opened_at
         );
