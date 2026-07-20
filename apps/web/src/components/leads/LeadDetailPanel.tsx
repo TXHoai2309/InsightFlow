@@ -224,7 +224,6 @@ export function LeadDetailPanel({
     isSameBrandScope(profile, lead) &&
     canPerformAction(profile, "update_lead_details");
   const ownership = getLeadOwnershipMeta(lead, profile);
-  const canClaimLead = canEdit;
   const canRecordResult =
     canEdit &&
     ownership.canWork &&
@@ -720,21 +719,7 @@ export function LeadDetailPanel({
                     Xem lịch sử
                   </button>
                 </div>
-                <dl className="mt-2 grid grid-cols-2 gap-1.5">
-                  <div className="rounded-lg bg-[var(--color-bg-surface-raised)] p-2.5">
-                    <dt className="text-[11px] font-semibold text-[var(--color-text-muted)]">SLA hiện tại</dt>
-                    <dd className={`mt-1 text-sm font-black ${meta.isOverdue ? "text-[var(--color-error)]" : "text-[var(--color-text-primary)]"}`}>{formatLeadSla(meta)}</dd>
-                  </div>
-                  <div className="rounded-lg bg-[var(--color-bg-surface-raised)] p-2.5">
-                    <dt className="text-[11px] font-semibold text-[var(--color-text-muted)]">Điểm ưu tiên</dt>
-                    <dd className="mt-1 text-sm font-black text-[var(--color-brand)]">{meta.priorityScore}/100</dd>
-                  </div>
-                </dl>
-                <div className="mt-2 flex items-center justify-between gap-3 border-b border-[var(--color-border)] pb-2 text-xs">
-                  <span className="text-[var(--color-text-muted)]">Người phụ trách</span>
-                  <strong className="truncate text-right text-[var(--color-text-primary)]">{ownership.ownerName}</strong>
-                </div>
-                <div className="mt-2 space-y-2">
+                <div className="mt-3 space-y-2">
                   <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-text-muted)]">Hoạt động gần nhất</p>
                   {recentHistoryEvents.map((event) => (
                     <div key={event.id} className="flex gap-2 border-l-2 border-[var(--color-border)] pl-2.5">
@@ -762,22 +747,12 @@ export function LeadDetailPanel({
                 {meta.needsResultCapture && <span className="rounded-full bg-[var(--color-brand-subtle)] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--color-brand)]">Chờ kết quả</span>}
               </div>
               {!canRecordResult && (
-                <div className="mb-3 flex flex-col gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-2.5">
+                <div className="mb-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-2.5">
                   <p className="text-sm text-[var(--color-text-secondary)]">
                     {!lead.owner_id
                       ? "Bạn cần nhận xử lý trước khi có thể ghi nhận kết quả."
                       : "Hãy mở nguồn và liên hệ khách hàng trước khi ghi nhận kết quả."}
                   </p>
-                  {!lead.owner_id ? (
-                    <button type="button" onClick={() => void handleClaim()} disabled={!canClaimLead || isClaiming} className="inline-flex min-h-9 shrink-0 items-center justify-center rounded-lg bg-[var(--color-brand)] px-3 text-sm font-bold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] disabled:cursor-not-allowed disabled:opacity-50">
-                      {isClaiming ? "Đang nhận..." : "Nhận xử lý"}
-                    </button>
-                  ) : sourceAction ? (
-                    <button type="button" onClick={() => handleOpenAction(sourceAction, true)} disabled={!ownership.canWork || Boolean(isOpening)} className="inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 text-sm font-bold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] disabled:cursor-not-allowed disabled:opacity-50">
-                      <span className="material-symbols-outlined text-base">open_in_new</span>
-                      Mở nguồn
-                    </button>
-                  ) : null}
                 </div>
               )}
               
