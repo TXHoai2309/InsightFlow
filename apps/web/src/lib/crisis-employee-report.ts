@@ -13,7 +13,7 @@ import {
   getEffectiveAlertOwner,
   isAlertOwnedByUser,
 } from "@/lib/alert-visibility";
-import { isResolvedAlert } from "@/lib/alertWorkflow";
+import { isResolvedAlert, isTerminalAlert } from "@/lib/alertWorkflow";
 import type { AlertData } from "@/stores/alert.store";
 
 export interface CrisisEmployeeKpis {
@@ -100,7 +100,7 @@ function slaDurationMinutes(severity: string) {
 function buildPriorityRows(rows: CrisisReportDetailRow[], nowMs: number) {
   const urgencyRank = { urgent: 3, attention: 2, normal: 1 } as const;
   return rows
-    .filter((row) => row.status !== "resolved")
+    .filter((row) => row.status !== "resolved" && row.status !== "skipped")
     .map<CrisisPriorityRow>((row) => {
       const createdAt = toTime(row.createdAt);
       const duration = slaDurationMinutes(row.severity);
@@ -271,7 +271,7 @@ export function buildCrisisEmployeeReportData(
     isAlertOwnedByUser(alert, profile),
   );
   const claimableCount = accessibleAlerts.filter(
-    (alert) => !getEffectiveAlertOwner(alert) && !isResolvedAlert(alert),
+    (alert) => !getEffectiveAlertOwner(alert) && !isTerminalAlert(alert),
   ).length;
   const periodAlerts = filterCrisisReportItems(personalAlerts, filters, nowMs);
   const filteredPersonalAlerts = filterCrisisReportItems(
@@ -293,7 +293,9 @@ export function buildCrisisEmployeeReportData(
     (row) => row.slaStatus === "Dung SLA" || row.slaStatus === "Tre SLA",
   );
   const priorityRows = buildPriorityRows(currentReport.detailRows, nowMs);
-  const openRows = currentReport.detailRows.filter((row) => row.status !== "resolved");
+  const openRows = currentReport.detailRows.filter(
+    (row) => row.status !== "resolved" && row.status !== "skipped",
+  );
   const personalKpis: CrisisEmployeeKpis = {
     createdInPeriod: periodReport.kpis.total,
     resolvedInPeriod: resolvedInPeriodRows.length,

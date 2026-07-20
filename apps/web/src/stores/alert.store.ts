@@ -14,7 +14,13 @@ import {
 import { calculateNegativityScore } from "@/lib/negativityScore";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import type { Mention } from "@/types/dashboard";
-import { getPersistedAlertStatus, isResolvedAlert } from "@/lib/alertWorkflow";
+import {
+  canSkipAlert,
+  getAlertWorkflowStatus,
+  getPersistedAlertStatus,
+  isResolvedAlert,
+  isTerminalAlert,
+} from "@/lib/alertWorkflow";
 import { canAlertBeVisibleToUser } from "@/lib/alert-visibility";
 
 function getResolverName(emailOrId: string | null | undefined): string {
@@ -51,6 +57,7 @@ export interface ResolutionAttempt {
   image_url?: string;
   resolved_by_email?: string;
   resolved_by_name?: string;
+  action_type?: "claim" | "result" | "skip" | "restore";
 }
 
 export interface InternalNote {
@@ -112,6 +119,10 @@ export interface AlertData {
   resolution_history?: ResolutionAttempt[];
   resolved_by_email?: string | null;
   resolved_by_name?: string | null;
+  skipped_at?: string | null;
+  skipped_by_uid?: string | null;
+  skipped_by_email?: string | null;
+  skipped_by_name?: string | null;
   post_content?: string;
   comment_content?: string;
   parent_id?: string | null;
@@ -202,8 +213,14 @@ interface AlertState {
       customer_response_result?: AlertData["customer_response_result"];
       customer_contact_history?: CustomerContactAttempt[];
       reset_customer_contact?: boolean;
+      action_type?: ResolutionAttempt["action_type"];
     },
     brandFallback?: string
+  ) => Promise<void>;
+  skipAlert: (
+    id: string,
+    profile: UserRoleProfile | null | undefined,
+    brandFallback?: string,
   ) => Promise<void>;
   fetchCorrectionRequests: (scopedBrandKey?: string | null, force?: boolean) => Promise<void>;
   createCorrectionRequest: (requestData: Omit<CorrectionRequest, "id" | "created_at" | "status">) => Promise<void>;
@@ -364,6 +381,10 @@ function mentionToAlertData(m: Mention): AlertData {
     resolution_history: labelObj.resolution_history || [],
     resolved_by_email: labelObj.resolved_by_email || null,
     resolved_by_name: labelObj.resolved_by_name || null,
+    skipped_at: labelObj.skipped_at || null,
+    skipped_by_uid: labelObj.skipped_by_uid || null,
+    skipped_by_email: labelObj.skipped_by_email || null,
+    skipped_by_name: labelObj.skipped_by_name || null,
     post_content: m.post_content,
     comment_content: m.comment_content,
     parent_id: m.parent_id,
@@ -425,9 +446,10 @@ function buildAlertsFromMentions(
       const history = Array.isArray(alert.resolution_history) ? alert.resolution_history : [];
       const completedAt =
         alert.resolved_at ||
+        alert.skipped_at ||
         alert.monitoring_started_at ||
         history[history.length - 1]?.timestamp;
-      const reviewTimestamp = isResolvedAlert(alert)
+      const reviewTimestamp = isTerminalAlert(alert)
         ? completedAt || alert.created_at
         : alert.created_at;
 
@@ -515,6 +537,10 @@ function applyRealtimeAnnotationUpdate(
         being_resolved_at: labelObj.being_resolved_at || null,
         resolved_by_email: labelObj.resolved_by_email || null,
         resolved_by_name: labelObj.resolved_by_name || null,
+        skipped_at: labelObj.skipped_at || null,
+        skipped_by_uid: labelObj.skipped_by_uid || null,
+        skipped_by_email: labelObj.skipped_by_email || null,
+        skipped_by_name: labelObj.skipped_by_name || null,
         resolution_history: Array.isArray(labelObj.resolution_history)
           ? labelObj.resolution_history
           : alert.resolution_history,
@@ -714,8 +740,7 @@ export const useAlertStore = create<AlertState>()(
     },
 
     updateAlertStatus: async (id, newStatus, profile, attempt, brandFallback) => {
-      // Persist only the three-state workflow, even when an older screen sends
-      // a legacy value such as pending_approval, responded, or monitoring.
+      // Normalize legacy values while preserving the dedicated skipped state.
       newStatus = getPersistedAlertStatus({ resolution_status: newStatus });
       console.log("[AlertStore] updateAlertStatus called:", { id, newStatus, profileEmail: profile?.email, profileRole: profile?.role });
       const currentAlert = get().rawAlerts.find((alert) => isSameAlertRecord(alert, id));
@@ -736,6 +761,18 @@ export const useAlertStore = create<AlertState>()(
 
       if (currentAlert && !canAlertBeVisibleToUser(currentAlert, profile)) {
         throw new Error("Cảnh báo không thuộc phạm vi xử lý của bạn.");
+      }
+
+      if (newStatus === "skipped") {
+        if (!currentAlert) {
+          throw new Error("Không tìm thấy cảnh báo cần bỏ qua.");
+        }
+        if (getAlertWorkflowStatus(currentAlert) !== "processing") {
+          throw new Error("Chỉ có thể bỏ qua cảnh báo trong trạng thái Đang xử lý.");
+        }
+        if (!canSkipAlert(currentAlert, profile.email)) {
+          throw new Error("Bạn phải là người đang phụ trách cảnh báo để thực hiện bỏ qua.");
+        }
       }
 
       if (["resolved", "contact_waiting", "contact_failed"].includes(newStatus)) {
@@ -784,12 +821,13 @@ export const useAlertStore = create<AlertState>()(
         throw new Error(`Alert is outside the user's brand scope. Profile: [Name: ${profile?.brandName}, ID: ${profile?.brandId}], Alert Brand: [${resolvedBrand}]`);
       }
 
-      const resolvedAt =
-        newStatus === "resolved" ? new Date().toISOString() : null;
+      const operationAt = new Date().toISOString();
+      const resolvedAt = newStatus === "resolved" ? operationAt : null;
+      const skippedAt = newStatus === "skipped" ? operationAt : null;
       const auditFields = {
         updated_by: profile.uid,
         updated_by_role: profile.role,
-        updated_at: new Date().toISOString(),
+        updated_at: operationAt,
       };
 
       set((state) => {
@@ -804,6 +842,10 @@ export const useAlertStore = create<AlertState>()(
                 resolved_at: undefined,
                 resolved_by_email: null,
                 resolved_by_name: null,
+                skipped_at: null,
+                skipped_by_uid: null,
+                skipped_by_email: null,
+                skipped_by_name: null,
                 escalation: null,
                 monitoring_started_at: undefined,
                 monitoring_duration_hours: undefined,
@@ -824,10 +866,11 @@ export const useAlertStore = create<AlertState>()(
             if (attempt) {
               const newAttemptItem: ResolutionAttempt = {
                 attempt_number: nextHistory.length + 1,
-                timestamp: new Date().toISOString(),
+                timestamp: operationAt,
                 note: attempt.note,
                 resolved_by_email: profile.email ?? undefined,
                 resolved_by_name: profile.displayName ?? undefined,
+                action_type: attempt.action_type,
                 ...(attempt.image_url ? { image_url: attempt.image_url } : {}),
               };
               nextHistory.push(newAttemptItem);
@@ -839,6 +882,10 @@ export const useAlertStore = create<AlertState>()(
               resolved_at: resolvedAt || undefined,
               resolved_by_email: resolvedAt ? profile.email : null,
               resolved_by_name: resolvedAt ? profile.displayName : null,
+              skipped_at: skippedAt || alert.skipped_at || null,
+              skipped_by_uid: skippedAt ? profile.uid : alert.skipped_by_uid || null,
+              skipped_by_email: skippedAt ? profile.email : alert.skipped_by_email || null,
+              skipped_by_name: skippedAt ? profile.displayName : alert.skipped_by_name || null,
               escalation: attempt?.escalation !== undefined ? attempt.escalation : alert.escalation,
               customer_contact_opened_at: attempt?.reset_customer_contact ? undefined : attempt?.customer_contact_opened_at ?? alert.customer_contact_opened_at,
               customer_contact_opened_by: attempt?.reset_customer_contact ? undefined : attempt?.customer_contact_opened_by ?? alert.customer_contact_opened_by,
@@ -853,8 +900,8 @@ export const useAlertStore = create<AlertState>()(
                 being_resolved_by: profile.email,
                 being_resolved_at: new Date().toISOString(),
               } : {}),
-              // When resolved, clear the lock
-              ...(newStatus === "resolved" ? {
+              // Terminal states release the active ownership lock.
+              ...(["resolved", "skipped"].includes(newStatus) ? {
                 being_resolved_by: null,
                 being_resolved_at: null,
                 ...(attempt?.monitoring_duration_hours ? {
@@ -886,14 +933,24 @@ export const useAlertStore = create<AlertState>()(
             throw new Error(`Vụ việc đã được ${getResolverName(existingLabel.being_resolved_by)} nhận xử lý.`);
           }
 
+          if (newStatus === "skipped") {
+            if (getAlertWorkflowStatus(existingLabel) !== "processing") {
+              throw new Error("Cảnh báo không còn ở trạng thái Đang xử lý.");
+            }
+            if (!canSkipAlert(existingLabel, profile.email)) {
+              throw new Error("Cảnh báo không còn thuộc quyền xử lý của bạn.");
+            }
+          }
+
           let nextHistory = existingLabel.resolution_history ? [...existingLabel.resolution_history] : [];
           if (attempt) {
             nextHistory.push({
               attempt_number: nextHistory.length + 1,
-              timestamp: new Date().toISOString(),
+              timestamp: operationAt,
               note: attempt.note,
               resolved_by_email: profile.email ?? undefined,
               resolved_by_name: profile.displayName ?? undefined,
+              action_type: attempt.action_type,
               ...(attempt.image_url ? { image_url: attempt.image_url } : {}),
             });
           }
@@ -906,6 +963,10 @@ export const useAlertStore = create<AlertState>()(
               resolved_at: null,
               resolved_by_email: null,
               resolved_by_name: null,
+              skipped_at: null,
+              skipped_by_uid: null,
+              skipped_by_email: null,
+              skipped_by_name: null,
               being_resolved_by: null,
               being_resolved_at: null,
               monitoring_started_at: null,
@@ -935,6 +996,10 @@ export const useAlertStore = create<AlertState>()(
             resolved_by: resolvedAt ? profile.uid : null,
             resolved_by_email: resolvedAt ? profile.email : null,
             resolved_by_name: resolvedAt ? profile.displayName : null,
+            skipped_at: skippedAt,
+            skipped_by_uid: skippedAt ? profile.uid : existingLabel.skipped_by_uid ?? null,
+            skipped_by_email: skippedAt ? profile.email : existingLabel.skipped_by_email ?? null,
+            skipped_by_name: skippedAt ? profile.displayName : existingLabel.skipped_by_name ?? null,
             escalation: attempt?.escalation !== undefined ? attempt.escalation : existingLabel.escalation ?? null,
             customer_contact_opened_at: attempt?.customer_contact_opened_at ?? existingLabel.customer_contact_opened_at ?? null,
             customer_contact_opened_by: attempt?.customer_contact_opened_by ?? existingLabel.customer_contact_opened_by ?? null,
@@ -965,7 +1030,7 @@ export const useAlertStore = create<AlertState>()(
             updateObj.monitoring_initial_shares = currentAlert?.shares || 0;
           }
 
-          if (newStatus === "resolved") {
+          if (["resolved", "skipped"].includes(newStatus)) {
             updateObj.being_resolved_by = null;
             updateObj.being_resolved_at = null;
           } else if (newStatus === "resolving") {
@@ -981,7 +1046,7 @@ export const useAlertStore = create<AlertState>()(
         // Terminal/contact outcome changes affect the summary counters. Reload
         // from Supabase before returning so the Alert page never renders a
         // stale cached queue after navigation from the detail screen.
-        if (["resolved", "contact_waiting", "contact_failed"].includes(newStatus)) {
+        if (["resolved", "contact_waiting", "contact_failed", "skipped"].includes(newStatus)) {
           await get().fetchAlerts(getScopedBrandKey(profile), true);
         }
       } catch (error) {
@@ -1001,6 +1066,19 @@ export const useAlertStore = create<AlertState>()(
         });
         throw error;
       }
+    },
+
+    skipAlert: async (id, profile, brandFallback) => {
+      await get().updateAlertStatus(
+        id,
+        "skipped",
+        profile,
+        {
+          note: "Đã bỏ qua cảnh báo không liên quan.",
+          action_type: "skip",
+        },
+        brandFallback,
+      );
     },
 
     fetchCorrectionRequests: async (scopedBrandKey = null, force = false) => {

@@ -14,7 +14,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { PlatformLogo } from "@/components/platform/PlatformLogo";
-import { getAlertWorkflowStatus } from "@/lib/alertWorkflow";
+import { canSkipAlert, getAlertWorkflowStatus, type AlertWorkflowStatus } from "@/lib/alertWorkflow";
 import { useAlertStore, type AlertData } from "@/stores/alert.store";
 import { useAuth } from "@/hooks/useAuth";
 import { AlertContentContext } from "./AlertContentContext";
@@ -30,6 +30,7 @@ export type AlertDetailPanelTab = "action" | "profile" | "interactions" | "histo
 interface AlertDetailPanelProps {
   alert: AlertData;
   activeTab: AlertDetailPanelTab;
+  statusFilter: AlertWorkflowStatus | "all";
   onTabChange: (tab: AlertDetailPanelTab) => void;
   profileEmail?: string | null;
   canUpdate: boolean;
@@ -37,6 +38,7 @@ interface AlertDetailPanelProps {
   onClose: () => void;
   onClaim: (alert: AlertData) => Promise<void>;
   onRecordResult: (alert: AlertData, draft: AlertContactResultDraft) => Promise<void>;
+  onSkip: (alert: AlertData) => Promise<void>;
   onOpenSource: (alert: AlertData) => void;
 }
 
@@ -50,6 +52,7 @@ function formatDate(value?: string) {
 function getStatusLabel(alert: AlertData) {
   const status = getAlertWorkflowStatus(alert);
   if (status === "resolved") return "Đã giải quyết";
+  if (status === "skipped") return "Đã bỏ qua";
   if (status === "contact_failed") return "Liên hệ không thành";
   if (status === "processing") return alert.status === "contact_waiting" ? "Đã liên hệ, chờ phản hồi" : "Đang xử lý";
   return "Chưa phân công";
@@ -91,6 +94,7 @@ const CONTACT_OUTCOME_LABELS: Record<string, string> = {
 export function AlertDetailPanel({
   alert,
   activeTab,
+  statusFilter,
   onTabChange,
   profileEmail,
   canUpdate,
@@ -98,21 +102,34 @@ export function AlertDetailPanel({
   onClose,
   onClaim,
   onRecordResult,
+  onSkip,
   onOpenSource,
 }: AlertDetailPanelProps) {
   const workflowStatus = getAlertWorkflowStatus(alert);
   const [optimisticClaimId, setOptimisticClaimId] = useState<string | null>(null);
   const [isOpeningContact, setIsOpeningContact] = useState(false);
   const [previewHistoryImage, setPreviewHistoryImage] = useState<string | null>(null);
+  const [showSkipConfirmation, setShowSkipConfirmation] = useState(false);
+  const [isSkipping, setIsSkipping] = useState(false);
+  const [skipError, setSkipError] = useState("");
   const claimedOptimistically = optimisticClaimId === alert.id;
   const normalizedOwner = String(alert.being_resolved_by || "").trim().toLowerCase();
   const normalizedProfileEmail = String(profileEmail || "").trim().toLowerCase();
   const isMine = claimedOptimistically || Boolean(normalizedProfileEmail && normalizedOwner === normalizedProfileEmail);
   const effectiveWorkflowStatus = claimedOptimistically ? "processing" : workflowStatus;
-  const effectiveOwner = claimedOptimistically ? profileEmail : alert.being_resolved_by;
+  const effectiveOwner = claimedOptimistically
+    ? profileEmail
+    : workflowStatus === "skipped"
+      ? alert.skipped_by_name || alert.skipped_by_email || alert.skipped_by_uid
+      : alert.being_resolved_by;
   const ownerName = getResolverName(effectiveOwner) || "Chưa có người phụ trách";
   const canClaim = canUpdate && !claimedOptimistically && workflowStatus === "pending" && !alert.being_resolved_by;
   const canRecord = canUpdate && isMine && (effectiveWorkflowStatus === "processing" || effectiveWorkflowStatus === "contact_failed");
+  const canSkip =
+    canUpdate &&
+    statusFilter === "processing" &&
+    canSkipAlert(alert, profileEmail) &&
+    !claimedOptimistically;
   const contactUrl = [alert.social_profile_url, alert.url, alert.post_url]
     .find((url) => Boolean(url && url !== "#"));
   const canOpenContact = canRecord && !alert.customer_contact_opened_at;
@@ -227,12 +244,16 @@ export function AlertDetailPanel({
     ];
 
     (alert.resolution_history || []).forEach((entry, index) => {
+      const actor = entry.resolved_by_name || getResolverName(entry.resolved_by_email) || "Nhân viên xử lý";
+      const isSkipEntry = entry.action_type === "skip";
       entries.push({
         key: `resolution-${entry.timestamp}-${index}`,
         timestamp: entry.timestamp,
-        title: entry.resolved_by_name || getResolverName(entry.resolved_by_email) || "Nhân viên xử lý",
-        detail: entry.note || "Đã cập nhật trạng thái xử lý.",
-        badge: `Cập nhật ${entry.attempt_number || index + 1}`,
+        title: isSkipEntry ? "Đã bỏ qua cảnh báo" : actor,
+        detail: isSkipEntry
+          ? `${actor}\n${entry.note || "Cảnh báo được xác định là không liên quan."}`
+          : entry.note || "Đã cập nhật trạng thái xử lý.",
+        badge: isSkipEntry ? "Bỏ qua" : `Cập nhật ${entry.attempt_number || index + 1}`,
         imageUrl: entry.image_url,
         kind: "resolution",
       });
@@ -316,6 +337,8 @@ export function AlertDetailPanel({
     setOptimisticClaimId(null);
     setIsOpeningContact(false);
     setPreviewHistoryImage(null);
+    setShowSkipConfirmation(false);
+    setSkipError("");
   }, [alert.id]);
 
   useEffect(() => {
@@ -335,24 +358,43 @@ export function AlertDetailPanel({
       return;
     }
   };
+
+  const handleSkip = async () => {
+    if (!canSkip || isSkipping) return;
+
+    try {
+      setIsSkipping(true);
+      setSkipError("");
+      await onSkip(alert);
+      setShowSkipConfirmation(false);
+      showToast("Đã chuyển cảnh báo sang Đã bỏ qua.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Không thể bỏ qua cảnh báo này.";
+      setSkipError(message);
+      showToast(message, "error");
+    } finally {
+      setIsSkipping(false);
+    }
+  };
   const tabs: Array<{ id: AlertDetailPanelTab; label: string }> = [
     { id: "action", label: "Xử lý" },
     { id: "profile", label: "Hồ sơ" },
     { id: "interactions", label: "Tương tác" },
     { id: "history", label: "Lịch sử" },
   ];
+  const isTerminal = effectiveWorkflowStatus === "resolved" || effectiveWorkflowStatus === "skipped";
   const workflowSteps = [
     { label: "Đã chọn", complete: true, active: false },
     { label: "Nhận xử lý", complete: Boolean(effectiveOwner), active: !effectiveOwner },
     {
       label: "Mở nguồn",
       complete: Boolean(alert.customer_contact_opened_at) || effectiveWorkflowStatus === "resolved",
-      active: Boolean(effectiveOwner) && !alert.customer_contact_opened_at && effectiveWorkflowStatus !== "resolved",
+      active: Boolean(effectiveOwner) && !alert.customer_contact_opened_at && !isTerminal,
     },
     {
       label: "Ghi nhận kết quả",
       complete: effectiveWorkflowStatus === "resolved",
-      active: Boolean(alert.customer_contact_opened_at) && effectiveWorkflowStatus !== "resolved",
+      active: Boolean(alert.customer_contact_opened_at) && !isTerminal,
     },
   ];
 
@@ -420,6 +462,20 @@ export function AlertDetailPanel({
                 <span className="hidden sm:inline">{isOpeningContact ? "Đang mở..." : "Mở nguồn"}</span>
               </button>
             ) : null}
+            {canSkip && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSkipError("");
+                  setShowSkipConfirmation(true);
+                }}
+                disabled={isSkipping}
+                className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--color-error)]/35 bg-[var(--color-bg-surface)] px-3 text-[13px] font-semibold text-[var(--color-error)] transition hover:bg-[var(--color-error-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-error)]/30 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <span className="material-symbols-outlined text-lg">block</span>
+                <span className="hidden sm:inline">Bỏ qua</span>
+              </button>
+            )}
             <div className="mx-1 h-6 w-px bg-[var(--color-border)]" />
             <button type="button" onClick={onClose} className="rounded-full p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-raised)]" title="Thu gọn panel" aria-label="Thu gọn panel">
               <PanelRightClose size={18} aria-hidden="true" />
@@ -495,6 +551,8 @@ export function AlertDetailPanel({
                   <p className="mt-2 rounded-lg bg-[var(--color-bg-surface-raised)] p-3 text-xs leading-5 text-[var(--color-text-secondary)]">
                     {effectiveWorkflowStatus === "resolved"
                       ? "Cảnh báo đã được hoàn tất. Bạn có thể xem lại toàn bộ lịch sử xử lý."
+                      : effectiveWorkflowStatus === "skipped"
+                        ? "Cảnh báo đã được bỏ qua và không được tính là đã giải quyết."
                       : canClaim
                         ? "Sử dụng nút Nhận xử lý ở đầu panel để bắt đầu nghiệp vụ."
                         : "Cảnh báo đang do nhân viên khác phụ trách hoặc nằm ngoài quyền cập nhật của bạn."}
@@ -551,6 +609,45 @@ export function AlertDetailPanel({
           </div>
         )}
       </div>
+
+      {showSkipConfirmation && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="skip-alert-title"
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm"
+          onClick={() => !isSkipping && setShowSkipConfirmation(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-5 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-error-subtle)] text-[var(--color-error)]">
+                <span className="material-symbols-outlined">block</span>
+              </span>
+              <div>
+                <h3 id="skip-alert-title" className="text-base font-black text-[var(--color-text-primary)]">Bỏ qua cảnh báo này?</h3>
+                <p className="mt-1 text-sm leading-6 text-[var(--color-text-secondary)]">
+                  Cảnh báo sẽ chuyển sang “Đã bỏ qua” và không được tính là đã giải quyết.
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 rounded-xl bg-[var(--color-bg-surface-raised)] p-3">
+              <p className="truncate text-sm font-bold text-[var(--color-text-primary)]">{alert.author || "Người dùng ẩn danh"}</p>
+              <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--color-text-secondary)]">{alert.text || alert.comment_content || "Không có nội dung xem trước."}</p>
+            </div>
+            {skipError && <p className="mt-3 rounded-lg bg-[var(--color-error-subtle)] px-3 py-2 text-xs font-semibold text-[var(--color-error)]">{skipError}</p>}
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => setShowSkipConfirmation(false)} disabled={isSkipping} className="min-h-10 rounded-lg border border-[var(--color-border)] px-4 text-sm font-bold text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)] disabled:opacity-60">Quay lại</button>
+              <button type="button" onClick={() => void handleSkip()} disabled={isSkipping} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[var(--color-error)] px-4 text-sm font-bold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60">
+                <span className="material-symbols-outlined text-base">block</span>
+                {isSkipping ? "Đang bỏ qua..." : "Xác nhận bỏ qua"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {previewHistoryImage && (
         <div role="dialog" aria-modal="true" aria-label="Xem ảnh minh chứng lịch sử" className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm" onClick={() => setPreviewHistoryImage(null)}>

@@ -59,6 +59,13 @@ test("personal KPIs exclude unassigned alerts while keeping them claimable", () 
         being_resolved_at: "2026-07-01T08:30:00.000Z",
         resolved_at: "2026-07-16T09:00:00.000Z",
       }),
+      alert({
+        id: "skipped-in-period",
+        status: "skipped",
+        skipped_at: "2026-07-16T10:00:00.000Z",
+        skipped_by_email: profile.email,
+        skipped_by_name: profile.displayName,
+      }),
     ],
     { ...DEFAULT_CRISIS_REPORT_FILTERS, timeRange: "7d" },
     profile,
@@ -69,6 +76,8 @@ test("personal KPIs exclude unassigned alerts while keeping them claimable", () 
   assert.equal(report.personalKpis.claimable, 1);
   assert.equal(report.personalKpis.resolvedInPeriod, 1);
   assert.equal(report.personalKpis.createdInPeriod, 1);
+  assert.equal(report.detailRows.some((row) => row.id === "skipped-in-period"), true);
+  assert.equal(report.priorityRows.some((row) => row.id === "skipped-in-period"), false);
   assert.equal(report.priorityRows[0]?.id, "owned-critical");
   assert.equal(report.priorityRows[0]?.urgencyLevel, "urgent");
   assert.ok(report.priorityRows[0]?.urgencyReasons.includes("Quá hạn"));
