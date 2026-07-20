@@ -344,7 +344,7 @@ export default function LeadsPage() {
   );
 
   const viewCounts = useMemo(() => {
-    const allViews: LeadWorkbenchView[] = ["unassigned", "priority", "active", "follow_up", "closed", "need_result"];
+    const allViews: LeadWorkbenchView[] = ["unassigned", "priority", "active", "follow_up", "closed", "skipped", "need_result"];
     return allViews.reduce(
       (acc, viewId) => {
         acc[viewId] = visibleBaseLeads.filter((lead) =>
@@ -700,6 +700,44 @@ export default function LeadsPage() {
     const nextLead = visibleLeads[currentIndex + 1] || visibleLeads[0] || null;
     setActiveView(getDefaultLeadWorkbenchView(profile));
     setSelectedLeadId(nextLead?.id || null);
+  };
+
+  const handleAfterSkip = (skippedLead: Lead) => {
+    rememberOptimisticLead(skippedLead);
+    const currentIndex = paginatedLeads.findIndex((lead) => lead.id === skippedLead.id);
+    const nextLead = currentIndex >= 0
+      ? paginatedLeads[currentIndex + 1] || paginatedLeads[currentIndex - 1] || null
+      : paginatedLeads[0] || null;
+    setSelectedLeadId(nextLead?.id || null);
+    setHighlightedLeadId(nextLead?.id || null);
+    setIsPanelCollapsed(!nextLead);
+  };
+
+  const handleAfterRestore = (restoredLead: Lead) => {
+    rememberOptimisticLead(restoredLead);
+    skipNextPageReset.current = true;
+    setLeadFilters({
+      ...DEFAULT_LEAD_WORKBENCH_FILTERS,
+      workspaceId: leadFilters.workspaceId,
+    });
+    setSortMode("recommended");
+    setActiveView("active");
+    setCurrentPage(1);
+    setSelectedLeadId(restoredLead.id);
+    setHighlightedLeadId(restoredLead.id);
+    setDetailTab("action");
+    setIsPanelCollapsed(false);
+    setRestoreNotice("Item đã được khôi phục và chuyển về Đang xử lý.");
+
+    window.setTimeout(() => {
+      document.getElementById(`lead-row-${restoredLead.id}`)?.scrollIntoView({
+        block: "nearest",
+        behavior: "smooth",
+      });
+    }, 120);
+    window.setTimeout(() => {
+      setHighlightedLeadId((current) => current === restoredLead.id ? null : current);
+    }, 4000);
   };
 
   if (!authLoading && !canViewLeads) {
@@ -1078,6 +1116,8 @@ export default function LeadsPage() {
               workbenchView={activeView}
               onClose={() => setIsPanelCollapsed(true)}
               onAfterResult={handleAfterResult}
+              onAfterSkip={handleAfterSkip}
+              onAfterRestore={handleAfterRestore}
               onStartedAction={handleStartedAction}
               returnContext={{
                 view: activeView,

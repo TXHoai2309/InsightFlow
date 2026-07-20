@@ -176,6 +176,7 @@ begin
         when new.last_action_type = 'email' then 'Gửi email cho khách hàng.'
         when new.last_action_type = 'note' then 'Cập nhật ghi chú xử lý.'
         when new.last_action_type = 'skip' then 'Bỏ qua và đóng Lead.'
+        when new.last_action_type = 'restore' then 'Khôi phục Lead để tiếp tục xử lý.'
         else 'Thực hiện thao tác xử lý Lead.'
       end,
       jsonb_build_object('action_type', new.last_action_type),

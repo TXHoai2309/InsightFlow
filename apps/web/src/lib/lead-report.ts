@@ -375,7 +375,7 @@ export function buildLeadReportData(
       scopedLeads.map((lead) => minutesBetween(lead.created_at, lead.first_contacted_at || lead.last_contact_at)),
     ),
     avgResultMinutes: average(
-      scopedLeads.map((lead) => minutesBetween(lead.created_at, lead.result_recorded_at || lead.closed_at)),
+      scopedLeads.map((lead) => minutesBetween(lead.created_at, lead.result_recorded_at || lead.closed_at || undefined)),
     ),
     conversionRate: percentage(converted, scopedLeads.length),
     contactRate: percentage(contacted, scopedLeads.length),

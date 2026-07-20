@@ -6,6 +6,7 @@ export type LeadWorkbenchView =
   | "priority"
   | "active"
   | "closed"
+  | "skipped"
   | "urgent"
   | "follow_up"
   | "need_result";
@@ -74,6 +75,7 @@ export const WORKBENCH_VIEWS: Array<{
   { id: "active", label: "Đang xử lý" },
   { id: "follow_up", label: "Follow-up" },
   { id: "closed", label: "Đã đóng" },
+  { id: "skipped", label: "Đã bỏ qua" },
 ];
 
 export const EMPLOYEE_PRIORITY_WORKBENCH_VIEWS: Array<{
@@ -566,12 +568,20 @@ export function matchesLeadWorkbenchView(
     if (!isMine) return false;
 
     // Active matches if the lead is mine and HAS been contacted
-    const hasBeenContacted = Boolean(lead.last_contact_at || (lead.contact_attempts && lead.contact_attempts > 0));
+    const hasBeenContacted = Boolean(
+      lead.last_contact_at ||
+      (lead.contact_attempts && lead.contact_attempts > 0) ||
+      lead.last_action_type === "restore",
+    );
     return hasBeenContacted;
   }
 
   if (view === "closed") {
-    return lead.status === "completed" || lead.status === "skipped";
+    return lead.status === "completed";
+  }
+
+  if (view === "skipped") {
+    return lead.status === "skipped";
   }
 
   // Supporting views for KPI calculations inside LeadStats:
