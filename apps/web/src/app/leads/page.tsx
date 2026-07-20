@@ -21,7 +21,6 @@ import {
   getLeadWorkbenchMeta,
   getLeadWorkbenchViews,
   matchesLeadWorkbenchView,
-  getLeadFollowUpMeta,
   sortFollowUpLeads,
   sortLeadsForWorkbench,
   type LeadWorkbenchView,
@@ -372,7 +371,7 @@ export default function LeadsPage() {
         { ...leadFilters, workspaceId: "all" },
         currentTime,
         profile?.uid,
-      );
+    );
     if (activeView === "follow_up") {
       return sortFollowUpLeads(filtered, currentTime, profile);
     }
@@ -404,19 +403,6 @@ export default function LeadsPage() {
     ),
     [currentTime, profile, visibleBaseLeads],
   );
-
-  const followUpSummary = useMemo(() => {
-    const metadata = followUpQueue.map((lead) => getLeadFollowUpMeta(lead, currentTime));
-    const overdue = metadata.filter((item) => item.isOverdue).length;
-    const next = metadata.find((item) => !item.isOverdue && item.scheduledAt !== null);
-    return {
-      total: followUpQueue.length,
-      overdue,
-      nextLabel: next?.scheduledAt
-        ? new Date(next.scheduledAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })
-        : "Chưa có lịch tiếp theo",
-    };
-  }, [currentTime, followUpQueue]);
 
   const activeFilterCount = countActiveLeadFilters(
     leadFilters,
@@ -665,22 +651,37 @@ export default function LeadsPage() {
     );
   };
 
-  const handleAfterResult = (resultType?: Lead["result_type"]) => {
-    if (selectedLeadId) {
+  const handleAfterResult = (updatedLead: Lead, resultType?: Lead["result_type"]) => {
+    if (updatedLead.id) {
       setOptimisticLeadsById((current) => {
-        if (!current[selectedLeadId]) return current;
+        if (!current[updatedLead.id]) return current;
         const next = { ...current };
-        delete next[selectedLeadId];
+        delete next[updatedLead.id];
         return next;
       });
     }
 
+    if (resultType === "follow_up") {
+      skipNextPageReset.current = true;
+      rememberOptimisticLead(updatedLead);
+      setActiveView("follow_up");
+      setCurrentPage(1);
+      setSelectedLeadId(updatedLead.id);
+      setHighlightedLeadId(updatedLead.id);
+      setDetailTab("action");
+      setIsPanelCollapsed(false);
+      window.setTimeout(() => {
+        setHighlightedLeadId((current) => current === updatedLead.id ? null : current);
+      }, 4000);
+      return;
+    }
+
     if (activeView === "follow_up") {
-      const nextFollowUp = visibleLeads.find((lead) => lead.id !== selectedLeadId) || null;
+      const nextFollowUp = visibleLeads.find((lead) => lead.id !== updatedLead.id) || null;
       setCurrentPage(1);
       setSelectedLeadId(nextFollowUp?.id || null);
       setHighlightedLeadId(nextFollowUp?.id || null);
-      if (!nextFollowUp && resultType !== "follow_up") setIsPanelCollapsed(true);
+      if (!nextFollowUp) setIsPanelCollapsed(true);
       return;
     }
 
@@ -696,7 +697,7 @@ export default function LeadsPage() {
       return;
     }
 
-    const currentIndex = visibleLeads.findIndex((lead) => lead.id === selectedLeadId);
+    const currentIndex = visibleLeads.findIndex((lead) => lead.id === updatedLead.id);
     const nextLead = visibleLeads[currentIndex + 1] || visibleLeads[0] || null;
     setActiveView(getDefaultLeadWorkbenchView(profile));
     setSelectedLeadId(nextLead?.id || null);
@@ -835,23 +836,6 @@ export default function LeadsPage() {
         </section>
       )}
 
-      {activeView === "follow_up" && (
-        <section className="grid gap-3 rounded-xl border border-blue-200 bg-blue-50 p-3 text-blue-950 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] sm:items-center">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-blue-700 shadow-sm">
-              <span className="material-symbols-outlined">event_upcoming</span>
-            </span>
-            <div className="min-w-0">
-              <p className="text-sm font-black">Hàng đợi Follow-up hôm nay</p>
-              <p className="mt-0.5 truncate text-xs text-blue-800">Ưu tiên lịch quá hẹn và lịch sắp đến giờ.</p>
-            </div>
-          </div>
-          <div className="rounded-lg bg-white px-3 py-2 text-center shadow-sm"><strong className="block text-lg text-blue-700">{followUpSummary.total}</strong><span className="text-[10px] font-bold uppercase text-blue-700">Cần xử lý</span></div>
-          <div className="rounded-lg bg-white px-3 py-2 text-center shadow-sm"><strong className="block text-lg text-red-700">{followUpSummary.overdue}</strong><span className="text-[10px] font-bold uppercase text-red-700">Quá hẹn</span></div>
-          <div className="rounded-lg bg-white px-3 py-2 text-center shadow-sm"><strong className="block text-sm text-blue-700">{followUpSummary.nextLabel}</strong><span className="text-[10px] font-bold uppercase text-blue-700">Lịch tiếp theo</span></div>
-        </section>
-      )}
-
       {pendingResultLead && (
         <section className="flex flex-col gap-2 rounded-xl border border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] px-3 py-2.5 md:flex-row md:items-center md:justify-between">
           <div className="flex min-w-0 items-center gap-2.5">
@@ -892,7 +876,9 @@ export default function LeadsPage() {
               <button
                 key={view.id}
                 type="button"
-                onClick={() => setActiveView(view.id)}
+                onClick={() => {
+                  setActiveView(view.id);
+                }}
                 className={`inline-flex min-h-10 shrink-0 items-center rounded-xl border px-3.5 py-2 text-sm font-bold tracking-tight transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-1 ${activeView === view.id
                   ? "border-[var(--color-brand)] bg-[var(--color-brand)] text-white shadow-md shadow-[var(--color-brand)]/10"
                   : "border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-primary)]"
@@ -1025,14 +1011,14 @@ export default function LeadsPage() {
                   </span>
                   <h3 className="mt-3 text-base font-bold text-[var(--color-text-primary)]">
                     {activeView === "follow_up"
-                      ? "Không còn lịch follow-up cần xử lý hôm nay"
+                      ? "Chưa có lịch follow-up đang mở"
                       : activeFilterCount > 0
                       ? "Không có khách hàng phù hợp"
                       : "Không có lead trong nhóm này"}
                   </h3>
                   <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
                     {activeView === "follow_up"
-                      ? "Các lịch tương lai sẽ xuất hiện khi đến ngày hẹn; lịch đã hoàn tất được tự động loại khỏi hàng đợi."
+                      ? "Hãy chọn phạm vi khác hoặc đặt lịch hẹn mới; lịch đã hoàn tất được tự động loại khỏi hàng đợi."
                       : activeFilterCount > 0
                       ? "Hãy điều chỉnh hoặc xóa các điều kiện lọc đang áp dụng."
                       : "Chuyển hàng chờ để xem nhóm lead khác."}

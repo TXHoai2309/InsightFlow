@@ -41,7 +41,7 @@ interface LeadDetailPanelProps {
   nowMs: number;
   workbenchView: LeadWorkbenchView;
   onClose: () => void;
-  onAfterResult?: (resultType?: Lead["result_type"]) => void;
+  onAfterResult?: (updatedLead: Lead, resultType?: Lead["result_type"]) => void;
   onAfterSkip?: (lead: Lead) => void;
   onAfterRestore?: (lead: Lead) => void;
   onStartedAction?: (lead: Lead, preventJump?: boolean) => void;
@@ -89,7 +89,12 @@ const RESULT_OPTIONS: Array<{
 
 function toDateInputValue(dateIso?: string) {
   if (!dateIso) return "";
-  return new Date(dateIso).toISOString().slice(0, 10);
+  const date = new Date(dateIso);
+  if (Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function toTimeInputValue(dateIso?: string) {
@@ -479,13 +484,26 @@ export function LeadDetailPanel({
       return;
     }
 
+    const selectedFollowUpDate = selectedResult === "follow_up"
+      ? new Date(`${followUpDate}T${followUpTime}:00`)
+      : null;
+    if (
+      selectedResult === "follow_up" &&
+      (!selectedFollowUpDate ||
+        Number.isNaN(selectedFollowUpDate.getTime()) ||
+        selectedFollowUpDate.getTime() <= Date.now())
+    ) {
+      setSaveError("Thời điểm follow-up phải ở trong tương lai.");
+      return;
+    }
+
     try {
       setIsSaving(true);
       setSaveError("");
       const nowIso = new Date().toISOString();
       const followUpAt =
-        selectedResult === "follow_up"
-          ? new Date(`${followUpDate}T${followUpTime}:00`).toISOString()
+        selectedResult === "follow_up" && selectedFollowUpDate
+          ? selectedFollowUpDate.toISOString()
           : undefined;
       const nextNote = [
         lead.notes,
@@ -514,15 +532,27 @@ export function LeadDetailPanel({
         profile,
       );
 
+      const updatedLead = { ...lead, ...resultData };
       setIsSaveSuccess(true);
-      showToast("Ghi nhận kết quả thành công!", "success");
+      showToast(
+        selectedResult === "follow_up" && followUpAt
+          ? `Đã hẹn follow-up lúc ${new Date(followUpAt).toLocaleString("vi-VN", {
+              hour: "2-digit",
+              minute: "2-digit",
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+            })}.`
+          : "Ghi nhận kết quả thành công!",
+        "success",
+      );
+      onAfterResult?.(updatedLead, selectedResult);
       setTimeout(() => {
         setIsSaveSuccess(false);
         setSelectedResult(null);
         setNote("");
         setFollowUpDate("");
         setFollowUpTime("");
-        onAfterResult?.(selectedResult);
       }, 2000);
     } catch (error: any) {
       console.error(error);
@@ -868,7 +898,8 @@ export function LeadDetailPanel({
                               setSelectedResult(option.id);
                               setIsResultDropdownOpen(false);
                               if (option.id === "follow_up" && !followUpDate) {
-                                const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+                                const tomorrow = new Date();
+                                tomorrow.setDate(tomorrow.getDate() + 1);
                                 setFollowUpDate(toDateInputValue(tomorrow.toISOString()));
                                 setFollowUpTime(toTimeInputValue(tomorrow.toISOString()) || "09:00");
                               }
@@ -901,7 +932,7 @@ export function LeadDetailPanel({
                     <div data-tour="lead-detail-followup" className="mt-3 grid grid-cols-2 gap-2">
                       <div>
                         <label className="mb-1 block text-xs font-semibold text-[var(--color-text-secondary)]">Ngày follow-up</label>
-                        <input type="date" value={followUpDate} onChange={(event) => setFollowUpDate(event.target.value)} className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus-visible:border-[var(--color-brand)] focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/20" />
+                        <input type="date" min={toDateInputValue(new Date().toISOString())} value={followUpDate} onChange={(event) => setFollowUpDate(event.target.value)} className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus-visible:border-[var(--color-brand)] focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/20" />
                       </div>
                       <div>
                         <label className="mb-1 block text-xs font-semibold text-[var(--color-text-secondary)]">Giờ follow-up</label>
