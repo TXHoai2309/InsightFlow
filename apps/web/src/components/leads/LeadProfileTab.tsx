@@ -86,11 +86,11 @@ export function LeadProfileTab({
   }>;
 
   const toneClasses = {
-    success: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-300",
-    info: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/40 dark:bg-blue-950/20 dark:text-blue-300",
+    success: "border-[var(--color-success)]/30 bg-[var(--color-success-subtle)] text-[var(--color-success)]",
+    info: "border-[var(--color-info)]/30 bg-[var(--color-info-subtle)] text-[var(--color-info)]",
     brand: "border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] text-[var(--color-brand)]",
-    danger: "border-red-200 bg-red-50 text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-300",
-    warning: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300",
+    danger: "border-[var(--color-error)]/30 bg-[var(--color-error-subtle)] text-[var(--color-error)]",
+    warning: "border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] text-[var(--color-warning)]",
   };
 
   const handleCopySource = async () => {
@@ -107,7 +107,7 @@ export function LeadProfileTab({
 
   return (
     <div className="space-y-3">
-      <section className="grid gap-3 rounded-lg border border-[var(--color-border)] p-3 md:grid-cols-[1fr_0.8fr_1fr_auto] md:items-center">
+      <section className="grid gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-3 md:grid-cols-[1fr_0.8fr_1fr_auto] md:items-center">
         <div className="flex min-w-0 items-center gap-3">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-[var(--color-brand)]">
             <Globe2 size={22} aria-hidden="true" />
@@ -122,48 +122,49 @@ export function LeadProfileTab({
           <p className="text-xs text-[var(--color-text-secondary)]">Điểm ưu tiên</p>
         </div>
         <div className="flex min-w-0 items-center gap-3 border-[var(--color-border)] md:border-l md:pl-4">
-          <AlarmClock className={meta.isOverdue ? "text-red-500" : "text-[var(--color-warning)]"} size={24} aria-hidden="true" />
+          <AlarmClock className={meta.isOverdue ? "text-[var(--color-error)]" : "text-[var(--color-warning)]"} size={24} aria-hidden="true" />
           <div className="min-w-0">
-            <p className={`truncate text-sm font-bold ${meta.isOverdue ? "text-red-600" : "text-[var(--color-text-primary)]"}`}>{slaLabel}</p>
+            <p className={`truncate text-sm font-bold ${meta.isOverdue ? "text-[var(--color-error)]" : "text-[var(--color-text-primary)]"}`}>{slaLabel}</p>
             <p className="text-xs text-[var(--color-text-secondary)]">SLA xử lý</p>
           </div>
         </div>
-        <button type="button" onClick={onOpenSource} disabled={!canOpenSource} className="inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--color-brand-border)] px-3 py-2 text-sm font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-brand-subtle)] disabled:cursor-not-allowed disabled:opacity-45">
+        <button type="button" onClick={onOpenSource} disabled={!canOpenSource} className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-bg-surface)] px-3 text-sm font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-brand-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] disabled:cursor-not-allowed disabled:opacity-45">
           Mở nguồn
           <ExternalLink size={16} aria-hidden="true" />
         </button>
       </section>
 
       <div className="grid gap-3 lg:grid-cols-2">
-        <section className="rounded-lg border border-[var(--color-border)] p-3">
-          <h3 className="flex items-center gap-2 text-sm font-bold text-[var(--color-text-primary)]">
-            <UserRound size={18} className="text-[var(--color-brand)]" aria-hidden="true" />
-            Thông tin cơ bản
-          </h3>
-          <dl className="mt-3 space-y-2.5">
-            <InfoRow label="Tên hiển thị">{lead.author || "Khách hàng"}</InfoRow>
-            <InfoRow label="Nền tảng">{platformLabel}</InfoRow>
-            <InfoRow label="Liên hệ">{contactValue}</InfoRow>
-            <InfoRow label="Điểm ưu tiên"><span className="text-[var(--color-brand)]">{meta.priorityScore}/100</span></InfoRow>
-          </dl>
+        <section className="rounded-xl border border-[var(--color-border)] lg:col-span-2">
+          <div className="grid lg:grid-cols-2">
+            <div className="p-4 lg:border-r lg:border-[var(--color-border)]">
+              <h3 className="flex items-center gap-2 text-sm font-bold text-[var(--color-text-primary)]">
+                <UserRound size={18} className="text-[var(--color-brand)]" aria-hidden="true" />
+                Thông tin cơ bản
+              </h3>
+              <dl className="mt-3 space-y-2.5">
+                <InfoRow label="Tên hiển thị">{lead.author || "Khách hàng"}</InfoRow>
+                <InfoRow label="Nền tảng">{platformLabel}</InfoRow>
+                <InfoRow label="Liên hệ">{contactValue}</InfoRow>
+              </dl>
+            </div>
+            <div className="border-t border-[var(--color-border)] p-4 lg:border-t-0">
+              <h3 className="flex items-center gap-2 text-sm font-bold text-[var(--color-text-primary)]">
+                <ClipboardList size={18} className="text-[var(--color-brand)]" aria-hidden="true" />
+                Thông tin xử lý
+              </h3>
+              <dl className="mt-3 space-y-2.5">
+                <InfoRow label="Người phụ trách">{ownership.ownerName}</InfoRow>
+                <InfoRow label="Trạng thái">{getLeadStatusLabel(lead)}</InfoRow>
+                <InfoRow label="Mức ưu tiên"><span className={`uppercase ${lead.intent === "hot" ? "text-[var(--color-error)]" : lead.intent === "warm" ? "text-[var(--color-warning)]" : "text-[var(--color-text-secondary)]"}`}>{lead.intent}</span></InfoRow>
+              </dl>
+            </div>
+          </div>
         </section>
 
-        <section className="rounded-lg border border-[var(--color-border)] p-3">
+        <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-3">
           <h3 className="flex items-center gap-2 text-sm font-bold text-[var(--color-text-primary)]">
-            <ClipboardList size={18} className="text-[var(--color-brand)]" aria-hidden="true" />
-            Thông tin xử lý
-          </h3>
-          <dl className="mt-3 space-y-2.5">
-            <InfoRow label="Người phụ trách">{ownership.ownerName}</InfoRow>
-            <InfoRow label="Trạng thái">{getLeadStatusLabel(lead)}</InfoRow>
-            <InfoRow label="Mức ưu tiên"><span className="uppercase text-red-600">{lead.intent}</span></InfoRow>
-            <InfoRow label="Nghiệp vụ"><span className="text-[var(--color-success)]">Tiềm năng</span></InfoRow>
-          </dl>
-        </section>
-
-        <section className="rounded-lg border border-amber-200 bg-amber-50/40 p-3 dark:border-amber-900/40 dark:bg-amber-950/10">
-          <h3 className="flex items-center gap-2 text-sm font-bold text-amber-700 dark:text-amber-300">
-            <Flag size={18} aria-hidden="true" />
+            <Flag size={18} className="text-[var(--color-warning)]" aria-hidden="true" />
             Tín hiệu quan trọng
           </h3>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -194,7 +195,7 @@ export function LeadProfileTab({
         </section>
       </div>
 
-      <section className="flex flex-col gap-3 rounded-lg border border-[var(--color-border)] p-3 md:flex-row md:items-center">
+      <section className="flex flex-col gap-3 rounded-lg border-t border-[var(--color-border)] px-1 pt-3 md:flex-row md:items-center">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <Link2 size={18} className="shrink-0 text-[var(--color-brand)]" aria-hidden="true" />
           <div className="min-w-0">
@@ -203,8 +204,7 @@ export function LeadProfileTab({
           </div>
         </div>
         <div className="flex shrink-0 gap-2">
-          <button type="button" onClick={handleCopySource} disabled={!sourceHref} className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm font-bold text-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)] disabled:cursor-not-allowed disabled:opacity-45"><Copy size={16} aria-hidden="true" />Sao chép link</button>
-          <button type="button" onClick={onOpenSource} disabled={!canOpenSource} className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-brand-border)] px-3 py-2 text-sm font-bold text-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)] disabled:cursor-not-allowed disabled:opacity-45"><ExternalLink size={16} aria-hidden="true" />Mở nguồn</button>
+          <button type="button" onClick={handleCopySource} disabled={!sourceHref} className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-[var(--color-border)] px-3 text-sm font-bold text-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] disabled:cursor-not-allowed disabled:opacity-45"><Copy size={16} aria-hidden="true" />Sao chép link</button>
         </div>
       </section>
     </div>

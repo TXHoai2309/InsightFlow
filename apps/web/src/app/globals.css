@@ -137,6 +137,72 @@
   --color-platform-news:        #C4ACFF;
 }
 
+/* Lead workbench uses a denser, neutral palette so content and state colors
+   remain easy to scan. These overrides are intentionally scoped to /leads. */
+.lead-workbench-theme {
+  --color-bg-primary:        #f5f6f8;
+  --color-bg-surface:        #ffffff;
+  --color-bg-surface-raised: #f7f8fa;
+  --color-bg-surface-high:   #edf0f4;
+  --color-bg-overlay:        #e7eaf0;
+
+  --color-border:            #e0e4ea;
+  --color-border-strong:     #c6ccd5;
+
+  --color-text-primary:      #172033;
+  --color-text-secondary:    #526071;
+  --color-text-muted:        #758196;
+  --color-text-disabled:     #a9b1bd;
+
+  --color-brand:             #6558e8;
+  --color-brand-hover:       #5548d6;
+  --color-brand-subtle:      #f1efff;
+  --color-brand-border:      #d2cdfb;
+
+  --color-success:           #18794e;
+  --color-success-subtle:    #eaf7f0;
+  --color-warning:           #9a6700;
+  --color-warning-subtle:    #fff7dc;
+  --color-error:             #c9362f;
+  --color-error-subtle:      #fff0ef;
+  --color-info:              #2563b8;
+  --color-info-subtle:       #edf5ff;
+
+  --shadow-card:             0 1px 2px rgba(23, 32, 51, 0.05);
+  --shadow-card-hover:       0 6px 18px rgba(23, 32, 51, 0.08);
+  --shadow-dropdown:         0 10px 30px rgba(23, 32, 51, 0.12);
+}
+
+.dark .lead-workbench-theme {
+  --color-bg-primary:        #111318;
+  --color-bg-surface:        #181b22;
+  --color-bg-surface-raised: #20242d;
+  --color-bg-surface-high:   #292e39;
+  --color-bg-overlay:        #303642;
+
+  --color-border:            #343a46;
+  --color-border-strong:     #4a5261;
+
+  --color-text-primary:      #f3f5f7;
+  --color-text-secondary:    #c0c6d0;
+  --color-text-muted:        #919aaa;
+  --color-text-disabled:     #687180;
+
+  --color-brand:             #9d94ff;
+  --color-brand-hover:       #b1aaff;
+  --color-brand-subtle:      rgba(101, 88, 232, 0.18);
+  --color-brand-border:      rgba(157, 148, 255, 0.42);
+
+  --color-success:           #5bd19a;
+  --color-success-subtle:    rgba(91, 209, 154, 0.14);
+  --color-warning:           #f0be53;
+  --color-warning-subtle:    rgba(240, 190, 83, 0.14);
+  --color-error:             #ff8e88;
+  --color-error-subtle:      rgba(255, 142, 136, 0.14);
+  --color-info:              #77adff;
+  --color-info-subtle:       rgba(119, 173, 255, 0.14);
+}
+
 /* Glow Layers for Dark Mode */
 .dark body::before,
 .dark body::after {
