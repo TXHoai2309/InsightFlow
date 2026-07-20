@@ -35,7 +35,7 @@ function formatBrandName(brand: string) {
     .join(" ");
 }
 
-function createDefaultContactTemplate(customerName: string, brand: string) {
+export function createDefaultContactTemplate(customerName: string, brand: string) {
   return `Xin chào ${customerName || "Anh/Chị"}, ${formatBrandName(brand)} thành thật xin lỗi về trải nghiệm chưa tốt của Anh/Chị. Anh/Chị vui lòng nhắn tin trực tiếp hoặc để lại thông tin liên hệ để chúng tôi kiểm tra và hỗ trợ giải quyết vấn đề sớm nhất. Cảm ơn Anh/Chị đã phản hồi.`;
 }
 
@@ -56,38 +56,6 @@ export function AlertContactWorkflow({ alert, getResolverName }: AlertContactWor
 
   const showFeedback = (message: string, tone: "success" | "error" = "success") => {
     setFeedback({ message, tone });
-  };
-
-  const handleOpenCustomerContact = async () => {
-    const contactUrl = [alert.social_profile_url, alert.url, alert.post_url]
-      .find((url) => Boolean(url && url !== "#"));
-    if (!contactUrl) {
-      showFeedback("Cảnh báo này chưa có liên kết để liên hệ khách hàng.", "error");
-      return;
-    }
-
-    const template = createDefaultContactTemplate(alert.author || "Anh/Chị", alert.brand);
-    const openedAt = new Date().toISOString();
-    window.open(contactUrl, "_blank", "noopener,noreferrer");
-
-    try {
-      await navigator.clipboard.writeText(template);
-    } catch (error) {
-      console.warn("Could not copy the default contact template:", error);
-    }
-
-    try {
-      await updateAlertStatus(alert.id, "resolving", profile, {
-        note: "Đã mở liên kết liên hệ khách hàng và tạo mẫu phản hồi xin lỗi mặc định.",
-        customer_contact_opened_at: openedAt,
-        customer_contact_opened_by: profile?.email || profile?.uid || "unknown",
-        customer_contact_template: template,
-      }, alert.brand);
-      showFeedback("Đã sao chép mẫu xin lỗi và mở liên kết liên hệ.");
-    } catch (error) {
-      console.error(error);
-      showFeedback("Đã mở liên kết nhưng chưa lưu được dấu vết liên hệ.", "error");
-    }
   };
 
   const handleContactEvidenceImage = (file?: File) => {
@@ -166,7 +134,7 @@ export function AlertContactWorkflow({ alert, getResolverName }: AlertContactWor
   );
 
   return (
-    <section className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl shadow-sm p-5 space-y-4">
+    <section className="space-y-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-3 shadow-sm">
       <div>
         <h3 className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-[var(--color-text-primary)]">
           <span className="material-symbols-outlined text-base text-purple-500">support_agent</span>
@@ -217,18 +185,13 @@ export function AlertContactWorkflow({ alert, getResolverName }: AlertContactWor
         </div>
       )}
 
-      <button type="button" onClick={() => void handleOpenCustomerContact()} disabled={![alert.social_profile_url, alert.url, alert.post_url].some((url) => Boolean(url && url !== "#"))} className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] px-3 py-2.5 text-xs font-bold text-[var(--color-brand)] disabled:cursor-not-allowed disabled:opacity-40">
-        <span className="material-symbols-outlined text-base">open_in_new</span>
-        Xem trên nền tảng và sao chép mẫu liên hệ
-      </button>
-
       <div className={`flex items-start gap-2 rounded-xl border p-3 text-[11px] font-bold ${
         alert.customer_contact_opened_at
           ? "border-green-200 bg-green-50 text-green-700"
           : "border-amber-200 bg-amber-50 text-amber-700"
       }`}>
         <span className="material-symbols-outlined text-base">{alert.customer_contact_opened_at ? "check_circle" : "info"}</span>
-        <span>{alert.customer_contact_opened_at ? "Đã mở nguồn để liên hệ. Hãy bổ sung ghi chú và ảnh minh chứng bên dưới." : "Hãy mở nền tảng trước khi bổ sung minh chứng."}</span>
+        <span>{alert.customer_contact_opened_at ? "Đã mở nguồn để liên hệ. Hãy bổ sung ghi chú và ảnh minh chứng bên dưới." : "Sử dụng nút Mở nguồn ở đầu panel trước khi bổ sung minh chứng."}</span>
       </div>
 
       {alert.customer_contact_opened_at && (
