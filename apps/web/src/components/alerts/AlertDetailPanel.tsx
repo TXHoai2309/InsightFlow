@@ -17,7 +17,8 @@ import { PlatformLogo } from "@/components/platform/PlatformLogo";
 import { getAlertWorkflowStatus } from "@/lib/alertWorkflow";
 import { useAlertStore, type AlertData } from "@/stores/alert.store";
 import { useAuth } from "@/hooks/useAuth";
-import { AlertContactWorkflow } from "./AlertContactWorkflow";
+import { AlertContentContext } from "./AlertContentContext";
+import { AlertContactWorkflow, createDefaultContactTemplate } from "./AlertContactWorkflow";
 import { CustomerInteractionHistoryPanel } from "@/components/customer-interactions/CustomerInteractionHistoryPanel";
 
 export type AlertDetailPanelTab = "action" | "profile" | "interactions" | "history";
@@ -98,6 +99,7 @@ export function AlertDetailPanel({
   const workflowStatus = getAlertWorkflowStatus(alert);
   const [optimisticClaimId, setOptimisticClaimId] = useState<string | null>(null);
   const [isRecordingResult, setIsRecordingResult] = useState(false);
+  const [isOpeningContact, setIsOpeningContact] = useState(false);
   const [previewHistoryImage, setPreviewHistoryImage] = useState<string | null>(null);
   const claimedOptimistically = optimisticClaimId === alert.id;
   const normalizedOwner = String(alert.being_resolved_by || "").trim().toLowerCase();
@@ -108,6 +110,9 @@ export function AlertDetailPanel({
   const ownerName = getResolverName(effectiveOwner) || "Chưa có người phụ trách";
   const canClaim = canUpdate && !claimedOptimistically && workflowStatus === "pending" && !alert.being_resolved_by;
   const canRecord = canUpdate && isMine && (effectiveWorkflowStatus === "processing" || effectiveWorkflowStatus === "contact_failed");
+  const contactUrl = [alert.social_profile_url, alert.url, alert.post_url]
+    .find((url) => Boolean(url && url !== "#"));
+  const canOpenContact = canRecord && !alert.customer_contact_opened_at;
   const hasRequiredResultEvidence = Boolean(
     alert.customer_contact_opened_at &&
     alert.customer_contact_note?.trim() &&
@@ -176,6 +181,40 @@ export function AlertDetailPanel({
       showToast("Không thể giao việc cho nhân viên.", "error");
     } finally {
       setAssigningUid(null);
+    }
+  };
+
+  const handleOpenCustomerContact = async () => {
+    if (!canOpenContact || isOpeningContact) return;
+    if (!contactUrl) {
+      showToast("Cảnh báo này chưa có liên kết để liên hệ khách hàng.", "error");
+      return;
+    }
+
+    const template = createDefaultContactTemplate(alert.author || "Anh/Chị", alert.brand);
+    const openedAt = new Date().toISOString();
+    window.open(contactUrl, "_blank", "noopener,noreferrer");
+
+    try {
+      await navigator.clipboard.writeText(template);
+    } catch (error) {
+      console.warn("Could not copy the default contact template:", error);
+    }
+
+    setIsOpeningContact(true);
+    try {
+      await useAlertStore.getState().updateAlertStatus(alert.id, "resolving", profile, {
+        note: "Đã mở liên kết liên hệ khách hàng và tạo mẫu phản hồi xin lỗi mặc định.",
+        customer_contact_opened_at: openedAt,
+        customer_contact_opened_by: profile?.email || profile?.uid || "unknown",
+        customer_contact_template: template,
+      }, alert.brand);
+      showToast("Đã sao chép mẫu xin lỗi và mở liên kết liên hệ.");
+    } catch (error) {
+      console.error(error);
+      showToast("Đã mở liên kết nhưng chưa lưu được dấu vết liên hệ.", "error");
+    } finally {
+      setIsOpeningContact(false);
     }
   };
   const historyEntries = useMemo<AlertHistoryViewEntry[]>(() => {
@@ -279,6 +318,7 @@ export function AlertDetailPanel({
   useEffect(() => {
     setOptimisticClaimId(null);
     setIsRecordingResult(false);
+    setIsOpeningContact(false);
     setPreviewHistoryImage(null);
   }, [alert.id]);
 
@@ -315,156 +355,164 @@ export function AlertDetailPanel({
     { id: "interactions", label: "Tương tác" },
     { id: "history", label: "Lịch sử" },
   ];
+  const workflowSteps = [
+    { label: "Đã chọn", complete: true, active: false },
+    { label: "Nhận xử lý", complete: Boolean(effectiveOwner), active: !effectiveOwner },
+    {
+      label: "Mở nguồn",
+      complete: Boolean(alert.customer_contact_opened_at) || effectiveWorkflowStatus === "resolved",
+      active: Boolean(effectiveOwner) && !alert.customer_contact_opened_at && effectiveWorkflowStatus !== "resolved",
+    },
+    {
+      label: "Lưu kết quả",
+      complete: effectiveWorkflowStatus === "resolved",
+      active: Boolean(alert.customer_contact_opened_at) && effectiveWorkflowStatus !== "resolved",
+    },
+  ];
 
   return (
-    <aside data-tour="alert-detail-panel" className="min-w-0 self-start rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm">
-      <header className="border-b border-[var(--color-border)] p-[2%]">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-sm font-black text-[var(--color-brand)]">{(alert.author || "CB").slice(0, 2).toUpperCase()}</span>
+    <aside data-tour="alert-detail-panel" className="flex min-w-0 shrink-0 flex-col self-start rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm min-[1100px]:sticky min-[1100px]:top-3 min-[1100px]:max-h-[calc(100vh-88px)]">
+      <header className="shrink-0 border-b border-[var(--color-border)] px-3 pb-0 pt-2.5">
+        <div className="flex items-start justify-between gap-2.5">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-xs font-black text-[var(--color-brand)]">{(alert.author || "CB").slice(0, 2).toUpperCase()}</span>
             <div className="min-w-0">
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <h2 className="truncate text-base font-black text-[var(--color-text-primary)]">{alert.author || "Người dùng ẩn danh"}</h2>
+              <div className="flex min-w-0 items-center gap-2">
+                <h2 className="truncate text-sm font-black text-[var(--color-text-primary)]">{alert.author || "Người dùng ẩn danh"}</h2>
                 <span className="rounded-md border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-black uppercase text-red-700">{alert.severity || "unknown"}</span>
               </div>
-              <div className="mt-1 flex items-center gap-1.5 text-xs text-[var(--color-text-secondary)]">
+              <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-[var(--color-text-secondary)]">
                 <PlatformLogo platform={alert.source} size="sm" />
-                <span>{alert.source || "Nền tảng khác"}</span><span>·</span><span>{claimedOptimistically ? "Đang xử lý" : getStatusLabel(alert)}</span>
+                <span className="truncate">{alert.source || "Nền tảng khác"} · {claimedOptimistically ? "Đang xử lý" : getStatusLabel(alert)} · {ownerName}</span>
               </div>
             </div>
           </div>
-          <button type="button" onClick={onClose} className="rounded-full p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-raised)]" title="Thu gọn panel" aria-label="Thu gọn panel">
-            <PanelRightClose size={18} aria-hidden="true" />
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {canClaim ? (
+              role === "brand_manager" ? (
+                <div className="flex items-center gap-2" ref={dropdownRef}>
+                  <div className="relative">
+                    <button type="button" onClick={() => setIsAssignDropdownOpen(!isAssignDropdownOpen)} disabled={!canUpdate || loadingStaff} className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 text-[13px] font-semibold text-white shadow-sm hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50">
+                      <UserPlus size={16} />
+                      <span className="hidden min-[1350px]:inline">Giao việc cho nhân viên</span>
+                      <ChevronDown size={14} className={`transition-transform ${isAssignDropdownOpen ? "rotate-180" : ""}`} />
+                    </button>
+                    {isAssignDropdownOpen && (
+                      <div className="absolute right-0 top-full z-50 mt-1 max-h-60 w-64 overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-1 shadow-xl">
+                        {loadingStaff ? (
+                          <div className="p-2 text-center text-sm text-[var(--color-text-secondary)]">Đang tải...</div>
+                        ) : staffList.length === 0 ? (
+                          <div className="p-2 text-center text-sm text-[var(--color-text-secondary)]">Không có nhân viên xử lý</div>
+                        ) : (
+                          staffList.map((staff) => (
+                            <button key={staff.uid} type="button" onClick={() => void handleAssignTo(staff.uid)} disabled={assigningUid !== null} className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-[var(--color-bg-surface-raised)] disabled:opacity-50">
+                              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-[10px] font-bold text-[var(--color-brand)]">{staff.displayName?.slice(0, 2).toUpperCase() || "NV"}</span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-xs font-bold text-[var(--color-text-primary)]">{staff.displayName || "Nhân viên"}</span>
+                                <span className="block truncate text-[10px] text-[var(--color-text-secondary)]">{staff.email}</span>
+                              </span>
+                              {assigningUid === staff.uid && <span className="text-[10px] text-[var(--color-brand)]">Đang giao...</span>}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <button type="button" onClick={() => void handlePrimaryAction()} disabled={!canUpdate || assigningUid !== null} title="Tự nhận xử lý" className="inline-flex min-h-9 items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 text-[13px] font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)] disabled:opacity-50">
+                    <span className="hidden sm:inline">Nhận xử lý</span>
+                  </button>
+                </div>
+              ) : (
+                <button type="button" onClick={() => void handlePrimaryAction()} disabled={!canUpdate} className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 text-[13px] font-semibold text-white shadow-sm hover:bg-[var(--color-brand-hover)] disabled:opacity-50">
+                  <UserPlus size={16} />
+                  <span className="hidden sm:inline">Nhận xử lý</span>
+                </button>
+              )
+            ) : canOpenContact ? (
+              <button type="button" onClick={() => void handleOpenCustomerContact()} disabled={!contactUrl || isOpeningContact} className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 text-[13px] font-semibold text-white shadow-sm hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50" title={!contactUrl ? "Cảnh báo chưa có liên kết nguồn" : undefined}>
+                <ExternalLink size={16} />
+                <span className="hidden sm:inline">{isOpeningContact ? "Đang mở..." : "Mở nguồn"}</span>
+              </button>
+            ) : canRecord ? (
+              <button type="button" onClick={() => void handlePrimaryAction()} disabled={!hasRequiredResultEvidence || isRecordingResult} title={!hasRequiredResultEvidence ? "Cần có ghi chú, ảnh minh chứng và kết quả phản hồi của khách hàng" : undefined} className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 text-[13px] font-semibold text-white shadow-sm hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50">
+                <CheckCircle2 size={16} />
+                <span className="hidden sm:inline">{isRecordingResult ? "Đang ghi nhận..." : "Ghi nhận kết quả"}</span>
+              </button>
+            ) : null}
+            <div className="mx-1 h-6 w-px bg-[var(--color-border)]" />
+            <button type="button" onClick={onClose} className="rounded-full p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-raised)]" title="Thu gọn panel" aria-label="Thu gọn panel">
+              <PanelRightClose size={18} aria-hidden="true" />
+            </button>
+          </div>
         </div>
-        <div className="mt-3 grid grid-cols-4 gap-1">
+
+        <ol aria-label="Tiến trình xử lý cảnh báo" className="mt-2 grid grid-cols-4 gap-1 rounded-lg bg-[var(--color-bg-surface-raised)] p-1.5">
+          {workflowSteps.map((step, index) => (
+            <li key={step.label} className="flex min-w-0 items-center">
+              <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-black ${step.complete ? "bg-[var(--color-success)] text-white" : step.active ? "bg-[var(--color-brand)] text-white ring-2 ring-[var(--color-brand)]/20" : "bg-[var(--color-border)] text-[var(--color-text-muted)]"}`}>
+                  {step.complete ? <span className="material-symbols-outlined text-xs">check</span> : index + 1}
+                </span>
+                <span className={`truncate text-[11px] font-bold ${step.active ? "text-[var(--color-brand)]" : step.complete ? "text-[var(--color-text-primary)]" : "text-[var(--color-text-muted)]"}`}>{step.label}</span>
+              </div>
+              {index < workflowSteps.length - 1 && <span className="mx-1 h-px w-3 shrink-0 bg-[var(--color-border)]" />}
+            </li>
+          ))}
+        </ol>
+
+        <div className="mt-1.5 flex gap-4 overflow-x-auto" role="tablist" aria-label="Chi tiết cảnh báo">
           {tabs.map((tab) => (
-            <button key={tab.id} type="button" onClick={() => onTabChange(tab.id)} className={`w-full rounded-lg px-2 py-1.5 text-xs font-semibold transition ${activeTab === tab.id ? "bg-[var(--color-brand-subtle)] text-[var(--color-brand)]" : "text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)]"}`}>{tab.label}</button>
+            <button key={tab.id} type="button" onClick={() => onTabChange(tab.id)} role="tab" aria-selected={activeTab === tab.id} className={`relative min-h-8 shrink-0 border-b-2 px-1 text-xs font-semibold transition ${activeTab === tab.id ? "border-[var(--color-brand)] text-[var(--color-brand)]" : "border-transparent text-[var(--color-text-secondary)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-text-primary)]"}`}>{tab.label}</button>
           ))}
         </div>
       </header>
 
-      <div className="p-[2%]">
+      <div className="min-h-0 flex-1 overflow-y-auto p-2.5 [scrollbar-gutter:stable]">
         {activeTab === "action" && (
-          <div className="space-y-3">
-            <div className={canClaim || canRecord ? "grid gap-3 md:grid-cols-[0.96fr_1.04fr]" : "block"}>
-              <section className="rounded-lg border border-[var(--color-border)] p-3">
-                <p className="text-xs font-bold uppercase text-[var(--color-text-muted)]">Người phụ trách</p>
-                <div className="mt-2 flex items-center justify-between gap-3">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-sm font-black text-[var(--color-brand)]">{effectiveOwner ? ownerName.slice(0, 2).toUpperCase() : "--"}</span>
-                    <div className="min-w-0"><p className="truncate text-sm font-bold text-[var(--color-text-primary)]">{ownerName}</p><p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">Đội xử lý khủng hoảng</p></div>
+          <div className="grid items-start gap-2 min-[1600px]:grid-cols-[minmax(0,1fr)_340px] min-[1850px]:grid-cols-[minmax(0,1fr)_360px]">
+            <div className="min-w-0 space-y-2">
+              <section className="rounded-xl border border-amber-200 bg-amber-50/70 p-3 dark:border-amber-900/40 dark:bg-amber-950/20">
+                <div className="flex items-start gap-2.5">
+                  <ShieldAlert className="mt-0.5 shrink-0 text-amber-600" size={18} />
+                  <div>
+                    <h3 className="text-sm font-black text-[var(--color-text-primary)]">Lý do ưu tiên</h3>
+                    <p className="mt-1 text-xs leading-5 text-[var(--color-text-secondary)]">{getPriorityReason(alert)}</p>
                   </div>
-                  <span className="shrink-0 rounded-full border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-2.5 py-1 text-xs font-bold text-[var(--color-text-secondary)]">{isMine ? "Của tôi" : workflowStatus === "pending" ? "Chưa phân công" : getStatusLabel(alert)}</span>
+                </div>
+              </section>
+              <AlertContentContext alert={alert} />
+            </div>
+
+            <aside className="space-y-2 min-[1600px]:sticky min-[1600px]:top-0" aria-label="Công cụ xử lý cảnh báo">
+              <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-3 shadow-sm">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-text-muted)]">Người phụ trách</p>
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-xs font-black text-[var(--color-brand)]">{effectiveOwner ? ownerName.slice(0, 2).toUpperCase() : "--"}</span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold text-[var(--color-text-primary)]">{ownerName}</p>
+                      <p className="mt-0.5 text-[11px] text-[var(--color-text-secondary)]">Đội xử lý khủng hoảng</p>
+                    </div>
+                  </div>
+                  <span className="shrink-0 rounded-full border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-2 py-1 text-[10px] font-bold text-[var(--color-text-secondary)]">{isMine ? "Của tôi" : workflowStatus === "pending" ? "Chưa phân công" : getStatusLabel(alert)}</span>
                 </div>
               </section>
 
-              {(canClaim || canRecord) && (
-                <section className="flex flex-col justify-between rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)]/20 p-3">
-                  <div className="flex items-start gap-2.5"><ShieldAlert className="mt-0.5 shrink-0 text-[var(--color-brand)]" size={19} /><div><p className="text-sm font-bold text-[var(--color-brand)]">Hành động chính</p><p className="mt-0.5 text-xs leading-5 text-[var(--color-text-secondary)]">{canClaim ? "Nhận cảnh báo để bắt đầu xử lý." : hasRequiredResultEvidence ? "Đã đủ minh chứng và kết quả phản hồi để hoàn tất." : "Cần lưu minh chứng liên hệ và kết quả phản hồi trước."}</p></div></div>
-                  {canClaim ? (
-                    <div className="mt-3 flex w-full flex-row gap-2" ref={dropdownRef}>
-                      {role === "brand_manager" ? (
-                        <>
-                          <div className="relative flex-1">
-                            <button
-                              type="button"
-                              onClick={() => setIsAssignDropdownOpen(!isAssignDropdownOpen)}
-                              disabled={!canUpdate || loadingStaff}
-                              className="inline-flex w-full items-center justify-between rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold text-white hover:bg-[var(--color-brand-hover)] focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
-                            >
-                              <div className="flex items-center gap-2">
-                                <UserPlus size={18} />
-                                Giao việc cho nhân viên
-                              </div>
-                              <ChevronDown size={18} className={`transition-transform duration-200 ${isAssignDropdownOpen ? "rotate-180" : ""}`} />
-                            </button>
-
-                            {isAssignDropdownOpen && (
-                              <div className="absolute left-0 top-full z-10 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-1 shadow-lg">
-                                {loadingStaff ? (
-                                  <div className="p-2 text-center text-sm text-[var(--color-text-secondary)]">
-                                    Đang tải...
-                                  </div>
-                                ) : staffList.length === 0 ? (
-                                  <div className="p-2 text-center text-sm text-[var(--color-text-secondary)]">
-                                    Không có nhân viên xử lý
-                                  </div>
-                                ) : (
-                                  staffList.map((staff) => (
-                                    <button
-                                      key={staff.uid}
-                                      type="button"
-                                      onClick={() => void handleAssignTo(staff.uid)}
-                                      disabled={assigningUid !== null}
-                                      className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-semibold hover:bg-[var(--color-bg-surface-raised)] disabled:opacity-50"
-                                    >
-                                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-[10px] font-bold text-[var(--color-brand)]">
-                                        {staff.displayName?.slice(0, 2).toUpperCase() || "NV"}
-                                      </div>
-                                      <div className="flex-1 truncate">
-                                        <p className="truncate text-sm text-[var(--color-text-primary)]">
-                                          {staff.displayName || "Nhân viên"}
-                                        </p>
-                                        <p className="truncate text-[10px] text-[var(--color-text-secondary)]">
-                                          {staff.email}
-                                        </p>
-                                      </div>
-                                      {assigningUid === staff.uid && (
-                                        <span className="shrink-0 text-xs text-[var(--color-brand)]">
-                                          Đang giao...
-                                        </span>
-                                      )}
-                                    </button>
-                                  ))
-                                )}
-                              </div>
-                            )}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => void handlePrimaryAction()}
-                            disabled={!canUpdate || assigningUid !== null}
-                            title="Tự nhận xử lý"
-                            className="inline-flex shrink-0 items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm font-bold text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            Nhận xử lý
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => void handlePrimaryAction()}
-                          disabled={!canUpdate}
-                          className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold text-white hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
-                        >
-                          <UserPlus size={18} />
-                          Nhận xử lý
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    <button type="button" onClick={() => void handlePrimaryAction()} disabled={canRecord && (!hasRequiredResultEvidence || isRecordingResult)} title={canRecord && !hasRequiredResultEvidence ? "Cần có ghi chú, ảnh minh chứng và kết quả phản hồi của khách hàng" : undefined} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-3 py-2 text-sm font-bold text-white hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500">
-                      <CheckCircle2 size={18} />{isRecordingResult ? "Đang ghi nhận..." : "Ghi nhận kết quả"}
-                    </button>
-                  )}
+              {isMine && (effectiveWorkflowStatus === "processing" || effectiveWorkflowStatus === "contact_failed") ? (
+                <AlertContactWorkflow alert={alert} getResolverName={getResolverName} />
+              ) : (
+                <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-3 shadow-sm">
+                  <h3 className="text-sm font-bold text-[var(--color-text-primary)]">Xử lý cảnh báo</h3>
+                  <p className="mt-2 rounded-lg bg-[var(--color-bg-surface-raised)] p-3 text-xs leading-5 text-[var(--color-text-secondary)]">
+                    {effectiveWorkflowStatus === "resolved"
+                      ? "Cảnh báo đã được hoàn tất. Bạn có thể xem lại toàn bộ lịch sử xử lý."
+                      : canClaim
+                        ? "Sử dụng nút Nhận xử lý ở đầu panel để bắt đầu nghiệp vụ."
+                        : "Cảnh báo đang do nhân viên khác phụ trách hoặc nằm ngoài quyền cập nhật của bạn."}
+                  </p>
                 </section>
               )}
-            </div>
-
-            <section className="rounded-lg border border-amber-200 bg-amber-50/70 p-3 dark:border-amber-900/40 dark:bg-amber-950/20">
-              <div className="flex items-start gap-2.5"><ShieldAlert className="mt-0.5 shrink-0 text-amber-600" size={18} /><div><h3 className="text-sm font-black text-[var(--color-text-primary)]">Lý do ưu tiên</h3><p className="mt-1 text-xs leading-5 text-[var(--color-text-secondary)]">{getPriorityReason(alert)}</p></div></div>
-            </section>
-
-            <section className="rounded-lg border border-[var(--color-border)] p-3">
-              <div className="flex items-center gap-2"><MessageSquareText size={17} className="text-[var(--color-brand)]" /><h3 className="text-sm font-black text-[var(--color-text-primary)]">Nội dung cần xử lý</h3></div>
-              <p className="mt-2 whitespace-pre-wrap rounded-lg bg-[var(--color-bg-surface-raised)] p-3 text-sm leading-6 text-[var(--color-text-secondary)]">{alert.text || alert.comment_content || "Không có nội dung hiển thị."}</p>
-              <p className="mt-2 text-[10px] font-medium text-[var(--color-text-muted)]">Phát hiện lúc {formatDate(alert.created_at)}</p>
-            </section>
-
-            {isMine && (effectiveWorkflowStatus === "processing" || effectiveWorkflowStatus === "contact_failed") && (
-              <AlertContactWorkflow alert={alert} getResolverName={getResolverName} />
-            )}
+            </aside>
           </div>
         )}
 
