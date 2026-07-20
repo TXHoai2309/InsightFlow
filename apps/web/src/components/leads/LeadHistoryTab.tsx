@@ -55,8 +55,8 @@ const KIND_ICONS: Record<LeadHistoryKind, typeof Clock3> = {
 };
 
 const ACTOR_STYLES: Record<LeadHistoryActor, string> = {
-  employee: "bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-300",
-  system: "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-300",
+  employee: "bg-[var(--color-brand-subtle)] text-[var(--color-brand)]",
+  system: "bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]",
 };
 
 const FILTERS: Array<{ key: HistoryFilter; label: string }> = [
@@ -110,7 +110,7 @@ function HistoryEventRow({ event }: { event: LeadHistoryEvent }) {
             {event.badge}
           </span>
           {isInferred && (
-            <span className="rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+            <span className="rounded-md border border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] px-2 py-0.5 text-[10px] font-semibold text-[var(--color-warning)]">
               Dữ liệu suy diễn
             </span>
           )}
@@ -158,14 +158,14 @@ export function LeadHistoryTab({ lead, meta, slaLabel }: LeadHistoryTabProps) {
       value: ownerName,
       sub: lead.owner_id ? "Đang phụ trách" : "Chưa có người nhận",
       icon: CircleUserRound,
-      tone: "bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-300",
+      tone: "bg-[var(--color-brand-subtle)] text-[var(--color-brand)]",
     },
     {
       label: "Thao tác gần nhất",
       value: latestEvent?.title || "Chưa có thao tác",
       sub: latest ? `${latest.time} · ${latest.date}` : "Chưa có thời điểm",
       icon: History,
-      tone: "bg-violet-50 text-violet-600 dark:bg-violet-950/30 dark:text-violet-300",
+      tone: "bg-[var(--color-brand-subtle)] text-[var(--color-brand)]",
     },
     {
       label: "Trạng thái hiện tại",
@@ -173,8 +173,8 @@ export function LeadHistoryTab({ lead, meta, slaLabel }: LeadHistoryTabProps) {
       sub: meta.isOverdue ? slaLabel : "Trong quy trình xử lý",
       icon: meta.isOverdue ? TriangleAlert : CheckCircle2,
       tone: meta.isOverdue
-        ? "bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-300"
-        : "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-300",
+        ? "bg-[var(--color-error-subtle)] text-[var(--color-error)]"
+        : "bg-[var(--color-success-subtle)] text-[var(--color-success)]",
     },
   ];
 
@@ -211,7 +211,7 @@ export function LeadHistoryTab({ lead, meta, slaLabel }: LeadHistoryTabProps) {
       </section>
 
       {(isLimitedHistory || errorCode === "TEMPORARY_ERROR") && (
-        <section className="flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2.5 text-xs leading-5 text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200">
+        <section className="flex items-start justify-between gap-3 rounded-lg border border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] px-3 py-2.5 text-xs leading-5 text-[var(--color-warning)]">
           <p>
             {errorCode === "TEMPORARY_ERROR"
               ? "Chưa thể đồng bộ event log. Hệ thống đang hiển thị các mốc có thể suy ra từ Lead hiện tại."
@@ -288,7 +288,7 @@ export function LeadHistoryTab({ lead, meta, slaLabel }: LeadHistoryTabProps) {
             </div>
             <div>
               <dt className="text-[var(--color-text-muted)]">Tình trạng SLA</dt>
-              <dd className={`mt-0.5 font-bold ${meta.isOverdue ? "text-amber-700 dark:text-amber-300" : "text-[var(--color-text-primary)]"}`}>{slaLabel}</dd>
+              <dd className={`mt-0.5 font-bold ${meta.isOverdue ? "text-[var(--color-error)]" : "text-[var(--color-text-primary)]"}`}>{slaLabel}</dd>
             </div>
             <div>
               <dt className="text-[var(--color-text-muted)]">Follow-up tiếp theo</dt>

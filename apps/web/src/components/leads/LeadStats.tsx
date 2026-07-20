@@ -145,7 +145,7 @@ export function LeadStats({ leads, isLoading, profile, onSelectView }: LeadStats
           type="button"
           data-tour={index === 0 ? "lead-stats-priority" : undefined}
           onClick={() => onSelectView?.(card.view)}
-          className="group relative flex min-h-16 items-center justify-between gap-3 overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2.5 text-left shadow-sm transition duration-200 hover:border-[var(--color-brand-border)] hover:bg-[var(--color-bg-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2 dark:bg-slate-900/40"
+          className="group relative flex min-h-16 items-center justify-between gap-3 overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2.5 text-left shadow-sm transition duration-200 hover:border-[var(--color-brand-border)] hover:bg-[var(--color-bg-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2"
         >
           <div className="flex items-center gap-3 min-w-0">
             <span

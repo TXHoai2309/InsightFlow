@@ -86,11 +86,11 @@ export function LeadProfileTab({
   }>;
 
   const toneClasses = {
-    success: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-300",
-    info: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/40 dark:bg-blue-950/20 dark:text-blue-300",
+    success: "border-[var(--color-success)]/30 bg-[var(--color-success-subtle)] text-[var(--color-success)]",
+    info: "border-[var(--color-info)]/30 bg-[var(--color-info-subtle)] text-[var(--color-info)]",
     brand: "border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] text-[var(--color-brand)]",
-    danger: "border-red-200 bg-red-50 text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-300",
-    warning: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300",
+    danger: "border-[var(--color-error)]/30 bg-[var(--color-error-subtle)] text-[var(--color-error)]",
+    warning: "border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] text-[var(--color-warning)]",
   };
 
   const handleCopySource = async () => {
@@ -122,9 +122,9 @@ export function LeadProfileTab({
           <p className="text-xs text-[var(--color-text-secondary)]">Điểm ưu tiên</p>
         </div>
         <div className="flex min-w-0 items-center gap-3 border-[var(--color-border)] md:border-l md:pl-4">
-          <AlarmClock className={meta.isOverdue ? "text-red-500" : "text-[var(--color-warning)]"} size={24} aria-hidden="true" />
+          <AlarmClock className={meta.isOverdue ? "text-[var(--color-error)]" : "text-[var(--color-warning)]"} size={24} aria-hidden="true" />
           <div className="min-w-0">
-            <p className={`truncate text-sm font-bold ${meta.isOverdue ? "text-red-600" : "text-[var(--color-text-primary)]"}`}>{slaLabel}</p>
+            <p className={`truncate text-sm font-bold ${meta.isOverdue ? "text-[var(--color-error)]" : "text-[var(--color-text-primary)]"}`}>{slaLabel}</p>
             <p className="text-xs text-[var(--color-text-secondary)]">SLA xử lý</p>
           </div>
         </div>
@@ -156,15 +156,15 @@ export function LeadProfileTab({
               <dl className="mt-3 space-y-2.5">
                 <InfoRow label="Người phụ trách">{ownership.ownerName}</InfoRow>
                 <InfoRow label="Trạng thái">{getLeadStatusLabel(lead)}</InfoRow>
-                <InfoRow label="Mức ưu tiên"><span className="uppercase text-red-600">{lead.intent}</span></InfoRow>
+                <InfoRow label="Mức ưu tiên"><span className={`uppercase ${lead.intent === "hot" ? "text-[var(--color-error)]" : lead.intent === "warm" ? "text-[var(--color-warning)]" : "text-[var(--color-text-secondary)]"}`}>{lead.intent}</span></InfoRow>
               </dl>
             </div>
           </div>
         </section>
 
-        <section className="rounded-lg border border-amber-200 bg-amber-50/40 p-3 dark:border-amber-900/40 dark:bg-amber-950/10">
-          <h3 className="flex items-center gap-2 text-sm font-bold text-amber-700 dark:text-amber-300">
-            <Flag size={18} aria-hidden="true" />
+        <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-3">
+          <h3 className="flex items-center gap-2 text-sm font-bold text-[var(--color-text-primary)]">
+            <Flag size={18} className="text-[var(--color-warning)]" aria-hidden="true" />
             Tín hiệu quan trọng
           </h3>
           <div className="mt-3 flex flex-wrap gap-2">

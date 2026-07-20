@@ -78,7 +78,7 @@ function ContentNodeCard({
       id={`lead-context-${mention.id}`}
       className={`rounded-lg border p-3 transition-all duration-300 ${
         isTarget
-          ? "border-[var(--color-brand)] bg-white ring-2 ring-[var(--color-brand)]/20 shadow-md shadow-[var(--color-brand)]/5"
+          ? "border-[var(--color-brand)] bg-[var(--color-bg-surface)] ring-2 ring-[var(--color-brand)]/15 shadow-sm"
           : "border-[var(--color-border)] bg-[var(--color-bg-surface)]"
       }`}
     >
@@ -94,7 +94,7 @@ function ContentNodeCard({
             </span>
           )}
         </div>
-        <time className="shrink-0 text-[10px] text-gray-400 font-medium">
+        <time className="shrink-0 text-[10px] font-medium text-[var(--color-text-muted)]">
           {formatContentTime(mention.posted_at || mention.created_at)}
         </time>
       </div>
@@ -231,7 +231,7 @@ export function LeadContentContext({ lead, mentions }: LeadContentContextProps) 
     target.content_type !== "post" && (!postContent || context.orphanedCount > 0);
 
   return (
-    <section className="rounded-xl border border-[var(--color-brand-border)] bg-white p-3 shadow-sm">
+    <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-3 shadow-sm">
       <div className="flex items-center justify-between gap-3 mb-1">
         <div className="flex items-center gap-2">
           <span className="material-symbols-outlined text-xl text-[var(--color-brand)]">electric_bolt</span>
@@ -246,7 +246,11 @@ export function LeadContentContext({ lead, mentions }: LeadContentContextProps) 
       </div>
 
       {(context.post || postContent) && (
-        <article className="mt-2 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] p-3">
+        <article className={`mt-2 rounded-lg border p-3 ${
+          target.content_type === "post"
+            ? "border-[var(--color-brand)] bg-[var(--color-brand-subtle)]"
+            : "border-[var(--color-border)] bg-[var(--color-bg-surface-raised)]"
+        }`}>
           <div className="flex items-start justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2">
               <PlatformLogo platform={lead.platform} size="xs" />
@@ -260,12 +264,12 @@ export function LeadContentContext({ lead, mentions }: LeadContentContextProps) 
                     </span>
                   )}
                 </div>
-                <p className="truncate text-[11px] text-gray-500 mt-0.5">
+                <p className="mt-0.5 truncate text-[11px] text-[var(--color-text-secondary)]">
                   {context.post?.author || "Không rõ tác giả"} · {platformLabel}
                 </p>
               </div>
             </div>
-            <time className="shrink-0 text-[10px] text-gray-400 font-medium">
+            <time className="shrink-0 text-[10px] font-medium text-[var(--color-text-muted)]">
               {formatContentTime(context.post?.posted_at || context.post?.created_at)}
             </time>
           </div>
@@ -306,8 +310,8 @@ export function LeadContentContext({ lead, mentions }: LeadContentContextProps) 
       )}
 
       {(loadError || hasIncompleteContext) && !isLoading && (
-        <div className="mt-4 flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-800">
-          <span className="material-symbols-outlined shrink-0 text-xl text-amber-500">warning</span>
+        <div className="mt-4 flex items-start gap-2.5 rounded-lg border border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] p-3 text-[var(--color-warning)]">
+          <span className="material-symbols-outlined shrink-0 text-xl">warning</span>
           <p className="text-xs leading-5">
             {loadError || "Một phần ngữ cảnh không còn trong dữ liệu; nội dung cần xử lý vẫn được giữ nguyên."}
           </p>

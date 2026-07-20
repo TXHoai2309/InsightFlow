@@ -614,7 +614,7 @@ export default function LeadsPage() {
   return (
     <div
       data-tour="leads-page"
-      className="mx-auto min-h-full w-full max-w-[1520px] space-y-2 overflow-x-hidden p-2.5"
+      className="lead-workbench-theme mx-auto min-h-full w-full max-w-[1520px] space-y-2 overflow-x-hidden bg-[var(--color-bg-primary)] p-2.5 text-[var(--color-text-primary)]"
     >
       <LeadStats
         leads={brandPlatformFilteredLeads}
@@ -661,7 +661,7 @@ export default function LeadsPage() {
                 setDetailTab("action");
                 setIsPanelCollapsed(false);
               }}
-              className="rounded-lg border border-[var(--color-warning)]/40 bg-[var(--color-bg-surface)] px-3 py-1.5 text-sm font-bold text-[var(--color-text-primary)] transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-warning)]"
+              className="rounded-lg border border-[var(--color-warning)]/40 bg-[var(--color-bg-surface)] px-3 py-1.5 text-sm font-bold text-[var(--color-text-primary)] transition hover:bg-[var(--color-bg-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-warning)]"
             >
               Ghi nhận ngay
             </button>
@@ -679,13 +679,13 @@ export default function LeadsPage() {
                 onClick={() => setActiveView(view.id)}
                 className={`inline-flex min-h-9 items-center rounded-lg border px-3 py-1.5 text-sm font-bold tracking-tight transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-1 ${activeView === view.id
                   ? "border-[var(--color-brand)] bg-[var(--color-brand)] text-white shadow-sm"
-                  : "border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-strong)] dark:bg-slate-900/40"
+                  : "border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-primary)]"
                   }`}
               >
                 <span>{view.label}</span>
                 <span className={`ml-2 px-2 py-0.5 rounded-full text-[11px] font-extrabold transition-all duration-200 ${activeView === view.id
                   ? "bg-white/20 text-white"
-                  : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+                  : "bg-[var(--color-bg-surface-high)] text-[var(--color-text-secondary)]"
                   }`}>
                   {viewCounts[view.id]}
                 </span>

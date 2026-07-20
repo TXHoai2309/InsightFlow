@@ -33,17 +33,17 @@ interface LeadWorkbenchRowProps {
 }
 
 const INTENT_STYLE = {
-  hot: "bg-red-50 text-red-700 border-red-200/60 dark:bg-red-950/20 dark:text-red-300 dark:border-red-900/30",
-  warm: "bg-orange-50 text-orange-700 border-orange-200/60 dark:bg-orange-950/20 dark:text-orange-300 dark:border-orange-900/30",
-  cold: "bg-emerald-50 text-emerald-700 border-emerald-200/60 dark:bg-emerald-950/20 dark:text-emerald-300 dark:border-emerald-900/30",
-  none: "bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-900/20 dark:text-slate-400 dark:border-slate-800/30",
+  hot: "border-[var(--color-error)]/30 bg-[var(--color-error-subtle)] text-[var(--color-error)]",
+  warm: "border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] text-[var(--color-warning)]",
+  cold: "border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]",
+  none: "border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] text-[var(--color-text-muted)]",
 };
 
 const INTENT_ICON_STYLE = {
-  hot: "bg-red-50 text-red-600 dark:bg-red-950/20 dark:text-red-300",
-  warm: "bg-orange-50 text-orange-600 dark:bg-orange-950/20 dark:text-orange-300",
-  cold: "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/20 dark:text-emerald-300",
-  none: "bg-slate-50 text-slate-500 dark:bg-slate-900/20 dark:text-slate-400",
+  hot: "bg-[var(--color-error-subtle)] text-[var(--color-error)]",
+  warm: "bg-[var(--color-warning-subtle)] text-[var(--color-warning)]",
+  cold: "bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]",
+  none: "bg-[var(--color-bg-surface-raised)] text-[var(--color-text-muted)]",
 };
 
 function formatLeadTimeAgo(value: string | undefined, nowMs: number) {
@@ -105,10 +105,10 @@ export function LeadWorkbenchRow({
 
   const ownerChipClass =
     ownership.status === "assigned_to_me"
-      ? "border-green-200 bg-green-50 text-green-700 dark:border-green-900/30 dark:bg-green-950/20 dark:text-green-300"
+      ? "border-[var(--color-success)]/30 bg-[var(--color-success-subtle)] text-[var(--color-success)]"
       : ownership.status === "unassigned"
-        ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/30 dark:bg-amber-950/20 dark:text-amber-300"
-        : "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-800/30 dark:bg-slate-900/20 dark:text-slate-400";
+        ? "border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] text-[var(--color-warning)]"
+        : "border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]";
 
   const ctaLabel = ownership.canClaim
       ? "Nhận xử lý"
@@ -229,7 +229,7 @@ export function LeadWorkbenchRow({
   const buttonStyle = ownership.canClaim
       ? "border border-[var(--color-brand)] text-[var(--color-brand)] bg-transparent hover:bg-[var(--color-brand-subtle)] hover:shadow-sm"
       : meta.needsResultCapture
-        ? "bg-amber-500 hover:bg-amber-600 text-white hover:shadow-md"
+        ? "bg-[var(--color-warning)] text-white hover:brightness-95 hover:shadow-md"
         : "bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand-hover)] hover:shadow-md";
 
   const cardStateClass = highlighted
@@ -237,14 +237,14 @@ export function LeadWorkbenchRow({
     : selected
       ? "border-[var(--color-brand)] bg-[var(--color-brand-subtle)]/55 ring-2 ring-[var(--color-brand)]/15"
       : meta.needsResultCapture
-        ? "border-[var(--color-border)] hover:border-amber-400"
+        ? "border-[var(--color-border)] hover:border-[var(--color-warning)]"
         : meta.isOverdue || meta.isUrgent
-          ? "border-[var(--color-border)] hover:border-red-400"
+          ? "border-[var(--color-border)] hover:border-[var(--color-error)]"
           : "border-[var(--color-border)] hover:border-[var(--color-brand-border)]";
 
   const accentClass = selected || highlighted
     ? "bg-[var(--color-brand)]"
-    : "bg-slate-200 dark:bg-slate-700";
+    : "bg-[var(--color-border-strong)]";
 
   const leadTimeAgo = formatLeadTimeAgo(lead.posted_at || lead.created_at, nowMs);
   const intentLabel = lead.intent === "none" ? "N/A" : lead.intent.toUpperCase();
@@ -355,9 +355,9 @@ export function LeadWorkbenchRow({
             : selected
               ? "border-[var(--color-brand)] ring-2 ring-[var(--color-brand)]/10"
               : meta.needsResultCapture
-                ? "border-amber-500/60"
+                ? "border-[var(--color-warning)]/50"
                 : meta.isOverdue || meta.isUrgent
-                  ? "border-red-500/50"
+                  ? "border-[var(--color-error)]/45"
                   : "border-[var(--color-border)] hover:border-[var(--color-brand-border)]"
           }`}
       >
@@ -366,8 +366,8 @@ export function LeadWorkbenchRow({
             <div className="flex shrink-0 flex-col items-center justify-center self-center">
               <span
                 className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-extrabold ${rank === 1
-                    ? "bg-red-500 text-white"
-                    : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+                    ? "bg-[var(--color-brand)] text-white"
+                    : "bg-[var(--color-bg-surface-raised)] text-[var(--color-text-muted)]"
                   }`}
               >
                 {rank}
@@ -378,7 +378,7 @@ export function LeadWorkbenchRow({
               <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-sm font-bold text-[var(--color-brand)]">
                 {(lead.author || "KH").slice(0, 2).toUpperCase()}
               </div>
-              <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border border-white bg-[var(--color-bg-surface)] shadow-sm dark:border-slate-800">
+              <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border border-[var(--color-bg-surface)] bg-[var(--color-bg-surface)] shadow-sm">
                 <PlatformLogo platform={lead.platform} size="xs" />
               </span>
             </div>
@@ -388,7 +388,7 @@ export function LeadWorkbenchRow({
                 <span className="text-[15px] font-bold text-[var(--color-text-primary)]">
                   {lead.author || "Khách hàng"}
                 </span>
-                <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold text-[var(--color-text-secondary)] dark:bg-slate-800/50">
+                <span className="rounded bg-[var(--color-bg-surface-raised)] px-2 py-0.5 text-xs font-semibold text-[var(--color-text-secondary)]">
                   {platformMeta?.label || lead.platform}
                 </span>
                 <span className="text-xs font-medium text-[var(--color-text-muted)]">
@@ -400,8 +400,8 @@ export function LeadWorkbenchRow({
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-red-100/60 bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-700 dark:border-red-900/30 dark:bg-red-950/20 dark:text-red-300">
-                  <span className="material-symbols-outlined text-[14px]">error</span>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-2.5 py-0.5 text-xs font-semibold text-[var(--color-text-secondary)]">
+                  <span className="material-symbols-outlined text-[14px] text-[var(--color-brand)]">priority_high</span>
                   Lý do ưu tiên: {leadReason}
                 </span>
               </div>
@@ -488,8 +488,8 @@ export function LeadWorkbenchRow({
           <div className="sm:absolute sm:left-5 sm:top-1/2 sm:-translate-y-1/2">
             <span
               className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-extrabold shadow-sm ${rank === 1
-                  ? "bg-red-500 text-white"
-                  : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                  ? "bg-[var(--color-brand)] text-white"
+                  : "bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]"
                 }`}
             >
               {rank}
@@ -500,7 +500,7 @@ export function LeadWorkbenchRow({
             <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-base font-black text-[var(--color-brand)] shadow-inner">
               {(lead.author || "KH").slice(0, 2).toUpperCase()}
             </div>
-            <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border border-white bg-[var(--color-bg-surface)] shadow-sm dark:border-slate-800">
+            <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border border-[var(--color-bg-surface)] bg-[var(--color-bg-surface)] shadow-sm">
               <PlatformLogo platform={lead.platform} size="xs" />
             </span>
           </div>
@@ -513,7 +513,7 @@ export function LeadWorkbenchRow({
                 <span className="min-w-0 truncate text-[15px] font-black text-[var(--color-text-primary)]">
                   {lead.author || "Khách hàng"}
                 </span>
-                <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-blue-700 dark:bg-slate-800/70 dark:text-blue-300">
+                <span className="rounded-md bg-[var(--color-bg-surface-high)] px-2 py-0.5 text-[11px] font-bold text-[var(--color-brand)]">
                   {platformMeta?.label || lead.platform}
                 </span>
               </div>
@@ -529,8 +529,8 @@ export function LeadWorkbenchRow({
 
             <div className="flex shrink-0 items-start justify-between gap-2 min-[1180px]:justify-end">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-red-100 bg-red-50 px-2.5 py-1 text-xs font-bold text-red-700 dark:border-red-900/30 dark:bg-red-950/20 dark:text-red-300">
-                  <span className="material-symbols-outlined text-[15px]">error</span>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-2.5 py-1 text-xs font-bold text-[var(--color-text-secondary)]">
+                  <span className="material-symbols-outlined text-[15px] text-[var(--color-brand)]">priority_high</span>
                   Lý do ưu tiên: {leadReason}
                 </span>
               </div>
@@ -541,7 +541,7 @@ export function LeadWorkbenchRow({
                   event.stopPropagation();
                   onSelect(lead);
                 }}
-                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--color-text-muted)] transition hover:bg-slate-100 hover:text-[var(--color-text-primary)] dark:hover:bg-slate-800"
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--color-text-muted)] transition hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-primary)]"
               >
                 <span className="material-symbols-outlined text-[20px]">more_vert</span>
               </button>
@@ -581,8 +581,8 @@ export function LeadWorkbenchRow({
 
             <div className="flex min-w-0 items-center gap-2">
               <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${meta.isOverdue || meta.isUrgent
-                  ? "bg-red-50 text-red-600 dark:bg-red-950/20 dark:text-red-300"
-                  : "bg-slate-50 text-[var(--color-text-secondary)] dark:bg-slate-900/30"
+                  ? "bg-[var(--color-error-subtle)] text-[var(--color-error)]"
+                  : "bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]"
                 }`}>
                 <span className="material-symbols-outlined text-[20px]">
                   {meta.needsResultCapture ? "task_alt" : "schedule"}
@@ -623,8 +623,8 @@ export function LeadWorkbenchRow({
               </button>
 
               {showMenu && (
-                <div className="absolute right-0 bottom-full mb-2 z-50 w-52 rounded-xl bg-white py-1.5 shadow-xl ring-1 ring-black/5 border border-[#E9E7EE] max-h-48 overflow-y-auto">
-                  <div className="px-3 py-1.5 text-[10px] font-bold text-[#787585] uppercase tracking-wider border-b border-[#E9E7EE] mb-1">
+                <div className="absolute bottom-full right-0 z-50 mb-2 max-h-48 w-52 overflow-y-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] py-1.5 shadow-xl">
+                  <div className="mb-1 border-b border-[var(--color-border)] px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
                     Phân công xử lý
                   </div>
                   {canEdit && (
@@ -658,7 +658,7 @@ export function LeadWorkbenchRow({
                           );
                         }
                       }}
-                      className="w-full text-left px-3 py-2 text-xs text-[#BA1A1A] hover:bg-[#FFDAD6]/30 font-bold transition-colors"
+                      className="w-full px-3 py-2 text-left text-xs font-bold text-[var(--color-error)] transition-colors hover:bg-[var(--color-error-subtle)]"
                     >
                       -- Hủy gán --
                     </button>
@@ -700,7 +700,7 @@ export function LeadWorkbenchRow({
                           );
                         }
                       }}
-                      className="w-full text-left px-3 py-2 text-xs text-[#1A1B20] hover:bg-[#F4F3FA] font-medium transition-colors border-t border-[#F4F3FA]"
+                      className="w-full border-t border-[var(--color-border)] px-3 py-2 text-left text-xs font-medium text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-bg-surface-raised)]"
                     >
                       {staff.displayName || staff.email}
                     </button>
@@ -710,7 +710,7 @@ export function LeadWorkbenchRow({
             </div>
           </div>
 
-          <div className="flex flex-col gap-2 rounded-lg bg-slate-50/90 p-3 dark:bg-slate-900/30 min-[1180px]:flex-row min-[1180px]:items-center min-[1180px]:justify-between">
+          <div className="flex flex-col gap-2 rounded-lg bg-[var(--color-bg-surface-raised)] p-3 min-[1180px]:flex-row min-[1180px]:items-center min-[1180px]:justify-between">
             <div className="flex min-w-0 items-start gap-2">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-[var(--color-brand)]">
                 <span className="material-symbols-outlined text-[20px]">chat_bubble</span>
@@ -740,9 +740,9 @@ export function LeadWorkbenchRow({
 
       {
     toast && (
-      <div className={`fixed bottom-6 right-6 z-[9999] flex items-center gap-2.5 rounded-xl border bg-white px-4 py-3.5 text-sm font-bold shadow-2xl animate-fade-in ${toast.type === "success"
-          ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-          : "border-red-200 bg-red-50 text-red-800"
+      <div className={`fixed bottom-6 right-6 z-[9999] flex items-center gap-2.5 rounded-xl border bg-[var(--color-bg-surface)] px-4 py-3.5 text-sm font-bold shadow-2xl animate-fade-in ${toast.type === "success"
+          ? "border-[var(--color-success)]/30 bg-[var(--color-success-subtle)] text-[var(--color-success)]"
+          : "border-[var(--color-error)]/30 bg-[var(--color-error-subtle)] text-[var(--color-error)]"
         }`}>
         <span className="material-symbols-outlined text-[18px]">
           {toast.type === "success" ? "check_circle" : "error"}

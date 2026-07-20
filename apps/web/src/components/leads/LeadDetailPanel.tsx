@@ -560,7 +560,7 @@ export function LeadDetailPanel({
                 <h3 className="truncate text-sm font-bold text-[var(--color-text-primary)]">
                   {lead.author || "Khách hàng"}
                 </h3>
-                <span className="shrink-0 rounded-md border border-[#FFB4B4] bg-[#FFE5E5] px-2 py-0.5 text-xs font-bold uppercase text-[#D92D20]">
+                <span className="shrink-0 rounded-md border border-[var(--color-error)]/30 bg-[var(--color-error-subtle)] px-2 py-0.5 text-xs font-bold uppercase text-[var(--color-error)]">
                   {lead.intent}
                 </span>
               </div>
@@ -618,7 +618,7 @@ export function LeadDetailPanel({
                     type="button"
                     onClick={() => void handleClaim()}
                     disabled={!canEdit || isClaiming || assigningUid !== null}
-                    className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-white px-3 text-[13px] font-semibold text-[var(--color-text-primary)] transition hover:bg-[var(--color-bg-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 text-[13px] font-semibold text-[var(--color-text-primary)] transition hover:bg-[var(--color-bg-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <span className="hidden sm:inline">{isClaiming ? "Đang nhận..." : "Nhận xử lý"}</span>
                   </button>
@@ -654,12 +654,12 @@ export function LeadDetailPanel({
                 <span className="hidden sm:inline">{isOpening === sourceAction.label ? "Đang mở..." : "Mở nguồn"}</span>
               </button>
             ) : null}
-            <div className="h-6 w-px bg-gray-200 mx-1.5" />
+            <div className="mx-1.5 h-6 w-px bg-[var(--color-border)]" />
 
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]"
+              className="rounded-full p-1.5 text-[var(--color-text-muted)] transition hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]"
               aria-label="Đóng chi tiết lead"
             >
               <span className="material-symbols-outlined text-[20px]">close</span>
@@ -707,7 +707,7 @@ export function LeadDetailPanel({
         className="min-h-0 flex-1 overflow-y-auto p-2.5 [scrollbar-gutter:stable]"
       >
         {activeTab === "action" && (
-          <div className="grid items-start gap-2.5 min-[1600px]:grid-cols-[minmax(0,1fr)_300px]">
+          <div className="grid items-start gap-2 min-[1600px]:grid-cols-[minmax(0,1fr)_340px] min-[1850px]:grid-cols-[minmax(0,1fr)_360px]">
             <div className="min-w-0">
               <LeadContentContext lead={lead} mentions={mentions} />
             </div>
@@ -753,8 +753,8 @@ export function LeadDetailPanel({
               data-tour="lead-detail-result-actions"
               className={`scroll-mt-3 rounded-xl border p-3 outline-none transition-shadow duration-300 ${
                 isResultSectionHighlighted
-                  ? "border-[var(--color-brand)] ring-2 ring-[var(--color-brand)]/25 bg-white"
-                  : "border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)]/30"
+                  ? "border-[var(--color-brand)] bg-[var(--color-bg-surface)] ring-2 ring-[var(--color-brand)]/20"
+                  : "border-[var(--color-border)] bg-[var(--color-bg-surface)]"
               }`}
             >
               <div className="mb-3 flex items-center gap-2">
@@ -762,7 +762,7 @@ export function LeadDetailPanel({
                 {meta.needsResultCapture && <span className="rounded-full bg-[var(--color-brand-subtle)] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--color-brand)]">Chờ kết quả</span>}
               </div>
               {!canRecordResult && (
-                <div className="mb-3 flex flex-col gap-2 rounded-lg border border-[var(--color-border)] bg-white p-2.5">
+                <div className="mb-3 flex flex-col gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-2.5">
                   <p className="text-sm text-[var(--color-text-secondary)]">
                     {!lead.owner_id
                       ? "Bạn cần nhận xử lý trước khi có thể ghi nhận kết quả."
@@ -793,10 +793,10 @@ export function LeadDetailPanel({
                       }
                       setIsResultDropdownOpen(!isResultDropdownOpen);
                     }}
-                    className={`flex w-full items-center justify-between gap-2 rounded-lg border border-[var(--color-border)] bg-white px-3 py-2.5 text-sm text-[var(--color-text-primary)] shadow-sm outline-none transition ${
+                    className={`flex w-full items-center justify-between gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2.5 text-sm text-[var(--color-text-primary)] shadow-sm outline-none transition ${
                       canRecordResult 
                         ? "hover:border-[var(--color-brand)] focus-visible:border-[var(--color-brand)] focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/20"
-                        : "cursor-not-allowed bg-gray-50 opacity-80"
+                        : "cursor-not-allowed bg-[var(--color-bg-surface-high)] text-[var(--color-text-disabled)]"
                     }`}
                   >
                     <div className="flex items-center gap-2 min-w-0">
@@ -808,16 +808,16 @@ export function LeadDetailPanel({
                           <span className="truncate font-semibold">{RESULT_OPTIONS.find(o => o.id === selectedResult)?.label}</span>
                         </>
                       ) : (
-                        <span className="text-gray-400">Chọn kết quả xử lý</span>
+                        <span className="text-[var(--color-text-muted)]">Chọn kết quả xử lý</span>
                       )}
                     </div>
-                    <span className="material-symbols-outlined shrink-0 text-[20px] text-gray-400">
+                    <span className="material-symbols-outlined shrink-0 text-[20px] text-[var(--color-text-muted)]">
                       {isResultDropdownOpen ? "expand_less" : "expand_more"}
                     </span>
                   </button>
                   
                   {isResultDropdownOpen && (
-                    <div className="absolute left-0 top-full z-50 mt-1.5 w-full overflow-hidden rounded-xl border border-[var(--color-border)] bg-white shadow-xl animate-in fade-in slide-in-from-top-2">
+                    <div className="absolute left-0 top-full z-50 mt-1.5 w-full overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-xl animate-in fade-in slide-in-from-top-2">
                       <div className="max-h-[300px] overflow-y-auto p-1">
                         {RESULT_OPTIONS.map((option) => (
                           <button
@@ -839,7 +839,7 @@ export function LeadDetailPanel({
                             }`}
                           >
                             <span className={`material-symbols-outlined mt-0.5 shrink-0 text-[20px] ${
-                              selectedResult === option.id ? "text-[var(--color-brand)]" : "text-gray-500"
+                              selectedResult === option.id ? "text-[var(--color-brand)]" : "text-[var(--color-text-secondary)]"
                             }`}>
                               {option.icon}
                             </span>
@@ -860,11 +860,11 @@ export function LeadDetailPanel({
                     <div data-tour="lead-detail-followup" className="mt-3 grid grid-cols-2 gap-2">
                       <div>
                         <label className="mb-1 block text-xs font-semibold text-[var(--color-text-secondary)]">Ngày follow-up</label>
-                        <input type="date" value={followUpDate} onChange={(event) => setFollowUpDate(event.target.value)} className="w-full rounded-lg border border-[var(--color-border)] bg-white px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus-visible:border-[var(--color-brand)] focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/20" />
+                        <input type="date" value={followUpDate} onChange={(event) => setFollowUpDate(event.target.value)} className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus-visible:border-[var(--color-brand)] focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/20" />
                       </div>
                       <div>
                         <label className="mb-1 block text-xs font-semibold text-[var(--color-text-secondary)]">Giờ follow-up</label>
-                        <input type="time" value={followUpTime} onChange={(event) => setFollowUpTime(event.target.value)} className="w-full rounded-lg border border-[var(--color-border)] bg-white px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus-visible:border-[var(--color-brand)] focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/20" />
+                        <input type="time" value={followUpTime} onChange={(event) => setFollowUpTime(event.target.value)} className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus-visible:border-[var(--color-brand)] focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/20" />
                       </div>
                     </div>
                   )}
@@ -872,14 +872,14 @@ export function LeadDetailPanel({
                 
                 <div className="flex flex-col">
                   <label className="mb-1.5 block text-xs font-bold text-[var(--color-text-secondary)]">Ghi chú</label>
-                  <textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Nhập kết quả trao đổi với khách hàng..." className="min-h-20 w-full flex-1 resize-y rounded-lg border border-[var(--color-border)] bg-white p-2.5 text-sm leading-relaxed text-[var(--color-text-primary)] outline-none transition focus-visible:border-[var(--color-brand)] focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/20" />
+                  <textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Nhập kết quả trao đổi với khách hàng..." className="min-h-20 w-full flex-1 resize-y rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-2.5 text-sm leading-relaxed text-[var(--color-text-primary)] outline-none transition placeholder:text-[var(--color-text-muted)] focus-visible:border-[var(--color-brand)] focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/20" />
                 </div>
               </div>
               
               {saveError && <p className="mt-3 text-xs font-semibold text-[var(--color-error)]">{saveError}</p>}
               
-              <div className="-mx-3 -mb-3 mt-3 border-t border-[var(--color-border)] bg-white/95 p-2.5">
-                <button type="button" disabled={!selectedResult || isSaving || isSaveSuccess || !canRecordResult} onClick={handleSaveResult} className={`inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg px-5 text-sm font-bold text-white shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${isSaveSuccess ? "bg-emerald-500 focus-visible:ring-emerald-500" : "bg-[var(--color-brand)] hover:bg-[var(--color-brand-hover)] focus-visible:ring-[var(--color-brand)]"}`}>
+              <div className="-mx-3 -mb-3 mt-3 border-t border-[var(--color-border)] bg-[var(--color-bg-surface)] p-2.5">
+                <button type="button" disabled={!selectedResult || isSaving || isSaveSuccess || !canRecordResult} onClick={handleSaveResult} className={`inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg px-5 text-sm font-bold text-white shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-[var(--color-bg-surface-high)] disabled:text-[var(--color-text-disabled)] disabled:shadow-none disabled:opacity-100 ${isSaveSuccess ? "bg-[var(--color-success)] focus-visible:ring-[var(--color-success)]" : "bg-[var(--color-brand)] hover:bg-[var(--color-brand-hover)] focus-visible:ring-[var(--color-brand)]"}`}>
                   {isSaveSuccess ? (
                     <>
                       <span className="material-symbols-outlined text-[20px] animate-bounce">check_circle</span>
@@ -895,19 +895,19 @@ export function LeadDetailPanel({
               </div>
             </section>
 
-            <section className="rounded-lg border border-red-200 bg-red-50/40 p-2.5 dark:border-red-900/40 dark:bg-red-950/10">
+            <section className="rounded-lg border border-[var(--color-error)]/25 bg-[var(--color-error-subtle)] p-2.5">
               <div className="flex items-start gap-2.5">
-                <span className="material-symbols-outlined text-xl text-red-500">block</span>
+                <span className="material-symbols-outlined text-xl text-[var(--color-error)]">block</span>
                 <div className="min-w-0 flex-1"><p className="text-sm font-bold text-[var(--color-text-primary)]">Bỏ qua / Không liên quan</p><p className="mt-0.5 text-xs leading-5 text-[var(--color-text-secondary)]">Đóng item không thuộc phạm vi xử lý và lưu lý do để tra cứu.</p></div>
               </div>
               {!showSkipForm ? (
-                <button type="button" onClick={() => { setShowSkipForm(true); setSkipError(""); }} disabled={!canSkipLead} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-red-300 px-3 py-2 text-sm font-bold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50">Bỏ qua item này<span className="material-symbols-outlined text-lg">arrow_forward</span></button>
+                <button type="button" onClick={() => { setShowSkipForm(true); setSkipError(""); }} disabled={!canSkipLead} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--color-error)]/35 px-3 py-2 text-sm font-bold text-[var(--color-error)] transition hover:bg-[var(--color-bg-surface)] disabled:cursor-not-allowed disabled:opacity-50">Bỏ qua item này<span className="material-symbols-outlined text-lg">arrow_forward</span></button>
               ) : (
-                <div className="mt-3 space-y-3 border-t border-red-200 pt-3">
-                  <label className="block text-xs font-bold text-[var(--color-text-secondary)]">Lý do bỏ qua<select value={skipReason} onChange={(event) => setSkipReason(event.target.value)} className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus:border-red-400"><option value="">Chọn lý do</option><option value="not_relevant">Không liên quan</option><option value="spam">Spam/quảng cáo</option><option value="duplicate">Trùng lặp</option><option value="not_a_lead">Không phải khách hàng tiềm năng</option><option value="other">Lý do khác</option></select></label>
-                  <label className="block text-xs font-bold text-[var(--color-text-secondary)]">Ghi chú <span className="font-normal">(không bắt buộc)</span><textarea value={skipNote} onChange={(event) => setSkipNote(event.target.value)} placeholder="Bổ sung lý do để tra cứu sau..." className="mt-1 min-h-[64px] w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-3 text-sm text-[var(--color-text-primary)] outline-none focus:border-red-400" /></label>
+                <div className="mt-3 space-y-3 border-t border-[var(--color-error)]/25 pt-3">
+                  <label className="block text-xs font-bold text-[var(--color-text-secondary)]">Lý do bỏ qua<select value={skipReason} onChange={(event) => setSkipReason(event.target.value)} className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus:border-[var(--color-error)] focus:ring-1 focus:ring-[var(--color-error)]"><option value="">Chọn lý do</option><option value="not_relevant">Không liên quan</option><option value="spam">Spam/quảng cáo</option><option value="duplicate">Trùng lặp</option><option value="not_a_lead">Không phải khách hàng tiềm năng</option><option value="other">Lý do khác</option></select></label>
+                  <label className="block text-xs font-bold text-[var(--color-text-secondary)]">Ghi chú <span className="font-normal">(không bắt buộc)</span><textarea value={skipNote} onChange={(event) => setSkipNote(event.target.value)} placeholder="Bổ sung lý do để tra cứu sau..." className="mt-1 min-h-[64px] w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-3 text-sm text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-error)] focus:ring-1 focus:ring-[var(--color-error)]" /></label>
                   {skipError && <p className="text-xs font-semibold text-[var(--color-error)]">{skipError}</p>}
-                  <div className="flex justify-end gap-2"><button type="button" onClick={() => { setShowSkipForm(false); setSkipError(""); }} className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm font-bold text-[var(--color-text-primary)]">Hủy</button><button type="button" onClick={handleSkipLead} disabled={isSkipping || !skipReason} className="rounded-lg bg-red-600 px-3 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{isSkipping ? "Đang xử lý..." : "Xác nhận bỏ qua"}</button></div>
+                  <div className="flex justify-end gap-2"><button type="button" onClick={() => { setShowSkipForm(false); setSkipError(""); }} className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm font-bold text-[var(--color-text-primary)]">Hủy</button><button type="button" onClick={handleSkipLead} disabled={isSkipping || !skipReason} className="rounded-lg bg-[var(--color-error)] px-3 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{isSkipping ? "Đang xử lý..." : "Xác nhận bỏ qua"}</button></div>
                 </div>
               )}
             </section>
@@ -944,10 +944,10 @@ export function LeadDetailPanel({
       </div>
 
       {toast && (
-        <div className={`fixed bottom-6 right-6 z-[9999] flex items-center gap-2.5 rounded-xl border bg-white px-4 py-3.5 text-sm font-bold shadow-2xl animate-fade-in ${
+        <div className={`fixed bottom-6 right-6 z-[9999] flex items-center gap-2.5 rounded-xl border bg-[var(--color-bg-surface)] px-4 py-3.5 text-sm font-bold shadow-2xl animate-fade-in ${
           toast.type === "success"
-            ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-            : "border-red-200 bg-red-50 text-red-800"
+            ? "border-[var(--color-success)]/30 bg-[var(--color-success-subtle)] text-[var(--color-success)]"
+            : "border-[var(--color-error)]/30 bg-[var(--color-error-subtle)] text-[var(--color-error)]"
         }`}>
           <span className="material-symbols-outlined text-[18px]">
             {toast.type === "success" ? "check_circle" : "error"}
