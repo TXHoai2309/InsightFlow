@@ -2548,27 +2548,6 @@ function LegacyReportsPage() {
             ) : !customReportGenerated ? (
               // A: Configuration Form
               <div className="space-y-6 max-w-4xl">
-                {/* Tabs switcher inside custom config view since we hide the outer toolbar */}
-                <div className="flex gap-1 overflow-x-auto border-b border-outline-variant pb-3">
-                  <button
-                    onClick={() => setActiveTab("periodic")}
-                    className="px-4 py-2 rounded-lg text-sm text-on-surface-variant hover:bg-surface-container transition-colors font-bold whitespace-nowrap flex-shrink-0"
-                  >
-                    {t("reports.tabs.periodic", { defaultValue: "Định kỳ" })}
-                  </button>
-                  <button
-                    onClick={() => setActiveTab("custom")}
-                    className="px-4 py-2 rounded-lg text-sm font-bold text-primary bg-primary/10 whitespace-nowrap flex-shrink-0"
-                  >
-                    {t("reports.tabs.custom", { defaultValue: "Tùy chỉnh" })}
-                  </button>
-                  <button
-                    onClick={() => setActiveTab("archive")}
-                    className="px-4 py-2 rounded-lg text-sm text-on-surface-variant hover:bg-surface-container transition-colors font-bold whitespace-nowrap flex-shrink-0"
-                  >
-                    {t("reports.tabs.archive", { defaultValue: "Lưu trữ" })}
-                  </button>
-                </div>
 
                 <div>
                   <h2 className="text-lg font-bold text-on-surface flex items-center gap-2">

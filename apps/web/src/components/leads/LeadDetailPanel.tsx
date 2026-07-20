@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ClipboardCheck, Sparkles, UserPlus, ChevronDown } from "lucide-react";
+import { ClipboardCheck, PanelRightClose, Sparkles, UserPlus, ChevronDown } from "lucide-react";
 import { LeadHistoryTab } from "@/components/leads/LeadHistoryTab";
 import { LeadProfileTab } from "@/components/leads/LeadProfileTab";
 import { LeadContentContext } from "@/components/leads/LeadContentContext";
@@ -546,7 +546,7 @@ export function LeadDetailPanel({
   return (
     <aside
       data-tour="lead-detail-panel"
-      className="flex min-w-0 shrink-0 flex-col self-start rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm min-[1100px]:sticky min-[1100px]:top-3 min-[1100px]:max-h-[calc(100vh-88px)]"
+      className="flex min-w-0 shrink-0 flex-col self-start rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm min-[1100px]:sticky min-[1100px]:top-3 min-[1100px]:h-[calc(100vh-88px)] min-[1100px]:max-h-[calc(100vh-88px)]"
     >
       <div className="shrink-0 border-b border-[var(--color-border)] px-3 pb-0 pt-2.5">
         <div className="flex items-start justify-between gap-2.5">
@@ -658,10 +658,11 @@ export function LeadDetailPanel({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full p-1.5 text-[var(--color-text-muted)] transition hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]"
-              aria-label="Đóng chi tiết lead"
+              className="rounded-full p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-raised)]"
+              title="Thu gọn panel"
+              aria-label="Thu gọn panel"
             >
-              <span className="material-symbols-outlined text-[20px]">close</span>
+              <PanelRightClose size={18} aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -703,16 +704,20 @@ export function LeadDetailPanel({
 
       <div
         id={LEAD_DETAIL_PANEL_SCROLL_ID}
-        className="min-h-0 flex-1 overflow-y-auto p-2.5 [scrollbar-gutter:stable]"
+        className={`min-h-0 flex-1 p-2.5 [scrollbar-gutter:stable] ${
+          activeTab === "action"
+            ? "overflow-y-auto min-[1280px]:overflow-hidden"
+            : "overflow-y-auto"
+        }`}
       >
         {activeTab === "action" && (
-          <div className="grid items-start gap-2 min-[1600px]:grid-cols-[minmax(0,1fr)_340px] min-[1850px]:grid-cols-[minmax(0,1fr)_360px]">
-            <div className="min-w-0">
+          <div className="grid items-start gap-2 min-[1280px]:h-full min-[1280px]:min-h-0 min-[1280px]:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] min-[1280px]:items-stretch">
+            <div className="min-w-0 min-[1280px]:min-h-0 min-[1280px]:overflow-y-auto min-[1280px]:pr-1 min-[1280px]:[scrollbar-gutter:stable]">
               <LeadContentContext lead={lead} mentions={mentions} />
             </div>
 
-            <aside className="space-y-2 min-[1600px]:sticky min-[1600px]:top-0" aria-label="Thao tác nhanh với lead">
-              <section className="hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-2.5 min-[1600px]:block">
+            <aside className="space-y-2 min-[1280px]:min-h-0 min-[1280px]:overflow-y-auto min-[1280px]:pl-1 min-[1280px]:[scrollbar-gutter:stable]" aria-label="Thao tác nhanh với lead">
+              <section className="hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-2.5 min-[1280px]:block">
                 <div className="flex items-center justify-between gap-2">
                   <h4 className="text-sm font-bold text-[var(--color-text-primary)]">Tổng quan xử lý</h4>
                   <button type="button" onClick={() => handleTabChange("history")} className="rounded-md px-2 py-1 text-xs font-bold text-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]">
