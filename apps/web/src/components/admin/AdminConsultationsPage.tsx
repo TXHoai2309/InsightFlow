@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { auth } from "@/lib/firebase";
 import {
   Search,
@@ -15,14 +15,19 @@ import {
   Loader2,
   Check,
   Copy,
-  ExternalLink,
   Filter,
-  HelpCircle,
   AlertTriangle,
   Play,
   RefreshCw,
   KeyRound,
   XCircle,
+  Globe2,
+  MessageCircle,
+  Music2,
+  Newspaper,
+  SearchCheck,
+  Video,
+  ChevronDown,
 } from "lucide-react";
 
 interface ConsultationRequest {
@@ -140,12 +145,32 @@ function CopyButton({ value, label }: { value: string; label: string }) {
       type="button"
       onClick={handleCopy}
       title={`Sao chép ${label}`}
-      className="inline-flex items-center gap-1 rounded bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] px-1.5 py-0.5 text-[11px] font-semibold text-[var(--color-text-secondary)] transition hover:border-[var(--color-brand)] hover:text-[var(--color-brand)]"
+      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-transparent bg-white/70 text-[var(--color-text-secondary)] transition hover:border-[var(--color-brand)]/25 hover:bg-[var(--color-brand-subtle)] hover:text-[var(--color-brand)] dark:bg-white/5"
     >
       {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
-      {copied ? "Đã chép" : "Sao chép"}
     </button>
   );
+}
+
+function getPlatformVisual(platform: string) {
+  const normalizedPlatform = platform.toLowerCase();
+
+  if (normalizedPlatform.includes("facebook")) {
+    return { Icon: MessageCircle, iconClass: "bg-blue-500/10 text-blue-600", label: "Facebook" };
+  }
+  if (normalizedPlatform.includes("tiktok")) {
+    return { Icon: Music2, iconClass: "bg-slate-900 text-white dark:bg-white dark:text-slate-900", label: "TikTok" };
+  }
+  if (normalizedPlatform.includes("youtube")) {
+    return { Icon: Video, iconClass: "bg-red-500/10 text-red-600", label: "YouTube" };
+  }
+  if (normalizedPlatform.includes("review")) {
+    return { Icon: SearchCheck, iconClass: "bg-amber-500/10 text-amber-600", label: "Review" };
+  }
+  if (normalizedPlatform.includes("tin") || normalizedPlatform.includes("news")) {
+    return { Icon: Newspaper, iconClass: "bg-violet-500/10 text-violet-600", label: "Tin tức" };
+  }
+  return { Icon: Globe2, iconClass: "bg-emerald-500/10 text-emerald-600", label: platform || "Website" };
 }
 
 export default function AdminConsultationsPage() {
@@ -156,6 +181,7 @@ export default function AdminConsultationsPage() {
   // Search & Filter
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
   // Form edit states (strictly state-controlled)
   const [editStatus, setEditStatus] = useState<EditableStatus>("");
@@ -167,6 +193,8 @@ export default function AdminConsultationsPage() {
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [loadError, setLoadError] = useState("");
+  const detailPanelRef = useRef<HTMLDivElement | null>(null);
+  const [detailPanelHeight, setDetailPanelHeight] = useState<number | null>(null);
 
   const loadConsultations = useCallback(async () => {
     setLoading(true);
@@ -247,6 +275,26 @@ export default function AdminConsultationsPage() {
     }
   }, [selectedRequest]);
 
+  // Keep the request list aligned with the detail workspace at every browser zoom level.
+  useEffect(() => {
+    const detailPanel = detailPanelRef.current;
+    if (!detailPanel) return;
+
+    const updateHeight = () => {
+      setDetailPanelHeight(Math.ceil(detailPanel.getBoundingClientRect().height));
+    };
+
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(detailPanel);
+    window.addEventListener("resize", updateHeight);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", updateHeight);
+    };
+  }, [loading, selectedRequest]);
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedId || !selectedRequest) return;
@@ -318,44 +366,16 @@ export default function AdminConsultationsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-[1200px] space-y-6 p-4 md:p-8">
-      {/* Header section */}
-      <section className="relative overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 md:p-7 shadow-sm">
-        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[var(--color-brand)] via-[var(--color-brand)]/60 to-transparent" />
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-[12px] font-bold uppercase tracking-[0.12em] text-[var(--color-brand)]">
-              Admin Console
-            </p>
-            <h1 className="mt-1 text-[26px] font-bold leading-tight text-[var(--color-text-primary)] md:text-[28px]">
-              Yêu cầu tư vấn nhận từ Landing Page
-            </h1>
-            <p className="mt-1 text-[14px] text-[var(--color-text-secondary)]">
-              Tổng hợp, phân loại các yêu cầu hỗ trợ, nhận tư vấn và thiết lập phương án tiếp cận cụ thể.
-            </p>
-          </div>
-
-          {/* Overall counters */}
-          <div className="grid grid-cols-4 gap-2 md:shrink-0">
-            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2 text-center min-w-[70px]">
-              <p className="text-[18px] font-extrabold text-[var(--color-text-primary)]">{stats.total}</p>
-              <p className="mt-0.5 text-[10px] font-medium text-[var(--color-text-muted)]">Tổng số</p>
-            </div>
-            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2 text-center min-w-[70px]">
-              <p className="text-[18px] font-extrabold text-amber-500">{stats.pending}</p>
-              <p className="mt-0.5 text-[10px] font-medium text-[var(--color-text-muted)]">Chưa xử lý</p>
-            </div>
-            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2 text-center min-w-[70px]">
-              <p className="text-[18px] font-extrabold text-blue-500">{stats.contacting}</p>
-              <p className="mt-0.5 text-[10px] font-medium text-[var(--color-text-muted)]">Đang gọi</p>
-            </div>
-            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2 text-center min-w-[70px]">
-              <p className="text-[18px] font-extrabold text-emerald-500">{stats.completed}</p>
-              <p className="mt-0.5 text-[10px] font-medium text-[var(--color-text-muted)]">Đã duyệt</p>
-            </div>
-          </div>
+    <div className="mx-auto max-w-[1360px] space-y-5 bg-gradient-to-br from-[var(--color-brand-subtle)]/20 via-transparent to-blue-500/5 p-4 md:p-6 xl:p-8">
+      <div className="flex items-center justify-between rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)]/80 px-4 py-2.5 shadow-sm backdrop-blur">
+        <div className="flex items-center gap-2">
+          <Layers className="h-4 w-4 text-[var(--color-brand)]" />
+          <span className="text-[12px] font-extrabold text-[var(--color-brand)]">Quản lý Yêu cầu Tư vấn</span>
         </div>
-      </section>
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
+          Landing Page
+        </span>
+      </div>
 
       {loadError && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-[13px] text-rose-600 dark:text-rose-400">
@@ -375,43 +395,91 @@ export default function AdminConsultationsPage() {
           </div>
         </div>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[400px_1fr]">
+        <div className="grid items-start gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
           {/* LEFT LIST PANE */}
-          <div className="flex flex-col gap-4">
+          <div
+            className="flex min-h-[560px] min-w-0 flex-col gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)]/70 p-3 shadow-sm backdrop-blur"
+            style={detailPanelHeight ? { height: `${detailPanelHeight}px` } : undefined}
+          >
+            <div className="flex flex-col gap-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="flex items-center justify-between gap-2 rounded-lg border border-[var(--color-border)] bg-white/75 px-3 py-2 shadow-sm dark:bg-white/5">
+                  <span className="text-[11px] font-semibold text-[var(--color-text-muted)]">Tổng</span>
+                  <span className="text-[15px] font-extrabold text-[var(--color-text-primary)]">{stats.total}</span>
+                </div>
+                <div className="flex items-center justify-between gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 shadow-sm">
+                  <span className="text-[11px] font-semibold text-amber-700/80 dark:text-amber-300/80">Chưa xử lý</span>
+                  <span className="text-[15px] font-extrabold text-amber-500">{stats.pending}</span>
+                </div>
+                <div className="flex items-center justify-between gap-2 rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-2 shadow-sm">
+                  <span className="text-[11px] font-semibold text-blue-700/80 dark:text-blue-300/80">Đang gọi</span>
+                  <span className="text-[15px] font-extrabold text-blue-500">{stats.contacting}</span>
+                </div>
+                <div className="flex items-center justify-between gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 shadow-sm">
+                  <span className="text-[11px] font-semibold text-emerald-700/80 dark:text-emerald-300/80">Đã duyệt</span>
+                  <span className="text-[15px] font-extrabold text-emerald-500">{stats.completed}</span>
+                </div>
+              </div>
+            </div>
+
             {/* Search & filters */}
-            <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-4 space-y-3">
-              <div className="relative flex items-center">
+            <div className="flex items-center gap-2">
+              <div className="relative flex min-w-0 flex-1 items-center">
                 <Search className="absolute left-3 h-4 w-4 text-[var(--color-text-muted)]" />
                 <input
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Tìm tên, email, sđt, công ty..."
-                  className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] pl-9 pr-3 py-2 text-[14px] outline-none transition focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]/10"
+                  className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] py-2.5 pl-9 pr-3 text-[14px] outline-none transition focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/10"
                 />
               </div>
 
-              <div className="flex items-center gap-2">
-                <Filter className="h-3.5 w-3.5 text-[var(--color-text-muted)]" />
-                <span className="text-[12px] font-semibold text-[var(--color-text-secondary)]">Trạng thái:</span>
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-2 py-1 text-[12px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]"
+              <div className="relative shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowAdvancedFilters((current) => !current)}
+                  aria-expanded={showAdvancedFilters}
+                  className={`inline-flex h-[42px] items-center gap-1.5 rounded-lg border px-2.5 text-[12px] font-bold transition focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/15 ${statusFilter !== "all" ? "border-[var(--color-brand)]/45 bg-[var(--color-brand-subtle)] text-[var(--color-brand)]" : "border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] text-[var(--color-brand)] hover:border-[var(--color-brand)]/35 hover:bg-[var(--color-brand-subtle)]/45"}`}
                 >
-                  <option value="all">Tất cả</option>
-                  <option value="pending">Chưa xử lý</option>
-                  <option value="contacting">Đang liên hệ</option>
-                  <option value="completed">Yêu cầu được duyệt</option>
-                  <option value="unreachable">Không liên lạc được</option>
-                  <option value="not_approved">Yêu cầu không được duyệt</option>
-                </select>
+                  <Filter className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Lọc nâng cao</span>
+                  {statusFilter !== "all" && <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--color-brand)] px-1 text-[10px] text-white">1</span>}
+                  <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showAdvancedFilters ? "rotate-180" : ""}`} />
+                </button>
+
+                {showAdvancedFilters && (
+                  <div className="absolute right-0 top-[calc(100%+8px)] z-20 w-56 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-1.5 shadow-xl">
+                    <p className="px-2.5 pb-1.5 pt-1 text-[10px] font-extrabold uppercase tracking-wider text-[var(--color-text-muted)]">Trạng thái</p>
+                    {[
+                      ["all", "Tất cả"],
+                      ["pending", "Chưa xử lý"],
+                      ["contacting", "Đang liên hệ"],
+                      ["completed", "Yêu cầu được duyệt"],
+                      ["unreachable", "Không liên lạc được"],
+                      ["not_approved", "Yêu cầu không được duyệt"],
+                    ].map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => {
+                          setStatusFilter(value);
+                          setShowAdvancedFilters(false);
+                        }}
+                        className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-[12px] transition hover:bg-[var(--color-brand-subtle)]/60 ${statusFilter === value ? "bg-[var(--color-brand-subtle)] font-bold text-[var(--color-brand)]" : "text-[var(--color-text-secondary)]"}`}
+                      >
+                        <span>{label}</span>
+                        {statusFilter === value && <Check className="h-3.5 w-3.5" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
             {/* List entries */}
-            <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] overflow-hidden">
-              <div className="max-h-[500px] overflow-y-auto divide-y divide-[var(--color-border)]">
+            <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+              <div className="space-y-3">
                 {filteredRequests.length === 0 ? (
                   <div className="p-8 text-center text-[13px] text-[var(--color-text-muted)]">
                     Không tìm thấy yêu cầu tư vấn nào phù hợp.
@@ -426,37 +494,43 @@ export default function AdminConsultationsPage() {
                       <button
                         key={req.id}
                         onClick={() => setSelectedId(req.id)}
-                        className={`w-full text-left p-4 transition-colors flex flex-col gap-2 hover:bg-[var(--color-bg-surface-raised)] ${isSelected ? "bg-[var(--color-brand-subtle)]/30 hover:bg-[var(--color-brand-subtle)]/40" : ""
+                        className={`group flex w-full gap-3 rounded-xl border bg-[var(--color-bg-surface)] p-3.5 text-left shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-[var(--color-brand)]/25 hover:shadow-md ${isSelected ? "border-[var(--color-brand)] bg-gradient-to-br from-[var(--color-brand-subtle)]/55 to-[var(--color-bg-surface)] hover:bg-[var(--color-brand-subtle)]/45" : "border-[var(--color-border)]"
                           }`}
                       >
-                        <div className="flex items-start justify-between gap-2">
-                          <h3 className="font-semibold text-[14px] text-[var(--color-text-primary)] line-clamp-1">
-                            {req.fullName}
-                          </h3>
-                          <span
-                            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${status.bg} ${status.text} ${status.border}`}
-                          >
-                            <StatusIcon className="h-2.5 w-2.5" />
-                            {status.label}
-                          </span>
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--color-brand-subtle)] text-[12px] font-extrabold text-[var(--color-brand)]">
+                          {getInitials(req.fullName)}
                         </div>
-
-                        <div className="space-y-1 text-[12px] text-[var(--color-text-secondary)]">
-                          <p className="font-medium line-clamp-1"><span className="text-[var(--color-text-muted)]">Công ty:</span> {req.company || "Chưa cung cấp"}</p>
-                          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-[var(--color-text-muted)]">
-                            <span>Mã số DN: <strong className="text-[var(--color-text-secondary)]">{req.taxId || "Chưa cung cấp"}</strong></span>
-                            <span>Ngành: <strong className="text-[var(--color-text-secondary)]">{req.industry || "Chưa cung cấp"}</strong></span>
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <h3 className="line-clamp-1 text-[14px] font-bold text-[var(--color-text-primary)]">
+                                {req.fullName}
+                              </h3>
+                              <p className="line-clamp-1 text-[12px] font-medium text-[var(--color-text-secondary)]">
+                                {req.company || "Chưa cung cấp"}
+                              </p>
+                            </div>
+                            <span
+                              className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold ${status.bg} ${status.text} ${status.border}`}
+                            >
+                              <StatusIcon className="h-2.5 w-2.5" />
+                              {status.label}
+                            </span>
                           </div>
-                          <p className="text-[11px] text-[var(--color-text-muted)]">
+
+                          <p className="line-clamp-2 text-[12px] leading-5 text-[var(--color-text-muted)]">
                             {req.need}
                           </p>
-                        </div>
 
-                        <div className="flex items-center justify-between text-[11px] text-[var(--color-text-muted)] mt-1">
-                          <span className="flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
-                            {formatTimestamp(req.createdAt)}
-                          </span>
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[var(--color-text-muted)]">
+                            <span className="flex items-center gap-1">
+                              <Calendar className="h-3 w-3" />
+                              {formatTimestamp(req.createdAt)}
+                            </span>
+                            <span className="line-clamp-1">
+                              {req.industry || "Chưa có ngành"}
+                            </span>
+                          </div>
                         </div>
                       </button>
                     );
@@ -467,181 +541,154 @@ export default function AdminConsultationsPage() {
           </div>
 
           {/* RIGHT DETAIL PANE */}
-          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 shadow-sm flex flex-col justify-between">
+          <div ref={detailPanelRef} className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm">
             {selectedRequest ? (
-              <div className="space-y-6">
+              <div>
                 {/* Details Header */}
-                <div className="flex items-start gap-4 pb-5 border-b border-[var(--color-border)]">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--color-brand)] text-white text-[16px] font-extrabold shadow-sm">
+                <div className="relative flex items-start gap-4 border-b border-[var(--color-border)] bg-gradient-to-r from-[var(--color-brand-subtle)]/50 via-[var(--color-bg-surface)] to-blue-500/5 p-5">
+                  <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[var(--color-brand)] via-blue-500 to-emerald-400" />
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-[var(--color-brand)] text-[17px] font-extrabold text-white shadow-md shadow-[var(--color-brand)]/20">
                     {getInitials(selectedRequest.fullName)}
                   </div>
-                  <div className="space-y-1">
-                    <h2 className="text-[18px] font-bold text-[var(--color-text-primary)]">
-                      {selectedRequest.fullName}
-                    </h2>
-                    <p className="text-[13px] font-semibold text-[var(--color-text-secondary)] flex items-center gap-1">
-                      <Building className="h-3.5 w-3.5 text-[var(--color-text-muted)]" />
-                      {selectedRequest.company}
-                    </p>
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h2 className="line-clamp-1 text-[20px] font-bold text-[var(--color-text-primary)]">
+                          {selectedRequest.fullName}
+                        </h2>
+                        <p className="mt-1 flex items-center gap-1 text-[13px] font-semibold text-[var(--color-text-secondary)]">
+                          <Building className="h-3.5 w-3.5 shrink-0 text-[var(--color-text-muted)]" />
+                          <span className="line-clamp-1">{selectedRequest.company || "Chưa cung cấp công ty"}</span>
+                        </p>
+                      </div>
+                      {(() => {
+                        const status = statusConfig[selectedRequest.status] || statusConfig.pending;
+                        const StatusIcon = status.icon;
+                        return (
+                          <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-bold shadow-sm ${status.bg} ${status.text} ${status.border}`}>
+                            <StatusIcon className="h-3.5 w-3.5" />
+                            {status.label}
+                          </span>
+                        );
+                      })()}
+                    </div>
+                    <div className="flex flex-wrap gap-2 text-[11px] text-[var(--color-text-muted)]">
+                      <span className="flex items-center gap-1 rounded-full bg-white/70 px-2.5 py-1 dark:bg-white/5">
+                        <Calendar className="h-3.5 w-3.5" />
+                        {formatTimestamp(selectedRequest.createdAt)}
+                      </span>
+                      <span className="rounded-full bg-[var(--color-brand-subtle)] px-2.5 py-1 font-semibold text-[var(--color-brand)]">
+                        {selectedRequest.requestSource || "Landing Page"}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
-                {/* Profile Grid */}
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-3 space-y-1.5 sm:col-span-2">
-                    <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
-                      <Building className="h-3.5 w-3.5" />
-                      Tên công ty / thương hiệu
-                    </span>
-                    <p className="text-[13px] font-semibold text-[var(--color-text-primary)]">
-                      {selectedRequest.company || "Chưa cung cấp"}
-                    </p>
-                  </div>
-
-                  <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-3 space-y-1.5">
-                    <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
-                      <Mail className="h-3.5 w-3.5" />
-                      Email
-                    </span>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[13px] font-medium text-[var(--color-text-primary)] break-all select-all">
-                        {selectedRequest.email}
+                {/* Contact and request details */}
+                <div className="grid gap-4 p-5">
+                  <section className="overflow-hidden rounded-lg border border-[var(--color-border)] bg-white/60 shadow-sm dark:bg-white/5">
+                    <div className="flex items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-brand-subtle)]/35 px-4 py-3">
+                      <span className="flex h-7 w-7 items-center justify-center rounded-md bg-blue-500/10 text-blue-600">
+                        <User className="h-4 w-4" />
                       </span>
-                      <div className="shrink-0 flex items-center gap-1.5">
-                        <CopyButton value={selectedRequest.email} label="Email" />
-                        <a
-                          href={`mailto:${selectedRequest.email}`}
-                          className="p-1 rounded hover:bg-gray-100 dark:hover:bg-zinc-800 text-[var(--color-brand)]"
-                          title="Gửi Email trực tiếp"
-                        >
-                          <ExternalLink className="h-3.5 w-3.5" />
-                        </a>
+                      <span className="text-[12px] font-extrabold uppercase tracking-wider text-[var(--color-brand)]">Thông tin liên hệ</span>
+                    </div>
+                    <div className="grid gap-x-5 px-4 sm:grid-cols-2">
+                      <div className="flex items-start gap-2.5 border-b border-[var(--color-border)] py-3 sm:border-r sm:pr-4">
+                        <Building className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-brand)]" />
+                        <div className="min-w-0 space-y-1">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">Tên công ty</span>
+                          <p className="text-[13px] font-semibold text-[var(--color-text-primary)]">{selectedRequest.company || "Chưa cung cấp"}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2.5 border-b border-[var(--color-border)] py-3 sm:pl-4">
+                        <Mail className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-brand)]" />
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">Email</span>
+                          <div className="flex items-center gap-1.5">
+                            <p className="min-w-0 flex-1 break-all text-[13px] font-semibold text-[var(--color-text-primary)]">{selectedRequest.email}</p>
+                            <CopyButton value={selectedRequest.email} label="Email" />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2.5 border-b border-[var(--color-border)] py-3 sm:border-r sm:pr-4">
+                        <Phone className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">Số điện thoại</span>
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-[13px] font-semibold text-[var(--color-text-primary)]">{selectedRequest.phone}</p>
+                            <CopyButton value={selectedRequest.phone} label="SĐT" />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2.5 border-b border-[var(--color-border)] py-3 sm:pl-4">
+                        <Layers className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" />
+                        <div className="min-w-0 space-y-1">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">Ngành hàng</span>
+                          <p className="text-[13px] font-semibold text-[var(--color-text-primary)]">{selectedRequest.industry || "Chưa cung cấp"}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2.5 py-3 sm:border-r sm:pr-4">
+                        <Building className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                        <div className="min-w-0 space-y-1">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">Mã số thuế</span>
+                          <p className="text-[13px] font-semibold text-[var(--color-text-primary)]">{selectedRequest.taxId || "Chưa cung cấp"}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2.5 py-3 sm:pl-4">
+                        <Mail className="mt-0.5 h-4 w-4 shrink-0 text-cyan-600" />
+                        <div className="min-w-0 space-y-1">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">Đuôi email</span>
+                          <p className="break-all text-[13px] font-semibold text-[var(--color-text-primary)]">{selectedRequest.companyEmailDomain ? `@${selectedRequest.companyEmailDomain}` : "Chưa cung cấp"}</p>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  </section>
 
-                  <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-3 space-y-1.5">
-                    <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
-                      <Phone className="h-3.5 w-3.5" />
-                      Số điện thoại
-                    </span>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[13px] font-medium text-[var(--color-text-primary)] select-all">
-                        {selectedRequest.phone}
+                  <section className="overflow-hidden rounded-lg border border-[var(--color-border)] bg-white/60 shadow-sm dark:bg-white/5">
+                    <div className="flex items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-brand-subtle)]/35 px-4 py-3">
+                      <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[var(--color-brand)]/10 text-[var(--color-brand)]">
+                        <Layers className="h-4 w-4" />
                       </span>
-                      <div className="shrink-0 flex items-center gap-1.5">
-                        <CopyButton value={selectedRequest.phone} label="SĐT" />
-                        <a
-                          href={`tel:${selectedRequest.phone}`}
-                          className="p-1 rounded hover:bg-gray-100 dark:hover:bg-zinc-800 text-[var(--color-brand)]"
-                          title="Gọi điện trực tiếp"
-                        >
-                          <ExternalLink className="h-3.5 w-3.5" />
-                        </a>
-                      </div>
+                      <span className="text-[12px] font-extrabold uppercase tracking-wider text-[var(--color-brand)]">Chi tiết nhu cầu & cấu hình</span>
                     </div>
-                  </div>
-
-                  <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-3 space-y-1">
-                    <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
-                      <Layers className="h-3.5 w-3.5" />
-                      Ngành hàng
-                    </span>
-                    <p className="text-[13px] font-medium text-[var(--color-text-primary)]">
-                      {selectedRequest.industry || "Chưa cung cấp"}
-                    </p>
-                  </div>
-
-                  <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-3 space-y-1">
-                    <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
-                      <Mail className="h-3.5 w-3.5" />
-                      Đuôi email doanh nghiệp
-                    </span>
-                    <p className="text-[13px] font-medium text-[var(--color-text-primary)]">
-                      {selectedRequest.companyEmailDomain ? `@${selectedRequest.companyEmailDomain}` : "Chưa cung cấp"}
-                    </p>
-                  </div>
-
-                  <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-3 space-y-1">
-                    <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
-                      <Building className="h-3.5 w-3.5" />
-                      Mã số thuế
-                    </span>
-                    <p className="text-[13px] font-medium text-[var(--color-text-primary)]">
-                      {selectedRequest.taxId || "Chưa cung cấp"}
-                    </p>
-                  </div>
-
-                  <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-3 space-y-1 sm:col-span-2">
-                    <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
-                      <HelpCircle className="h-3.5 w-3.5" />
-                      Nhu cầu chính
-                    </span>
-                    <p className="text-[13px] font-semibold text-[var(--color-text-primary)]">
-                      {selectedRequest.need}
-                    </p>
-                  </div>
-
-                  {selectedRequest.consultationRequested && (
-                    <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 sm:col-span-2">
-                      <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-                        <HelpCircle className="h-3.5 w-3.5" />
-                        Nội dung đăng ký tư vấn thêm
-                      </span>
-                      <p className="mt-2 whitespace-pre-wrap text-[13px] leading-5 text-[var(--color-text-secondary)]">
-                        {selectedRequest.consultationNotes || "Khách hàng chưa để lại ghi chú bổ sung."}
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="space-y-4 rounded-xl border border-[var(--color-brand)]/20 bg-[var(--color-brand-subtle)]/30 p-4 sm:col-span-2">
-                      <div className="flex items-center gap-2 border-b border-[var(--color-border)] pb-3">
-                        <Layers className="h-4 w-4 text-[var(--color-brand)]" />
-                        <span className="text-[12px] font-extrabold uppercase tracking-wider text-[var(--color-brand)]">Cấu hình thương hiệu</span>
-                      </div>
+                    <div className="space-y-4 p-4">
                       <div>
                         <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
                           <Layers className="h-3.5 w-3.5" />
                           Kênh theo dõi
                         </span>
                         <div className="mt-2 flex flex-wrap gap-2">
-                          {(selectedRequest.platforms || []).length > 0 ? selectedRequest.platforms?.map((platform) => (
-                            <span key={platform} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-base)] px-2.5 py-1 text-[12px] font-semibold text-[var(--color-text-primary)]">
-                              {platform}
-                            </span>
-                          )) : <span className="text-[12px] text-[var(--color-text-muted)]">Chưa chọn kênh.</span>}
+                          {(selectedRequest.platforms || []).length > 0 ? selectedRequest.platforms?.map((platform) => {
+                            const { Icon, iconClass, label } = getPlatformVisual(platform);
+                            return (
+                              <span key={platform} className="group inline-flex min-w-[68px] flex-col items-center gap-1 rounded-lg border border-[var(--color-border)] bg-white/80 px-1.5 py-2 text-[10px] font-bold text-[var(--color-text-secondary)] shadow-sm transition hover:-translate-y-0.5 hover:border-[var(--color-brand)]/35 hover:shadow-md dark:bg-white/5">
+                                <span className={`flex h-7 w-7 items-center justify-center rounded-md ${iconClass}`}><Icon className="h-4 w-4" /></span>
+                                <span className="max-w-[68px] truncate">{label}</span>
+                              </span>
+                            );
+                          }) : <span className="text-[12px] text-[var(--color-text-muted)]">Chưa chọn kênh.</span>}
                         </div>
                       </div>
-
                       <div>
                         <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">Từ khóa quan trọng</span>
                         <div className="mt-2 flex flex-wrap gap-2">
                           {(selectedRequest.keywords || []).length > 0 ? selectedRequest.keywords?.map((keyword) => (
-                            <span key={keyword} className="rounded-full bg-[var(--color-brand-subtle)] px-2.5 py-1 text-[12px] font-semibold text-[var(--color-brand)]">
-                              {keyword}
-                            </span>
+                            <span key={keyword} className="rounded-full border border-amber-500/15 bg-amber-500/10 px-2.5 py-1 text-[12px] font-semibold text-amber-700 dark:text-amber-300">{keyword}</span>
                           )) : <span className="text-[12px] text-[var(--color-text-muted)]">Chưa nhập từ khóa.</span>}
                         </div>
                       </div>
-
-                      {selectedRequest.configurationNotes && (
-                        <div>
-                          <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">Ghi chú cấu hình</span>
-                          <p className="mt-2 whitespace-pre-wrap text-[13px] leading-5 text-[var(--color-text-secondary)]">{selectedRequest.configurationNotes}</p>
-                        </div>
-                      )}
-                      {!selectedRequest.configurationNotes && (
-                        <div>
-                          <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">Ghi chú cấu hình</span>
-                          <p className="mt-2 text-[12px] text-[var(--color-text-muted)]">Không có ghi chú cấu hình.</p>
-                        </div>
-                      )}
+                      <div>
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">Ghi chú cấu hình</span>
+                        <p className="mt-2 whitespace-pre-wrap text-[12px] leading-5 text-[var(--color-text-secondary)]">{selectedRequest.configurationNotes || "Không có ghi chú cấu hình."}</p>
+                      </div>
                     </div>
+                  </section>
                 </div>
 
                 {/* Edit Form - Plan and Status */}
-                <form onSubmit={handleSave} className="space-y-4 pt-5 border-t border-[var(--color-border)]">
-                  <h3 className="text-[15px] font-bold text-[var(--color-text-primary)] flex items-center gap-1.5">
+                <form onSubmit={handleSave} className="space-y-4 border-t border-[var(--color-border)] bg-gradient-to-br from-[var(--color-bg-surface-raised)]/60 to-[var(--color-brand-subtle)]/25 p-5">
+                  <h3 className="flex items-center gap-2 rounded-lg border border-[var(--color-brand)]/15 bg-white/70 px-3 py-2 text-[14px] font-extrabold text-[var(--color-brand)] shadow-sm dark:bg-white/5">
                     <CheckCircle2 className="h-4.5 w-4.5 text-[var(--color-brand)]" />
                     Lập phương án liên hệ & trạng thái
                   </h3>
@@ -666,7 +713,7 @@ export default function AdminConsultationsPage() {
                     </div>
                   )}
 
-                  <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="grid gap-3 md:grid-cols-2">
                     <label className="space-y-1.5">
                       <span className="text-[12px] font-bold text-[var(--color-text-secondary)]">Trạng thái hiện tại</span>
                       <select
@@ -677,7 +724,7 @@ export default function AdminConsultationsPage() {
                           setGeneratedCredentials(null);
                         }}
                         disabled={isFinalDecision}
-                        className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]/15"
+                        className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2.5 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/10"
                       >
                         {!isFinalDecision && <option value="">-- Chọn trạng thái --</option>}
                         <option value="pending">Chưa xử lý</option>
@@ -694,7 +741,7 @@ export default function AdminConsultationsPage() {
                       <select
                         value={editContactPlan}
                         onChange={(e) => setEditContactPlan(e.target.value)}
-                        className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]/15"
+                        className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2.5 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/10"
                       >
                         <option value="">-- Chọn phương án liên hệ --</option>
                         {prebuiltOutreachPlans.map((plan) => (
@@ -763,14 +810,14 @@ export default function AdminConsultationsPage() {
                     </div>
                   )}
 
-                  <label className="block space-y-1.5">
+                  <label className="block space-y-1.5 md:col-span-2">
                     <span className="text-[12px] font-bold text-[var(--color-text-secondary)]">Ghi chú cuộc gọi / Kế hoạch chi tiết</span>
                     <textarea
                       value={editNotes}
                       onChange={(e) => setEditNotes(e.target.value)}
                       placeholder="Ghi chú chi tiết nhu cầu hoặc kết quả sau khi trao đổi cụ thể với khách hàng..."
                       rows={3}
-                      className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]/15"
+                      className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2.5 text-[13px] text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/10"
                     />
                   </label>
 
@@ -778,7 +825,7 @@ export default function AdminConsultationsPage() {
                     <button
                       type="submit"
                       disabled={saving || !editStatus}
-                      className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] hover:bg-[var(--color-brand)]/90 px-4 text-[13px] font-bold text-white shadow-sm transition disabled:opacity-50"
+                      className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-5 text-[13px] font-bold text-white shadow-md shadow-[var(--color-brand)]/25 transition hover:-translate-y-0.5 hover:bg-[var(--color-brand)]/90 disabled:opacity-50 disabled:hover:translate-y-0"
                     >
                       {saving ? (
                         <>
