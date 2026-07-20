@@ -250,6 +250,13 @@ export function LeadDetailPanel({
       ownership.status === "manager_override" ||
       ownership.status === "unassigned");
   const sourceAction = getLeadSourceAction(lead);
+  const showTerminalSourceAction =
+    isTerminalLead &&
+    (workbenchView === "closed" || workbenchView === "skipped");
+  const canOpenTerminalSource =
+    showTerminalSourceAction &&
+    Boolean(sourceAction) &&
+    isSameBrandScope(profile, lead);
   const profileSourceHref = sourceAction?.href || "";
   const canOpenProfileSource = Boolean(sourceAction && ownership.canWork);
   const platformMeta = PLATFORM_META[lead.platform];
@@ -448,6 +455,15 @@ export function LeadDetailPanel({
     }
   };
 
+  const handleOpenTerminalSource = () => {
+    if (!sourceAction || !canOpenTerminalSource) {
+      showToast("Item này không có liên kết nguồn hợp lệ.", "error");
+      return;
+    }
+
+    window.open(sourceAction.href, "_blank", "noopener,noreferrer");
+  };
+
   const handleSaveResult = async () => {
     if (!selectedResult) return;
     const option = RESULT_OPTIONS.find((item) => item.id === selectedResult);
@@ -575,17 +591,31 @@ export function LeadDetailPanel({
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {isTerminalLead ? (
-              canRestoreLead ? (
-                <button
-                  type="button"
-                  onClick={() => void handleRestoreLead()}
-                  disabled={isRestoring}
-                  className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[var(--color-brand-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <span className="material-symbols-outlined text-lg">restore</span>
-                  <span className="hidden sm:inline">{isRestoring ? "Đang khôi phục..." : "Khôi phục"}</span>
-                </button>
-              ) : null
+              <>
+                {showTerminalSourceAction && (
+                  <button
+                    type="button"
+                    onClick={handleOpenTerminalSource}
+                    disabled={!canOpenTerminalSource}
+                    title={canOpenTerminalSource ? "Mở nội dung trên nền tảng nguồn" : "Không có liên kết nguồn"}
+                    className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 text-[13px] font-semibold text-[var(--color-text-primary)] transition hover:border-[var(--color-brand)]/40 hover:bg-[var(--color-brand-subtle)] hover:text-[var(--color-brand)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined text-lg">open_in_new</span>
+                    <span className="hidden sm:inline">Mở nguồn</span>
+                  </button>
+                )}
+                {canRestoreLead && (
+                  <button
+                    type="button"
+                    onClick={() => void handleRestoreLead()}
+                    disabled={isRestoring}
+                    className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[var(--color-brand-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <span className="material-symbols-outlined text-lg">restore</span>
+                    <span className="hidden sm:inline">{isRestoring ? "Đang khôi phục..." : "Khôi phục"}</span>
+                  </button>
+                )}
+              </>
             ) : !lead.owner_id ? (
               role === "brand_manager" ? (
                 <div className="flex items-center gap-2" ref={dropdownRef}>
