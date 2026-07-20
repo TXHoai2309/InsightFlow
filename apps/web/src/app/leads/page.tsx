@@ -32,6 +32,10 @@ import {
 import { normalizeBrandName } from "@/lib/services/dashboard";
 import { isIntentLead } from "@/lib/lead-intent";
 import {
+  findLeadByNavigationTarget,
+  getLeadPrimaryMentionId,
+} from "@/lib/mention-navigation";
+import {
   DEFAULT_LEAD_WORKBENCH_FILTERS,
   countActiveLeadFilters,
   filterLeadWorkbenchItems,
@@ -106,6 +110,7 @@ export default function LeadsPage() {
   const hasRestoredReturnContext = useRef(false);
   const skipNextPageReset = useRef(false);
   const pendingRestoreLeadId = useRef<string | null>(null);
+  const pendingRestoreMentionId = useRef<string | null>(null);
   const pendingRestoreScrollTop = useRef<number | null>(null);
   const pendingRestorePanelScrollTop = useRef<number | null>(null);
   const hasReconciledRestoreLead = useRef(false);
@@ -115,6 +120,7 @@ export default function LeadsPage() {
 
   const clearPendingRestore = useCallback((clearHighlight = false) => {
     pendingRestoreLeadId.current = null;
+    pendingRestoreMentionId.current = null;
     pendingRestoreScrollTop.current = null;
     pendingRestorePanelScrollTop.current = null;
     if (clearHighlight) setHighlightedLeadId(null);
@@ -221,6 +227,7 @@ export default function LeadsPage() {
     const requestedView = params.get("view") as LeadWorkbenchView | null;
     const requestedPage = Number(params.get("page") || "1");
     const requestedLeadId = params.get("leadId");
+    const requestedMentionId = params.get("mentionId");
     const requestedSort = params.get("sort");
     const nextView = returnContext?.view || requestedView;
     const nextPage = returnContext?.page || requestedPage;
@@ -255,13 +262,19 @@ export default function LeadsPage() {
       setCurrentPage(Math.floor(nextPage));
     }
 
-    if (nextLeadId) {
-      pendingRestoreLeadId.current = nextLeadId;
+    if (nextLeadId || requestedMentionId) {
+      const pendingLeadId = nextLeadId || requestedMentionId;
+      pendingRestoreLeadId.current = pendingLeadId;
+      pendingRestoreMentionId.current = requestedMentionId;
       pendingRestoreScrollTop.current = returnContext?.listScrollTop ?? null;
       pendingRestorePanelScrollTop.current = returnContext?.panelScrollTop ?? null;
-      setSelectedLeadId(nextLeadId);
-      setHighlightedLeadId(nextLeadId);
-      setRestoreNotice("Đã quay lại đúng lead bạn vừa kiểm tra.");
+      setSelectedLeadId(pendingLeadId);
+      setHighlightedLeadId(pendingLeadId);
+      setRestoreNotice(
+        requestedMentionId
+          ? "Đang mở đúng mention từ Lead Monitoring."
+          : "Đã quay lại đúng lead bạn vừa kiểm tra.",
+      );
     }
 
     hasRestoredReturnContext.current = true;
@@ -277,8 +290,22 @@ export default function LeadsPage() {
     params.set("view", activeView);
     if (currentPage > 1) params.set("page", String(currentPage));
     else params.delete("page");
-    if (selectedLeadId) params.set("leadId", selectedLeadId);
-    else params.delete("leadId");
+    if (selectedLeadId) {
+      params.set("leadId", selectedLeadId);
+      const selectedLead = findLeadByNavigationTarget(
+        leads,
+        selectedLeadId,
+        pendingRestoreMentionId.current,
+      );
+      const mentionId = selectedLead
+        ? getLeadPrimaryMentionId(selectedLead)
+        : pendingRestoreMentionId.current;
+      if (mentionId) params.set("mentionId", mentionId);
+      else params.delete("mentionId");
+    } else {
+      params.delete("leadId");
+      params.delete("mentionId");
+    }
     if (sortMode !== "recommended") params.set("sort", sortMode);
     else params.delete("sort");
     params.delete("returnToken");
@@ -289,7 +316,7 @@ export default function LeadsPage() {
       "",
       query ? `${window.location.pathname}?${query}` : window.location.pathname,
     );
-  }, [activeView, currentPage, leadFilters, selectedLeadId, sortMode]);
+  }, [activeView, currentPage, leadFilters, leads, selectedLeadId, sortMode]);
 
   const visibleBaseLeads = useMemo(
     () => baseLeads.filter((lead) => canLeadBeVisibleToUser(lead, profile)),
@@ -402,6 +429,7 @@ export default function LeadsPage() {
 
   useEffect(() => {
     const restoredLeadId = pendingRestoreLeadId.current;
+    const restoredMentionId = pendingRestoreMentionId.current;
     if (!restoredLeadId || hasReconciledRestoreLead.current || isLoading) return;
     if (visibleBaseLeads.length === 0 && leads.length > 0) {
       setRestoreNotice(
@@ -412,10 +440,21 @@ export default function LeadsPage() {
       return;
     }
 
-    const restoredLead = visibleBaseLeads.find((lead) => lead.id === restoredLeadId);
+    const restoredLead = findLeadByNavigationTarget(
+      visibleBaseLeads,
+      restoredLeadId,
+      restoredMentionId,
+    );
     if (!restoredLead) return;
+    const resolvedLeadId = restoredLead.id;
 
-    if (!visibleLeads.some((lead) => lead.id === restoredLeadId)) {
+    if (resolvedLeadId !== restoredLeadId) {
+      pendingRestoreLeadId.current = resolvedLeadId;
+      setSelectedLeadId(resolvedLeadId);
+      setHighlightedLeadId(resolvedLeadId);
+    }
+
+    if (!visibleLeads.some((lead) => lead.id === resolvedLeadId)) {
       const nextView = workbenchViews.find((view) =>
         matchesLeadWorkbenchView(restoredLead, view.id, currentTime, profile),
       );
@@ -437,7 +476,7 @@ export default function LeadsPage() {
       return;
     }
 
-    const visibleIndex = visibleLeads.findIndex((lead) => lead.id === restoredLeadId);
+    const visibleIndex = visibleLeads.findIndex((lead) => lead.id === resolvedLeadId);
     if (visibleIndex >= 0) {
       const pageForLead = Math.floor(visibleIndex / LEADS_PAGE_SIZE) + 1;
       if (pageForLead !== currentPage) {
