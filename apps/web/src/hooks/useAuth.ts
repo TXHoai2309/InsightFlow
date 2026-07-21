@@ -137,5 +137,35 @@ export function useAuth() {
     };
   }, [setLoading, setProfile, setProfileLoading, setUser]);
 
-  return { user, profile, role, loading: loading || profileLoading };
+  // If in demo mode, override the auth return values
+  const isDemoMode = typeof window !== "undefined" && window.location.pathname.startsWith("/demo");
+  if (isDemoMode) {
+    return {
+      user: { uid: "demo-user", email: "demo@example.com" } as any,
+      profile: {
+        uid: "demo-user",
+        email: "demo@example.com",
+        displayName: "Khách xem Demo",
+        role: "brand_manager",
+        brandId: "demo_brand",
+        brandName: "Demo Brand",
+        permissions: [
+          "dashboard",
+          "mentions",
+          "alerts",
+          "leads",
+          "reports",
+          "staff_management",
+          "brand_settings",
+          "label_request_review",
+          "response_settings",
+        ],
+      } as any,
+      role: "brand_manager",
+      loading: false,
+    };
+  }
+
+  return { user, profile, role: role as any, loading: loading || profileLoading };
 }
+

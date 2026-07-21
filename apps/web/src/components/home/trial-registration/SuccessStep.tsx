@@ -27,7 +27,7 @@ export function SuccessStep({
   }, []);
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       className="w-full min-h-[650px] p-10 md:p-14 bg-white/90 dark:bg-[#161722]/90 backdrop-blur-3xl rounded-[32px] shadow-[0_10px_40px_rgba(0,0,0,0.08)] dark:shadow-none flex flex-col relative overflow-hidden mx-auto border border-transparent dark:border-white/5"
@@ -37,7 +37,7 @@ export function SuccessStep({
 
       {/* Header */}
       <div className="flex flex-col items-center mb-14 relative z-10">
-        <motion.div 
+        <motion.div
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
           transition={{ type: "spring", bounce: 0.5, duration: 0.8 }}
@@ -46,7 +46,7 @@ export function SuccessStep({
           <CheckCircle2 className="w-10 h-10 text-white" />
         </motion.div>
         <h3 className="text-[32px] md:text-[40px] font-extrabold text-[#0F172A] dark:text-white tracking-tight mb-4 text-center">
-          {consultationCompleted ? "Thông tin tư vấn đã được bổ sung!" : "Yêu cầu đã được gửi thành công!"}
+          {consultationCompleted ? "Thông tin tư vấn đã được bổ sung!" : "Cảm ơn bạn đã đăng ký dùng thử!"}
         </h3>
         <p className="text-[#64748B] dark:text-gray-400 text-[16px] max-w-[650px] text-center leading-relaxed">
           {consultationCompleted
@@ -63,19 +63,19 @@ export function SuccessStep({
           <h4 className="text-[18px] font-extrabold text-[#0F172A] dark:text-white mb-8">Thông tin yêu cầu</h4>
           <div className="flex flex-col gap-6">
             <div className="flex justify-between items-center pb-4 border-b border-[#E2E8F0] dark:border-white/10">
-              <span className="text-[#64748B] dark:text-gray-400 text-[15px] font-medium flex items-center gap-2"><Hash className="w-4 h-4"/> Mã yêu cầu</span>
+              <span className="text-[#64748B] dark:text-gray-400 text-[15px] font-medium flex items-center gap-2"><Hash className="w-4 h-4" /> Mã yêu cầu</span>
               <span className="max-w-[220px] break-all text-right font-bold text-[14px] text-[#0F172A] dark:text-gray-200">{requestId}</span>
             </div>
             <div className="flex justify-between items-center pb-4 border-b border-[#E2E8F0] dark:border-white/10">
-              <span className="text-[#64748B] dark:text-gray-400 text-[15px] font-medium flex items-center gap-2"><Calendar className="w-4 h-4"/> Thời gian gửi</span>
+              <span className="text-[#64748B] dark:text-gray-400 text-[15px] font-medium flex items-center gap-2"><Calendar className="w-4 h-4" /> Thời gian gửi</span>
               <span className="font-bold text-[16px] text-[#0F172A] dark:text-gray-200">{timeStr || "Đang tải..."}</span>
             </div>
             <div className="flex justify-between items-center pb-4 border-b border-[#E2E8F0] dark:border-white/10">
-              <span className="text-[#64748B] dark:text-gray-400 text-[15px] font-medium flex items-center gap-2"><Mail className="w-4 h-4"/> Email thông báo</span>
+              <span className="text-[#64748B] dark:text-gray-400 text-[15px] font-medium flex items-center gap-2"><Mail className="w-4 h-4" /> Email thông báo</span>
               <span className="max-w-[220px] break-all text-right font-bold text-[14px] text-[#0F172A] dark:text-gray-200">{email}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-[#64748B] dark:text-gray-400 text-[15px] font-medium flex items-center gap-2"><Clock className="w-4 h-4"/> Trạng thái</span>
+              <span className="text-[#64748B] dark:text-gray-400 text-[15px] font-medium flex items-center gap-2"><Clock className="w-4 h-4" /> Trạng thái</span>
               <span className="inline-flex items-center gap-1.5 text-[14px] font-bold text-[#F59E0B] bg-[#FFFBEB] dark:bg-[#F59E0B]/20 px-3.5 py-1.5 rounded-[10px] border border-[#FCD34D] dark:border-[#F59E0B]/30">
                 Đang xét duyệt
               </span>
@@ -90,7 +90,7 @@ export function SuccessStep({
           <div className="flex flex-col gap-8 relative">
             {/* Vertical Line */}
             <div className="absolute left-[20px] top-[24px] bottom-[24px] w-[2px] bg-[#E2E8F0] dark:bg-white/10 z-0" />
-            
+
             <div className="flex items-start gap-5 relative z-10">
               <div className="w-10 h-10 rounded-full bg-[#10B981] flex items-center justify-center shadow-md">
                 <CheckCircle2 className="w-5 h-5 text-white" />
@@ -100,7 +100,7 @@ export function SuccessStep({
                 <p className="text-[14px] text-[#64748B] dark:text-gray-400">Đã cung cấp đủ thông tin</p>
               </div>
             </div>
-            
+
             <div className="flex items-start gap-5 relative z-10">
               <div className="w-10 h-10 rounded-full bg-[#10B981] flex items-center justify-center shadow-md">
                 <CheckCircle2 className="w-5 h-5 text-white" />
@@ -134,21 +134,40 @@ export function SuccessStep({
         </div>
       </div>
 
-      {onRestart && (
-        <div className="relative z-10 mt-8 flex flex-col items-center rounded-[20px] border border-[#C7D2FE] bg-[#EEF2FF] p-5 text-center sm:flex-row sm:justify-between sm:text-left">
-          <div>
-            <p className="flex items-center justify-center gap-2 text-[15px] font-extrabold text-[#3730A3] sm:justify-start">
-              <MessageSquareText className="h-5 w-5" /> Bạn muốn gửi thêm một yêu cầu?
-            </p>
-            <p className="mt-1 text-[13px] leading-5 text-[#4F46E5]">Quay lại form ban đầu để bắt đầu một đăng ký dùng thử mới.</p>
+      {!consultationCompleted && (
+        <div className="relative z-10 mt-8 flex flex-col md:flex-row items-center gap-4 w-full">
+          {onFillConsultation && (
+            <div className="flex-1 flex flex-col items-center rounded-[20px] border border-[#C7D2FE] bg-[#EEF2FF] p-5 text-center sm:flex-row sm:justify-between sm:text-left w-full h-full">
+              <div>
+                <p className="flex items-center justify-center gap-2 text-[15px] font-extrabold text-[#3730A3] sm:justify-start">
+                  <MessageSquareText className="h-5 w-5" /> Cần tư vấn thêm?
+                </p>
+                <p className="mt-1 text-[13px] leading-5 text-[#4F46E5]">Bổ sung yêu cầu để nhận tư vấn sát nhất.</p>
+              </div>
+              <button
+                type="button"
+                onClick={onFillConsultation}
+                className="mt-4 inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-[12px] bg-[#6D5EF6] px-5 text-[14px] font-bold text-white shadow-[0_8px_16px_rgba(109,94,246,0.2)] transition hover:-translate-y-0.5 hover:bg-[#5B4DF5] sm:mt-0 sm:ml-4"
+              >
+                Gửi Form <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+
+          <div className="flex-1 flex flex-col items-center rounded-[20px] border border-[#A7F3D0] bg-[#ECFDF5] p-5 text-center sm:flex-row sm:justify-between sm:text-left w-full h-full">
+            <div>
+              <p className="flex items-center justify-center gap-2 text-[15px] font-extrabold text-[#065F46] sm:justify-start">
+                <span className="w-5 h-5 flex items-center justify-center bg-[#10B981] text-white rounded-full text-[12px]">🚀</span> Khám phá hệ thống
+              </p>
+              <p className="mt-1 text-[13px] leading-5 text-[#047857]">Trải nghiệm Dashboard với dữ liệu mẫu.</p>
+            </div>
+            <a
+              href="/demo"
+              className="mt-4 inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-[12px] bg-[#10B981] px-5 text-[14px] font-bold text-white shadow-[0_8px_16px_rgba(16,185,129,0.2)] transition hover:-translate-y-0.5 hover:bg-[#059669] sm:mt-0 sm:ml-4 whitespace-nowrap"
+            >
+              Xem Bản Demo <ArrowRight className="h-4 w-4" />
+            </a>
           </div>
-          <button
-            type="button"
-            onClick={onRestart}
-            className="mt-4 inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-[14px] bg-[#6D5EF6] px-6 text-[14px] font-bold text-white shadow-[0_10px_22px_rgba(109,94,246,0.22)] transition hover:-translate-y-0.5 hover:bg-[#5B4DF5] sm:mt-0 sm:ml-5"
-          >
-            Điền form đăng ký mới <ArrowRight className="h-4 w-4" />
-          </button>
         </div>
       )}
     </motion.div>

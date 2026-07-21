@@ -24,10 +24,13 @@ export function BMTabs() {
 
   useEffect(() => setPendingHref(null), [pathname]);
 
+  const isDemo = pathname.startsWith("/demo");
+  const basePath = isDemo ? "/demo" : "/dashboard";
+
   const tabs = [
-    { href: "/dashboard", label: t("bm.tabs.overview", "Tổng quan") },
-    { href: "/dashboard/insights", label: t("bm.tabs.crisis", "Crisis Monitoring"), count: alertsCount },
-    { href: "/dashboard/lead-monitoring", label: t("bm.tabs.lead", "Lead Monitoring"), count: leadsCount },
+    { href: basePath, label: t("bm.tabs.overview", "Tổng quan") },
+    { href: `${basePath}/insights`, label: t("bm.tabs.crisis", "Crisis Monitoring"), count: alertsCount },
+    { href: `${basePath}/lead-monitoring`, label: t("bm.tabs.lead", "Lead Monitoring"), count: leadsCount },
   ];
 
   return (
