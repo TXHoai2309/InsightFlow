@@ -26,6 +26,14 @@ const PLATFORM_OPTIONS = [
   ["website", "Website"],
 ] as const;
 
+const ACTIVE_RUN_STATUSES = new Set([
+  "queued",
+  "waiting_resource",
+  "running",
+  "labeling",
+  "syncing",
+]);
+
 function dateText(value: any) {
   const date = value?.toDate ? value.toDate() : value ? new Date(value) : null;
   return date && !Number.isNaN(date.getTime()) ? date.toLocaleString("vi-VN") : "—";
@@ -56,7 +64,7 @@ export default function AdminCrawlOperationsPage() {
     if (!user) return;
     try {
       const token = await user.getIdToken();
-      const response = await fetch("/api/admin/crawl-runs?limit=50", {
+      const response = await fetch("/api/admin/crawl-runs?limit=20", {
         headers: { Authorization: `Bearer ${token}` },
         cache: "no-store",
       });
@@ -84,12 +92,14 @@ export default function AdminCrawlOperationsPage() {
         setErrorMessage("Phiên đăng nhập chưa sẵn sàng.");
       }
     });
-    const timer = window.setInterval(() => void loadRuns(), 5000);
+    const timer = window.setInterval(() => void loadRuns(), 60000);
     return () => {
       unsubscribe();
       window.clearInterval(timer);
     };
   }, [loadRuns]);
+
+  const selectedStatus = runs.find((run) => run.id === selectedId)?.status;
 
   useEffect(() => {
     if (!selectedId) { setEvents([]); return; }
@@ -99,14 +109,16 @@ export default function AdminCrawlOperationsPage() {
       if (!user) return;
       try {
         const token = await user.getIdToken();
-        const response = await fetch(`/api/admin/crawl-runs/${encodeURIComponent(selectedId)}?eventLimit=100`, {
+        const response = await fetch(`/api/admin/crawl-runs/${encodeURIComponent(selectedId)}?eventLimit=30`, {
           headers: { Authorization: `Bearer ${token}` },
           cache: "no-store",
         });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
         if (cancelled) return;
-        setEvents(Array.isArray(payload.events) ? payload.events : []);
+        setEvents(Array.isArray(payload.events)
+          ? payload.events.filter((event: Event) => event.eventType !== "heartbeat")
+          : []);
         if (payload.run) {
           setRuns((current) => current.map((run) => run.id === payload.run.id ? payload.run : run));
         }
@@ -118,12 +130,14 @@ export default function AdminCrawlOperationsPage() {
       }
     };
     void loadDetail();
-    const timer = window.setInterval(() => void loadDetail(), 3000);
+    const timer = ACTIVE_RUN_STATUSES.has(selectedStatus || "")
+      ? window.setInterval(() => void loadDetail(), 30000)
+      : null;
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
+      if (timer !== null) window.clearInterval(timer);
     };
-  }, [selectedId]);
+  }, [selectedId, selectedStatus]);
 
   const selected = useMemo(() => runs.find((run) => run.id === selectedId) || null, [runs, selectedId]);
   const iconFor = (status: string) => status === "failed" ? XCircle : status === "completed" ? CheckCircle2 : status === "running" ? Activity : Clock3;
@@ -163,7 +177,7 @@ export default function AdminCrawlOperationsPage() {
             <h1 className="mt-1 text-2xl font-black">Tiến trình cào dữ liệu</h1>
             <p className="mt-1 text-sm opacity-70">Production và trial dùng chung một luồng giám sát realtime.</p>
           </div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600"><span className="h-2 w-2 rounded-full bg-emerald-500" />Tự cập nhật 3–5 giây</div>
+          <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600"><span className="h-2 w-2 rounded-full bg-emerald-500" />Tự cập nhật tiết kiệm 30–60 giây</div>
         </div>
         <div className="grid gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)]">
           <section className="space-y-3">

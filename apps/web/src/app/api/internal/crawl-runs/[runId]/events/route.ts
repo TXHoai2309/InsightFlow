@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { hasCrawlRunIngestAccess } from "@/lib/server/crawlRunIngestAuth";
-import { appendCrawlRunEvent, getCrawlRun } from "@/lib/server/crawlRuns";
+import { appendCrawlRunEvent, getCrawlRun, updateCrawlRun } from "@/lib/server/crawlRuns";
 
 function text(value: unknown, maxLength: number) {
   return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
@@ -17,9 +17,7 @@ export async function POST(
   }
 
   const runId = text(context.params.runId, 120);
-  if (!runId || !(await getCrawlRun(runId))) {
-    return NextResponse.json({ error: "Crawl run not found" }, { status: 404 });
-  }
+  if (!runId) return NextResponse.json({ error: "Crawl run not found" }, { status: 404 });
 
   try {
     const body = await request.json();
@@ -28,6 +26,22 @@ export async function POST(
     const eventType = text(body.eventType, 30);
     if (!EVENT_TYPES.has(eventType)) {
       return NextResponse.json({ error: "eventType is invalid" }, { status: 400 });
+    }
+
+    // Heartbeats only renew the run. They are deliberately not persisted as
+    // event documents because a long crawl can otherwise create thousands of
+    // low-value log rows and exhaust Firestore quota.
+    if (eventType === "heartbeat") {
+      await updateCrawlRun(runId, {
+        heartbeatAt: true,
+        progressCurrent: Number.isFinite(body.progressCurrent) ? body.progressCurrent : undefined,
+        progressTotal: Number.isFinite(body.progressTotal) ? body.progressTotal : undefined,
+      });
+      return NextResponse.json({ heartbeat: true });
+    }
+
+    if (!(await getCrawlRun(runId))) {
+      return NextResponse.json({ error: "Crawl run not found" }, { status: 404 });
     }
 
     const eventId = await appendCrawlRunEvent(runId, {

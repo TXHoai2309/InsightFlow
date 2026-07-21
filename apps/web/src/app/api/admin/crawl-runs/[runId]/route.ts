@@ -52,8 +52,8 @@ export async function GET(
   try {
     const run = await getCrawlRun(context.params.runId);
     if (!run) return NextResponse.json({ error: "Crawl run not found" }, { status: 404 });
-    const rawLimit = Number(request.nextUrl.searchParams.get("eventLimit") || 100);
-    const events = await listCrawlRunEvents(context.params.runId, Number.isFinite(rawLimit) ? rawLimit : 100);
+    const rawLimit = Number(request.nextUrl.searchParams.get("eventLimit") || 30);
+    const events = await listCrawlRunEvents(context.params.runId, Number.isFinite(rawLimit) ? rawLimit : 30);
     return NextResponse.json({ run, events });
   } catch (error) {
     console.error("[Admin crawl runs API] detail error:", error);

@@ -64,8 +64,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   try {
-    const rawLimit = Number(request.nextUrl.searchParams.get("limit") || 50);
-    return NextResponse.json({ runs: await listCrawlRuns(Number.isFinite(rawLimit) ? rawLimit : 50) });
+    const rawLimit = Number(request.nextUrl.searchParams.get("limit") || 20);
+    return NextResponse.json({ runs: await listCrawlRuns(Number.isFinite(rawLimit) ? rawLimit : 20) });
   } catch (error) {
     console.error("[Admin crawl runs API] list error:", error);
     return NextResponse.json({ error: "Unable to load crawl runs" }, { status: 500 });
