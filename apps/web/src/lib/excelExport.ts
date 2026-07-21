@@ -1192,6 +1192,78 @@ export interface DualOperationsExcelViewOptions {
   brandName?: string;
 }
 
+export function renderRichMarkdownToHTML(mdText: string): string {
+  if (!mdText) return "";
+  const normalized = mdText.normalize("NFC");
+  const lines = normalized.split("\n");
+  const htmlBlocks: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      htmlBlocks.push('<div style="height: 10px;"></div>');
+      continue;
+    }
+
+    // 1. Title Header (e.g. **BÁO CÁO PHÂN TÍCH...**)
+    if (trimmed.startsWith("**BÁO CÁO") || trimmed.startsWith("**BÁO CÁO PHÂN TÍCH")) {
+      const cleanTitle = trimmed.replace(/^\*\*/, "").replace(/\*\*/g, "").replace(/---$/, "").trim();
+      htmlBlocks.push(`
+        <div style="font-family:'Times New Roman', Times, serif; font-size: 20px; font-weight: 700; color: #111827; text-align: center; text-transform: uppercase; margin-bottom: 24px; line-height: 1.4; letter-spacing: 0.3px;">
+          ${escapeHtml(cleanTitle)}
+        </div>
+      `);
+      continue;
+    }
+
+    // 2. Section Headings (e.g. ### 1. ĐÁNH GIÁ TỔNG QUAN...)
+    if (trimmed.startsWith("### ")) {
+      const headingText = trimmed.replace(/^###\s*/, "").replace(/---$/, "").trim();
+      const cleanHeading = escapeHtml(headingText).replace(/\*\*(.*?)\*\*/g, "$1");
+      htmlBlocks.push(`
+        <h3 style="font-family:'Times New Roman', Times, serif; font-size: 16.5px; font-weight: 700; color: #1E293B; margin-top: 24px; margin-bottom: 10px; line-height: 1.4; border-bottom: 1.5px solid #CBD5E1; padding-bottom: 4px;">
+          ${cleanHeading}
+        </h3>
+      `);
+      continue;
+    }
+
+    // 3. Bullet / List Items (*, •, -, ↳)
+    if (/^[\*\•\-\↳]\s/.test(trimmed) || /^\*\s\*\*/.test(trimmed)) {
+      let content = trimmed.replace(/^[\*\•\-\↳]\s*/, "").trim();
+      if (content.startsWith("* **")) {
+        content = content.replace(/^\*\s/, "");
+      }
+
+      const formattedContent = escapeHtml(content)
+        .replace(/\*\*(.*?)\*\*/g, '<strong style="font-weight:700; color:#111827;">$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em style="font-style:italic; color:#374151;">$1</em>');
+
+      htmlBlocks.push(`
+        <div style="font-family:'Times New Roman', Times, serif; font-size: 14.5px; line-height: 1.75; color: #1F2937; margin-left: 20px; margin-bottom: 6px; position: relative;">
+          <span style="position: absolute; left: -16px; top: 0; font-weight: bold; color: #374151;">•</span>
+          ${formattedContent}
+        </div>
+      `);
+      continue;
+    }
+
+    // 4. Regular Paragraph line
+    const formattedParagraph = escapeHtml(trimmed)
+      .replace(/\*\*(.*?)\*\*/g, '<strong style="font-weight:700; color:#111827;">$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em style="font-style:italic; color:#374151;">$1</em>');
+
+    htmlBlocks.push(`
+      <p style="font-family:'Times New Roman', Times, serif; font-size: 14.5px; line-height: 1.75; color: #1F2937; margin-top: 4px; margin-bottom: 8px; text-align: justify;">
+        ${formattedParagraph}
+      </p>
+    `);
+  }
+
+  return htmlBlocks.join("");
+}
+
 export function buildUnifiedBIInsightHTML(params: {
   insightReport?: InsightReport;
   aiInsights?: string;
@@ -1276,6 +1348,33 @@ export function buildUnifiedBIInsightHTML(params: {
 
   const slaGaugeColor = slaRateNum >= 90 ? "#3F8F5F" : slaRateNum >= 75 ? "#9C7A2E" : "#A85A3E";
 
+  if (params.aiInsights) {
+    return `
+    <div class="bi-report-container" style="padding:40px 48px; background:#ffffff; font-family:'Times New Roman', Times, serif; color:#1F2937;">
+      <!-- Title Header -->
+      <header style="margin-bottom:28px; padding-bottom:16px; border-bottom:1px solid #E2E8F0;">
+        <h1 style="font-family:'Times New Roman', Times, serif; color:#111827; font-size:24px; font-weight:700; margin:0 0 6px 0; line-height:1.25; letter-spacing:-0.2px;">
+          BÁO CÁO PHÂN TÍCH INSIGHT — KỲ ${escapeHtml(periodLabel).toUpperCase()}
+        </h1>
+        <p style="font-family:'Times New Roman', Times, serif; color:#4B5563; font-size:14px; font-style:italic; margin:0;">
+          Thương hiệu: ${escapeHtml(brandName)} · Dữ liệu phân tích AI Insights
+        </p>
+      </header>
+
+      <!-- Section: Phân tích AI Insights Document View -->
+      <div style="margin-bottom:32px;">
+        <div style="background:#ffffff; border:1px solid #E5E7EB; border-radius:8px; padding:36px 44px; box-shadow:0 4px 24px rgba(0,0,0,0.06); font-family:'Times New Roman', Times, serif;">
+          ${renderRichMarkdownToHTML(params.aiInsights)}
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <footer style="margin-top:36px; padding-top:16px; border-top:1px solid #E5E7EB; text-align:center; color:#6B7280; font-size:12px; font-style:italic; font-family:'Times New Roman', serif;">
+        Báo cáo được khởi tạo tự động bởi InsightFlow BI System · Định dạng tài liệu chuẩn Word
+      </footer>
+    </div>`;
+  }
+
   return `
     <div class="bi-report-container" style="padding:36px; background:#ffffff; font-family:'Calibri', 'Segoe UI', Arial, sans-serif; color:#3A3936;">
       <!-- Title Header -->
@@ -1287,20 +1386,6 @@ export function buildUnifiedBIInsightHTML(params: {
           ${escapeHtml(brandName)} · Dữ liệu phân tích AI Insights &amp; Metrics
         </p>
       </header>
-
-      ${params.aiInsights
-        ? `
-      <!-- Section: Phân tích AI Insights (Gemini Key Rotation) -->
-      <div style="margin-bottom:36px;">
-        <h2 style="font-family:'Segoe UI', Arial, sans-serif; color:#4F46E5; font-size:18px; font-weight:700; margin:0 0 14px 0; display:flex; align-items:center; gap:8px;">
-          📌 Phân tích AI Insights (Gemini Key Rotation)
-        </h2>
-        <div style="background:#ffffff; border:1px solid #DCE4EC; border-radius:12px; padding:24px 28px; box-shadow:0 2px 12px rgba(0,0,0,0.03);">
-          <div style="font-family:'Segoe UI', 'Calibri', Arial, sans-serif; font-size:13.5px; line-height:1.75; color:#1E293B; white-space:pre-wrap; word-break:break-word;">${escapeHtml(params.aiInsights)}</div>
-        </div>
-      </div>
-      `
-        : ""}
 
       <!-- 1. Tóm tắt -->
       <div style="margin-bottom:32px;">
