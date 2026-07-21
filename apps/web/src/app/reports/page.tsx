@@ -11,7 +11,7 @@ import { LeadEmployeeReportPage } from "@/components/lead-monitoring/LeadEmploye
 import { CrisisEmployeeReportPage } from "@/components/crisis-monitoring/CrisisEmployeeReportPage";
 import { DualOperationsEmployeeReportPage } from "@/components/dual-operations-report/DualOperationsEmployeeReportPage";
 import { ReportExportPreviewModal } from "@/components/reports/ReportExportPreviewModal";
-import { canPerformAction } from "@/lib/rbac";
+import { canPerformAction, getEmployeeBusinessScope } from "@/lib/rbac";
 
 
 /**
@@ -1112,12 +1112,7 @@ function LanguageSelectModal({
 
 export default function ReportsPage() {
   const { profile, loading: authLoading } = useAuth();
-  const isEmployeeRole =
-    profile?.role === "crisis_employee" || profile?.role === "lead_employee";
-  const hasDualOperations =
-    isEmployeeRole &&
-    profile?.permissions?.includes("alerts") &&
-    profile?.permissions?.includes("leads");
+  const hasDualOperations = getEmployeeBusinessScope(profile) === "dual";
 
   if (authLoading) {
     return (

@@ -427,20 +427,30 @@ export function getLeadWorkbenchMeta(
 
 export function formatLeadSla(meta: LeadWorkbenchMeta) {
   if (!meta.isPending) return "Đã xử lý";
+
+  const formatDuration = (totalMinutes: number) => {
+    if (totalMinutes < 60) return `${totalMinutes} phút`;
+
+    const totalHours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    if (totalHours < 24) {
+      return minutes > 0
+        ? `${totalHours} giờ ${minutes} phút`
+        : `${totalHours} giờ`;
+    }
+
+    const days = Math.floor(totalHours / 24);
+    const hours = totalHours % 24;
+    return hours > 0 ? `${days} ngày ${hours} giờ` : `${days} ngày`;
+  };
+
   if (meta.isOverdue) {
     const overdueMin = Math.ceil(Math.abs(meta.remainingMs) / 60000);
-    return `Quá hạn ${overdueMin} phút`;
+    return `Quá hạn ${formatDuration(overdueMin)}`;
   }
 
   const totalMinutes = Math.max(1, Math.ceil(meta.remainingMs / 60000));
-  if (totalMinutes < 60) return `còn ${totalMinutes} phút`;
-
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (hours < 24) return minutes > 0 ? `còn ${hours}g ${minutes}p` : `còn ${hours} giờ`;
-
-  const days = Math.ceil(hours / 24);
-  return `còn ${days} ngày`;
+  return `Còn ${formatDuration(totalMinutes)}`;
 }
 
 export function formatFollowUpTime(lead: Lead) {

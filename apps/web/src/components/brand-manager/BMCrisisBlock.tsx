@@ -157,7 +157,7 @@ export function BMCrisisBlock({ alerts }: BMCrisisBlockProps) {
                       <div className="font-semibold text-[var(--color-text-primary)] mb-1">{alert.message}</div>
                       {alert.original_content && (
                         <div className="text-[12px] text-[var(--color-text-muted)] italic line-clamp-2 bg-[var(--color-bg-surface-raised)] p-2 rounded-md border border-[var(--color-border)]">
-                          "{alert.original_content}"
+                          “{alert.original_content}”
                         </div>
                       )}
                     </td>
@@ -225,7 +225,7 @@ export function BMCrisisBlock({ alerts }: BMCrisisBlockProps) {
             </div>
             
             <p className="text-[13px] text-[var(--color-text-secondary)] mb-4">
-              Chọn nhân viên để xử lý cảnh báo này. Danh sách hiển thị các nhân sự có nghiệp vụ "Xử lý khủng hoảng".
+              Chọn nhân viên để xử lý cảnh báo này. Danh sách hiển thị các nhân sự có nghiệp vụ “Xử lý khủng hoảng”.
             </p>
 
             <div className="space-y-2 mb-6">

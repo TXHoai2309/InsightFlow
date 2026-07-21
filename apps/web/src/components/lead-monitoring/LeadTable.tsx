@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useMemo, useState, useEffect } from "react";
+import Link from "next/link";
 import {
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
@@ -16,6 +16,7 @@ import { auth } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { getLeadOperationErrorMessage } from "@/lib/services/dashboard";
+import { createLeadWorkbenchHref } from "@/lib/mention-navigation";
 
 const filterChips = [
   { id: "all", label: "Tất cả" },
@@ -115,7 +116,7 @@ function calculateResponseTime(created: string, firstContacted?: string) {
 export function LeadTable() {
   const monitoringLeads = useLeadMonitoringLeads();
   const { profile } = useAuth();
-  const { updateLeadDetails, updateLeadStatus } = useDashboardStore();
+  const { updateLeadDetails } = useDashboardStore();
   const [staffList, setStaffList] = useState<any[]>([]);
   const [assigningLeadId, setAssigningLeadId] = useState<string | null>(null);
 
@@ -267,11 +268,12 @@ export function LeadTable() {
                 const statusInfo = getStatusInfo(lead.status);
                 const sla = formatSla(lead);
                 const sourceHref = lead.url || lead.source_url;
+                const leadHref = createLeadWorkbenchHref(lead);
 
                 return (
                   <tr key={lead.id} className="transition-colors hover:bg-[#FAF8FF]">
                     <td className="px-5 py-4 align-top">
-                      <div className="flex items-center gap-3">
+                      <Link href={leadHref} className="flex items-center gap-3 rounded-lg outline-none transition hover:text-[#4234B6] focus-visible:ring-2 focus-visible:ring-[#4234B6]/30" title="Xem mention tại trang Khách hàng">
                         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#EEEDF4] text-[13px] font-bold text-[#4234B6]">
                           {getAvatarInitials(lead.author)}
                         </div>
@@ -283,16 +285,18 @@ export function LeadTable() {
                             {lead.platform} · {lead.id.substring(0, 8)}
                           </p>
                         </div>
-                      </div>
+                      </Link>
                     </td>
 
                     <td className="max-w-[340px] px-5 py-4 align-top">
-                      <p className="text-[13px] font-bold text-[#1A1B20]">
-                        {getLeadSignal(lead)}
-                      </p>
-                      <p className="mt-1 line-clamp-2 text-[13px] leading-5 text-[#474554]">
-                        "{lead.content}"
-                      </p>
+                      <Link href={leadHref} className="block rounded-lg outline-none transition hover:bg-[#F4F3FA] focus-visible:ring-2 focus-visible:ring-[#4234B6]/30" title="Xem mention tại trang Khách hàng">
+                        <p className="text-[13px] font-bold text-[#1A1B20]">
+                          {getLeadSignal(lead)}
+                        </p>
+                        <p className="mt-1 line-clamp-2 text-[13px] leading-5 text-[#474554]">
+                          “{lead.content}”
+                        </p>
+                      </Link>
                     </td>
 
                     <td className="px-5 py-4 align-top">
@@ -396,39 +400,14 @@ export function LeadTable() {
                           </div>
                         )}
 
-                        <button
-                          type="button"
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            try {
-                              await updateLeadStatus(lead.id, "completed", profile);
-                              showToast("Đã đánh dấu hoàn thành lead thành công!", "success");
-                            } catch (err: any) {
-                              console.error("[LeadTable] Failed to complete lead:", err);
-                              showToast(
-                                getLeadOperationErrorMessage(
-                                  err,
-                                  "Không thể hoàn thành lead.",
-                                ),
-                                "error",
-                              );
-                            }
-                          }}
-                          className={`flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#E9E7EE] hover:bg-[#F3FCF6] transition-all ${
-                            lead.status === "completed" ? "text-[#147A3F] bg-[#F3FCF6] border-[#147A3F]/30" : "text-[#787585]"
-                          }`}
-                          title="Đánh dấu đã phản hồi"
-                        >
-                          <CheckCircle2 className="h-4 w-4" />
-                        </button>
                         {sourceHref ? (
-                          <a href={sourceHref} target="_blank" rel="noreferrer" className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#E9E7EE] text-[#474554] hover:bg-[#F4F3FA] transition-all" title="Mở bài gốc">
+                          <a href={sourceHref} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#E9E7EE] text-[#474554] hover:bg-[#F4F3FA] transition-all" title="Mở bài gốc">
                             <ExternalLink className="h-4 w-4" />
                           </a>
                         ) : (
-                          <button type="button" className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#E9E7EE] text-[#787585]" title="Xem nội dung">
+                          <Link href={leadHref} className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#E9E7EE] text-[#787585] hover:bg-[#F4F3FA]" title="Xem tại trang Khách hàng">
                             <MessageSquare className="h-4 w-4" />
-                          </button>
+                          </Link>
                         )}
                       </div>
                     </td>

@@ -4,6 +4,7 @@ import React, { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { PLATFORM_META } from "@/lib/services/dashboard";
+import { getDiscussionPeriodDays } from "@/lib/dashboard-display";
 import { Platform, Mention } from "@/types/dashboard";
 import { PlatformLogo } from "../platform/PlatformLogo";
 
@@ -41,6 +42,22 @@ export function BMPlatformDashboard({ onBack, currentMentions }: BMPlatformDashb
     const netSentiment = total === 0 ? 0 : Math.round(((pos - neg) / total) * 100);
     return { pos, neu, neg, total, netSentiment };
   }, [platformMentions]);
+
+  const discussionPeriodDays = useMemo(
+    () =>
+      getDiscussionPeriodDays({
+        timeRange: filters.time_range,
+        customStartDate: filters.custom_start_date,
+        customEndDate: filters.custom_end_date,
+        mentionDates: platformMentions.map((mention) => mention.posted_at),
+      }),
+    [
+      filters.time_range,
+      filters.custom_start_date,
+      filters.custom_end_date,
+      platformMentions,
+    ],
+  );
 
   // Google Maps ratings distribution (1-5 stars)
   const starStats = useMemo(() => {
@@ -279,7 +296,7 @@ export function BMPlatformDashboard({ onBack, currentMentions }: BMPlatformDashb
               {t("bm.platform.aiInsight", "Nhận định AI cho Kênh")}
             </h4>
             <p className="text-xs text-[var(--color-text-primary)] leading-relaxed italic">
-              "{aiPlatformInsight}"
+              “{aiPlatformInsight}”
             </p>
           </div>
         </div>
@@ -340,7 +357,7 @@ export function BMPlatformDashboard({ onBack, currentMentions }: BMPlatformDashb
                   <div>
                     <span className="text-xs text-[var(--color-text-muted)] font-semibold">{t("bm.platform.avgFreq", "Tần suất thảo luận trung bình")}</span>
                     <h4 className="text-lg font-extrabold text-[var(--color-text-primary)] mt-1">
-                      {(sentimentStats.total / 7).toFixed(1)} / {t("bm.platform.day", "ngày")}
+                      {(sentimentStats.total / discussionPeriodDays).toFixed(1)} / {t("bm.platform.day", "ngày")}
                     </h4>
                   </div>
                   <span className="material-symbols-outlined text-[var(--color-brand)]" style={{ fontSize: 24 }}>insights</span>

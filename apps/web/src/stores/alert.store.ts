@@ -7,7 +7,10 @@ import { normalizeBrandName, DashboardService } from "@/lib/services/dashboard";
 import { canPerformAction, type UserRoleProfile } from "@/lib/rbac";
 import { fetchSupabaseAlerts, updateSupabaseAlertLabel, supabaseRequest } from "@/lib/supabase";
 import { supabaseClient } from "@/lib/supabaseClient";
-import { normalizeClassificationLabel } from "@/lib/label-change";
+import {
+  isCrisisClassificationLabel,
+  normalizeClassificationLabel,
+} from "@/lib/label-change";
 import { calculateNegativityScore } from "@/lib/negativityScore";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import type { Mention } from "@/types/dashboard";
@@ -370,7 +373,7 @@ function mentionToAlertData(m: Mention): AlertData {
     comment_id: m.comment_id || undefined,
     post_url: m.url || "",
     post_like_count: m.star_count || 0,
-    relevance: typeof labelObj.relevance === "boolean" ? labelObj.relevance : true,
+    relevance: typeof labelObj.relevance === "boolean" ? labelObj.relevance : null,
     urgency: labelObj.urgency || "none",
     intent: labelObj.intent || "none",
     escalation: labelObj.escalation || null,
@@ -409,7 +412,14 @@ function buildAlertsFromMentions(
   scopedBrandKey?: string | null,
 ): AlertData[] {
   return mentions
-    .filter((mention) => mention.sentiment === "negative")
+    .filter((mention) =>
+      isCrisisClassificationLabel(mention.labels, {
+        sentiment: mention.sentiment,
+        relevance: mention.labels?.relevance ?? null,
+        urgency: mention.labels?.urgency ?? "none",
+        intent: mention.labels?.intent ?? "none",
+      }),
+    )
     .map(mentionToAlertData)
     .filter((alert) => {
       const history = Array.isArray(alert.resolution_history) ? alert.resolution_history : [];
@@ -479,10 +489,24 @@ function applyRealtimeAnnotationUpdate(
   try {
     labelObj = typeof row.label === "string" ? JSON.parse(row.label) : (row.label || {});
   } catch {
-    return;
+    labelObj = {};
   }
 
-  const lookupIds = [row.entity_key, row.annotation_id, row.comment_id, row.post_id]
+  const beingResolvedBy = row.being_resolved_by || labelObj.being_resolved_by || null;
+  const beingResolvedAt = row.being_resolved_at || labelObj.being_resolved_at || null;
+  const resolvedByEmail = row.resolved_by_email || labelObj.resolved_by_email || null;
+  const resolvedByName = row.resolved_by_name || labelObj.resolved_by_name || null;
+  const newStatus = row.status || row.resolution_status || resolveAlertStatusFromLabel(labelObj);
+
+  const lookupIds = [
+    row.id,
+    row.entity_key,
+    row.annotation_id,
+    row.mention_id,
+    row.source_id,
+    row.comment_id,
+    row.post_id,
+  ]
     .map((value) => String(value || "").trim())
     .filter(Boolean);
   if (lookupIds.length === 0) return;
@@ -494,28 +518,28 @@ function applyRealtimeAnnotationUpdate(
       if (!lookupIds.some((lookupId) => isSameAlertRecord(alert, lookupId))) return alert;
       changed = true;
       nextRecentLocks[alert.id] = {
-        email: labelObj.being_resolved_by || null,
+        email: beingResolvedBy,
         timestamp: Date.now(),
       };
       return {
         ...alert,
-        status: resolveAlertStatusFromLabel(labelObj),
-        resolved_at: labelObj.resolved_at || undefined,
-        being_resolved_by: labelObj.being_resolved_by || null,
-        being_resolved_at: labelObj.being_resolved_at || null,
-        resolved_by_email: labelObj.resolved_by_email || null,
-        resolved_by_name: labelObj.resolved_by_name || null,
-        resolution_history: Array.isArray(labelObj.resolution_history)
-          ? labelObj.resolution_history
+        status: newStatus || alert.status,
+        resolved_at: row.resolved_at || labelObj.resolved_at || alert.resolved_at,
+        being_resolved_by: beingResolvedBy,
+        being_resolved_at: beingResolvedAt,
+        resolved_by_email: resolvedByEmail,
+        resolved_by_name: resolvedByName,
+        resolution_history: Array.isArray(row.resolution_history || labelObj.resolution_history)
+          ? (row.resolution_history || labelObj.resolution_history)
           : alert.resolution_history,
-        customer_contact_opened_at: labelObj.customer_contact_opened_at || undefined,
-        customer_contact_opened_by: labelObj.customer_contact_opened_by || undefined,
-        customer_contact_template: labelObj.customer_contact_template || undefined,
-        customer_contact_note: labelObj.customer_contact_note || undefined,
-        customer_contact_evidence_image: labelObj.customer_contact_evidence_image || undefined,
-        customer_response_result: labelObj.customer_response_result || undefined,
-        customer_contact_history: Array.isArray(labelObj.customer_contact_history)
-          ? labelObj.customer_contact_history
+        customer_contact_opened_at: row.customer_contact_opened_at || labelObj.customer_contact_opened_at || alert.customer_contact_opened_at,
+        customer_contact_opened_by: row.customer_contact_opened_by || labelObj.customer_contact_opened_by || alert.customer_contact_opened_by,
+        customer_contact_template: row.customer_contact_template || labelObj.customer_contact_template || alert.customer_contact_template,
+        customer_contact_note: row.customer_contact_note || labelObj.customer_contact_note || alert.customer_contact_note,
+        customer_contact_evidence_image: row.customer_contact_evidence_image || labelObj.customer_contact_evidence_image || alert.customer_contact_evidence_image,
+        customer_response_result: row.customer_response_result || labelObj.customer_response_result || alert.customer_response_result,
+        customer_contact_history: Array.isArray(row.customer_contact_history || labelObj.customer_contact_history)
+          ? (row.customer_contact_history || labelObj.customer_contact_history)
           : alert.customer_contact_history,
       };
     });
@@ -532,9 +556,13 @@ function applyRealtimeAnnotationUpdate(
 let activeUnsubscribe: (() => void) | null = null;
 let activeRequestsUnsubscribe: (() => Promise<void>) | null = null;
 let activeRequestsScope: string | null = null;
+/** Holds the subscribed Supabase channel so we can reuse it for broadcasts */
+let activeRealtimeChannel: ReturnType<NonNullable<typeof supabaseClient>["channel"]> | null = null;
 const ALERT_REVIEW_WINDOW_DAYS = 30;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
-const ALERT_REFRESH_INTERVAL_MS = 60 * 1000;
+// Realtime is the primary update path. Keep polling only as a safety net so a
+// transient channel failure does not turn every alert screen into a DB scan.
+const ALERT_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
 
 export function getAlertReviewSinceIso(days = ALERT_REVIEW_WINDOW_DAYS): string {
   return new Date(Date.now() - days * MS_PER_DAY).toISOString();
@@ -616,11 +644,11 @@ export const useAlertStore = create<AlertState>()(
             return !scopedBrandKey || normalizeBrandName(brand) === scopedBrandKey;
           });
 
-          // Merge with recent lock cache to avoid race condition overwrites
+          // Merge with recent lock cache to avoid race condition overwrites from slow REST API responses
           const recentLocks = get().recentLocks || {};
           const merged = filtered.map((fetchedAlert) => {
             const recent = recentLocks[fetchedAlert.id];
-            if (recent && Date.now() - recent.timestamp < 15000) {
+            if (recent && Date.now() - recent.timestamp < 60000) {
               return {
                 ...fetchedAlert,
                 being_resolved_by: recent.email,
@@ -653,20 +681,22 @@ export const useAlertStore = create<AlertState>()(
 
         const cleanupFns: (() => void)[] = [];
 
-        // ===== STRATEGY 1: Supabase Realtime subscription =====
-        // Listens for ANY UPDATE on the annotations table and triggers a full reload.
-        // This gives sub-second updates to ALL connected clients simultaneously.
+        // ===== STRATEGY 1: Supabase Realtime subscription (Postgres WAL + Client Broadcast) =====
+        // Listens for ANY UPDATE on annotations table and Broadcast events to update ALL connected clients in < 50ms.
+        // IMPORTANT: Use a unique channel name each session to avoid the
+        // "cannot add postgres_changes callbacks after subscribe()" error that
+        // occurs when Supabase reuses the internal state of an old same-named channel.
         if (supabaseClient) {
           try {
             let realtimeReloadTimer: ReturnType<typeof setTimeout> | null = null;
+            const channelName = `alert-annotations-${Date.now()}`;
             const channel = supabaseClient
-              .channel("alert-annotations-global")
+              .channel(channelName)
               .on(
                 "postgres_changes",
                 { event: "*", schema: "public", table: "annotations" },
                 (payload: any) => {
-                  // Reflect ownership/status immediately in every open session,
-                  // then reconcile the full row from the authoritative REST data.
+                  console.log("[AlertStore] Realtime postgres_changes event:", payload);
                   applyRealtimeAnnotationUpdate(set, get, payload?.new);
                   if (realtimeReloadTimer) clearTimeout(realtimeReloadTimer);
                   realtimeReloadTimer = setTimeout(() => {
@@ -675,16 +705,46 @@ export const useAlertStore = create<AlertState>()(
                   }, 250);
                 }
               )
+              .on(
+                "broadcast",
+                { event: "task_assigned" },
+                (event: any) => {
+                  console.log("[AlertStore] Realtime broadcast task_assigned:", event);
+                  const payload = event?.payload;
+                  if (payload?.alertId) {
+                    applyRealtimeAnnotationUpdate(set, get, {
+                      id: payload.alertId,
+                      entity_key: payload.alertId,
+                      being_resolved_by: payload.assignedTo,
+                      being_resolved_at: payload.assignedAt,
+                      status: "resolving",
+                    });
+                    if (realtimeReloadTimer) clearTimeout(realtimeReloadTimer);
+                    realtimeReloadTimer = setTimeout(() => {
+                      loadAlerts();
+                      realtimeReloadTimer = null;
+                    }, 250);
+                  }
+                }
+              )
               .subscribe((status: any) => {
-                console.log("[AlertStore] Realtime subscription status:", status);
+                console.log("[AlertStore] Realtime subscription status:", status, "channel:", channelName);
+                if (status === "SUBSCRIBED") {
+                  activeRealtimeChannel = channel;
+                  console.log("[AlertStore] ✅ activeRealtimeChannel saved:", channelName);
+                } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+                  console.warn("[AlertStore] Realtime channel error, relying on polling:", status);
+                  activeRealtimeChannel = null;
+                }
               });
 
             cleanupFns.push(() => {
               if (realtimeReloadTimer) clearTimeout(realtimeReloadTimer);
+              activeRealtimeChannel = null;
               if (supabaseClient) supabaseClient.removeChannel(channel);
             });
 
-            console.log("[AlertStore] ✅ Supabase Realtime active — instant cross-client sync enabled");
+            console.log("[AlertStore] ✅ Supabase Realtime initialising:", channelName);
           } catch (realtimeErr) {
             console.warn("[AlertStore] Realtime init failed, falling back to polling:", realtimeErr);
           }
@@ -1389,6 +1449,7 @@ export const useAlertStore = create<AlertState>()(
     lockAlertForResolution: async (id, profile) => {
       if (!profile) return;
       const now = new Date().toISOString();
+      const previousAlert = get().rawAlerts.find((alert) => isSameAlertRecord(alert, id));
 
       // Update local state immediately
       set((state) => {
@@ -1419,8 +1480,44 @@ export const useAlertStore = create<AlertState>()(
           being_resolved_by: profile.email,
           being_resolved_at: now,
         }));
+
+        // Use the already-subscribed channel so the broadcast actually reaches peers.
+        // Calling supabaseClient.channel() without subscribing creates a disconnected
+        // object and the message is silently dropped.
+        if (activeRealtimeChannel) {
+          try {
+            await activeRealtimeChannel.send({
+              type: "broadcast",
+              event: "task_assigned",
+              payload: {
+                alertId: id,
+                assignedTo: profile.email,
+                assignedAt: now,
+              },
+            });
+            console.log("[AlertStore] ✅ task_assigned broadcast sent via active channel");
+          } catch (broadcastErr) {
+            console.warn("[AlertStore] Failed to send assignment broadcast:", broadcastErr);
+          }
+        } else {
+          console.warn("[AlertStore] No active realtime channel – broadcast skipped. Client will rely on polling.");
+        }
       } catch (error) {
         console.error("[AlertStore] Failed to lock alert:", error);
+        set((state) => {
+          const nextRawAlerts = state.rawAlerts.map((alert) => {
+            if (previousAlert && isSameAlertRecord(alert, id)) return previousAlert;
+            return alert;
+          });
+          const nextRecentLocks = { ...state.recentLocks };
+          delete nextRecentLocks[id];
+          return {
+            rawAlerts: nextRawAlerts,
+            alerts: applyFilters(nextRawAlerts, state.filters),
+            recentLocks: nextRecentLocks,
+          };
+        });
+        throw error;
       }
     },
 

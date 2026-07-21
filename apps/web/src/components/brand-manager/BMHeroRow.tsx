@@ -406,7 +406,7 @@ export function BMHeroRow({ score, trend, sentiment, totalMentions, onViewDetail
             </span>
           </div>
 
-          <p className="bm-ai-text">"{aiText}"</p>
+          <p className="bm-ai-text">“{aiText}”</p>
 
           <div className="bm-ai-metrics">
             <div className="bm-ai-metric">

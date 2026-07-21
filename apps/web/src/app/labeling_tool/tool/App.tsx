@@ -17,6 +17,7 @@ import Sidebar from './components/Sidebar';
 import ExportButton from './components/ExportButton';
 import {
   AssignmentView,
+  approveAllSupabaseAiAnnotations,
   approveSupabaseAiAnnotations,
   loadPendingAssignmentCounts,
   PendingAssignmentCounts,
@@ -44,6 +45,16 @@ const SUPABASE_URL_KEY = 'insightflow_supabase_url';
 const SUPABASE_ANON_KEY = 'insightflow_supabase_anon_key';
 const LABELING_SESSION_KEY = 'insightflow_labeling_session';
 const SUPABASE_CONFIG_PATH = process.env.NEXT_PUBLIC_SUPABASE_CONFIG_PATH || '';
+
+const PLATFORM_LABELS: Record<PlatformFilter, string> = {
+  facebook: 'Facebook',
+  threads: 'Threads',
+  tiktok: 'TikTok',
+  youtube: 'YouTube',
+  google_maps: 'Google Maps',
+  befood: 'BeFood',
+  news: 'News',
+};
 
 interface LabelingSession {
   platform: PlatformFilter;
@@ -114,6 +125,7 @@ export default function App() {
   const [pendingCounts, setPendingCounts] = useState<PendingAssignmentCounts | null>(null);
   const [pendingCountsLoading, setPendingCountsLoading] = useState(false);
   const [approvingAi, setApprovingAi] = useState(false);
+  const [approvingAllAi, setApprovingAllAi] = useState(false);
   const [approvalMessage, setApprovalMessage] = useState<string | null>(null);
   const [pendingRestoreThreadId, setPendingRestoreThreadId] = useState<string | null>(
     () => initialSessionRef.current?.currentThreadId ?? null,
@@ -266,9 +278,20 @@ export default function App() {
   }, [currentThread]);
 
   const aiCandidateItems = useMemo(
-    () => threadItems.filter(item => item._annotation_status === 'ai_pending'),
-    [threadItems],
+    () => threadItems.filter(item => (
+      item._annotation_status === 'ai_pending'
+      && !(
+        (
+          item._content_type === 'post'
+          || /^(google_maps|be|befood):post:/.test(item._entity_key)
+        )
+        && (platformFilter === 'google_maps' || platformFilter === 'befood')
+      )
+    )),
+    [platformFilter, threadItems],
   );
+  const platformAiPendingCount = (pendingCounts?.aiPendingPosts ?? 0)
+    + (pendingCounts?.aiPendingComments ?? 0);
 
   // ─── Focused item index for Tab navigation ─────────────
   const focusedItemIndex = useMemo(() => {
@@ -405,7 +428,7 @@ export default function App() {
   }, [
     goNext, goPrev, currentThread, skipThread, completeThread,
     threadItems, focusedItemIndex, focusedItemId,
-    getLabel, setLabel, setFocusedItemId,
+    getLabel, setLabel, setItemSkipped, setFocusedItemId,
   ]);
 
   const handleSupabaseLoad = useCallback(async (restoreThreadId?: string | null) => {
@@ -440,7 +463,6 @@ export default function App() {
     assignmentView,
     currentThread,
     loadFromSupabase,
-    person,
     platformFilter,
     queueDateFrom,
     queueDateTo,
@@ -492,6 +514,50 @@ export default function App() {
     currentThread,
     getLabel,
     handleSupabaseLoad,
+  ]);
+
+  const handleApproveAllAiForPlatform = useCallback(async () => {
+    if (!activeSupabaseConfig || platformAiPendingCount === 0) return;
+    const platformLabel = PLATFORM_LABELS[platformFilter];
+    const confirmed = window.confirm(
+      `Duyệt toàn bộ ${platformAiPendingCount.toLocaleString()} nhãn AI đang chờ của ${platformLabel}?\n\n`
+      + 'Thao tác này dùng nhãn AI đang lưu trên hệ thống và không thể hoàn tác hàng loạt.',
+    );
+    if (!confirmed) return;
+
+    setApprovingAllAi(true);
+    setApprovalMessage('Đang tải và kiểm tra toàn bộ hàng chờ AI...');
+    try {
+      const result = await approveAllSupabaseAiAnnotations(
+        activeSupabaseConfig,
+        platformFilter,
+        'InsightFlow Admin',
+        (approved, total) => {
+          setApprovalMessage(
+            `Đang duyệt ${approved.toLocaleString()}/${total.toLocaleString()} nhãn AI của ${platformLabel}...`,
+          );
+        },
+      );
+      setApprovalMessage(
+        `Đã duyệt ${result.approved.toLocaleString()}/${result.total.toLocaleString()} nhãn AI của ${platformLabel}.`,
+      );
+      const counts = await loadPendingAssignmentCounts(activeSupabaseConfig, platformFilter);
+      setPendingCounts(counts);
+      await handleSupabaseLoad(null);
+    } catch (error) {
+      setApprovalMessage(
+        error instanceof Error
+          ? `Không thể duyệt toàn bộ nhãn AI: ${error.message}`
+          : 'Không thể duyệt toàn bộ nhãn AI.',
+      );
+    } finally {
+      setApprovingAllAi(false);
+    }
+  }, [
+    activeSupabaseConfig,
+    handleSupabaseLoad,
+    platformAiPendingCount,
+    platformFilter,
   ]);
 
   useEffect(() => {
@@ -798,16 +864,29 @@ export default function App() {
                           Có {aiCandidateItems.length.toLocaleString()} nhãn AI trong thread này. Các chỉnh sửa chỉ được lưu chính thức sau khi chấp nhận.
                         </p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => void handleApproveAiThread()}
-                        disabled={approvingAi || aiCandidateItems.length === 0}
-                        className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {approvingAi
-                          ? 'Đang cập nhật...'
-                          : `✓ Chấp nhận ${aiCandidateItems.length.toLocaleString()} nhãn`}
-                      </button>
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void handleApproveAiThread()}
+                          disabled={approvingAi || approvingAllAi || aiCandidateItems.length === 0}
+                          className="rounded-lg border border-violet-300 bg-white px-4 py-2 text-sm font-bold text-violet-700 shadow-sm transition hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-violet-700 dark:bg-violet-950/40 dark:text-violet-200 dark:hover:bg-violet-900/50"
+                        >
+                          {approvingAi
+                            ? 'Đang cập nhật...'
+                            : `✓ Duyệt ${aiCandidateItems.length.toLocaleString()} nhãn trong thread`}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleApproveAllAiForPlatform()}
+                          disabled={approvingAi || approvingAllAi || platformAiPendingCount === 0}
+                          className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          title={`Duyệt toàn bộ hàng chờ AI của ${PLATFORM_LABELS[platformFilter]}`}
+                        >
+                          {approvingAllAi
+                            ? 'Đang duyệt toàn bộ...'
+                            : `✓ Duyệt tất cả ${platformAiPendingCount.toLocaleString()} nhãn`}
+                        </button>
+                      </div>
                     </div>
                     {approvalMessage && (
                       <p className="mt-3 text-xs font-semibold text-violet-800 dark:text-violet-200">

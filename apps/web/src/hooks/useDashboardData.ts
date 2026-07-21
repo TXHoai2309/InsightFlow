@@ -21,12 +21,20 @@ interface UseDashboardOptions {
 }
 
 const DASHBOARD_CACHE_PREFIX = "insightflow_dashboard_cache_";
+const DASHBOARD_CACHE_VERSION = "v3";
 const DASHBOARD_CACHE_LIMITS = {
   mentions: 150,
   alerts: 150,
   leads: 500,
   labelChangeRequests: 100,
 };
+
+// A tab transition can leave the previous request in flight while the next
+// page mounts. Keep a monotonically increasing generation per browser session
+// so a slower, older response can never overwrite the newest snapshot.
+const latestFetchGeneration = new Map<string, number>();
+let fetchGenerationCounter = 0;
+const activeDashboardFetches = new Set<string>();
 
 function isStorageQuotaError(error: unknown) {
   return (
@@ -96,8 +104,15 @@ export function useDashboard(options: UseDashboardOptions = {}) {
     // otherwise render another employee's assigned work after account changes
     // in the same browser.
     const profileKey = profile?.uid || profile?.role || "anonymous";
-    const fetchScopeKey = `${brandKey}:${profileKey}`;
-    const cacheKey = `insightflow_dashboard_cache_${brandKey}_${profileKey}`;
+    const fetchScopeKey = `${DASHBOARD_CACHE_VERSION}:${brandKey}:${profileKey}`;
+    // All dashboard pages share one Zustand store. Do not start another full
+    // raw-data scan while the same scope is already loading (including when a
+    // user clicks through menu items quickly).
+    if (activeDashboardFetches.has(fetchScopeKey)) return;
+    activeDashboardFetches.add(fetchScopeKey);
+    const generation = ++fetchGenerationCounter;
+    latestFetchGeneration.set(fetchScopeKey, generation);
+    const cacheKey = `${DASHBOARD_CACHE_PREFIX}${DASHBOARD_CACHE_VERSION}_${brandKey}_${profileKey}`;
     try {
       let hasRenderedCache = false;
 
@@ -141,6 +156,8 @@ export function useDashboard(options: UseDashboardOptions = {}) {
       const rawBrandKey = brandKey === "global" ? undefined : brandKey;
       const rawData =
         await DashboardService.fetchRawData({ brandKey: rawBrandKey });
+      // Ignore stale responses from a previous navigation/refresh.
+      if (latestFetchGeneration.get(fetchScopeKey) !== generation) return;
       const workspaces = filterByBusinessPolicy(
         rawData.workspaces.map((workspace) => ({
           ...workspace,
@@ -259,6 +276,7 @@ export function useDashboard(options: UseDashboardOptions = {}) {
         setError(message);
       }
     } finally {
+      activeDashboardFetches.delete(fetchScopeKey);
       setLoading(false);
     }
   };
@@ -268,7 +286,7 @@ export function useDashboard(options: UseDashboardOptions = {}) {
 
     const brandKey = getScopedBrandKey(profile) || "global";
     const profileKey = profile?.uid || profile?.role || "anonymous";
-    const fetchScopeKey = `${brandKey}:${profileKey}`;
+    const fetchScopeKey = `${DASHBOARD_CACHE_VERSION}:${brandKey}:${profileKey}`;
     const lastFetched = lastFetchedAtMap[fetchScopeKey] || 0;
     const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes cache window
 

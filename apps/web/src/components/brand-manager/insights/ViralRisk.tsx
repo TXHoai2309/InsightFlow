@@ -118,7 +118,7 @@ export function ViralRisk({ risks }: ViralRiskProps) {
                 <p className="text-[13px] font-semibold text-[var(--color-text-primary)]">{risk.label}</p>
                 {risk.contentSample && (
                   <p className="text-[11px] text-[var(--color-text-muted)] italic mt-1 line-clamp-2">
-                    "{risk.contentSample}"
+                    “{risk.contentSample}”
                   </p>
                 )}
               </div>

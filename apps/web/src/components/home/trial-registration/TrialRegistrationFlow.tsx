@@ -166,9 +166,17 @@ export function TrialRegistrationFlow() {
               email={submissionResult.email}
               consultationCompleted={consultationCompleted}
               consultationEmailSent={consultationEmailSent}
-              onFillConsultation={() => {
+              onFillConsultation={() => setCurrentStep("CONSULTATION_FORM")}
+              onRestart={() => {
                 setSubmissionError("");
-                setCurrentStep("CONSULTATION_FORM");
+                setFormData({ basicInfo: null, businessAuth: null, configuration: null });
+                setSubmissionResult(null);
+                setConsultationCompleted(false);
+                setConsultationEmailSent(null);
+                setCurrentStep("BASIC_INFO");
+                requestAnimationFrame(() => {
+                  document.getElementById("consultation")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                });
               }}
             />
           </motion.div>

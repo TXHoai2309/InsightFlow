@@ -333,6 +333,10 @@ function toQueueStatus(status: string): 'unassigned' | 'updated_review' | null {
   return status === 'unassigned' || status === 'updated_review' ? status : null;
 }
 
+function usesLocationContainerPosts(platform: PlatformFilter): boolean {
+  return platform === 'google_maps' || platform === 'befood';
+}
+
 export async function loadPendingAssignmentCounts(
   config: SupabaseConfig,
   platform: PlatformFilter,
@@ -342,6 +346,7 @@ export async function loadPendingAssignmentCounts(
     : platform === 'befood'
       ? 'in.(be,befood)'
       : `eq.${platform}`;
+  const commentsOnly = usesLocationContainerPosts(platform);
 
   const annotationBase = {
     select: 'annotation_id',
@@ -358,20 +363,24 @@ export async function loadPendingAssignmentCounts(
     totalPosts,
     totalComments,
   ] = await Promise.all([
-    requestExactCountWithFallback(config, 'annotations', new URLSearchParams({
-      ...annotationBase,
-      entity_type: 'eq.post',
-    }).toString()),
-    requestExactCountWithFallback(config, 'annotations', new URLSearchParams({
+    commentsOnly
+      ? Promise.resolve(0)
+      : requestExactCount(config, 'annotations', new URLSearchParams({
+        ...annotationBase,
+        entity_type: 'eq.post',
+      }).toString()),
+    requestExactCount(config, 'annotations', new URLSearchParams({
       ...annotationBase,
       entity_type: 'eq.comment',
     }).toString()),
-    requestExactCountWithFallback(config, 'annotations', new URLSearchParams({
-      ...annotationBase,
-      status: 'eq.ai_pending',
-      entity_type: 'eq.post',
-    }).toString()),
-    requestExactCountWithFallback(config, 'annotations', new URLSearchParams({
+    commentsOnly
+      ? Promise.resolve(0)
+      : requestExactCount(config, 'annotations', new URLSearchParams({
+        ...annotationBase,
+        status: 'eq.ai_pending',
+        entity_type: 'eq.post',
+      }).toString()),
+    requestExactCount(config, 'annotations', new URLSearchParams({
       ...annotationBase,
       status: 'eq.ai_pending',
       entity_type: 'eq.comment',
@@ -408,7 +417,9 @@ export async function loadPendingAssignmentCounts(
   const safeAiPendingComments = Math.min(aiPendingComments, totalComments);
   const safeLabeledPosts = Math.min(labeledPosts, Math.max(0, totalPosts - safeAiPendingPosts));
   const safeLabeledComments = Math.min(labeledComments, Math.max(0, totalComments - safeAiPendingComments));
-  const unassignedPosts = Math.max(0, totalPosts - safeLabeledPosts - safeAiPendingPosts);
+  const unassignedPosts = commentsOnly
+    ? 0
+    : Math.max(0, totalPosts - safeLabeledPosts - safeAiPendingPosts);
   const unassignedComments = Math.max(0, totalComments - safeLabeledComments - safeAiPendingComments);
 
   return {
@@ -662,6 +673,7 @@ export async function loadSupabaseThreads(
     : platform === 'befood'
       ? 'in.(be,befood)'
       : `eq.${platform}`;
+  const commentsOnly = usesLocationContainerPosts(platform);
   const threads: Thread[] = [];
   const includedPostKeys = new Set<string>();
   const needsClientFilter = hasDateRange(dateRange) || (brand && brand !== 'all');
@@ -690,7 +702,9 @@ export async function loadSupabaseThreads(
         offset: String(offset),
         order: 'updated_at.desc',
       });
-      if (assignmentView === 'completed') {
+      if (commentsOnly) {
+        annotationParams.set('entity_type', 'eq.comment');
+      } else if (assignmentView === 'completed') {
         annotationParams.set('entity_type', 'eq.post');
       }
       try {
@@ -743,6 +757,9 @@ export async function loadSupabaseThreads(
         offset: String(offset),
         order: 'updated_at.desc',
       });
+      if (commentsOnly) {
+        assignmentParams.set('entity_type', 'eq.comment');
+      }
       assignments = await request<SupabaseAssignment[]>(
         config,
         'labeling_assignments',
@@ -758,11 +775,11 @@ export async function loadSupabaseThreads(
     const uniquePostIds = Array.from(new Set(postIds));
     const postsList = uniquePostIds.length > 0
       ? await requestActiveRows<SupabasePost[]>(
-          config,
-          'posts',
-          `select=${POST_SELECT}&platform=${platformFilter}&post_id=in.(${uniquePostIds.map(encode).join(',')})&crawl_status=eq.active`,
-          signal,
-        )
+        config,
+        'posts',
+        `select=${POST_SELECT}&platform=${platformFilter}&post_id=in.(${uniquePostIds.map(encode).join(',')})&crawl_status=eq.active`,
+        signal,
+      )
       : [];
     const postMap = new Map(postsList.map(p => [p.post_id, p]));
 
@@ -838,10 +855,10 @@ export async function loadSupabaseThreads(
 
       const activeAssignments = assignmentView === 'pending'
         ? postAssignments.filter(candidate => {
-            const entityKey = candidate.entity_key.replace(/^be:/, 'befood:');
-            const annotation = annotationByEntity.get(entityKey);
-            return !annotation || annotation.labeled_version < candidate.data_version;
-          })
+          const entityKey = candidate.entity_key.replace(/^be:/, 'befood:');
+          const annotation = annotationByEntity.get(entityKey);
+          return !annotation || annotation.labeled_version < candidate.data_version;
+        })
         : postAssignments;
       if (assignmentView === 'pending' && activeAssignments.length === 0) {
         return null;
@@ -1011,7 +1028,10 @@ export async function approveSupabaseAiAnnotations(
   }>,
   reviewer = 'InsightFlow Admin',
 ): Promise<number> {
-  if (items.length === 0) return 0;
+  const labelableItems = items.filter(item => (
+    !/^(google_maps|be|befood):post:/.test(item.entityKey)
+  ));
+  if (labelableItems.length === 0) return 0;
   const approved = await request<number>(
     config,
     'rpc/approve_ai_annotations',
@@ -1019,8 +1039,11 @@ export async function approveSupabaseAiAnnotations(
     {
       method: 'POST',
       body: JSON.stringify({
-        p_items: items.map(item => ({
-          entity_key: item.entityKey.replace(/^befood:/, 'be:'),
+        p_items: labelableItems.map(item => ({
+          // The approval RPC requires an exact annotations.entity_key match.
+          // Keep the key returned by Supabase instead of rewriting BeFood's
+          // canonical `befood:` prefix to the legacy `be:` alias.
+          entity_key: item.entityKey,
           label: item.label,
         })),
         p_reviewer: reviewer,
@@ -1028,7 +1051,103 @@ export async function approveSupabaseAiAnnotations(
       headers: { Prefer: 'return=representation' },
     },
   );
-  return Number(approved) || 0;
+  const approvedCount = Number(approved) || 0;
+  if (approvedCount === 0) {
+    throw new Error(
+      'Không tìm thấy nhãn AI đang chờ khớp với dữ liệu vừa tải. Hãy tải lại dữ liệu rồi thử lại.',
+    );
+  }
+  return approvedCount;
+}
+
+export interface BulkAiApprovalResult {
+  total: number;
+  approved: number;
+}
+
+function approvalLabelFromAnnotation(
+  row: SupabaseAnnotation,
+): Label & { skipped?: boolean } {
+  const value = typeof row.label === 'string' ? JSON.parse(row.label) : row.label;
+  if (!value || typeof value !== 'object') {
+    throw new Error(`Nhãn AI không hợp lệ: ${row.entity_key}`);
+  }
+  const candidate = value as Partial<Label> & { skipped?: boolean };
+  const label: Label & { skipped?: boolean } = {
+    sentiment: candidate.sentiment ?? null,
+    topic: Array.isArray(candidate.topic) ? candidate.topic : [],
+    relevance: candidate.relevance ?? null,
+    urgency: candidate.urgency ?? null,
+    intent: candidate.intent ?? null,
+    skipped: candidate.skipped === true || row.status === 'skipped',
+  };
+  if (!label.skipped && !isLabelComplete(label)) {
+    throw new Error(`Nhãn AI chưa đầy đủ: ${row.entity_key}`);
+  }
+  return label;
+}
+
+/**
+ * Approve every AI-pending annotation for one selected platform.
+ *
+ * Rows are read and validated in full before the first mutation, then sent to
+ * the existing transactional RPC in small batches. This avoids silently
+ * approving only the currently loaded UI page and keeps large queues from
+ * exceeding the request-size limit.
+ */
+export async function approveAllSupabaseAiAnnotations(
+  config: SupabaseConfig,
+  platform: PlatformFilter,
+  reviewer = 'InsightFlow Admin',
+  onProgress?: (approved: number, total: number) => void,
+): Promise<BulkAiApprovalResult> {
+  const platformFilter = platform === 'news'
+    ? 'in.(news,news_html)'
+    : platform === 'befood'
+      ? 'in.(be,befood)'
+      : `eq.${platform}`;
+  const pageSize = 1000;
+  const rows: SupabaseAnnotation[] = [];
+  let offset = 0;
+
+  while (true) {
+    const params = new URLSearchParams({
+      select: ANNOTATION_SELECT,
+      platform: platformFilter,
+      status: 'eq.ai_pending',
+      order: 'entity_key.asc',
+      limit: String(pageSize),
+      offset: String(offset),
+    });
+    if (usesLocationContainerPosts(platform)) {
+      params.set('entity_type', 'eq.comment');
+    }
+    const page = await request<SupabaseAnnotation[]>(
+      config,
+      'annotations',
+      params.toString(),
+    );
+    rows.push(...page);
+    if (page.length < pageSize) break;
+    offset += page.length;
+  }
+
+  const items = rows.map(row => ({
+    entityKey: row.entity_key,
+    label: approvalLabelFromAnnotation(row),
+  }));
+  const batchSize = 250;
+  let approved = 0;
+  onProgress?.(approved, items.length);
+  for (let index = 0; index < items.length; index += batchSize) {
+    approved += await approveSupabaseAiAnnotations(
+      config,
+      items.slice(index, index + batchSize),
+      reviewer,
+    );
+    onProgress?.(approved, items.length);
+  }
+  return { total: items.length, approved };
 }
 
 export async function updateSupabaseAssignment(

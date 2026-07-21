@@ -55,7 +55,8 @@ function statusLabel(item: CustomerInteractionItem) {
 function InteractionRow({ item }: { item: CustomerInteractionItem }) {
   const platformLabel = PLATFORM_META[item.platform]?.label || item.platform;
   return (
-    <article className={`rounded-lg border p-3 ${item.isCurrent ? "border-[var(--color-brand)] bg-[var(--color-brand-subtle)]/35 ring-1 ring-[var(--color-brand)]/15" : "border-[var(--color-border)]"}`}>
+    <article className={`relative border-l-2 py-3 pl-4 pr-2 ${item.isCurrent ? "border-[var(--color-brand)] bg-[var(--color-brand-subtle)]/30" : "border-[var(--color-border)]"}`}>
+      <span className={`absolute -left-[5px] top-5 h-2 w-2 rounded-full ${item.isCurrent ? "bg-[var(--color-brand)] ring-4 ring-[var(--color-brand)]/15" : "bg-[var(--color-border-strong)]"}`} aria-hidden="true" />
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <PlatformLogo platform={item.platform} size="xs" />
@@ -87,7 +88,7 @@ function InteractionRow({ item }: { item: CustomerInteractionItem }) {
         )}
         <span className="rounded-full border border-[var(--color-border)] px-2 py-0.5 text-[10px] font-bold text-[var(--color-text-secondary)]">{statusLabel(item)}</span>
         {item.sourceUrl && (
-          <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer" className="ml-auto inline-flex items-center gap-1 text-[10px] font-bold text-[var(--color-brand)]">
+          <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer" className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-bold text-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]">
             Mở nguồn <span className="material-symbols-outlined text-sm">open_in_new</span>
           </a>
         )}
@@ -185,12 +186,12 @@ export function CustomerInteractionHistoryPanel({
       {!hasPreviousInteractions ? (
         <InteractionHistoryState kind="empty_history" />
       ) : (
-        <section className="rounded-lg border border-[var(--color-border)] p-3">
+        <section>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-sm font-black text-[var(--color-text-primary)]">Các lần tương tác với thương hiệu</h3>
             <p className="text-[10px] text-[var(--color-text-muted)]">{formatDate(summary.firstInteractionAt)} — {formatDate(summary.lastInteractionAt)}</p>
           </div>
-          <div className="mt-3 space-y-2">
+          <div className="mt-3">
             {data.items.map((item) => <InteractionRow key={item.id} item={item} />)}
           </div>
           {data.nextCursor && (

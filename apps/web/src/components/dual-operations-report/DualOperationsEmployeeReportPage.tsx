@@ -5,30 +5,45 @@ import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import { useDashboard } from "@/hooks/useDashboardData";
 import { getScopedBrandKey } from "@/lib/brandScope";
-import { exportDualOperationsReportCsv, exportDualOperationsReportExcel } from "@/lib/excelExport";
-import type { DualOperationsBucket } from "@/lib/dual-operations-report";
-import { formatCrisisMinutes } from "@/lib/crisis-report";
-import { DEFAULT_CRISIS_REPORT_FILTERS, type CrisisReportFilters } from "@/lib/crisis-report-filters";
-import { formatMinutes } from "@/lib/lead-report";
-import { DEFAULT_LEAD_REPORT_FILTERS, type LeadReportFilters } from "@/lib/lead-report-filters";
+import {
+  buildDualOperationsReportExcelDocument,
+  exportDualOperationsReportExcel,
+  type DualOperationsExcelViewOptions,
+} from "@/lib/excelExport";
+import type {
+  DualOperationsAttentionItem,
+  DualOperationsPriorityRow,
+} from "@/lib/dual-operations-report";
+import {
+  DEFAULT_CRISIS_REPORT_FILTERS,
+  type CrisisReportFilters,
+} from "@/lib/crisis-report-filters";
+import {
+  DEFAULT_LEAD_REPORT_FILTERS,
+  type LeadReportFilters,
+} from "@/lib/lead-report-filters";
 import { normalizeBrandName } from "@/lib/services/dashboard";
-import { ReportExportPreviewModal } from "@/components/reports/ReportExportPreviewModal";
-import { getAlertReviewSinceIso, useAlertStore } from "@/stores/alert.store";
+import { useAlertStore } from "@/stores/alert.store";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { useDualOperationsReport } from "./useDualOperationsReport";
+import { ExcelDocumentPreviewModal } from "@/components/reports/ExcelDocumentPreviewModal";
+import {
+  AlertTriangle,
+  ArrowRight,
+  CalendarDays,
+  CheckCircle2,
+  Eye,
+  Filter,
+  Lightbulb,
+  Table2,
+  TrendingUp,
+} from "lucide-react";
 
-function formatPercent(value: number) {
-  return `${value}%`;
-}
-
-function reportFilename() {
-  return `Bao_cao_nhan_vien_2_nghiep_vu_${new Date().toISOString().slice(0, 10)}`;
-}
-
-type DualOperationFilter = "all" | "lead" | "crisis";
+type OperationScope = "all" | "lead" | "crisis";
+type OperationTab = "lead" | "crisis";
 
 interface DualReportFilters {
-  operation: DualOperationFilter;
+  operation: OperationScope;
   timeRange: LeadReportFilters["timeRange"];
   startDate: string;
   endDate: string;
@@ -42,7 +57,7 @@ interface DualReportFilters {
 
 const DEFAULT_DUAL_REPORT_FILTERS: DualReportFilters = {
   operation: "all",
-  timeRange: "all",
+  timeRange: "7d",
   startDate: "",
   endDate: "",
   sla: "all",
@@ -54,28 +69,49 @@ const DEFAULT_DUAL_REPORT_FILTERS: DualReportFilters = {
 };
 
 const SOURCE_OPTIONS = [
-  { value: "all", label: "Tat ca nguon" },
+  { value: "all", label: "Tất cả nguồn" },
   { value: "facebook", label: "Facebook" },
   { value: "tiktok", label: "TikTok" },
   { value: "google_maps", label: "Google Maps" },
   { value: "be", label: "BeFood" },
   { value: "youtube", label: "YouTube" },
   { value: "thread", label: "Threads" },
-  { value: "news", label: "Bao dien tu" },
+  { value: "news", label: "Báo điện tử" },
 ];
 
+const inputClass =
+  "h-10 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 text-sm font-semibold text-[var(--color-text-primary)] outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20";
+
+function getPeriodLabel(filters: DualReportFilters) {
+  if (filters.timeRange === "today") return "Hôm nay";
+  if (filters.timeRange === "7d") return "7 ngày gần nhất";
+  if (filters.timeRange === "30d") return "30 ngày gần nhất";
+  if (filters.timeRange === "custom") {
+    return filters.startDate && filters.endDate
+      ? `${new Date(filters.startDate).toLocaleDateString("vi-VN")} – ${new Date(filters.endDate).toLocaleDateString("vi-VN")}`
+      : "Khoảng thời gian tùy chọn";
+  }
+  return "Toàn bộ dữ liệu";
+}
+
+function getScopeLabel(scope: OperationScope) {
+  if (scope === "lead") return "Chỉ Khách hàng tiềm năng";
+  if (scope === "crisis") return "Chỉ Khủng hoảng";
+  return "Cả hai nghiệp vụ";
+}
+
 function KpiCard({
-  title,
+  label,
   value,
-  sub,
+  description,
   tone = "default",
 }: {
-  title: string;
+  label: string;
   value: React.ReactNode;
-  sub: string;
+  description: string;
   tone?: "default" | "good" | "warn" | "danger";
 }) {
-  const color =
+  const valueClass =
     tone === "good"
       ? "text-emerald-700"
       : tone === "warn"
@@ -83,104 +119,151 @@ function KpiCard({
         : tone === "danger"
           ? "text-red-700"
           : "text-[var(--color-brand)]";
-
+  const dotClass =
+    tone === "good"
+      ? "bg-emerald-500"
+      : tone === "warn"
+        ? "bg-amber-500"
+        : tone === "danger"
+          ? "bg-red-500"
+          : "bg-[var(--color-brand)]";
   return (
-    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-4 shadow-sm">
-      <p className="text-xs font-bold uppercase tracking-wide text-[var(--color-text-muted)]">
-        {title}
-      </p>
-      <p className={`mt-2 text-3xl font-black leading-none ${color}`}>{value}</p>
-      <p className="mt-2 text-sm text-[var(--color-text-secondary)]">{sub}</p>
-    </div>
-  );
-}
-
-function ReportPanel({
-  title,
-  subtitle,
-  children,
-}: {
-  title: string;
-  subtitle?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-5 shadow-sm">
-      <div className="mb-4">
-        <h2 className="text-lg font-black text-[var(--color-text-primary)]">{title}</h2>
-        {subtitle ? (
-          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">{subtitle}</p>
-        ) : null}
+    <article className="min-w-0 bg-[var(--color-bg-surface)] p-4">
+      <div className="flex items-center gap-2">
+        <span className={`h-2 w-2 rounded-full ${dotClass}`} />
+        <p className="text-[11px] font-extrabold uppercase text-[var(--color-text-muted)]">{label}</p>
       </div>
-      {children}
-    </section>
+      <p className={`mt-2 text-2xl font-black leading-none ${valueClass}`}>{value}</p>
+      <p className="mt-2 line-clamp-2 text-[11px] leading-4 text-[var(--color-text-secondary)]">{description}</p>
+    </article>
   );
 }
 
-function DistributionList({ items }: { items: DualOperationsBucket[] }) {
-  const maxCount = Math.max(1, ...items.map((item) => item.count));
-
+function AttentionCard({ item }: { item: DualOperationsAttentionItem }) {
+  const toneClass =
+    item.tone === "danger"
+      ? "border-red-200 bg-red-50/65 text-red-700"
+      : item.tone === "warn"
+        ? "border-amber-200 bg-amber-50/65 text-amber-700"
+        : "border-indigo-200 bg-indigo-50/65 text-indigo-700";
   return (
-    <div className="space-y-3">
-      {items.map((item) => (
-        <div key={item.key}>
-          <div className="mb-1 flex items-center justify-between gap-3 text-sm">
-            <span className="font-bold text-[var(--color-text-primary)]">{item.label}</span>
-            <span className="text-[var(--color-text-secondary)]">
-              {item.count} viec · {item.percentage}%
-            </span>
-          </div>
-          <div className="h-2 overflow-hidden rounded-full bg-[var(--color-bg-surface-high)]">
-            <div
-              className="h-full rounded-full"
-              style={{
-                width: `${Math.max(3, (item.count / maxCount) * 100)}%`,
-                backgroundColor: item.color,
-              }}
-            />
-          </div>
+    <Link
+      href={item.href}
+      className={`group flex items-start gap-3 rounded-lg border p-3 transition hover:border-current hover:shadow-sm ${toneClass}`}
+    >
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-white/80 shadow-sm">
+        <AlertTriangle className="h-4 w-4" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-3">
+          <p className="font-extrabold text-[var(--color-text-primary)]">{item.title}</p>
+          <strong className="text-xl font-black">{item.count}</strong>
         </div>
-      ))}
+        <p className="mt-1 text-xs leading-5 text-[var(--color-text-secondary)]">{item.description}</p>
+        <p className="mt-2 flex items-center gap-1 text-[11px] font-bold">
+          Mở danh sách xử lý
+          <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+        </p>
+      </div>
+    </Link>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] px-3 py-3 last:border-b-0">
+      <p className="text-xs font-bold text-[var(--color-text-secondary)]">{label}</p>
+      <p className="text-lg font-black text-[var(--color-text-primary)]">{value}</p>
     </div>
   );
 }
 
-function FilterField({
-  label,
-  children,
+function TrendBars({
+  rows,
+  primaryKey,
+  secondaryKey,
+  primaryLabel,
+  secondaryLabel,
 }: {
-  label: string;
-  children: React.ReactNode;
+  rows: Array<Record<string, string | number>>;
+  primaryKey: string;
+  secondaryKey: string;
+  primaryLabel: string;
+  secondaryLabel: string;
 }) {
+  const maxValue = Math.max(
+    1,
+    ...rows.flatMap((row) => [Number(row[primaryKey] || 0), Number(row[secondaryKey] || 0)]),
+  );
   return (
-    <label className="space-y-1">
-      <span className="text-[11px] font-black uppercase tracking-wide text-[var(--color-text-muted)]">
-        {label}
-      </span>
-      {children}
-    </label>
+    <div>
+      <div className="mb-4 flex flex-wrap gap-4 text-xs font-bold text-[var(--color-text-secondary)]">
+        <span className="flex items-center gap-2"><i className="h-2.5 w-2.5 rounded-full bg-indigo-500" />{primaryLabel}</span>
+        <span className="flex items-center gap-2"><i className="h-2.5 w-2.5 rounded-full bg-emerald-500" />{secondaryLabel}</span>
+      </div>
+      <div className="grid min-h-40 grid-cols-7 items-end gap-2">
+        {rows.slice(-7).map((row, index) => (
+          <div key={`${row.day}-${index}`} className="flex h-full min-w-0 flex-col justify-end gap-1">
+            <div className="flex h-28 items-end justify-center gap-1">
+              <div
+                className="w-3 rounded-t bg-indigo-500"
+                style={{ height: `${Math.max(4, (Number(row[primaryKey] || 0) / maxValue) * 100)}%` }}
+                title={`${primaryLabel}: ${row[primaryKey] || 0}`}
+              />
+              <div
+                className="w-3 rounded-t bg-emerald-500"
+                style={{ height: `${Math.max(4, (Number(row[secondaryKey] || 0) / maxValue) * 100)}%` }}
+                title={`${secondaryLabel}: ${row[secondaryKey] || 0}`}
+              />
+            </div>
+            <span className="truncate text-center text-[10px] text-[var(--color-text-muted)]">{row.day}</span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
-const inputClass =
-  "h-10 w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 text-sm font-semibold text-[var(--color-text-primary)] outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20";
-
-function countActiveDualReportFilters(filters: DualReportFilters) {
-  return [
-    filters.operation !== "all",
-    filters.timeRange !== "all",
-    filters.sla !== "all",
-    filters.priority !== "all",
-    filters.source !== "all",
-    filters.leadStatus !== "all",
-    filters.crisisStatus !== "all",
-    Boolean(filters.keyword.trim()),
-  ].filter(Boolean).length;
+function PriorityRow({ row }: { row: DualOperationsPriorityRow }) {
+  const urgencyClass =
+    row.urgencyLevel === "urgent"
+      ? "bg-red-50 text-red-700"
+      : row.urgencyLevel === "attention"
+        ? "bg-amber-50 text-amber-700"
+        : "bg-slate-100 text-slate-700";
+  return (
+    <Link
+      href={row.href}
+      className="block border-t border-[var(--color-border)] px-4 py-3 first:border-t-0 hover:bg-[var(--color-bg-surface-high)]"
+    >
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-[var(--color-brand-subtle)] px-2 py-1 text-[10px] font-black uppercase text-[var(--color-brand)]">
+              {row.typeLabel}
+            </span>
+            <p className="truncate text-sm font-black text-[var(--color-text-primary)]">{row.title}</p>
+          </div>
+          <p className="mt-1 line-clamp-1 text-xs text-[var(--color-text-secondary)]">{row.content}</p>
+          <p className="mt-2 text-xs font-semibold text-[var(--color-text-muted)]">
+            {row.urgencyReasons.length > 0 ? row.urgencyReasons.join(" · ") : "Theo dõi theo thứ tự SLA"}
+          </p>
+        </div>
+        <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-black ${urgencyClass}`}>
+          {row.urgencyLevel === "urgent" ? "Khẩn cấp" : row.urgencyLevel === "attention" ? "Cần chú ý" : "Theo dõi"}
+        </span>
+      </div>
+    </Link>
+  );
 }
 
 export function DualOperationsEmployeeReportPage() {
   const { profile } = useAuth();
   const [reportFilters, setReportFilters] = useState<DualReportFilters>(DEFAULT_DUAL_REPORT_FILTERS);
+  const [activeOperation, setActiveOperation] = useState<OperationTab>("lead");
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [showExcelPreview, setShowExcelPreview] = useState(false);
+
   const leadFilters = useMemo<LeadReportFilters>(() => ({
     ...DEFAULT_LEAD_REPORT_FILTERS,
     timeRange: reportFilters.timeRange,
@@ -191,7 +274,9 @@ export function DualOperationsEmployeeReportPage() {
     keyword: reportFilters.keyword,
     status: reportFilters.leadStatus,
     intent: reportFilters.priority === "high" ? "hot" : "all",
+    owner: "mine",
   }), [reportFilters]);
+
   const crisisFilters = useMemo<CrisisReportFilters>(() => ({
     ...DEFAULT_CRISIS_REPORT_FILTERS,
     timeRange: reportFilters.timeRange,
@@ -203,46 +288,29 @@ export function DualOperationsEmployeeReportPage() {
     status: reportFilters.crisisStatus,
     severity: reportFilters.priority === "high" ? "high_critical" : "all",
   }), [reportFilters]);
+
   const report = useDualOperationsReport({
     leadFilters,
     crisisFilters,
     includeLead: reportFilters.operation !== "crisis",
     includeCrisis: reportFilters.operation !== "lead",
   });
-  const [pendingExport, setPendingExport] = useState<"excel" | "csv" | null>(null);
-  const activeFilterCount = countActiveDualReportFilters(reportFilters);
   const { filters, workspaces, isLoading: dashboardLoading, error: dashboardError, setFilters } = useDashboardStore();
-  const {
-    isLoading: alertLoading,
-    error: alertError,
-    fetchAlerts,
-    fetchCorrectionRequests,
-  } = useAlertStore();
+  const { isLoading: alertLoading, error: alertError, fetchAlerts, fetchCorrectionRequests } = useAlertStore();
 
   useDashboard({ autoFetch: true, refetchInterval: 60000 });
 
   useEffect(() => {
     if (!profile || profile.role === "admin" || workspaces.length === 0) return;
     if (filters.workspace_id !== "all") return;
-
     const profileBrandKey = normalizeBrandName(profile.brandName || profile.brandId || "");
     const scopedWorkspace = workspaces.find(
       (workspace) =>
         normalizeBrandName(workspace.id) === profileBrandKey ||
         normalizeBrandName(workspace.brand_name) === profileBrandKey,
     );
-
-    setFilters({
-      workspace_id: scopedWorkspace?.id || profile.brandId || profile.brandName || "all",
-    });
-  }, [
-    filters.workspace_id,
-    profile,
-    profile?.brandId,
-    profile?.brandName,
-    setFilters,
-    workspaces,
-  ]);
+    setFilters({ workspace_id: scopedWorkspace?.id || profile.brandId || profile.brandName || "all" });
+  }, [filters.workspace_id, profile, setFilters, workspaces]);
 
   useEffect(() => {
     const scopedBrandKey = getScopedBrandKey(profile);
@@ -250,446 +318,240 @@ export function DualOperationsEmployeeReportPage() {
     fetchCorrectionRequests(scopedBrandKey, false);
   }, [fetchAlerts, fetchCorrectionRequests, profile]);
 
-  const updateReportFilter = <K extends keyof DualReportFilters>(
-    key: K,
-    value: DualReportFilters[K],
-  ) => {
+  useEffect(() => {
+    if (reportFilters.operation === "lead") setActiveOperation("lead");
+    if (reportFilters.operation === "crisis") setActiveOperation("crisis");
+  }, [reportFilters.operation]);
+
+  const updateFilter = <K extends keyof DualReportFilters>(key: K, value: DualReportFilters[K]) => {
     setReportFilters((current) => ({ ...current, [key]: value }));
   };
 
-  const exportFile = () => {
-    if (pendingExport === "excel") exportDualOperationsReportExcel(report, reportFilename());
-    if (pendingExport === "csv") exportDualOperationsReportCsv(report, reportFilename());
-    setPendingExport(null);
+  const activeAdvancedFilterCount = [
+    reportFilters.sla !== "all",
+    reportFilters.priority !== "all",
+    reportFilters.source !== "all",
+    reportFilters.leadStatus !== "all",
+    reportFilters.crisisStatus !== "all",
+    Boolean(reportFilters.keyword.trim()),
+  ].filter(Boolean).length;
+  const periodLabel = getPeriodLabel(reportFilters);
+  const scopeLabel = getScopeLabel(reportFilters.operation);
+  const excelOptions: DualOperationsExcelViewOptions = {
+    periodLabel,
+    filterLabel: `${scopeLabel}${activeAdvancedFilterCount > 0 ? ` · ${activeAdvancedFilterCount} bộ lọc nâng cao` : ""}`,
+    operation: reportFilters.operation,
   };
+  const excelPreviewHtml = showExcelPreview
+    ? buildDualOperationsReportExcelDocument(report, excelOptions)
+    : "";
+  const attentionItems = report.attentionItems.slice(0, 3);
+  const visiblePriorityRows = report.priorityRows
+    .filter((row) => reportFilters.operation === "all" || row.type === reportFilters.operation)
+    .slice(0, 10);
+  const loading = dashboardLoading || alertLoading;
+  const error = dashboardError || alertError;
 
   return (
-    <div data-tour="reports-center" className="space-y-6 p-4 md:p-8">
-      {pendingExport ? (
-        <ReportExportPreviewModal
-          title="Bao cao Lead + Khung hoang"
-          subtitle="Preview truoc khi xuat file cho nhan vien xu ly ca 2 nghiep vu."
-          generatedAt={report.generatedAt}
-          formatLabel={pendingExport.toUpperCase()}
-          stats={[
-            { label: "Tong viec", value: report.kpis.totalTasks },
-            { label: "Da hoan tat", value: report.kpis.completedTasks, tone: "good" },
-            { label: "Qua han/SLA", value: report.kpis.overdueTasks, tone: report.kpis.overdueTasks > 0 ? "warn" : "good" },
-            { label: "Uu tien cao", value: report.kpis.priorityTasks, tone: report.kpis.priorityTasks > 0 ? "danger" : "default" },
-          ]}
-          summary={report.aiSummary}
-          sections={[
-            {
-              title: "Pham vi file",
-              rows: [
-                { label: "Chi tiet Lead", value: `${report.lead.detailRows.length} dong` },
-                { label: "Chi tiet Khung hoang", value: `${report.crisis.detailRows.length} dong` },
-                { label: "Viec uu tien chung", value: report.priorityRows.length },
-              ],
-            },
-            {
-              title: "Ty le chinh",
-              rows: [
-                { label: "Chuyen doi lead", value: formatPercent(report.kpis.leadConversionRate) },
-                { label: "Xu ly crisis", value: formatPercent(report.kpis.crisisResolvedRate) },
-                { label: "Dung SLA tong hop", value: formatPercent(report.kpis.slaOnTimeRate) },
-              ],
-            },
-          ]}
-          sampleRows={report.priorityRows.slice(0, 6).map((row) => ({
-            label: row.title,
-            meta: `${row.typeLabel} · ${row.status} · ${row.slaStatus}`,
-            badge: row.priority,
-            description: row.content,
-          }))}
-          onClose={() => setPendingExport(null)}
-          onConfirm={exportFile}
+    <main data-tour="reports-center" className="mx-auto w-full max-w-[1600px] space-y-5 p-4 md:p-6 min-[1100px]:p-8">
+      {showExcelPreview ? (
+        <ExcelDocumentPreviewModal
+          title="Nội dung và hình thức sẽ được xuất nguyên bản"
+          html={excelPreviewHtml}
+          onClose={() => setShowExcelPreview(false)}
+          onExport={() => exportDualOperationsReportExcel(report, `Bao_cao_ca_nhan_${new Date().toISOString().slice(0, 10)}`, excelOptions)}
         />
       ) : null}
 
-      <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-xs font-black uppercase tracking-[0.28em] text-[var(--color-brand)]">
-            Bao cao nhan vien 2 nghiep vu
-          </p>
-          <h1 className="mt-2 text-3xl font-black leading-tight text-[var(--color-text-primary)] md:text-4xl">
-            Bao cao Lead + Khung hoang
-          </h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--color-text-secondary)]">
-            Tong hop khoi luong lead va case khung hoang trong pham vi xu ly cua nhan vien, giup uu tien viec can lam truoc va xuat Excel theo tung nghiep vu.
-          </p>
-          <p className="mt-1 text-xs font-semibold text-[var(--color-text-muted)]">
-            Du lieu khung hoang: {Math.round((Date.now() - new Date(getAlertReviewSinceIso()).getTime()) / (24 * 60 * 60 * 1000))} ngay gan nhat.
-          </p>
+      <header className="border-b border-[var(--color-border)] pb-4">
+        <div className="flex flex-col gap-4 min-[1100px]:flex-row min-[1100px]:items-center min-[1100px]:justify-between">
+          <div>
+            <h1 className="text-xl font-black text-[var(--color-text-primary)]">Lead &amp; Khủng hoảng</h1>
+            <p className="mt-1 text-xs text-[var(--color-text-secondary)]">Theo dõi hiệu suất, rủi ro và việc cần xử lý trong kỳ báo cáo.</p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+            <div className="relative">
+              <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
+              <select
+                aria-label="Kỳ báo cáo"
+                value={reportFilters.timeRange}
+                onChange={(event) => {
+                  const value = event.target.value as DualReportFilters["timeRange"];
+                  updateFilter("timeRange", value);
+                  if (value === "custom") setShowAdvancedFilters(true);
+                }}
+                className={`${inputClass} pl-9 sm:w-48`}
+              >
+                <option value="today">Hôm nay</option>
+                <option value="7d">7 ngày gần nhất</option>
+                <option value="30d">30 ngày gần nhất</option>
+                <option value="custom">Tùy chọn thời gian</option>
+                <option value="all">Toàn bộ dữ liệu</option>
+              </select>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowAdvancedFilters((value) => !value)}
+              className={`inline-flex h-10 items-center justify-center gap-2 rounded-lg border px-3 text-sm font-bold transition ${showAdvancedFilters || activeAdvancedFilterCount > 0 ? "border-[var(--color-brand)]/35 bg-[var(--color-brand-subtle)] text-[var(--color-brand)]" : "border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-high)]"}`}
+            >
+              <Filter className="h-4 w-4" />
+              Bộ lọc{activeAdvancedFilterCount > 0 ? ` (${activeAdvancedFilterCount})` : ""}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowExcelPreview(true)}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-4 text-sm font-bold text-white shadow-sm transition hover:bg-[var(--color-brand-hover)]"
+            >
+              <Eye className="h-4 w-4" />
+              Xem trước &amp; xuất Excel
+            </button>
+          </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setPendingExport("excel")}
-            className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-brand)] px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-[var(--color-brand-hover)]"
-          >
-            <span className="material-symbols-outlined text-base">table_view</span>
-            Xuat Excel
-          </button>
-          <button
-            type="button"
-            onClick={() => setPendingExport("csv")}
-            className="inline-flex items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-4 py-2.5 text-sm font-bold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-high)]"
-          >
-            <span className="material-symbols-outlined text-base">download</span>
-            Xuat CSV
-          </button>
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="inline-flex w-fit rounded-lg bg-[var(--color-bg-surface-high)] p-1">
+            {(["all", "lead", "crisis"] as const).map((scope) => (
+              <button
+                key={scope}
+                type="button"
+                onClick={() => updateFilter("operation", scope)}
+                className={`rounded-md px-3 py-1.5 text-xs font-bold transition ${reportFilters.operation === scope ? "bg-[var(--color-bg-surface)] text-[var(--color-brand)] shadow-sm" : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"}`}
+              >
+                {scope === "all" ? "Tổng quan" : scope === "lead" ? "Khách hàng tiềm năng" : "Khủng hoảng"}
+              </button>
+            ))}
+          </div>
+          <span className="text-[11px] font-semibold text-[var(--color-text-muted)]">Cập nhật {new Date(report.generatedAt).toLocaleString("vi-VN")}</span>
         </div>
       </header>
 
-      {(dashboardLoading || alertLoading) && report.kpis.totalTasks === 0 ? (
-        <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-4 text-sm font-semibold text-[var(--color-text-secondary)]">
-          Dang tai du lieu bao cao 2 nghiep vu...
-        </div>
+      {showAdvancedFilters ? (
+        <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-4 shadow-sm">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="font-black text-[var(--color-text-primary)]">Bộ lọc nâng cao</h2>
+              <p className="mt-1 text-xs text-[var(--color-text-secondary)]">Chỉ hiển thị bộ lọc trạng thái phù hợp với nghiệp vụ đang xem.</p>
+            </div>
+            <button type="button" onClick={() => setReportFilters(DEFAULT_DUAL_REPORT_FILTERS)} className="text-sm font-bold text-[var(--color-brand)]">Đặt lại</button>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2 min-[1100px]:grid-cols-4">
+            <label className="space-y-1"><span className="text-xs font-bold text-[var(--color-text-muted)]">SLA</span><select value={reportFilters.sla} onChange={(event) => updateFilter("sla", event.target.value as DualReportFilters["sla"])} className={inputClass}><option value="all">Tất cả SLA</option><option value="in_sla">Trong/Đúng SLA</option><option value="overdue">Quá hạn</option><option value="late">Trễ SLA</option><option value="closed">Đã đóng</option></select></label>
+            <label className="space-y-1"><span className="text-xs font-bold text-[var(--color-text-muted)]">Mức ưu tiên</span><select value={reportFilters.priority} onChange={(event) => updateFilter("priority", event.target.value as DualReportFilters["priority"])} className={inputClass}><option value="all">Tất cả mức độ</option><option value="high">Hot Lead / Crisis cao</option></select></label>
+            <label className="space-y-1"><span className="text-xs font-bold text-[var(--color-text-muted)]">Nguồn</span><select value={reportFilters.source} onChange={(event) => updateFilter("source", event.target.value)} className={inputClass}>{SOURCE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+            {activeOperation === "lead" ? (
+              <label className="space-y-1"><span className="text-xs font-bold text-[var(--color-text-muted)]">Trạng thái Lead</span><select value={reportFilters.leadStatus} onChange={(event) => updateFilter("leadStatus", event.target.value as DualReportFilters["leadStatus"])} className={inputClass}><option value="all">Tất cả trạng thái</option><option value="new">Mới</option><option value="processing">Đang xử lý</option><option value="completed">Đã chuyển đổi</option><option value="skipped">Bỏ qua</option></select></label>
+            ) : (
+              <label className="space-y-1"><span className="text-xs font-bold text-[var(--color-text-muted)]">Trạng thái Khủng hoảng</span><select value={reportFilters.crisisStatus} onChange={(event) => updateFilter("crisisStatus", event.target.value)} className={inputClass}><option value="all">Tất cả trạng thái</option><option value="new">Mới</option><option value="resolving">Đang xử lý</option><option value="monitoring">Đang theo dõi</option><option value="pending_approval">Chờ duyệt</option><option value="resolved">Đã xử lý</option></select></label>
+            )}
+            <label className="space-y-1 md:col-span-2"><span className="text-xs font-bold text-[var(--color-text-muted)]">Từ khóa</span><input value={reportFilters.keyword} onChange={(event) => updateFilter("keyword", event.target.value)} placeholder="ID, khách hàng, nội dung..." className={inputClass} /></label>
+            {reportFilters.timeRange === "custom" ? <><label className="space-y-1"><span className="text-xs font-bold text-[var(--color-text-muted)]">Từ ngày</span><input type="date" value={reportFilters.startDate} onChange={(event) => updateFilter("startDate", event.target.value)} className={inputClass} /></label><label className="space-y-1"><span className="text-xs font-bold text-[var(--color-text-muted)]">Đến ngày</span><input type="date" value={reportFilters.endDate} onChange={(event) => updateFilter("endDate", event.target.value)} className={inputClass} /></label></> : null}
+          </div>
+        </section>
       ) : null}
 
-      {dashboardError || alertError ? (
-        <div className="rounded-xl border border-[var(--color-error)]/25 bg-[var(--color-error-subtle)] p-4 text-sm font-semibold text-[var(--color-error)]">
-          {dashboardError || alertError}
-        </div>
-      ) : null}
+      {loading && report.kpis.totalTasks === 0 ? <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-4 text-sm font-semibold text-[var(--color-text-secondary)]">Đang tải dữ liệu báo cáo...</div> : null}
+      {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">Một phần dữ liệu chưa tải được: {error}</div> : null}
 
-      <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-4 shadow-sm">
-        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-base font-black text-[var(--color-text-primary)]">Bo loc bao cao</h2>
-            <p className="text-sm text-[var(--color-text-secondary)]">
-              Ap dung dong thoi cho KPI tong hop, viec uu tien, preview va file xuat.
-            </p>
+      <section className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-border)] px-4 py-3">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-[var(--color-brand)]" />
+            <h2 className="text-sm font-extrabold text-[var(--color-text-primary)]">Tình trạng công việc</h2>
           </div>
-          <button
-            type="button"
-            onClick={() => setReportFilters(DEFAULT_DUAL_REPORT_FILTERS)}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-[var(--color-border)] px-3 py-2 text-sm font-bold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-high)]"
-          >
-            <span className="material-symbols-outlined text-base">restart_alt</span>
-            Dat lai{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
-          </button>
+          <span className="text-[11px] font-semibold text-[var(--color-text-muted)]">{periodLabel}</span>
         </div>
-
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <FilterField label="Nghiep vu">
-            <select
-              value={reportFilters.operation}
-              onChange={(event) => updateReportFilter("operation", event.target.value as DualReportFilters["operation"])}
-              className={inputClass}
-            >
-              <option value="all">Tat ca</option>
-              <option value="lead">Chi Lead</option>
-              <option value="crisis">Chi Khung hoang</option>
-            </select>
-          </FilterField>
-          <FilterField label="Thoi gian">
-            <select
-              value={reportFilters.timeRange}
-              onChange={(event) => updateReportFilter("timeRange", event.target.value as DualReportFilters["timeRange"])}
-              className={inputClass}
-            >
-              <option value="all">Tat ca</option>
-              <option value="today">Hom nay</option>
-              <option value="7d">7 ngay</option>
-              <option value="30d">30 ngay</option>
-              <option value="custom">Tuy chon</option>
-            </select>
-          </FilterField>
-          <FilterField label="SLA">
-            <select
-              value={reportFilters.sla}
-              onChange={(event) => updateReportFilter("sla", event.target.value as DualReportFilters["sla"])}
-              className={inputClass}
-            >
-              <option value="all">Tat ca</option>
-              <option value="in_sla">Trong/Dung SLA</option>
-              <option value="overdue">Qua han</option>
-              <option value="late">Tre SLA</option>
-              <option value="closed">Da dong</option>
-            </select>
-          </FilterField>
-          <FilterField label="Uu tien">
-            <select
-              value={reportFilters.priority}
-              onChange={(event) => updateReportFilter("priority", event.target.value as DualReportFilters["priority"])}
-              className={inputClass}
-            >
-              <option value="all">Tat ca</option>
-              <option value="high">Hot lead / Crisis cao</option>
-            </select>
-          </FilterField>
-          <FilterField label="Nguon">
-            <select
-              value={reportFilters.source}
-              onChange={(event) => updateReportFilter("source", event.target.value)}
-              className={inputClass}
-            >
-              {SOURCE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
-          </FilterField>
-          <FilterField label="Trang thai Lead">
-            <select
-              value={reportFilters.leadStatus}
-              onChange={(event) => updateReportFilter("leadStatus", event.target.value as DualReportFilters["leadStatus"])}
-              className={inputClass}
-            >
-              <option value="all">Tat ca</option>
-              <option value="new">Moi</option>
-              <option value="processing">Dang xu ly</option>
-              <option value="completed">Da chuyen doi</option>
-              <option value="skipped">Bo qua</option>
-            </select>
-          </FilterField>
-          <FilterField label="Trang thai Crisis">
-            <select
-              value={reportFilters.crisisStatus}
-              onChange={(event) => updateReportFilter("crisisStatus", event.target.value)}
-              className={inputClass}
-            >
-              <option value="all">Tat ca</option>
-              <option value="new">Moi</option>
-              <option value="resolving">Dang xu ly</option>
-              <option value="monitoring">Dang theo doi</option>
-              <option value="pending_approval">Cho duyet</option>
-              <option value="resolved">Da xu ly</option>
-            </select>
-          </FilterField>
-          <FilterField label="Tu khoa">
-            <input
-              value={reportFilters.keyword}
-              onChange={(event) => updateReportFilter("keyword", event.target.value)}
-              placeholder="ID, noi dung, topic..."
-              className={inputClass}
-            />
-          </FilterField>
+        <div className="grid gap-px bg-[var(--color-border)] sm:grid-cols-2 min-[1100px]:grid-cols-4">
+          <KpiCard label="Đã hoàn tất" value={report.kpis.completedTasks} description="Lead đã kết thúc và case đã giải quyết." tone="good" />
+          <KpiCard label="Đúng SLA" value={`${report.kpis.slaOnTimeRate}%`} description="Tỷ lệ chung trên các việc có thể đánh giá SLA." />
+          <KpiCard label="Còn mở" value={report.kpis.pendingTasks} description="Công việc vẫn cần tiếp tục xử lý." tone="warn" />
+          <KpiCard label="Quá hạn" value={report.kpis.overdueTasks} description="Việc quá hạn hoặc đã hoàn tất trễ SLA." tone={report.kpis.overdueTasks > 0 ? "danger" : "good"} />
         </div>
-
-        {reportFilters.timeRange === "custom" ? (
-          <div className="mt-3 grid gap-3 md:grid-cols-2">
-            <FilterField label="Tu ngay">
-              <input
-                type="date"
-                value={reportFilters.startDate}
-                onChange={(event) => updateReportFilter("startDate", event.target.value)}
-                className={inputClass}
-              />
-            </FilterField>
-            <FilterField label="Den ngay">
-              <input
-                type="date"
-                value={reportFilters.endDate}
-                onChange={(event) => updateReportFilter("endDate", event.target.value)}
-                className={inputClass}
-              />
-            </FilterField>
-          </div>
-        ) : null}
       </section>
 
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <KpiCard
-          title="Tong viec"
-          value={report.kpis.totalTasks}
-          sub={`${report.kpis.leadTotal} lead · ${report.kpis.crisisTotal} case`}
-        />
-        <KpiCard
-          title="Da hoan tat"
-          value={report.kpis.completedTasks}
-          sub={`${report.kpis.pendingTasks} viec con mo`}
-          tone="good"
-        />
-        <KpiCard
-          title="Qua han/SLA"
-          value={report.kpis.overdueTasks}
-          sub={`Dung SLA ${formatPercent(report.kpis.slaOnTimeRate)}`}
-          tone={report.kpis.overdueTasks > 0 ? "warn" : "good"}
-        />
-        <KpiCard
-          title="Uu tien cao"
-          value={report.kpis.priorityTasks}
-          sub={`${report.lead.kpis.hot} hot lead · ${report.crisis.kpis.critical + report.crisis.kpis.high} crisis cao`}
-          tone={report.kpis.priorityTasks > 0 ? "danger" : "default"}
-        />
-      </section>
-
-      <ReportPanel title="Tom tat van hanh" subtitle={`Cap nhat luc ${new Date(report.generatedAt).toLocaleString("vi-VN")}`}>
-        <p className="text-base leading-7 text-[var(--color-text-primary)]">{report.aiSummary}</p>
-      </ReportPanel>
-
-      <section className="grid gap-4 xl:grid-cols-3">
-        <ReportPanel title="Phan bo khoi luong" subtitle="Ty trong viec Lead va Khung hoang trong cung mot hang doi.">
-          <DistributionList items={report.workloadDistribution} />
-        </ReportPanel>
-
-        <ReportPanel title="Tong quan Lead" subtitle="Chi so chinh cua nghiep vu khach hang tiem nang.">
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <Metric label="Tong lead" value={report.lead.kpis.total} />
-            <Metric label="Hot/Warm" value={`${report.lead.kpis.hot}/${report.lead.kpis.warm}`} />
-            <Metric label="Da lien he" value={formatPercent(report.lead.kpis.contactRate)} />
-            <Metric label="Chuyen doi" value={formatPercent(report.lead.kpis.conversionRate)} />
-            <Metric label="Can ghi ket qua" value={report.lead.kpis.needResult} />
-            <Metric label="Tre SLA" value={report.lead.kpis.slaBreached} />
+      <div className="grid gap-4 min-[1100px]:grid-cols-[minmax(0,1.45fr)_minmax(300px,0.75fr)]">
+        <section className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm">
+          <div className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] px-4 py-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-red-600" />
+              <div>
+                <h2 className="text-sm font-extrabold text-[var(--color-text-primary)]">Việc cần xử lý trước</h2>
+                <p className="mt-0.5 text-[11px] text-[var(--color-text-secondary)]">Ưu tiên theo rủi ro và thời hạn xử lý.</p>
+              </div>
+            </div>
+            <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-black text-red-700">{attentionItems.reduce((total, item) => total + item.count, 0)}</span>
           </div>
-        </ReportPanel>
-
-        <ReportPanel title="Tong quan Khung hoang" subtitle="Chi so chinh cua nghiep vu xu ly canh bao.">
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <Metric label="Tong case" value={report.crisis.kpis.total} />
-            <Metric label="Cao/Nguy cap" value={report.crisis.kpis.high + report.crisis.kpis.critical} />
-            <Metric label="Da xu ly" value={formatPercent(report.crisis.kpis.resolvedRate)} />
-            <Metric label="Dang xu ly" value={report.crisis.kpis.resolving} />
-            <Metric label="Escalation" value={report.crisis.kpis.escalated} />
-            <Metric label="Qua han" value={report.crisis.kpis.overdue} />
+          <div className="space-y-2 p-3">
+            {attentionItems.length > 0 ? attentionItems.map((item) => <AttentionCard key={item.key} item={item} />) : (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-700">Không có rủi ro nổi bật trong phạm vi báo cáo hiện tại.</div>
+            )}
           </div>
-        </ReportPanel>
-      </section>
+        </section>
 
-      <ReportPanel title={`Viec uu tien chung (${report.priorityRows.length})`} subtitle="Sap xep ket hop theo diem uu tien, SLA, muc do khung hoang va intent lead.">
-        <div className="overflow-x-auto">
-          <table className="min-w-[960px] w-full text-left text-sm">
-            <thead className="text-xs uppercase text-[var(--color-text-muted)]">
-              <tr>
-                <th className="px-3 py-3">Loai</th>
-                <th className="px-3 py-3">Ma</th>
-                <th className="px-3 py-3">Noi dung</th>
-                <th className="px-3 py-3">Muc uu tien</th>
-                <th className="px-3 py-3">Trang thai</th>
-                <th className="px-3 py-3">SLA</th>
-                <th className="px-3 py-3">Phu trach</th>
-              </tr>
-            </thead>
-            <tbody>
-              {report.priorityRows.slice(0, 60).map((row) => (
-                <tr key={`${row.type}-${row.id}`} className="border-t border-[var(--color-border)] align-top">
-                  <td className="px-3 py-3">
-                    <span className={`rounded-full px-2 py-1 text-xs font-bold ${row.type === "crisis" ? "bg-red-50 text-red-700" : "bg-indigo-50 text-indigo-700"}`}>
-                      {row.typeLabel}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3">
-                    <Link href={row.href} className="font-bold text-[var(--color-brand)] hover:underline">
-                      {row.id.slice(0, 10)}
-                    </Link>
-                  </td>
-                  <td className="px-3 py-3">
-                    <p className="font-semibold text-[var(--color-text-primary)]">{row.title}</p>
-                    <p className="line-clamp-2 max-w-[420px] text-xs text-[var(--color-text-secondary)]">{row.content}</p>
-                  </td>
-                  <td className="px-3 py-3 font-bold">{row.priority}</td>
-                  <td className="px-3 py-3">{row.status}</td>
-                  <td className="px-3 py-3">{row.slaStatus}</td>
-                  <td className="px-3 py-3">{row.ownerName}</td>
-                </tr>
-              ))}
-              {report.priorityRows.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-3 py-10 text-center text-[var(--color-text-secondary)]">
-                    Chua co viec uu tien trong pham vi bao cao hien tai.
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
+        <section className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm">
+          <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-4 py-3">
+            <Lightbulb className="h-4 w-4 text-amber-600" />
+            <div>
+              <h2 className="text-sm font-extrabold text-[var(--color-text-primary)]">Hành động đề xuất</h2>
+              <p className="mt-0.5 text-[11px] text-[var(--color-text-secondary)]">Các bước nên thực hiện trong kỳ.</p>
+            </div>
+          </div>
+          <div className="divide-y divide-[var(--color-border)] px-4">
+            {report.recommendations.map((recommendation, index) => (
+              <div key={recommendation} className="flex gap-3 py-3">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-[11px] font-black text-[var(--color-brand)]">{index + 1}</span>
+                <p className="text-xs font-semibold leading-5 text-[var(--color-text-secondary)]">{recommendation}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      <section className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm">
+        <div className="flex flex-col gap-3 border-b border-[var(--color-border)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="h-4 w-4 text-[var(--color-brand)]" />
+            <div>
+              <h2 className="text-sm font-extrabold text-[var(--color-text-primary)]">Kết quả và xu hướng</h2>
+              <p className="mt-0.5 text-[11px] text-[var(--color-text-secondary)]">So sánh khối lượng phát sinh với kết quả xử lý.</p>
+            </div>
+          </div>
+          <div className="inline-flex w-fit rounded-lg bg-[var(--color-bg-surface-high)] p-1">
+            {(["lead", "crisis"] as const).map((tab) => (
+              <button key={tab} type="button" disabled={reportFilters.operation !== "all" && reportFilters.operation !== tab} onClick={() => setActiveOperation(tab)} className={`rounded-md px-3 py-1.5 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-40 ${activeOperation === tab ? "bg-[var(--color-bg-surface)] text-[var(--color-brand)] shadow-sm" : "text-[var(--color-text-secondary)]"}`}>{tab === "lead" ? "Khách hàng tiềm năng" : "Khủng hoảng"}</button>
+            ))}
+          </div>
         </div>
-      </ReportPanel>
-
-      <section className="grid gap-4 xl:grid-cols-2">
-        <ReportPanel title={`Chi tiet Lead (${report.lead.detailRows.length})`} subtitle="Danh sach lead trong pham vi xu ly cua nhan vien.">
-          <div className="overflow-x-auto">
-            <table className="min-w-[760px] w-full text-left text-sm">
-              <thead className="text-xs uppercase text-[var(--color-text-muted)]">
-                <tr>
-                  <th className="px-3 py-3">Lead</th>
-                  <th className="px-3 py-3">Khach hang</th>
-                  <th className="px-3 py-3">Intent</th>
-                  <th className="px-3 py-3">SLA</th>
-                  <th className="px-3 py-3">Phan hoi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {report.lead.detailRows.slice(0, 40).map((row) => (
-                  <tr key={row.id} className="border-t border-[var(--color-border)] align-top">
-                    <td className="px-3 py-3">
-                      <Link href={`/leads?leadId=${encodeURIComponent(row.id)}`} className="font-bold text-[var(--color-brand)] hover:underline">
-                        {row.id.slice(0, 10)}
-                      </Link>
-                    </td>
-                    <td className="px-3 py-3">
-                      <p className="font-semibold text-[var(--color-text-primary)]">{row.customer}</p>
-                      <p className="line-clamp-2 max-w-[320px] text-xs text-[var(--color-text-secondary)]">{row.content}</p>
-                    </td>
-                    <td className="px-3 py-3 font-bold uppercase">{row.intent}</td>
-                    <td className="px-3 py-3">{row.slaStatus}</td>
-                    <td className="px-3 py-3">{formatMinutes(row.responseMinutes)}</td>
-                  </tr>
-                ))}
-                {report.lead.detailRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-3 py-10 text-center text-[var(--color-text-secondary)]">
-                      Chua co lead phu hop.
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
+        <div className="grid min-[1100px]:grid-cols-[minmax(0,1fr)_280px]">
+          <div className="min-w-0 p-4 min-[1100px]:border-r min-[1100px]:border-[var(--color-border)]">
+            <h3 className="mb-1 text-xs font-extrabold text-[var(--color-text-primary)]">Xu hướng 7 ngày</h3>
+            <p className="mb-4 text-[11px] text-[var(--color-text-secondary)]">Dữ liệu phát sinh và kết quả hoàn thành theo ngày.</p>
+            {activeOperation === "lead" ? <TrendBars rows={report.lead.responseTrend as unknown as Array<Record<string, string | number>>} primaryKey="created" secondaryKey="contacted" primaryLabel="Lead mới" secondaryLabel="Đã liên hệ" /> : <TrendBars rows={report.crisis.responseTrend as unknown as Array<Record<string, string | number>>} primaryKey="created" secondaryKey="resolved" primaryLabel="Case mới" secondaryLabel="Đã giải quyết" />}
           </div>
-        </ReportPanel>
-
-        <ReportPanel title={`Chi tiet Khung hoang (${report.crisis.detailRows.length})`} subtitle="Danh sach case khung hoang trong pham vi xu ly cua nhan vien.">
-          <div className="overflow-x-auto">
-            <table className="min-w-[780px] w-full text-left text-sm">
-              <thead className="text-xs uppercase text-[var(--color-text-muted)]">
-                <tr>
-                  <th className="px-3 py-3">Case</th>
-                  <th className="px-3 py-3">Noi dung</th>
-                  <th className="px-3 py-3">Muc do</th>
-                  <th className="px-3 py-3">SLA</th>
-                  <th className="px-3 py-3">Xu ly</th>
-                </tr>
-              </thead>
-              <tbody>
-                {report.crisis.detailRows.slice(0, 40).map((row) => (
-                  <tr key={row.id} className="border-t border-[var(--color-border)] align-top">
-                    <td className="px-3 py-3">
-                      <Link href={`/alerts?alertId=${encodeURIComponent(row.id)}`} className="font-bold text-[var(--color-brand)] hover:underline">
-                        {row.id.slice(0, 10)}
-                      </Link>
-                    </td>
-                    <td className="px-3 py-3">
-                      <p className="font-semibold text-[var(--color-text-primary)]">{row.topic}</p>
-                      <p className="line-clamp-2 max-w-[340px] text-xs text-[var(--color-text-secondary)]">{row.content}</p>
-                    </td>
-                    <td className="px-3 py-3 font-bold uppercase">{row.severity}</td>
-                    <td className="px-3 py-3">{row.slaStatus}</td>
-                    <td className="px-3 py-3">{formatCrisisMinutes(row.resolutionMinutes)}</td>
-                  </tr>
-                ))}
-                {report.crisis.detailRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-3 py-10 text-center text-[var(--color-text-secondary)]">
-                      Chua co case khung hoang phu hop.
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
-        </ReportPanel>
+          <aside className="border-t border-[var(--color-border)] bg-[var(--color-bg-surface-high)]/45 min-[1100px]:border-t-0">
+            <p className="px-3 pb-1 pt-3 text-[10px] font-extrabold uppercase text-[var(--color-text-muted)]">Chỉ số nghiệp vụ</p>
+            {activeOperation === "lead" ? <><Metric label="Đã liên hệ" value={`${report.lead.kpis.contacted}/${report.lead.kpis.total}`} /><Metric label="Tỷ lệ chuyển đổi" value={`${report.lead.kpis.conversionRate}%`} /><Metric label="Chưa ghi kết quả" value={report.lead.kpis.needResult} /><Metric label="Trễ SLA" value={report.lead.kpis.slaBreached} /></> : <><Metric label="Đã giải quyết" value={`${report.crisis.kpis.resolved}/${report.crisis.kpis.total}`} /><Metric label="Critical/High" value={report.crisis.kpis.critical + report.crisis.kpis.high} /><Metric label="Chờ duyệt" value={report.crisis.kpis.pendingApproval} /><Metric label="Quá hạn" value={report.crisis.kpis.overdue} /></>}
+          </aside>
+        </div>
       </section>
-    </div>
-  );
-}
 
-function Metric({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-high)] p-3">
-      <p className="text-xs font-bold uppercase tracking-wide text-[var(--color-text-muted)]">{label}</p>
-      <p className="mt-1 text-xl font-black text-[var(--color-text-primary)]">{value}</p>
-    </div>
+      <section className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm">
+        <div className="flex flex-col gap-3 border-b border-[var(--color-border)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+            <Table2 className="h-4 w-4 text-[var(--color-brand)]" />
+            <div>
+              <h2 className="text-sm font-extrabold text-[var(--color-text-primary)]">Chi tiết công việc ưu tiên</h2>
+              <p className="mt-0.5 text-[11px] text-[var(--color-text-secondary)]">Mở từng mục để xử lý hoặc đối soát dữ liệu.</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {reportFilters.operation !== "crisis" ? <Link href="/leads" className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-brand-subtle)]">Khách hàng <ArrowRight className="h-3.5 w-3.5" /></Link> : null}
+            {reportFilters.operation !== "lead" ? <Link href="/alerts" className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-brand-subtle)]">Cảnh báo <ArrowRight className="h-3.5 w-3.5" /></Link> : null}
+          </div>
+        </div>
+        <div>
+          {visiblePriorityRows.length > 0 ? visiblePriorityRows.map((row) => <PriorityRow key={`${row.type}-${row.id}`} row={row} />) : <p className="p-8 text-center text-sm text-[var(--color-text-secondary)]">Không có công việc ưu tiên trong phạm vi hiện tại.</p>}
+        </div>
+      </section>
+    </main>
   );
 }

@@ -1,0 +1,144 @@
+
+> @insightflow/web@1.0.0 build
+> next build
+
+  ▲ Next.js 14.2.35
+  - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+
+./src/app/alerts/page.tsx
+1523:6  Warning: React Hook useEffect has missing dependencies: 'generateTrendData', 'i18n.language', 'scopedBrandKey', and 't'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/alerts/[id]/page.tsx
+320:6  Warning: React Hook useEffect has a missing dependency: 'alert'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+1229:25  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+1348:31  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+1404:33  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+1500:31  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+1575:25  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+1640:13  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./src/app/forgot-password/page.tsx
+244:11  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./src/app/label-requests/page.tsx
+661:6  Warning: React Hook useEffect has an unnecessary dependency: 'auth.currentUser'. Either exclude it or remove the dependency array. Outer scope values like 'auth.currentUser' aren't valid dependencies because mutating them doesn't re-render the component.  react-hooks/exhaustive-deps
+828:6  Warning: React Hook useEffect has a missing dependency: 'profile'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/layout.tsx
+144:9  Warning: Custom fonts not added in `pages/_document.js` will only load for a single page. This is discouraged. See: https://nextjs.org/docs/messages/no-page-custom-font  @next/next/no-page-custom-font
+148:9  Warning: Custom fonts not added in `pages/_document.js` will only load for a single page. This is discouraged. See: https://nextjs.org/docs/messages/no-page-custom-font  @next/next/no-page-custom-font
+
+./src/app/mentions/page.tsx
+20:5  Warning: React Hook useMemo has unnecessary dependencies: 'allMentions' and 'filters'. Either exclude them or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/reports/page.tsx
+1534:6  Warning: React Hook useMemo has a missing dependency: 't'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/admin/AdminBrandManagerPage.tsx
+317:6  Warning: React Hook useEffect has a missing dependency: 'loadBrandManagers'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/alerts/AlertContactWorkflow.tsx
+179:21  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+218:15  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+256:11  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./src/components/alerts/AlertDetailPanel.tsx
+571:11  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+602:1180  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./src/components/auth/LoginForm.tsx
+126:13  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./src/components/brand-manager/BMHeroRow.tsx
+125:6  Warning: React Hook useEffect has a missing dependency: 'isDark'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+179:6  Warning: React Hook useEffect has missing dependencies: 'isDark' and 't'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/brand-manager/BMSentimentChart.tsx
+177:6  Warning: React Hook useEffect has missing dependencies: 'isDark', 'p.grid', 'p.negative.fill', 'p.negative.line', 'p.neutral.fill', 'p.neutral.line', 'p.positive.fill', 'p.positive.line', 'p.tick', 'p.ttBg', 'p.ttBody', 'p.ttBorder', 'p.ttTitle', and 't'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/brand-manager/BrandManagerDashboard.tsx
+60:6  Warning: React Hook useEffect has missing dependencies: 'initialWorkspaces', 'setFilters', and 'setWorkspaces'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+218:5  Warning: React Hook useMemo has a missing dependency: 'filters'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+311:6  Warning: React Hook useMemo has a missing dependency: 't'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/dashboard/Dashboard.tsx
+63:6  Warning: React Hook useEffect has missing dependencies: 'initialStats', 'initialWorkspaces', 'setFilters', 'setStats', and 'setWorkspaces'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+135:61  Warning: React Hook useMemo has unnecessary dependencies: 'alerts' and 'filters'. Either exclude them or remove the dependency array.  react-hooks/exhaustive-deps
+138:5  Warning: React Hook useMemo has a missing dependency: 'filters'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+160:6  Warning: React Hook useMemo has a missing dependency: 'filteredLeadsForStats.length'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/dashboard/SentimentDonut.tsx
+102:6  Warning: React Hook useEffect has missing dependencies: 'isDark' and 't'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/dashboard/SentimentTrend.tsx
+182:6  Warning: React Hook useEffect has missing dependencies: 'p.gridColor', 'p.negative.fill', 'p.negative.line', 'p.neutral.fill', 'p.neutral.line', 'p.positive.fill', 'p.positive.line', 'p.tickColor', 'p.tooltipBg', 'p.tooltipBody', 'p.tooltipBorder', 'p.tooltipTitle', and 't'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/home/TestimonialsSection.tsx
+46:19  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./src/components/home/TopNavBar.tsx
+130:13  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./src/components/home/trial-registration/BasicInfoForm.tsx
+130:19  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./src/components/layout/Sidebar.tsx
+59:6  Warning: React Hook useEffect has a missing dependency: 'onClose'. Either include it or remove the dependency array. If 'onClose' changes too often, find the parent component that defines it and wrap that definition in useCallback.  react-hooks/exhaustive-deps
+109:15  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./src/components/lead-monitoring/report/ReportHero.tsx
+24:13  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./src/components/operations/TaskCard.tsx
+60:9  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./src/components/profile/NotificationsTab.tsx
+64:6  Warning: React Hook useEffect has a missing dependency: 'i18n'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/team/TeamManagementPage.tsx
+176:6  Warning: React Hook useEffect has missing dependencies: 'loadStaff' and 'profile'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/ui/Avatar.tsx
+14:3  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./src/components/ui/NativeSelectEnhancer.tsx
+374:6  Warning: React Hook useEffect has a missing dependency: 'menu'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/ve-chung-toi/AboutLogoSection.tsx
+100:17  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./src/hooks/useDashboardData.ts
+318:6  Warning: React Hook useEffect has missing dependencies: 'fetchDashboardData', 'lastFetchedAtMap', and 'profile'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+377:6  Warning: React Hook useEffect has a missing dependency: 'fetchDashboardData'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+385:6  Warning: React Hook useEffect has a missing dependency: 'setTrendData'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/basic-features/eslint#disabling-rules
+   Collecting page data ...
+PageNotFoundError: Cannot find module for page: /admin
+    at getPagePath (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\server\require.js:94:15)
+    at requirePage (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\server\require.js:99:22)
+    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\server\load-components.js:103:84
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async loadComponentsImpl (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\server\load-components.js:103:26)
+    at async D:\Thuc_Tap\InsightFlow\node_modules\next\dist\build\utils.js:1116:32
+    at async Span.traceAsyncFn (D:\Thuc_Tap\InsightFlow\node_modules\next\dist\trace\trace.js:154:20) {
+  code: 'ENOENT'
+}
+
+> Build error occurred
+Error: Failed to collect page data for /admin
+    at D:\Thuc_Tap\InsightFlow\node_modules\next\dist\build\utils.js:1269:15
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5) {
+  type: 'Error'
+}
+npm error Lifecycle script `build` failed with error:
+npm error code 1
+npm error path D:\Thuc_Tap\InsightFlow\apps\web
+npm error workspace @insightflow/web@1.0.0
+npm error location D:\Thuc_Tap\InsightFlow\apps\web
+npm error command failed
+npm error command C:\WINDOWS\system32\cmd.exe /d /s /c next build

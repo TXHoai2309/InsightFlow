@@ -220,6 +220,15 @@ export function inferQueueFromLabels(label: ClassificationLabel): LabelQueue {
   return "none";
 }
 
+export function isCrisisClassificationLabel(
+  raw: Partial<ClassificationLabel> | Record<string, unknown> | null | undefined,
+  fallback: Partial<ClassificationLabel> = {},
+) {
+  return inferQueueFromLabels(
+    normalizeClassificationLabel(raw, fallback),
+  ) === "crisis";
+}
+
 export function getQueueLabel(queue: LabelQueue) {
   return LABEL_QUEUE_LABEL[queue];
 }
@@ -313,7 +322,7 @@ export function getLeadCurrentLabels(
   return normalizeClassificationLabel(lead.labels, {
     sentiment: mention?.labels?.sentiment || mention?.sentiment || "neutral",
     topic: mention?.labels?.topic || (mentionTopic ? [mentionTopic] : []),
-    relevance: mention?.labels?.relevance ?? true,
+    relevance: mention?.labels?.relevance ?? null,
     urgency: mention?.labels?.urgency || "low",
     intent: lead.labels?.intent || lead.intent,
   });

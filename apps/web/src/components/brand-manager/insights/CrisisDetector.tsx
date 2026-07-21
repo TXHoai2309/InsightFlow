@@ -78,7 +78,7 @@ export function CrisisDetector({ signals, loading }: CrisisDetectorProps) {
                 </div>
                 {sig.contentSample && (
                   <p className="mt-2 text-[11px] text-[var(--color-text-muted)] italic bg-white/70 rounded-lg p-2 border border-white line-clamp-2">
-                    "{sig.contentSample}"
+                    “{sig.contentSample}”
                   </p>
                 )}
                 <div className="mt-2 text-[11px] text-[var(--color-text-muted)]">

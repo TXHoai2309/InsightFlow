@@ -5,7 +5,7 @@
  * Điều hướng chính của ứng dụng — hỗ trợ mobile drawer + Dark Mode.
  */
 
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useTranslation } from "react-i18next";
 import { usePathname, useRouter } from "next/navigation";
@@ -33,7 +33,6 @@ const navItems: NavItem[] = [
   { href: "/operations", label: "nav.operations", fallback: "Vận hành", icon: "ti-layout-dashboard" },
   { href: "/team", label: "nav.team", fallback: "Quản lý đội ngũ", icon: "ti-users" },
   { href: "/mentions", label: "nav.mentions", fallback: "Đề cập", icon: "ti-message-circle" },
-  { href: "/label-requests", label: "nav.label_requests", fallback: "Duyệt yêu cầu", icon: "ti-clipboard-check" },
   { href: "/alerts", label: "nav.alerts", fallback: "Cảnh báo", icon: "ti-bell" },
   { href: "/leads", label: "nav.leads", fallback: "Khách hàng", icon: "ti-chart-bar" },
   { href: "/reports", label: "nav.reports", fallback: "Báo cáo", icon: "ti-file-analytics" },
@@ -52,12 +51,41 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { theme } = useTheme();
   const { profile, role } = useAuth();
   const isDark = theme === "dark";
-  const accessibleNavItems = navItems.filter((item) => canAccessPath(role, item.href, profile?.permissions));
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
+  const accessibleNavItems = useMemo(
+    () => navItems.filter((item) => canAccessPath(role, item.href, profile?.permissions)),
+    [profile?.permissions, role],
+  );
 
   // Đóng sidebar khi chuyển trang trên mobile
   useEffect(() => {
     onClose();
+    setPendingHref(null);
   }, [pathname]);
+
+  // Warm route bundles after the shell is interactive. This does not mount
+  // the destination page or query the database; it only removes the chunk
+  // download delay when the user clicks a menu item.
+  useEffect(() => {
+    const connection = (navigator as Navigator & {
+      connection?: { saveData?: boolean; effectiveType?: string };
+    }).connection;
+    if (connection?.saveData || connection?.effectiveType?.includes("2g")) return;
+
+    const prefetchTimers: number[] = [];
+    const startTimer = window.setTimeout(() => {
+      accessibleNavItems.forEach((item, index) => {
+        prefetchTimers.push(
+          window.setTimeout(() => router.prefetch(item.href), index * 200),
+        );
+      });
+    }, 1000);
+
+    return () => {
+      window.clearTimeout(startTimer);
+      prefetchTimers.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, [accessibleNavItems, router]);
 
   // Khoá scroll khi sidebar mở trên mobile
   useEffect(() => {
@@ -138,6 +166,11 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch
+                aria-busy={pendingHref === item.href}
+                onClick={() => setPendingHref(item.href)}
+                onFocus={() => router.prefetch(item.href)}
+                onPointerEnter={() => router.prefetch(item.href)}
                 data-tour={`nav-${item.href.replace(/^\//, "").replace(/\//g, "-") || "home"}`}
                 className="w-full px-4 py-[14px] text-left text-[14px] transition-colors duration-200 flex items-center rounded-r-[10px]"
                 style={
@@ -167,6 +200,9 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
               >
                 <i className={`ti ${item.icon} text-[18px] mr-[10px]`}></i>
                 <span className="flex-1">{t(item.label, item.fallback)}</span>
+                {pendingHref === item.href && pathname !== item.href && (
+                  <span className="ml-2 h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-r-transparent" />
+                )}
                 {item.badge && item.badge > 0 && (
                   <span
                     className="text-[11px] px-2 py-0.5 rounded-full text-white font-bold ml-2"

@@ -28,6 +28,7 @@ import {
   canAlertBeVisibleToUser,
   isAlertOwnedByUser,
 } from "@/lib/alert-visibility";
+import { findAlertByNavigationTarget } from "@/lib/alert-navigation";
 
 const ALERTS_PER_PAGE = 5;
 import { collection, getDocs, doc, getDoc } from "firebase/firestore";
@@ -266,6 +267,7 @@ export default function AlertsPage() {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
   const alertIdParam = searchParams.get("alertId");
+  const mentionIdParam = searchParams.get("mentionId");
   const handledAlertIdParamRef = useRef<string | null>(null);
 
 
@@ -468,20 +470,21 @@ export default function AlertsPage() {
   }, [visibleBaseAlerts]);
 
   useEffect(() => {
-    if (!alertIdParam) {
+    const navigationKey = [alertIdParam, mentionIdParam].filter(Boolean).join("::");
+    if (!navigationKey) {
       handledAlertIdParamRef.current = null;
       return;
     }
-    if (handledAlertIdParamRef.current === alertIdParam) return;
+    if (handledAlertIdParamRef.current === navigationKey) return;
 
-    const targetAlert = visibleBaseAlerts.find((alert) => {
-      return [alert.id, alert.source_id, alert.post_id, alert.comment_id]
-        .filter(Boolean)
-        .some((id) => String(id) === alertIdParam);
-    });
+    const targetAlert = findAlertByNavigationTarget(
+      visibleBaseAlerts,
+      alertIdParam,
+      mentionIdParam,
+    );
     if (!targetAlert) return;
 
-    handledAlertIdParamRef.current = alertIdParam;
+    handledAlertIdParamRef.current = navigationKey;
     const workflowStatus = getAlertWorkflowStatus(targetAlert);
 
     // A deep link must reveal the requested record even if the user left
@@ -494,22 +497,27 @@ export default function AlertsPage() {
     setStatusFilter(
       workflowStatus === "resolved"
         ? "resolved"
-        : workflowStatus === "contact_failed"
-          ? "contact_failed"
-          : "all",
+        : workflowStatus === "processing"
+          ? "processing"
+          : workflowStatus === "contact_failed"
+            ? "contact_failed"
+            : "all",
     );
     setAlertPage(1);
     setDetailPanelTab("action");
     setIsDetailPanelCollapsed(false);
     setPendingClaimSelectionId(targetAlert.id);
-  }, [alertIdParam, visibleBaseAlerts]);
+  }, [alertIdParam, mentionIdParam, visibleBaseAlerts]);
 
   const processedActiveAlerts = useMemo(() => {
     let result = statusFilter === "resolved" ? [...resolvedAlerts] : [...activeAlerts];
 
-    // Lọc theo trạng thái nghiệp vụ. "all" là toàn bộ hàng đợi đang mở;
-    // cảnh báo đã giải quyết chỉ xuất hiện khi chọn riêng trạng thái resolved.
-    if (statusFilter === "pending") {
+    // Lọc theo trạng thái nghiệp vụ.
+    // "all": Chỉ hiển thị các công việc chưa phân công hoặc cần liên hệ lại;
+    // các task đã phân công/đang xử lý sẽ ẩn khỏi "Tất cả đang mở" và chuyển sang tab "Đang xử lý".
+    if (statusFilter === "all") {
+      result = result.filter((alert) => getAlertWorkflowStatus(alert) !== "processing");
+    } else if (statusFilter === "pending") {
       result = result.filter((alert) => {
         return getAlertWorkflowStatus(alert) === "pending";
       });
@@ -1029,7 +1037,7 @@ export default function AlertsPage() {
     }
   }, [activeTab, highRiskIncidents, selectedIncidentId]);
 
-  // Load alerts on mount
+  // Load alerts on mount only – realtime + 60s polling handles subsequent updates
   useEffect(() => {
     if (authLoading || !canViewCrisisQueue) return;
     setFilters({ status: "all" });
@@ -1720,7 +1728,7 @@ function IncidentReportModal({ item, onClose, triggerToast }: IncidentReportModa
           <div className="space-y-1">
             <label className="text-xs font-bold text-[var(--color-text-primary)]">{t("alerts.report.desc")}</label>
             <div className="p-3 bg-[var(--color-bg-surface-raised)] rounded-xl border border-[var(--color-border)] text-xs text-[var(--color-text-secondary)] italic">
-              "{item.text || item.content}"
+              “{item.text || item.content}”
             </div>
           </div>
 

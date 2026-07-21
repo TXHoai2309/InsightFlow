@@ -137,14 +137,15 @@ function matchesUpdatedRange(
   const leadTime = new Date(lead.updated_at || lead.created_at).getTime();
   if (!Number.isFinite(leadTime)) return false;
 
+  const startOfToday = new Date(nowMs);
+  startOfToday.setHours(0, 0, 0, 0);
+
   if (range === "today") {
-    const startOfToday = new Date(nowMs);
-    startOfToday.setHours(0, 0, 0, 0);
     return leadTime >= startOfToday.getTime();
   }
 
-  const days = range === "7d" ? 7 : 30;
-  return leadTime >= nowMs - days * 24 * 60 * 60 * 1000;
+  const days = range === "7d" ? 6 : 29;
+  return leadTime >= startOfToday.getTime() - days * 24 * 60 * 60 * 1000;
 }
 
 export function filterLeadWorkbenchItems(
