@@ -546,6 +546,11 @@ function applyRealtimeAnnotationUpdate(
   const resolvedByEmail = row.resolved_by_email || labelObj.resolved_by_email || null;
   const resolvedByName = row.resolved_by_name || labelObj.resolved_by_name || null;
   const newStatus = row.status || row.resolution_status || resolveAlertStatusFromLabel(labelObj);
+  const getRealtimeValue = (key: string, currentValue: unknown) => {
+    if (Object.prototype.hasOwnProperty.call(row, key)) return row[key];
+    if (Object.prototype.hasOwnProperty.call(labelObj, key)) return labelObj[key];
+    return currentValue;
+  };
 
   const lookupIds = [
     row.id,
@@ -573,11 +578,16 @@ function applyRealtimeAnnotationUpdate(
       return {
         ...alert,
         status: newStatus || alert.status,
-        resolved_at: row.resolved_at || labelObj.resolved_at || alert.resolved_at,
-        being_resolved_by: beingResolvedBy,
-        being_resolved_at: beingResolvedAt,
-        resolved_by_email: resolvedByEmail,
-        resolved_by_name: resolvedByName,
+        resolved_at: getRealtimeValue("resolved_at", alert.resolved_at) || undefined,
+        being_resolved_by: getRealtimeValue("being_resolved_by", beingResolvedBy) || null,
+        being_resolved_at: getRealtimeValue("being_resolved_at", beingResolvedAt) || null,
+        resolved_by: getRealtimeValue("resolved_by", alert.resolved_by) || null,
+        resolved_by_email: getRealtimeValue("resolved_by_email", resolvedByEmail) || null,
+        resolved_by_name: getRealtimeValue("resolved_by_name", resolvedByName) || null,
+        skipped_at: getRealtimeValue("skipped_at", alert.skipped_at) || null,
+        skipped_by_uid: getRealtimeValue("skipped_by_uid", alert.skipped_by_uid) || null,
+        skipped_by_email: getRealtimeValue("skipped_by_email", alert.skipped_by_email) || null,
+        skipped_by_name: getRealtimeValue("skipped_by_name", alert.skipped_by_name) || null,
         resolution_history: Array.isArray(row.resolution_history || labelObj.resolution_history)
           ? (row.resolution_history || labelObj.resolution_history)
           : alert.resolution_history,

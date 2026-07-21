@@ -474,9 +474,11 @@ export default function AlertsPage() {
     setStatusFilter(
       workflowStatus === "resolved"
         ? "resolved"
-        : workflowStatus === "processing"
-          ? "processing"
-          : workflowStatus === "contact_failed"
+        : workflowStatus === "skipped"
+          ? "skipped"
+          : workflowStatus === "processing"
+            ? "processing"
+            : workflowStatus === "contact_failed"
             ? "contact_failed"
             : "all",
     );

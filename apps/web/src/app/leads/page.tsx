@@ -808,7 +808,7 @@ export default function LeadsPage() {
   return (
     <div
       data-tour="leads-page"
-      className="lead-workbench-theme mx-auto min-h-full w-full max-w-[1600px] space-y-2 overflow-x-hidden bg-[var(--color-bg-primary)] p-2.5 text-[var(--color-text-primary)]"
+      className="lead-workbench-theme mx-auto min-h-full w-full max-w-[1920px] space-y-[clamp(8px,0.8vw,14px)] overflow-x-hidden bg-[var(--color-bg-base)] p-[clamp(12px,2vw,32px)] text-[var(--color-text-primary)]"
     >
       {dashboardReturnNavigation && (
         <button

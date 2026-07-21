@@ -165,6 +165,24 @@ export function SuccessStep({
         </div>
       </div>
 
+      {!consultationCompleted && onFillConsultation && (
+        <div className="relative z-10 mt-8 flex flex-col items-center rounded-[20px] border border-[#C7D2FE] bg-[#EEF2FF] p-5 text-center sm:flex-row sm:justify-between sm:text-left">
+          <div>
+            <p className="flex items-center justify-center gap-2 text-[15px] font-extrabold text-[#3730A3] sm:justify-start">
+              <MessageSquareText className="h-5 w-5" /> Cần tư vấn thêm?
+            </p>
+            <p className="mt-1 text-[13px] leading-5 text-[#4F46E5]">Bổ sung yêu cầu để nhận tư vấn sát nhất.</p>
+          </div>
+          <button
+            type="button"
+            onClick={onFillConsultation}
+            className="mt-4 inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-[12px] bg-[#6D5EF6] px-5 text-[14px] font-bold text-white shadow-[0_8px_16px_rgba(109,94,246,0.2)] transition hover:-translate-y-0.5 hover:bg-[#5B4DF5] sm:ml-4 sm:mt-0"
+          >
+            Gửi Form <ArrowRight className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {onRestart && (
         <div className="relative z-10 mt-8 flex flex-col items-center rounded-[20px] border border-[#C7D2FE] bg-[#EEF2FF] p-5 text-center sm:flex-row sm:justify-between sm:text-left">
           <div>

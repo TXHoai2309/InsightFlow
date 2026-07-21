@@ -32,6 +32,7 @@ function useViewPresence({ resource, resourceId, enabled }: UseViewPresenceOptio
     }
 
     let disposed = false;
+<<<<<<< HEAD
     const collectionName = resource === "alerts" ? "alert_view_presence" : "lead_view_presence";
     const viewersCollection = collection(dbSecond, collectionName, resourceId, "viewers");
     const viewerRef = doc(viewersCollection, currentUser.uid);
@@ -55,6 +56,59 @@ function useViewPresence({ resource, resourceId, enabled }: UseViewPresenceOptio
 
     const leave = () => {
       void deleteDoc(viewerRef).catch(() => undefined);
+=======
+    let cachedToken = "";
+    const endpoint = `/api/${resource}/${encodeURIComponent(resourceId)}/viewers`;
+
+    const getToken = async () => {
+      cachedToken = cachedToken || await auth.currentUser?.getIdToken() || "";
+      return cachedToken;
+    };
+
+    const loadViewers = async () => {
+      try {
+        const token = await getToken();
+        if (!token || disposed) return;
+        const response = await fetch(endpoint, {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (response.status === 401 || response.status === 403) {
+          cachedToken = "";
+          if (!disposed) setViewers([]);
+          return;
+        }
+        if (!response.ok) return;
+        const payload = await response.json() as { viewers?: AlertViewer[] };
+        if (!disposed) setViewers(Array.isArray(payload.viewers) ? payload.viewers : []);
+      } catch {
+        // Presence is supplementary and must never interrupt the workbench.
+      }
+    };
+
+    const heartbeat = async () => {
+      try {
+        const token = await getToken();
+        if (!token || disposed) return;
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (response.status === 401 || response.status === 403) cachedToken = "";
+        if (response.ok) await loadViewers();
+      } catch {
+        // A transient heartbeat failure expires naturally on the server.
+      }
+    };
+
+    const leave = () => {
+      if (!cachedToken) return;
+      void fetch(endpoint, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${cachedToken}` },
+        keepalive: true,
+      }).catch(() => undefined);
+>>>>>>> 489ec048e8aeef754ec9ab4918917709296cca11
     };
 
     const handleVisibilityChange = () => {

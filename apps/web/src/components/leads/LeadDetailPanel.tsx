@@ -814,12 +814,12 @@ export function LeadDetailPanel({
           }`}
       >
         {activeTab === "action" && (
-          <div className="grid items-start gap-2 min-[1280px]:grid-cols-[minmax(0,1fr)_300px] min-[1500px]:grid-cols-[minmax(0,1fr)_320px] min-[1850px]:grid-cols-[minmax(0,1fr)_360px]">
-            <div className="min-w-0">
+          <div className="grid items-start gap-2 min-[1280px]:h-full min-[1280px]:min-h-0 min-[1280px]:grid-cols-[minmax(0,1fr)_300px] min-[1280px]:items-stretch min-[1500px]:grid-cols-[minmax(0,1fr)_320px] min-[1850px]:grid-cols-[minmax(0,1fr)_360px]">
+            <div className="min-w-0 min-[1280px]:min-h-0 min-[1280px]:overflow-y-auto min-[1280px]:pr-1 min-[1280px]:[scrollbar-gutter:stable]">
               <LeadContentContext lead={lead} mentions={mentions} />
             </div>
 
-            <aside className="space-y-2 min-[1280px]:sticky min-[1280px]:top-0" aria-label="Thao tác nhanh với lead">
+            <aside className="space-y-2 min-[1280px]:min-h-0 min-[1280px]:overflow-y-auto min-[1280px]:pl-1 min-[1280px]:[scrollbar-gutter:stable]" aria-label="Thao tác nhanh với lead">
               <section className="hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-2.5 min-[1280px]:block">
                 <div className="flex items-center justify-between gap-2">
                   <h4 className="text-sm font-bold text-[var(--color-text-primary)]">Tổng quan xử lý</h4>

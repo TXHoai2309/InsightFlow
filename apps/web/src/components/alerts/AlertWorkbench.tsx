@@ -146,9 +146,9 @@ export function AlertWorkbench(props: AlertWorkbenchProps) {
                 key={view.id}
                 type="button"
                 onClick={() => props.onStatusFilterChange(view.id)}
-                className={`inline-flex shrink-0 items-center rounded-xl border px-3.5 py-2 text-sm font-bold tracking-tight transition-all duration-200 ${props.statusFilter === view.id
-                  ? "border-[var(--color-brand)] bg-[var(--color-brand)] text-white shadow-md shadow-[var(--color-brand)]/10"
-                  : "border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-strong)] dark:bg-slate-900/40"
+                className={`inline-flex min-h-10 shrink-0 items-center rounded-xl border px-3.5 py-2 text-sm font-bold tracking-tight transition-all duration-200 ${props.statusFilter === view.id
+                    ? "border-[var(--color-brand)] bg-[var(--color-brand)] text-white shadow-md shadow-[var(--color-brand)]/10"
+                    : "border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-strong)] dark:bg-slate-900/40"
                   }`}
               >
                 <span className="whitespace-nowrap">{view.label}</span>

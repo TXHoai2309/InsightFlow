@@ -64,8 +64,12 @@ export function Sidebar({ isOpen, onClose, isCollapsed = false, onToggleCollapse
   const isDark = theme === "dark";
   const [pendingHref, setPendingHref] = useState<string | null>(null);
   const accessibleNavItems = useMemo(
-    () => navItems.filter((item) => canAccessPath(role, item.href, profile?.permissions)),
-    [profile?.permissions, role],
+    () => navItems.filter(
+      (item) =>
+        canAccessPath(role, item.href, profile?.permissions) &&
+        (!isDemoMode || Boolean(demoNavRoutes[item.href])),
+    ),
+    [isDemoMode, profile?.permissions, role],
   );
 
   // Đóng sidebar khi chuyển trang trên mobile
@@ -86,8 +90,9 @@ export function Sidebar({ isOpen, onClose, isCollapsed = false, onToggleCollapse
     const prefetchTimers: number[] = [];
     const startTimer = window.setTimeout(() => {
       accessibleNavItems.forEach((item, index) => {
+        const href = isDemoMode ? demoNavRoutes[item.href] : item.href;
         prefetchTimers.push(
-          window.setTimeout(() => router.prefetch(item.href), index * 200),
+          window.setTimeout(() => router.prefetch(href), index * 200),
         );
       });
     }, 1000);
@@ -96,7 +101,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed = false, onToggleCollapse
       window.clearTimeout(startTimer);
       prefetchTimers.forEach((timer) => window.clearTimeout(timer));
     };
-  }, [accessibleNavItems, router]);
+  }, [accessibleNavItems, isDemoMode, router]);
 
   // Khoá scroll khi sidebar mở trên mobile
   useEffect(() => {
@@ -205,12 +210,12 @@ export function Sidebar({ isOpen, onClose, isCollapsed = false, onToggleCollapse
             return (
               <Link
                 key={item.href}
-                href={item.href}
+                href={navigationHref}
                 prefetch
-                aria-busy={pendingHref === item.href}
-                onClick={() => setPendingHref(item.href)}
-                onFocus={() => router.prefetch(item.href)}
-                onPointerEnter={() => router.prefetch(item.href)}
+                aria-busy={pendingHref === navigationHref}
+                onClick={() => setPendingHref(navigationHref)}
+                onFocus={() => router.prefetch(navigationHref)}
+                onPointerEnter={() => router.prefetch(navigationHref)}
                 data-tour={`nav-${item.href.replace(/^\//, "").replace(/\//g, "-") || "home"}`}
                 className={`flex w-full items-center rounded-r-[10px] px-4 py-[14px] text-left text-[14px] transition-colors duration-200 ${isCollapsed ? "md:justify-center md:rounded-[10px] md:px-2" : ""}`}
                 title={isCollapsed ? t(item.label, item.fallback) : undefined}
@@ -239,12 +244,12 @@ export function Sidebar({ isOpen, onClose, isCollapsed = false, onToggleCollapse
                   }
                 }}
               >
-                <i className={`ti ${item.icon} text-[18px] mr-[10px]`}></i>
-                <span className="flex-1">{t(item.label, item.fallback)}</span>
-                {pendingHref === item.href && pathname !== item.href && (
+                <i className={`ti ${item.icon} mr-[10px] text-[18px] ${isCollapsed ? "md:mr-0" : ""}`}></i>
+                <span className={`flex-1 ${isCollapsed ? "md:hidden" : ""}`}>{t(item.label, item.fallback)}</span>
+                {pendingHref === navigationHref && pathname !== navigationHref && !isCollapsed && (
                   <span className="ml-2 h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-r-transparent" />
                 )}
-                {item.badge && item.badge > 0 && (
+                {item.badge && item.badge > 0 && !isCollapsed && (
                   <span
                     className="text-[11px] px-2 py-0.5 rounded-full text-white font-bold ml-2"
                     style={{ backgroundColor: "var(--color-brand)" }}

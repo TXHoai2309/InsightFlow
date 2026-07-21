@@ -163,8 +163,15 @@ export function useDashboard(options: UseDashboardOptions = {}) {
 
       // 1. Fetch raw data từ Supabase (lọc theo brand nếu có)
       const rawBrandKey = brandKey === "global" ? undefined : brandKey;
-      const rawData =
-        await DashboardService.fetchRawData({ brandKey: rawBrandKey });
+      const rawData = isDemoMode
+        ? {
+            workspaces: dummyWorkspaces,
+            mentions: dummyMentions,
+            alerts: dummyAlerts,
+            leads: dummyLeads,
+            labelChangeRequests: dummyLabelChangeRequests,
+          }
+        : await DashboardService.fetchRawData({ brandKey: rawBrandKey });
       // Ignore stale responses from a previous navigation/refresh.
       if (latestFetchGeneration.get(fetchScopeKey) !== generation) return;
       const workspaces = filterByBusinessPolicy(
