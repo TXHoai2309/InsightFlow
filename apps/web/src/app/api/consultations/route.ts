@@ -42,7 +42,8 @@ function normalizePlatforms(value: unknown) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const body = await request.json().catch(() => ({}));
+
     const fullName = text(body.fullName, 120);
     const email = text(body.email, 180).toLowerCase();
     const phone = text(body.phone, 40);
@@ -57,18 +58,23 @@ export async function POST(request: NextRequest) {
       : [];
     const platforms = normalizePlatforms(Array.isArray(body.platforms) ? body.platforms : body.channels);
 
-    if (!fullName || !email || !phone || !company || !taxId || !industry || !companyEmailDomain) {
+    if (!fullName || !email || !phone || !company || !industry) {
       return NextResponse.json(
-        { error: "Vui lòng nhập đầy đủ họ tên, email, số điện thoại, công ty / thương hiệu, ngành hàng, đuôi email doanh nghiệp và mã số thuế." },
+        {
+          error: "Vui lòng nhập đầy đủ họ tên, email, số điện thoại, công ty / thương hiệu và ngành hàng.",
+        },
         { status: 400 },
       );
     }
+
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json({ error: "Email không đúng định dạng." }, { status: 400 });
     }
-    if (!/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i.test(companyEmailDomain)) {
+
+    if (companyEmailDomain && !/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i.test(companyEmailDomain)) {
       return NextResponse.json({ error: "Đuôi email doanh nghiệp không đúng định dạng." }, { status: 400 });
     }
+
     if (platforms.length === 0) {
       return NextResponse.json({ error: "Vui lòng chọn ít nhất một kênh theo dõi." }, { status: 400 });
     }
@@ -94,16 +100,14 @@ export async function POST(request: NextRequest) {
       notes: "",
       contactPlan: "",
       configurationEmbedded: true,
+      trialRegistration: true,
       createdAt: now,
       updatedAt: now,
     });
 
     await batch.commit();
 
-    return NextResponse.json(
-      { success: true, consultationId: consultationRef.id },
-      { status: 201 },
-    );
+    return NextResponse.json({ success: true, consultationId: consultationRef.id }, { status: 201 });
   } catch (error) {
     console.error("[Consultations API] submit error:", error);
     return NextResponse.json({ error: "Chưa thể gửi yêu cầu. Vui lòng thử lại sau." }, { status: 500 });
@@ -112,7 +116,7 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const body = await request.json();
+    const body = await request.json().catch(() => ({}));
     const consultationId = text(body.consultationId, 120);
     const email = text(body.email, 180).toLowerCase();
     const need = text(body.need, 180);
@@ -132,10 +136,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const consultation = consultationSnapshot.data() || {};
-    if (
-      text(consultation.email, 180).toLowerCase() !== email
-      || consultation.requestSource !== "trial-registration"
-    ) {
+    if (text(consultation.email, 180).toLowerCase() !== email || consultation.requestSource !== "trial-registration") {
       return NextResponse.json({ error: "Thông tin xác nhận yêu cầu không hợp lệ." }, { status: 403 });
     }
 

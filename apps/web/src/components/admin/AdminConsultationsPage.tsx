@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { auth } from "@/lib/firebase";
 import {
   Search,
@@ -49,6 +50,8 @@ interface ConsultationRequest {
   approvedAccountEmail?: string;
   trialEndsAt?: string;
   decisionEmailStatus?: string;
+  trialCrawlRunId?: string;
+  trialCrawlStatus?: string;
   status: "pending" | "contacting" | "completed" | "unreachable" | "not_approved";
   notes?: string;
   contactPlan?: string;
@@ -193,6 +196,9 @@ export default function AdminConsultationsPage() {
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [loadError, setLoadError] = useState("");
+  const [startingTrialCrawl, setStartingTrialCrawl] = useState(false);
+  const [trialCrawlError, setTrialCrawlError] = useState("");
+  const [trialCrawlMessage, setTrialCrawlMessage] = useState("");
   const detailPanelRef = useRef<HTMLDivElement | null>(null);
   const [detailPanelHeight, setDetailPanelHeight] = useState<number | null>(null);
 
@@ -272,6 +278,8 @@ export default function AdminConsultationsPage() {
       setGeneratedCredentials(null);
       setApprovalError("");
       setSaveSuccess(false);
+      setTrialCrawlError("");
+      setTrialCrawlMessage("");
     }
   }, [selectedRequest]);
 
@@ -345,6 +353,48 @@ export default function AdminConsultationsPage() {
       setApprovalError(error?.message || "Không thể cập nhật yêu cầu tư vấn.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleStartTrialCrawl = async () => {
+    if (!selectedId || !selectedRequest) return;
+
+    setStartingTrialCrawl(true);
+    setTrialCrawlError("");
+    setTrialCrawlMessage("");
+    try {
+      await auth.authStateReady();
+      const user = auth.currentUser;
+      if (!user) throw new Error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+      const token = await user.getIdToken();
+      const response = await fetch("/api/admin/crawl-runs", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ consultationId: selectedId }),
+      });
+      const result = await response.json();
+
+      if (response.status === 409 && result.run?.id) {
+        setRequests((current) => current.map((item) => item.id === selectedId
+          ? { ...item, trialCrawlRunId: result.run.id, trialCrawlStatus: result.run.status }
+          : item));
+        setTrialCrawlMessage("Phiên cào trial của yêu cầu này vẫn đang hoạt động.");
+        return;
+      }
+      if (!response.ok) throw new Error(result.error || "Chưa thể tạo phiên cào trial.");
+
+      setRequests((current) => current.map((item) => item.id === selectedId
+        ? { ...item, trialCrawlRunId: result.runId, trialCrawlStatus: result.status }
+        : item));
+      setTrialCrawlMessage("Đã xếp hàng phiên cào trial. VPS sẽ nhận job ở bước tiếp theo.");
+    } catch (error: any) {
+      console.error("Error starting trial crawl:", error);
+      setTrialCrawlError(error?.message || "Chưa thể tạo phiên cào trial.");
+    } finally {
+      setStartingTrialCrawl(false);
     }
   };
 
@@ -685,6 +735,51 @@ export default function AdminConsultationsPage() {
                     </div>
                   </section>
                 </div>
+
+                <section className="border-t border-[var(--color-border)] bg-white/50 p-5 dark:bg-white/[0.02]">
+                  <div className="flex flex-col gap-4 rounded-xl border border-violet-500/20 bg-violet-500/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="flex items-center gap-2 text-[13px] font-extrabold text-violet-700 dark:text-violet-300">
+                        <Play className="h-4 w-4" /> Cào dữ liệu dùng thử
+                      </p>
+                      <p className="mt-1 text-[12px] leading-5 text-[var(--color-text-secondary)]">
+                        Tạo một job trial riêng từ thương hiệu, từ khóa và kênh khách hàng đã chọn. Job này không chạy chung tiến trình production.
+                      </p>
+                      {selectedRequest.trialCrawlRunId && (
+                        <p className="mt-2 truncate text-[11px] font-semibold text-violet-700 dark:text-violet-300">
+                          Run gần nhất: {selectedRequest.trialCrawlRunId} · {selectedRequest.trialCrawlStatus || "đang đồng bộ"}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 flex-wrap gap-2">
+                      {selectedRequest.trialCrawlRunId && (
+                        <Link
+                          href="/admin/crawl-operations"
+                          className="inline-flex h-10 items-center justify-center rounded-lg border border-violet-500/25 bg-white px-3 text-[12px] font-bold text-violet-700 transition hover:bg-violet-50 dark:bg-white/5 dark:text-violet-300 dark:hover:bg-white/10"
+                        >
+                          Xem tiến trình
+                        </Link>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => void handleStartTrialCrawl()}
+                        disabled={startingTrialCrawl || (selectedRequest.platforms || []).length === 0}
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 text-[12px] font-bold text-white shadow-sm transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {startingTrialCrawl
+                          ? <Loader2 className="h-4 w-4 animate-spin" />
+                          : <Play className="h-4 w-4" />}
+                        {selectedRequest.trialCrawlRunId ? "Tạo lượt cào mới" : "Bắt đầu trial crawl"}
+                      </button>
+                    </div>
+                  </div>
+                  {trialCrawlMessage && (
+                    <p className="mt-2 text-[12px] font-semibold text-emerald-600 dark:text-emerald-400">{trialCrawlMessage}</p>
+                  )}
+                  {trialCrawlError && (
+                    <p className="mt-2 text-[12px] font-semibold text-rose-600 dark:text-rose-400">{trialCrawlError}</p>
+                  )}
+                </section>
 
                 {/* Edit Form - Plan and Status */}
                 <form onSubmit={handleSave} className="space-y-4 border-t border-[var(--color-border)] bg-gradient-to-br from-[var(--color-bg-surface-raised)]/60 to-[var(--color-brand-subtle)]/25 p-5">
