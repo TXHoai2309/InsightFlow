@@ -166,6 +166,7 @@ export function TrialRegistrationFlow() {
               email={submissionResult.email}
               consultationCompleted={consultationCompleted}
               consultationEmailSent={consultationEmailSent}
+              onFillConsultation={() => setCurrentStep("CONSULTATION_FORM")}
               onRestart={() => {
                 setSubmissionError("");
                 setFormData({ basicInfo: null, businessAuth: null, configuration: null });
