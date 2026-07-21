@@ -100,6 +100,38 @@ export async function POST(request: NextRequest) {
 
     await batch.commit();
 
+    try {
+      const apiKey = process.env.NEXT_PUBLIC_FIREBASE_SECOND_API_KEY;
+      const projectId = process.env.NEXT_PUBLIC_FIREBASE_SECOND_PROJECT_ID || "datainsightflow";
+      
+      if (apiKey && projectId) {
+        const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/notifications?key=${apiKey}`;
+        const payload = {
+          fields: {
+            title: { stringValue: "Yêu cầu tư vấn mới" },
+            message: { stringValue: `Khách hàng ${fullName} từ ${company} vừa đăng ký dùng thử.` },
+            type: { stringValue: "new_consultation" },
+            alert_id: { stringValue: consultationRef.id },
+            recipient_role: { stringValue: "admin" },
+            read: { booleanValue: false },
+            created_at: { stringValue: new Date().toISOString() }
+          }
+        };
+
+        const fetchResponse = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        if (!fetchResponse.ok) {
+          console.error("[Consultations API] REST create notification error:", await fetchResponse.text());
+        }
+      }
+    } catch (notifErr) {
+      console.error("[Consultations API] create notification error:", notifErr);
+    }
+
     return NextResponse.json(
       { success: true, consultationId: consultationRef.id },
       { status: 201 },

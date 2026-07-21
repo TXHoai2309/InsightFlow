@@ -170,7 +170,7 @@ export default function LoginForm() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="yourname@company.com"
-                  className={`block w-full pl-10 pr-4 py-3 border rounded-lg text-[16px] transition-all focus:outline-none focus:ring-4 ${isDark ? "bg-gray-800 border-gray-600 text-white focus:border-[#4648d4] focus:ring-[#4648d4]/10" : "bg-[#f9f9ff] border-[#c7c4d7] text-[#111c2d] placeholder:text-[#767586]/50 focus:border-[#4648d4] focus:ring-[#4648d4]/10"}`}
+                  className={`block w-full pl-12 pr-4 py-3 border rounded-lg text-[16px] transition-all focus:outline-none focus:ring-4 ${isDark ? "bg-gray-800 border-gray-600 text-white focus:border-[#4648d4] focus:ring-[#4648d4]/10" : "bg-[#f9f9ff] border-[#c7c4d7] text-[#111c2d] placeholder:text-[#767586]/50 focus:border-[#4648d4] focus:ring-[#4648d4]/10"}`}
                 />
               </div>
             </div>
@@ -189,7 +189,7 @@ export default function LoginForm() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className={`block w-full pl-10 pr-10 py-3 border rounded-lg text-[16px] transition-all focus:outline-none focus:ring-4 ${isDark ? "bg-gray-800 border-gray-600 text-white focus:border-[#4648d4] focus:ring-[#4648d4]/10" : "bg-[#f9f9ff] border-[#c7c4d7] text-[#111c2d] placeholder:text-[#767586]/50 focus:border-[#4648d4] focus:ring-[#4648d4]/10"}`}
+                  className={`block w-full pl-12 pr-10 py-3 border rounded-lg text-[16px] transition-all focus:outline-none focus:ring-4 ${isDark ? "bg-gray-800 border-gray-600 text-white focus:border-[#4648d4] focus:ring-[#4648d4]/10" : "bg-[#f9f9ff] border-[#c7c4d7] text-[#111c2d] placeholder:text-[#767586]/50 focus:border-[#4648d4] focus:ring-[#4648d4]/10"}`}
                 />
                 <button
                   type="button"

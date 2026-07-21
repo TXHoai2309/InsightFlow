@@ -6,7 +6,7 @@
  * Thêm Dark Mode Toggle Button (Sun/Moon) với animation mượt mà.
  */
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/hooks/useAuth";
@@ -23,7 +23,7 @@ import {
 } from "@/components/onboarding/events";
 import { dbSecond } from "@/lib/firebase";
 import { normalizeBrandName } from "@/lib/services/dashboard";
-import { collection, doc, limit, onSnapshot, query, updateDoc } from "firebase/firestore";
+import { collection, doc, limit, onSnapshot, query, updateDoc, orderBy } from "firebase/firestore";
 
 interface HeaderProps {
   onMenuToggle: () => void;
@@ -48,6 +48,8 @@ export function Header({ onMenuToggle }: HeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false);
   const { user, role, profile } = useAuth();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const seenNotificationIds = useRef<Set<string>>(new Set());
+  const [toast, setToast] = useState<{title: string, message: string, id: string, notif: AppNotification} | null>(null);
   const { t } = useTranslation();
   const { theme, toggleTheme } = useTheme();
   const { language, setLanguage } = useLanguage();
@@ -93,7 +95,11 @@ export function Header({ onMenuToggle }: HeaderProps) {
         return;
       }
 
-      const notificationsQuery = query(collection(dbSecond, "notifications"), limit(100));
+      const notificationsQuery = query(
+        collection(dbSecond, "notifications"), 
+        orderBy("created_at", "desc"),
+        limit(100)
+      );
       return onSnapshot(notificationsQuery, (snapshot) => {
         const rows = snapshot.docs.map((docSnap) => {
           const data = docSnap.data() as Omit<AppNotification, "id">;
@@ -124,6 +130,15 @@ export function Header({ onMenuToggle }: HeaderProps) {
           .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
           .slice(0, 20);
 
+        // Detect new notifications for toast
+        const newNotifs = filtered.filter(n => !seenNotificationIds.current.has(n.id) && !n.read);
+        if (seenNotificationIds.current.size > 0 && newNotifs.length > 0) {
+          const latest = newNotifs[0];
+          setToast({ title: latest.title, message: latest.message, id: latest.id, notif: latest });
+          setTimeout(() => setToast(null), 8000);
+        }
+        filtered.forEach(n => seenNotificationIds.current.add(n.id));
+
         setNotifications(filtered);
       }, (error) => {
         console.error("[Header] notifications snapshot error:", error);
@@ -146,8 +161,14 @@ export function Header({ onMenuToggle }: HeaderProps) {
 
       setShowNotifications(false);
       if (notification.alert_id) {
-        if (notification.type === "lead_assignment") {
-          router.push(`/leads?leadId=${encodeURIComponent(notification.alert_id)}`);
+        if (notification.type === "lead_assignment" || notification.title.toLowerCase().includes("lead")) {
+          if (pathname === "/leads") {
+            window.dispatchEvent(new CustomEvent('selectLeadFromHeader', { detail: { leadId: notification.alert_id } }));
+          } else {
+            router.push(`/leads?restoreLeadId=${encodeURIComponent(notification.alert_id)}`);
+          }
+        } else if (notification.type === "new_consultation") {
+          router.push(`/admin/consultations`);
         } else {
           router.push(`/alerts/${encodeURIComponent(notification.alert_id)}`);
         }
@@ -155,13 +176,32 @@ export function Header({ onMenuToggle }: HeaderProps) {
     };
 
     return (
-      <header
-        className="h-[72px] flex justify-between items-center px-4 md:px-8 fixed top-0 left-0 right-0 md:left-[240px] z-30 font-sans"
-        style={{
-          backgroundColor: isDark ? "#1a1b1e" : "#ffffff",
-          borderBottom: "1px solid var(--color-border)",
-        }}
-      >
+      <React.Fragment>
+        {toast && (
+          <div 
+             className="fixed top-[80px] right-4 md:right-8 z-[9999] bg-white dark:bg-[#1a1b1e] rounded-xl p-4 cursor-pointer flex gap-3 shadow-lg border border-[var(--color-border)] animate-in slide-in-from-right w-[340px]"
+             style={{ boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)" }}
+             onClick={() => { setToast(null); handleNotificationClick(toast.notif); }}
+          >
+              <div className="w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center bg-[var(--color-brand-subtle)] text-[var(--color-brand)]">
+                  <span className="material-symbols-outlined">notifications_active</span>
+              </div>
+              <div className="flex-1 min-w-0 pr-4">
+                  <p className="text-[14px] font-bold text-[var(--color-text-primary)] leading-tight mb-1 truncate">{toast.title}</p>
+                  <p className="text-[13px] text-[var(--color-text-secondary)] line-clamp-2 leading-[1.3]">{toast.message}</p>
+              </div>
+              <button className="absolute top-2 right-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" onClick={(e) => { e.stopPropagation(); setToast(null); }}>
+                  <span className="material-symbols-outlined text-[16px]">close</span>
+              </button>
+          </div>
+        )}
+        <header
+          className="h-[72px] flex justify-between items-center px-4 md:px-8 fixed top-0 left-0 right-0 md:left-[240px] z-30 font-sans"
+          style={{
+            backgroundColor: isDark ? "#1a1b1e" : "#ffffff",
+            borderBottom: "1px solid var(--color-border)",
+          }}
+        >
         {/* Left: Hamburger (mobile) + Search (desktop) */}
         <div className="flex items-center gap-3 w-full md:w-auto">
           {/* Hamburger — mobile only */}
@@ -394,5 +434,6 @@ export function Header({ onMenuToggle }: HeaderProps) {
           </div>
         </div>
       </header>
+      </React.Fragment>
     );
   }

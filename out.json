@@ -1,0 +1,15 @@
+{
+  "db": [
+    {
+      "id": "pMG3m3k7CIjjYuVEyK7n",
+      "title": "Yêu cầu tư vấn mới",
+      "message": "Khách hàng ha từ ha vừa đăng ký dùng thử.",
+      "type": "new_consultation",
+      "alert_id": "3kt3HCIviEctlW3o6TTF",
+      "recipient_role": "admin",
+      "read": false,
+      "created_at": "2026-07-21T04:46:19.757Z"
+    }
+  ],
+  "dbData": []
+}

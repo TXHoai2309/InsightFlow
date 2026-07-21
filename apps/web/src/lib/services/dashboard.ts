@@ -2304,6 +2304,28 @@ export class DashboardService {
         id,
         buildLeadWorkflowPayload(lead, { status }, profile, auditFields),
       );
+
+      const targetOwnerEmail = lead?.owner_email;
+      if (targetOwnerEmail && profile?.email !== targetOwnerEmail && status !== lead?.status && dbData) {
+        try {
+          const brandName = lead?.workspace_id || "hệ thống";
+          const authorName = lead?.author || "Khách hàng";
+          await addDoc(collection(dbData, "notifications"), {
+            title: `Cập nhật Lead (${brandName.toUpperCase()})`,
+            message: `Lead ${authorName} vừa được chuyển trạng thái thành: ${status}.`,
+            type: "lead_update",
+            alert_id: id,
+            brand: lead?.workspace_id || "",
+            created_at: new Date().toISOString(),
+            read: false,
+            recipient_role: "lead_employee",
+            recipient_email: targetOwnerEmail,
+            sender_email: profile?.email || "",
+          });
+        } catch (notifErr) {
+          console.warn("[DashboardService] Failed to create lead status notification:", notifErr);
+        }
+      }
     } catch (error) {
       console.error("[DashboardService] updateLeadStatus error:", error);
       throw error;
@@ -2344,24 +2366,56 @@ export class DashboardService {
 
       // Gửi thông báo đến nhân viên nếu được phân công mới
       const isNewAssignment = data.owner_id && data.owner_id !== (lead?.owner_id || null);
-      if (isNewAssignment && dbData) {
+      const isStatusChanged = data.status && data.status !== (lead?.status || null);
+      const isPriorityChanged = data.priority && data.priority !== (lead?.priority || null);
+      const isNotesChanged = data.notes && data.notes !== (lead?.notes || null);
+      
+      if (dbData) {
+        const brandName = lead?.workspace_id || "hệ thống";
+        const authorName = lead?.author || "Khách hàng";
+        
         try {
-          const brandName = lead?.workspace_id || "hệ thống";
-          const authorName = lead?.author || "Khách hàng";
-          await addDoc(collection(dbData, "notifications"), {
-            title: `Giao việc mới (${brandName.toUpperCase()})`,
-            message: `Bạn được giao xử lý khách hàng tiềm năng: ${authorName}`,
-            type: "lead_assignment",
-            alert_id: id,
-            brand: lead?.workspace_id || "",
-            created_at: new Date().toISOString(),
-            read: false,
-            recipient_role: "lead_employee",
-            recipient_email: data.owner_email || null,
-            sender_email: profile?.email || "",
-          });
+          if (isNewAssignment) {
+            await addDoc(collection(dbData, "notifications"), {
+              title: `Giao việc mới (${brandName.toUpperCase()})`,
+              message: `Bạn được giao xử lý khách hàng tiềm năng: ${authorName}`,
+              type: "lead_assignment",
+              alert_id: id,
+              brand: lead?.workspace_id || "",
+              created_at: new Date().toISOString(),
+              read: false,
+              recipient_role: "lead_employee",
+              recipient_email: data.owner_email || null,
+              sender_email: profile?.email || "",
+            });
+          }
+
+          // Gửi thông báo nếu có hoạt động cập nhật (trạng thái, ưu tiên, ghi chú)
+          // Chỉ gửi nếu người cập nhật không phải là người đang giữ lead, hoặc muốn báo cho Brand Manager (hiện tại báo cho owner)
+          const targetOwnerEmail = data.owner_email || lead?.owner_email;
+          if (targetOwnerEmail && profile?.email !== targetOwnerEmail) {
+            let updateMessage = "";
+            if (isStatusChanged) updateMessage = `được chuyển trạng thái thành: ${data.status}`;
+            else if (isPriorityChanged) updateMessage = `được thay đổi độ ưu tiên thành: ${data.priority}`;
+            else if (isNotesChanged) updateMessage = `có ghi chú mới`;
+
+            if (updateMessage) {
+              await addDoc(collection(dbData, "notifications"), {
+                title: `Cập nhật Lead (${brandName.toUpperCase()})`,
+                message: `Lead ${authorName} vừa ${updateMessage}.`,
+                type: "lead_update",
+                alert_id: id,
+                brand: lead?.workspace_id || "",
+                created_at: new Date().toISOString(),
+                read: false,
+                recipient_role: "lead_employee",
+                recipient_email: targetOwnerEmail,
+                sender_email: profile?.email || "",
+              });
+            }
+          }
         } catch (notifErr) {
-          console.warn("[DashboardService] Failed to create assignment notification:", notifErr);
+          console.warn("[DashboardService] Failed to create lead update notification:", notifErr);
         }
       }
     } catch (error) {

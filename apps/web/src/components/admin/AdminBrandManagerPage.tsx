@@ -169,7 +169,7 @@ function CopyButton({ value, label }: { value: string; label: string }) {
       type="button"
       onClick={handleCopy}
       aria-label={`Copy ${label}`}
-      className="inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-[11px] font-semibold text-[var(--color-text-secondary)] transition hover:border-[var(--color-brand)] hover:text-[var(--color-brand)]"
+      className="inline-flex items-center gap-1 rounded-md border border-app-border px-2 py-1 text-[11px] font-semibold text-app-text-secondary transition hover:border-[var(--color-brand)] hover:text-app-brand"
     >
       {copied ? <Icon.Check className="h-3 w-3" /> : <Icon.Copy className="h-3 w-3" />}
       {copied ? "Đã sao chép" : "Sao chép"}
@@ -578,14 +578,15 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
   if (view === "overview") {
     return (
       <div className="mx-auto max-w-[1000px] space-y-6 p-4 md:p-8">
-        <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 md:p-7">
-          <p className="text-[12px] font-bold uppercase tracking-[0.12em] text-[var(--color-brand)]">
+        <section className="relative overflow-hidden rounded-2xl border border-app-border bg-app-surface backdrop-blur-md p-6 md:p-7 shadow-sm">
+          <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-[var(--color-brand)] opacity-[0.03] blur-3xl pointer-events-none" />
+          <p className="text-[12px] font-bold uppercase tracking-[0.12em] text-app-brand">
             Admin Console
           </p>
-          <h1 className="mt-2 text-[28px] font-bold text-[var(--color-text-primary)]">
+          <h1 className="mt-2 text-[28px] font-bold text-app-text">
             Quản trị tài khoản Brand Manager
           </h1>
-          <p className="mt-2 max-w-2xl text-[14px] leading-6 text-[var(--color-text-secondary)]">
+          <p className="mt-2 max-w-2xl text-[14px] leading-6 text-app-text-secondary">
             Chọn tác vụ cần thực hiện: cấp tài khoản quản lý thương hiệu mới hoặc xem và quản lý danh sách tài khoản đã tạo.
           </p>
         </section>
@@ -593,60 +594,60 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
         <section className="grid gap-4 md:grid-cols-2">
           <Link
             href="/admin/create-brand-manager"
-            className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 transition hover:border-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)]"
+            className="rounded-2xl border border-app-border bg-app-surface backdrop-blur-md p-6 transition hover:border-[var(--color-brand)] hover:bg-app-brand-subtle"
           >
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--color-brand-subtle)] text-[var(--color-brand)]">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-app-brand-subtle text-app-brand">
               <Icon.User className="h-6 w-6" />
             </div>
-            <h2 className="mt-4 text-[18px] font-bold text-[var(--color-text-primary)]">
+            <h2 className="mt-4 text-[18px] font-bold text-app-text">
               {t("nav.admin_create_brand", "Tạo tài khoản Brand Manager")}
             </h2>
-            <p className="mt-2 text-[13px] leading-6 text-[var(--color-text-secondary)]">
+            <p className="mt-2 text-[13px] leading-6 text-app-text-secondary">
               Chọn thương hiệu từ dữ liệu đã cào, nhập thông tin người quản lý và cấp mật khẩu tạm thời.
             </p>
           </Link>
 
           <Link
             href="/admin/brand-managers"
-            className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 transition hover:border-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)]"
+            className="rounded-2xl border border-app-border bg-app-surface backdrop-blur-md p-6 transition hover:border-[var(--color-brand)] hover:bg-app-brand-subtle"
           >
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--color-brand-subtle)] text-[var(--color-brand)]">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-app-brand-subtle text-app-brand">
               <Icon.Building className="h-6 w-6" />
             </div>
-            <h2 className="mt-4 text-[18px] font-bold text-[var(--color-text-primary)]">
+            <h2 className="mt-4 text-[18px] font-bold text-app-text">
               {t("nav.admin_brand_list", "Danh sách Brand Manager")}
             </h2>
-            <p className="mt-2 text-[13px] leading-6 text-[var(--color-text-secondary)]">
+            <p className="mt-2 text-[13px] leading-6 text-app-text-secondary">
               Xem, tìm kiếm, chỉnh sửa, khóa hoặc mở khóa các tài khoản quản lý thương hiệu.
             </p>
           </Link>
 
           <Link
             href="/admin/consultations"
-            className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 transition hover:border-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)]"
+            className="rounded-2xl border border-app-border bg-app-surface backdrop-blur-md p-6 transition hover:border-[var(--color-brand)] hover:bg-app-brand-subtle"
           >
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--color-brand-subtle)] text-[var(--color-brand)]">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-app-brand-subtle text-app-brand">
               <Icon.Headset className="h-6 w-6" />
             </div>
-            <h2 className="mt-4 text-[18px] font-bold text-[var(--color-text-primary)]">
+            <h2 className="mt-4 text-[18px] font-bold text-app-text">
               {t("nav.admin_consultations", "Yêu cầu tư vấn")}
             </h2>
-            <p className="mt-2 text-[13px] leading-6 text-[var(--color-text-secondary)]">
+            <p className="mt-2 text-[13px] leading-6 text-app-text-secondary">
               Xem và xử lý các yêu cầu tư vấn và đăng ký từ khách hàng tiềm năng.
             </p>
           </Link>
 
           <Link
             href="/labeling_tool"
-            className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 transition hover:border-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)]"
+            className="rounded-2xl border border-app-border bg-app-surface backdrop-blur-md p-6 transition hover:border-[var(--color-brand)] hover:bg-app-brand-subtle"
           >
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--color-brand-subtle)] text-[var(--color-brand)]">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-app-brand-subtle text-app-brand">
               <Icon.Tag className="h-6 w-6" />
             </div>
-            <h2 className="mt-4 text-[18px] font-bold text-[var(--color-text-primary)]">
+            <h2 className="mt-4 text-[18px] font-bold text-app-text">
               {t("nav.labeling_tool", "Gắn nhãn dữ liệu")}
             </h2>
-            <p className="mt-2 text-[13px] leading-6 text-[var(--color-text-secondary)]">
+            <p className="mt-2 text-[13px] leading-6 text-app-text-secondary">
               Công cụ gắn nhãn dữ liệu hệ thống để phục vụ cho việc huấn luyện và cải thiện AI.
             </p>
           </Link>
@@ -658,21 +659,22 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
   return (
     <div className="mx-auto max-w-[1200px] space-y-6 p-4 md:p-8">
       {/* Header */}
-      <section className="relative overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 md:p-7">
+      <section className="relative overflow-hidden rounded-2xl border border-app-border bg-app-surface backdrop-blur-md p-6 md:p-7">
         <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[var(--color-brand)] via-[var(--color-brand)]/60 to-transparent" />
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--color-brand-subtle)] text-[var(--color-brand)]">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-app-brand-subtle text-app-brand">
               <Icon.Shield className="h-6 w-6" />
             </div>
             <div>
-              <p className="text-[12px] font-bold uppercase tracking-[0.12em] text-[var(--color-brand)]">
+              <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-[var(--color-brand)] opacity-[0.03] blur-3xl pointer-events-none" />
+          <p className="text-[12px] font-bold uppercase tracking-[0.12em] text-app-brand">
                 {t("admin.brandManager.badge")}
               </p>
-              <h1 className="mt-1 text-[26px] font-bold leading-tight text-[var(--color-text-primary)] md:text-[28px]">
+              <h1 className="mt-1 text-[26px] font-bold leading-tight text-app-text md:text-[28px]">
                 {t("admin.brandManager.title")}
               </h1>
-              <p className="mt-1.5 max-w-2xl text-[14px] leading-6 text-[var(--color-text-secondary)]">
+              <p className="mt-1.5 max-w-2xl text-[14px] leading-6 text-app-text-secondary">
                 {t("admin.brandManager.subtitle")}
               </p>
             </div>
@@ -680,17 +682,17 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
 
           {/* Quick stats */}
           <div className="grid grid-cols-3 gap-2 md:shrink-0">
-            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-4 py-2.5 text-center">
-              <p className="text-[20px] font-bold leading-none text-[var(--color-text-primary)]">{stats.total}</p>
-              <p className="mt-1 text-[11px] font-medium text-[var(--color-text-muted)]">Tổng số</p>
+            <div className="rounded-xl border border-app-border bg-app-surface-raised px-4 py-2.5 text-center">
+              <p className="text-[20px] font-bold leading-none text-app-text">{stats.total}</p>
+              <p className="mt-1 text-[11px] font-medium text-app-text-muted">Tổng số</p>
             </div>
-            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-4 py-2.5 text-center">
+            <div className="rounded-xl border border-app-border bg-app-surface-raised px-4 py-2.5 text-center">
               <p className="text-[20px] font-bold leading-none text-emerald-600">{stats.active}</p>
-              <p className="mt-1 text-[11px] font-medium text-[var(--color-text-muted)]">Hoạt động</p>
+              <p className="mt-1 text-[11px] font-medium text-app-text-muted">Hoạt động</p>
             </div>
-            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-4 py-2.5 text-center">
+            <div className="rounded-xl border border-app-border bg-app-surface-raised px-4 py-2.5 text-center">
               <p className="text-[20px] font-bold leading-none text-red-600">{stats.disabled}</p>
-              <p className="mt-1 text-[11px] font-medium text-[var(--color-text-muted)]">Đã khóa</p>
+              <p className="mt-1 text-[11px] font-medium text-app-text-muted">Đã khóa</p>
             </div>
           </div>
         </div>
@@ -698,22 +700,22 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
 
       {/* Flow stepper */}
       {(view === "all" || view === "create") && (
-        <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6">
-          <p className="mb-4 text-[12px] font-bold uppercase tracking-[0.1em] text-[var(--color-text-muted)]">
+        <section className="rounded-2xl border border-app-border bg-app-surface backdrop-blur-md p-6">
+          <p className="mb-4 text-[12px] font-bold uppercase tracking-[0.1em] text-app-text-muted">
             Quy trình cấp tài khoản
           </p>
           <div className="grid gap-3 md:grid-cols-5">
             {flowSteps.map((step, index) => (
               <div key={step} className="relative flex md:flex-col md:items-start">
                 <div className="flex items-center md:mb-3">
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-[var(--color-brand)] bg-[var(--color-bg-surface)] text-[12px] font-bold text-[var(--color-brand)]">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-[var(--color-brand)] bg-app-surface backdrop-blur-md text-[12px] font-bold text-app-brand">
                     {index + 1}
                   </div>
                   {index < flowSteps.length - 1 && (
                     <div className="mx-2 hidden h-[2px] flex-1 bg-[var(--color-border)] md:block" />
                   )}
                 </div>
-                <p className="ml-3 text-[13px] font-medium leading-5 text-[var(--color-text-primary)] md:ml-0">
+                <p className="ml-3 text-[13px] font-medium leading-5 text-app-text md:ml-0">
                   {step}
                 </p>
               </div>
@@ -727,13 +729,13 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
         <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
           <form
             onSubmit={handleSubmit}
-            className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 space-y-5"
+            className="rounded-2xl border border-app-border bg-app-surface backdrop-blur-md p-6 space-y-5"
           >
             <div>
-              <h2 className="text-[18px] font-bold text-[var(--color-text-primary)]">
+              <h2 className="text-[18px] font-bold text-app-text">
                 {t("admin.brandManager.form.title")}
               </h2>
-              <p className="mt-1 text-[13px] text-[var(--color-text-secondary)]">
+              <p className="mt-1 text-[13px] text-app-text-secondary">
                 {t("admin.brandManager.form.subtitle")}
               </p>
             </div>
@@ -747,8 +749,8 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
 
             <div className="grid gap-4 md:grid-cols-2">
               <label className="space-y-2">
-                <span className="flex items-center gap-1.5 text-[13px] font-semibold text-[var(--color-text-primary)]">
-                  <Icon.User className="h-3.5 w-3.5 text-[var(--color-text-muted)]" />
+                <span className="flex items-center gap-1.5 text-[13px] font-semibold text-app-text">
+                  <Icon.User className="h-3.5 w-3.5 text-app-text-muted" />
                   {t("admin.brandManager.form.fullName")}
                 </span>
                 <input
@@ -756,36 +758,36 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
                   onChange={(event) => setFullName(event.target.value)}
                   required
                   placeholder={t("admin.brandManager.form.fullNamePlaceholder")}
-                  className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2.5 text-[14px] text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/15"
+                  className="w-full rounded-lg border border-app-border bg-app-surface-raised px-3 py-2.5 text-[14px] text-app-text outline-none transition focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/20"
                 />
               </label>
 
               <label className="space-y-2">
-                <span className="flex items-center gap-1.5 text-[13px] font-semibold text-[var(--color-text-primary)]">
-                  <Icon.Mail className="h-3.5 w-3.5 text-[var(--color-text-muted)]" />
+                <span className="flex items-center gap-1.5 text-[13px] font-semibold text-app-text">
+                  <Icon.Mail className="h-3.5 w-3.5 text-app-text-muted" />
                   {t("admin.brandManager.form.email")}
                 </span>
-                <div className="flex overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] transition focus-within:border-[var(--color-brand)] focus-within:ring-2 focus-within:ring-[var(--color-brand)]/15">
+                <div className="flex overflow-hidden rounded-lg border border-app-border bg-app-surface-raised transition focus-within:border-[var(--color-brand)] focus-within:ring-2 focus-within:ring-[var(--color-brand)]/15">
                   <input
                     value={emailLocalPart}
                     onChange={(event) => setEmailLocalPart(event.target.value)}
                     required
                     placeholder="manager"
-                    className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-[14px] text-[var(--color-text-primary)] outline-none"
+                    className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-[14px] text-app-text outline-none"
                   />
-                  <span className="shrink-0 border-l border-[var(--color-border)] px-3 py-2.5 text-[14px] text-[var(--color-text-secondary)]">
+                  <span className="shrink-0 border-l border-app-border px-3 py-2.5 text-[14px] text-app-text-secondary">
                     @{selectedBrandDomain || "brand.com"}
                   </span>
                 </div>
                 {fullEmail && (
-                  <span className="block truncate text-[12px] text-[var(--color-text-muted)]">{fullEmail}</span>
+                  <span className="block truncate text-[12px] text-app-text-muted">{fullEmail}</span>
                 )}
               </label>
             </div>
 
             <label className="space-y-2 block">
-              <span className="flex items-center gap-1.5 text-[13px] font-semibold text-[var(--color-text-primary)]">
-                <Icon.Building className="h-3.5 w-3.5 text-[var(--color-text-muted)]" />
+              <span className="flex items-center gap-1.5 text-[13px] font-semibold text-app-text">
+                <Icon.Building className="h-3.5 w-3.5 text-app-text-muted" />
                 {t("admin.brandManager.form.brand")}
               </span>
               <select
@@ -793,7 +795,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
                 onChange={(event) => setBrandName(event.target.value)}
                 required
                 disabled={loadingBrands || brandOptions.length === 0}
-                className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2.5 text-[14px] text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/15 disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full rounded-lg border border-app-border bg-app-surface-raised px-3 py-2.5 text-[14px] text-app-text outline-none transition focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/20 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {brandOptions.map((brand) => (
                   <option key={brand.id} value={brand.name}>
@@ -802,16 +804,16 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
                 ))}
               </select>
               {brandPreview && (
-                <span className="flex flex-wrap gap-x-3 text-[12px] text-[var(--color-text-muted)]">
-                  <span>Brand ID: <code className="text-[var(--color-text-secondary)]">{brandPreview}</code></span>
-                  <span>Domain: <code className="text-[var(--color-text-secondary)]">{selectedBrandDomain}</code></span>
+                <span className="flex flex-wrap gap-x-3 text-[12px] text-app-text-muted">
+                  <span>Brand ID: <code className="text-app-text-secondary">{brandPreview}</code></span>
+                  <span>Domain: <code className="text-app-text-secondary">{selectedBrandDomain}</code></span>
                 </span>
               )}
             </label>
 
             <label className="space-y-2 block">
-              <span className="flex items-center gap-1.5 text-[13px] font-semibold text-[var(--color-text-primary)]">
-                <Icon.Key className="h-3.5 w-3.5 text-[var(--color-text-muted)]" />
+              <span className="flex items-center gap-1.5 text-[13px] font-semibold text-app-text">
+                <Icon.Key className="h-3.5 w-3.5 text-app-text-muted" />
                 {t("admin.brandManager.form.tempPassword")}
               </span>
               <div className="flex gap-2">
@@ -820,12 +822,12 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
                   onChange={(event) => setTemporaryPassword(event.target.value)}
                   required
                   minLength={10}
-                  className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2.5 font-sans text-[14px] text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/15"
+                  className="w-full rounded-lg border border-app-border bg-app-surface-raised px-3 py-2.5 font-sans text-[14px] text-app-text outline-none transition focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/20"
                 />
                 <button
                   type="button"
                   onClick={() => setTemporaryPassword(generateTemporaryPassword())}
-                  className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-4 text-[13px] font-semibold text-[var(--color-text-primary)] transition hover:border-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)]"
+                  className="flex shrink-0 items-center gap-1.5 rounded-lg border border-app-border px-4 text-[13px] font-semibold text-app-text transition hover:border-[var(--color-brand)] hover:bg-app-brand-subtle"
                 >
                   <Icon.Refresh className="h-3.5 w-3.5" />
                   {t("admin.brandManager.form.generate")}
@@ -836,65 +838,65 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-lg bg-[var(--color-brand)] px-5 py-3 text-[14px] font-semibold text-white shadow-sm transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-60 md:w-auto"
+              className="w-full rounded-lg bg-app-brand px-5 py-3 text-[14px] font-semibold text-white shadow-sm hover:shadow-md transition-shadow duration-300 transition-all duration-300 hover:bg-[var(--color-brand-hover)] hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[var(--color-brand)]/20 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 md:w-auto"
             >
               {loading ? t("admin.brandManager.form.submitting") : t("admin.brandManager.form.submit")}
             </button>
           </form>
 
-          <aside className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6">
-            <h2 className="text-[16px] font-bold text-[var(--color-text-primary)]">
+          <aside className="rounded-2xl border border-app-border bg-app-surface backdrop-blur-md p-6">
+            <h2 className="text-[16px] font-bold text-app-text">
               {t("admin.brandManager.result.title")}
             </h2>
             {createdAccount ? (
               <div className="mt-4 space-y-4">
-                <div className="flex items-center gap-3 rounded-xl bg-[var(--color-brand-subtle)] p-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand)] text-[13px] font-bold text-white">
+                <div className="flex items-center gap-3 rounded-xl bg-app-brand-subtle p-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-app-brand text-[13px] font-bold text-white">
                     {getInitials(createdAccount.displayName)}
                   </div>
                   <div className="min-w-0">
-                    <p className="truncate text-[14px] font-semibold text-[var(--color-text-primary)]">
+                    <p className="truncate text-[14px] font-semibold text-app-text">
                       {createdAccount.displayName}
                     </p>
-                    <p className="truncate text-[12px] text-[var(--color-text-secondary)]">{createdAccount.brandName}</p>
+                    <p className="truncate text-[12px] text-app-text-secondary">{createdAccount.brandName}</p>
                   </div>
                 </div>
 
                 <dl className="space-y-3 text-[13px]">
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
-                      <dt className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Email</dt>
-                      <dd className="truncate text-[var(--color-text-primary)]">{createdAccount.email}</dd>
+                      <dt className="text-[11px] font-semibold uppercase tracking-wide text-app-text-muted">Email</dt>
+                      <dd className="truncate text-app-text">{createdAccount.email}</dd>
                     </div>
                     <CopyButton value={createdAccount.email} label="email" />
                   </div>
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
-                      <dt className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+                      <dt className="text-[11px] font-semibold uppercase tracking-wide text-app-text-muted">
                         {t("admin.brandManager.result.tempPassword")}
                       </dt>
-                      <dd className="truncate font-sans text-[var(--color-text-primary)]">{createdAccount.temporaryPassword}</dd>
+                      <dd className="truncate font-sans text-app-text">{createdAccount.temporaryPassword}</dd>
                     </div>
                     <CopyButton value={createdAccount.temporaryPassword} label="mật khẩu" />
                   </div>
                   <div>
-                    <dt className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Brand ID</dt>
-                    <dd className="text-[var(--color-text-primary)]">{createdAccount.brandId}</dd>
+                    <dt className="text-[11px] font-semibold uppercase tracking-wide text-app-text-muted">Brand ID</dt>
+                    <dd className="text-app-text">{createdAccount.brandId}</dd>
                   </div>
                   <div>
-                    <dt className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+                    <dt className="text-[11px] font-semibold uppercase tracking-wide text-app-text-muted">
                       {t("admin.brandManager.result.defaultRoute")}
                     </dt>
-                    <dd className="text-[var(--color-text-primary)]">{createdAccount.defaultRoute}</dd>
+                    <dd className="text-app-text">{createdAccount.defaultRoute}</dd>
                   </div>
                 </dl>
               </div>
             ) : (
               <div className="mt-6 flex flex-col items-center gap-2 text-center">
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--color-bg-surface-raised)] text-[var(--color-text-muted)]">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-app-surface-raised text-app-text-muted">
                   <Icon.Inbox className="h-5 w-5" />
                 </div>
-                <p className="text-[13px] leading-6 text-[var(--color-text-secondary)]">
+                <p className="text-[13px] leading-6 text-app-text-secondary">
                   {t("admin.brandManager.result.empty")}
                 </p>
               </div>
@@ -905,30 +907,30 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
 
       {/* Brand manager list */}
       {(view === "all" || view === "list") && (
-        <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6">
+        <section className="rounded-2xl border border-app-border bg-app-surface backdrop-blur-md p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-[18px] font-bold text-[var(--color-text-primary)]">Danh sách Brand Manager</h2>
-              <p className="text-[13px] text-[var(--color-text-secondary)]">
+              <h2 className="text-[18px] font-bold text-app-text">Danh sách Brand Manager</h2>
+              <p className="text-[13px] text-app-text-secondary">
                 Quản lý toàn bộ tài khoản quản lý thương hiệu.
               </p>
             </div>
             <div className="flex items-center gap-2">
               <div className="relative">
-                <Icon.Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--color-text-muted)]" />
+                <Icon.Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-app-text-muted" />
                 <input
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
                   name="brand-manager-search"
                   autoComplete="off"
                   placeholder="Tìm theo tên, email, thương hiệu..."
-                  className="w-56 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] py-2 pl-8 pr-3 text-[13px] text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/15"
+                  className="w-56 rounded-lg border border-app-border bg-app-surface-raised py-2 pl-8 pr-3 text-[13px] text-app-text outline-none transition focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/20"
                 />
               </div>
               <button
                 type="button"
                 onClick={loadBrandManagers}
-                className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-4 py-2 text-[13px] font-semibold text-[var(--color-text-primary)] transition hover:border-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)]"
+                className="flex items-center gap-1.5 rounded-lg border border-app-border px-4 py-2 text-[13px] font-semibold text-app-text transition hover:border-[var(--color-brand)] hover:bg-app-brand-subtle"
               >
                 <Icon.Refresh className="h-3.5 w-3.5" />
                 Tải lại
@@ -945,8 +947,8 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
 
           <div className="mt-5 overflow-x-auto">
             <table className="min-w-full text-left text-[14px]">
-              <thead className="text-[11px] uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
-                <tr className="border-b border-[var(--color-border)]">
+              <thead className="text-[11px] uppercase tracking-[0.08em] text-app-text-muted">
+                <tr className="border-b border-app-border">
                   <th className="py-3 pr-4 font-semibold">Tài khoản</th>
                   <th className="py-3 pr-4 font-semibold">Thương hiệu</th>
                   <th className="py-3 pr-4 font-semibold">Trạng thái</th>
@@ -959,7 +961,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
                   Array.from({ length: 3 }).map((_, i) => (
                     <tr key={i}>
                       <td className="py-4 pr-4" colSpan={5}>
-                        <div className="h-10 w-full animate-pulse rounded-lg bg-[var(--color-bg-surface-raised)]" />
+                        <div className="h-10 w-full animate-pulse rounded-lg bg-app-surface-raised" />
                       </td>
                     </tr>
                   ))
@@ -967,10 +969,10 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
                   <tr>
                     <td className="py-10" colSpan={5}>
                       <div className="flex flex-col items-center gap-2 text-center">
-                        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--color-bg-surface-raised)] text-[var(--color-text-muted)]">
+                        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-app-surface-raised text-app-text-muted">
                           <Icon.Inbox className="h-5 w-5" />
                         </div>
-                        <p className="text-[13px] text-[var(--color-text-secondary)]">
+                        <p className="text-[13px] text-app-text-secondary">
                           {searchTerm ? "Không tìm thấy tài khoản phù hợp." : "Chưa có Brand Manager nào."}
                         </p>
                       </div>
@@ -978,21 +980,21 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
                   </tr>
                 ) : (
                   filteredManagers.map((item) => (
-                    <tr key={item.uid} className="transition hover:bg-[var(--color-bg-surface-raised)]">
+                    <tr key={item.uid} className="transition-all duration-300 hover:bg-app-surface-raised hover:-translate-y-0.5 active:translate-y-0">
                       <td className="py-3.5 pr-4">
                         <div className="flex items-center gap-3">
-                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-[12px] font-bold text-[var(--color-brand)]">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-app-brand-subtle text-[12px] font-bold text-app-brand">
                             {getInitials(item.displayName)}
                           </div>
                           <div className="min-w-0">
-                            <p className="truncate font-semibold text-[var(--color-text-primary)]">{item.displayName}</p>
-                            <p className="truncate text-[12px] text-[var(--color-text-secondary)]">{item.email}</p>
+                            <p className="truncate font-semibold text-app-text">{item.displayName}</p>
+                            <p className="truncate text-[12px] text-app-text-secondary">{item.email}</p>
                           </div>
                         </div>
                       </td>
                       <td className="py-3.5 pr-4">
-                        <p className="text-[var(--color-text-primary)]">{item.brandName}</p>
-                        <p className="text-[12px] text-[var(--color-text-muted)]">{item.brandId}</p>
+                        <p className="text-app-text">{item.brandName}</p>
+                        <p className="text-[12px] text-app-text-muted">{item.brandId}</p>
                       </td>
                       <td className="py-3.5 pr-4">
                         <span
@@ -1006,7 +1008,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
                       <td className="py-3.5 pr-4">
                         {revealedPasswords[item.uid] ? (
                           <div className="flex items-center gap-2">
-                            <span className="font-sans text-[13px] text-[var(--color-text-primary)]">
+                            <span className="font-sans text-[13px] text-app-text">
                               {revealedPasswords[item.uid]}
                             </span>
                             <CopyButton value={revealedPasswords[item.uid]} label="mật khẩu" />
@@ -1015,7 +1017,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
                           <button
                             type="button"
                             onClick={() => openPasswordRequest(item.uid, "reveal")}
-                            className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 font-sans text-[13px] text-[var(--color-text-primary)] transition hover:bg-[var(--color-brand-subtle)] hover:text-[var(--color-brand)]"
+                            className="rounded-lg border border-app-border px-3 py-1.5 font-sans text-[13px] text-app-text transition hover:bg-app-brand-subtle hover:text-app-brand"
                           >
                             ••••••••••
                           </button>
@@ -1023,7 +1025,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
                           <button
                             type="button"
                             onClick={() => openPasswordRequest(item.uid, "reset")}
-                            className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-[12px] font-semibold text-[var(--color-text-primary)] transition hover:bg-[var(--color-brand-subtle)] hover:text-[var(--color-brand)]"
+                            className="rounded-lg border border-app-border px-3 py-1.5 text-[12px] font-semibold text-app-text transition hover:bg-app-brand-subtle hover:text-app-brand"
                           >
                             Cấp lại
                           </button>
@@ -1034,7 +1036,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
                           <button
                             type="button"
                             onClick={() => openEditModal(item)}
-                            className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-[12px] font-semibold text-[var(--color-text-primary)] transition hover:border-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)]"
+                            className="flex items-center gap-1.5 rounded-lg border border-app-border px-3 py-1.5 text-[12px] font-semibold text-app-text transition hover:border-[var(--color-brand)] hover:bg-app-brand-subtle"
                           >
                             <Icon.Pencil className="h-3.5 w-3.5" />
                             Sửa
@@ -1069,12 +1071,12 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
               event.preventDefault();
               handleRevealTemporaryPassword(passwordRequestUid);
             }}
-            className="w-full max-w-[420px] rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 shadow-xl animate-in fade-in zoom-in-95 duration-150"
+            className="w-full max-w-[420px] rounded-2xl border border-app-border bg-app-surface backdrop-blur-md p-6 shadow-2xl shadow-black/20 animate-in fade-in zoom-in-95 duration-150"
           >
-            <h3 className="text-[18px] font-bold text-[var(--color-text-primary)]">
+            <h3 className="text-[18px] font-bold text-app-text">
               {passwordRequestMode === "reset" ? "Xác thực để cấp lại mật khẩu" : "Xác thực để xem mật khẩu"}
             </h3>
-            <p className="mt-2 text-[13px] leading-5 text-[var(--color-text-secondary)]">
+            <p className="mt-2 text-[13px] leading-5 text-app-text-secondary">
               {passwordRequestMode === "reset"
                 ? "Nhập mật khẩu tài khoản Admin của bạn. Hệ thống sẽ tạo mật khẩu tạm mới cho Brand Manager."
                 : "Nhập mật khẩu tài khoản Admin của bạn để xem mật khẩu tạm thời hiện tại."}
@@ -1098,7 +1100,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
             />
 
             <label className="mt-5 block space-y-2">
-              <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">
+              <span className="text-[13px] font-semibold text-app-text">
                 Mật khẩu Admin
               </span>
               <input
@@ -1123,7 +1125,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
                 autoCapitalize="none"
                 spellCheck={false}
                 autoFocus
-                className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2.5 text-[14px] text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/15"
+                className="w-full rounded-lg border border-app-border bg-app-surface-raised px-3 py-2.5 text-[14px] text-app-text outline-none transition focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/20"
               />
             </label>
 
@@ -1136,14 +1138,14 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
                   setAdminPassword("");
                   setRevealError("");
                 }}
-                className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-[13px] font-semibold text-[var(--color-text-primary)] transition hover:bg-[var(--color-bg-surface-raised)]"
+                className="rounded-lg border border-app-border px-4 py-2 text-[13px] font-semibold text-app-text transition-all duration-300 hover:bg-app-surface-raised hover:-translate-y-0.5 active:translate-y-0"
               >
                 Hủy
               </button>
               <button
                 type="submit"
                 disabled={revealLoading || !adminPassword}
-                className="rounded-lg bg-[var(--color-brand)] px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-lg bg-app-brand px-4 py-2 text-[13px] font-semibold text-white transition-all duration-300 hover:bg-[var(--color-brand-hover)] hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[var(--color-brand)]/20 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {revealLoading
                   ? "Đang xác thực..."
@@ -1159,43 +1161,43 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
       {/* Edit modal */}
       {editingAccount && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-[440px] rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 shadow-xl">
+          <div className="w-full max-w-[440px] rounded-2xl border border-app-border bg-app-surface backdrop-blur-md p-6 shadow-2xl shadow-black/20">
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-[12px] font-bold text-[var(--color-brand)]">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-app-brand-subtle text-[12px] font-bold text-app-brand">
                   {getInitials(editingAccount.displayName)}
                 </div>
                 <div>
-                  <h3 className="text-[16px] font-bold text-[var(--color-text-primary)]">Chỉnh sửa Brand Manager</h3>
-                  <p className="text-[12px] text-[var(--color-text-secondary)]">{editingAccount.email}</p>
+                  <h3 className="text-[16px] font-bold text-app-text">Chỉnh sửa Brand Manager</h3>
+                  <p className="text-[12px] text-app-text-secondary">{editingAccount.email}</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setEditingAccount(null)}
                 aria-label="Đóng"
-                className="rounded-lg p-1 text-[var(--color-text-muted)] transition hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-primary)]"
+                className="rounded-lg p-1 text-app-text-muted transition-all duration-300 hover:bg-app-surface-raised hover:-translate-y-0.5 active:translate-y-0 hover:text-app-text"
               >
                 <Icon.X className="h-4 w-4" />
               </button>
             </div>
 
             <label className="mt-5 block space-y-2">
-              <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">Họ tên</span>
+              <span className="text-[13px] font-semibold text-app-text">Họ tên</span>
               <input
                 value={editFullName}
                 onChange={(event) => setEditFullName(event.target.value)}
-                className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2.5 text-[14px] text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/15"
+                className="w-full rounded-lg border border-app-border bg-app-surface-raised px-3 py-2.5 text-[14px] text-app-text outline-none transition focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/20"
               />
             </label>
 
             <label className="mt-4 block space-y-2">
-              <span className="text-[13px] font-semibold text-[var(--color-text-primary)]">Thương hiệu</span>
+              <span className="text-[13px] font-semibold text-app-text">Thương hiệu</span>
               <select
                 value={editBrandName}
                 onChange={(event) => setEditBrandName(event.target.value)}
                 disabled={brandOptions.length === 0}
-                className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-3 py-2.5 text-[14px] text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/15"
+                className="w-full rounded-lg border border-app-border bg-app-surface-raised px-3 py-2.5 text-[14px] text-app-text outline-none transition focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/20"
               >
                 {editBrandName && !brandOptions.some((brand) => brand.name === editBrandName) && (
                   <option value={editBrandName}>{editBrandName}</option>
@@ -1212,7 +1214,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
               <button
                 type="button"
                 onClick={() => setEditingAccount(null)}
-                className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-[13px] font-semibold text-[var(--color-text-primary)] transition hover:bg-[var(--color-bg-surface-raised)]"
+                className="rounded-lg border border-app-border px-4 py-2 text-[13px] font-semibold text-app-text transition-all duration-300 hover:bg-app-surface-raised hover:-translate-y-0.5 active:translate-y-0"
               >
                 Hủy
               </button>
@@ -1220,7 +1222,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
                 type="button"
                 disabled={savingEdit || !editFullName.trim() || !editBrandName.trim()}
                 onClick={handleEditAccount}
-                className="rounded-lg bg-[var(--color-brand)] px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-lg bg-app-brand px-4 py-2 text-[13px] font-semibold text-white transition-all duration-300 hover:bg-[var(--color-brand-hover)] hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[var(--color-brand)]/20 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {savingEdit ? "Đang lưu..." : "Lưu thay đổi"}
               </button>

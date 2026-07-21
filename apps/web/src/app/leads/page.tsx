@@ -262,6 +262,21 @@ export default function LeadsPage() {
   }, [workbenchViews]);
 
   useEffect(() => {
+    const handleSelectLeadFromHeader = (e: any) => {
+      const leadId = e.detail?.leadId;
+      if (leadId) {
+        pendingRestoreLeadId.current = leadId;
+        hasReconciledRestoreLead.current = false;
+        setSelectedLeadId(leadId);
+        setHighlightedLeadId(leadId);
+        setIsPanelCollapsed(false);
+      }
+    };
+    window.addEventListener('selectLeadFromHeader', handleSelectLeadFromHeader);
+    return () => window.removeEventListener('selectLeadFromHeader', handleSelectLeadFromHeader);
+  }, []);
+
+  useEffect(() => {
     if (!hasInitializedLeadFilters.current) return;
 
     const params = new URLSearchParams(window.location.search);

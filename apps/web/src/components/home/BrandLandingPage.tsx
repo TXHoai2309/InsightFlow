@@ -192,12 +192,10 @@ function Reveal({ children, className, delay = 0 }: { children: ReactNode; class
 function SectionIntro({ eyebrow, title, description, inverse = false }: { eyebrow: string; title: string; description: string; inverse?: boolean }) {
   return (
     <Reveal className="mx-auto max-w-[760px] text-center">
-      <div className="mx-auto mb-5 flex w-fit items-center gap-3">
-        <span className={`h-px w-8 ${inverse ? "bg-[#9B8CFF]" : "bg-[#6D5EF6]/30"}`} />
-        <p className={`text-[13px] font-extrabold uppercase tracking-[0.16em] ${inverse ? "text-[#9B8CFF]" : "text-[#6D5EF6]"}`}>{eyebrow}</p>
-        <span className={`h-px w-8 ${inverse ? "bg-[#9B8CFF]" : "bg-[#6D5EF6]/30"}`} />
+      <div className={`inline-block px-5 py-2 border-2 rounded-full mb-6 ${inverse ? "border-[#9B8CFF]/30 bg-[#9B8CFF]/10" : "border-[#6D5EF6]/30 bg-[#6D5EF6]/5"}`}>
+        <p className={`text-[16px] md:text-[18px] font-extrabold uppercase tracking-[0.16em] ${inverse ? "text-[#9B8CFF]" : "text-[#6D5EF6]"}`}>{eyebrow}</p>
       </div>
-      <h2 className={`font-display text-[36px] font-extrabold leading-[1.1] md:text-[42px] ${inverse ? "text-white" : "text-[#1B1B4A] tracking-tight"}`}>{title}</h2>
+      <h2 className={`font-display text-[28px] md:text-[36px] font-extrabold leading-[1.2] ${inverse ? "text-white" : "text-[#1B1B4A] tracking-tight"}`}>{title}</h2>
       <p className={`mx-auto mt-6 max-w-[640px] text-[17px] leading-[1.7] ${inverse ? "text-slate-300" : "text-[#6B7090]"}`}>{description}</p>
     </Reveal>
   );
@@ -243,10 +241,12 @@ function LiveIntelligenceSection() {
 
       <div className="relative z-10 mx-auto max-w-[1200px]">
         <Reveal className="text-center mx-auto max-w-[800px]">
-          <p className="text-[13px] font-extrabold uppercase tracking-[0.16em] text-[#6D5EF6] mb-4">Live Intelligence</p>
-          <h2 className="font-display text-[32px] md:text-[42px] font-extrabold leading-[1.1] text-[#1B1B4A] tracking-tight">
-            Không chỉ là dashboard. Đây là <br className="hidden md:block" />
-            <span className="bg-gradient-to-r from-[#6D5EF6] to-[#9B8CFF] bg-clip-text text-transparent">nhịp đập của thương hiệu.</span>
+          <div className="inline-block px-5 py-2 border-2 border-[#6D5EF6]/30 rounded-full mb-6 bg-[#6D5EF6]/5">
+            <p className="text-[16px] md:text-[18px] font-extrabold uppercase tracking-[0.16em] text-[#6D5EF6]">Live Intelligence</p>
+          </div>
+          <h2 className="font-display text-[28px] md:text-[36px] font-extrabold leading-[1.2] text-[#1B1B4A] tracking-tight mx-auto max-w-[600px]">
+            Không chỉ là dashboard.<br />
+            Đây là nhịp đập của thương hiệu.
           </h2>
         </Reveal>
 
@@ -612,8 +612,10 @@ export default function BrandLandingPage() {
 
         <div className="relative z-10 mx-auto max-w-[900px] text-center">
           <Reveal>
-            <p className="text-[13px] font-extrabold uppercase tracking-[0.16em] text-[#6D5EF6] mb-4">AI Brand Insights</p>
-            <h2 className="font-display text-[32px] md:text-[42px] font-extrabold leading-[1.1] text-[#1B1B4A] tracking-tight">
+            <div className="inline-block px-5 py-2 border-2 border-[#6D5EF6]/30 rounded-full mb-6 bg-[#6D5EF6]/5">
+              <p className="text-[16px] md:text-[18px] font-extrabold uppercase tracking-[0.16em] text-[#6D5EF6]">AI Brand Insights</p>
+            </div>
+            <h2 className="font-display text-[24px] md:text-[32px] font-extrabold leading-[1.2] text-[#1B1B4A] tracking-tight">
               Khách hàng đang nói mỗi ngày.<br />
               <span className="bg-gradient-to-r from-[#6D5EF6] to-[#9B8CFF] bg-clip-text text-transparent">Thương hiệu</span> của bạn<br />
               đã thực sự lắng nghe?
@@ -796,8 +798,10 @@ export default function BrandLandingPage() {
         <div className="relative z-10 mx-auto max-w-[1200px] flex flex-col items-center">
           {/* Text Section */}
           <Reveal className="text-center max-w-[800px]">
-            <p className="text-[13px] font-extrabold uppercase tracking-[0.16em] text-[#6D5EF6] mb-4">Tín hiệu được kết nối</p>
-            <h2 className="font-display text-[32px] md:text-[42px] font-extrabold leading-[1.1] text-[#1B1B4A] tracking-tight">
+            <div className="inline-block px-5 py-2 border-2 border-[#6D5EF6]/30 rounded-full mb-6 bg-[#6D5EF6]/5">
+              <p className="text-[16px] md:text-[18px] font-extrabold uppercase tracking-[0.16em] text-[#6D5EF6]">Tín hiệu được kết nối</p>
+            </div>
+            <h2 className="font-display text-[24px] md:text-[32px] font-extrabold leading-[1.2] text-[#1B1B4A] tracking-tight">
               Mỗi cuộc trò chuyện đều có thể là <br className="hidden md:block" />
               <span className="bg-gradient-to-r from-[#6D5EF6] to-[#9B8CFF] bg-clip-text text-transparent">bước tiếp theo của tăng trưởng.</span>
             </h2>
