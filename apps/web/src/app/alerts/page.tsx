@@ -37,6 +37,7 @@ import {
 import { findAlertByNavigationTarget } from "@/lib/alert-navigation";
 import { readDashboardReturnNavigation } from "@/lib/dashboard-return-context";
 import { usePinnedQueue } from "@/hooks/usePinnedQueue";
+import { useAlertViewPresence } from "@/hooks/useAlertViewPresence";
 import { getAlertSourceUrl } from "@/lib/alert-source-url";
 
 const ALERTS_PER_PAGE = 5;
@@ -583,6 +584,14 @@ export default function AlertsPage() {
     if (!selectedAlertId) return null;
     return processedActiveAlerts.find((alert) => alert.id === selectedAlertId) || null;
   }, [processedActiveAlerts, selectedAlertId]);
+  const alertViewers = useAlertViewPresence({
+    alertId: selectedAlert?.id || null,
+    enabled: Boolean(
+      selectedAlert &&
+      !isDetailPanelCollapsed &&
+      getAlertWorkflowStatus(selectedAlert) === "pending",
+    ),
+  });
 
   useEffect(() => {
     if (!pendingClaimSelectionId) return;
@@ -1124,6 +1133,8 @@ export default function AlertsPage() {
         pinnedAlertIds={pinnedAlertIds}
         maxPinnedAlerts={maxPinnedAlerts}
         profileEmail={profile?.email}
+        currentViewerId={profile?.uid}
+        alertViewers={alertViewers}
         canUpdate={canUpdateCrisisStatus}
         getResolverName={getResolverName}
         onRefresh={async () => {

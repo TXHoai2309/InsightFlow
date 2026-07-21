@@ -19,6 +19,7 @@ import {
   getLeadWorkbenchMeta,
   getPrimaryLeadAction,
 } from "@/lib/lead-workbench";
+import type { AlertViewer } from "@/hooks/useAlertViewPresence";
 
 interface LeadWorkbenchRowProps {
   lead: Lead;
@@ -35,6 +36,8 @@ interface LeadWorkbenchRowProps {
   onSelect: (lead: Lead) => void;
   onTogglePin?: (lead: Lead) => void;
   onStartedAction?: (lead: Lead) => void;
+  viewers?: AlertViewer[];
+  currentViewerId?: string | null;
 }
 
 const INTENT_STYLE = {
@@ -88,12 +91,15 @@ export function LeadWorkbenchRow({
   onSelect,
   onTogglePin,
   onStartedAction,
+  viewers = [],
+  currentViewerId,
 }: LeadWorkbenchRowProps) {
   const { profile } = useAuth();
   const { updateLeadDetails, claimLead } = useDashboardStore();
   const [isOpening, setIsOpening] = useState(false);
   const [error, setError] = useState("");
   const [showMenu, setShowMenu] = useState(false);
+  const [showViewers, setShowViewers] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const showToast = (message: string, type: "success" | "error" = "success") => {
     setToast({ message, type });
@@ -312,7 +318,7 @@ export function LeadWorkbenchRow({
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(lead)}
         onKeyDown={handleRowKeyDown}
-        className={`relative w-full cursor-pointer overflow-hidden rounded-lg border bg-[var(--color-bg-surface)] p-3 text-left transition duration-200 hover:bg-[var(--color-bg-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2 ${cardStateClass}`}
+        className={`relative w-full cursor-pointer overflow-visible rounded-lg border bg-[var(--color-bg-surface)] p-3 text-left transition duration-200 hover:bg-[var(--color-bg-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2 ${cardStateClass}`}
       >
         <span className={`absolute inset-y-0 left-0 w-1 ${accentClass}`} />
 
@@ -343,17 +349,66 @@ export function LeadWorkbenchRow({
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
                 {renderPinButton()}
-                {selected && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-brand)] px-2 py-0.5 text-[10px] font-black text-white">
-                    <span className="material-symbols-outlined text-xs">check</span>
-                    Đang xem
-                  </span>
+                {selected && ownership.status === "unassigned" && (
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setShowViewers((value) => !value);
+                    }}
+                    aria-expanded={showViewers}
+                    aria-label={`${viewers.length} người đang xem khách hàng`}
+                    title={`${viewers.length} người đang xem`}
+                    className="inline-flex h-7 min-w-7 items-center justify-center gap-0.5 rounded-md border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-1.5 text-[10px] font-black text-[var(--color-text-muted)] transition hover:border-violet-300 hover:text-violet-600"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">visibility</span>
+                    <span>{viewers.length}</span>
+                  </button>
                 )}
                 <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black ${INTENT_STYLE[lead.intent]}`}>
                   {intentLabel}
                 </span>
               </div>
             </div>
+
+            {selected && ownership.status === "unassigned" && showViewers && (
+              <div
+                role="dialog"
+                aria-label="Danh sách người đang xem khách hàng"
+                onClick={(event) => event.stopPropagation()}
+                className="absolute right-3 top-12 z-50 w-[min(18rem,calc(100%-1.5rem))] rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-3 text-left shadow-xl"
+              >
+                <div className="flex items-center justify-between gap-2 border-b border-[var(--color-border)] pb-2">
+                  <p className="text-sm font-black text-[var(--color-text-primary)]">Người đang xem ({viewers.length})</p>
+                  <button type="button" onClick={() => setShowViewers(false)} className="grid h-7 w-7 place-items-center rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-raised)]" aria-label="Đóng danh sách người xem">
+                    <span className="material-symbols-outlined text-[18px]">close</span>
+                  </button>
+                </div>
+                {viewers.length === 0 ? (
+                  <p className="py-3 text-xs text-[var(--color-text-secondary)]">Chưa có người nào đang xem.</p>
+                ) : (
+                  <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto">
+                    {viewers.map((viewer) => (
+                      <li key={viewer.uid} className="flex items-center gap-2 rounded-lg px-2 py-2 hover:bg-[var(--color-bg-surface-raised)]">
+                        {viewer.photoURL ? (
+                          <span aria-hidden="true" className="h-8 w-8 shrink-0 rounded-full bg-cover bg-center" style={{ backgroundImage: `url(${JSON.stringify(viewer.photoURL).slice(1, -1)})` }} />
+                        ) : (
+                          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-violet-100 text-xs font-black text-violet-700 dark:bg-violet-950/40 dark:text-violet-300">
+                            {(viewer.displayName || viewer.email || "ND").slice(0, 2).toUpperCase()}
+                          </span>
+                        )}
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-black text-[var(--color-text-primary)]">
+                            {viewer.displayName || viewer.email || "Người dùng"}{viewer.uid === currentViewerId ? " (Bạn)" : ""}
+                          </p>
+                          {viewer.email && <p className="truncate text-[10px] text-[var(--color-text-muted)]">{viewer.email}</p>}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
 
             <p className="mt-2 line-clamp-1 text-[13px] font-semibold leading-5 text-[var(--color-text-primary)]">
               {leadReason}

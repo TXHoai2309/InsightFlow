@@ -11,26 +11,27 @@ export interface AlertViewer {
   lastSeenAt: string;
 }
 
-interface UseAlertViewPresenceOptions {
-  alertId: string | null;
+interface UseViewPresenceOptions {
+  resource: "alerts" | "leads";
+  resourceId: string | null;
   enabled: boolean;
 }
 
-const LOAD_INTERVAL_MS = 5_000;
+const LOAD_INTERVAL_MS = 2_000;
 const HEARTBEAT_INTERVAL_MS = 15_000;
 
-export function useAlertViewPresence({ alertId, enabled }: UseAlertViewPresenceOptions) {
+function useViewPresence({ resource, resourceId, enabled }: UseViewPresenceOptions) {
   const [viewers, setViewers] = useState<AlertViewer[]>([]);
 
   useEffect(() => {
-    if (!enabled || !alertId) {
+    if (!enabled || !resourceId) {
       setViewers([]);
       return;
     }
 
     let disposed = false;
     let cachedToken = "";
-    const endpoint = `/api/alerts/${encodeURIComponent(alertId)}/viewers`;
+    const endpoint = `/api/${resource}/${encodeURIComponent(resourceId)}/viewers`;
 
     const getToken = async () => {
       cachedToken = cachedToken || await auth.currentUser?.getIdToken() || "";
@@ -50,7 +51,6 @@ export function useAlertViewPresence({ alertId, enabled }: UseAlertViewPresenceO
     };
 
     const heartbeat = async () => {
-      if (document.visibilityState === "hidden") return;
       const token = await getToken();
       if (!token || disposed) return;
       await fetch(endpoint, {
@@ -70,8 +70,7 @@ export function useAlertViewPresence({ alertId, enabled }: UseAlertViewPresenceO
     };
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") leave();
-      else void heartbeat();
+      if (document.visibilityState === "visible") void heartbeat();
     };
 
     void heartbeat();
@@ -89,7 +88,15 @@ export function useAlertViewPresence({ alertId, enabled }: UseAlertViewPresenceO
       leave();
       setViewers([]);
     };
-  }, [alertId, enabled]);
+  }, [resource, resourceId, enabled]);
 
   return viewers;
+}
+
+export function useAlertViewPresence({ alertId, enabled }: { alertId: string | null; enabled: boolean }) {
+  return useViewPresence({ resource: "alerts", resourceId: alertId, enabled });
+}
+
+export function useLeadViewPresence({ leadId, enabled }: { leadId: string | null; enabled: boolean }) {
+  return useViewPresence({ resource: "leads", resourceId: leadId, enabled });
 }

@@ -18,6 +18,7 @@ import type { Lead } from "@/types/dashboard";
 import {
   canLeadBeVisibleToUser,
   getDefaultLeadWorkbenchView,
+  getLeadOwnershipMeta,
   getLeadWorkbenchMeta,
   getLeadWorkbenchViews,
   matchesLeadWorkbenchView,
@@ -50,6 +51,7 @@ import {
   type DashboardReturnNavigation,
 } from "@/lib/dashboard-return-context";
 import { usePinnedQueue } from "@/hooks/usePinnedQueue";
+import { useLeadViewPresence } from "@/hooks/useAlertViewPresence";
 
 const LEADS_PAGE_SIZE = 5;
 const APP_SCROLL_ROOT_SELECTOR = '[data-app-scroll-root="true"]';
@@ -478,6 +480,14 @@ export default function LeadsPage() {
     visibleLeads.find((lead) => lead.id === selectedLeadId) ||
     visibleBaseLeads.find((lead) => lead.id === selectedLeadId) ||
     null;
+  const leadViewers = useLeadViewPresence({
+    leadId: selectedLead?.id || null,
+    enabled: Boolean(
+      selectedLead &&
+      !isPanelCollapsed &&
+      getLeadOwnershipMeta(selectedLead, profile).status === "unassigned",
+    ),
+  });
 
   useEffect(() => {
     const restoredLeadId = pendingRestoreLeadId.current;
@@ -1081,6 +1091,8 @@ export default function LeadsPage() {
                     pinned={pinnedLeadIds.includes(lead.id)}
                     canPin={activeView === "active"}
                     pinDisabled={pinnedLeadIds.length >= maxPinnedLeads}
+                    viewers={selectedLeadId === lead.id ? leadViewers : []}
+                    currentViewerId={profile?.uid}
                     onTogglePin={(nextLead) => {
                       togglePinnedLead(nextLead.id);
                     }}
