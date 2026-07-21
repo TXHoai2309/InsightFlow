@@ -205,8 +205,8 @@ function SentimentDonut({
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {[
           { label: "Tích cực", value: positive, pct: pct(positive), color: "#22C55E", darkColor: "#4ADE80" },
-          { label: "Trung lập", value: neutral,  pct: pct(neutral),  color: "#94A3B8", darkColor: "#94A3B8" },
-          { label: "Tiêu cực", value: negative,  pct: pct(negative), color: "#EF4444", darkColor: "#F87171" },
+          { label: "Trung lập", value: neutral, pct: pct(neutral), color: "#94A3B8", darkColor: "#94A3B8" },
+          { label: "Tiêu cực", value: negative, pct: pct(negative), color: "#EF4444", darkColor: "#F87171" },
         ].map(({ label, value, pct: p, color, darkColor }) => (
           <div key={label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{
@@ -236,13 +236,13 @@ export function BMHeroRow({ score, trend, sentiment, totalMentions, onViewDetail
 
   const statusLabel = isHealthy ? t("bm.hero.status.good") : isWarning ? t("bm.hero.status.warning") : t("bm.hero.status.danger");
   const statusColor = isHealthy ? "#22C55E" : isWarning ? "#F59E0B" : "#EF4444";
-  const statusBg    = isHealthy ? "rgba(34,197,94,0.1)"  : isWarning ? "rgba(245,158,11,0.1)" : "rgba(239,68,68,0.1)";
+  const statusBg = isHealthy ? "rgba(34,197,94,0.1)" : isWarning ? "rgba(245,158,11,0.1)" : "rgba(239,68,68,0.1)";
 
   const aiText = isHealthy
     ? t("bm.hero.aiText.good")
     : isWarning
-    ? t("bm.hero.aiText.warning")
-    : t("bm.hero.aiText.danger");
+      ? t("bm.hero.aiText.warning")
+      : t("bm.hero.aiText.danger");
 
   return (
     <div className="bm-hero-row">
@@ -462,8 +462,8 @@ export function BMHeroRow({ score, trend, sentiment, totalMentions, onViewDetail
               d={isHealthy
                 ? "M0,35 L28,28 L56,20 L84,15 L112,12 L140,10 L168,8 L200,5"
                 : isWarning
-                ? "M0,20 L28,22 L56,18 L84,24 L112,20 L140,26 L168,22 L200,28"
-                : "M0,15 L28,20 L56,25 L84,22 L112,30 L140,28 L168,34 L200,38"}
+                  ? "M0,20 L28,22 L56,18 L84,24 L112,20 L140,26 L168,22 L200,28"
+                  : "M0,15 L28,20 L56,25 L84,22 L112,30 L140,28 L168,34 L200,38"}
               fill="url(#bm-spark-grad)"
               stroke={statusColor}
               strokeWidth="2"

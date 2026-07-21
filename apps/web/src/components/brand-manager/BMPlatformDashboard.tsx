@@ -111,7 +111,7 @@ export function BMPlatformDashboard({ onBack, currentMentions }: BMPlatformDashb
   // AI recommendations draft reply recommendations
   const aiPlatformInsight = useMemo(() => {
     if (sentimentStats.total === 0) return "Chưa đủ dữ liệu đề cập trên nền tảng này để phân tích hành vi AI.";
-    
+
     if (selectedPlatform === "google_maps") {
       const lowStars = starStats.counts[1] + starStats.counts[2];
       if (lowStars > 0) {
@@ -167,11 +167,10 @@ export function BMPlatformDashboard({ onBack, currentMentions }: BMPlatformDashb
               <button
                 key={p}
                 onClick={() => handlePlatformChange(p)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  isActive
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${isActive
                     ? "bg-[var(--color-brand)] text-white shadow-sm"
                     : "text-[var(--color-text-secondary)] hover:bg-[var(--color-border)]"
-                }`}
+                  }`}
               >
                 <PlatformLogo platform={p} className="w-4 h-4" />
                 <span>{meta?.label ?? p}</span>
@@ -183,20 +182,20 @@ export function BMPlatformDashboard({ onBack, currentMentions }: BMPlatformDashb
 
       {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
+
         {/* Card 1: Platform Health & Sentiment Summary */}
         <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-2xl p-6 shadow-sm">
           <h3 className="text-sm font-bold text-[var(--color-text-primary)] mb-4 flex items-center gap-2">
             <span className="material-symbols-outlined text-[var(--color-brand)]" style={{ fontSize: 18 }}>donut_large</span>
             {t("bm.platform.sentimentRatio", "Tỷ lệ Cảm xúc Kênh")}
           </h3>
-          
+
           <div className="flex flex-col items-center justify-center py-4">
             <div className="relative w-36 h-36 flex items-center justify-center mb-6">
               {/* Custom SVG Donut chart representation */}
               <svg width="140" height="140" viewBox="0 0 42 42" className="transform -rotate-90">
                 <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="var(--color-border)" strokeWidth="4" />
-                
+
                 {sentimentStats.total > 0 ? (
                   <>
                     {/* Positive arc */}
@@ -266,20 +265,19 @@ export function BMPlatformDashboard({ onBack, currentMentions }: BMPlatformDashb
               <span className="material-symbols-outlined text-[var(--color-brand)]" style={{ fontSize: 18 }}>health_and_safety</span>
               {t("bm.platform.healthScore", "Sức khỏe Kênh")}
             </h3>
-            
+
             <div className="flex items-center gap-6 mb-4">
               <div className="w-20 h-20 rounded-full border-[6px] border-[var(--color-brand)] border-t-transparent flex items-center justify-center relative">
                 <span className="text-xl font-extrabold text-[var(--color-text-primary)]">{platformHealthScore}</span>
                 <span className="absolute text-[8px] text-[var(--color-text-muted)] font-bold bottom-3">/100</span>
               </div>
               <div>
-                <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                  platformHealthScore >= 70
+                <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${platformHealthScore >= 70
                     ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
                     : platformHealthScore >= 40
-                    ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-                    : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-                }`}>
+                      ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                      : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                  }`}>
                   {platformHealthScore >= 70 ? t("bm.hero.status.good", "Khỏe mạnh") : platformHealthScore >= 40 ? t("bm.hero.status.warning", "Cảnh báo") : t("bm.hero.status.danger", "Rủi ro cao")}
                 </span>
                 <p className="text-xs text-[var(--color-text-muted)] mt-2 font-medium">
@@ -309,7 +307,7 @@ export function BMPlatformDashboard({ onBack, currentMentions }: BMPlatformDashb
                 <span className="material-symbols-outlined text-amber-500" style={{ fontSize: 18 }}>star</span>
                 {t("bm.platform.starDistribution", "Phân bố Đánh giá Sao")}
               </h3>
-              
+
               <div className="space-y-3.5">
                 {[5, 4, 3, 2, 1].map((stars) => {
                   const count = starStats.counts[stars as 1 | 2 | 3 | 4 | 5] || 0;
@@ -324,9 +322,8 @@ export function BMPlatformDashboard({ onBack, currentMentions }: BMPlatformDashb
                       </div>
                       <div className="w-full h-2 bg-[var(--color-bg-surface-raised)] rounded-full overflow-hidden">
                         <div
-                          className={`h-full rounded-full ${
-                            stars >= 4 ? "bg-green-500" : stars === 3 ? "bg-amber-500" : "bg-red-500"
-                          }`}
+                          className={`h-full rounded-full ${stars >= 4 ? "bg-green-500" : stars === 3 ? "bg-amber-500" : "bg-red-500"
+                            }`}
                           style={{ width: `${percent}%` }}
                         />
                       </div>
@@ -341,7 +338,7 @@ export function BMPlatformDashboard({ onBack, currentMentions }: BMPlatformDashb
                 <span className="material-symbols-outlined text-[var(--color-brand)]" style={{ fontSize: 18 }}>analytics</span>
                 {t("bm.platform.engagementMetrics", "Chỉ số Tương tác Kênh")}
               </h3>
-              
+
               <div className="space-y-4 py-3">
                 <div className="p-4 bg-[var(--color-bg-surface-raised)] border border-[var(--color-border)] rounded-xl flex items-center justify-between">
                   <div>
@@ -377,7 +374,7 @@ export function BMPlatformDashboard({ onBack, currentMentions }: BMPlatformDashb
               <span className="material-symbols-outlined text-red-500" style={{ fontSize: 18 }}>storefront</span>
               {t("bm.platform.negativeBranches", "Xếp hạng Chi nhánh có nhiều Đánh giá Tiêu cực nhất")}
             </h3>
-            
+
             {locationStats.length === 0 ? (
               <div className="py-8 text-center text-xs text-[var(--color-text-muted)] font-semibold">
                 {t("bm.platform.noBranches", "Không tìm thấy dữ liệu chi nhánh nào trên Google Maps.")}
@@ -430,7 +427,7 @@ export function BMPlatformDashboard({ onBack, currentMentions }: BMPlatformDashb
               <span className="material-symbols-outlined text-red-500" style={{ fontSize: 18 }}>campaign</span>
               {t("bm.platform.notableNegativePosts", "Các bài đăng/bình luận tiêu cực đáng lưu ý trên kênh")}
             </h3>
-            
+
             {viralNegativePosts.length === 0 ? (
               <div className="py-8 text-center text-xs text-[var(--color-text-muted)] font-semibold">
                 {t("bm.platform.noNegativePosts", "Không ghi nhận đề cập tiêu cực nổi bật nào trên nền tảng này.")}
