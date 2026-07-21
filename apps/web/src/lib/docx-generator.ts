@@ -85,7 +85,7 @@ export async function generateDocxReport(
           display: true,
           text: `Tỷ lệ tuân thủ SLA (${metrics.sla.compliance_rate}%)`,
           color: "#6B5B4D",
-          font: { family: "Georgia", size: 14, weight: "bold" },
+          font: { family: "Calibri", size: 14, weight: "bold" },
         },
       },
     },
@@ -113,7 +113,7 @@ export async function generateDocxReport(
           display: true,
           text: "Phân bổ Chủ đề (Topic Breakdown)",
           color: "#6B5B4D",
-          font: { family: "Georgia", size: 14, weight: "bold" },
+          font: { family: "Calibri", size: 14, weight: "bold" },
         },
       },
     },
@@ -146,7 +146,7 @@ export async function generateDocxReport(
             children: [
               new TextRun({
                 text: "BÁO CÁO PHÂN TÍCH INSIGHT DOANH NGHIỆP",
-                font: "Georgia",
+                font: "Calibri",
                 bold: true,
                 size: 36,
                 color: COLOR_TITLE_GEORGIA,
@@ -192,7 +192,7 @@ export async function generateDocxReport(
             children: [
               new TextRun({
                 text: "Tóm tắt",
-                font: "Georgia",
+                font: "Calibri",
                 bold: true,
                 size: 28,
                 color: COLOR_TITLE_GEORGIA,
@@ -218,7 +218,7 @@ export async function generateDocxReport(
             children: [
               new TextRun({
                 text: "Trực quan hóa dữ liệu",
-                font: "Georgia",
+                font: "Calibri",
                 bold: true,
                 size: 28,
                 color: COLOR_TITLE_GEORGIA,
@@ -301,7 +301,7 @@ export async function generateDocxReport(
             children: [
               new TextRun({
                 text: "Insight chính",
-                font: "Georgia",
+                font: "Calibri",
                 bold: true,
                 size: 28,
                 color: COLOR_TITLE_GEORGIA,
@@ -388,7 +388,7 @@ export async function generateDocxReport(
             children: [
               new TextRun({
                 text: "Khuyến nghị hành động",
-                font: "Georgia",
+                font: "Calibri",
                 bold: true,
                 size: 28,
                 color: COLOR_TITLE_GEORGIA,
@@ -448,7 +448,7 @@ export async function generateDocxReport(
             children: [
               new TextRun({
                 text: "Rủi ro và Độ tin cậy",
-                font: "Georgia",
+                font: "Calibri",
                 bold: true,
                 size: 28,
                 color: COLOR_TITLE_GEORGIA,

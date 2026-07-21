@@ -4,8 +4,16 @@ import { useState } from "react";
 import { usePathname } from "next/navigation";
 import dynamic from "next/dynamic";
 import { useTranslation, I18nextProvider } from "react-i18next";
+import { Be_Vietnam_Pro } from "next/font/google";
 import i18nInstance from "../i18n";
 import "./globals.css";
+
+const beVietnamPro = Be_Vietnam_Pro({
+  subsets: ["vietnamese", "latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-be-vietnam-pro",
+  display: "swap",
+});
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { MobileNav } from "@/components/layout/MobileNav";
@@ -135,13 +143,17 @@ export default function RootLayout({
   const descKey = getPageDescriptionKey(pathname || "/");
 
   return (
-    <html lang={i18n.language} suppressHydrationWarning>
+    <html lang={i18n.language} className={beVietnamPro.variable} suppressHydrationWarning>
       <head>
         {/* Anti-FOUC: set dark class trước React render để tránh flash */}
         <script dangerouslySetInnerHTML={{ __html: antiFoucScript }} />
         <title>{t(titleKey)}</title>
         <meta name="description" content={t(descKey)} />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap"
+        />
         <link
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
@@ -156,7 +168,7 @@ export default function RootLayout({
         />
       </head>
       <body
-        className="overflow-x-hidden"
+        className="font-sans overflow-x-hidden"
         style={{
           margin: 0,
           padding: 0,

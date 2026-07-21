@@ -177,24 +177,37 @@ ${customPrompt ? `▶ YÊU CẦU PHÂN TÍCH ĐẶC BIỆT TỪ NGƯỜI DÙNG:\
 📋 QUY TẮC BẮT BUỘC KHI VIẾT BÁO CÁO:
 ═══════════════════════════════════════════════════
 1. KHÔNG BỊ CẮT ĐOẠN: Bắt buộc hoàn thành trọn vẹn cả 4 mục bên dưới. Viết đầy đủ kết luận, không dừng giữa chừng.
-2. INSIGHT CHO THƯƠNG HIỆU: Với MỖI con số dữ liệu thô (ví dụ: Net Sentiment, % phản hồi tiêu cực, ca trễ SLA, tỷ lệ chuyển đổi), AI BẮT BUỘC giải thích INSIGHT & Ý NGHĨA THỰC TẾ cho thương hiệu ${displayBrand} (Vì sao con số đó xảy ra? Tác động đến doanh thu/uy tín ra sao? Giải pháp thế nào?). Tuyệt đối không liệt kê lại con số thô một cách đơn thuần.
-3. CẤU TRÚC 4 MỤC THỐNG NHẤT BẮT BUỘC:
+2. 🚫 NGUYÊN TẮC CHỐNG BỊA THÔNG TIN (ZERO HALLUCINATION):
+   • Chỉ phân tích dựa trên ĐÚNG các chỉ số thực tế trong prompt. TUYỆT ĐỐI KHÔNG BỊA THÊM SỐ LIỆU, không bịa tên chi nhánh hay sự cố không có trong dữ liệu.
+   • Nếu một chỉ số bằng 0 (ví dụ: 0 ca quá hạn SLA, 0 khiếu nại): BẮT BUỘC ghi "Không có ca trễ SLA trong kỳ" hoặc "Không ghi nhận vi phạm". KHÔNG ĐƯỢC tự bịa ra kịch bản khiếu nại.
+   • Nếu không có thông tin về nguyên nhân cụ thể trong dữ liệu, ghi rõ: "Không đủ dữ liệu để xác định nguyên nhân cụ thể."
+3. PHÂN BIỆT INSIGHT THẬT VS DIỄN GIẢI SỐ LIỆU (QUAN TRỌNG NHẤT):
+   • Không chỉ diễn giải lại số liệu bằng chữ khác (Ví dụ SAI: "Tỷ lệ SLA 88.7%, có 34 ca quá hạn").
+   • INSIGHT THẬT BẮT BUỘC có ít nhất 1 trong 3 yếu tố:
+     1) So sánh: Với kỳ trước, ngưỡng mục tiêu hoặc giữa các nhóm con.
+     2) Hệ quả: Rủi ro, cơ hội, tác động CSAT/doanh thu cụ thể.
+     3) Vị trí điểm nghẽn: Chỉ ra vấn đề nằm CỤ THỂ ở nhóm/giai đoạn nào.
+   • Nếu phát hiện bất thường, đánh dấu "⚠️".
+   • Không suy đoán nguyên nhân nếu dữ liệu không chứng minh (dùng: "Có khả năng..." / "Cần kiểm tra thêm...").
+   • Lời khuyên (Recommendation) phải thực tế và khả thi, không đưa lời khuyên chung chung.
+
+4. CẤU TRÚC 4 MỤC THỐNG NHẤT BẮT BUỘC:
 
 **1. ĐÁNH GIÁ TỔNG QUAN SỨC KHỎE THƯƠNG HIỆU & CAM KẾT SLA**
-   - Phân tích Net Sentiment (${netSentiment > 0 ? "+" : ""}${netSentiment}%) và tỷ lệ phân bổ (${positive}% tích cực, ${negative}% tiêu cực). Nêu rõ insight về mức độ hài lòng thực sự của khách hàng.
-   - Đánh giá tổng thể hiệu suất vận hành & rủi ro SLA từ các chỉ số thô.
+   - Phân tích Net Sentiment (${netSentiment > 0 ? "+" : ""}${netSentiment}%) và tỷ lệ phân bổ (${positive}% tích cực, ${negative}% tiêu cực). Nêu rõ INSIGHT QUẢN TRỊ về mức độ hài lòng thực sự của khách hàng.
+   - Đánh giá tổng thể hiệu suất vận hành & điểm nghẽn SLA.
 
 **2. PHÂN TÍCH CHUYÊN SÂU ĐIỂM NÓNG & DỮ LIỆU THỰC TẾ (INSIGHTS FOR BRAND)**
-   - Phân tích các chủ đề có lượng tương tác cao nhất. Với mỗi chủ đề, nêu con số + INSIGHT tác động tới thương hiệu.
-   - Đánh giá nền tảng có tỷ lệ tiêu cực cao nhất và nguyên nhân cốt lõi từ phản hồi của người dùng.
+   - Phân tích các chủ đề có lượng tương tác cao nhất. Với mỗi chủ đề, nêu con số + INSIGHT tác động thực tế tới thương hiệu ${displayBrand}.
+   - Đánh giá nền tảng có tỷ lệ tiêu cực cao nhất và nguyên nhân gốc rễ từ phản hồi của người dùng.
 
 **3. DỰ BÁO RỦI RO TRUYỀN THÔNG & NGHẼN VẬN HÀNH**
    - ${customPrompt ? "Trả lời chuyên sâu yêu cầu đặc biệt của người dùng: \"" + customPrompt + "\" kèm dẫn chứng dữ liệu thực tế." : "Dự báo các rủi ro truyền thông tiềm ẩn từ luồng ý kiến tiêu cực và nghẽn trong khâu đáp ứng khách hàng."}
 
 **4. 3 KHUYẾN NGHỊ HÀNH ĐỘNG VÀ KẾ HOẠCH THỰC THI THƯƠNG HIỆU**
-   - Đề xuất 3 hành động cụ thể, khả thi kèm thời gian thực thi (Ngắn hạn trong tuần / Trung hạn trong tháng).
+   - Đề xuất 3 hành động cụ thể, khả thi kèm thời gian thực thi (Khẩn cấp 24h / Ngắn hạn 7 ngày / Trung hạn 30 ngày).
 
-Viết bằng văn phong báo cáo quản trị chuyên nghiệp, súc tích và giàu giá trị thực thi.`;
+Viết bằng văn phong báo cáo quản trị BI cao cấp, súc tích và giàu giá trị thực thi.`;
   }
 
   // ── English version ──
@@ -316,7 +329,7 @@ export async function POST(request: NextRequest) {
     );
 
     return NextResponse.json({
-      insights,
+      insights: insights.normalize("NFC"),
       mentionsAnalyzed: cappedMentions.length,
       keyCount,
       model: "gemini-1.5-flash",
