@@ -112,7 +112,12 @@ export function AlertDetailPanel({
   const workflowStatus = getAlertWorkflowStatus(alert);
   const isTerminal = workflowStatus === "resolved" || workflowStatus === "skipped";
   const [optimisticClaimId, setOptimisticClaimId] = useState<string | null>(null);
-  const [isOpeningContact, setIsOpeningContact] = useState(false);
+  const [optimisticContactSession, setOptimisticContactSession] = useState<{
+    alertId: string;
+    openedAt: string;
+    openedBy: string;
+    template: string;
+  } | null>(null);
   const [previewHistoryImage, setPreviewHistoryImage] = useState<string | null>(null);
   const [showSkipConfirmation, setShowSkipConfirmation] = useState(false);
   const [isSkipping, setIsSkipping] = useState(false);
@@ -135,6 +140,15 @@ export function AlertDetailPanel({
   const canRecord = canUpdate && isMine && (effectiveWorkflowStatus === "processing" || effectiveWorkflowStatus === "contact_failed");
   const sourceUrl = getAlertSourceUrl(alert);
   const canOpenSource = canRecord;
+  const contactAlert: AlertData =
+    !alert.customer_contact_opened_at && optimisticContactSession?.alertId === alert.id
+      ? {
+          ...alert,
+          customer_contact_opened_at: optimisticContactSession.openedAt,
+          customer_contact_opened_by: optimisticContactSession.openedBy,
+          customer_contact_template: optimisticContactSession.template,
+        }
+      : alert;
   const canSkip =
     canUpdate &&
     statusFilter === "processing" &&
@@ -155,6 +169,14 @@ export function AlertDetailPanel({
     setTimeout(() => setToast(null), 3500);
   };
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setOptimisticContactSession((current) => {
+      if (!current) return null;
+      if (current.alertId !== alert.id) return null;
+      return current;
+    });
+  }, [alert.id]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -209,53 +231,43 @@ export function AlertDetailPanel({
   };
 
   const handleOpenCustomerContact = async () => {
-    if (!canOpenSource || isOpeningContact) return;
+    if (!canOpenSource) return;
     if (!sourceUrl) {
       showToast("Cảnh báo này chưa có liên kết nguồn.", "error");
       return;
     }
 
     onOpenSource(alert);
+    // Always return the InsightFlow panel to the action workspace so the
+    // evidence form is visible as soon as the user comes back from the source.
+    onTabChange("action");
 
     // Opening again should never hide the button or add duplicate workflow history.
-    if (alert.customer_contact_opened_at) {
+    if (contactAlert.customer_contact_opened_at) {
       showToast("Đã mở lại bài viết tại vị trí bình luận cảnh báo.");
       return;
     }
 
     const template = createDefaultContactTemplate(alert.author || "Anh/Chị", alert.brand);
     const openedAt = new Date().toISOString();
+    const openedBy = profile?.email || profile?.uid || "unknown";
 
-    try {
-      await navigator.clipboard.writeText(template);
-    } catch (error) {
+    setOptimisticContactSession({
+      alertId: alert.id,
+      openedAt,
+      openedBy,
+      template,
+    });
+
+    void navigator.clipboard.writeText(template).catch((error) => {
       console.warn("Could not copy the default contact template:", error);
-    }
+    });
 
-    setIsOpeningContact(true);
-    try {
-      // A follow-up item must remain in its current queue while the employee
-      // opens a new contact session. Otherwise the active status filter removes
-      // the alert (and its response form) before the result can be recorded.
-      const contactSessionStatus =
-        alert.status === "contact_failed" || alert.status === "contact_waiting"
-          ? alert.status
-          : "resolving";
-
-      await useAlertStore.getState().updateAlertStatus(alert.id, contactSessionStatus, profile, {
-        note: "Đã mở liên kết liên hệ khách hàng và tạo mẫu phản hồi xin lỗi mặc định.",
-        customer_contact_opened_at: openedAt,
-        customer_contact_opened_by: profile?.email || profile?.uid || "unknown",
-        customer_contact_template: template,
-        opening_contact_session: true,
-      }, alert.brand);
-      showToast("Đã sao chép mẫu xin lỗi và mở liên kết liên hệ.");
-    } catch (error) {
-      console.error(error);
-      showToast("Đã mở liên kết nhưng chưa lưu được dấu vết liên hệ.", "error");
-    } finally {
-      setIsOpeningContact(false);
-    }
+    // Opening a source is a local preparation step. Do not call
+    // updateAlertStatus here: doing so can upsert another annotation and makes
+    // the same alert appear twice in the Processing queue. The opened-at data
+    // is persisted together with the evidence when the result is submitted.
+    showToast("Đã sao chép mẫu xin lỗi và mở nguồn. Hãy bổ sung minh chứng bên dưới.");
   };
   const historyEntries = useMemo<AlertHistoryViewEntry[]>(() => {
     const entries: AlertHistoryViewEntry[] = [
@@ -364,7 +376,6 @@ export function AlertDetailPanel({
 
   useEffect(() => {
     setOptimisticClaimId(null);
-    setIsOpeningContact(false);
     setPreviewHistoryImage(null);
     setShowSkipConfirmation(false);
     setSkipError("");
@@ -430,13 +441,13 @@ export function AlertDetailPanel({
     { label: "Nhận xử lý", complete: Boolean(effectiveOwner), active: !effectiveOwner },
     {
       label: "Mở nguồn",
-      complete: Boolean(alert.customer_contact_opened_at) || effectiveWorkflowStatus === "resolved",
-      active: Boolean(effectiveOwner) && !alert.customer_contact_opened_at && !isTerminal,
+      complete: Boolean(contactAlert.customer_contact_opened_at) || effectiveWorkflowStatus === "resolved",
+      active: Boolean(effectiveOwner) && !contactAlert.customer_contact_opened_at && !isTerminal,
     },
     {
       label: "Ghi nhận kết quả",
       complete: effectiveWorkflowStatus === "resolved",
-      active: Boolean(alert.customer_contact_opened_at) && !isTerminal,
+      active: Boolean(contactAlert.customer_contact_opened_at) && !isTerminal,
     },
   ];
 
@@ -523,9 +534,9 @@ export function AlertDetailPanel({
                 </button>
               )
             ) : canOpenSource ? (
-              <button type="button" onClick={() => void handleOpenCustomerContact()} disabled={!sourceUrl || isOpeningContact} className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 text-[13px] font-semibold text-white shadow-sm hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50" title={!sourceUrl ? "Cảnh báo chưa có liên kết nguồn" : "Mở bài viết và đi tới bình luận cảnh báo"}>
+              <button type="button" onClick={() => void handleOpenCustomerContact()} disabled={!sourceUrl} className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 text-[13px] font-semibold text-white shadow-sm hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50" title={!sourceUrl ? "Cảnh báo chưa có liên kết nguồn" : "Mở bài viết và đi tới bình luận cảnh báo"}>
                 <ExternalLink size={16} />
-                <span className="hidden sm:inline">{isOpeningContact ? "Đang mở..." : "Mở nguồn"}</span>
+                <span className="hidden sm:inline">Mở nguồn</span>
               </button>
             ) : null}
             {canSkip && (
@@ -607,9 +618,12 @@ export function AlertDetailPanel({
 
               {isMine && (effectiveWorkflowStatus === "processing" || effectiveWorkflowStatus === "contact_failed") ? (
                 <AlertContactWorkflow
-                  alert={alert}
+                  alert={contactAlert}
                   getResolverName={getResolverName}
-                  onRecordResult={(draft) => onRecordResult(alert, draft)}
+                  onRecordResult={async (draft) => {
+                    await onRecordResult(contactAlert, draft);
+                    setOptimisticContactSession(null);
+                  }}
                 />
               ) : (
                 <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-3 shadow-sm">
@@ -635,7 +649,7 @@ export function AlertDetailPanel({
               <div><p className="text-[10px] font-bold uppercase text-[var(--color-text-muted)]">Nền tảng</p><p className="mt-1 text-sm font-black text-[var(--color-text-primary)]">{alert.source || "Không rõ"}</p></div>
               <div><p className="text-[10px] font-bold uppercase text-[var(--color-text-muted)]">Điểm rủi ro</p><p className="mt-1 text-sm font-black text-[var(--color-brand)]">{Math.round(alert.negativity_score || 0)}/100</p></div>
               <div><p className="text-[10px] font-bold uppercase text-[var(--color-text-muted)]">Phạm vi tiếp cận</p><p className="mt-1 text-sm font-black text-[var(--color-text-primary)]">{(alert.reach || 0).toLocaleString("vi-VN")}</p></div>
-              <button type="button" onClick={() => onOpenSource(alert)} disabled={!sourceUrl} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[var(--color-brand-border)] px-3 py-2 text-xs font-bold text-[var(--color-brand)] disabled:opacity-40">Mở nguồn gốc<ExternalLink size={15} /></button>
+              <button type="button" onClick={() => canOpenSource ? void handleOpenCustomerContact() : onOpenSource(alert)} disabled={!sourceUrl} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-[var(--color-brand-border)] px-3 py-2 text-xs font-bold text-[var(--color-brand)] disabled:opacity-40">Mở nguồn gốc<ExternalLink size={15} /></button>
             </section>
             <div className="grid gap-3 lg:grid-cols-2">
               <InfoSection title="Thông tin cơ bản" rows={[["Tên hiển thị", alert.author || "Ẩn danh"], ["Thương hiệu", alert.brand], ["Chủ đề", alert.topic || "Chưa xác định"], ["Loại nội dung", alert.content_type || "mention"]]} />

@@ -7,6 +7,7 @@ import { useDashboardStore } from "@/stores/dashboard.store";
 import {
   getAlertReviewSinceIso,
   useAlertStore,
+  type AlertData,
   type CustomerContactAttempt,
 } from "@/stores/alert.store";
 import { AlertWorkbench, type AlertStatusFilter } from "@/components/alerts/AlertWorkbench";
@@ -54,6 +55,25 @@ import {
   Legend as ChartLegend,
   Filler as ChartFiller,
 } from "chart.js";
+
+function getAlertDeduplicationKey(alert: AlertData) {
+  const contentType = String(alert.content_type || "mention").toLowerCase();
+  const sourceRecordId = contentType === "comment"
+    ? alert.comment_id || alert.source_id || alert.id
+    : alert.post_id || alert.source_id || alert.id;
+  return `${String(alert.source || "unknown").toLowerCase()}:${contentType}:${sourceRecordId}`;
+}
+
+function getAlertCompletenessScore(alert: AlertData) {
+  const workflowStatus = getAlertWorkflowStatus(alert);
+  return (
+    (workflowStatus === "pending" ? 0 : 20) +
+    (alert.being_resolved_by ? 10 : 0) +
+    (alert.customer_contact_opened_at ? 5 : 0) +
+    (alert.resolution_history?.length || 0) +
+    (alert.customer_contact_history?.length || 0)
+  );
+}
 
 
 // Helper function to calculate relative time
@@ -198,6 +218,8 @@ export default function AlertsPage() {
   const [correctionModalItem, setCorrectionModalItem] = useState<any>(null);
   const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
   const [pendingClaimSelectionId, setPendingClaimSelectionId] = useState<string | null>(null);
+  const [contactSessionAlertId, setContactSessionAlertId] = useState<string | null>(null);
+  const contactSessionAlertRef = useRef<AlertData | null>(null);
   const [isDetailPanelCollapsed, setIsDetailPanelCollapsed] = useState(false);
   const [detailPanelTab, setDetailPanelTab] = useState<AlertDetailPanelTab>("action");
 
@@ -420,10 +442,20 @@ export default function AlertsPage() {
     return alert.negativity_score ?? 0;
   };
 
-  const visibleBaseAlerts = useMemo(
-    () => brandFilteredAlerts.filter((alert) => canAlertBeVisibleToUser(alert, profile)),
-    [brandFilteredAlerts, profile],
-  );
+  const visibleBaseAlerts = useMemo(() => {
+    const scopedAlerts = brandFilteredAlerts.filter((alert) => canAlertBeVisibleToUser(alert, profile));
+    const deduplicated = new Map<string, AlertData>();
+
+    scopedAlerts.forEach((alert) => {
+      const key = getAlertDeduplicationKey(alert);
+      const existing = deduplicated.get(key);
+      if (!existing || getAlertCompletenessScore(alert) > getAlertCompletenessScore(existing)) {
+        deduplicated.set(key, alert);
+      }
+    });
+
+    return Array.from(deduplicated.values());
+  }, [brandFilteredAlerts, profile]);
 
   useEffect(() => {
     if (isLoading || rawAlerts.length === 0) return;
@@ -584,8 +616,9 @@ export default function AlertsPage() {
 
   const selectedAlert = useMemo(() => {
     if (!selectedAlertId) return null;
-    return processedActiveAlerts.find((alert) => alert.id === selectedAlertId) || null;
-  }, [processedActiveAlerts, selectedAlertId]);
+    return processedActiveAlerts.find((alert) => alert.id === selectedAlertId) ||
+      (contactSessionAlertId === selectedAlertId ? contactSessionAlertRef.current : null);
+  }, [contactSessionAlertId, processedActiveAlerts, selectedAlertId]);
   const alertViewers = useAlertViewPresence({
     alertId: selectedAlert?.id || null,
     enabled: Boolean(
@@ -615,15 +648,37 @@ export default function AlertsPage() {
 
   useEffect(() => {
     if (pendingClaimSelectionId) return;
+    if (contactSessionAlertId) {
+      const contactAlertIndex = processedActiveAlerts.findIndex((alert) => alert.id === contactSessionAlertId);
+      if (selectedAlertId !== contactSessionAlertId) setSelectedAlertId(contactSessionAlertId);
+      if (contactAlertIndex >= 0) {
+        const contactAlertPage = Math.floor(contactAlertIndex / ALERTS_PER_PAGE) + 1;
+        if (contactAlertPage !== alertPage) setAlertPage(contactAlertPage);
+      }
+      return;
+    }
+    // Keep the current detail panel stable while a status/contact update is
+    // reloading the queue. Clearing the selection here makes the UI jump to
+    // another alert before the evidence form can be completed.
+    if (isLoading) return;
+
+    if (selectedAlertId) {
+      const selectedIndex = processedActiveAlerts.findIndex((alert) => alert.id === selectedAlertId);
+      if (selectedIndex >= 0) {
+        const selectedPage = Math.floor(selectedIndex / ALERTS_PER_PAGE) + 1;
+        if (selectedPage !== alertPage) setAlertPage(selectedPage);
+        return;
+      }
+    }
+
     if (paginatedActiveAlerts.length === 0) {
       setSelectedAlertId(null);
       return;
     }
-    if (!selectedAlertId || !paginatedActiveAlerts.some((alert) => alert.id === selectedAlertId)) {
-      setSelectedAlertId(paginatedActiveAlerts[0].id);
-      setDetailPanelTab("action");
-    }
-  }, [paginatedActiveAlerts, pendingClaimSelectionId, selectedAlertId]);
+
+    setSelectedAlertId(paginatedActiveAlerts[0].id);
+    setDetailPanelTab("action");
+  }, [alertPage, contactSessionAlertId, isLoading, paginatedActiveAlerts, pendingClaimSelectionId, processedActiveAlerts, selectedAlertId]);
 
   const visibleAlertPages = useMemo(() => {
     const startPage = Math.max(1, Math.min(alertPage - 2, totalAlertPages - 4));
@@ -640,7 +695,20 @@ export default function AlertsPage() {
   }, [totalAlertPages]);
 
   const goToAlertPage = (pageNumber: number) => {
-    setAlertPage(Math.max(1, Math.min(totalAlertPages, pageNumber)));
+    const nextPage = Math.max(1, Math.min(totalAlertPages, pageNumber));
+    if (nextPage === alertPage) return;
+
+    // Pagination is an explicit navigation action. Move the selection with the
+    // page so the selection-preservation effect cannot immediately pull the
+    // user back to the page containing the previously selected alert.
+    const firstAlertOnNextPage = processedActiveAlerts[(nextPage - 1) * ALERTS_PER_PAGE] || null;
+    setPendingClaimSelectionId(null);
+    setContactSessionAlertId(null);
+    contactSessionAlertRef.current = null;
+    setAlertPage(nextPage);
+    setSelectedAlertId(firstAlertOnNextPage?.id || null);
+    setDetailPanelTab("action");
+
     window.requestAnimationFrame(() => {
       document.querySelector('[data-tour="alerts-queue-list"]')?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
@@ -1149,6 +1217,10 @@ export default function AlertsPage() {
           }
         }}
         onSelectAlert={(alert) => {
+          if (contactSessionAlertId && contactSessionAlertId !== alert.id) {
+            setContactSessionAlertId(null);
+            contactSessionAlertRef.current = null;
+          }
           setSelectedAlertId(alert.id);
           setDetailPanelTab("action");
           setIsDetailPanelCollapsed(false);
@@ -1247,6 +1319,8 @@ export default function AlertsPage() {
                   ? "Đã chuyển cảnh báo sang luồng Giải quyết thất bại."
                   : "Đã ghi nhận liên hệ và chuyển sang chờ phản hồi."
             );
+            setContactSessionAlertId(null);
+            contactSessionAlertRef.current = null;
           } catch (recordError) {
             triggerToast(recordError instanceof Error ? recordError.message : "Không thể ghi nhận kết quả cảnh báo.");
             throw recordError;
@@ -1256,12 +1330,16 @@ export default function AlertsPage() {
           const currentIndex = paginatedActiveAlerts.findIndex((item) => item.id === alert.id);
           const nextAlert = paginatedActiveAlerts[currentIndex + 1] || paginatedActiveAlerts[currentIndex - 1] || null;
           await skipAlert(alert.id, profile, alert.brand);
+          setContactSessionAlertId(null);
+          contactSessionAlertRef.current = null;
           setSelectedAlertId(nextAlert?.id || null);
           setDetailPanelTab("action");
           setIsDetailPanelCollapsed(false);
         }}
         onRestore={async (alert) => {
           await restoreAlert(alert.id, profile, alert.brand);
+          setContactSessionAlertId(null);
+          contactSessionAlertRef.current = null;
           setSearchText("");
           setSeverityFilter("all");
           setSourceFilter("all");
@@ -1274,7 +1352,14 @@ export default function AlertsPage() {
           setDetailPanelTab("action");
           setIsDetailPanelCollapsed(false);
         }}
-        onOpenSource={(alert) => void handleAccessSource(alert)}
+        onOpenSource={(alert) => {
+          contactSessionAlertRef.current = alert;
+          setContactSessionAlertId(alert.id);
+          setSelectedAlertId(alert.id);
+          setDetailPanelTab("action");
+          setIsDetailPanelCollapsed(false);
+          void handleAccessSource(alert);
+        }}
         onStatusFilterChange={setStatusFilter}
         onSearchTextChange={setSearchText}
         onSeverityFilterChange={setSeverityFilter}

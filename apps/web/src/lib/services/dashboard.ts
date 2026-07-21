@@ -1609,6 +1609,12 @@ async function fetchSupabaseMentionThread(postId: string): Promise<Mention[]> {
 
 async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
   const cacheKey = `${normalizeBrandName(opts.brandKey || "global")}:${opts.maxMentions || 30000}`;
+  // Workflow mutations and realtime events must never be rebuilt from the
+  // 30-minute dashboard snapshot. Dropping the scoped entry also refreshes
+  // the shared cache for any page opened after the alert action completes.
+  if (opts.forceRefresh) {
+    supabaseMentionCache.delete(cacheKey);
+  }
   const cached = supabaseMentionCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.promise;
 
@@ -1770,6 +1776,8 @@ export interface FetchOptions {
   brandKey?: string;
   /** Set a max limit (default: 10,000 rows per fetch stage) */
   maxMentions?: number;
+  /** Bypass the shared snapshot after a workflow mutation or realtime event. */
+  forceRefresh?: boolean;
 }
 
 // ─── Main service ─────────────────────────────────────────────────────────────

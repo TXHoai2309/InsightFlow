@@ -23,6 +23,7 @@ import {
   isTerminalAlert,
 } from "@/lib/alertWorkflow";
 import { canAlertBeVisibleToUser } from "@/lib/alert-visibility";
+import { isSameAlertRecord } from "@/lib/alertRecordIdentity";
 import { dummyMentions } from "@/lib/demoData";
 
 function getResolverName(emailOrId: string | null | undefined): string {
@@ -442,15 +443,6 @@ export function buildDemoAlertData(): AlertData[] {
     .map(mentionToAlertData);
 }
 
-function isSameAlertRecord(alert: AlertData, id: string): boolean {
-  return (
-    alert.id === id ||
-    alert.source_id === id ||
-    alert.post_id === id ||
-    alert.comment_id === id
-  );
-}
-
 function resolveAlertStatusFromLabel(labelObj: any): string {
   return getPersistedAlertStatus(labelObj);
 }
@@ -552,6 +544,15 @@ function applyRealtimeAnnotationUpdate(
     return currentValue;
   };
 
+  const realtimeEntityType = String(row.entity_type || labelObj.entity_type || "").trim().toLowerCase();
+  const realtimeEntityKey = String(row.entity_key || "").trim().toLowerCase();
+  const isCommentRealtimeRow =
+    Boolean(String(row.comment_id || "").trim()) ||
+    realtimeEntityType === "comment" ||
+    realtimeEntityType === "reply" ||
+    realtimeEntityKey.includes(":comment:") ||
+    realtimeEntityKey.includes(":reply:");
+
   const lookupIds = [
     row.id,
     row.entity_key,
@@ -559,7 +560,9 @@ function applyRealtimeAnnotationUpdate(
     row.mention_id,
     row.source_id,
     row.comment_id,
-    row.post_id,
+    // A comment annotation carries its parent post_id as context, not as its
+    // workflow identity. Including it would update every sibling comment.
+    ...(isCommentRealtimeRow ? [] : [row.post_id]),
   ]
     .map((value) => String(value || "").trim())
     .filter(Boolean);
@@ -617,6 +620,9 @@ let activeRequestsUnsubscribe: (() => Promise<void>) | null = null;
 let activeRequestsScope: string | null = null;
 /** Holds the subscribed Supabase channel so we can reuse it for broadcasts */
 let activeRealtimeChannel: ReturnType<NonNullable<typeof supabaseClient>["channel"]> | null = null;
+// A slow request started before a claim/result mutation must not be allowed to
+// replace the newer optimistic or realtime state when it eventually resolves.
+let alertLoadGeneration = 0;
 const ALERT_REVIEW_WINDOW_DAYS = 30;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 // Realtime is the primary update path. Keep polling only as a safety net so a
@@ -708,14 +714,14 @@ export const useAlertStore = create<AlertState>()(
 
       set({ isLoading: true, error: null });
 
-      if (force) {
-        setAlertsFromDashboardCache(set, get, scopedBrandKey);
-      }
-
-      const loadAlerts = async () => {
+      const loadAlerts = async (forceRefresh = false) => {
+        const loadGeneration = ++alertLoadGeneration;
         try {
           const rawBrandKey = (scopedBrandKey === "global" || !scopedBrandKey) ? undefined : scopedBrandKey;
-          const rawData = await DashboardService.fetchRawData({ brandKey: rawBrandKey });
+          const rawData = await DashboardService.fetchRawData({
+            brandKey: rawBrandKey,
+            forceRefresh,
+          });
           const filtered = buildAlertsFromMentions(rawData.mentions, scopedBrandKey);
 
           const scopedBrands = Array.from(new Set(filtered.map((alert) => alert.brand))).sort();
@@ -739,6 +745,10 @@ export const useAlertStore = create<AlertState>()(
             return fetchedAlert;
           });
 
+          // A newer load or a local mutation started while this request was in
+          // flight. Its state is authoritative, so discard this late response.
+          if (loadGeneration !== alertLoadGeneration) return;
+
           set({
             rawAlerts: merged,
             alerts: applyFilters(merged, get().filters),
@@ -748,6 +758,7 @@ export const useAlertStore = create<AlertState>()(
             lastFetchedAt: Date.now(),
           });
         } catch (error) {
+          if (loadGeneration !== alertLoadGeneration) return;
           const message = error instanceof Error ? error.message : "Lỗi đồng bộ Supabase";
           set({ error: message, isLoading: false });
           console.error("[AlertStore] loadAlerts error:", message, error);
@@ -756,7 +767,7 @@ export const useAlertStore = create<AlertState>()(
 
       try {
         // Initial load
-        await loadAlerts();
+        await loadAlerts(force);
 
         // Demo pages use DashboardService's in-memory sample data only. Do not
         // attach realtime listeners or polling to the production data source.
@@ -785,7 +796,7 @@ export const useAlertStore = create<AlertState>()(
                   applyRealtimeAnnotationUpdate(set, get, payload?.new);
                   if (realtimeReloadTimer) clearTimeout(realtimeReloadTimer);
                   realtimeReloadTimer = setTimeout(() => {
-                    loadAlerts();
+                    void loadAlerts(true);
                     realtimeReloadTimer = null;
                   }, 250);
                 }
@@ -806,7 +817,7 @@ export const useAlertStore = create<AlertState>()(
                     });
                     if (realtimeReloadTimer) clearTimeout(realtimeReloadTimer);
                     realtimeReloadTimer = setTimeout(() => {
-                      loadAlerts();
+                      void loadAlerts(true);
                       realtimeReloadTimer = null;
                     }, 250);
                   }
@@ -849,6 +860,11 @@ export const useAlertStore = create<AlertState>()(
     },
 
     updateAlertStatus: async (id, newStatus, profile, attempt, brandFallback) => {
+      // Invalidate any REST snapshot that began before this mutation. Without
+      // this guard, a late response can visibly move the alert back to its old
+      // queue immediately after the optimistic update succeeds.
+      alertLoadGeneration += 1;
+      set({ isLoading: false });
       // Normalize legacy values while preserving the dedicated skipped state.
       newStatus = getPersistedAlertStatus({ resolution_status: newStatus });
       console.log("[AlertStore] updateAlertStatus called:", { id, newStatus, profileEmail: profile?.email, profileRole: profile?.role });
