@@ -4,10 +4,7 @@ import React from "react";
 import dynamic from "next/dynamic";
 
 const BrandManagerDashboard = dynamic(
-  () =>
-    import("@/components/brand-manager/BrandManagerDashboard").then(
-      (mod) => mod.BrandManagerDashboard,
-    ),
+  () => import("@/components/brand-manager/BrandManagerDashboard").then((mod) => mod.BrandManagerDashboard),
   { ssr: false }
 );
 

@@ -92,7 +92,7 @@ export function AlertWorkbench(props: AlertWorkbenchProps) {
   const isPanelOpen = Boolean(props.selectedAlert && !props.panelCollapsed);
 
   const ALL_STATUS_VIEWS = [
-    { id: "all" as const, label: "Tất cả đang mở", count: counts.pending + counts.processing + counts.contact_failed },
+    { id: "all" as const, label: "Tất cả đang mở", count: counts.pending + counts.contact_failed },
     { id: "pending" as const, label: "Chưa phân công", count: counts.pending },
     { id: "processing" as const, label: "Đang xử lý", count: counts.processing },
     { id: "contact_failed" as const, label: "Cần liên hệ lại", count: counts.contact_failed },
@@ -143,15 +143,15 @@ export function AlertWorkbench(props: AlertWorkbenchProps) {
                 key={view.id}
                 type="button"
                 onClick={() => props.onStatusFilterChange(view.id)}
-                className={`inline-flex min-h-10 shrink-0 items-center rounded-xl border px-3.5 py-2 text-sm font-bold tracking-tight transition-all duration-200 ${props.statusFilter === view.id
-                    ? "border-[var(--color-brand)] bg-[var(--color-brand)] text-white shadow-md shadow-[var(--color-brand)]/10"
-                    : "border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-strong)] dark:bg-slate-900/40"
+                className={`inline-flex shrink-0 items-center rounded-xl border px-3.5 py-2 text-sm font-bold tracking-tight transition-all duration-200 ${props.statusFilter === view.id
+                  ? "border-[var(--color-brand)] bg-[var(--color-brand)] text-white shadow-md shadow-[var(--color-brand)]/10"
+                  : "border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-strong)] dark:bg-slate-900/40"
                   }`}
               >
                 <span className="whitespace-nowrap">{view.label}</span>
                 <span className={`ml-2 px-2 py-0.5 rounded-full text-[11px] font-extrabold transition-all duration-200 ${props.statusFilter === view.id
-                    ? "bg-white/20 text-white"
-                    : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+                  ? "bg-white/20 text-white"
+                  : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
                   }`}>
                   {view.count}
                 </span>
@@ -178,7 +178,7 @@ export function AlertWorkbench(props: AlertWorkbenchProps) {
               Bộ lọc
             </button>
             {props.selectedAlert && props.panelCollapsed && (
-                <button
+              <button
                 type="button"
                 onClick={props.onOpenPanel}
                 className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] px-2.5 py-1.5 text-sm font-semibold text-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)]/80"

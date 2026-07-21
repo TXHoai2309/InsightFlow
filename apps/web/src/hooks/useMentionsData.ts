@@ -11,6 +11,9 @@ interface UseMentionsOptions {
   refetchInterval?: number;
 }
 
+const DASHBOARD_CACHE_PREFIX = "insightflow_dashboard_cache_";
+const DASHBOARD_CACHE_VERSION = "v3";
+
 // Module-level in-memory cache time tracking to avoid duplicate fetching during menu transitions
 
 
@@ -34,7 +37,9 @@ export function useMentionsData(options: UseMentionsOptions = {}) {
   const fetchMentions = async (force: boolean = false) => {
     try {
       const brandKey = getScopedBrandKey(profile) || "global";
-      const cacheKey = `insightflow_dashboard_cache_${brandKey}`;
+      const profileKey = profile?.uid || profile?.role || "anonymous";
+      const fetchScopeKey = `${DASHBOARD_CACHE_VERSION}:${brandKey}:${profileKey}`;
+      const cacheKey = `${DASHBOARD_CACHE_PREFIX}${DASHBOARD_CACHE_VERSION}_${brandKey}_${profileKey}`;
       let hasRenderedCache = false;
 
       // Check client-side localStorage cache if not forcing refresh
@@ -54,7 +59,7 @@ export function useMentionsData(options: UseMentionsOptions = {}) {
             const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes fresh cache window
             const hasCachedMentions = data.mentions && data.mentions.length > 0;
             if (hasCachedMentions && Date.now() - timestamp < CACHE_DURATION) {
-              setLastFetchedAt(brandKey, timestamp);
+              setLastFetchedAt(fetchScopeKey, timestamp);
               setLoading(false);
               return;
             }
@@ -112,7 +117,7 @@ export function useMentionsData(options: UseMentionsOptions = {}) {
         }
       }
 
-      setLastFetchedAt(brandKey, Date.now());
+      setLastFetchedAt(fetchScopeKey, Date.now());
       setError(null);
     } catch (error) {
       const message =
@@ -128,7 +133,9 @@ export function useMentionsData(options: UseMentionsOptions = {}) {
     if (!autoFetch || authLoading) return;
 
     const brandKey = getScopedBrandKey(profile) || "global";
-    const lastFetched = lastFetchedAtMap[brandKey] || 0;
+    const profileKey = profile?.uid || profile?.role || "anonymous";
+    const fetchScopeKey = `${DASHBOARD_CACHE_VERSION}:${brandKey}:${profileKey}`;
+    const lastFetched = lastFetchedAtMap[fetchScopeKey] || 0;
     const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes cache window
 
     // Only fetch if we don't have data in the Zustand store or it is older than 30 minutes

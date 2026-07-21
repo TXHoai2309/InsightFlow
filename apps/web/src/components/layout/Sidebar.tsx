@@ -5,7 +5,7 @@
  * Điều hướng chính của ứng dụng — hỗ trợ mobile drawer + Dark Mode.
  */
 
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useTranslation } from "react-i18next";
 import { usePathname, useRouter } from "next/navigation";
@@ -61,17 +61,41 @@ export function Sidebar({ isOpen, onClose, isCollapsed = false, onToggleCollapse
   const { theme } = useTheme();
   const { profile, role } = useAuth();
   const isDark = theme === "dark";
-  const isDemoMode = pathname.startsWith("/demo");
-  const accessibleNavItems = navItems.filter(
-    (item) =>
-      canAccessPath(role, item.href, profile?.permissions) &&
-      (!isDemoMode || Boolean(demoNavRoutes[item.href])),
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
+  const accessibleNavItems = useMemo(
+    () => navItems.filter((item) => canAccessPath(role, item.href, profile?.permissions)),
+    [profile?.permissions, role],
   );
 
   // Đóng sidebar khi chuyển trang trên mobile
   useEffect(() => {
     onClose();
+    setPendingHref(null);
   }, [pathname]);
+
+  // Warm route bundles after the shell is interactive. This does not mount
+  // the destination page or query the database; it only removes the chunk
+  // download delay when the user clicks a menu item.
+  useEffect(() => {
+    const connection = (navigator as Navigator & {
+      connection?: { saveData?: boolean; effectiveType?: string };
+    }).connection;
+    if (connection?.saveData || connection?.effectiveType?.includes("2g")) return;
+
+    const prefetchTimers: number[] = [];
+    const startTimer = window.setTimeout(() => {
+      accessibleNavItems.forEach((item, index) => {
+        prefetchTimers.push(
+          window.setTimeout(() => router.prefetch(item.href), index * 200),
+        );
+      });
+    }, 1000);
+
+    return () => {
+      window.clearTimeout(startTimer);
+      prefetchTimers.forEach((timer) => window.clearTimeout(timer));
+    };
+  }, [accessibleNavItems, router]);
 
   // Khoá scroll khi sidebar mở trên mobile
   useEffect(() => {
@@ -180,7 +204,12 @@ export function Sidebar({ isOpen, onClose, isCollapsed = false, onToggleCollapse
             return (
               <Link
                 key={item.href}
-                href={navigationHref}
+                href={item.href}
+                prefetch
+                aria-busy={pendingHref === item.href}
+                onClick={() => setPendingHref(item.href)}
+                onFocus={() => router.prefetch(item.href)}
+                onPointerEnter={() => router.prefetch(item.href)}
                 data-tour={`nav-${item.href.replace(/^\//, "").replace(/\//g, "-") || "home"}`}
                 className={`flex w-full items-center rounded-r-[10px] px-4 py-[14px] text-left text-[14px] transition-colors duration-200 ${isCollapsed ? "md:justify-center md:rounded-[10px] md:px-2" : ""}`}
                 title={isCollapsed ? t(item.label, item.fallback) : undefined}
@@ -209,9 +238,12 @@ export function Sidebar({ isOpen, onClose, isCollapsed = false, onToggleCollapse
                   }
                 }}
               >
-                <i className={`ti ${item.icon} mr-[10px] text-[18px] ${isCollapsed ? "md:mr-0" : ""}`}></i>
-                <span className={`flex-1 ${isCollapsed ? "md:hidden" : ""}`}>{t(item.label, item.fallback)}</span>
-                {item.badge && item.badge > 0 && !isCollapsed && (
+                <i className={`ti ${item.icon} text-[18px] mr-[10px]`}></i>
+                <span className="flex-1">{t(item.label, item.fallback)}</span>
+                {pendingHref === item.href && pathname !== item.href && (
+                  <span className="ml-2 h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-r-transparent" />
+                )}
+                {item.badge && item.badge > 0 && (
                   <span
                     className="text-[11px] px-2 py-0.5 rounded-full text-white font-bold ml-2"
                     style={{ backgroundColor: "var(--color-brand)" }}

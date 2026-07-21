@@ -36,6 +36,13 @@ const DASHBOARD_CACHE_LIMITS = {
   labelChangeRequests: 100,
 };
 
+// A tab transition can leave the previous request in flight while the next
+// page mounts. Keep a monotonically increasing generation per browser session
+// so a slower, older response can never overwrite the newest snapshot.
+const latestFetchGeneration = new Map<string, number>();
+let fetchGenerationCounter = 0;
+const activeDashboardFetches = new Set<string>();
+
 function isStorageQuotaError(error: unknown) {
   return (
     error instanceof DOMException &&
@@ -107,6 +114,13 @@ export function useDashboard(options: UseDashboardOptions = {}) {
     // in the same browser.
     const profileKey = profile?.uid || profile?.role || "anonymous";
     const fetchScopeKey = `${DASHBOARD_CACHE_VERSION}:${brandKey}:${profileKey}`;
+    // All dashboard pages share one Zustand store. Do not start another full
+    // raw-data scan while the same scope is already loading (including when a
+    // user clicks through menu items quickly).
+    if (activeDashboardFetches.has(fetchScopeKey)) return;
+    activeDashboardFetches.add(fetchScopeKey);
+    const generation = ++fetchGenerationCounter;
+    latestFetchGeneration.set(fetchScopeKey, generation);
     const cacheKey = `${DASHBOARD_CACHE_PREFIX}${DASHBOARD_CACHE_VERSION}_${brandKey}_${profileKey}`;
     try {
       let hasRenderedCache = false;
@@ -149,15 +163,10 @@ export function useDashboard(options: UseDashboardOptions = {}) {
 
       // 1. Fetch raw data từ Supabase (lọc theo brand nếu có)
       const rawBrandKey = brandKey === "global" ? undefined : brandKey;
-      const rawData = isDemoMode
-        ? {
-            workspaces: dummyWorkspaces,
-            mentions: dummyMentions,
-            alerts: dummyAlerts,
-            leads: dummyLeads,
-            labelChangeRequests: dummyLabelChangeRequests,
-          }
-        : await DashboardService.fetchRawData({ brandKey: rawBrandKey });
+      const rawData =
+        await DashboardService.fetchRawData({ brandKey: rawBrandKey });
+      // Ignore stale responses from a previous navigation/refresh.
+      if (latestFetchGeneration.get(fetchScopeKey) !== generation) return;
       const workspaces = filterByBusinessPolicy(
         rawData.workspaces.map((workspace) => ({
           ...workspace,
@@ -237,7 +246,7 @@ export function useDashboard(options: UseDashboardOptions = {}) {
         error instanceof Error
           ? error.message
           : "Không thể kết nối Supabase";
-      
+
       console.error("[useDashboard] fetch error:", error);
 
       // Fallback: If DB errors, keep old data in store or load from localStorage cache
@@ -276,6 +285,7 @@ export function useDashboard(options: UseDashboardOptions = {}) {
         setError(message);
       }
     } finally {
+      activeDashboardFetches.delete(fetchScopeKey);
       setLoading(false);
     }
   };
@@ -341,25 +351,25 @@ export function useDashboard(options: UseDashboardOptions = {}) {
                 useDashboardStore.getState().leads.map((l) =>
                   l.id === updated.id
                     ? {
-                        ...l,
-                        status: updated.status ?? l.status,
-                        owner_id: updated.owner_id ?? undefined,
-                        owner_name: updated.owner_name ?? undefined,
-                        owner_email: updated.owner_email ?? undefined,
-                        assigned_at: updated.assigned_at ?? undefined,
-                        assigned_by: updated.assigned_by ?? undefined,
-                        claimed_at: updated.claimed_at ?? undefined,
-                        first_contacted_at: updated.first_contacted_at ?? undefined,
-                        contact_attempts: updated.contact_attempts ?? l.contact_attempts,
-                        last_contact_at: updated.last_contact_at ?? undefined,
-                        pending_result: updated.pending_result ?? l.pending_result,
-                        notes: updated.notes ?? l.notes,
-                        sales_status: updated.sales_status ?? l.sales_status,
-                        sales_owner_id: updated.sales_owner_id ?? l.sales_owner_id,
-                        sales_owner_name: updated.sales_owner_name ?? l.sales_owner_name,
-                        sales_transferred_at: updated.sales_transferred_at ?? l.sales_transferred_at,
-                        crm_deal_id: updated.crm_deal_id ?? l.crm_deal_id,
-                      }
+                      ...l,
+                      status: updated.status ?? l.status,
+                      owner_id: updated.owner_id ?? undefined,
+                      owner_name: updated.owner_name ?? undefined,
+                      owner_email: updated.owner_email ?? undefined,
+                      assigned_at: updated.assigned_at ?? undefined,
+                      assigned_by: updated.assigned_by ?? undefined,
+                      claimed_at: updated.claimed_at ?? undefined,
+                      first_contacted_at: updated.first_contacted_at ?? undefined,
+                      contact_attempts: updated.contact_attempts ?? l.contact_attempts,
+                      last_contact_at: updated.last_contact_at ?? undefined,
+                      pending_result: updated.pending_result ?? l.pending_result,
+                      notes: updated.notes ?? l.notes,
+                      sales_status: updated.sales_status ?? l.sales_status,
+                      sales_owner_id: updated.sales_owner_id ?? l.sales_owner_id,
+                      sales_owner_name: updated.sales_owner_name ?? l.sales_owner_name,
+                      sales_transferred_at: updated.sales_transferred_at ?? l.sales_transferred_at,
+                      crm_deal_id: updated.crm_deal_id ?? l.crm_deal_id,
+                    }
                     : l
                 )
               );

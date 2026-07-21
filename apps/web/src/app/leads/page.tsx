@@ -261,11 +261,11 @@ export default function LeadsPage() {
     const urlFilters = readLeadWorkbenchFilters(params);
     const restoredFilters: LeadWorkbenchFilters = requestedFilters
       ? {
-          ...urlFilters,
-          workspaceId:
-            requestedFilters.workspace_id || urlFilters.workspaceId,
-          platform: requestedFilters.platform || urlFilters.platform,
-        }
+        ...urlFilters,
+        workspaceId:
+          requestedFilters.workspace_id || urlFilters.workspaceId,
+        platform: requestedFilters.platform || urlFilters.platform,
+      }
       : urlFilters;
     skipNextPageReset.current = true;
     setLeadFilters(restoredFilters);
@@ -384,29 +384,29 @@ export default function LeadsPage() {
 
   const visibleLeads = useMemo(() => {
     const filtered = filterLeadWorkbenchItems(
-        leadsInActiveView,
-        { ...leadFilters, workspaceId: "all" },
-        currentTime,
-        profile?.uid,
-      );
+      leadsInActiveView,
+      { ...leadFilters, workspaceId: "all" },
+      currentTime,
+      profile?.uid,
+    );
     let result = activeView === "follow_up"
       ? sortFollowUpLeads(filtered, currentTime, profile)
       : sortMode === "recommended"
         ? filtered
         : [...filtered].sort((left, right) => {
-            if (sortMode === "newest") {
-              const leftTime = new Date(left.posted_at || left.created_at || 0).getTime();
-              const rightTime = new Date(right.posted_at || right.created_at || 0).getTime();
-              return rightTime - leftTime;
-            }
+          if (sortMode === "newest") {
+            const leftTime = new Date(left.posted_at || left.created_at || 0).getTime();
+            const rightTime = new Date(right.posted_at || right.created_at || 0).getTime();
+            return rightTime - leftTime;
+          }
 
-            const leftMeta = getLeadWorkbenchMeta(left, currentTime);
-            const rightMeta = getLeadWorkbenchMeta(right, currentTime);
-            if (sortMode === "overdue" && leftMeta.isOverdue !== rightMeta.isOverdue) {
-              return leftMeta.isOverdue ? -1 : 1;
-            }
-            return leftMeta.remainingMs - rightMeta.remainingMs;
-          });
+          const leftMeta = getLeadWorkbenchMeta(left, currentTime);
+          const rightMeta = getLeadWorkbenchMeta(right, currentTime);
+          if (sortMode === "overdue" && leftMeta.isOverdue !== rightMeta.isOverdue) {
+            return leftMeta.isOverdue ? -1 : 1;
+          }
+          return leftMeta.remainingMs - rightMeta.remainingMs;
+        });
 
     if (activeView === "active") {
       result = [...result].sort(
@@ -603,9 +603,9 @@ export default function LeadsPage() {
   const selectedWorkspace = workspaces.find(
     (workspace) =>
       normalizeBrandName(workspace.id) ===
-        normalizeBrandName(leadFilters.workspaceId) ||
+      normalizeBrandName(leadFilters.workspaceId) ||
       normalizeBrandName(workspace.brand_name) ===
-        normalizeBrandName(leadFilters.workspaceId),
+      normalizeBrandName(leadFilters.workspaceId),
   );
   const activeViewLabel =
     workbenchViews.find((view) => view.id === activeView)?.label ||
@@ -798,7 +798,7 @@ export default function LeadsPage() {
   return (
     <div
       data-tour="leads-page"
-      className="lead-workbench-theme min-h-full w-full space-y-[clamp(8px,0.8vw,14px)] overflow-x-hidden bg-[var(--color-bg-base)] p-[clamp(12px,2vw,32px)] text-[var(--color-text-primary)]"
+      className="lead-workbench-theme mx-auto min-h-full w-full max-w-[1600px] space-y-2 overflow-x-hidden bg-[var(--color-bg-primary)] p-2.5 text-[var(--color-text-primary)]"
     >
       {dashboardReturnNavigation && (
         <button
@@ -1001,7 +1001,7 @@ export default function LeadsPage() {
 
         <div
           className={`grid w-full items-start gap-y-[1vh] ${isDetailPanelOpen
-            ? "min-[1100px]:grid-cols-[clamp(22rem,30%,32rem)_minmax(0,1fr)] min-[1100px]:gap-x-[1%]"
+            ? "min-[1100px]:grid-cols-[clamp(340px,24vw,390px)_minmax(0,1fr)] min-[1100px]:gap-x-2.5 min-[1500px]:grid-cols-[clamp(360px,24vw,410px)_minmax(0,1fr)]"
             : "grid-cols-1"
             }`}
         >
@@ -1045,15 +1045,15 @@ export default function LeadsPage() {
                     {activeView === "follow_up"
                       ? "Chưa có lịch follow-up đang mở"
                       : activeFilterCount > 0
-                      ? "Không có khách hàng phù hợp"
-                      : "Không có lead trong nhóm này"}
+                        ? "Không có khách hàng phù hợp"
+                        : "Không có lead trong nhóm này"}
                   </h3>
                   <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
                     {activeView === "follow_up"
                       ? "Hãy chọn phạm vi khác hoặc đặt lịch hẹn mới; lịch đã hoàn tất được tự động loại khỏi hàng đợi."
                       : activeFilterCount > 0
-                      ? "Hãy điều chỉnh hoặc xóa các điều kiện lọc đang áp dụng."
-                      : "Chuyển hàng chờ để xem nhóm lead khác."}
+                        ? "Hãy điều chỉnh hoặc xóa các điều kiện lọc đang áp dụng."
+                        : "Chuyển hàng chờ để xem nhóm lead khác."}
                   </p>
                   {activeFilterCount > 0 && (
                     <button

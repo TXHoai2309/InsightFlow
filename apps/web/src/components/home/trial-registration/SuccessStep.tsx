@@ -9,6 +9,7 @@ interface SuccessStepProps {
   requestId: string;
   email: string;
   onRestart?: () => void;
+  onFillConsultation?: () => void;
   consultationCompleted?: boolean;
   consultationEmailSent?: boolean | null;
 }
@@ -17,6 +18,7 @@ export function SuccessStep({
   requestId,
   email,
   onRestart,
+  onFillConsultation,
   consultationCompleted = false,
   consultationEmailSent = null,
 }: SuccessStepProps) {
@@ -97,7 +99,7 @@ export function SuccessStep({
                 <CheckCircle2 className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h5 className="font-bold text-[16px] text-[#0F172A] dark:text-white mb-0.5">Thông পাশ cơ bản</h5>
+                <h5 className="font-bold text-[16px] text-[#0F172A] dark:text-white mb-0.5">Thông tin cơ bản</h5>
                 <p className="text-[14px] text-[#64748B] dark:text-gray-400">Đã cung cấp đủ thông tin</p>
               </div>
             </div>

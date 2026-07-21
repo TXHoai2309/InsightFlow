@@ -279,7 +279,7 @@ export const useAlertStore = create<AlertState>()(
 
         await loadAlerts();
 
-        const intervalId = setInterval(loadAlerts, 60000);
+        const intervalId = setInterval(loadAlerts, 30 * 60 * 1000);
         activeUnsubscribe = () => clearInterval(intervalId);
       } catch (error) {
         const message =
