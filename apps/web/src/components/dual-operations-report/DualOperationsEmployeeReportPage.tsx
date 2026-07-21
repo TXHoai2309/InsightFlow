@@ -257,7 +257,11 @@ function PriorityRow({ row }: { row: DualOperationsPriorityRow }) {
   );
 }
 
-export function DualOperationsEmployeeReportPage() {
+export function DualOperationsEmployeeReportPage({
+  onOpenDailyReport,
+}: {
+  onOpenDailyReport?: () => void;
+} = {}) {
   const { profile } = useAuth();
   const [reportFilters, setReportFilters] = useState<DualReportFilters>(DEFAULT_DUAL_REPORT_FILTERS);
   const [activeOperation, setActiveOperation] = useState<OperationTab>("lead");
@@ -370,6 +374,16 @@ export function DualOperationsEmployeeReportPage() {
             <p className="mt-1 text-xs text-[var(--color-text-secondary)]">Theo dõi hiệu suất, rủi ro và việc cần xử lý trong kỳ báo cáo.</p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+            {onOpenDailyReport ? (
+              <button
+                type="button"
+                onClick={onOpenDailyReport}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] px-4 text-sm font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-bg-surface-high)]"
+              >
+                <CalendarDays className="h-4 w-4" />
+                Báo cáo theo ngày
+              </button>
+            ) : null}
             <div className="relative">
               <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
               <select
