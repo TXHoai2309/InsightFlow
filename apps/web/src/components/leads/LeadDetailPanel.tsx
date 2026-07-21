@@ -816,7 +816,7 @@ export function LeadDetailPanel({
         }`}
       >
         {activeTab === "action" && (
-          <div className="grid items-start gap-2 min-[1280px]:h-full min-[1280px]:min-h-0 min-[1280px]:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] min-[1280px]:items-stretch">
+          <div className="grid items-start gap-2 min-[1280px]:h-full min-[1280px]:min-h-0 min-[1280px]:grid-cols-[minmax(0,1fr)_300px] min-[1280px]:items-stretch min-[1500px]:grid-cols-[minmax(0,1fr)_320px] min-[1850px]:grid-cols-[minmax(0,1fr)_360px]">
             <div className="min-w-0 min-[1280px]:min-h-0 min-[1280px]:overflow-y-auto min-[1280px]:pr-1 min-[1280px]:[scrollbar-gutter:stable]">
               <LeadContentContext lead={lead} mentions={mentions} />
             </div>

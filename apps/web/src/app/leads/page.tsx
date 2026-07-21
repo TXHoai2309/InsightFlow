@@ -798,7 +798,7 @@ export default function LeadsPage() {
   return (
     <div
       data-tour="leads-page"
-      className="lead-workbench-theme min-h-full w-full space-y-[clamp(8px,0.8vw,14px)] overflow-x-hidden bg-[var(--color-bg-base)] p-[clamp(12px,2vw,32px)] text-[var(--color-text-primary)]"
+      className="lead-workbench-theme mx-auto min-h-full w-full max-w-[1920px] space-y-[clamp(8px,0.8vw,14px)] overflow-x-hidden bg-[var(--color-bg-base)] p-[clamp(12px,2vw,32px)] text-[var(--color-text-primary)]"
     >
       {dashboardReturnNavigation && (
         <button
@@ -1001,7 +1001,7 @@ export default function LeadsPage() {
 
         <div
           className={`grid w-full items-start gap-y-[1vh] ${isDetailPanelOpen
-            ? "min-[1100px]:grid-cols-[clamp(22rem,30%,32rem)_minmax(0,1fr)] min-[1100px]:gap-x-[1%]"
+            ? "min-[1100px]:grid-cols-[clamp(340px,24vw,390px)_minmax(0,1fr)] min-[1100px]:gap-x-2.5 min-[1500px]:grid-cols-[clamp(360px,24vw,410px)_minmax(0,1fr)]"
             : "grid-cols-1"
             }`}
         >

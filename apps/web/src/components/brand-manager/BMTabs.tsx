@@ -1,8 +1,8 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard.store";
@@ -13,9 +13,16 @@ import { useTranslation } from "react-i18next";
 export function BMTabs() {
   const { t } = useTranslation();
   const pathname = usePathname();
+  const router = useRouter();
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
   const { leads, filters } = useDashboardStore();
   const alertsCount = useAlertStore((state) => state.rawAlerts.length);
-  const leadsCount = filterLeadsForDashboard(leads, filters).length;
+  const leadsCount = useMemo(
+    () => filterLeadsForDashboard(leads, filters).length,
+    [filters, leads],
+  );
+
+  useEffect(() => setPendingHref(null), [pathname]);
 
   const isDemo = pathname.startsWith("/demo");
   const basePath = isDemo ? "/demo" : "/dashboard";
@@ -49,6 +56,11 @@ export function BMTabs() {
           <Link
             key={tab.href}
             href={tab.href}
+            prefetch
+            aria-busy={pendingHref === tab.href}
+            onClick={() => setPendingHref(tab.href)}
+            onFocus={() => router.prefetch(tab.href)}
+            onPointerEnter={() => router.prefetch(tab.href)}
             className={cn(
               "relative px-4 py-4 text-[15px] transition-colors focus:outline-none flex items-center space-x-2",
               isActive 

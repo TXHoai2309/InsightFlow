@@ -475,9 +475,11 @@ export default function AlertsPage() {
         ? "resolved"
         : workflowStatus === "skipped"
           ? "skipped"
-        : workflowStatus === "contact_failed"
-          ? "contact_failed"
-          : "all",
+          : workflowStatus === "processing"
+            ? "processing"
+            : workflowStatus === "contact_failed"
+            ? "contact_failed"
+            : "all",
     );
     setAlertPage(1);
     setDetailPanelTab("action");
@@ -492,8 +494,12 @@ export default function AlertsPage() {
         ? [...skippedAlerts]
         : [...activeAlerts];
 
-    // "all" chỉ là hàng đợi đang mở; hai trạng thái kết thúc được tách riêng.
-    if (statusFilter === "pending") {
+    // Lọc theo trạng thái nghiệp vụ.
+    // "all": Chỉ hiển thị các công việc chưa phân công hoặc cần liên hệ lại;
+    // các task đã phân công/đang xử lý sẽ ẩn khỏi "Tất cả đang mở" và chuyển sang tab "Đang xử lý".
+    if (statusFilter === "all") {
+      result = result.filter((alert) => getAlertWorkflowStatus(alert) !== "processing");
+    } else if (statusFilter === "pending") {
       result = result.filter((alert) => {
         return getAlertWorkflowStatus(alert) === "pending";
       });
@@ -1023,7 +1029,7 @@ export default function AlertsPage() {
     }
   }, [activeTab, highRiskIncidents, selectedIncidentId]);
 
-  // Load alerts on mount
+  // Load alerts on mount only – realtime + 60s polling handles subsequent updates
   useEffect(() => {
     if (authLoading || !canViewCrisisQueue) return;
     setFilters({ status: "all" });

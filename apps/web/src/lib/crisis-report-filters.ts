@@ -82,17 +82,18 @@ function matchesTimeRange(alert: AlertData, filters: CrisisReportFilters, nowMs:
   const createdAt = toTime(alert.created_at);
   if (createdAt === null) return false;
 
+  const { start: startOfToday, end: endOfToday } = getDayBounds(new Date(nowMs));
+
   if (filters.timeRange === "today") {
-    const { start, end } = getDayBounds(new Date(nowMs));
-    return createdAt >= start && createdAt <= end;
+    return createdAt >= startOfToday && createdAt <= endOfToday;
   }
 
   if (filters.timeRange === "7d") {
-    return createdAt >= nowMs - 7 * 24 * 60 * 60 * 1000;
+    return createdAt >= startOfToday - 6 * 24 * 60 * 60 * 1000;
   }
 
   if (filters.timeRange === "30d") {
-    return createdAt >= nowMs - 30 * 24 * 60 * 60 * 1000;
+    return createdAt >= startOfToday - 29 * 24 * 60 * 60 * 1000;
   }
 
   const start = filters.startDate ? new Date(`${filters.startDate}T00:00:00`).getTime() : null;
