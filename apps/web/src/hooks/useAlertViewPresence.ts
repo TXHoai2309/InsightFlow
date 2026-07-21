@@ -39,25 +39,39 @@ function useViewPresence({ resource, resourceId, enabled }: UseViewPresenceOptio
     };
 
     const loadViewers = async () => {
-      const token = await getToken();
-      if (!token || disposed) return;
-      const response = await fetch(endpoint, {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
-      if (!response.ok) return;
-      const payload = await response.json() as { viewers?: AlertViewer[] };
-      if (!disposed) setViewers(Array.isArray(payload.viewers) ? payload.viewers : []);
+      try {
+        const token = await getToken();
+        if (!token || disposed) return;
+        const response = await fetch(endpoint, {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (response.status === 401 || response.status === 403) {
+          cachedToken = "";
+          if (!disposed) setViewers([]);
+          return;
+        }
+        if (!response.ok) return;
+        const payload = await response.json() as { viewers?: AlertViewer[] };
+        if (!disposed) setViewers(Array.isArray(payload.viewers) ? payload.viewers : []);
+      } catch {
+        // Presence is supplementary and must never interrupt the workbench.
+      }
     };
 
     const heartbeat = async () => {
-      const token = await getToken();
-      if (!token || disposed) return;
-      await fetch(endpoint, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      await loadViewers();
+      try {
+        const token = await getToken();
+        if (!token || disposed) return;
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (response.status === 401 || response.status === 403) cachedToken = "";
+        if (response.ok) await loadViewers();
+      } catch {
+        // A transient heartbeat failure expires naturally on the server.
+      }
     };
 
     const leave = () => {
@@ -66,7 +80,7 @@ function useViewPresence({ resource, resourceId, enabled }: UseViewPresenceOptio
         method: "DELETE",
         headers: { Authorization: `Bearer ${cachedToken}` },
         keepalive: true,
-      });
+      }).catch(() => undefined);
     };
 
     const handleVisibilityChange = () => {

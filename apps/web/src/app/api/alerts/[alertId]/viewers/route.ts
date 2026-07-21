@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyBearerToken } from "@/lib/server/auth";
 import { db } from "@/lib/server/firebaseAdmin";
+import {
+  canAccessViewPresence,
+  getScopedPresenceDocumentId,
+  normalizePresenceBrandKey,
+} from "@/lib/server/view-presence-scope";
 
 const ACTIVE_WINDOW_MS = 120_000;
 
@@ -13,6 +18,8 @@ type ViewerRecord = {
   lastSeenAt: FirebaseFirestore.Timestamp;
 };
 
+const ALERT_ROLES = new Set(["brand_manager", "crisis_employee"]);
+
 type ActiveViewer = {
   uid: string;
   displayName: string;
@@ -21,21 +28,13 @@ type ActiveViewer = {
   lastSeenAt: string;
 };
 
-function normalizeBrandKey(value: unknown) {
-  return String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
 async function getViewerIdentity(request: NextRequest) {
   const token = await verifyBearerToken(request.headers.get("authorization"));
   if (!token) return null;
 
   const userSnapshot = await db.collection("users").doc(token.uid).get();
   const profile = userSnapshot.exists ? userSnapshot.data() || {} : {};
-  const brandKey = normalizeBrandKey(
+  const brandKey = normalizePresenceBrandKey(
     profile.brandId ||
       profile.brand_id ||
       profile.companyDomain ||
@@ -44,21 +43,35 @@ async function getViewerIdentity(request: NextRequest) {
       token.companyDomain,
   );
 
+  const role = String(profile.role || token.role || "");
+  const permissions = Array.isArray(profile.permissions)
+    ? profile.permissions.map((permission: unknown) => String(permission))
+    : [];
+
   return {
     uid: token.uid,
     displayName: String(profile.displayName || profile.fullName || token.name || token.email || "Người dùng"),
     email: String(profile.email || token.email || ""),
     photoURL: String(profile.photoURL || token.picture || ""),
     brandKey,
+    authorized: canAccessViewPresence({
+      brandKey,
+      role,
+      permissions,
+      requiredPermission: "alerts",
+      allowedRoles: ALERT_ROLES,
+    }),
   };
 }
 
-function getViewerCollection(alertId: string) {
-  return db.collection("alert_view_presence").doc(alertId).collection("viewers");
+function getViewerCollection(alertId: string, brandKey: string) {
+  // Presence is namespaced by the authenticated business scope. A user who
+  // guesses an alert ID from another brand cannot read or join its viewer list.
+  return db.collection("alert_view_presence").doc(getScopedPresenceDocumentId(brandKey, alertId)).collection("viewers");
 }
 
-async function listActiveViewers(alertId: string) {
-  const snapshot = await getViewerCollection(alertId).get();
+async function listActiveViewers(alertId: string, brandKey: string) {
+  const snapshot = await getViewerCollection(alertId, brandKey).get();
   const activeSince = Date.now() - ACTIVE_WINDOW_MS;
   const staleDocs: FirebaseFirestore.QueryDocumentSnapshot[] = [];
   const viewers: ActiveViewer[] = snapshot.docs.flatMap((viewerDoc: FirebaseFirestore.QueryDocumentSnapshot) => {
@@ -94,9 +107,10 @@ export async function GET(request: NextRequest, { params }: { params: { alertId:
   try {
     const viewer = await getViewerIdentity(request);
     if (!viewer) return NextResponse.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
+    if (!viewer.authorized) return NextResponse.json({ error: "Bạn không có quyền xem cảnh báo này." }, { status: 403 });
     if (!validateAlertId(params.alertId)) return NextResponse.json({ error: "Cảnh báo không hợp lệ." }, { status: 400 });
 
-    const viewers = await listActiveViewers(params.alertId);
+    const viewers = await listActiveViewers(params.alertId, viewer.brandKey);
     return NextResponse.json({ success: true, viewers });
   } catch (error) {
     console.error("[Alert viewers API] load error:", error);
@@ -108,9 +122,10 @@ export async function POST(request: NextRequest, { params }: { params: { alertId
   try {
     const viewer = await getViewerIdentity(request);
     if (!viewer) return NextResponse.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
+    if (!viewer.authorized) return NextResponse.json({ error: "Bạn không có quyền xem cảnh báo này." }, { status: 403 });
     if (!validateAlertId(params.alertId)) return NextResponse.json({ error: "Cảnh báo không hợp lệ." }, { status: 400 });
 
-    await getViewerCollection(params.alertId).doc(viewer.uid).set({
+    await getViewerCollection(params.alertId, viewer.brandKey).doc(viewer.uid).set({
       ...viewer,
       lastSeenAt: new Date(),
     }, { merge: true });
@@ -126,9 +141,10 @@ export async function DELETE(request: NextRequest, { params }: { params: { alert
   try {
     const viewer = await getViewerIdentity(request);
     if (!viewer) return NextResponse.json({ error: "Bạn cần đăng nhập." }, { status: 401 });
+    if (!viewer.authorized) return NextResponse.json({ error: "Bạn không có quyền xem cảnh báo này." }, { status: 403 });
     if (!validateAlertId(params.alertId)) return NextResponse.json({ error: "Cảnh báo không hợp lệ." }, { status: 400 });
 
-    await getViewerCollection(params.alertId).doc(viewer.uid).delete().catch(() => undefined);
+    await getViewerCollection(params.alertId, viewer.brandKey).doc(viewer.uid).delete().catch(() => undefined);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("[Alert viewers API] leave error:", error);
