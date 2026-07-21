@@ -108,7 +108,7 @@ export function ReportExportOptionModal({
                   </span>
                 </div>
                 <p className="mt-1 text-xs text-[var(--color-text-secondary)] leading-relaxed">
-                  Đẩy toàn bộ dữ liệu vào Gemini AI qua API Key xoay vòng. AI sẽ tự động phân tích Net Sentiment, rủi ro SLA, điểm nóng và **dẫn chứng bằng số liệu thực tế** kèm khuyến nghị cho thương hiệu.
+                  Tự động tổng hợp và phân tích toàn bộ chỉ số KPI, Net Sentiment, rủi ro trễ hạn SLA và điểm nóng vận hành từ Gemini AI. Trích xuất <strong className="font-bold text-[var(--color-text-primary)]">dẫn chứng số liệu thực tế</strong> kèm đề xuất khuyến nghị hành động chiến lược cho thương hiệu.
                 </p>
               </div>
             </div>
