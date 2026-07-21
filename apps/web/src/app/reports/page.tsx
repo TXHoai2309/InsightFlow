@@ -1112,13 +1112,35 @@ function LanguageSelectModal({
 
 export default function ReportsPage() {
   const { profile, loading: authLoading } = useAuth();
-  const hasDualOperations = getEmployeeBusinessScope(profile) === "dual";
+  const [managerReportView, setManagerReportView] = useState<"overview" | "daily">("overview");
+  const isEmployeeRole = profile?.role === "crisis_employee" || profile?.role === "lead_employee";
+  // Brand managers normally have both Alerts and Leads permissions. Route them
+  // explicitly below so they can use the new overview and opt into the legacy
+  // daily report without being classified as dual-operation employees.
+  const hasDualOperations = isEmployeeRole && getEmployeeBusinessScope(profile) === "dual";
 
   if (authLoading) {
     return (
       <div className="min-h-screen bg-[#f8f7ff] px-6 py-10 text-slate-700">
         Dang tai bao cao...
       </div>
+    );
+  }
+
+  if (profile?.role === "brand_manager") {
+    if (managerReportView === "daily") {
+      return (
+        <LegacyReportsPage
+          dailyOnly
+          onBack={() => setManagerReportView("overview")}
+        />
+      );
+    }
+
+    return (
+      <DualOperationsEmployeeReportPage
+        onOpenDailyReport={() => setManagerReportView("daily")}
+      />
     );
   }
 
@@ -1137,7 +1159,13 @@ export default function ReportsPage() {
   return <LegacyReportsPage />;
 }
 
-function LegacyReportsPage() {
+function LegacyReportsPage({
+  dailyOnly = false,
+  onBack,
+}: {
+  dailyOnly?: boolean;
+  onBack?: () => void;
+} = {}) {
   const { t, i18n } = useTranslation();
   const { profile, loading: authLoading } = useAuth();
   const scopedBrandKey = getScopedBrandKey(profile);
@@ -2114,17 +2142,28 @@ function LegacyReportsPage() {
             {t("reports.header.desc", { defaultValue: "Quản lý và tải xuống các báo cáo phân tích định kỳ từ AI." })}
           </p>
         </div>
-        <button
-          onClick={() => {
-            setActiveTab("custom");
-            setCustomReportGenerated(false);
-          }}
-          data-tour="reports-create-custom"
-          className="flex items-center justify-center gap-2 bg-primary text-white px-5 py-3 rounded-xl font-bold text-sm hover:bg-primary/90 active:scale-95 transition-all shadow-sm w-full sm:w-auto"
-        >
-          <span className="material-symbols-outlined text-xl">add_chart</span>
-          {t("reports.header.createCustomBtn", { defaultValue: "Tạo báo cáo thủ công" })}
-        </button>
+        {dailyOnly ? (
+          <button
+            type="button"
+            onClick={onBack}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] px-5 py-3 text-sm font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-bg-surface-high)] sm:w-auto"
+          >
+            <span className="material-symbols-outlined text-xl">arrow_back</span>
+            Quay lại báo cáo tổng hợp
+          </button>
+        ) : (
+          <button
+            onClick={() => {
+              setActiveTab("custom");
+              setCustomReportGenerated(false);
+            }}
+            data-tour="reports-create-custom"
+            className="flex items-center justify-center gap-2 bg-primary text-white px-5 py-3 rounded-xl font-bold text-sm hover:bg-primary/90 active:scale-95 transition-all shadow-sm w-full sm:w-auto"
+          >
+            <span className="material-symbols-outlined text-xl">add_chart</span>
+            {t("reports.header.createCustomBtn", { defaultValue: "Tạo báo cáo thủ công" })}
+          </button>
+        )}
       </div>
 
       {/* ── Stats Cards ── */}
@@ -2199,29 +2238,33 @@ function LegacyReportsPage() {
             >
               {t("reports.tabs.periodic", { defaultValue: "Định kỳ" })}
             </button>
-            <button
-              onClick={() => {
-                setActiveTab("custom");
-                setCustomReportGenerated(false);
-              }}
-              className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap flex-shrink-0 transition-colors ${
-                activeTab === "custom"
-                  ? "text-[var(--color-brand)] bg-[var(--color-brand-subtle)]"
-                  : "text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-high)]"
-              }`}
-            >
-              {t("reports.tabs.custom", { defaultValue: "Tùy chỉnh" })}
-            </button>
-            <button
-              onClick={() => setActiveTab("archive")}
-              className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap flex-shrink-0 transition-colors ${
-                activeTab === "archive"
-                  ? "text-[var(--color-brand)] bg-[var(--color-brand-subtle)]"
-                  : "text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-high)]"
-              }`}
-            >
-              {t("reports.tabs.archive", { defaultValue: "Lưu trữ" })}
-            </button>
+            {!dailyOnly ? (
+              <>
+                <button
+                  onClick={() => {
+                    setActiveTab("custom");
+                    setCustomReportGenerated(false);
+                  }}
+                  className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap flex-shrink-0 transition-colors ${
+                    activeTab === "custom"
+                      ? "text-[var(--color-brand)] bg-[var(--color-brand-subtle)]"
+                      : "text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-high)]"
+                  }`}
+                >
+                  {t("reports.tabs.custom", { defaultValue: "Tùy chỉnh" })}
+                </button>
+                <button
+                  onClick={() => setActiveTab("archive")}
+                  className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap flex-shrink-0 transition-colors ${
+                    activeTab === "archive"
+                      ? "text-[var(--color-brand)] bg-[var(--color-brand-subtle)]"
+                      : "text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-high)]"
+                  }`}
+                >
+                  {t("reports.tabs.archive", { defaultValue: "Lưu trữ" })}
+                </button>
+              </>
+            ) : null}
           </div>
 
           {/* Filters */}
