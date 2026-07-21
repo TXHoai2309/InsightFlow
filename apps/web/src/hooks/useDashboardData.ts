@@ -253,7 +253,7 @@ export function useDashboard(options: UseDashboardOptions = {}) {
         error instanceof Error
           ? error.message
           : "Không thể kết nối Supabase";
-      
+
       console.error("[useDashboard] fetch error:", error);
 
       // Fallback: If DB errors, keep old data in store or load from localStorage cache
@@ -358,25 +358,25 @@ export function useDashboard(options: UseDashboardOptions = {}) {
                 useDashboardStore.getState().leads.map((l) =>
                   l.id === updated.id
                     ? {
-                        ...l,
-                        status: updated.status ?? l.status,
-                        owner_id: updated.owner_id ?? undefined,
-                        owner_name: updated.owner_name ?? undefined,
-                        owner_email: updated.owner_email ?? undefined,
-                        assigned_at: updated.assigned_at ?? undefined,
-                        assigned_by: updated.assigned_by ?? undefined,
-                        claimed_at: updated.claimed_at ?? undefined,
-                        first_contacted_at: updated.first_contacted_at ?? undefined,
-                        contact_attempts: updated.contact_attempts ?? l.contact_attempts,
-                        last_contact_at: updated.last_contact_at ?? undefined,
-                        pending_result: updated.pending_result ?? l.pending_result,
-                        notes: updated.notes ?? l.notes,
-                        sales_status: updated.sales_status ?? l.sales_status,
-                        sales_owner_id: updated.sales_owner_id ?? l.sales_owner_id,
-                        sales_owner_name: updated.sales_owner_name ?? l.sales_owner_name,
-                        sales_transferred_at: updated.sales_transferred_at ?? l.sales_transferred_at,
-                        crm_deal_id: updated.crm_deal_id ?? l.crm_deal_id,
-                      }
+                      ...l,
+                      status: updated.status ?? l.status,
+                      owner_id: updated.owner_id ?? undefined,
+                      owner_name: updated.owner_name ?? undefined,
+                      owner_email: updated.owner_email ?? undefined,
+                      assigned_at: updated.assigned_at ?? undefined,
+                      assigned_by: updated.assigned_by ?? undefined,
+                      claimed_at: updated.claimed_at ?? undefined,
+                      first_contacted_at: updated.first_contacted_at ?? undefined,
+                      contact_attempts: updated.contact_attempts ?? l.contact_attempts,
+                      last_contact_at: updated.last_contact_at ?? undefined,
+                      pending_result: updated.pending_result ?? l.pending_result,
+                      notes: updated.notes ?? l.notes,
+                      sales_status: updated.sales_status ?? l.sales_status,
+                      sales_owner_id: updated.sales_owner_id ?? l.sales_owner_id,
+                      sales_owner_name: updated.sales_owner_name ?? l.sales_owner_name,
+                      sales_transferred_at: updated.sales_transferred_at ?? l.sales_transferred_at,
+                      crm_deal_id: updated.crm_deal_id ?? l.crm_deal_id,
+                    }
                     : l
                 )
               );

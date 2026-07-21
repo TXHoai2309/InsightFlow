@@ -56,12 +56,12 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen, onClose, isCollapsed = false, onToggleCollapsed }: SidebarProps) {
   const pathname = usePathname();
+  const isDemoMode = pathname?.startsWith("/demo") || false;
   const router = useRouter();
   const { t } = useTranslation();
   const { theme } = useTheme();
   const { profile, role } = useAuth();
   const isDark = theme === "dark";
-  const isDemoMode = pathname.startsWith("/demo");
   const [pendingHref, setPendingHref] = useState<string | null>(null);
   const accessibleNavItems = useMemo(
     () => navItems.filter(

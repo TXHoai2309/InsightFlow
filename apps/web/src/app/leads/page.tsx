@@ -18,6 +18,7 @@ import type { Lead } from "@/types/dashboard";
 import {
   canLeadBeVisibleToUser,
   getDefaultLeadWorkbenchView,
+  getLeadOwnershipMeta,
   getLeadWorkbenchMeta,
   getLeadWorkbenchViews,
   matchesLeadWorkbenchView,
@@ -50,6 +51,7 @@ import {
   type DashboardReturnNavigation,
 } from "@/lib/dashboard-return-context";
 import { usePinnedQueue } from "@/hooks/usePinnedQueue";
+import { useLeadViewPresence } from "@/hooks/useAlertViewPresence";
 
 const LEADS_PAGE_SIZE = 5;
 const APP_SCROLL_ROOT_SELECTOR = '[data-app-scroll-root="true"]';
@@ -261,11 +263,11 @@ export default function LeadsPage() {
     const urlFilters = readLeadWorkbenchFilters(params);
     const restoredFilters: LeadWorkbenchFilters = requestedFilters
       ? {
-          ...urlFilters,
-          workspaceId:
-            requestedFilters.workspace_id || urlFilters.workspaceId,
-          platform: requestedFilters.platform || urlFilters.platform,
-        }
+        ...urlFilters,
+        workspaceId:
+          requestedFilters.workspace_id || urlFilters.workspaceId,
+        platform: requestedFilters.platform || urlFilters.platform,
+      }
       : urlFilters;
     skipNextPageReset.current = true;
     setLeadFilters(restoredFilters);
@@ -384,29 +386,29 @@ export default function LeadsPage() {
 
   const visibleLeads = useMemo(() => {
     const filtered = filterLeadWorkbenchItems(
-        leadsInActiveView,
-        { ...leadFilters, workspaceId: "all" },
-        currentTime,
-        profile?.uid,
-      );
+      leadsInActiveView,
+      { ...leadFilters, workspaceId: "all" },
+      currentTime,
+      profile?.uid,
+    );
     let result = activeView === "follow_up"
       ? sortFollowUpLeads(filtered, currentTime, profile)
       : sortMode === "recommended"
         ? filtered
         : [...filtered].sort((left, right) => {
-            if (sortMode === "newest") {
-              const leftTime = new Date(left.posted_at || left.created_at || 0).getTime();
-              const rightTime = new Date(right.posted_at || right.created_at || 0).getTime();
-              return rightTime - leftTime;
-            }
+          if (sortMode === "newest") {
+            const leftTime = new Date(left.posted_at || left.created_at || 0).getTime();
+            const rightTime = new Date(right.posted_at || right.created_at || 0).getTime();
+            return rightTime - leftTime;
+          }
 
-            const leftMeta = getLeadWorkbenchMeta(left, currentTime);
-            const rightMeta = getLeadWorkbenchMeta(right, currentTime);
-            if (sortMode === "overdue" && leftMeta.isOverdue !== rightMeta.isOverdue) {
-              return leftMeta.isOverdue ? -1 : 1;
-            }
-            return leftMeta.remainingMs - rightMeta.remainingMs;
-          });
+          const leftMeta = getLeadWorkbenchMeta(left, currentTime);
+          const rightMeta = getLeadWorkbenchMeta(right, currentTime);
+          if (sortMode === "overdue" && leftMeta.isOverdue !== rightMeta.isOverdue) {
+            return leftMeta.isOverdue ? -1 : 1;
+          }
+          return leftMeta.remainingMs - rightMeta.remainingMs;
+        });
 
     if (activeView === "active") {
       result = [...result].sort(
@@ -478,6 +480,14 @@ export default function LeadsPage() {
     visibleLeads.find((lead) => lead.id === selectedLeadId) ||
     visibleBaseLeads.find((lead) => lead.id === selectedLeadId) ||
     null;
+  const leadViewers = useLeadViewPresence({
+    leadId: selectedLead?.id || null,
+    enabled: Boolean(
+      selectedLead &&
+      !isPanelCollapsed &&
+      getLeadOwnershipMeta(selectedLead, profile).status === "unassigned",
+    ),
+  });
 
   useEffect(() => {
     const restoredLeadId = pendingRestoreLeadId.current;
@@ -603,9 +613,9 @@ export default function LeadsPage() {
   const selectedWorkspace = workspaces.find(
     (workspace) =>
       normalizeBrandName(workspace.id) ===
-        normalizeBrandName(leadFilters.workspaceId) ||
+      normalizeBrandName(leadFilters.workspaceId) ||
       normalizeBrandName(workspace.brand_name) ===
-        normalizeBrandName(leadFilters.workspaceId),
+      normalizeBrandName(leadFilters.workspaceId),
   );
   const activeViewLabel =
     workbenchViews.find((view) => view.id === activeView)?.label ||
@@ -1045,15 +1055,15 @@ export default function LeadsPage() {
                     {activeView === "follow_up"
                       ? "Chưa có lịch follow-up đang mở"
                       : activeFilterCount > 0
-                      ? "Không có khách hàng phù hợp"
-                      : "Không có lead trong nhóm này"}
+                        ? "Không có khách hàng phù hợp"
+                        : "Không có lead trong nhóm này"}
                   </h3>
                   <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
                     {activeView === "follow_up"
                       ? "Hãy chọn phạm vi khác hoặc đặt lịch hẹn mới; lịch đã hoàn tất được tự động loại khỏi hàng đợi."
                       : activeFilterCount > 0
-                      ? "Hãy điều chỉnh hoặc xóa các điều kiện lọc đang áp dụng."
-                      : "Chuyển hàng chờ để xem nhóm lead khác."}
+                        ? "Hãy điều chỉnh hoặc xóa các điều kiện lọc đang áp dụng."
+                        : "Chuyển hàng chờ để xem nhóm lead khác."}
                   </p>
                   {activeFilterCount > 0 && (
                     <button
@@ -1081,6 +1091,8 @@ export default function LeadsPage() {
                     pinned={pinnedLeadIds.includes(lead.id)}
                     canPin={activeView === "active"}
                     pinDisabled={pinnedLeadIds.length >= maxPinnedLeads}
+                    viewers={selectedLeadId === lead.id ? leadViewers : []}
+                    currentViewerId={profile?.uid}
                     onTogglePin={(nextLead) => {
                       togglePinnedLead(nextLead.id);
                     }}

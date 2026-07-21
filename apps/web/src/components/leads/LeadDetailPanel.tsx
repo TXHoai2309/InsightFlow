@@ -80,12 +80,12 @@ const RESULT_OPTIONS: Array<{
   status: Lead["status"];
   description: string;
 }> = [
-  { id: "positive", label: "Khách phản hồi tích cực", icon: "thumb_up", status: "processing", description: "Khách hàng có quan tâm và tương tác tốt." },
-  { id: "no_response", label: "Chưa phản hồi", icon: "schedule", status: "processing", description: "Đã liên hệ nhưng khách chưa trả lời." },
-  { id: "follow_up", label: "Hẹn lại", icon: "event", status: "processing", description: "Khách hẹn liên hệ lại vào thời gian khác." },
-  { id: "not_fit", label: "Không phù hợp", icon: "block", status: "skipped", description: "Khách không có nhu cầu hoặc sai đối tượng." },
-  { id: "converted", label: "Đã chuyển đổi", icon: "emoji_events", status: "completed", description: "Khách hàng đã đồng ý chốt deal/đăng ký." },
-];
+    { id: "positive", label: "Khách phản hồi tích cực", icon: "thumb_up", status: "processing", description: "Khách hàng có quan tâm và tương tác tốt." },
+    { id: "no_response", label: "Chưa phản hồi", icon: "schedule", status: "processing", description: "Đã liên hệ nhưng khách chưa trả lời." },
+    { id: "follow_up", label: "Hẹn lại", icon: "event", status: "processing", description: "Khách hẹn liên hệ lại vào thời gian khác." },
+    { id: "not_fit", label: "Không phù hợp", icon: "block", status: "skipped", description: "Khách không có nhu cầu hoặc sai đối tượng." },
+    { id: "converted", label: "Đã chuyển đổi", icon: "emoji_events", status: "completed", description: "Khách hàng đã đồng ý chốt deal/đăng ký." },
+  ];
 
 function toDateInputValue(dateIso?: string) {
   if (!dateIso) return "";
@@ -173,11 +173,11 @@ export function LeadDetailPanel({
         }
         const staff = Array.isArray(payload?.data)
           ? (payload.data as AssignableStaff[]).filter(
-              (item) =>
-                !item.disabled &&
-                Array.isArray(item.permissions) &&
-                item.permissions.includes("leads"),
-            )
+            (item) =>
+              !item.disabled &&
+              Array.isArray(item.permissions) &&
+              item.permissions.includes("leads"),
+          )
           : [];
         setStaffList(staff);
       } catch (error) {
@@ -545,12 +545,12 @@ export function LeadDetailPanel({
       showToast(
         selectedResult === "follow_up" && followUpAt
           ? `Đã hẹn follow-up lúc ${new Date(followUpAt).toLocaleString("vi-VN", {
-              hour: "2-digit",
-              minute: "2-digit",
-              day: "2-digit",
-              month: "2-digit",
-              year: "numeric",
-            })}.`
+            hour: "2-digit",
+            minute: "2-digit",
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+          })}.`
           : "Ghi nhận kết quả thành công!",
         "success",
       );
@@ -733,14 +733,14 @@ export function LeadDetailPanel({
                   </button>
                 )}
                 {meta.needsResultCapture && (
-                <button
-                  type="button"
-                  onClick={handleScrollToResult}
-                  className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[var(--color-brand-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2"
-                >
-                  <ClipboardCheck size={18} aria-hidden="true" />
-                  <span className="hidden sm:inline">Ghi nhận kết quả</span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={handleScrollToResult}
+                    className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[var(--color-brand-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2"
+                  >
+                    <ClipboardCheck size={18} aria-hidden="true" />
+                    <span className="hidden sm:inline">Ghi nhận kết quả</span>
+                  </button>
                 )}
               </>
             )}
@@ -795,11 +795,10 @@ export function LeadDetailPanel({
               onClick={() => handleTabChange(tab.id)}
               role="tab"
               aria-selected={activeTab === tab.id}
-              className={`relative min-h-8 shrink-0 border-b-2 px-1 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-1 ${
-                activeTab === tab.id
+              className={`relative min-h-8 shrink-0 border-b-2 px-1 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-1 ${activeTab === tab.id
                   ? "border-[var(--color-brand)] text-[var(--color-brand)]"
                   : "border-transparent text-[var(--color-text-secondary)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-text-primary)]"
-              }`}
+                }`}
             >
               {tab.label}
             </button>
@@ -809,11 +808,10 @@ export function LeadDetailPanel({
 
       <div
         id={LEAD_DETAIL_PANEL_SCROLL_ID}
-        className={`min-h-0 flex-1 p-2.5 [scrollbar-gutter:stable] ${
-          activeTab === "action"
+        className={`min-h-0 flex-1 p-2.5 [scrollbar-gutter:stable] ${activeTab === "action"
             ? "overflow-y-auto min-[1280px]:overflow-hidden"
             : "overflow-y-auto"
-        }`}
+          }`}
       >
         {activeTab === "action" && (
           <div className="grid items-start gap-2 min-[1280px]:h-full min-[1280px]:min-h-0 min-[1280px]:grid-cols-[minmax(0,1fr)_300px] min-[1280px]:items-stretch min-[1500px]:grid-cols-[minmax(0,1fr)_320px] min-[1850px]:grid-cols-[minmax(0,1fr)_360px]">
@@ -842,144 +840,139 @@ export function LeadDetailPanel({
                   ))}
                 </div>
               </section>
-            <section
-              ref={resultSectionRef}
-              tabIndex={-1}
-              data-tour="lead-detail-result-actions"
-              className={`scroll-mt-3 rounded-xl border p-3 outline-none transition-shadow duration-300 ${
-                isResultSectionHighlighted
-                  ? "border-[var(--color-brand)] bg-[var(--color-bg-surface)] ring-2 ring-[var(--color-brand)]/20"
-                  : "border-[var(--color-border)] bg-[var(--color-bg-surface)]"
-              }`}
-            >
-              <div className="mb-3 flex items-center gap-2">
-                <h4 className="text-sm font-bold text-[var(--color-text-primary)]">Ghi nhận kết quả nhanh</h4>
-                {meta.needsResultCapture && <span className="rounded-full bg-[var(--color-brand-subtle)] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--color-brand)]">Chờ kết quả</span>}
-              </div>
-              {!canRecordResult && (
-                <div className="mb-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-2.5">
-                  <p className="text-sm text-[var(--color-text-secondary)]">
-                    {!lead.owner_id
-                      ? "Bạn cần nhận xử lý trước khi có thể ghi nhận kết quả."
-                      : "Hãy mở nguồn và liên hệ khách hàng trước khi ghi nhận kết quả."}
-                  </p>
+              <section
+                ref={resultSectionRef}
+                tabIndex={-1}
+                data-tour="lead-detail-result-actions"
+                className={`scroll-mt-3 rounded-xl border p-3 outline-none transition-shadow duration-300 ${isResultSectionHighlighted
+                    ? "border-[var(--color-brand)] bg-[var(--color-bg-surface)] ring-2 ring-[var(--color-brand)]/20"
+                    : "border-[var(--color-border)] bg-[var(--color-bg-surface)]"
+                  }`}
+              >
+                <div className="mb-3 flex items-center gap-2">
+                  <h4 className="text-sm font-bold text-[var(--color-text-primary)]">Ghi nhận kết quả nhanh</h4>
+                  {meta.needsResultCapture && <span className="rounded-full bg-[var(--color-brand-subtle)] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--color-brand)]">Chờ kết quả</span>}
                 </div>
-              )}
-              
-              <div className="grid items-start gap-3">
-                <div className="relative min-w-0" ref={resultDropdownRef}>
-                  <label className="mb-1.5 block text-xs font-bold text-[var(--color-text-secondary)]">Kết quả xử lý</label>
-                  <button 
-                    type="button"
-                    onClick={() => {
-                      if (!canRecordResult) {
-                        showToast("Vui lòng nhận xử lý và mở nguồn trước khi ghi nhận kết quả.", "error");
-                        return;
-                      }
-                      setIsResultDropdownOpen(!isResultDropdownOpen);
-                    }}
-                    className={`flex w-full items-center justify-between gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2.5 text-sm text-[var(--color-text-primary)] shadow-sm outline-none transition ${
-                      canRecordResult 
-                        ? "hover:border-[var(--color-brand)] focus-visible:border-[var(--color-brand)] focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/20"
-                        : "cursor-not-allowed bg-[var(--color-bg-surface-high)] text-[var(--color-text-disabled)]"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      {selectedResult ? (
-                        <>
-                          <span className="material-symbols-outlined shrink-0 text-[18px] text-[var(--color-brand)]">
-                            {RESULT_OPTIONS.find(o => o.id === selectedResult)?.icon}
-                          </span>
-                          <span className="truncate font-semibold">{RESULT_OPTIONS.find(o => o.id === selectedResult)?.label}</span>
-                        </>
-                      ) : (
-                        <span className="text-[var(--color-text-muted)]">Chọn kết quả xử lý</span>
-                      )}
-                    </div>
-                    <span className="material-symbols-outlined shrink-0 text-[20px] text-[var(--color-text-muted)]">
-                      {isResultDropdownOpen ? "expand_less" : "expand_more"}
-                    </span>
-                  </button>
-                  
-                  {isResultDropdownOpen && (
-                    <div className="absolute left-0 top-full z-50 mt-1.5 w-full overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-xl animate-in fade-in slide-in-from-top-2">
-                      <div className="max-h-[300px] overflow-y-auto p-1">
-                        {RESULT_OPTIONS.map((option) => (
-                          <button
-                            key={option.id}
-                            type="button"
-                            onClick={() => {
-                              setSelectedResult(option.id);
-                              setIsResultDropdownOpen(false);
-                              if (option.id === "follow_up" && !followUpDate) {
-                                const tomorrow = new Date();
-                                tomorrow.setDate(tomorrow.getDate() + 1);
-                                setFollowUpDate(toDateInputValue(tomorrow.toISOString()));
-                                setFollowUpTime(toTimeInputValue(tomorrow.toISOString()) || "09:00");
-                              }
-                            }}
-                            className={`flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition ${
-                              selectedResult === option.id 
-                                ? "bg-[var(--color-brand-subtle)]" 
-                                : "hover:bg-[var(--color-bg-surface-raised)]"
-                            }`}
-                          >
-                            <span className={`material-symbols-outlined mt-0.5 shrink-0 text-[20px] ${
-                              selectedResult === option.id ? "text-[var(--color-brand)]" : "text-[var(--color-text-secondary)]"
-                            }`}>
-                              {option.icon}
+                {!canRecordResult && (
+                  <div className="mb-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-2.5">
+                    <p className="text-sm text-[var(--color-text-secondary)]">
+                      {!lead.owner_id
+                        ? "Bạn cần nhận xử lý trước khi có thể ghi nhận kết quả."
+                        : "Hãy mở nguồn và liên hệ khách hàng trước khi ghi nhận kết quả."}
+                    </p>
+                  </div>
+                )}
+
+                <div className="grid items-start gap-3">
+                  <div className="relative min-w-0" ref={resultDropdownRef}>
+                    <label className="mb-1.5 block text-xs font-bold text-[var(--color-text-secondary)]">Kết quả xử lý</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!canRecordResult) {
+                          showToast("Vui lòng nhận xử lý và mở nguồn trước khi ghi nhận kết quả.", "error");
+                          return;
+                        }
+                        setIsResultDropdownOpen(!isResultDropdownOpen);
+                      }}
+                      className={`flex w-full items-center justify-between gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2.5 text-sm text-[var(--color-text-primary)] shadow-sm outline-none transition ${canRecordResult
+                          ? "hover:border-[var(--color-brand)] focus-visible:border-[var(--color-brand)] focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/20"
+                          : "cursor-not-allowed bg-[var(--color-bg-surface-high)] text-[var(--color-text-disabled)]"
+                        }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        {selectedResult ? (
+                          <>
+                            <span className="material-symbols-outlined shrink-0 text-[18px] text-[var(--color-brand)]">
+                              {RESULT_OPTIONS.find(o => o.id === selectedResult)?.icon}
                             </span>
-                            <div>
-                              <p className={`text-sm font-semibold ${
-                                selectedResult === option.id ? "text-[var(--color-brand)]" : "text-[var(--color-text-primary)]"
-                              }`}>
-                                {option.label}
-                              </p>
-                              <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">{option.description}</p>
-                            </div>
-                          </button>
-                        ))}
+                            <span className="truncate font-semibold">{RESULT_OPTIONS.find(o => o.id === selectedResult)?.label}</span>
+                          </>
+                        ) : (
+                          <span className="text-[var(--color-text-muted)]">Chọn kết quả xử lý</span>
+                        )}
                       </div>
-                    </div>
-                  )}
-                  {selectedResult === "follow_up" && (
-                    <div data-tour="lead-detail-followup" className="mt-3 grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="mb-1 block text-xs font-semibold text-[var(--color-text-secondary)]">Ngày follow-up</label>
-                        <input type="date" min={toDateInputValue(new Date().toISOString())} value={followUpDate} onChange={(event) => setFollowUpDate(event.target.value)} className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus-visible:border-[var(--color-brand)] focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/20" />
+                      <span className="material-symbols-outlined shrink-0 text-[20px] text-[var(--color-text-muted)]">
+                        {isResultDropdownOpen ? "expand_less" : "expand_more"}
+                      </span>
+                    </button>
+
+                    {isResultDropdownOpen && (
+                      <div className="absolute left-0 top-full z-50 mt-1.5 w-full overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-xl animate-in fade-in slide-in-from-top-2">
+                        <div className="max-h-[300px] overflow-y-auto p-1">
+                          {RESULT_OPTIONS.map((option) => (
+                            <button
+                              key={option.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedResult(option.id);
+                                setIsResultDropdownOpen(false);
+                                if (option.id === "follow_up" && !followUpDate) {
+                                  const tomorrow = new Date();
+                                  tomorrow.setDate(tomorrow.getDate() + 1);
+                                  setFollowUpDate(toDateInputValue(tomorrow.toISOString()));
+                                  setFollowUpTime(toTimeInputValue(tomorrow.toISOString()) || "09:00");
+                                }
+                              }}
+                              className={`flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition ${selectedResult === option.id
+                                  ? "bg-[var(--color-brand-subtle)]"
+                                  : "hover:bg-[var(--color-bg-surface-raised)]"
+                                }`}
+                            >
+                              <span className={`material-symbols-outlined mt-0.5 shrink-0 text-[20px] ${selectedResult === option.id ? "text-[var(--color-brand)]" : "text-[var(--color-text-secondary)]"
+                                }`}>
+                                {option.icon}
+                              </span>
+                              <div>
+                                <p className={`text-sm font-semibold ${selectedResult === option.id ? "text-[var(--color-brand)]" : "text-[var(--color-text-primary)]"
+                                  }`}>
+                                  {option.label}
+                                </p>
+                                <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">{option.description}</p>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                      <div>
-                        <label className="mb-1 block text-xs font-semibold text-[var(--color-text-secondary)]">Giờ follow-up</label>
-                        <input type="time" value={followUpTime} onChange={(event) => setFollowUpTime(event.target.value)} className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus-visible:border-[var(--color-brand)] focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/20" />
+                    )}
+                    {selectedResult === "follow_up" && (
+                      <div data-tour="lead-detail-followup" className="mt-3 grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="mb-1 block text-xs font-semibold text-[var(--color-text-secondary)]">Ngày follow-up</label>
+                          <input type="date" min={toDateInputValue(new Date().toISOString())} value={followUpDate} onChange={(event) => setFollowUpDate(event.target.value)} className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus-visible:border-[var(--color-brand)] focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/20" />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-semibold text-[var(--color-text-secondary)]">Giờ follow-up</label>
+                          <input type="time" value={followUpTime} onChange={(event) => setFollowUpTime(event.target.value)} className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus-visible:border-[var(--color-brand)] focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/20" />
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
+
+                  <div className="flex flex-col">
+                    <label className="mb-1.5 block text-xs font-bold text-[var(--color-text-secondary)]">Ghi chú</label>
+                    <textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Nhập kết quả trao đổi với khách hàng..." className="min-h-20 w-full flex-1 resize-y rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-2.5 text-sm leading-relaxed text-[var(--color-text-primary)] outline-none transition placeholder:text-[var(--color-text-muted)] focus-visible:border-[var(--color-brand)] focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/20" />
+                  </div>
                 </div>
-                
-                <div className="flex flex-col">
-                  <label className="mb-1.5 block text-xs font-bold text-[var(--color-text-secondary)]">Ghi chú</label>
-                  <textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Nhập kết quả trao đổi với khách hàng..." className="min-h-20 w-full flex-1 resize-y rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-2.5 text-sm leading-relaxed text-[var(--color-text-primary)] outline-none transition placeholder:text-[var(--color-text-muted)] focus-visible:border-[var(--color-brand)] focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/20" />
+
+                {saveError && <p className="mt-3 text-xs font-semibold text-[var(--color-error)]">{saveError}</p>}
+
+                <div className="-mx-3 -mb-3 mt-3 border-t border-[var(--color-border)] bg-[var(--color-bg-surface)] p-2.5">
+                  <button type="button" disabled={!selectedResult || isSaving || isSaveSuccess || !canRecordResult} onClick={handleSaveResult} className={`inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg px-5 text-sm font-bold text-white shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-[var(--color-bg-surface-high)] disabled:text-[var(--color-text-disabled)] disabled:shadow-none disabled:opacity-100 ${isSaveSuccess ? "bg-[var(--color-success)] focus-visible:ring-[var(--color-success)]" : "bg-[var(--color-brand)] hover:bg-[var(--color-brand-hover)] focus-visible:ring-[var(--color-brand)]"}`}>
+                    {isSaveSuccess ? (
+                      <>
+                        <span className="material-symbols-outlined text-[20px] animate-bounce">check_circle</span>
+                        <span>Lưu thành công!</span>
+                      </>
+                    ) : (
+                      <>
+                        <ClipboardCheck size={18} />
+                        <span>{isSaving ? "Đang lưu..." : "Lưu kết quả"}</span>
+                      </>
+                    )}
+                  </button>
                 </div>
-              </div>
-              
-              {saveError && <p className="mt-3 text-xs font-semibold text-[var(--color-error)]">{saveError}</p>}
-              
-              <div className="-mx-3 -mb-3 mt-3 border-t border-[var(--color-border)] bg-[var(--color-bg-surface)] p-2.5">
-                <button type="button" disabled={!selectedResult || isSaving || isSaveSuccess || !canRecordResult} onClick={handleSaveResult} className={`inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg px-5 text-sm font-bold text-white shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-[var(--color-bg-surface-high)] disabled:text-[var(--color-text-disabled)] disabled:shadow-none disabled:opacity-100 ${isSaveSuccess ? "bg-[var(--color-success)] focus-visible:ring-[var(--color-success)]" : "bg-[var(--color-brand)] hover:bg-[var(--color-brand-hover)] focus-visible:ring-[var(--color-brand)]"}`}>
-                  {isSaveSuccess ? (
-                    <>
-                      <span className="material-symbols-outlined text-[20px] animate-bounce">check_circle</span>
-                      <span>Lưu thành công!</span>
-                    </>
-                  ) : (
-                    <>
-                      <ClipboardCheck size={18} />
-                      <span>{isSaving ? "Đang lưu..." : "Lưu kết quả"}</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </section>
+              </section>
 
             </aside>
           </div>
@@ -1080,11 +1073,10 @@ export function LeadDetailPanel({
       )}
 
       {toast && (
-        <div className={`fixed bottom-6 right-6 z-[9999] flex items-center gap-2.5 rounded-xl border bg-[var(--color-bg-surface)] px-4 py-3.5 text-sm font-bold shadow-2xl animate-fade-in ${
-          toast.type === "success"
+        <div className={`fixed bottom-6 right-6 z-[9999] flex items-center gap-2.5 rounded-xl border bg-[var(--color-bg-surface)] px-4 py-3.5 text-sm font-bold shadow-2xl animate-fade-in ${toast.type === "success"
             ? "border-[var(--color-success)]/30 bg-[var(--color-success-subtle)] text-[var(--color-success)]"
             : "border-[var(--color-error)]/30 bg-[var(--color-error-subtle)] text-[var(--color-error)]"
-        }`}>
+          }`}>
           <span className="material-symbols-outlined text-[18px]">
             {toast.type === "success" ? "check_circle" : "error"}
           </span>

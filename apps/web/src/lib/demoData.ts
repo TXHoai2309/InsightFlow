@@ -7,9 +7,9 @@ import type {
 } from "@/types/dashboard";
 
 export const dummyWorkspaces: Workspace[] = [
-  { 
-    id: "Demo Brand", 
-    brand_name: "Demo Brand", 
+  {
+    id: "Demo Brand",
+    brand_name: "Demo Brand",
     scale: "large",
     keywords: ["demo"],
     synonyms: [],

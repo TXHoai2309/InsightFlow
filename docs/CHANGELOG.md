@@ -10,7 +10,55 @@
 > - Các commit merge vẫn được giữ lại để phản ánh đúng dòng phát triển giữa các nhánh.
 >   Tất cả các thay đổi đáng chú ý đối với dự án này sẽ được ghi lại trong file này.
 >   Định dạng dựa trên [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) và dự án này tuân thủ [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-aaaa
+
+## [Unreleased] - 2026-07-20
+
+### Added
+
+- **Chế độ demo độc lập**:
+  - Bổ sung luồng `/demo` cùng các trang tổng quan, phân tích, đề cập, cảnh báo, khách hàng tiềm năng và báo cáo sử dụng dữ liệu mẫu.
+  - Thêm thanh điều hướng riêng cho demo và cho phép truy cập trải nghiệm này mà không phụ thuộc vào phiên đăng nhập của ứng dụng chính.
+  - Kết nối các nút kêu gọi hành động trên landing page và bước hoàn tất đăng ký dùng thử với trải nghiệm demo.
+
+- **Follow-up và quản lý vòng đời khách hàng tiềm năng**:
+  - Bổ sung tab `Follow-up`, thời điểm hẹn liên hệ lại và trạng thái quá hạn/sắp đến hạn trong trang Khách hàng tiềm năng.
+  - Thêm luồng ghi nhận kết quả sau khi liên hệ, bao gồm chuyển đổi, hẹn lại và đánh dấu khách hàng không phù hợp.
+  - Bổ sung thao tác `Bỏ qua` và `Khôi phục`; các mục đã bỏ qua được tách khỏi hàng chờ xử lý và không được tính là đã chuyển đổi.
+  - Cho phép mở lại nguồn nội dung từ các tab đã đóng hoặc đã bỏ qua để tiếp tục đối chiếu thông tin.
+
+- **Quy trình bỏ qua và khôi phục cảnh báo**:
+  - Thêm trạng thái `Đã bỏ qua`, hộp thoại xác nhận và tab lọc riêng trên trang Cảnh báo.
+  - Bổ sung thao tác khôi phục cảnh báo về trạng thái `Đang xử lý`, kèm thông tin người thực hiện và lịch sử hành động.
+  - Loại các cảnh báo đã bỏ qua khỏi số liệu đã giải quyết và đồng bộ trạng thái này với báo cáo khủng hoảng.
+
+- **Điều hướng giữa Monitoring và màn hình xử lý**:
+  - Cho phép mở đúng lead/cảnh báo từ bảng Lead Monitoring hoặc Crisis Monitoring.
+  - Bổ sung nút quay lại màn hình Monitoring, đồng thời lưu ngữ cảnh bộ lọc, trang và vị trí cuộn để người dùng tiếp tục công việc đang dở.
+
+### Changed
+
+- Thiết kế lại trang chi tiết khách hàng tiềm năng và cảnh báo theo bố cục gọn hơn, tập trung vào nội dung nguồn, thao tác liên hệ, kết quả xử lý và lịch sử.
+- Thu gọn Header, Sidebar và thanh điều hướng responsive để tăng không gian cho khu vực nghiệp vụ.
+- Cập nhật bảng và biểu đồ của Lead Monitoring/Crisis Monitoring; đồng bộ cách mở bản ghi với dữ liệu trên trang xử lý.
+- Cải thiện ánh xạ dữ liệu dashboard, intent của lead và dữ liệu thay đổi nhãn để các chỉ số hiển thị nhất quán hơn.
+- Cập nhật báo cáo dành cho nhân viên lead, nhân viên khủng hoảng và nhân viên xử lý cả hai nghiệp vụ, bao gồm phần xem trước và xuất Excel.
+- Chuẩn hóa font chữ, bản dịch Việt/Anh và giao diện của các trang quản trị, báo cáo, onboarding và landing page.
+
+### Fixed
+
+- Sửa trạng thái follow-up để lead vẫn nằm đúng hàng chờ trong thời gian đợi liên hệ lại và chuyển đúng nhóm khi đến hạn.
+- Sửa nghiệp vụ bỏ qua/khôi phục lead và cảnh báo, bao gồm quyền thao tác, dữ liệu lịch sử và số liệu báo cáo liên quan.
+- Sửa luồng mở nguồn/liên hệ khách hàng trên trang chi tiết cảnh báo và ngăn ghi nhận kết quả khi chưa thực hiện thao tác liên hệ cần thiết.
+- Sửa đồng bộ dữ liệu thời gian thực của trang Lead/Cảnh báo và bổ sung dữ liệu nhân viên cần thiết cho luồng phân công.
+- Sửa các trường hợp điều hướng từ Monitoring không chọn đúng bản ghi hoặc không quay lại đúng ngữ cảnh trước đó.
+
+### Verification
+
+- Bổ sung test cho phân loại hàng chờ lead, follow-up, lịch sử lead, trạng thái hiển thị cảnh báo, vòng đời cảnh báo và số liệu báo cáo khủng hoảng.
+- TypeScript typecheck của ứng dụng web hoàn tất thành công sau các thay đổi.
+
+---
+
 ## [Unreleased] - 2026-07-16
 
 ### Added

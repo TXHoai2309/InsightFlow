@@ -7,6 +7,7 @@ import type { AlertData, AlertFilters } from "@/stores/alert.store";
 import { AlertDetailPanel, type AlertDetailPanelTab } from "./AlertDetailPanel";
 import type { AlertContactResultDraft } from "./AlertContactWorkflow";
 import { AlertWorkbenchRow } from "./AlertWorkbenchRow";
+import type { AlertViewer } from "@/hooks/useAlertViewPresence";
 
 export type AlertStatusFilter = "all" | "pending" | "processing" | "contact_failed" | "resolved" | "skipped";
 type StatusFilter = AlertStatusFilter;
@@ -43,6 +44,8 @@ interface AlertWorkbenchProps {
   pinnedAlertIds: string[];
   maxPinnedAlerts: number;
   profileEmail?: string | null;
+  currentViewerId?: string | null;
+  alertViewers: AlertViewer[];
   canUpdate: boolean;
   getResolverName: (value: string | null | undefined) => string;
   onRefresh: () => Promise<void>;
@@ -203,7 +206,7 @@ export function AlertWorkbench(props: AlertWorkbenchProps) {
               </div>
             </header>
             <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3 [scrollbar-gutter:stable]">
-              {props.isLoading && props.pageAlerts.length === 0 ? [0, 1, 2].map((item) => <div key={item} className="h-[18vh] animate-pulse rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)]" />) : props.pageAlerts.length === 0 ? <div className="flex min-h-[45vh] flex-col items-center justify-center rounded-lg border border-dashed border-[var(--color-border)] p-[8%] text-center"><p className="text-sm font-black text-[var(--color-text-primary)]">Không có cảnh báo phù hợp</p><p className="mt-1 text-xs text-[var(--color-text-secondary)]">{props.canViewAllAssignments ? "Thử chọn trạng thái hoặc điều chỉnh bộ lọc." : "Không có cảnh báo nào đang chờ bạn xử lý."}</p></div> : props.pageAlerts.map((alert) => <AlertWorkbenchRow key={alert.id} alert={alert} selected={props.selectedAlertId === alert.id} pinned={props.pinnedAlertIds.includes(alert.id)} canPin={props.statusFilter === "processing" && getAlertWorkflowStatus(alert) === "processing"} pinDisabled={props.pinnedAlertIds.length >= props.maxPinnedAlerts} onTogglePin={props.onTogglePin} onSelect={props.onSelectAlert} getResolverName={props.getResolverName} />)}
+              {props.isLoading && props.pageAlerts.length === 0 ? [0, 1, 2].map((item) => <div key={item} className="h-[18vh] animate-pulse rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)]" />) : props.pageAlerts.length === 0 ? <div className="flex min-h-[45vh] flex-col items-center justify-center rounded-lg border border-dashed border-[var(--color-border)] p-[8%] text-center"><p className="text-sm font-black text-[var(--color-text-primary)]">Không có cảnh báo phù hợp</p><p className="mt-1 text-xs text-[var(--color-text-secondary)]">{props.canViewAllAssignments ? "Thử chọn trạng thái hoặc điều chỉnh bộ lọc." : "Không có cảnh báo nào đang chờ bạn xử lý."}</p></div> : props.pageAlerts.map((alert) => <AlertWorkbenchRow key={alert.id} alert={alert} selected={props.selectedAlertId === alert.id} pinned={props.pinnedAlertIds.includes(alert.id)} canPin={props.statusFilter === "processing" && getAlertWorkflowStatus(alert) === "processing"} pinDisabled={props.pinnedAlertIds.length >= props.maxPinnedAlerts} onTogglePin={props.onTogglePin} onSelect={props.onSelectAlert} getResolverName={props.getResolverName} viewers={props.selectedAlertId === alert.id ? props.alertViewers : []} currentViewerId={props.currentViewerId} />)}
             </div>
             {props.totalFiltered > 0 && <footer className="flex shrink-0 items-center justify-between border-t border-[var(--color-border)] px-[4%] py-[3%] text-xs text-[var(--color-text-secondary)]"><span>{props.totalFiltered} cảnh báo</span><div className="flex items-center gap-2"><button type="button" onClick={() => props.onPageChange(props.currentPage - 1)} disabled={props.currentPage === 1} className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--color-border)] disabled:opacity-40" title="Trang trước"><ChevronLeft size={16} /></button><span className="min-w-10 text-center font-black text-[var(--color-text-primary)]">{props.currentPage}/{props.totalPages}</span><button type="button" onClick={() => props.onPageChange(props.currentPage + 1)} disabled={props.currentPage === props.totalPages} className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--color-border)] disabled:opacity-40" title="Trang sau"><ChevronRight size={16} /></button></div></footer>}
           </main>
