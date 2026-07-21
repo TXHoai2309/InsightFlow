@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useAuth } from "@/hooks/useAuth";
-import { useAlertStore, type AlertData } from "@/stores/alert.store";
+import type { AlertData } from "@/stores/alert.store";
 
 type CustomerResponseResult = NonNullable<AlertData["customer_response_result"]>;
 
@@ -21,6 +20,13 @@ const CUSTOMER_RESPONSE_OPTIONS: Array<{
 interface AlertContactWorkflowProps {
   alert: AlertData;
   getResolverName: (value: string | null | undefined) => string;
+  onRecordResult: (draft: AlertContactResultDraft) => Promise<void>;
+}
+
+export interface AlertContactResultDraft {
+  note: string;
+  evidenceImage: string;
+  responseResult: CustomerResponseResult;
 }
 
 function formatBrandName(brand: string) {
@@ -39,20 +45,20 @@ export function createDefaultContactTemplate(customerName: string, brand: string
   return `Xin chào ${customerName || "Anh/Chị"}, ${formatBrandName(brand)} thành thật xin lỗi về trải nghiệm chưa tốt của Anh/Chị. Anh/Chị vui lòng nhắn tin trực tiếp hoặc để lại thông tin liên hệ để chúng tôi kiểm tra và hỗ trợ giải quyết vấn đề sớm nhất. Cảm ơn Anh/Chị đã phản hồi.`;
 }
 
-export function AlertContactWorkflow({ alert, getResolverName }: AlertContactWorkflowProps) {
-  const { profile } = useAuth();
-  const updateAlertStatus = useAlertStore((state) => state.updateAlertStatus);
+export function AlertContactWorkflow({ alert, getResolverName, onRecordResult }: AlertContactWorkflowProps) {
   const [contactEvidenceNote, setContactEvidenceNote] = useState(alert.customer_contact_note || "");
   const [contactEvidenceImage, setContactEvidenceImage] = useState<string | null>(alert.customer_contact_evidence_image || null);
+  const [selectedResponseResult, setSelectedResponseResult] = useState<CustomerResponseResult | null>(alert.customer_response_result || null);
   const [previewEvidenceImage, setPreviewEvidenceImage] = useState<string | null>(null);
-  const [savingContactEvidence, setSavingContactEvidence] = useState(false);
+  const [isRecordingResult, setIsRecordingResult] = useState(false);
   const [feedback, setFeedback] = useState<{ tone: "success" | "error"; message: string } | null>(null);
 
   useEffect(() => {
     setContactEvidenceNote(alert.customer_contact_note || "");
     setContactEvidenceImage(alert.customer_contact_evidence_image || null);
+    setSelectedResponseResult(alert.customer_response_result || null);
     setFeedback(null);
-  }, [alert.id, alert.customer_contact_note, alert.customer_contact_evidence_image]);
+  }, [alert.id, alert.customer_contact_note, alert.customer_contact_evidence_image, alert.customer_response_result]);
 
   const showFeedback = (message: string, tone: "success" | "error" = "success") => {
     setFeedback({ message, tone });
@@ -86,55 +92,44 @@ export function AlertContactWorkflow({ alert, getResolverName }: AlertContactWor
     reader.readAsDataURL(file);
   };
 
-  const handleSaveContactEvidence = async () => {
+  const handleRecordResult = async () => {
     if (!alert.customer_contact_opened_at) {
       showFeedback("Hãy bấm ‘Xem trên nền tảng’ trước.", "error");
       return;
     }
-    if (!contactEvidenceNote.trim() || !contactEvidenceImage) {
-      showFeedback("Cần nhập ghi chú và thêm ảnh minh chứng.", "error");
+    if (!contactEvidenceNote.trim() || !contactEvidenceImage || !selectedResponseResult) {
+      showFeedback("Cần nhập ghi chú, thêm ảnh minh chứng và chọn kết quả phản hồi.", "error");
       return;
     }
 
-    setSavingContactEvidence(true);
+    setIsRecordingResult(true);
     try {
-      await updateAlertStatus(alert.id, "resolving", profile, {
-        note: `Đã bổ sung minh chứng liên hệ: ${contactEvidenceNote.trim()}`,
-        customer_contact_note: contactEvidenceNote.trim(),
-        customer_contact_evidence_image: contactEvidenceImage,
-      }, alert.brand);
-      showFeedback("Đã lưu minh chứng liên hệ.");
+      await onRecordResult({
+        note: contactEvidenceNote.trim(),
+        evidenceImage: contactEvidenceImage,
+        responseResult: selectedResponseResult,
+      });
+      showFeedback("Đã ghi nhận kết quả và lưu minh chứng liên hệ.");
     } catch (error) {
       console.error(error);
-      showFeedback("Không thể lưu minh chứng. Vui lòng thử lại.", "error");
+      showFeedback(
+        error instanceof Error ? error.message : "Không thể ghi nhận kết quả. Vui lòng thử lại.",
+        "error",
+      );
     } finally {
-      setSavingContactEvidence(false);
+      setIsRecordingResult(false);
     }
   };
 
-  const handleCustomerResponseResult = async (result: CustomerResponseResult) => {
-    if (!alert.customer_contact_opened_at || !alert.customer_contact_note || !alert.customer_contact_evidence_image) return;
-    const resultLabel = CUSTOMER_RESPONSE_OPTIONS.find((option) => option.value === result)?.label || result;
-    try {
-      await updateAlertStatus(alert.id, "resolving", profile, {
-        note: `Đã ghi nhận kết quả liên hệ: ${resultLabel}.`,
-        customer_response_result: result,
-      }, alert.brand);
-      showFeedback(`Đã lưu: ${resultLabel}.`);
-    } catch (error) {
-      console.error(error);
-      showFeedback("Không thể lưu kết quả phản hồi. Vui lòng thử lại.", "error");
-    }
-  };
-
-  const hasContactProof = Boolean(
+  const hasCompleteDraft = Boolean(
     alert.customer_contact_opened_at &&
-    alert.customer_contact_note?.trim() &&
-    alert.customer_contact_evidence_image
+    contactEvidenceNote.trim() &&
+    contactEvidenceImage &&
+    selectedResponseResult
   );
 
   return (
-    <section className="space-y-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-3 shadow-sm">
+    <section className="space-y-3">
       <div>
         <h3 className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-[var(--color-text-primary)]">
           <span className="material-symbols-outlined text-base text-purple-500">support_agent</span>
@@ -222,18 +217,15 @@ export function AlertContactWorkflow({ alert, getResolverName }: AlertContactWor
             </div>
           )}
         </div>
-        <button type="button" disabled={!alert.customer_contact_opened_at || !contactEvidenceNote.trim() || !contactEvidenceImage || savingContactEvidence} onClick={() => void handleSaveContactEvidence()} className="w-full rounded-xl bg-slate-900 py-2.5 text-xs font-bold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500">
-          {savingContactEvidence ? "Đang lưu..." : hasContactProof ? "Cập nhật minh chứng" : "Lưu minh chứng"}
-        </button>
       </div>
 
-      <fieldset disabled={!hasContactProof} className="space-y-2 disabled:opacity-50">
+      <fieldset disabled={!alert.customer_contact_opened_at} className="space-y-2 disabled:opacity-50">
         <legend className="mb-2 text-[10px] font-black uppercase tracking-wider text-[var(--color-text-secondary)]">Kết quả phản hồi của khách hàng</legend>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {CUSTOMER_RESPONSE_OPTIONS.map((option) => {
-            const selected = alert.customer_response_result === option.value;
+            const selected = selectedResponseResult === option.value;
             return (
-              <button type="button" key={option.value} disabled={!hasContactProof} onClick={() => void handleCustomerResponseResult(option.value)} aria-pressed={selected} className={`flex items-center gap-2 rounded-xl border p-2.5 text-left text-[11px] font-bold transition-all disabled:cursor-not-allowed ${selected ? `${option.tone} ring-2 ring-current ring-offset-1` : "border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)] hover:border-purple-300"}`}>
+              <button type="button" key={option.value} disabled={!alert.customer_contact_opened_at} onClick={() => setSelectedResponseResult(option.value)} aria-pressed={selected} className={`flex items-center gap-2 rounded-xl border p-2.5 text-left text-[11px] font-bold transition-all disabled:cursor-not-allowed ${selected ? `${option.tone} ring-2 ring-current ring-offset-1` : "border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)] hover:border-purple-300"}`}>
                 <span className="material-symbols-outlined text-base">{option.icon}</span>
                 {option.label}
               </button>
@@ -241,6 +233,18 @@ export function AlertContactWorkflow({ alert, getResolverName }: AlertContactWor
           })}
         </div>
       </fieldset>
+
+      {hasCompleteDraft && (
+        <button
+          type="button"
+          onClick={() => void handleRecordResult()}
+          disabled={isRecordingResult}
+          className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-[var(--color-brand)] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[var(--color-brand-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <span className="material-symbols-outlined text-lg">task_alt</span>
+          {isRecordingResult ? "Đang ghi nhận..." : "Ghi nhận kết quả"}
+        </button>
+      )}
 
       {feedback && (
         <p role="status" className={`rounded-xl border p-3 text-[11px] font-bold ${feedback.tone === "success" ? "border-green-200 bg-green-50 text-green-700" : "border-red-200 bg-red-50 text-red-700"}`}>

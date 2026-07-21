@@ -6,6 +6,7 @@ export type LeadWorkbenchView =
   | "priority"
   | "active"
   | "closed"
+  | "skipped"
   | "urgent"
   | "follow_up"
   | "need_result";
@@ -39,6 +40,24 @@ export interface LeadWorkbenchMeta {
   nextActionLabel: string;
 }
 
+export type LeadFollowUpBucket =
+  | "overdue"
+  | "due_soon"
+  | "today"
+  | "future"
+  | "unscheduled";
+
+export interface LeadFollowUpMeta {
+  scheduledAt: number | null;
+  isScheduled: boolean;
+  isActive: boolean;
+  isDueToday: boolean;
+  isOverdue: boolean;
+  isDueSoon: boolean;
+  bucket: LeadFollowUpBucket;
+  relativeLabel: string;
+}
+
 export interface LeadActionLink {
   label: string;
   icon: string;
@@ -55,7 +74,9 @@ export const WORKBENCH_VIEWS: Array<{
   { id: "unassigned", label: "Chưa phân công" },
   { id: "priority", label: "Chờ xử lý" },
   { id: "active", label: "Đang xử lý" },
+  { id: "follow_up", label: "Follow-up" },
   { id: "closed", label: "Đã đóng" },
+  { id: "skipped", label: "Đã bỏ qua" },
 ];
 
 export const EMPLOYEE_PRIORITY_WORKBENCH_VIEWS: Array<{
@@ -292,17 +313,75 @@ function hasContactChannel(lead: Lead) {
   return getLeadContactActions(lead).length > 0 || Boolean(getLeadSourceAction(lead));
 }
 
-function hasFollowUpSignal(lead: Lead) {
-  if (lead.follow_up_at) return true;
+export function getLeadFollowUpMeta(
+  lead: Lead,
+  nowMs = Date.now(),
+): LeadFollowUpMeta {
+  const scheduledAt = lead.follow_up_at
+    ? new Date(lead.follow_up_at).getTime()
+    : Number.NaN;
+  const isScheduled = Number.isFinite(scheduledAt);
+  const isOpen = lead.status === "processing";
+  const hasFollowUpResult = lead.result_type === "follow_up" || !lead.result_type;
+  const isActive = isScheduled && isOpen && hasFollowUpResult;
 
-  const note = `${lead.notes || ""} ${lead.intent_signals.join(" ")}`.toLowerCase();
-  return (
-    note.includes("follow") ||
-    note.includes("hẹn") ||
-    note.includes("hen") ||
-    note.includes("gọi lại") ||
-    note.includes("goi lai")
-  );
+  if (!isScheduled) {
+    return {
+      scheduledAt: null,
+      isScheduled: false,
+      isActive: false,
+      isDueToday: false,
+      isOverdue: false,
+      isDueSoon: false,
+      bucket: "unscheduled",
+      relativeLabel: "Chưa đặt giờ hẹn",
+    };
+  }
+
+  const now = new Date(nowMs);
+  const endOfToday = new Date(now);
+  endOfToday.setHours(23, 59, 59, 999);
+  const isOverdue = isActive && scheduledAt <= nowMs;
+  // This is the actionable scope: overdue appointments are intentionally
+  // included together with appointments scheduled for the rest of today.
+  const isDueToday = isActive && scheduledAt <= endOfToday.getTime();
+  const remainingMs = scheduledAt - nowMs;
+  const isDueSoon = isDueToday && !isOverdue && remainingMs <= 30 * 60 * 1000;
+  const absoluteMinutes = Math.max(1, Math.ceil(Math.abs(remainingMs) / 60000));
+  const formatDuration = (minutes: number) => {
+    if (minutes < 60) return `${minutes} phút`;
+    const hours = Math.floor(minutes / 60);
+    const restMinutes = minutes % 60;
+    if (hours < 24) return restMinutes ? `${hours} giờ ${restMinutes} phút` : `${hours} giờ`;
+    const days = Math.floor(hours / 24);
+    const restHours = hours % 24;
+    return restHours ? `${days} ngày ${restHours} giờ` : `${days} ngày`;
+  };
+
+  return {
+    scheduledAt,
+    isScheduled: true,
+    isActive,
+    isDueToday,
+    isOverdue,
+    isDueSoon,
+    bucket: !isActive
+      ? "unscheduled"
+      : isOverdue
+        ? "overdue"
+        : isDueSoon
+          ? "due_soon"
+          : isDueToday
+            ? "today"
+            : "future",
+    relativeLabel: isOverdue
+      ? `Quá hẹn ${formatDuration(absoluteMinutes)}`
+      : isDueSoon
+        ? `Còn ${formatDuration(absoluteMinutes)}`
+        : isDueToday
+          ? `Hôm nay lúc ${new Date(scheduledAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}`
+          : `Hẹn ${new Date(scheduledAt).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`,
+  };
 }
 
 function hasRecordedResult(lead: Lead) {
@@ -336,7 +415,7 @@ function inferNextAction(lead: Lead) {
   if (lead.status === "completed") return "Đã chuyển đổi";
   if (lead.status === "skipped") return "Không tiềm năng";
   if (needsLeadResultCapture(lead)) return "Ghi nhận kết quả";
-  if (hasFollowUpSignal(lead)) return "Hẹn follow-up";
+  if (getLeadFollowUpMeta(lead).isActive) return "Hẹn follow-up";
   return getPrimaryLeadAction(lead)?.label || "Xem chi tiết";
 }
 
@@ -381,7 +460,7 @@ export function getLeadWorkbenchMeta(
         ? 2 * 60 * 60 * 1000
         : 24 * 60 * 60 * 1000;
   const isUrgent = isPending && remainingMs > 0 && remainingMs <= urgentWindow;
-  const isFollowUp = isPending && hasFollowUpSignal(lead);
+  const isFollowUp = getLeadFollowUpMeta(lead, nowMs).isActive;
   const contactable = hasContactChannel(lead);
   const needsResult = needsLeadResultCapture(lead);
   const isSalesHandoff = false;
@@ -480,6 +559,7 @@ export function matchesLeadWorkbenchView(
 
   if (view === "priority") {
     if (!meta.isPending) return false;
+    if (meta.isFollowUp) return false;
 
     // If Brand Manager: show if it has pending label correction
     const isManager = profile?.role === "admin" || profile?.role === "brand_manager";
@@ -498,18 +578,30 @@ export function matchesLeadWorkbenchView(
     const isMine = ownership.status === "assigned_to_me" || ownership.status === "manager_override";
     if (!isMine) return false;
 
+    // Follow-up is a dedicated work queue. Excluding an active appointment
+    // here prevents one lead from appearing in two primary workflow tabs.
+    if (getLeadFollowUpMeta(lead, nowMs).isActive) return false;
+
     // Active matches if the lead is mine and HAS been contacted
-    const hasBeenContacted = Boolean(lead.last_contact_at || (lead.contact_attempts && lead.contact_attempts > 0));
+    const hasBeenContacted = Boolean(
+      lead.last_contact_at ||
+      (lead.contact_attempts && lead.contact_attempts > 0) ||
+      lead.last_action_type === "restore",
+    );
     return hasBeenContacted;
   }
 
   if (view === "closed") {
-    return lead.status === "completed" || lead.status === "skipped";
+    return lead.status === "completed";
+  }
+
+  if (view === "skipped") {
+    return lead.status === "skipped";
   }
 
   // Supporting views for KPI calculations inside LeadStats:
   if (view === "urgent") return meta.isOverdue || meta.isUrgent;
-  if (view === "follow_up") return meta.isFollowUp;
+  if (view === "follow_up") return getLeadFollowUpMeta(lead, nowMs).isActive;
   if (view === "need_result") return meta.needsResultCapture;
 
   return true;
@@ -551,5 +643,24 @@ export function sortLeadsForWorkbench(
     }
 
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+}
+
+export function sortFollowUpLeads(
+  leads: Lead[],
+  nowMs = Date.now(),
+  profile?: UserRoleProfile | null,
+) {
+  return [...leads].sort((left, right) => {
+    const leftFollowUp = getLeadFollowUpMeta(left, nowMs);
+    const rightFollowUp = getLeadFollowUpMeta(right, nowMs);
+    const leftTime = leftFollowUp.scheduledAt ?? Number.POSITIVE_INFINITY;
+    const rightTime = rightFollowUp.scheduledAt ?? Number.POSITIVE_INFINITY;
+    if (leftTime !== rightTime) return leftTime - rightTime;
+
+    const ownerRankDiff =
+      getLeadOwnerSortRank(left, profile) - getLeadOwnerSortRank(right, profile);
+    if (ownerRankDiff !== 0) return ownerRankDiff;
+    return new Date(left.created_at).getTime() - new Date(right.created_at).getTime();
   });
 }

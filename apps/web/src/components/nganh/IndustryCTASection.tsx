@@ -45,7 +45,8 @@ export default function IndustryCTASection() {
             >
               {t("industries.cta.start")}
             </Link>
-            <button 
+            <Link
+              href="/demo"
               className="bg-transparent border-2 px-8 py-3 rounded-xl text-[16px] font-bold text-white transition-all w-full sm:w-auto"
               style={{ borderColor: "rgba(255,255,255,0.6)" }}
               onMouseOver={(e) => {
@@ -56,7 +57,7 @@ export default function IndustryCTASection() {
               }}
             >
               {t("industries.cta.demo")}
-            </button>
+            </Link>
           </div>
         </div>
       </div>

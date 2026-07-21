@@ -46,3 +46,6 @@ apps/api/service-account.json
 
 # Turborepo cache and logs
 .turbo/
+
+
+*.tsbuildinfo

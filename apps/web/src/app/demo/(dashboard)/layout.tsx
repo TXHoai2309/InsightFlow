@@ -2,25 +2,20 @@
 
 import React from "react";
 import { BMTabs } from "@/components/brand-manager";
-import { useDashboard } from "@/hooks/useDashboardData";
+import { BMLayoutHeader } from "@/components/brand-manager/BMLayoutHeader";
 
 export default function DemoDashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // Tải trước và lưu vào cache bộ dữ liệu mẫu một cách nhanh chóng
-  useDashboard({
-    autoFetch: true,
-    refetchInterval: 1800000,
-  });
-
   return (
-    <>
+    <div className="p-4 md:p-8 max-w-[1600px] mx-auto">
+      <BMLayoutHeader />
       <BMTabs />
       <div className="mt-4">
         {children}
       </div>
-    </>
+    </div>
   );
 }

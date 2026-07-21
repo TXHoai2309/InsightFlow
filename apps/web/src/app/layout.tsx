@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import dynamic from "next/dynamic";
 import { useTranslation, I18nextProvider } from "react-i18next";
@@ -81,10 +81,23 @@ export default function RootLayout({
     "/ve-chung-toi",
     "/profile",
   ].includes(pathname || "");
-  const isDemoPage = pathname?.startsWith("/demo");
+  const isDemoPage = pathname === "/demo" || pathname?.startsWith("/demo/") === true;
   const hideShell = isAuthPage || isPublicPage;
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    setSidebarCollapsed(window.localStorage.getItem("insightflow-sidebar-collapsed") === "true");
+  }, []);
+
+  const toggleSidebarCollapsed = () => {
+    setSidebarCollapsed((current) => {
+      const next = !current;
+      window.localStorage.setItem("insightflow-sidebar-collapsed", String(next));
+      return next;
+    });
+  };
 
   const getPageTitleKey = (path: string) => {
     switch (path) {
@@ -102,6 +115,8 @@ export default function RootLayout({
         return "metadata.profile.title";
       case "/dashboard":
         return "metadata.dashboard.title";
+      case "/demo":
+        return "InsightFlow Demo";
       case "/mentions":
         return "metadata.mentions.title";
       case "/alerts":
@@ -179,7 +194,33 @@ export default function RootLayout({
           <ThemeProvider>
             <LanguageProvider>
               <NativeSelectEnhancer />
-              {isAuthPage ? (
+              {isDemoPage ? (
+                <div
+                  className="flex h-screen w-full overflow-hidden"
+                  style={{ backgroundColor: "var(--color-bg-primary)" }}
+                >
+                  <Sidebar
+                    isOpen={sidebarOpen}
+                    onClose={() => setSidebarOpen(false)}
+                    isCollapsed={sidebarCollapsed}
+                    onToggleCollapsed={toggleSidebarCollapsed}
+                  />
+                  <div className={`flex min-w-0 flex-1 flex-col transition-[margin] duration-200 ${sidebarCollapsed ? "md:ml-[76px]" : "md:ml-[240px]"}`}>
+                    <Header
+                      onMenuToggle={() => setSidebarOpen((prev) => !prev)}
+                      isSidebarCollapsed={sidebarCollapsed}
+                    />
+                    <main
+                      data-app-scroll-root="true"
+                      className="flex-1 overflow-y-auto mt-16 pb-16 md:pb-0"
+                      style={{ backgroundColor: "var(--color-bg-primary)" }}
+                    >
+                      {children}
+                    </main>
+                    <MobileNav />
+                  </div>
+                </div>
+              ) : isAuthPage ? (
                 /* Trang đăng nhập/đăng ký/quên mật khẩu — không có footer */
                 <main className="flex-1">{children}</main>
               ) : hideShell ? (
@@ -188,9 +229,6 @@ export default function RootLayout({
                   <main className="flex-1">{children}</main>
                   <Footer />
                 </div>
-              ) : isDemoPage ? (
-                /* Trang demo — có layout riêng bên trong /demo/layout.tsx */
-                children
               ) : (
                 /* Trang app (Dashboard, Mentions...) — có sidebar */
                 <ProtectedRoute>
@@ -201,10 +239,13 @@ export default function RootLayout({
                     <Sidebar
                       isOpen={sidebarOpen}
                       onClose={() => setSidebarOpen(false)}
+                      isCollapsed={sidebarCollapsed}
+                      onToggleCollapsed={toggleSidebarCollapsed}
                     />
-                    <div className="flex flex-col flex-1 min-w-0 md:ml-64">
+                    <div className={`flex min-w-0 flex-1 flex-col transition-[margin] duration-200 ${sidebarCollapsed ? "md:ml-[76px]" : "md:ml-[240px]"}`}>
                       <Header
                         onMenuToggle={() => setSidebarOpen((prev) => !prev)}
+                        isSidebarCollapsed={sidebarCollapsed}
                       />
                       <main
                         data-app-scroll-root="true"

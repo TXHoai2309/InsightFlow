@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   ChevronLeft,
@@ -17,6 +17,15 @@ import { useAuth } from "@/hooks/useAuth";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { getLeadOperationErrorMessage } from "@/lib/services/dashboard";
 import { createLeadWorkbenchHref } from "@/lib/mention-navigation";
+import {
+  DASHBOARD_RETURN_CONFIG,
+  createDashboardReturnHref,
+  getAppScrollTop,
+  loadDashboardReturnContext,
+  removeDashboardReturnTokenFromCurrentUrl,
+  saveDashboardReturnContext,
+  type DashboardReturnContext,
+} from "@/lib/dashboard-return-context";
 
 const filterChips = [
   { id: "all", label: "Tất cả" },
@@ -191,7 +200,23 @@ export function LeadTable() {
   );
   const [activeFilter, setActiveFilter] = useState<FilterChip>("hot");
   const [page, setPage] = useState(1);
+  const [highlightedLeadId, setHighlightedLeadId] = useState<string | null>(null);
+  const pendingRestoreContext = useRef<DashboardReturnContext | null>(null);
   const itemsPerPage = 8;
+  const dashboardReturnToken = DASHBOARD_RETURN_CONFIG["lead-monitoring"].token;
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const context = loadDashboardReturnContext(params.get("dashboardReturnToken"));
+    if (!context || context.origin !== "lead-monitoring") return;
+    if (filterChips.some((chip) => chip.id === context.filter)) {
+      setActiveFilter(context.filter as FilterChip);
+    }
+    setPage(Math.max(1, Math.floor(context.page || 1)));
+    setHighlightedLeadId(context.selectedItemId || null);
+    pendingRestoreContext.current = context;
+    removeDashboardReturnTokenFromCurrentUrl();
+  }, []);
 
   const filteredLeads = useMemo(() => {
     if (activeFilter === "all") return rawLeads;
@@ -211,6 +236,50 @@ export function LeadTable() {
     const start = (safePage - 1) * itemsPerPage;
     return filteredLeads.slice(start, start + itemsPerPage);
   }, [filteredLeads, page, totalPages]);
+
+  useEffect(() => {
+    if (rawLeads.length === 0) return;
+    setPage((current) => Math.min(Math.max(1, current), totalPages));
+  }, [rawLeads.length, totalPages]);
+
+  useEffect(() => {
+    const context = pendingRestoreContext.current;
+    if (!context || rawLeads.length === 0) return;
+    const timer = window.setTimeout(() => {
+      const row = document.getElementById(`dashboard-lead-row-${context.selectedItemId}`);
+      if (row) {
+        row.scrollIntoView({ block: "center", behavior: "smooth" });
+      } else {
+        const scrollRoot = document.querySelector<HTMLElement>('[data-app-scroll-root="true"]');
+        if (scrollRoot) scrollRoot.scrollTo({ top: Math.max(0, context.scrollTop), behavior: "smooth" });
+        else window.scrollTo({ top: Math.max(0, context.scrollTop), behavior: "smooth" });
+      }
+      pendingRestoreContext.current = null;
+    }, 160);
+    const highlightTimer = window.setTimeout(() => setHighlightedLeadId(null), 4000);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearTimeout(highlightTimer);
+    };
+  }, [activeFilter, leads, page, rawLeads.length]);
+
+  const rememberDashboardContext = (lead: Lead) => {
+    saveDashboardReturnContext({
+      token: dashboardReturnToken,
+      origin: "lead-monitoring",
+      returnPath: DASHBOARD_RETURN_CONFIG["lead-monitoring"].path,
+      filter: activeFilter,
+      page: Math.min(page, totalPages),
+      selectedItemId: lead.id,
+      scrollTop: getAppScrollTop(),
+      savedAt: new Date().toISOString(),
+    });
+    window.history.replaceState(
+      window.history.state,
+      "",
+      createDashboardReturnHref("lead-monitoring", dashboardReturnToken),
+    );
+  };
 
   return (
     <div className="flex flex-col overflow-hidden rounded-[14px] border border-[#E9E7EE] bg-white shadow-sm">
@@ -268,12 +337,15 @@ export function LeadTable() {
                 const statusInfo = getStatusInfo(lead.status);
                 const sla = formatSla(lead);
                 const sourceHref = lead.url || lead.source_url;
-                const leadHref = createLeadWorkbenchHref(lead);
+                const leadHref = createLeadWorkbenchHref(lead, {
+                  origin: "lead-monitoring",
+                  token: dashboardReturnToken,
+                });
 
                 return (
-                  <tr key={lead.id} className="transition-colors hover:bg-[#FAF8FF]">
+                  <tr id={`dashboard-lead-row-${lead.id}`} key={lead.id} className={`transition-colors hover:bg-[#FAF8FF] ${highlightedLeadId === lead.id ? "bg-[#EEEBFF] ring-2 ring-inset ring-[#5B4FCF]" : ""}`}>
                     <td className="px-5 py-4 align-top">
-                      <Link href={leadHref} className="flex items-center gap-3 rounded-lg outline-none transition hover:text-[#4234B6] focus-visible:ring-2 focus-visible:ring-[#4234B6]/30" title="Xem mention tại trang Khách hàng">
+                      <Link href={leadHref} onClick={() => rememberDashboardContext(lead)} onAuxClick={() => rememberDashboardContext(lead)} onContextMenu={() => rememberDashboardContext(lead)} className="flex items-center gap-3 rounded-lg outline-none transition hover:text-[#4234B6] focus-visible:ring-2 focus-visible:ring-[#4234B6]/30" title="Xem mention tại trang Khách hàng">
                         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#EEEDF4] text-[13px] font-bold text-[#4234B6]">
                           {getAvatarInitials(lead.author)}
                         </div>
@@ -289,7 +361,7 @@ export function LeadTable() {
                     </td>
 
                     <td className="max-w-[340px] px-5 py-4 align-top">
-                      <Link href={leadHref} className="block rounded-lg outline-none transition hover:bg-[#F4F3FA] focus-visible:ring-2 focus-visible:ring-[#4234B6]/30" title="Xem mention tại trang Khách hàng">
+                      <Link href={leadHref} onClick={() => rememberDashboardContext(lead)} onAuxClick={() => rememberDashboardContext(lead)} onContextMenu={() => rememberDashboardContext(lead)} className="block rounded-lg outline-none transition hover:bg-[#F4F3FA] focus-visible:ring-2 focus-visible:ring-[#4234B6]/30" title="Xem mention tại trang Khách hàng">
                         <p className="text-[13px] font-bold text-[#1A1B20]">
                           {getLeadSignal(lead)}
                         </p>
@@ -405,7 +477,7 @@ export function LeadTable() {
                             <ExternalLink className="h-4 w-4" />
                           </a>
                         ) : (
-                          <Link href={leadHref} className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#E9E7EE] text-[#787585] hover:bg-[#F4F3FA]" title="Xem tại trang Khách hàng">
+                          <Link href={leadHref} onClick={() => rememberDashboardContext(lead)} onAuxClick={() => rememberDashboardContext(lead)} onContextMenu={() => rememberDashboardContext(lead)} className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#E9E7EE] text-[#787585] hover:bg-[#F4F3FA]" title="Xem tại trang Khách hàng">
                             <MessageSquare className="h-4 w-4" />
                           </Link>
                         )}

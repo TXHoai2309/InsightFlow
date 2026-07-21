@@ -427,7 +427,7 @@ export default function DashboardPreviewSection() {
 
             {/* CTA link */}
             <Link
-              href={user ? appRoute : "/login"}
+              href="/demo"
               className="inline-flex items-center gap-2 font-semibold text-[14px] group"
               style={{ color: isDark ? "var(--color-brand)" : "#6D4CFF" }}
             >

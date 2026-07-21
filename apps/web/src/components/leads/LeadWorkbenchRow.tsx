@@ -14,10 +14,12 @@ import { PlatformLogo } from "@/components/platform/PlatformLogo";
 import type { Lead } from "@/types/dashboard";
 import {
   formatLeadSla,
+  getLeadFollowUpMeta,
   getLeadOwnershipMeta,
   getLeadWorkbenchMeta,
   getPrimaryLeadAction,
 } from "@/lib/lead-workbench";
+import type { AlertViewer } from "@/hooks/useAlertViewPresence";
 
 interface LeadWorkbenchRowProps {
   lead: Lead;
@@ -28,8 +30,14 @@ interface LeadWorkbenchRowProps {
   staffList?: any[];
   detailPanelOpen?: boolean;
   compact?: boolean;
+  pinned?: boolean;
+  canPin?: boolean;
+  pinDisabled?: boolean;
   onSelect: (lead: Lead) => void;
+  onTogglePin?: (lead: Lead) => void;
   onStartedAction?: (lead: Lead) => void;
+  viewers?: AlertViewer[];
+  currentViewerId?: string | null;
 }
 
 const INTENT_STYLE = {
@@ -77,20 +85,39 @@ export function LeadWorkbenchRow({
   staffList = [],
   detailPanelOpen = false,
   compact = false,
+  pinned = false,
+  canPin = false,
+  pinDisabled = false,
   onSelect,
+  onTogglePin,
   onStartedAction,
+  viewers = [],
+  currentViewerId,
 }: LeadWorkbenchRowProps) {
   const { profile } = useAuth();
   const { updateLeadDetails, claimLead } = useDashboardStore();
   const [isOpening, setIsOpening] = useState(false);
   const [error, setError] = useState("");
   const [showMenu, setShowMenu] = useState(false);
+  const [showViewers, setShowViewers] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const showToast = (message: string, type: "success" | "error" = "success") => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3500);
   };
   const meta = getLeadWorkbenchMeta(lead, nowMs);
+  const followUpMeta = getLeadFollowUpMeta(lead, nowMs);
+  const isActiveFollowUp = followUpMeta.isActive;
+  const isActionableFollowUp = followUpMeta.isDueToday;
+  const isUrgentFollowUp = followUpMeta.isOverdue || followUpMeta.isDueSoon;
+  const timingLabel = isActiveFollowUp
+    ? followUpMeta.relativeLabel
+    : formatLeadSla(meta);
+  const timingCaption = isActiveFollowUp
+    ? "Lịch follow-up"
+    : meta.needsResultCapture
+      ? "Cần ghi nhận kết quả"
+      : "SLA còn lại";
   const ownership = getLeadOwnershipMeta(lead, profile);
   const primaryAction = getPrimaryLeadAction(lead);
   const platformMeta = PLATFORM_META[lead.platform];
@@ -116,14 +143,18 @@ export function LeadWorkbenchRow({
         ? "Xem chi tiết"
         : meta.needsResultCapture
           ? "Ghi nhận kết quả"
-          : meta.nextActionLabel;
+          : isActionableFollowUp
+            ? "Thực hiện follow-up"
+            : meta.nextActionLabel;
   const ctaIcon = ownership.canClaim
       ? "person_add"
       : !ownership.canWork
         ? "visibility"
         : meta.needsResultCapture
           ? "task_alt"
-          : primaryAction?.icon || "open_in_new";
+          : isActionableFollowUp
+            ? "event_upcoming"
+            : primaryAction?.icon || "open_in_new";
 
   const getOwnerName = () =>
     profile?.displayName || profile?.email || "Nhân viên xử lý";
@@ -230,24 +261,51 @@ export function LeadWorkbenchRow({
       ? "border border-[var(--color-brand)] text-[var(--color-brand)] bg-transparent hover:bg-[var(--color-brand-subtle)] hover:shadow-sm"
       : meta.needsResultCapture
         ? "bg-[var(--color-warning)] text-white hover:brightness-95 hover:shadow-md"
-        : "bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand-hover)] hover:shadow-md";
+        : isActionableFollowUp && followUpMeta.isOverdue
+          ? "bg-[var(--color-error)] text-white hover:brightness-95 hover:shadow-md"
+          : "bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand-hover)] hover:shadow-md";
 
-  const cardStateClass = highlighted
+  const cardStateClass = pinned
+    ? "border-l-4 border-l-orange-500 border-[var(--color-brand)] p-[4%] shadow-sm ring-2 ring-[var(--color-brand)]/25 transition-colors"
+    : highlighted
     ? "border-[var(--color-brand)] bg-[var(--color-brand-subtle)] ring-4 ring-[var(--color-brand)]/20"
     : selected
       ? "border-[var(--color-brand)] bg-[var(--color-brand-subtle)]/55 ring-2 ring-[var(--color-brand)]/15"
       : meta.needsResultCapture
         ? "border-[var(--color-border)] hover:border-[var(--color-warning)]"
-        : meta.isOverdue || meta.isUrgent
-          ? "border-[var(--color-border)] hover:border-[var(--color-error)]"
-          : "border-[var(--color-border)] hover:border-[var(--color-brand-border)]";
+        : isActiveFollowUp
+          ? "border-[var(--color-info)]/50 hover:border-[var(--color-info)]"
+          : meta.isOverdue || meta.isUrgent
+            ? "border-[var(--color-border)] hover:border-[var(--color-error)]"
+            : "border-[var(--color-border)] hover:border-[var(--color-brand-border)]";
 
-  const accentClass = selected || highlighted
+  const accentClass = pinned
+    ? "bg-orange-500"
+    : selected || highlighted
     ? "bg-[var(--color-brand)]"
-    : "bg-[var(--color-border-strong)]";
+    : isActiveFollowUp
+      ? followUpMeta.isOverdue ? "bg-[var(--color-error)]" : "bg-[var(--color-info)]"
+      : "bg-[var(--color-border-strong)]";
 
   const leadTimeAgo = formatLeadTimeAgo(lead.posted_at || lead.created_at, nowMs);
   const intentLabel = lead.intent === "none" ? "N/A" : lead.intent.toUpperCase();
+
+  const renderPinButton = () => canPin ? (
+    <button
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        onTogglePin?.(lead);
+      }}
+      disabled={pinDisabled && !pinned}
+      aria-pressed={pinned}
+      aria-label={pinned ? "Bỏ ghim khách hàng" : "Ghim khách hàng"}
+      title={pinDisabled && !pinned ? "Chỉ được ghim tối đa 3 khách hàng" : pinned ? "Bỏ ghim" : "Ghim lên đầu"}
+      className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${pinned ? "border-orange-300 bg-orange-50 text-orange-600 dark:border-orange-800 dark:bg-orange-950/30 dark:text-orange-300" : "border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[var(--color-text-muted)] hover:border-orange-300 hover:bg-orange-50 hover:text-orange-600"}`}
+    >
+      <span className="material-symbols-outlined text-[17px]">push_pin</span>
+    </button>
+  ) : null;
 
   if (compact) {
     return (
@@ -260,7 +318,7 @@ export function LeadWorkbenchRow({
         aria-current={selected ? "true" : undefined}
         onClick={() => onSelect(lead)}
         onKeyDown={handleRowKeyDown}
-        className={`relative w-full cursor-pointer overflow-hidden rounded-lg border bg-[var(--color-bg-surface)] p-3 text-left transition duration-200 hover:bg-[var(--color-bg-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2 ${cardStateClass}`}
+        className={`relative w-full cursor-pointer overflow-visible rounded-lg border bg-[var(--color-bg-surface)] p-3 text-left transition duration-200 hover:bg-[var(--color-bg-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2 ${cardStateClass}`}
       >
         <span className={`absolute inset-y-0 left-0 w-1 ${accentClass}`} />
 
@@ -290,17 +348,67 @@ export function LeadWorkbenchRow({
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
-                {selected && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-brand)] px-2 py-0.5 text-[10px] font-black text-white">
-                    <span className="material-symbols-outlined text-xs">check</span>
-                    Đang xem
-                  </span>
+                {renderPinButton()}
+                {selected && ownership.status === "unassigned" && (
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setShowViewers((value) => !value);
+                    }}
+                    aria-expanded={showViewers}
+                    aria-label={`${viewers.length} người đang xem khách hàng`}
+                    title={`${viewers.length} người đang xem`}
+                    className="inline-flex h-7 min-w-7 items-center justify-center gap-0.5 rounded-md border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-1.5 text-[10px] font-black text-[var(--color-text-muted)] transition hover:border-violet-300 hover:text-violet-600"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">visibility</span>
+                    <span>{viewers.length}</span>
+                  </button>
                 )}
                 <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black ${INTENT_STYLE[lead.intent]}`}>
                   {intentLabel}
                 </span>
               </div>
             </div>
+
+            {selected && ownership.status === "unassigned" && showViewers && (
+              <div
+                role="dialog"
+                aria-label="Danh sách người đang xem khách hàng"
+                onClick={(event) => event.stopPropagation()}
+                className="absolute right-3 top-12 z-50 w-[min(18rem,calc(100%-1.5rem))] rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-3 text-left shadow-xl"
+              >
+                <div className="flex items-center justify-between gap-2 border-b border-[var(--color-border)] pb-2">
+                  <p className="text-sm font-black text-[var(--color-text-primary)]">Người đang xem ({viewers.length})</p>
+                  <button type="button" onClick={() => setShowViewers(false)} className="grid h-7 w-7 place-items-center rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-raised)]" aria-label="Đóng danh sách người xem">
+                    <span className="material-symbols-outlined text-[18px]">close</span>
+                  </button>
+                </div>
+                {viewers.length === 0 ? (
+                  <p className="py-3 text-xs text-[var(--color-text-secondary)]">Chưa có người nào đang xem.</p>
+                ) : (
+                  <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto">
+                    {viewers.map((viewer) => (
+                      <li key={viewer.uid} className="flex items-center gap-2 rounded-lg px-2 py-2 hover:bg-[var(--color-bg-surface-raised)]">
+                        {viewer.photoURL ? (
+                          <span aria-hidden="true" className="h-8 w-8 shrink-0 rounded-full bg-cover bg-center" style={{ backgroundImage: `url(${JSON.stringify(viewer.photoURL).slice(1, -1)})` }} />
+                        ) : (
+                          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-violet-100 text-xs font-black text-violet-700 dark:bg-violet-950/40 dark:text-violet-300">
+                            {(viewer.displayName || viewer.email || "ND").slice(0, 2).toUpperCase()}
+                          </span>
+                        )}
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-black text-[var(--color-text-primary)]">
+                            {viewer.displayName || viewer.email || "Người dùng"}{viewer.uid === currentViewerId ? " (Bạn)" : ""}
+                          </p>
+                          {viewer.email && <p className="truncate text-[10px] text-[var(--color-text-muted)]">{viewer.email}</p>}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
 
             <p className="mt-2 line-clamp-1 text-[13px] font-semibold leading-5 text-[var(--color-text-primary)]">
               {leadReason}
@@ -311,12 +419,12 @@ export function LeadWorkbenchRow({
 
             <div className="mt-2.5 flex items-end justify-between gap-3 border-t border-[var(--color-border)] pt-2.5">
               <div className="min-w-0">
-                <p className={`flex items-center gap-1 truncate text-xs font-black ${meta.isOverdue || meta.isUrgent ? "text-[var(--color-error)]" : "text-[var(--color-text-primary)]"}`}>
-                  {(meta.isOverdue || meta.isUrgent) && <span className="material-symbols-outlined text-sm">schedule</span>}
-                  <span className="truncate">{formatLeadSla(meta)}</span>
+                <p className={`flex items-center gap-1 truncate text-xs font-black ${isUrgentFollowUp || meta.isOverdue || meta.isUrgent ? "text-[var(--color-error)]" : isActiveFollowUp ? "text-[var(--color-info)]" : "text-[var(--color-text-primary)]"}`}>
+                  {(isActiveFollowUp || meta.isOverdue || meta.isUrgent) && <span className="material-symbols-outlined text-sm">{isActiveFollowUp ? "event_upcoming" : "schedule"}</span>}
+                  <span className="truncate">{timingLabel}</span>
                 </p>
                 <p className="mt-0.5 truncate text-[11px] font-semibold text-[var(--color-text-muted)]">
-                  {meta.needsResultCapture ? "Cần ghi nhận kết quả" : leadTimeAgo || "SLA xử lý"}
+                  {isActiveFollowUp ? timingCaption : meta.needsResultCapture ? "Cần ghi nhận kết quả" : leadTimeAgo || "SLA xử lý"}
                 </p>
               </div>
               <div className="shrink-0 text-right">
@@ -359,7 +467,7 @@ export function LeadWorkbenchRow({
                 : meta.isOverdue || meta.isUrgent
                   ? "border-[var(--color-error)]/45"
                   : "border-[var(--color-border)] hover:border-[var(--color-brand-border)]"
-          }`}
+          } ${pinned ? "border-l-4 border-l-orange-500 border-[var(--color-brand)] p-[4%] ring-2 ring-[var(--color-brand)]/25 transition-colors" : ""}`}
       >
         <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
           <div className="flex min-w-0 flex-1 items-start gap-4">
@@ -437,19 +545,20 @@ export function LeadWorkbenchRow({
               <div className="flex items-center gap-1 lg:justify-end">
                 <span className={`material-symbols-outlined text-[16px] ${meta.isOverdue || meta.isUrgent ? "text-[var(--color-error)] animate-pulse" : "text-[var(--color-text-secondary)]"
                   }`}>
-                  {meta.needsResultCapture ? "task_alt" : "schedule"}
+                  {isActiveFollowUp ? "event_upcoming" : meta.needsResultCapture ? "task_alt" : "schedule"}
                 </span>
                 <span className={`text-sm font-extrabold tracking-tight ${meta.isOverdue || meta.isUrgent ? "text-[var(--color-error)]" : "text-[var(--color-text-secondary)]"
                   }`}>
-                  {formatLeadSla(meta)}
+                  {timingLabel}
                 </span>
               </div>
               <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
-                {meta.needsResultCapture ? "Cần ghi nhận" : "SLA còn lại"}
+                {timingCaption}
               </span>
             </div>
 
             <div className="flex min-w-[130px] items-center gap-2">
+              {renderPinButton()}
               <button
                 type="button"
                 data-tour={rank === 1 ? "lead-row-primary-action" : undefined}
@@ -534,6 +643,7 @@ export function LeadWorkbenchRow({
                   Lý do ưu tiên: {leadReason}
                 </span>
               </div>
+              {renderPinButton()}
               <button
                 type="button"
                 aria-label="Tùy chọn lead"
@@ -585,16 +695,16 @@ export function LeadWorkbenchRow({
                   : "bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]"
                 }`}>
                 <span className="material-symbols-outlined text-[20px]">
-                  {meta.needsResultCapture ? "task_alt" : "schedule"}
+                  {isActiveFollowUp ? "event_upcoming" : meta.needsResultCapture ? "task_alt" : "schedule"}
                 </span>
               </span>
               <div className="min-w-0">
                 <p className={`truncate text-sm font-black ${meta.isOverdue || meta.isUrgent ? "text-[var(--color-error)]" : "text-[var(--color-text-primary)]"
                   }`}>
-                  {formatLeadSla(meta)}
+                  {timingLabel}
                 </p>
                 <p className="mt-0.5 text-[11px] font-semibold text-[var(--color-text-muted)]">
-                  {meta.needsResultCapture ? "Cần ghi nhận kết quả" : "SLA còn lại"}
+                  {timingCaption}
                 </p>
               </div>
             </div>

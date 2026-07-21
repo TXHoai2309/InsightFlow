@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ClipboardCheck, Sparkles, UserPlus, ChevronDown } from "lucide-react";
+import { ClipboardCheck, PanelRightClose, Sparkles, UserPlus, ChevronDown } from "lucide-react";
 import { LeadHistoryTab } from "@/components/leads/LeadHistoryTab";
 import { LeadProfileTab } from "@/components/leads/LeadProfileTab";
 import { LeadContentContext } from "@/components/leads/LeadContentContext";
@@ -41,7 +41,9 @@ interface LeadDetailPanelProps {
   nowMs: number;
   workbenchView: LeadWorkbenchView;
   onClose: () => void;
-  onAfterResult?: () => void;
+  onAfterResult?: (updatedLead: Lead, resultType?: Lead["result_type"]) => void;
+  onAfterSkip?: (lead: Lead) => void;
+  onAfterRestore?: (lead: Lead) => void;
   onStartedAction?: (lead: Lead, preventJump?: boolean) => void;
   returnContext?: {
     view: LeadWorkbenchView;
@@ -78,16 +80,21 @@ const RESULT_OPTIONS: Array<{
   status: Lead["status"];
   description: string;
 }> = [
-  { id: "positive", label: "Khách phản hồi tích cực", icon: "thumb_up", status: "processing", description: "Khách hàng có quan tâm và tương tác tốt." },
-  { id: "no_response", label: "Chưa phản hồi", icon: "schedule", status: "processing", description: "Đã liên hệ nhưng khách chưa trả lời." },
-  { id: "follow_up", label: "Hẹn lại", icon: "event", status: "processing", description: "Khách hẹn liên hệ lại vào thời gian khác." },
-  { id: "not_fit", label: "Không phù hợp", icon: "block", status: "skipped", description: "Khách không có nhu cầu hoặc sai đối tượng." },
-  { id: "converted", label: "Đã chuyển đổi", icon: "emoji_events", status: "completed", description: "Khách hàng đã đồng ý chốt deal/đăng ký." },
-];
+    { id: "positive", label: "Khách phản hồi tích cực", icon: "thumb_up", status: "processing", description: "Khách hàng có quan tâm và tương tác tốt." },
+    { id: "no_response", label: "Chưa phản hồi", icon: "schedule", status: "processing", description: "Đã liên hệ nhưng khách chưa trả lời." },
+    { id: "follow_up", label: "Hẹn lại", icon: "event", status: "processing", description: "Khách hẹn liên hệ lại vào thời gian khác." },
+    { id: "not_fit", label: "Không phù hợp", icon: "block", status: "skipped", description: "Khách không có nhu cầu hoặc sai đối tượng." },
+    { id: "converted", label: "Đã chuyển đổi", icon: "emoji_events", status: "completed", description: "Khách hàng đã đồng ý chốt deal/đăng ký." },
+  ];
 
 function toDateInputValue(dateIso?: string) {
   if (!dateIso) return "";
-  return new Date(dateIso).toISOString().slice(0, 10);
+  const date = new Date(dateIso);
+  if (Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function toTimeInputValue(dateIso?: string) {
@@ -113,6 +120,8 @@ export function LeadDetailPanel({
   workbenchView,
   onClose,
   onAfterResult,
+  onAfterSkip,
+  onAfterRestore,
   onStartedAction,
   activeTab: activeTabProp,
   onTabChange,
@@ -120,7 +129,7 @@ export function LeadDetailPanel({
   onCollapseToggle,
 }: LeadDetailPanelProps) {
   const { profile, role, user } = useAuth();
-  const { updateLeadDetails, claimLead } = useDashboardStore();
+  const { updateLeadDetails, claimLead, skipLead, restoreLead } = useDashboardStore();
   const [internalActiveTab, setInternalActiveTab] = useState<PanelTab>("action");
   const [staffList, setStaffList] = useState<AssignableStaff[]>([]);
   const [loadingStaff, setLoadingStaff] = useState(false);
@@ -164,11 +173,11 @@ export function LeadDetailPanel({
         }
         const staff = Array.isArray(payload?.data)
           ? (payload.data as AssignableStaff[]).filter(
-              (item) =>
-                !item.disabled &&
-                Array.isArray(item.permissions) &&
-                item.permissions.includes("leads"),
-            )
+            (item) =>
+              !item.disabled &&
+              Array.isArray(item.permissions) &&
+              item.permissions.includes("leads"),
+          )
           : [];
         setStaffList(staff);
       } catch (error) {
@@ -185,10 +194,9 @@ export function LeadDetailPanel({
     return () => controller.abort();
   }, [role, user, workbenchView]);
   const [selectedResult, setSelectedResult] = useState<ResultAction | null>(null);
-  const [showSkipForm, setShowSkipForm] = useState(false);
-  const [skipReason, setSkipReason] = useState("");
-  const [skipNote, setSkipNote] = useState("");
+  const [showSkipConfirmation, setShowSkipConfirmation] = useState(false);
   const [isSkipping, setIsSkipping] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
   const [isClaiming, setIsClaiming] = useState(false);
   const [skipError, setSkipError] = useState("");
   const [note, setNote] = useState("");
@@ -206,6 +214,11 @@ export function LeadDetailPanel({
     setTimeout(() => setToast(null), 3500);
   };
   const activeTab = activeTabProp || internalActiveTab;
+
+  useEffect(() => {
+    setShowSkipConfirmation(false);
+    setSkipError("");
+  }, [lead?.id]);
 
   const meta = useMemo(
     () => (lead ? getLeadWorkbenchMeta(lead, nowMs) : null),
@@ -228,12 +241,27 @@ export function LeadDetailPanel({
     canEdit &&
     ownership.canWork &&
     meta.needsResultCapture;
+  const isTerminalLead = lead.status === "completed" || lead.status === "skipped";
   const canSkipLead =
     canEdit &&
-    (ownership.canClaim || ownership.canWork) &&
-    lead.status !== "completed" &&
-    lead.status !== "skipped";
+    workbenchView === "active" &&
+    ownership.status === "assigned_to_me" &&
+    lead.status === "processing";
+  const canRestoreLead =
+    canEdit &&
+    (workbenchView === "closed" || workbenchView === "skipped") &&
+    isTerminalLead &&
+    (ownership.status === "assigned_to_me" ||
+      ownership.status === "manager_override" ||
+      ownership.status === "unassigned");
   const sourceAction = getLeadSourceAction(lead);
+  const showTerminalSourceAction =
+    isTerminalLead &&
+    (workbenchView === "closed" || workbenchView === "skipped");
+  const canOpenTerminalSource =
+    showTerminalSourceAction &&
+    Boolean(sourceAction) &&
+    isSameBrandScope(profile, lead);
   const profileSourceHref = sourceAction?.href || "";
   const canOpenProfileSource = Boolean(sourceAction && ownership.canWork);
   const platformMeta = PLATFORM_META[lead.platform];
@@ -299,50 +327,15 @@ export function LeadDetailPanel({
       setSkipError("Bạn không có quyền bỏ qua item này.");
       return;
     }
-    if (!skipReason) {
-      setSkipError("Vui lòng chọn lý do bỏ qua.");
-      return;
-    }
 
     try {
       setIsSkipping(true);
       setSkipError("");
-      const nowIso = new Date().toISOString();
-      const reasonLabel =
-        {
-          not_relevant: "Không liên quan",
-          spam: "Spam/quảng cáo",
-          duplicate: "Trùng lặp",
-          not_a_lead: "Không phải khách hàng tiềm năng",
-          other: "Lý do khác",
-        }[skipReason] || skipReason;
-      const nextNote = [
-        lead.notes,
-        `[Bỏ qua] ${new Date().toLocaleString("vi-VN")} - ${reasonLabel}${skipNote.trim() ? `: ${skipNote.trim()}` : ""}`,
-      ]
-        .filter(Boolean)
-        .join("\n");
-      const skipData: Partial<Lead> = {
-        status: "skipped",
-        result_type: "not_fit",
-        notes: nextNote,
-        pending_result: false,
-        result_recorded_at: nowIso,
-        closed_at: nowIso,
-        last_action_at: nowIso,
-        last_action_type: "skip",
-        owner_id: lead.owner_id || profile.uid,
-        owner_name: lead.owner_name || getOwnerName(),
-        owner_email: lead.owner_email || profile.email,
-      };
-
-      await updateLeadDetails(lead.id, skipData, profile);
-      onStartedAction?.({ ...lead, ...skipData });
-      setShowSkipForm(false);
-      setSkipReason("");
-      setSkipNote("");
-      onAfterResult?.();
-      showToast("Đã bỏ qua item và lưu lý do.", "success");
+      const skipData = await skipLead(lead.id, profile);
+      const skippedLead = { ...lead, ...skipData };
+      setShowSkipConfirmation(false);
+      showToast("Đã chuyển item sang Đã bỏ qua.", "success");
+      onAfterSkip?.(skippedLead);
     } catch (error) {
       console.error(error);
       setSkipError(
@@ -353,6 +346,32 @@ export function LeadDetailPanel({
       );
     } finally {
       setIsSkipping(false);
+    }
+  };
+
+  const handleRestoreLead = async () => {
+    if (!profile || !canRestoreLead) {
+      showToast("Bạn không có quyền khôi phục item này.", "error");
+      return;
+    }
+
+    try {
+      setIsRestoring(true);
+      const restoreData = await restoreLead(lead.id, profile);
+      const restoredLead = { ...lead, ...restoreData };
+      showToast("Đã khôi phục item về Đang xử lý.", "success");
+      onAfterRestore?.(restoredLead);
+    } catch (error) {
+      console.error(error);
+      showToast(
+        getLeadOperationErrorMessage(
+          error,
+          "Không thể khôi phục item này. Vui lòng thử lại.",
+        ),
+        "error",
+      );
+    } finally {
+      setIsRestoring(false);
     }
   };
 
@@ -388,6 +407,14 @@ export function LeadDetailPanel({
           ? "Hãy nhận xử lý lead này trước khi liên hệ."
           : "Lead này đang do người khác phụ trách.",
       );
+      return;
+    }
+
+    // Keep the source reusable while a result is pending, without recording
+    // another contact attempt every time the user reopens the same post.
+    if (countAsContact && meta.needsResultCapture) {
+      window.open(action.href, "_blank", "noopener,noreferrer");
+      showToast("Đã mở lại nguồn của khách hàng.");
       return;
     }
 
@@ -441,6 +468,15 @@ export function LeadDetailPanel({
     }
   };
 
+  const handleOpenTerminalSource = () => {
+    if (!sourceAction || !canOpenTerminalSource) {
+      showToast("Item này không có liên kết nguồn hợp lệ.", "error");
+      return;
+    }
+
+    window.open(sourceAction.href, "_blank", "noopener,noreferrer");
+  };
+
   const handleSaveResult = async () => {
     if (!selectedResult) return;
     const option = RESULT_OPTIONS.find((item) => item.id === selectedResult);
@@ -456,13 +492,26 @@ export function LeadDetailPanel({
       return;
     }
 
+    const selectedFollowUpDate = selectedResult === "follow_up"
+      ? new Date(`${followUpDate}T${followUpTime}:00`)
+      : null;
+    if (
+      selectedResult === "follow_up" &&
+      (!selectedFollowUpDate ||
+        Number.isNaN(selectedFollowUpDate.getTime()) ||
+        selectedFollowUpDate.getTime() <= Date.now())
+    ) {
+      setSaveError("Thời điểm follow-up phải ở trong tương lai.");
+      return;
+    }
+
     try {
       setIsSaving(true);
       setSaveError("");
       const nowIso = new Date().toISOString();
       const followUpAt =
-        selectedResult === "follow_up"
-          ? new Date(`${followUpDate}T${followUpTime}:00`).toISOString()
+        selectedResult === "follow_up" && selectedFollowUpDate
+          ? selectedFollowUpDate.toISOString()
           : undefined;
       const nextNote = [
         lead.notes,
@@ -479,9 +528,7 @@ export function LeadDetailPanel({
         last_contact_at: lead.last_contact_at || nowIso,
       };
 
-      if (followUpAt) {
-        resultData.follow_up_at = followUpAt;
-      }
+      resultData.follow_up_at = followUpAt || null;
 
       if (selectedResult === "not_fit" || selectedResult === "converted") {
         resultData.closed_at = nowIso;
@@ -493,15 +540,27 @@ export function LeadDetailPanel({
         profile,
       );
 
+      const updatedLead = { ...lead, ...resultData };
       setIsSaveSuccess(true);
-      showToast("Ghi nhận kết quả thành công!", "success");
+      showToast(
+        selectedResult === "follow_up" && followUpAt
+          ? `Đã hẹn follow-up lúc ${new Date(followUpAt).toLocaleString("vi-VN", {
+            hour: "2-digit",
+            minute: "2-digit",
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+          })}.`
+          : "Ghi nhận kết quả thành công!",
+        "success",
+      );
+      onAfterResult?.(updatedLead, selectedResult);
       setTimeout(() => {
         setIsSaveSuccess(false);
         setSelectedResult(null);
         setNote("");
         setFollowUpDate("");
         setFollowUpTime("");
-        onAfterResult?.();
       }, 2000);
     } catch (error: any) {
       console.error(error);
@@ -522,7 +581,7 @@ export function LeadDetailPanel({
     { id: "interactions", label: "Tương tác" },
     { id: "history", label: "Lịch sử" },
   ];
-  const isResultFinished = lead.status === "completed" || lead.status === "skipped";
+  const isResultFinished = isTerminalLead;
   const workflowSteps = [
     { label: "Đã chọn", complete: true, active: false },
     {
@@ -546,7 +605,7 @@ export function LeadDetailPanel({
   return (
     <aside
       data-tour="lead-detail-panel"
-      className="flex min-w-0 shrink-0 flex-col self-start rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm min-[1100px]:sticky min-[1100px]:top-3 min-[1100px]:max-h-[calc(100vh-88px)]"
+      className="flex min-w-0 shrink-0 flex-col self-start rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm min-[1100px]:sticky min-[1100px]:top-3 min-[1100px]:h-[calc(100vh-88px)] min-[1100px]:max-h-[calc(100vh-88px)]"
     >
       <div className="shrink-0 border-b border-[var(--color-border)] px-3 pb-0 pt-2.5">
         <div className="flex items-start justify-between gap-2.5">
@@ -569,7 +628,33 @@ export function LeadDetailPanel({
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            {!lead.owner_id ? (
+            {isTerminalLead ? (
+              <>
+                {showTerminalSourceAction && (
+                  <button
+                    type="button"
+                    onClick={handleOpenTerminalSource}
+                    disabled={!canOpenTerminalSource}
+                    title={canOpenTerminalSource ? "Mở nội dung trên nền tảng nguồn" : "Không có liên kết nguồn"}
+                    className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 text-[13px] font-semibold text-[var(--color-text-primary)] transition hover:border-[var(--color-brand)]/40 hover:bg-[var(--color-brand-subtle)] hover:text-[var(--color-brand)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined text-lg">open_in_new</span>
+                    <span className="hidden sm:inline">Mở nguồn</span>
+                  </button>
+                )}
+                {canRestoreLead && (
+                  <button
+                    type="button"
+                    onClick={() => void handleRestoreLead()}
+                    disabled={isRestoring}
+                    className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[var(--color-brand-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <span className="material-symbols-outlined text-lg">restore</span>
+                    <span className="hidden sm:inline">{isRestoring ? "Đang khôi phục..." : "Khôi phục"}</span>
+                  </button>
+                )}
+              </>
+            ) : !lead.owner_id ? (
               role === "brand_manager" ? (
                 <div className="flex items-center gap-2" ref={dropdownRef}>
                   <div className="relative">
@@ -633,35 +718,56 @@ export function LeadDetailPanel({
                   <span className="hidden sm:inline">{isClaiming ? "Đang nhận..." : "Nhận xử lý"}</span>
                 </button>
               )
-            ) : meta.needsResultCapture ? (
-                <button
-                  type="button"
-                  onClick={handleScrollToResult}
-                  className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[var(--color-brand-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2"
-                >
-                  <ClipboardCheck size={18} aria-hidden="true" />
-                  <span className="hidden sm:inline">Ghi nhận kết quả</span>
-                </button>
-            ) : sourceAction ? (
+            ) : (
+              <>
+                {sourceAction && (
+                  <button
+                    type="button"
+                    disabled={!ownership.canWork || Boolean(isOpening)}
+                    onClick={() => handleOpenAction(sourceAction, true)}
+                    className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-bg-surface)] px-3 text-[13px] font-semibold text-[var(--color-brand)] shadow-sm transition hover:bg-[var(--color-brand-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    title="Mở lại nguồn của Lead"
+                  >
+                    <span className="material-symbols-outlined text-lg">open_in_new</span>
+                    <span className="hidden sm:inline">{isOpening === sourceAction.label ? "Đang mở..." : "Mở nguồn"}</span>
+                  </button>
+                )}
+                {meta.needsResultCapture && (
+                  <button
+                    type="button"
+                    onClick={handleScrollToResult}
+                    className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[var(--color-brand-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2"
+                  >
+                    <ClipboardCheck size={18} aria-hidden="true" />
+                    <span className="hidden sm:inline">Ghi nhận kết quả</span>
+                  </button>
+                )}
+              </>
+            )}
+            {canSkipLead && (
               <button
                 type="button"
-                disabled={!ownership.canWork || Boolean(isOpening)}
-                onClick={() => handleOpenAction(sourceAction, true)}
-                className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[var(--color-brand-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => {
+                  setSkipError("");
+                  setShowSkipConfirmation(true);
+                }}
+                disabled={isSkipping}
+                className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--color-error)]/35 bg-[var(--color-bg-surface)] px-3 text-[13px] font-semibold text-[var(--color-error)] transition hover:bg-[var(--color-error-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-error)]/30 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <span className="material-symbols-outlined text-lg">open_in_new</span>
-                <span className="hidden sm:inline">{isOpening === sourceAction.label ? "Đang mở..." : "Mở nguồn"}</span>
+                <span className="material-symbols-outlined text-lg">block</span>
+                <span className="hidden sm:inline">Bỏ qua</span>
               </button>
-            ) : null}
+            )}
             <div className="mx-1.5 h-6 w-px bg-[var(--color-border)]" />
 
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full p-1.5 text-[var(--color-text-muted)] transition hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]"
-              aria-label="Đóng chi tiết lead"
+              className="rounded-full p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-raised)]"
+              title="Thu gọn panel"
+              aria-label="Thu gọn panel"
             >
-              <span className="material-symbols-outlined text-[20px]">close</span>
+              <PanelRightClose size={18} aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -689,11 +795,10 @@ export function LeadDetailPanel({
               onClick={() => handleTabChange(tab.id)}
               role="tab"
               aria-selected={activeTab === tab.id}
-              className={`relative min-h-8 shrink-0 border-b-2 px-1 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-1 ${
-                activeTab === tab.id
+              className={`relative min-h-8 shrink-0 border-b-2 px-1 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-1 ${activeTab === tab.id
                   ? "border-[var(--color-brand)] text-[var(--color-brand)]"
                   : "border-transparent text-[var(--color-text-secondary)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-text-primary)]"
-              }`}
+                }`}
             >
               {tab.label}
             </button>
@@ -703,15 +808,18 @@ export function LeadDetailPanel({
 
       <div
         id={LEAD_DETAIL_PANEL_SCROLL_ID}
-        className="min-h-0 flex-1 overflow-y-auto p-2.5 [scrollbar-gutter:stable]"
+        className={`min-h-0 flex-1 p-2.5 [scrollbar-gutter:stable] ${activeTab === "action"
+            ? "overflow-y-auto min-[1280px]:overflow-hidden"
+            : "overflow-y-auto"
+          }`}
       >
         {activeTab === "action" && (
-          <div className="grid items-start gap-2 min-[1280px]:grid-cols-[minmax(0,1fr)_300px] min-[1500px]:grid-cols-[minmax(0,1fr)_320px] min-[1850px]:grid-cols-[minmax(0,1fr)_360px]">
-            <div className="min-w-0">
+          <div className="grid items-start gap-2 min-[1280px]:h-full min-[1280px]:min-h-0 min-[1280px]:grid-cols-[minmax(0,1fr)_300px] min-[1280px]:items-stretch min-[1500px]:grid-cols-[minmax(0,1fr)_320px] min-[1850px]:grid-cols-[minmax(0,1fr)_360px]">
+            <div className="min-w-0 min-[1280px]:min-h-0 min-[1280px]:overflow-y-auto min-[1280px]:pr-1 min-[1280px]:[scrollbar-gutter:stable]">
               <LeadContentContext lead={lead} mentions={mentions} />
             </div>
 
-            <aside className="space-y-2 min-[1280px]:sticky min-[1280px]:top-0" aria-label="Thao tác nhanh với lead">
+            <aside className="space-y-2 min-[1280px]:min-h-0 min-[1280px]:overflow-y-auto min-[1280px]:pl-1 min-[1280px]:[scrollbar-gutter:stable]" aria-label="Thao tác nhanh với lead">
               <section className="hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-2.5 min-[1280px]:block">
                 <div className="flex items-center justify-between gap-2">
                   <h4 className="text-sm font-bold text-[var(--color-text-primary)]">Tổng quan xử lý</h4>
@@ -732,160 +840,140 @@ export function LeadDetailPanel({
                   ))}
                 </div>
               </section>
-            <section
-              ref={resultSectionRef}
-              tabIndex={-1}
-              data-tour="lead-detail-result-actions"
-              className={`scroll-mt-3 rounded-xl border p-3 outline-none transition-shadow duration-300 ${
-                isResultSectionHighlighted
-                  ? "border-[var(--color-brand)] bg-[var(--color-bg-surface)] ring-2 ring-[var(--color-brand)]/20"
-                  : "border-[var(--color-border)] bg-[var(--color-bg-surface)]"
-              }`}
-            >
-              <div className="mb-3 flex items-center gap-2">
-                <h4 className="text-sm font-bold text-[var(--color-text-primary)]">Ghi nhận kết quả nhanh</h4>
-                {meta.needsResultCapture && <span className="rounded-full bg-[var(--color-brand-subtle)] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--color-brand)]">Chờ kết quả</span>}
-              </div>
-              {!canRecordResult && (
-                <div className="mb-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-2.5">
-                  <p className="text-sm text-[var(--color-text-secondary)]">
-                    {!lead.owner_id
-                      ? "Bạn cần nhận xử lý trước khi có thể ghi nhận kết quả."
-                      : "Hãy mở nguồn và liên hệ khách hàng trước khi ghi nhận kết quả."}
-                  </p>
+              <section
+                ref={resultSectionRef}
+                tabIndex={-1}
+                data-tour="lead-detail-result-actions"
+                className={`scroll-mt-3 rounded-xl border p-3 outline-none transition-shadow duration-300 ${isResultSectionHighlighted
+                    ? "border-[var(--color-brand)] bg-[var(--color-bg-surface)] ring-2 ring-[var(--color-brand)]/20"
+                    : "border-[var(--color-border)] bg-[var(--color-bg-surface)]"
+                  }`}
+              >
+                <div className="mb-3 flex items-center gap-2">
+                  <h4 className="text-sm font-bold text-[var(--color-text-primary)]">Ghi nhận kết quả nhanh</h4>
+                  {meta.needsResultCapture && <span className="rounded-full bg-[var(--color-brand-subtle)] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--color-brand)]">Chờ kết quả</span>}
                 </div>
-              )}
-              
-              <div className="grid items-start gap-3">
-                <div className="relative min-w-0" ref={resultDropdownRef}>
-                  <label className="mb-1.5 block text-xs font-bold text-[var(--color-text-secondary)]">Kết quả xử lý</label>
-                  <button 
-                    type="button"
-                    onClick={() => {
-                      if (!canRecordResult) {
-                        showToast("Vui lòng nhận xử lý và mở nguồn trước khi ghi nhận kết quả.", "error");
-                        return;
-                      }
-                      setIsResultDropdownOpen(!isResultDropdownOpen);
-                    }}
-                    className={`flex w-full items-center justify-between gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2.5 text-sm text-[var(--color-text-primary)] shadow-sm outline-none transition ${
-                      canRecordResult 
-                        ? "hover:border-[var(--color-brand)] focus-visible:border-[var(--color-brand)] focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/20"
-                        : "cursor-not-allowed bg-[var(--color-bg-surface-high)] text-[var(--color-text-disabled)]"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      {selectedResult ? (
-                        <>
-                          <span className="material-symbols-outlined shrink-0 text-[18px] text-[var(--color-brand)]">
-                            {RESULT_OPTIONS.find(o => o.id === selectedResult)?.icon}
-                          </span>
-                          <span className="truncate font-semibold">{RESULT_OPTIONS.find(o => o.id === selectedResult)?.label}</span>
-                        </>
-                      ) : (
-                        <span className="text-[var(--color-text-muted)]">Chọn kết quả xử lý</span>
-                      )}
-                    </div>
-                    <span className="material-symbols-outlined shrink-0 text-[20px] text-[var(--color-text-muted)]">
-                      {isResultDropdownOpen ? "expand_less" : "expand_more"}
-                    </span>
-                  </button>
-                  
-                  {isResultDropdownOpen && (
-                    <div className="absolute left-0 top-full z-50 mt-1.5 w-full overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-xl animate-in fade-in slide-in-from-top-2">
-                      <div className="max-h-[300px] overflow-y-auto p-1">
-                        {RESULT_OPTIONS.map((option) => (
-                          <button
-                            key={option.id}
-                            type="button"
-                            onClick={() => {
-                              setSelectedResult(option.id);
-                              setIsResultDropdownOpen(false);
-                              if (option.id === "follow_up" && !followUpDate) {
-                                const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
-                                setFollowUpDate(toDateInputValue(tomorrow.toISOString()));
-                                setFollowUpTime(toTimeInputValue(tomorrow.toISOString()) || "09:00");
-                              }
-                            }}
-                            className={`flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition ${
-                              selectedResult === option.id 
-                                ? "bg-[var(--color-brand-subtle)]" 
-                                : "hover:bg-[var(--color-bg-surface-raised)]"
-                            }`}
-                          >
-                            <span className={`material-symbols-outlined mt-0.5 shrink-0 text-[20px] ${
-                              selectedResult === option.id ? "text-[var(--color-brand)]" : "text-[var(--color-text-secondary)]"
-                            }`}>
-                              {option.icon}
-                            </span>
-                            <div>
-                              <p className={`text-sm font-semibold ${
-                                selectedResult === option.id ? "text-[var(--color-brand)]" : "text-[var(--color-text-primary)]"
-                              }`}>
-                                {option.label}
-                              </p>
-                              <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">{option.description}</p>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {selectedResult === "follow_up" && (
-                    <div data-tour="lead-detail-followup" className="mt-3 grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="mb-1 block text-xs font-semibold text-[var(--color-text-secondary)]">Ngày follow-up</label>
-                        <input type="date" value={followUpDate} onChange={(event) => setFollowUpDate(event.target.value)} className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus-visible:border-[var(--color-brand)] focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/20" />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-xs font-semibold text-[var(--color-text-secondary)]">Giờ follow-up</label>
-                        <input type="time" value={followUpTime} onChange={(event) => setFollowUpTime(event.target.value)} className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus-visible:border-[var(--color-brand)] focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/20" />
-                      </div>
-                    </div>
-                  )}
-                </div>
-                
-                <div className="flex flex-col">
-                  <label className="mb-1.5 block text-xs font-bold text-[var(--color-text-secondary)]">Ghi chú</label>
-                  <textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Nhập kết quả trao đổi với khách hàng..." className="min-h-20 w-full flex-1 resize-y rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-2.5 text-sm leading-relaxed text-[var(--color-text-primary)] outline-none transition placeholder:text-[var(--color-text-muted)] focus-visible:border-[var(--color-brand)] focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/20" />
-                </div>
-              </div>
-              
-              {saveError && <p className="mt-3 text-xs font-semibold text-[var(--color-error)]">{saveError}</p>}
-              
-              <div className="-mx-3 -mb-3 mt-3 border-t border-[var(--color-border)] bg-[var(--color-bg-surface)] p-2.5">
-                <button type="button" disabled={!selectedResult || isSaving || isSaveSuccess || !canRecordResult} onClick={handleSaveResult} className={`inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg px-5 text-sm font-bold text-white shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-[var(--color-bg-surface-high)] disabled:text-[var(--color-text-disabled)] disabled:shadow-none disabled:opacity-100 ${isSaveSuccess ? "bg-[var(--color-success)] focus-visible:ring-[var(--color-success)]" : "bg-[var(--color-brand)] hover:bg-[var(--color-brand-hover)] focus-visible:ring-[var(--color-brand)]"}`}>
-                  {isSaveSuccess ? (
-                    <>
-                      <span className="material-symbols-outlined text-[20px] animate-bounce">check_circle</span>
-                      <span>Lưu thành công!</span>
-                    </>
-                  ) : (
-                    <>
-                      <ClipboardCheck size={18} />
-                      <span>{isSaving ? "Đang lưu..." : "Lưu kết quả"}</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </section>
+                {!canRecordResult && (
+                  <div className="mb-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-2.5">
+                    <p className="text-sm text-[var(--color-text-secondary)]">
+                      {!lead.owner_id
+                        ? "Bạn cần nhận xử lý trước khi có thể ghi nhận kết quả."
+                        : "Hãy mở nguồn và liên hệ khách hàng trước khi ghi nhận kết quả."}
+                    </p>
+                  </div>
+                )}
 
-            <section className="rounded-lg border border-[var(--color-error)]/25 bg-[var(--color-error-subtle)] p-2.5">
-              <div className="flex items-start gap-2.5">
-                <span className="material-symbols-outlined text-xl text-[var(--color-error)]">block</span>
-                <div className="min-w-0 flex-1"><p className="text-sm font-bold text-[var(--color-text-primary)]">Bỏ qua / Không liên quan</p><p className="mt-0.5 text-xs leading-5 text-[var(--color-text-secondary)]">Đóng item không thuộc phạm vi xử lý và lưu lý do để tra cứu.</p></div>
-              </div>
-              {!showSkipForm ? (
-                <button type="button" onClick={() => { setShowSkipForm(true); setSkipError(""); }} disabled={!canSkipLead} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--color-error)]/35 px-3 py-2 text-sm font-bold text-[var(--color-error)] transition hover:bg-[var(--color-bg-surface)] disabled:cursor-not-allowed disabled:opacity-50">Bỏ qua item này<span className="material-symbols-outlined text-lg">arrow_forward</span></button>
-              ) : (
-                <div className="mt-3 space-y-3 border-t border-[var(--color-error)]/25 pt-3">
-                  <label className="block text-xs font-bold text-[var(--color-text-secondary)]">Lý do bỏ qua<select value={skipReason} onChange={(event) => setSkipReason(event.target.value)} className="mt-1 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus:border-[var(--color-error)] focus:ring-1 focus:ring-[var(--color-error)]"><option value="">Chọn lý do</option><option value="not_relevant">Không liên quan</option><option value="spam">Spam/quảng cáo</option><option value="duplicate">Trùng lặp</option><option value="not_a_lead">Không phải khách hàng tiềm năng</option><option value="other">Lý do khác</option></select></label>
-                  <label className="block text-xs font-bold text-[var(--color-text-secondary)]">Ghi chú <span className="font-normal">(không bắt buộc)</span><textarea value={skipNote} onChange={(event) => setSkipNote(event.target.value)} placeholder="Bổ sung lý do để tra cứu sau..." className="mt-1 min-h-[64px] w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-3 text-sm text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-error)] focus:ring-1 focus:ring-[var(--color-error)]" /></label>
-                  {skipError && <p className="text-xs font-semibold text-[var(--color-error)]">{skipError}</p>}
-                  <div className="flex justify-end gap-2"><button type="button" onClick={() => { setShowSkipForm(false); setSkipError(""); }} className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm font-bold text-[var(--color-text-primary)]">Hủy</button><button type="button" onClick={handleSkipLead} disabled={isSkipping || !skipReason} className="rounded-lg bg-[var(--color-error)] px-3 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{isSkipping ? "Đang xử lý..." : "Xác nhận bỏ qua"}</button></div>
+                <div className="grid items-start gap-3">
+                  <div className="relative min-w-0" ref={resultDropdownRef}>
+                    <label className="mb-1.5 block text-xs font-bold text-[var(--color-text-secondary)]">Kết quả xử lý</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!canRecordResult) {
+                          showToast("Vui lòng nhận xử lý và mở nguồn trước khi ghi nhận kết quả.", "error");
+                          return;
+                        }
+                        setIsResultDropdownOpen(!isResultDropdownOpen);
+                      }}
+                      className={`flex w-full items-center justify-between gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2.5 text-sm text-[var(--color-text-primary)] shadow-sm outline-none transition ${canRecordResult
+                          ? "hover:border-[var(--color-brand)] focus-visible:border-[var(--color-brand)] focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/20"
+                          : "cursor-not-allowed bg-[var(--color-bg-surface-high)] text-[var(--color-text-disabled)]"
+                        }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        {selectedResult ? (
+                          <>
+                            <span className="material-symbols-outlined shrink-0 text-[18px] text-[var(--color-brand)]">
+                              {RESULT_OPTIONS.find(o => o.id === selectedResult)?.icon}
+                            </span>
+                            <span className="truncate font-semibold">{RESULT_OPTIONS.find(o => o.id === selectedResult)?.label}</span>
+                          </>
+                        ) : (
+                          <span className="text-[var(--color-text-muted)]">Chọn kết quả xử lý</span>
+                        )}
+                      </div>
+                      <span className="material-symbols-outlined shrink-0 text-[20px] text-[var(--color-text-muted)]">
+                        {isResultDropdownOpen ? "expand_less" : "expand_more"}
+                      </span>
+                    </button>
+
+                    {isResultDropdownOpen && (
+                      <div className="absolute left-0 top-full z-50 mt-1.5 w-full overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-xl animate-in fade-in slide-in-from-top-2">
+                        <div className="max-h-[300px] overflow-y-auto p-1">
+                          {RESULT_OPTIONS.map((option) => (
+                            <button
+                              key={option.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedResult(option.id);
+                                setIsResultDropdownOpen(false);
+                                if (option.id === "follow_up" && !followUpDate) {
+                                  const tomorrow = new Date();
+                                  tomorrow.setDate(tomorrow.getDate() + 1);
+                                  setFollowUpDate(toDateInputValue(tomorrow.toISOString()));
+                                  setFollowUpTime(toTimeInputValue(tomorrow.toISOString()) || "09:00");
+                                }
+                              }}
+                              className={`flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition ${selectedResult === option.id
+                                  ? "bg-[var(--color-brand-subtle)]"
+                                  : "hover:bg-[var(--color-bg-surface-raised)]"
+                                }`}
+                            >
+                              <span className={`material-symbols-outlined mt-0.5 shrink-0 text-[20px] ${selectedResult === option.id ? "text-[var(--color-brand)]" : "text-[var(--color-text-secondary)]"
+                                }`}>
+                                {option.icon}
+                              </span>
+                              <div>
+                                <p className={`text-sm font-semibold ${selectedResult === option.id ? "text-[var(--color-brand)]" : "text-[var(--color-text-primary)]"
+                                  }`}>
+                                  {option.label}
+                                </p>
+                                <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">{option.description}</p>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {selectedResult === "follow_up" && (
+                      <div data-tour="lead-detail-followup" className="mt-3 grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="mb-1 block text-xs font-semibold text-[var(--color-text-secondary)]">Ngày follow-up</label>
+                          <input type="date" min={toDateInputValue(new Date().toISOString())} value={followUpDate} onChange={(event) => setFollowUpDate(event.target.value)} className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus-visible:border-[var(--color-brand)] focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/20" />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-semibold text-[var(--color-text-secondary)]">Giờ follow-up</label>
+                          <input type="time" value={followUpTime} onChange={(event) => setFollowUpTime(event.target.value)} className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus-visible:border-[var(--color-brand)] focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/20" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col">
+                    <label className="mb-1.5 block text-xs font-bold text-[var(--color-text-secondary)]">Ghi chú</label>
+                    <textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Nhập kết quả trao đổi với khách hàng..." className="min-h-20 w-full flex-1 resize-y rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-2.5 text-sm leading-relaxed text-[var(--color-text-primary)] outline-none transition placeholder:text-[var(--color-text-muted)] focus-visible:border-[var(--color-brand)] focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/20" />
+                  </div>
                 </div>
-              )}
-            </section>
+
+                {saveError && <p className="mt-3 text-xs font-semibold text-[var(--color-error)]">{saveError}</p>}
+
+                <div className="-mx-3 -mb-3 mt-3 border-t border-[var(--color-border)] bg-[var(--color-bg-surface)] p-2.5">
+                  <button type="button" disabled={!selectedResult || isSaving || isSaveSuccess || !canRecordResult} onClick={handleSaveResult} className={`inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg px-5 text-sm font-bold text-white shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-[var(--color-bg-surface-high)] disabled:text-[var(--color-text-disabled)] disabled:shadow-none disabled:opacity-100 ${isSaveSuccess ? "bg-[var(--color-success)] focus-visible:ring-[var(--color-success)]" : "bg-[var(--color-brand)] hover:bg-[var(--color-brand-hover)] focus-visible:ring-[var(--color-brand)]"}`}>
+                    {isSaveSuccess ? (
+                      <>
+                        <span className="material-symbols-outlined text-[20px] animate-bounce">check_circle</span>
+                        <span>Lưu thành công!</span>
+                      </>
+                    ) : (
+                      <>
+                        <ClipboardCheck size={18} />
+                        <span>{isSaving ? "Đang lưu..." : "Lưu kết quả"}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </section>
+
             </aside>
           </div>
         )}
@@ -918,12 +1006,77 @@ export function LeadDetailPanel({
 
       </div>
 
+      {showSkipConfirmation && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="lead-skip-confirmation-title"
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-[1px]"
+          onClick={() => {
+            if (!isSkipping) setShowSkipConfirmation(false);
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-5 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-error-subtle)] text-[var(--color-error)]">
+                <span className="material-symbols-outlined">block</span>
+              </span>
+              <div className="min-w-0">
+                <h2 id="lead-skip-confirmation-title" className="text-base font-black text-[var(--color-text-primary)]">
+                  Xác nhận bỏ qua khách hàng này?
+                </h2>
+                <p className="mt-1 text-sm leading-5 text-[var(--color-text-secondary)]">
+                  Item sẽ được chuyển sang tab Đã bỏ qua và có thể khôi phục lại sau.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-3">
+              <p className="truncate text-sm font-bold text-[var(--color-text-primary)]">
+                {lead.author || "Khách hàng"}
+              </p>
+              <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--color-text-secondary)]">
+                {lead.content || "Không có nội dung xem trước."}
+              </p>
+            </div>
+
+            {skipError && (
+              <p role="alert" className="mt-3 rounded-lg bg-[var(--color-error-subtle)] px-3 py-2 text-xs font-semibold text-[var(--color-error)]">
+                {skipError}
+              </p>
+            )}
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowSkipConfirmation(false)}
+                disabled={isSkipping}
+                className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm font-bold text-[var(--color-text-primary)] transition hover:bg-[var(--color-bg-surface-raised)] disabled:opacity-50"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSkipLead()}
+                disabled={isSkipping}
+                className="inline-flex items-center gap-2 rounded-lg bg-[var(--color-error)] px-4 py-2 text-sm font-bold text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <span className="material-symbols-outlined text-lg">block</span>
+                {isSkipping ? "Đang xử lý..." : "Xác nhận bỏ qua"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {toast && (
-        <div className={`fixed bottom-6 right-6 z-[9999] flex items-center gap-2.5 rounded-xl border bg-[var(--color-bg-surface)] px-4 py-3.5 text-sm font-bold shadow-2xl animate-fade-in ${
-          toast.type === "success"
+        <div className={`fixed bottom-6 right-6 z-[9999] flex items-center gap-2.5 rounded-xl border bg-[var(--color-bg-surface)] px-4 py-3.5 text-sm font-bold shadow-2xl animate-fade-in ${toast.type === "success"
             ? "border-[var(--color-success)]/30 bg-[var(--color-success-subtle)] text-[var(--color-success)]"
             : "border-[var(--color-error)]/30 bg-[var(--color-error-subtle)] text-[var(--color-error)]"
-        }`}>
+          }`}>
           <span className="material-symbols-outlined text-[18px]">
             {toast.type === "success" ? "check_circle" : "error"}
           </span>

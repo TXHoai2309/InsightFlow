@@ -27,6 +27,7 @@ import { collection, doc, limit, onSnapshot, query, updateDoc } from "firebase/f
 
 interface HeaderProps {
   onMenuToggle: () => void;
+  isSidebarCollapsed?: boolean;
 }
 
 interface AppNotification {
@@ -42,10 +43,11 @@ interface AppNotification {
   recipient_email?: string | null;
 }
 
-export function Header({ onMenuToggle }: HeaderProps) {
+export function Header({ onMenuToggle, isSidebarCollapsed = false }: HeaderProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [showNotifications, setShowNotifications] = useState(false);
+  const isDemoMode = pathname.startsWith("/demo");
   const { user, role, profile } = useAuth();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const { t } = useTranslation();
@@ -90,6 +92,10 @@ export function Header({ onMenuToggle }: HeaderProps) {
   const scopedBrandKey = profile?.role === "admin" ? null : normalizeBrandName(profile?.brandName || profile?.brandId || "");
 
   useEffect(() => {
+    if (isDemoMode) {
+      setNotifications((current) => (current.length === 0 ? current : []));
+      return;
+    }
     if (!dbSecond || !profile) {
       setNotifications([]);
       return;
@@ -131,7 +137,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
       console.error("[Header] notifications snapshot error:", error);
       setNotifications([]);
     });
-  }, [profile, scopedBrandKey]);
+  }, [isDemoMode, profile, scopedBrandKey]);
 
   const unreadCount = useMemo(() => {
     return notifications.filter((notification) => !notification.read).length;
@@ -158,7 +164,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
 
   return (
     <header
-      className="h-[72px] flex justify-between items-center px-4 md:px-8 fixed top-0 left-0 right-0 md:left-[240px] z-30 font-sans"
+      className={`fixed left-0 right-0 top-0 z-30 flex h-[72px] items-center justify-between px-4 font-sans transition-[left] duration-200 md:px-8 ${isSidebarCollapsed ? "md:left-[76px]" : "md:left-[240px]"}`}
       style={{
         backgroundColor: isDark ? "#1a1b1e" : "#ffffff",
         borderBottom: "1px solid var(--color-border)",
@@ -181,7 +187,7 @@ export function Header({ onMenuToggle }: HeaderProps) {
 
       {/* Right Section */}
       <div className="flex items-center gap-4 md:gap-6">
-        {(role === "brand_manager" || role === "crisis_employee" || role === "lead_employee") && (
+        {!isDemoMode && (role === "brand_manager" || role === "crisis_employee" || role === "lead_employee") && (
           <button
             type="button"
             onClick={handleOpenGuide}

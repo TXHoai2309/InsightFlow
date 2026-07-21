@@ -353,7 +353,7 @@ export function buildLeadReportData(
     (lead) => lead.follow_up_at && lead.status !== "completed" && lead.status !== "skipped",
   ).length;
   const followUpOverdue = scopedLeads.filter((lead) => {
-    const followUpTime = toTime(lead.follow_up_at);
+    const followUpTime = toTime(lead.follow_up_at || undefined);
     return followUpTime !== null && followUpTime < nowMs && lead.status !== "completed" && lead.status !== "skipped";
   }).length;
 
@@ -375,7 +375,7 @@ export function buildLeadReportData(
       scopedLeads.map((lead) => minutesBetween(lead.created_at, lead.first_contacted_at || lead.last_contact_at)),
     ),
     avgResultMinutes: average(
-      scopedLeads.map((lead) => minutesBetween(lead.created_at, lead.result_recorded_at || lead.closed_at)),
+      scopedLeads.map((lead) => minutesBetween(lead.created_at, lead.result_recorded_at || lead.closed_at || undefined)),
     ),
     conversionRate: percentage(converted, scopedLeads.length),
     contactRate: percentage(contacted, scopedLeads.length),

@@ -1,4 +1,8 @@
 import type { AlertData } from "@/stores/alert.store";
+import {
+  appendDashboardReturnParams,
+  type DashboardReturnOrigin,
+} from "@/lib/dashboard-return-context";
 
 function normalizeId(value: unknown) {
   return String(value || "").trim();
@@ -18,11 +22,17 @@ export function getAlertMentionId(alert: AlertData) {
   return normalizeId(alert.source_id || alert.comment_id || alert.id);
 }
 
-export function createAlertWorkbenchHref(alert: AlertData) {
+export function createAlertWorkbenchHref(
+  alert: AlertData,
+  dashboardReturn?: { origin: DashboardReturnOrigin; token: string },
+) {
   const params = new URLSearchParams({ alertId: normalizeId(alert.id) });
   const mentionId = getAlertMentionId(alert);
   if (mentionId) params.set("mentionId", mentionId);
-  return `/alerts?${params.toString()}`;
+  const href = `/alerts?${params.toString()}`;
+  return dashboardReturn
+    ? appendDashboardReturnParams(href, dashboardReturn.origin, dashboardReturn.token)
+    : href;
 }
 
 export function findAlertByNavigationTarget(

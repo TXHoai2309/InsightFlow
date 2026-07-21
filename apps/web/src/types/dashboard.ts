@@ -46,6 +46,9 @@ export interface Mention {
   created_at: string;         // ISO string (từ crawled_at)
   posted_at: string;          // ISO string (ngày đăng bài thật: post_date / created_at từ nguồn)
   url?: string;
+  post_url?: string;
+  comment_url?: string;
+  source_url?: string;
   contact?: string;
   labels?: ClassificationLabel;
   star_count?: number | null;
@@ -187,7 +190,7 @@ export interface Lead {
   last_contact_at?: string;
   pending_result?: boolean;
   last_action_at?: string;
-  last_action_type?: "open_source" | "message" | "call" | "email" | "open_profile" | "note" | "skip";
+  last_action_type?: "open_source" | "message" | "call" | "email" | "open_profile" | "note" | "skip" | "restore";
   last_contact_channel?: string;
   result_type?:
     | "positive"
@@ -195,10 +198,11 @@ export interface Lead {
     | "follow_up"
     | "not_fit"
     | "converted"
-    | "transfer_sales";
-  result_recorded_at?: string;
-  follow_up_at?: string;
-  closed_at?: string;
+    | "transfer_sales"
+    | null;
+  result_recorded_at?: string | null;
+  follow_up_at?: string | null;
+  closed_at?: string | null;
   sales_status?: "not_ready" | "ready_to_transfer" | "transferred";
   sales_owner_id?: string;
   sales_owner_name?: string;

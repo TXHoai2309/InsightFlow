@@ -1,6 +1,6 @@
 import { getScopedBrandKey, hasBusinessBrandScope, isRecordInBrandScope } from "@/lib/brandScope";
 import { canPerformAction, type UserRoleProfile } from "@/lib/rbac";
-import { isResolvedAlert } from "@/lib/alertWorkflow";
+import { isResolvedAlert, isSkippedAlert, isTerminalAlert } from "@/lib/alertWorkflow";
 import type { AlertData } from "@/stores/alert.store";
 
 function normalizeIdentity(value: string | null | undefined) {
@@ -28,6 +28,9 @@ export function canAccessAlertQueue(profile?: UserRoleProfile | null) {
 }
 
 export function getEffectiveAlertOwner(alert: AlertData) {
+  if (isSkippedAlert(alert)) {
+    return alert.skipped_by_email || alert.skipped_by_uid || alert.skipped_by_name || getLatestResolutionOwner(alert);
+  }
   if (!isResolvedAlert(alert)) return alert.being_resolved_by || "";
   return alert.resolved_by_email || getLatestResolutionOwner(alert) || alert.being_resolved_by || "";
 }
@@ -55,6 +58,6 @@ export function canAlertBeVisibleToUser(
   if (profile.role === "brand_manager") return true;
 
   const owner = normalizeIdentity(getEffectiveAlertOwner(alert));
-  if (!owner) return !isResolvedAlert(alert);
+  if (!owner) return !isTerminalAlert(alert);
   return isAlertOwnedByUser(alert, profile);
 }
