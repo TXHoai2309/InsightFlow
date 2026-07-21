@@ -101,7 +101,7 @@ function formatTimeAgo(value?: string) {
   return `${Math.round(hours / 24)} ngày trước`;
 }
 
-const cardClass = "rounded-xl border-[#DDD9E8] bg-white shadow-[0_8px_24px_rgba(30,31,36,0.06)]";
+const cardClass = "rounded-xl border border-[#DDD9E8] dark:border-white/10 bg-white dark:bg-[#1A1B20] shadow-[0_8px_24px_rgba(30,31,36,0.06)] dark:shadow-none";
 
 function KpiCard({ icon: Icon, label, value, tone, meta }: { icon: React.ElementType; label: string; value: string; tone: string; meta: string }) {
   return (
@@ -109,9 +109,9 @@ function KpiCard({ icon: Icon, label, value, tone, meta }: { icon: React.Element
       <CardContent className="flex h-full flex-col justify-between p-4">
         <div className="flex items-center justify-between gap-3">
           <div className={cn("flex h-9 w-9 items-center justify-center rounded-lg", tone)}><Icon className="h-[18px] w-[18px]" /></div>
-          <span className="text-[11px] font-bold uppercase text-[#6E6A7C]">{label}</span>
+          <span className="text-[11px] font-bold uppercase text-[#6E6A7C] dark:text-gray-400">{label}</span>
         </div>
-        <div><div className="text-2xl font-black leading-none text-[#1A1B20]">{value}</div><div className="mt-2 text-xs font-medium text-[#6E6A7C]">{meta}</div></div>
+        <div><div className="text-2xl font-black leading-none text-[#1A1B20] dark:text-white">{value}</div><div className="mt-2 text-xs font-medium text-[#6E6A7C] dark:text-gray-400">{meta}</div></div>
       </CardContent>
     </Card>
   );
@@ -158,60 +158,60 @@ export function CrisisCommandCenter() {
 
   return (
     <div data-tour="dashboard-insights" className="w-full space-y-6">
-      <Card data-tour="dashboard-insights-risk" className="rounded-xl border-[#F1B7B2] bg-[#FFF7F6] shadow-[0_10px_30px_rgba(186,26,26,0.08)]">
+      <Card data-tour="dashboard-insights-risk" className="rounded-xl border border-[#F1B7B2] dark:border-red-500/20 bg-[#FFF7F6] dark:bg-red-500/5 shadow-[0_10px_30px_rgba(186,26,26,0.08)] dark:shadow-none">
         <CardContent className="p-5">
           <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-[#BA1A1A] text-white shadow-sm"><ShieldAlert className="h-6 w-6" /></div>
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-[#BA1A1A] dark:bg-red-500/20 text-white dark:text-red-400 shadow-sm"><ShieldAlert className="h-6 w-6" /></div>
               <div>
                 <div className="mb-2 flex flex-wrap items-center gap-2">
-                  <Badge className="bg-[#BA1A1A] text-white hover:bg-[#BA1A1A]">CẢNH BÁO THƯƠNG HIỆU</Badge>
-                  <Badge variant="outline" className="border-[#F1B7B2] bg-white text-[#BA1A1A]">{riskTone}</Badge>
+                  <Badge className="bg-[#BA1A1A] text-white hover:bg-[#BA1A1A] dark:bg-red-500/20 dark:text-red-400 dark:hover:bg-red-500/30 border-none">CẢNH BÁO THƯƠNG HIỆU</Badge>
+                  <Badge variant="outline" className="border-[#F1B7B2] bg-white text-[#BA1A1A] dark:border-red-500/30 dark:bg-transparent dark:text-red-400">{riskTone}</Badge>
                 </div>
-                <h2 className="text-xl font-black leading-tight text-[#1A1B20]">{alerts.length > 0 ? `${alerts.length} cảnh báo cần theo dõi trong 30 ngày.` : "Chưa có rủi ro nổi bật trong 30 ngày."}</h2>
-                <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-[#514D5E]">Nguồn chính: <span className="font-bold text-[#1A1B20]">{topPlatform?.label || "Chưa xác định"}</span>. Chủ đề nổi bật: <span className="font-bold text-[#1A1B20]">{topTopic?.label || "Chưa xác định"}</span>. Cập nhật mới nhất {formatTimeAgo(data.latestAlert?.created_at)}.</p>
+                <h2 className="text-xl font-black leading-tight text-[#1A1B20] dark:text-white">{alerts.length > 0 ? `${alerts.length} cảnh báo cần theo dõi trong 30 ngày.` : "Chưa có rủi ro nổi bật trong 30 ngày."}</h2>
+                <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-[#514D5E] dark:text-gray-400">Nguồn chính: <span className="font-bold text-[#1A1B20] dark:text-gray-200">{topPlatform?.label || "Chưa xác định"}</span>. Chủ đề nổi bật: <span className="font-bold text-[#1A1B20] dark:text-gray-200">{topTopic?.label || "Chưa xác định"}</span>. Cập nhật mới nhất {formatTimeAgo(data.latestAlert?.created_at)}.</p>
               </div>
             </div>
             <div className="grid grid-cols-3 gap-3 xl:w-[360px]">
-              <div className="rounded-lg border border-[#F1B7B2] bg-white p-3 text-center"><div className="text-2xl font-black text-[#BA1A1A]">{data.riskScore}</div><div className="mt-1 text-[10px] font-bold uppercase text-[#6E6A7C]">Risk score</div></div>
-              <div className="rounded-lg border border-[#F1B7B2] bg-white p-3 text-center"><div className="text-2xl font-black text-[#1A1B20]">{data.criticalShare}%</div><div className="mt-1 text-[10px] font-bold uppercase text-[#6E6A7C]">Critical/Cao</div></div>
-              <div className="rounded-lg border border-[#F1B7B2] bg-white p-3 text-center"><div className="text-2xl font-black text-[#BA1A1A]">{data.activeAlerts.length}</div><div className="mt-1 text-[10px] font-bold uppercase text-[#6E6A7C]">Đang mở</div></div>
+              <div className="rounded-lg border border-[#F1B7B2] dark:border-red-500/20 bg-white dark:bg-red-500/5 p-3 text-center"><div className="text-2xl font-black text-[#BA1A1A] dark:text-red-400">{data.riskScore}</div><div className="mt-1 text-[10px] font-bold uppercase text-[#6E6A7C] dark:text-gray-400">Risk score</div></div>
+              <div className="rounded-lg border border-[#F1B7B2] dark:border-red-500/20 bg-white dark:bg-red-500/5 p-3 text-center"><div className="text-2xl font-black text-[#1A1B20] dark:text-white">{data.criticalShare}%</div><div className="mt-1 text-[10px] font-bold uppercase text-[#6E6A7C] dark:text-gray-400">Critical/Cao</div></div>
+              <div className="rounded-lg border border-[#F1B7B2] dark:border-red-500/20 bg-white dark:bg-red-500/5 p-3 text-center"><div className="text-2xl font-black text-[#BA1A1A] dark:text-red-400">{data.activeAlerts.length}</div><div className="mt-1 text-[10px] font-bold uppercase text-[#6E6A7C] dark:text-gray-400">Đang mở</div></div>
             </div>
           </div>
         </CardContent>
       </Card>
 
       <section data-tour="dashboard-insights-kpis" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard icon={MessageSquareWarning} label="Cảnh báo" value={String(alerts.length)} meta="Trong 30 ngày gần nhất" tone="bg-red-50 text-[#BA1A1A]" />
-        <KpiCard icon={AlertTriangle} label="Critical / Cao" value={String(data.criticalAlerts.length)} meta="Cần ưu tiên kiểm tra" tone="bg-amber-50 text-amber-700" />
-        <KpiCard icon={Clock3} label="Trễ SLA" value={String(data.overdueAlerts.length)} meta="Cần xử lý ngay" tone="bg-rose-50 text-rose-700" />
-        <KpiCard icon={UserRoundCheck} label="Chưa giao" value={String(data.unassignedAlerts.length)} meta="Đang chờ người phụ trách" tone="bg-indigo-50 text-indigo-700" />
+        <KpiCard icon={MessageSquareWarning} label="Cảnh báo" value={String(alerts.length)} meta="Trong 30 ngày gần nhất" tone="bg-red-50 dark:bg-red-500/10 text-[#BA1A1A] dark:text-red-400" />
+        <KpiCard icon={AlertTriangle} label="Critical / Cao" value={String(data.criticalAlerts.length)} meta="Cần ưu tiên kiểm tra" tone="bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400" />
+        <KpiCard icon={Clock3} label="Trễ SLA" value={String(data.overdueAlerts.length)} meta="Cần xử lý ngay" tone="bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400" />
+        <KpiCard icon={UserRoundCheck} label="Chưa giao" value={String(data.unassignedAlerts.length)} meta="Đang chờ người phụ trách" tone="bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400" />
       </section>
 
       <CrisisAnalyticsCharts alerts={alerts} />
 
       <section data-tour="dashboard-insights-breakdown" className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <Card className={cardClass}>
-          <CardHeader className="px-5 pb-3 pt-5"><div className="flex items-center justify-between gap-3"><div><CardTitle className="text-base font-black text-[#1A1B20]">Rủi ro theo nền tảng</CardTitle><p className="mt-1 text-xs font-medium text-[#6E6A7C]">Xác định kênh đang tập trung nhiều sự vụ nhất.</p></div><BarChart3 className="h-4 w-4 text-[#6E6A7C]" /></div></CardHeader>
+          <CardHeader className="px-5 pb-3 pt-5"><div className="flex items-center justify-between gap-3"><div><CardTitle className="text-base font-black text-[#1A1B20] dark:text-white">Rủi ro theo nền tảng</CardTitle><p className="mt-1 text-xs font-medium text-[#6E6A7C] dark:text-gray-400">Xác định kênh đang tập trung nhiều sự vụ nhất.</p></div><BarChart3 className="h-4 w-4 text-[#6E6A7C] dark:text-gray-400" /></div></CardHeader>
           <CardContent className="space-y-4 px-5 pb-5">
             {(data.platformStats.length ? data.platformStats.slice(0, 5) : [{ key: "unknown", label: "Chưa có dữ liệu", count: 0, percent: 0 }]).map((item) => (
-              <div key={item.key} className="space-y-2"><div className="flex items-center justify-between gap-3 text-sm"><div className="flex min-w-0 items-center gap-2 font-bold text-[#1A1B20]"><PlatformLogo platform={item.key} size="xs" /><span className="truncate">{item.label}</span></div><span className="shrink-0 font-black text-[#BA1A1A]">{item.count} · {item.percent}%</span></div><div className="h-2 rounded-full bg-[#F1EEF8]"><div className="h-2 rounded-full bg-[#BA1A1A]" style={{ width: `${Math.max(item.percent, item.count ? 8 : 0)}%` }} /></div></div>
+              <div key={item.key} className="space-y-2"><div className="flex items-center justify-between gap-3 text-sm"><div className="flex min-w-0 items-center gap-2 font-bold text-[#1A1B20] dark:text-gray-200"><PlatformLogo platform={item.key} size="xs" /><span className="truncate">{item.label}</span></div><span className="shrink-0 font-black text-[#BA1A1A] dark:text-red-400">{item.count} · {item.percent}%</span></div><div className="h-2 rounded-full bg-[#F1EEF8] dark:bg-white/10"><div className="h-2 rounded-full bg-[#BA1A1A] dark:bg-red-500" style={{ width: `${Math.max(item.percent, item.count ? 8 : 0)}%` }} /></div></div>
             ))}
           </CardContent>
         </Card>
 
         <Card className={cardClass}>
-          <CardHeader className="px-5 pb-3 pt-5"><div className="flex items-center justify-between gap-3"><div><CardTitle className="text-base font-black text-[#1A1B20]">Chủ đề cần xử lý</CardTitle><p className="mt-1 text-xs font-medium text-[#6E6A7C]">Nhóm nguyên nhân đang tác động nhiều nhất đến thương hiệu.</p></div><Activity className="h-4 w-4 text-[#6E6A7C]" /></div></CardHeader>
+          <CardHeader className="px-5 pb-3 pt-5"><div className="flex items-center justify-between gap-3"><div><CardTitle className="text-base font-black text-[#1A1B20] dark:text-white">Chủ đề cần xử lý</CardTitle><p className="mt-1 text-xs font-medium text-[#6E6A7C] dark:text-gray-400">Nhóm nguyên nhân đang tác động nhiều nhất đến thương hiệu.</p></div><Activity className="h-4 w-4 text-[#6E6A7C] dark:text-gray-400" /></div></CardHeader>
           <CardContent className="space-y-3 px-5 pb-5">
             {(data.topicStats.length ? data.topicStats.slice(0, 5) : [{ key: "other", label: "Chưa có dữ liệu", count: 0, percent: 0 }]).map((item, index) => (
-              <div key={item.key} className="flex items-center justify-between gap-3 rounded-lg border border-[#EEEAF6] bg-[#FBFAFE] px-3 py-3"><div className="min-w-0"><div className="text-sm font-black text-[#1A1B20]">{index + 1}. {item.label}</div><div className="mt-1 text-xs font-medium text-[#6E6A7C]">{item.percent}% tổng cảnh báo trong kỳ</div></div><Badge variant="outline" className="shrink-0 border-[#DDD9E8] bg-white text-[#BA1A1A]">{item.count}</Badge></div>
+              <div key={item.key} className="flex items-center justify-between gap-3 rounded-lg border border-[#EEEAF6] dark:border-white/10 bg-[#FBFAFE] dark:bg-white/5 px-3 py-3"><div className="min-w-0"><div className="text-sm font-black text-[#1A1B20] dark:text-gray-200">{index + 1}. {item.label}</div><div className="mt-1 text-xs font-medium text-[#6E6A7C] dark:text-gray-400">{item.percent}% tổng cảnh báo trong kỳ</div></div><Badge variant="outline" className="shrink-0 border-[#DDD9E8] dark:border-white/10 bg-white dark:bg-transparent text-[#BA1A1A] dark:text-red-400">{item.count}</Badge></div>
             ))}
           </CardContent>
         </Card>
       </section>
 
-      {isLoading && alerts.length === 0 ? <div className="rounded-xl border border-[#DDD9E8] bg-white px-5 py-12 text-center text-sm font-medium text-[#6E6A7C]">Đang đồng bộ dữ liệu cảnh báo...</div> : <CrisisTable alerts={alerts} />}
-      {error && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">Dữ liệu realtime đang gián đoạn. Hệ thống đang hiển thị bản dữ liệu gần nhất: {error}</div>}
+      {isLoading && alerts.length === 0 ? <div className="rounded-xl border border-[#DDD9E8] dark:border-white/10 bg-white dark:bg-[#1A1B20] px-5 py-12 text-center text-sm font-medium text-[#6E6A7C] dark:text-gray-400">Đang đồng bộ dữ liệu cảnh báo...</div> : <CrisisTable alerts={alerts} />}
+      {error && <div className="rounded-xl border border-amber-200 dark:border-amber-500/20 bg-amber-50 dark:bg-amber-500/10 px-4 py-3 text-sm font-semibold text-amber-800 dark:text-amber-400">Dữ liệu realtime đang gián đoạn. Hệ thống đang hiển thị bản dữ liệu gần nhất: {error}</div>}
     </div>
   );
 }

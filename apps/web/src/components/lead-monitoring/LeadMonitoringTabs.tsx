@@ -14,7 +14,7 @@ export function LeadMonitoringTabs() {
   ];
 
   return (
-    <div className="flex w-full items-center gap-[32px] border-b border-[#C8C4D6] px-10">
+    <div className="flex w-full items-center gap-[32px] border-b border-[#C8C4D6] dark:border-white/10 px-10">
       {tabs.map((tab) => {
         const isActive = pathname === tab.href || pathname.startsWith(tab.href) && tab.href !== "/dashboard";
 
@@ -24,13 +24,13 @@ export function LeadMonitoringTabs() {
             href={tab.href}
             className={`relative py-4 text-[16px] transition-colors ${
               isActive
-                ? "text-[#4234B6] font-bold"
-                : "text-[#474554] font-medium hover:text-[#1A1B20]"
+                ? "text-[#4234B6] dark:text-[#9B8CFF] font-bold"
+                : "text-[#474554] dark:text-gray-400 font-medium hover:text-[#1A1B20] dark:hover:text-white"
             }`}
           >
             {tab.label}
             {isActive && (
-              <div className="absolute bottom-[-1px] left-0 right-0 h-[2px] bg-[#4234B6]" />
+              <div className="absolute bottom-[-1px] left-0 right-0 h-[2px] bg-[#4234B6] dark:bg-[#9B8CFF]" />
             )}
           </Link>
         );

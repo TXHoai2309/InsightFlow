@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import { useTranslation } from "react-i18next";
 import { getDefaultRouteForRole } from "@/lib/rbac";
+import { useTheme } from "@/contexts/ThemeContext";
 
 const particles = [
   { top: "18%", left: "7%", size: 4, dur: "4s", delay: "0s", opacity: 0.12 },
@@ -18,6 +19,8 @@ const particles = [
 export default function FinalCTASection() {
   const { user, profile, role, loading } = useAuth();
   const { t } = useTranslation();
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
   const appRoute = profile?.defaultRoute || getDefaultRouteForRole(role);
 
   return (
@@ -33,24 +36,39 @@ export default function FinalCTASection() {
           50%      { transform: translateY(-10px); }
         }
         .cta-box {
-          background: linear-gradient(135deg,#4338CA 0%,#6366F1 50%,#8B5CF6 100%);
+          background: ${isDark 
+            ? "rgba(255, 255, 255, 0.03)"
+            : "linear-gradient(135deg,#4338CA 0%,#6366F1 50%,#8B5CF6 100%)"};
+          backdrop-filter: ${isDark ? "blur(20px)" : "none"};
+          border: ${isDark ? "1px solid rgba(255, 255, 255, 0.08)" : "none"};
           background-size: 200% 200%;
-          animation: gradientShift 8s ease infinite;
+          animation: ${isDark ? "none" : "gradientShift 8s ease infinite"};
         }
         .cta-btn-primary {
-          background:#fff; color:#4338CA; font-weight:700; font-size:15px;
+          background: ${isDark ? "var(--color-brand)" : "#fff"}; 
+          color: ${isDark ? "#fff" : "#4338CA"}; 
+          font-weight:700; font-size:15px;
           padding:13px 28px; border-radius:14px;
           box-shadow:0 6px 20px rgba(0,0,0,0.13);
           transition:all .25s ease; display:flex; align-items:center; gap:6px;
         }
-        .cta-btn-primary:hover { transform:translateY(-2px); box-shadow:0 10px 28px rgba(0,0,0,0.18); }
+        .cta-btn-primary:hover { 
+          transform:translateY(-2px); 
+          box-shadow:0 10px 28px rgba(0,0,0,0.18); 
+          background: ${isDark ? "var(--color-brand-hover)" : "#fff"};
+        }
         .cta-btn-ghost {
-          background:transparent; border:1.5px solid rgba(255,255,255,0.45);
+          background: ${isDark ? "rgba(255,255,255,0.08)" : "transparent"}; 
+          border:1.5px solid ${isDark ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.45)"};
           color:#fff; font-weight:600; font-size:15px;
           padding:13px 28px; border-radius:14px;
           backdrop-filter:blur(8px); transition:all .25s ease;
         }
-        .cta-btn-ghost:hover { background:rgba(255,255,255,0.1); border-color:rgba(255,255,255,0.8); transform:translateY(-2px); }
+        .cta-btn-ghost:hover { 
+          background:rgba(255,255,255,0.15); 
+          border-color:rgba(255,255,255,0.8); 
+          transform:translateY(-2px); 
+        }
         @media(prefers-reduced-motion:reduce){
           .cta-box,.cta-particle{ animation:none!important; }
           .cta-btn-primary,.cta-btn-ghost{ transition:none!important; }
@@ -58,9 +76,15 @@ export default function FinalCTASection() {
       `}} />
 
       <div
-        className="cta-box max-w-[1200px] mx-auto relative overflow-hidden text-center"
-        style={{ padding: "56px 64px", borderRadius: "28px", boxShadow: "0 24px 64px rgba(99,102,241,0.32)" }}
+        className="cta-box max-w-[1200px] mx-auto relative overflow-hidden text-center group"
+        style={{ padding: "40px 32px", borderRadius: "32px", boxShadow: isDark ? "0 30px 60px rgba(0,0,0,0.4)" : "0 24px 64px rgba(99,102,241,0.32)" }}
       >
+        {isDark && (
+          <>
+            <div className="absolute -right-12 -top-12 w-64 h-64 rounded-full bg-gradient-to-br from-[#6D5EF6]/20 to-transparent blur-[40px] pointer-events-none" />
+            <div className="absolute -left-12 -bottom-12 w-48 h-48 rounded-full bg-gradient-to-br from-[#0ea5e9]/10 to-transparent blur-[40px] pointer-events-none" />
+          </>
+        )}
         {/* Dot-grid overlay */}
         <div className="absolute inset-0 pointer-events-none" style={{
           backgroundImage: "radial-gradient(rgba(255,255,255,1) 1px,transparent 1px)",
@@ -101,7 +125,7 @@ export default function FinalCTASection() {
         <div className="relative z-10 flex flex-col items-center">
           {/* Badge */}
           <div className="inline-flex items-center mb-5" style={{
-            background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)",
+            background: isDark ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.12)", border: isDark ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(255,255,255,0.2)",
             borderRadius: "100px", padding: "5px 14px"
           }}>
             <span className="text-white font-bold text-[11px] tracking-[1.5px]">✨ AI SOCIAL LISTENING</span>

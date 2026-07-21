@@ -47,13 +47,13 @@ export default function DashboardLeadMonitoringPage() {
   return (
     <div data-tour="dashboard-lead-monitoring" className="w-full space-y-6">
       {isLoading && leads.length === 0 ? (
-        <div className="rounded-[12px] border border-[#E9E7EE] bg-white px-5 py-4 text-[14px] font-semibold text-[#474554] shadow-sm">
+        <div className="rounded-[12px] border border-[#E9E7EE] dark:border-white/10 bg-white dark:bg-[#1A1B20] px-5 py-4 text-[14px] font-semibold text-[#474554] dark:text-gray-400 shadow-sm dark:shadow-none">
           Đang tải dữ liệu báo cáo lead...
         </div>
       ) : null}
 
       {error ? (
-        <div className="rounded-[12px] border border-[#FFDAD6] bg-[#FFF4F2] px-5 py-4 text-[14px] font-semibold text-[#BA1A1A] shadow-sm">
+        <div className="rounded-[12px] border border-[#FFDAD6] dark:border-red-500/30 bg-[#FFF4F2] dark:bg-red-500/20 px-5 py-4 text-[14px] font-semibold text-[#BA1A1A] dark:text-red-400 shadow-sm dark:shadow-none">
           {error}
         </div>
       ) : null}

@@ -404,9 +404,9 @@ export function TeamManagementPage({ initialTab = "list" }: TeamManagementPagePr
             <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[14px] text-red-700">{listError}</div>
           )}
           {loadingList ? (
-            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-gray-200 bg-white py-20 shadow-sm">
-              <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#6C5CE7] border-t-transparent" />
-              <p className="text-[14px] text-gray-500">{t("team.listLoading")}</p>
+            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#1A1B20] py-20 shadow-sm dark:shadow-none">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#6C5CE7] dark:border-[#9B8CFF] border-t-transparent dark:border-t-transparent" />
+              <p className="text-[14px] text-gray-500 dark:text-gray-400">{t("team.listLoading")}</p>
             </div>
           ) : staff.length === 0 ? (
             <EmployeeEmptyState onAddClick={handleOpenCreateTab} />
@@ -449,111 +449,113 @@ export function TeamManagementPage({ initialTab = "list" }: TeamManagementPagePr
       )}
 
       {passwordRequestUid && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 dark:bg-black/80 p-4 backdrop-blur-sm">
           <form
             autoComplete="off"
             onSubmit={(event) => {
               event.preventDefault();
               handleRevealTemporaryPassword(passwordRequestUid);
             }}
-            className="w-full max-w-[420px] rounded-2xl bg-white p-6 shadow-xl"
+            className="w-full max-w-[420px] rounded-[24px] border border-[#E9E7EE] dark:border-white/5 bg-white/95 dark:bg-[#1A1B20]/95 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.2)] backdrop-blur-xl"
           >
-            <h3 className="text-[20px] font-bold text-gray-900">{passwordRequestMode === "reset" ? t("team.password.modal.resetTitle") : t("team.password.modal.revealTitle")}</h3>
-            <p className="mt-2 text-[14px] text-gray-500">{passwordRequestMode === "reset" ? t("team.password.modal.resetDesc") : t("team.password.modal.revealDesc")}</p>
-            {revealError && <div className="mt-4 rounded-xl bg-red-50 p-3 text-[14px] text-red-700">{revealError}</div>}
-            <input
-              type="email"
-              name="username"
-              value={auth.currentUser?.email || ""}
-              readOnly
-              autoComplete="off"
-              tabIndex={-1}
-              aria-hidden="true"
-              className="sr-only"
-            />
-            <input
-              key={passwordFieldNonce}
-              type="password"
-              name={`manual-manager-password-${passwordFieldNonce}`}
-              value={managerPassword}
-              onBeforeInput={preventNonManualPasswordInput}
-              onPaste={(event) => {
-                event.preventDefault();
-                setManagerPassword("");
-                setRevealError("Vui lòng nhập mật khẩu bằng tay, không dán hoặc dùng mật khẩu đã lưu.");
-              }}
-              onDrop={(event) => {
-                event.preventDefault();
-                setManagerPassword("");
-                setRevealError("Vui lòng nhập mật khẩu bằng tay, không dán hoặc dùng mật khẩu đã lưu.");
-              }}
-              onChange={handleManagerPasswordChange}
-              placeholder={t("team.password.modal.managerPassword")}
-              autoComplete="new-password"
-              autoCorrect="off"
-              autoCapitalize="none"
-              spellCheck={false}
-              className="mt-4 w-full rounded-xl border border-gray-200 p-3 text-[14px] outline-none focus:border-[#6C5CE7] focus:ring-1 focus:ring-[#6C5CE7]"
-            />
-            <div className="mt-6 flex justify-end gap-3">
-              <button type="button" onClick={() => { setPasswordRequestUid(null); setManagerPassword(""); setRevealError(""); }} className="rounded-xl border border-gray-200 px-5 py-2.5 text-[14px] font-medium text-gray-700 hover:bg-gray-50">Hủy</button>
-              <button type="submit" disabled={revealLoading || !managerPassword} className="rounded-xl bg-[#6C5CE7] px-5 py-2.5 text-[14px] font-semibold text-white disabled:opacity-60">Xác nhận</button>
+            <div className="px-6 pt-6 pb-2">
+              <h3 className="text-[20px] font-bold text-gray-900 dark:text-white">{passwordRequestMode === "reset" ? t("team.password.modal.resetTitle") : t("team.password.modal.revealTitle")}</h3>
+              <p className="mt-2 text-[14px] text-gray-500 dark:text-gray-400">{passwordRequestMode === "reset" ? t("team.password.modal.resetDesc") : t("team.password.modal.revealDesc")}</p>
+              {revealError && <div className="mt-4 rounded-xl bg-red-50 dark:bg-red-500/10 p-3 text-[14px] text-red-700 dark:text-red-400">{revealError}</div>}
+              <input
+                type="email"
+                name="username"
+                value={auth.currentUser?.email || ""}
+                readOnly
+                autoComplete="off"
+                tabIndex={-1}
+                aria-hidden="true"
+                className="sr-only"
+              />
+              <input
+                key={passwordFieldNonce}
+                type="password"
+                name={`manual-manager-password-${passwordFieldNonce}`}
+                value={managerPassword}
+                onBeforeInput={preventNonManualPasswordInput}
+                onPaste={(event) => {
+                  event.preventDefault();
+                  setManagerPassword("");
+                  setRevealError("Vui lòng nhập mật khẩu bằng tay, không dán hoặc dùng mật khẩu đã lưu.");
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  setManagerPassword("");
+                  setRevealError("Vui lòng nhập mật khẩu bằng tay, không dán hoặc dùng mật khẩu đã lưu.");
+                }}
+                onChange={handleManagerPasswordChange}
+                placeholder={t("team.password.modal.managerPassword")}
+                autoComplete="new-password"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                className="mt-4 w-full rounded-2xl border border-[#E9E7EE] dark:border-white/10 bg-white dark:bg-white/5 px-4 py-3.5 text-[14px] text-gray-900 dark:text-white outline-none shadow-sm dark:shadow-none transition-all hover:border-[#6C5CE7]/30 dark:hover:border-white/20 focus:border-[#6C5CE7] dark:focus:border-[#9B8CFF] focus:ring-4 focus:ring-[#6C5CE7]/10 dark:focus:ring-[#9B8CFF]/10"
+              />
+            </div>
+            <div className="mt-6 flex justify-end gap-3 border-t border-[#E9E7EE] dark:border-white/5 bg-gray-50/50 dark:bg-[#2A2B35]/50 px-6 py-4 rounded-b-[24px]">
+              <button type="button" onClick={() => { setPasswordRequestUid(null); setManagerPassword(""); setRevealError(""); }} className="rounded-xl border border-[#E9E7EE] dark:border-white/10 px-5 py-2.5 text-[14px] font-medium text-gray-700 dark:text-gray-300 transition-all hover:bg-gray-50 dark:hover:bg-white/10 hover:shadow-sm">Hủy</button>
+              <button type="submit" disabled={revealLoading || !managerPassword} className="rounded-xl bg-gradient-to-r from-[#6C5CE7] to-[#8E7CFF] dark:from-[#9B8CFF] dark:to-[#B4A8FF] px-6 py-2.5 text-[14px] font-semibold text-white dark:text-[#1A1B20] transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[#6C5CE7]/20 dark:hover:shadow-[#9B8CFF]/20 active:translate-y-0 disabled:opacity-60 disabled:hover:translate-y-0">Xác nhận</button>
             </div>
           </form>
         </div>
       )}
 
       {editingStaff && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-gray-900/60 p-4">
-          <div className="w-full max-w-[560px] rounded-2xl bg-white p-6 shadow-xl">
-            <h3 className="text-[20px] font-bold text-gray-900">Chỉnh sửa nhân viên</h3>
-            <p className="mt-1 text-[14px] text-gray-500">{editingStaff.email}</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-gray-900/60 dark:bg-black/80 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-[560px] rounded-[24px] border border-[#E9E7EE] dark:border-white/5 bg-white/95 dark:bg-[#1A1B20]/95 p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.2)] backdrop-blur-xl">
+            <h3 className="text-[20px] font-bold text-gray-900 dark:text-white">Chỉnh sửa nhân viên</h3>
+            <p className="mt-1 text-[14px] text-gray-500 dark:text-gray-400">{editingStaff.email}</p>
 
             {actionError && (
-              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[14px] text-red-700">
+              <div className="mt-4 rounded-xl border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-4 py-3 text-[14px] text-red-700 dark:text-red-400">
                 {actionError}
               </div>
             )}
 
             <label className="mt-6 block">
-              <span className="text-[14px] font-semibold text-gray-900">Họ tên</span>
-              <input value={editFullName} onChange={(e) => setEditFullName(e.target.value)} className="mt-2 w-full rounded-xl border border-gray-200 p-3 text-[14px] outline-none focus:border-[#6C5CE7] focus:ring-1 focus:ring-[#6C5CE7]" />
+              <span className="text-[14px] font-semibold text-gray-900 dark:text-gray-300">Họ tên</span>
+              <input value={editFullName} onChange={(e) => setEditFullName(e.target.value)} className="mt-2 w-full rounded-2xl border border-[#E9E7EE] dark:border-white/10 bg-white dark:bg-white/5 px-4 py-3.5 text-[14px] text-gray-900 dark:text-white outline-none shadow-sm dark:shadow-none transition-all hover:border-[#6C5CE7]/30 dark:hover:border-white/20 focus:border-[#6C5CE7] dark:focus:border-[#9B8CFF] focus:ring-4 focus:ring-[#6C5CE7]/10 dark:focus:ring-[#9B8CFF]/10" />
             </label>
 
             <div className="mt-6">
-              <span className="text-[14px] font-semibold text-gray-900">Vai trò</span>
+              <span className="text-[14px] font-semibold text-gray-900 dark:text-gray-300">Vai trò</span>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 {roleOptions.map((opt) => (
-                  <label key={opt.value} className={`cursor-pointer rounded-xl border-2 p-4 transition-all ${selectedEditRoleOptions.includes(opt.value) ? "border-[#6C5CE7] bg-[#6C5CE7]/5" : "border-gray-200 hover:border-gray-300"}`}>
+                  <label key={opt.value} className={`cursor-pointer rounded-2xl border-2 p-4 transition-all duration-300 ${selectedEditRoleOptions.includes(opt.value) ? "border-[#6C5CE7] dark:border-[#9B8CFF] bg-gradient-to-br from-[#6C5CE7]/5 to-transparent dark:from-[#9B8CFF]/10 dark:to-transparent" : "border-[#E9E7EE] dark:border-white/10 hover:border-[#6C5CE7]/30 dark:hover:border-white/20 bg-white dark:bg-white/5 hover:shadow-sm dark:hover:shadow-none"}`}>
                     <input type="checkbox" className="sr-only" checked={selectedEditRoleOptions.includes(opt.value)} onChange={() => toggleEditRoleAssignment(opt.value)} />
-                    <span className="block text-[14px] font-semibold text-gray-900">{t(opt.labelKey)}</span>
-                    <span className="mt-1 block text-[12px] text-gray-500">{t(opt.descriptionKey)}</span>
+                    <span className={`block text-[15px] font-bold ${selectedEditRoleOptions.includes(opt.value) ? "text-[#6C5CE7] dark:text-[#9B8CFF]" : "text-gray-900 dark:text-white"}`}>{t(opt.labelKey)}</span>
+                    <span className="mt-1 block text-[13px] text-gray-500 dark:text-gray-400">{t(opt.descriptionKey)}</span>
                   </label>
                 ))}
               </div>
             </div>
 
             <fieldset className="mt-6 space-y-3">
-              <legend className="flex items-center gap-2 text-[14px] font-semibold text-gray-900">
-                <Shield className="h-4 w-4 text-gray-400" />
+              <legend className="flex items-center gap-2 text-[14px] font-semibold text-gray-900 dark:text-gray-300">
+                <Shield className="h-4 w-4 text-gray-400 dark:text-gray-500" />
                 {t("team.form.operations")}
               </legend>
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2">
                 {availableEditOperations.map((operation) => {
                   const checked = editOperations.includes(operation.value);
                   return (
-                    <label key={operation.value} className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 ${checked ? "border-[#6C5CE7]/30 bg-[#6C5CE7]/5" : "border-gray-200"}`}>
-                      <input type="checkbox" checked={checked} onChange={() => toggleEditOperation(operation.value)} className="h-4 w-4 rounded text-[#6C5CE7]" />
-                      <span className="text-[13px] font-medium text-gray-700">{t(operation.labelKey)}</span>
+                    <label key={operation.value} className={`flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 transition-all duration-300 ${checked ? "border-[#6C5CE7]/50 dark:border-[#9B8CFF]/50 bg-[#6C5CE7]/5 dark:bg-[#9B8CFF]/10" : "border-[#E9E7EE] dark:border-white/10 hover:border-[#6C5CE7]/30 dark:hover:border-white/20 bg-white dark:bg-white/5"}`}>
+                      <input type="checkbox" checked={checked} onChange={() => toggleEditOperation(operation.value)} className="h-4 w-4 rounded text-[#6C5CE7] dark:text-[#9B8CFF] focus:ring-[#6C5CE7] dark:focus:ring-[#9B8CFF] dark:bg-white/10 dark:border-white/20" />
+                      <span className="text-[14px] font-medium text-gray-700 dark:text-gray-300">{t(operation.labelKey)}</span>
                     </label>
                   );
                 })}
               </div>
             </fieldset>
 
-            <div className="mt-8 flex justify-end gap-3">
-              <button onClick={() => setEditingStaff(null)} className="rounded-xl border border-gray-200 px-5 py-2.5 text-[14px] font-medium text-gray-700 hover:bg-gray-50">Hủy</button>
-              <button onClick={handleEditStaff} disabled={savingEdit || !editFullName.trim()} className="rounded-xl bg-[#6C5CE7] px-5 py-2.5 text-[14px] font-semibold text-white disabled:opacity-60">{savingEdit ? "Đang lưu..." : "Lưu thay đổi"}</button>
+            <div className="mt-8 flex justify-end gap-3 pt-4">
+              <button onClick={() => setEditingStaff(null)} className="rounded-xl border border-[#E9E7EE] dark:border-white/10 px-6 py-3 text-[14px] font-semibold text-gray-700 dark:text-gray-300 transition-all hover:bg-gray-50 dark:hover:bg-white/10 hover:shadow-sm">Hủy</button>
+              <button onClick={handleEditStaff} disabled={savingEdit || !editFullName.trim()} className="rounded-xl bg-gradient-to-r from-[#6C5CE7] to-[#8E7CFF] dark:from-[#9B8CFF] dark:to-[#B4A8FF] px-6 py-3 text-[14px] font-semibold text-white dark:text-[#1A1B20] shadow-[0_8px_16px_rgba(108,92,231,0.25)] dark:shadow-[0_8px_16px_rgba(155,140,255,0.2)] transition-all hover:-translate-y-0.5 hover:shadow-[0_12px_20px_rgba(108,92,231,0.3)] dark:hover:shadow-[0_12px_20px_rgba(155,140,255,0.25)] active:translate-y-[1px] disabled:opacity-60 disabled:hover:translate-y-0">{savingEdit ? "Đang lưu..." : "Lưu thay đổi"}</button>
             </div>
           </div>
         </div>

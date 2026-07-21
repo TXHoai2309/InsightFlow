@@ -76,10 +76,10 @@ export function CrisisAnalyticsCharts({ alerts }: { alerts: AlertData[] }) {
 
   return (
     <section className="grid grid-cols-1 gap-6 xl:grid-cols-[1.45fr_0.75fr]">
-      <Card className="rounded-xl border-[#DDD9E8] bg-white shadow-[0_8px_24px_rgba(30,31,36,0.06)]">
+      <Card className="rounded-xl border border-[#DDD9E8] dark:border-white/10 bg-white dark:bg-[#1A1B20] shadow-[0_8px_24px_rgba(30,31,36,0.06)] dark:shadow-none">
         <CardHeader className="px-5 pb-2 pt-5">
-          <CardTitle className="text-base font-black text-[#1A1B20]">Xu hướng rủi ro 14 ngày</CardTitle>
-          <p className="text-xs font-medium text-[#6E6A7C]">Theo dõi tổng cảnh báo và nhóm Critical/Cao để nhận biết chiều hướng lan rộng.</p>
+          <CardTitle className="text-base font-black text-[#1A1B20] dark:text-white">Xu hướng rủi ro 14 ngày</CardTitle>
+          <p className="text-xs font-medium text-[#6E6A7C] dark:text-gray-400">Theo dõi tổng cảnh báo và nhóm Critical/Cao để nhận biết chiều hướng lan rộng.</p>
         </CardHeader>
         <CardContent className="h-[285px] px-2 pb-4 sm:px-5">
           <ResponsiveContainer width="100%" height="100%">
@@ -94,7 +94,7 @@ export function CrisisAnalyticsCharts({ alerts }: { alerts: AlertData[] }) {
                   <stop offset="95%" stopColor="#BA1A1A" stopOpacity={0.02} />
                 </linearGradient>
               </defs>
-              <CartesianGrid stroke="#ECE9F3" strokeDasharray="4 4" vertical={false} />
+              <CartesianGrid className="stroke-[#ECE9F3] dark:stroke-transparent" strokeDasharray="4 4" vertical={false} />
               <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "#787585", fontSize: 11 }} interval={1} />
               <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{ fill: "#787585", fontSize: 11 }} />
               <Tooltip contentStyle={{ borderRadius: 10, border: "1px solid #DDD9E8", fontSize: 12 }} />
@@ -106,10 +106,10 @@ export function CrisisAnalyticsCharts({ alerts }: { alerts: AlertData[] }) {
         </CardContent>
       </Card>
 
-      <Card className="rounded-xl border-[#DDD9E8] bg-white shadow-[0_8px_24px_rgba(30,31,36,0.06)]">
+      <Card className="rounded-xl border border-[#DDD9E8] dark:border-white/10 bg-white dark:bg-[#1A1B20] shadow-[0_8px_24px_rgba(30,31,36,0.06)] dark:shadow-none">
         <CardHeader className="px-5 pb-2 pt-5">
-          <CardTitle className="text-base font-black text-[#1A1B20]">Cơ cấu mức độ rủi ro</CardTitle>
-          <p className="text-xs font-medium text-[#6E6A7C]">Tỷ trọng cảnh báo theo mức độ ưu tiên trong 30 ngày.</p>
+          <CardTitle className="text-base font-black text-[#1A1B20] dark:text-white">Cơ cấu mức độ rủi ro</CardTitle>
+          <p className="text-xs font-medium text-[#6E6A7C] dark:text-gray-400">Tỷ trọng cảnh báo theo mức độ ưu tiên trong 30 ngày.</p>
         </CardHeader>
         <CardContent className="h-[285px] px-2 pb-4">
           {severityData.length > 0 ? (
@@ -123,7 +123,7 @@ export function CrisisAnalyticsCharts({ alerts }: { alerts: AlertData[] }) {
               </PieChart>
             </ResponsiveContainer>
           ) : (
-            <div className="flex h-full items-center justify-center text-sm font-medium text-[#787585]">Chưa có dữ liệu rủi ro trong kỳ.</div>
+            <div className="flex h-full items-center justify-center text-sm font-medium text-[#787585] dark:text-gray-400">Chưa có dữ liệu rủi ro trong kỳ.</div>
           )}
         </CardContent>
       </Card>

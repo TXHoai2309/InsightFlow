@@ -44,17 +44,17 @@ export function LeadScoreDoughnutCard() {
   const hotCount = distribution.find((item) => item.label === "Hot")?.count || 0;
 
   return (
-    <div className="flex h-[280px] flex-col rounded-[14px] border border-[#E9E7EE] bg-white shadow-sm">
+    <div className="flex h-[280px] flex-col rounded-[14px] border border-[#E9E7EE] dark:border-white/10 bg-white dark:bg-[#1A1B20] shadow-sm dark:shadow-none">
       <div className="flex items-start justify-between px-6 pb-2 pt-6">
         <div>
-          <h3 className="font-sans text-[14px] font-bold uppercase tracking-wide text-[#1A1B20]">
+          <h3 className="font-sans text-[14px] font-bold uppercase tracking-wide text-[#1A1B20] dark:text-white">
             Chất lượng lead
           </h3>
-          <p className="mt-1 text-[12px] font-medium text-[#787585]">
+          <p className="mt-1 text-[12px] font-medium text-[#787585] dark:text-gray-400">
             {hotCount} lead hot cần theo sát
           </p>
         </div>
-        <Info className="h-5 w-5 text-[#787585]" />
+        <Info className="h-5 w-5 text-[#787585] dark:text-gray-400" />
       </div>
 
       <div className="flex flex-1 items-center justify-between gap-5 px-6 pb-6">
@@ -65,7 +65,7 @@ export function LeadScoreDoughnutCard() {
               cy={size / 2}
               r={radius}
               fill="transparent"
-              stroke="#EEEDF4"
+              className="stroke-[#EEEDF4] dark:stroke-white/10"
               strokeWidth={strokeWidth}
             />
             {arcs.map((arc, index) => (
@@ -86,8 +86,8 @@ export function LeadScoreDoughnutCard() {
             ))}
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="font-sans text-[22px] font-bold text-[#1A1B20]">{leads.length}</span>
-            <span className="text-[12px] font-semibold text-[#787585]">leads</span>
+            <span className="font-sans text-[22px] font-bold text-[#1A1B20] dark:text-white">{leads.length}</span>
+            <span className="text-[12px] font-semibold text-[#787585] dark:text-gray-400">leads</span>
           </div>
         </div>
 
@@ -97,13 +97,13 @@ export function LeadScoreDoughnutCard() {
               <div className="flex min-w-0 items-center gap-2">
                 <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
                 <div className="min-w-0">
-                  <p className="truncate text-[13px] font-bold text-[#1A1B20]">
+                  <p className="truncate text-[13px] font-bold text-[#1A1B20] dark:text-white">
                     {item.label} ({item.range})
                   </p>
-                  <p className="text-[12px] font-medium text-[#787585]">{item.count} lead</p>
+                  <p className="text-[12px] font-medium text-[#787585] dark:text-gray-400">{item.count} lead</p>
                 </div>
               </div>
-              <span className="text-[13px] font-bold text-[#1A1B20]">{item.value}%</span>
+              <span className="text-[13px] font-bold text-[#1A1B20] dark:text-white">{item.value}%</span>
             </div>
           ))}
         </div>

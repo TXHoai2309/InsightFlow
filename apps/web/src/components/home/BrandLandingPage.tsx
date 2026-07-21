@@ -232,7 +232,7 @@ function LiveIntelligenceSection() {
   const reduceMotion = useReducedMotion();
 
   return (
-    <section id="intelligence" className="relative border-y border-[#ECE9FF] dark:border-white/10 bg-gradient-to-b from-white to-[#F7F5FF] dark:from-[#0A0612] dark:to-[#0A0612]/50 px-6 pb-24 pt-16 md:pb-32 md:pt-20 overflow-hidden">
+    <section id="intelligence" className="relative border-y border-[#ECE9FF] dark:border-white/10 bg-gradient-to-b from-white to-[#F7F5FF] dark:from-[#0A0612] dark:to-[#0A0612]/50 px-6 pb-16 pt-16 md:pb-24 md:pt-20 overflow-hidden">
       {/* Vercel grid in light mode */}
       <div className="absolute inset-0 bg-vercel-grid opacity-10 pointer-events-none" />
       {/* Glows */}
@@ -428,7 +428,7 @@ export default function BrandLandingPage() {
 
   return (
     <main className="overflow-hidden bg-[#FCFBFF] dark:bg-[#13141f] font-sans text-[#1B1B4A] dark:text-white selection:bg-[#9B8CFF]/30 selection:text-[#6D5EF6]">
-      <section className="relative isolate min-h-[720px] overflow-hidden pt-[88px] pb-[88px] md:pt-[120px] md:pb-[88px]">
+      <section className="relative isolate min-h-[720px] overflow-hidden pt-[88px] pb-12 md:pt-[120px] md:pb-16">
         {/* Nền tổng thể */}
         <div className="absolute inset-0 -z-20 hero-bg-gradient" />
         {/* Glow layer phía sau dashboard */}
@@ -605,7 +605,7 @@ export default function BrandLandingPage() {
         </div>
       </section>
 
-      <section id="solution" className="relative border-b border-[#ECE9FF] bg-[#F5F3FF] px-6 pb-[88px] pt-[50px] md:px-10 md:pt-[70px] overflow-hidden">
+      <section id="solution" className="relative border-b border-[#ECE9FF] bg-[#F5F3FF] px-6 pb-16 pt-10 md:px-10 md:pt-14 md:pb-20 overflow-hidden">
         {/* Glow Effects */}
         <div className="absolute top-[-200px] left-[-150px] w-[500px] h-[500px] bg-[#9B8CFF] blur-[180px] opacity-[0.15] rounded-full pointer-events-none" />
         <div className="absolute top-[20%] right-[-100px] w-[600px] h-[600px] bg-[#6D5EF6] blur-[180px] opacity-[0.1] rounded-full pointer-events-none" />
@@ -617,8 +617,7 @@ export default function BrandLandingPage() {
             </div>
             <h2 className="font-display text-[24px] md:text-[32px] font-extrabold leading-[1.2] text-[#1B1B4A] tracking-tight">
               Khách hàng đang nói mỗi ngày.<br />
-              <span className="bg-gradient-to-r from-[#6D5EF6] to-[#9B8CFF] bg-clip-text text-transparent">Thương hiệu</span> của bạn<br />
-              đã thực sự lắng nghe?
+              Thương hiệu của bạn đã thực sự lắng nghe?
             </h2>
             <p className="mx-auto mt-6 max-w-[640px] text-[17px] leading-[1.7] text-[#6B7090]">
               CRM lưu dữ liệu quá khứ. InsightFlow đọc tín hiệu thị trường hiện tại để bạn không bỏ lỡ bất kỳ cơ hội nào.
@@ -754,7 +753,7 @@ export default function BrandLandingPage() {
         </div>
 
         {/* 3 Cards */}
-        <div className="mx-auto mt-16 sm:mt-24 max-w-[1200px] relative z-10">
+        <div className="mx-auto mt-10 sm:mt-12 max-w-[1200px] relative z-10">
           <div className="grid gap-6 md:grid-cols-3 relative">
             {/* Connecting Line (Desktop only) */}
             <div className="hidden md:block absolute top-[50px] left-[15%] right-[15%] h-[2px] bg-gradient-to-r from-transparent via-[#6D5EF6]/20 to-transparent -z-10" />
@@ -872,12 +871,12 @@ export default function BrandLandingPage() {
 
       <LiveIntelligenceSection />
 
-      <section id="workflow" className="relative border-y border-[#ECE9FF] dark:border-white/10 bg-gradient-to-b from-[#F7F5FF] to-white dark:from-[#0A0612]/50 dark:to-[#0A0612] px-6 py-24 md:py-32 overflow-hidden">
+      <section id="workflow" className="relative border-y border-[#ECE9FF] dark:border-white/10 bg-gradient-to-b from-[#F7F5FF] to-white dark:from-[#0A0612]/50 dark:to-[#0A0612] px-6 pt-12 pb-12 md:pt-16 md:pb-16 overflow-hidden">
         <div className="absolute inset-0 bg-vercel-grid opacity-[0.04] dark:opacity-[0.02] pointer-events-none" />
 
         <SectionIntro eyebrow="Quy trình sống" title="Từ tín hiệu đầu tiên đến một phản hồi tạo khác biệt." description="InsightFlow giúp mọi đội chung một ngôn ngữ: nhìn thấy điều quan trọng, hiểu nó có ý nghĩa gì, rồi hành động có trách nhiệm." />
 
-        <div className="relative z-10 mx-auto mt-28 max-w-[1200px]">
+        <div className="relative z-10 mx-auto mt-12 md:mt-16 max-w-[1200px]">
           {/* Connecting Line with Animation */}
           <div className="hidden lg:block absolute top-[48px] left-[10%] right-[10%] h-[2px] bg-gradient-to-r from-transparent via-[#ECE9FF] dark:via-white/10 to-transparent -z-10 overflow-hidden">
             <div className="absolute inset-0 bg-[linear-gradient(90deg,transparent_0%,#6D5EF6_50%,transparent_100%)] w-[30%] animate-slide-right opacity-50 dark:opacity-80" />
@@ -911,14 +910,14 @@ export default function BrandLandingPage() {
         </div>
       </section>
 
-      <section id="modules" className="relative border-b border-[#ECE9FF] dark:border-white/10 bg-gradient-to-b from-white to-[#F7F9FF] dark:from-[#0A0612] dark:to-[#0A0612]/50 px-6 py-24 md:py-32 overflow-hidden">
+      <section id="modules" className="relative border-b border-[#ECE9FF] dark:border-white/10 bg-gradient-to-b from-white to-[#F7F9FF] dark:from-[#0A0612] dark:to-[#0A0612]/50 px-6 pt-16 pb-20 md:pt-20 md:pb-24 overflow-hidden">
         {/* Soft Grid Background */}
         <div className="absolute inset-0 bg-vercel-grid opacity-30 dark:opacity-5 pointer-events-none" />
         <div className="absolute top-0 right-1/4 w-[500px] h-[500px] bg-[#6D5EF6] blur-[200px] opacity-[0.05] pointer-events-none" />
 
         <div className="relative z-10 mx-auto max-w-[1200px]">
           <SectionIntro eyebrow="Một hệ thống, nhiều năng lực" title="Đủ sâu cho đội vận hành. Đủ rõ cho người ra quyết định." description="Mỗi mô-đun cùng làm một việc: biến dữ liệu phân tán thành những quyết định đáng tin cậy hơn." />
-          <div className="mt-20 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-12 md:mt-16 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
             {modules.map((module, index) => {
               const Icon = module.icon;
               return (
@@ -1105,14 +1104,14 @@ export default function BrandLandingPage() {
         </div>
       </section>
 
-      <section id="use-cases" className="relative border-y border-[#ECE9FF] dark:border-white/10 bg-gradient-to-b from-[#F7F9FF] to-white dark:from-[#0A0612]/50 dark:to-[#0A0612] px-6 py-24 md:py-32 overflow-hidden">
+      <section id="use-cases" className="relative border-y border-[#ECE9FF] dark:border-white/10 bg-gradient-to-b from-[#F7F9FF] to-white dark:from-[#0A0612]/50 dark:to-[#0A0612] px-6 pt-12 pb-20 md:pt-16 md:pb-24 overflow-hidden">
         {/* Glow */}
         <div className="absolute bottom-0 right-0 w-[800px] h-[800px] bg-[#9B8CFF] blur-[180px] opacity-[0.08] pointer-events-none" />
 
         <div className="relative z-10 mx-auto max-w-[1200px]">
           <SectionIntro eyebrow="Một nền tảng, một góc nhìn cho từng vai trò" title="Cùng một sự thật. Mỗi đội thấy đúng điều họ cần làm tiếp." description="Chọn vai trò để xem InsightFlow giúp đội ngũ chuyển từ theo dõi sang chủ động ra sao." />
 
-          <div className="mt-20 grid gap-8 lg:grid-cols-[320px_1fr]">
+          <div className="mt-12 md:mt-16 grid gap-8 lg:grid-cols-[320px_1fr]">
             <Reveal>
               <div className="flex flex-col gap-2 rounded-[24px] border border-[#ECE9FF] bg-white p-4 shadow-[0_18px_50px_rgba(109,94,246,0.04)] dark:border-white/10 dark:bg-white/5">
                 {roleStories.map((story) => {
@@ -1189,28 +1188,35 @@ export default function BrandLandingPage() {
         </div>
       </section>
 
-      <section className="relative overflow-hidden bg-gradient-to-br from-[#6D5DF6] via-[#8B5CF6] to-[#5B4BDB] px-6 py-12 md:py-16 text-white md:px-10" style={{ boxShadow: "0 0 120px rgba(109,93,246,0.35)" }}>
-        <div className="absolute inset-0 bg-vercel-grid opacity-10 pointer-events-none" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[800px] h-[400px] rounded-full bg-white blur-[150px] opacity-10 pointer-events-none" />
+      <section className="relative overflow-hidden bg-gradient-to-br from-[#6D5DF6] via-[#8B5CF6] to-[#5B4BDB] dark:from-[#1c0f45] dark:via-[#341d75] dark:to-[#130b2c] dark:border-y dark:border-[#6D5EF6]/20 px-6 py-10 md:py-12 text-white md:px-10 shadow-[0_0_120px_rgba(109,93,246,0.35)] dark:shadow-[0_0_80px_rgba(109,94,246,0.15)] mt-12">
+        {/* Lưới background pattern */}
+        <div className="absolute inset-0 bg-vercel-grid opacity-10 dark:opacity-20 pointer-events-none" />
+        
+        {/* Hiệu ứng Glow rực rỡ ở giữa */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[800px] h-[400px] rounded-full bg-white dark:bg-[#9B8CFF] blur-[150px] opacity-10 dark:opacity-[0.12] pointer-events-none" />
+        
+        {/* Các dải sáng phụ trong Dark Mode */}
+        <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-[#0ea5e9] blur-[150px] opacity-0 dark:opacity-20 pointer-events-none" />
+        <div className="absolute -bottom-32 -right-32 w-96 h-96 rounded-full bg-[#f43f5e] blur-[150px] opacity-0 dark:opacity-[0.15] pointer-events-none" />
 
         <Reveal className="relative z-10 mx-auto flex max-w-[900px] flex-col items-center text-center">
-          <p className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-1.5 text-[14px] font-bold text-white backdrop-blur-md">
+          <p className="mb-4 md:mb-5 inline-flex items-center gap-2 rounded-full border border-white/20 dark:border-white/10 bg-white/10 dark:bg-black/20 px-4 py-1.5 text-[14px] font-bold text-white backdrop-blur-md shadow-sm">
             <span className="text-[16px]">🚀</span> Theo dõi thương hiệu bằng AI
           </p>
-          <h2 className="font-display text-[32px] md:text-[56px] font-extrabold text-white leading-[1.1] tracking-tight">
+          <h2 className="font-display text-[32px] md:text-[50px] font-extrabold text-white leading-[1.1] tracking-tight text-glow-white">
             Đừng để khủng hoảng xuất hiện trước khi bạn biết.
           </h2>
-          <p className="mt-4 md:mt-6 text-[16px] md:text-[18px] text-white/80 max-w-[600px]">
+          <p className="mt-3 md:mt-4 text-[16px] md:text-[17px] text-white/80 dark:text-white/70 max-w-[600px]">
             Phát hiện khủng hoảng sớm • Theo dõi cảm xúc • Báo cáo AI • Không cần cài đặt
           </p>
 
-          <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link href="#consultation" className="inline-flex h-[60px] items-center justify-center rounded-[18px] bg-white px-[36px] text-[16px] font-extrabold text-linear-primary shadow-[0_20px_40px_rgba(0,0,0,0.15)] transition-all duration-300 hover:scale-[1.04] hover:-translate-y-[3px] hover:shadow-[0_30px_60px_rgba(0,0,0,0.2)]">
+          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
+            <Link href="#consultation" className="inline-flex h-[60px] md:h-[64px] items-center justify-center rounded-[20px] bg-white dark:bg-[#6D5EF6] px-[40px] text-[18px] md:text-[20px] font-black uppercase tracking-wider text-[#6D5EF6] dark:text-white shadow-[0_20px_40px_rgba(0,0,0,0.15)] dark:shadow-[0_20px_40px_rgba(0,0,0,0.4)] transition-all duration-300 hover:scale-[1.04] hover:-translate-y-[3px] hover:shadow-[0_30px_60px_rgba(0,0,0,0.2)] dark:hover:shadow-[0_30px_60px_rgba(0,0,0,0.6)]">
               Đặt lịch Demo
             </Link>
           </div>
 
-          <div className="mt-10 md:mt-12 flex flex-wrap items-center justify-center gap-6 md:gap-16 border-t border-white/20 pt-8 md:pt-10">
+          <div className="mt-8 md:mt-10 flex flex-wrap items-center justify-center gap-6 md:gap-16 border-t border-white/20 dark:border-white/10 pt-6 md:pt-8">
             <div className="text-center">
               <p className="font-display text-[32px] font-extrabold text-white">500+</p>
               <p className="mt-1 text-[13px] font-bold uppercase tracking-wider text-white/70">Doanh nghiệp</p>

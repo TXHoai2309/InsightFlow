@@ -8,23 +8,23 @@ interface TeamTabsProps {
 
 export function TeamTabs({ activeTab, onChange }: TeamTabsProps) {
   return (
-    <div className="flex items-center gap-2 mt-8 mb-6 p-1 bg-gray-100/80 border border-gray-200/60 rounded-[14px] w-fit">
+    <div className="flex items-center gap-2 mt-8 mb-6 p-1.5 bg-gray-50/80 dark:bg-white/5 border border-[#E9E7EE] dark:border-white/10 rounded-2xl w-fit backdrop-blur-sm">
       <button
         onClick={() => onChange("list")}
-        className={`px-5 py-2 rounded-xl text-[14px] font-semibold transition-all ${
+        className={`px-6 py-2.5 rounded-xl text-[14px] font-semibold transition-all duration-300 ${
           activeTab === "list"
-            ? "bg-white text-gray-900 shadow-sm border border-gray-200/50"
-            : "text-gray-500 hover:text-gray-900 hover:bg-gray-200/50 border border-transparent"
+            ? "bg-white dark:bg-[#1A1B20] text-[#6C5CE7] dark:text-[#9B8CFF] shadow-sm dark:shadow-none border border-[#E9E7EE] dark:border-white/10"
+            : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/50 dark:hover:bg-white/10 border border-transparent"
         }`}
       >
         Danh sách nhân viên
       </button>
       <button
         onClick={() => onChange("create")}
-        className={`px-5 py-2 rounded-xl text-[14px] font-semibold transition-all ${
+        className={`px-6 py-2.5 rounded-xl text-[14px] font-semibold transition-all duration-300 ${
           activeTab === "create"
-            ? "bg-white text-gray-900 shadow-sm border border-gray-200/50"
-            : "text-gray-500 hover:text-gray-900 hover:bg-gray-200/50 border border-transparent"
+            ? "bg-white dark:bg-[#1A1B20] text-[#6C5CE7] dark:text-[#9B8CFF] shadow-sm dark:shadow-none border border-[#E9E7EE] dark:border-white/10"
+            : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/50 dark:hover:bg-white/10 border border-transparent"
         }`}
       >
         Thêm nhân viên

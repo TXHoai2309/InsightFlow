@@ -11,7 +11,7 @@ export default function StaffListPage() {
   return (
     <Suspense fallback={
       <div className="flex min-h-[40vh] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#6C5CE7] border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#6C5CE7] dark:border-[#9B8CFF] border-t-transparent dark:border-t-transparent" />
       </div>
     }>
       <StaffListContent />

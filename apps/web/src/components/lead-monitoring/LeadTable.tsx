@@ -44,55 +44,55 @@ function getScoreInfo(lead: Lead) {
     return {
       score,
       label: "Hot",
-      color: "text-[#BA1A1A]",
+      color: "text-[#BA1A1A] dark:text-red-400",
       bar: "#BA1A1A",
-      tag: "bg-[#FFDAD6] text-[#410002]",
+      tag: "bg-[#FFDAD6] text-[#410002] dark:bg-red-500/20 dark:text-red-400",
     };
   }
   if (intent === "warm") {
     return {
       score,
       label: "Warm",
-      color: "text-[#A14A00]",
+      color: "text-[#A14A00] dark:text-orange-400",
       bar: "#D97706",
-      tag: "bg-[#FFE2C7] text-[#5B2A00]",
+      tag: "bg-[#FFE2C7] text-[#5B2A00] dark:bg-orange-500/20 dark:text-orange-400",
     };
   }
   return {
     score,
     label: "Cold",
-    color: "text-[#4234B6]",
+    color: "text-[#4234B6] dark:text-[#9B8CFF]",
     bar: "#5B4FCF",
-    tag: "bg-[#E2DFFF] text-[#0F0069]",
+    tag: "bg-[#E2DFFF] text-[#0F0069] dark:bg-[#4234B6]/30 dark:text-[#9B8CFF]",
   };
 }
 
 function getStatusInfo(status: Lead["status"]) {
   switch (status) {
     case "new":
-      return { label: "Chưa phản hồi", dot: "bg-[#BA1A1A]", text: "text-[#BA1A1A]" };
+      return { label: "Chưa phản hồi", dot: "bg-[#BA1A1A]", text: "text-[#BA1A1A] dark:text-red-400" };
     case "processing":
-      return { label: "Đang tư vấn", dot: "bg-[#D97706]", text: "text-[#A14A00]" };
+      return { label: "Đang tư vấn", dot: "bg-[#D97706]", text: "text-[#A14A00] dark:text-orange-400" };
     case "completed":
-      return { label: "Đã chốt", dot: "bg-[#22C55E]", text: "text-[#147A3F]" };
+      return { label: "Đã chốt", dot: "bg-[#22C55E]", text: "text-[#147A3F] dark:text-green-400" };
     case "skipped":
-      return { label: "Bỏ qua", dot: "bg-[#787585]", text: "text-[#474554]" };
+      return { label: "Bỏ qua", dot: "bg-[#787585]", text: "text-[#474554] dark:text-gray-400" };
     default:
-      return { label: "Chưa rõ", dot: "bg-[#787585]", text: "text-[#474554]" };
+      return { label: "Chưa rõ", dot: "bg-[#787585]", text: "text-[#474554] dark:text-gray-400" };
   }
 }
 
 function formatSla(lead: Lead) {
   const meta = getLeadWorkbenchMeta(lead);
-  if (!meta.isPending) return { label: "Đã xử lý", tone: "bg-[#D7F4E2] text-[#147A3F]" };
+  if (!meta.isPending) return { label: "Đã xử lý", tone: "bg-[#D7F4E2] text-[#147A3F] dark:bg-green-500/20 dark:text-green-400" };
   if (meta.isOverdue) {
     const minutes = Math.max(1, Math.ceil(Math.abs(meta.remainingMs) / 60000));
-    return { label: `Quá ${minutes}p`, tone: "bg-[#FFDAD6] text-[#BA1A1A]" };
+    return { label: `Quá ${minutes}p`, tone: "bg-[#FFDAD6] text-[#BA1A1A] dark:bg-red-500/20 dark:text-red-400" };
   }
   const minutes = Math.max(1, Math.ceil(meta.remainingMs / 60000));
-  if (minutes < 60) return { label: `Còn ${minutes}p`, tone: "bg-[#FFF1D6] text-[#A14A00]" };
+  if (minutes < 60) return { label: `Còn ${minutes}p`, tone: "bg-[#FFF1D6] text-[#A14A00] dark:bg-orange-500/20 dark:text-orange-400" };
   const hours = Math.ceil(minutes / 60);
-  return { label: `Còn ${hours}g`, tone: "bg-[#E2DFFF] text-[#4234B6]" };
+  return { label: `Còn ${hours}g`, tone: "bg-[#E2DFFF] text-[#4234B6] dark:bg-[#4234B6]/30 dark:text-[#9B8CFF]" };
 }
 
 function getLeadSignal(lead: Lead) {
@@ -213,13 +213,13 @@ export function LeadTable() {
   }, [filteredLeads, page, totalPages]);
 
   return (
-    <div className="flex flex-col overflow-hidden rounded-[14px] border border-[#E9E7EE] bg-white shadow-sm">
-      <div className="flex flex-col gap-4 border-b border-[#E9E7EE] px-5 py-5 xl:flex-row xl:items-center xl:justify-between">
+    <div className="flex flex-col overflow-hidden rounded-[14px] border border-[#E9E7EE] dark:border-white/10 bg-white dark:bg-[#1A1B20] shadow-sm dark:shadow-none">
+      <div className="flex flex-col gap-4 border-b border-[#E9E7EE] dark:border-white/10 px-5 py-5 xl:flex-row xl:items-center xl:justify-between">
         <div>
-          <h2 className="font-sans text-[18px] font-bold text-[#1A1B20]">
+          <h2 className="font-sans text-[18px] font-bold text-[#1A1B20] dark:text-white">
             Danh sách lead ưu tiên ({filteredLeads.length})
           </h2>
-          <p className="mt-1 text-[13px] text-[#787585]">
+          <p className="mt-1 text-[13px] text-[#787585] dark:text-gray-400">
             Mặc định hiển thị hot lead để khớp KPI tổng quan; chọn Tất cả để xem toàn bộ lead
           </p>
         </div>
@@ -234,8 +234,8 @@ export function LeadTable() {
               }}
               className={`rounded-full border px-3 py-1.5 text-[12px] font-bold transition-colors ${
                 activeFilter === chip.id
-                  ? "border-[#4234B6] bg-[#4234B6] text-white"
-                  : "border-[#E9E7EE] bg-white text-[#474554] hover:bg-[#F4F3FA]"
+                  ? "border-[#4234B6] bg-[#4234B6] text-white dark:border-[#9B8CFF] dark:bg-[#9B8CFF] dark:text-[#1A1B20]"
+                  : "border-[#E9E7EE] dark:border-white/20 bg-white dark:bg-transparent text-[#474554] dark:text-gray-300 hover:bg-[#F4F3FA] dark:hover:bg-white/10"
               }`}
             >
               {chip.label}
@@ -246,19 +246,19 @@ export function LeadTable() {
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[1180px] text-left font-sans">
-          <thead className="sticky top-0 z-10 bg-[#F4F3FA]">
+          <thead className="sticky top-0 z-10 bg-[#F4F3FA] dark:bg-white/5">
             <tr>
               {["Khách hàng", "Tín hiệu mua hàng", "Điểm", "SLA", "Trạng thái", "Phụ trách", "Phản hồi", "Hành động"].map((head) => (
-                <th key={head} className="px-5 py-3 text-[11px] font-bold uppercase tracking-wide text-[#474554]">
+                <th key={head} className="px-5 py-3 text-[11px] font-bold uppercase tracking-wide text-[#474554] dark:text-gray-400">
                   {head}
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#E9E7EE]">
+          <tbody className="divide-y divide-[#E9E7EE] dark:divide-white/10">
             {leads.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-5 py-12 text-center text-[14px] text-[#787585]">
+                <td colSpan={8} className="px-5 py-12 text-center text-[14px] text-[#787585] dark:text-gray-400">
                   Không có lead phù hợp với bộ lọc hiện tại.
                 </td>
               </tr>
@@ -271,17 +271,17 @@ export function LeadTable() {
                 const leadHref = createLeadWorkbenchHref(lead);
 
                 return (
-                  <tr key={lead.id} className="transition-colors hover:bg-[#FAF8FF]">
+                  <tr key={lead.id} className="transition-colors hover:bg-[#FAF8FF] dark:hover:bg-white/5">
                     <td className="px-5 py-4 align-top">
-                      <Link href={leadHref} className="flex items-center gap-3 rounded-lg outline-none transition hover:text-[#4234B6] focus-visible:ring-2 focus-visible:ring-[#4234B6]/30" title="Xem mention tại trang Khách hàng">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#EEEDF4] text-[13px] font-bold text-[#4234B6]">
+                      <Link href={leadHref} className="flex items-center gap-3 rounded-lg outline-none transition hover:text-[#4234B6] dark:hover:text-[#9B8CFF] focus-visible:ring-2 focus-visible:ring-[#4234B6]/30" title="Xem mention tại trang Khách hàng">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#EEEDF4] dark:bg-[#4234B6]/30 text-[13px] font-bold text-[#4234B6] dark:text-[#9B8CFF]">
                           {getAvatarInitials(lead.author)}
                         </div>
                         <div className="min-w-0">
-                          <p className="truncate text-[14px] font-bold text-[#1A1B20]">
+                          <p className="truncate text-[14px] font-bold text-[#1A1B20] dark:text-gray-200">
                             {lead.author || "Khách hàng"}
                           </p>
-                          <p className="mt-0.5 text-[12px] capitalize text-[#787585]">
+                          <p className="mt-0.5 text-[12px] capitalize text-[#787585] dark:text-gray-400">
                             {lead.platform} · {lead.id.substring(0, 8)}
                           </p>
                         </div>
@@ -289,11 +289,11 @@ export function LeadTable() {
                     </td>
 
                     <td className="max-w-[340px] px-5 py-4 align-top">
-                      <Link href={leadHref} className="block rounded-lg outline-none transition hover:bg-[#F4F3FA] focus-visible:ring-2 focus-visible:ring-[#4234B6]/30" title="Xem mention tại trang Khách hàng">
-                        <p className="text-[13px] font-bold text-[#1A1B20]">
+                      <Link href={leadHref} className="block rounded-lg outline-none transition hover:bg-[#F4F3FA] dark:hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-[#4234B6]/30" title="Xem mention tại trang Khách hàng">
+                        <p className="text-[13px] font-bold text-[#1A1B20] dark:text-gray-200">
                           {getLeadSignal(lead)}
                         </p>
-                        <p className="mt-1 line-clamp-2 text-[13px] leading-5 text-[#474554]">
+                        <p className="mt-1 line-clamp-2 text-[13px] leading-5 text-[#474554] dark:text-gray-400">
                           “{lead.content}”
                         </p>
                       </Link>
@@ -304,7 +304,7 @@ export function LeadTable() {
                         <span className={`text-[14px] font-bold ${scoreInfo.color}`}>
                           {scoreInfo.score}/100
                         </span>
-                        <div className="h-1.5 w-16 overflow-hidden rounded-full bg-[#EEEDF4]">
+                        <div className="h-1.5 w-16 overflow-hidden rounded-full bg-[#EEEDF4] dark:bg-white/10">
                           <div className="h-full rounded-full" style={{ width: `${scoreInfo.score}%`, backgroundColor: scoreInfo.bar }} />
                         </div>
                         <span className={`w-fit rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${scoreInfo.tag}`}>
@@ -331,22 +331,22 @@ export function LeadTable() {
                     <td className="px-5 py-4 align-top">
                       {lead.owner_name ? (
                         <div className="flex items-center gap-2">
-                          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#E2DFFF] text-[11px] font-bold text-[#4234B6]">
+                          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#E2DFFF] dark:bg-[#4234B6]/30 text-[11px] font-bold text-[#4234B6] dark:text-[#9B8CFF]">
                             {getAvatarInitials(lead.owner_name)}
                           </div>
-                          <span className="text-[13px] font-semibold text-[#1A1B20]">
+                          <span className="text-[13px] font-semibold text-[#1A1B20] dark:text-gray-200">
                             {lead.owner_name}
                           </span>
                         </div>
                       ) : (
-                        <span className="rounded-full bg-[#FFF1D6] px-2.5 py-1 text-[12px] font-bold text-[#A14A00]">
+                        <span className="rounded-full bg-[#FFF1D6] dark:bg-orange-500/20 px-2.5 py-1 text-[12px] font-bold text-[#A14A00] dark:text-orange-400">
                           Chưa gán
                         </span>
                       )}
                     </td>
 
                     <td className="px-5 py-4 align-top">
-                      <span className="text-[13px] font-semibold text-[#474554]">
+                      <span className="text-[13px] font-semibold text-[#474554] dark:text-gray-400">
                         {calculateResponseTime(lead.created_at, lead.first_contacted_at)}
                       </span>
                     </td>
@@ -359,8 +359,8 @@ export function LeadTable() {
                             e.stopPropagation();
                             setAssigningLeadId(assigningLeadId === lead.id ? null : lead.id);
                           }}
-                          className={`flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#E9E7EE] hover:bg-[#F4F3FA] transition-all ${
-                            lead.owner_id ? "text-[#4234B6] bg-[#F4F3FA]" : "text-[#787585]"
+                          className={`flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#E9E7EE] dark:border-white/20 hover:bg-[#F4F3FA] dark:hover:bg-white/10 transition-all ${
+                            lead.owner_id ? "text-[#4234B6] dark:text-[#9B8CFF] bg-[#F4F3FA] dark:bg-white/5" : "text-[#787585] dark:text-gray-400"
                           }`}
                           title="Gán nhân sự"
                         >
@@ -368,8 +368,8 @@ export function LeadTable() {
                         </button>
 
                         {assigningLeadId === lead.id && (
-                          <div className="absolute right-0 top-full mt-1.5 z-50 w-52 rounded-xl bg-white py-1.5 shadow-xl ring-1 ring-black/5 border border-[#E9E7EE] max-h-48 overflow-y-auto">
-                            <div className="px-3 py-1.5 text-[10px] font-bold text-[#787585] uppercase tracking-wider border-b border-[#E9E7EE] mb-1">
+                          <div className="absolute right-0 top-full mt-1.5 z-50 w-52 rounded-xl bg-white dark:bg-[#2A2B35] py-1.5 shadow-xl ring-1 ring-black/5 border border-[#E9E7EE] dark:border-white/10 max-h-48 overflow-y-auto">
+                            <div className="px-3 py-1.5 text-[10px] font-bold text-[#787585] dark:text-gray-400 uppercase tracking-wider border-b border-[#E9E7EE] dark:border-white/10 mb-1">
                               Chọn nhân sự phụ trách
                             </div>
                             <button
@@ -379,7 +379,7 @@ export function LeadTable() {
                                 setAssigningLeadId(null);
                                 await handleAssign(lead, null);
                               }}
-                              className="w-full text-left px-3 py-2 text-xs text-[#BA1A1A] hover:bg-[#FFDAD6]/30 font-bold transition-colors"
+                              className="w-full text-left px-3 py-2 text-xs text-[#BA1A1A] dark:text-red-400 hover:bg-[#FFDAD6]/30 dark:hover:bg-red-500/10 font-bold transition-colors"
                             >
                               -- Hủy gán --
                             </button>
@@ -392,7 +392,7 @@ export function LeadTable() {
                                   setAssigningLeadId(null);
                                   await handleAssign(lead, staff);
                                 }}
-                                className="w-full text-left px-3 py-2 text-xs text-[#1A1B20] hover:bg-[#F4F3FA] font-medium transition-colors border-t border-[#F4F3FA]"
+                                className="w-full text-left px-3 py-2 text-xs text-[#1A1B20] dark:text-white hover:bg-[#F4F3FA] dark:hover:bg-white/10 font-medium transition-colors border-t border-[#F4F3FA] dark:border-white/10"
                               >
                                 {staff.displayName || staff.email}
                               </button>
@@ -401,11 +401,11 @@ export function LeadTable() {
                         )}
 
                         {sourceHref ? (
-                          <a href={sourceHref} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#E9E7EE] text-[#474554] hover:bg-[#F4F3FA] transition-all" title="Mở bài gốc">
+                          <a href={sourceHref} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#E9E7EE] dark:border-white/20 text-[#474554] dark:text-gray-400 hover:bg-[#F4F3FA] dark:hover:bg-white/10 transition-all" title="Mở bài gốc">
                             <ExternalLink className="h-4 w-4" />
                           </a>
                         ) : (
-                          <Link href={leadHref} className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#E9E7EE] text-[#787585] hover:bg-[#F4F3FA]" title="Xem tại trang Khách hàng">
+                          <Link href={leadHref} className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#E9E7EE] dark:border-white/20 text-[#787585] dark:text-gray-400 hover:bg-[#F4F3FA] dark:hover:bg-white/10" title="Xem tại trang Khách hàng">
                             <MessageSquare className="h-4 w-4" />
                           </Link>
                         )}
@@ -419,8 +419,8 @@ export function LeadTable() {
         </table>
       </div>
 
-      <div className="flex items-center justify-between border-t border-[#E9E7EE] px-5 py-4">
-        <span className="text-[13px] text-[#787585]">
+      <div className="flex items-center justify-between border-t border-[#E9E7EE] dark:border-white/10 px-5 py-4">
+        <span className="text-[13px] text-[#787585] dark:text-gray-400">
           Hiển thị {leads.length > 0 ? (Math.min(page, totalPages) - 1) * itemsPerPage + 1 : 0} đến {Math.min(Math.min(page, totalPages) * itemsPerPage, filteredLeads.length)} trong {filteredLeads.length}
         </span>
         <div className="flex items-center gap-2">
@@ -428,7 +428,7 @@ export function LeadTable() {
             type="button"
             disabled={page === 1}
             onClick={() => setPage((current) => Math.max(1, current - 1))}
-            className="flex h-8 w-8 items-center justify-center rounded-[8px] text-[#474554] transition-colors hover:bg-[#EEEDF4] disabled:opacity-40"
+            className="flex h-8 w-8 items-center justify-center rounded-[8px] text-[#474554] dark:text-gray-400 transition-colors hover:bg-[#EEEDF4] dark:hover:bg-white/10 disabled:opacity-40"
           >
             <ChevronLeft className="h-5 w-5" />
           </button>
@@ -436,7 +436,7 @@ export function LeadTable() {
             type="button"
             disabled={page >= totalPages}
             onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-            className="flex h-8 w-8 items-center justify-center rounded-[8px] text-[#474554] transition-colors hover:bg-[#EEEDF4] disabled:opacity-40"
+            className="flex h-8 w-8 items-center justify-center rounded-[8px] text-[#474554] dark:text-gray-400 transition-colors hover:bg-[#EEEDF4] dark:hover:bg-white/10 disabled:opacity-40"
           >
             <ChevronRight className="h-5 w-5" />
           </button>

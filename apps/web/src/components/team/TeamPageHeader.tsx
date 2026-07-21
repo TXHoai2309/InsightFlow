@@ -10,8 +10,8 @@ export function TeamPageHeader({ onAddClick, showAddButton = true }: TeamPageHea
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div>
-        <h1 className="text-[28px] font-bold text-gray-900 tracking-tight">Quản lý đội ngũ</h1>
-        <p className="mt-1 text-[14px] text-gray-500">
+        <h1 className="text-[28px] font-bold text-gray-900 dark:text-white tracking-tight">Quản lý đội ngũ</h1>
+        <p className="mt-1 text-[14px] text-gray-500 dark:text-gray-400">
           Quản lý tài khoản và phân công nhân viên thuộc Brand.
         </p>
       </div>
@@ -19,7 +19,7 @@ export function TeamPageHeader({ onAddClick, showAddButton = true }: TeamPageHea
         <button
           onClick={onAddClick}
           data-tour="team-add-staff"
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#6C5CE7] px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-[#5a4cdb] active:scale-[0.98] shadow-sm"
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#6C5CE7] dark:bg-[#9B8CFF] px-5 py-2.5 text-[14px] font-semibold text-white dark:text-[#1A1B20] transition hover:bg-[#5a4cdb] dark:hover:bg-[#8675FF] active:scale-[0.98] shadow-sm dark:shadow-none"
         >
           <span>➕</span> Thêm nhân viên
         </button>

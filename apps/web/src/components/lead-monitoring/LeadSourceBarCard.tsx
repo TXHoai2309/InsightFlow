@@ -31,39 +31,39 @@ export function LeadSourceBarCard() {
   }, [leads]);
 
   return (
-    <div className="flex h-[280px] flex-col rounded-[14px] border border-[#E9E7EE] bg-white shadow-sm">
+    <div className="flex h-[280px] flex-col rounded-[14px] border border-[#E9E7EE] dark:border-white/10 bg-white dark:bg-[#1A1B20] shadow-sm dark:shadow-none">
       <div className="flex items-start justify-between px-6 pb-2 pt-6">
         <div>
-          <h3 className="font-sans text-[14px] font-bold uppercase tracking-wide text-[#1A1B20]">
+          <h3 className="font-sans text-[14px] font-bold uppercase tracking-wide text-[#1A1B20] dark:text-white">
             Nguồn lead chất lượng
           </h3>
-          <p className="mt-1 text-[12px] font-medium text-[#787585]">
+          <p className="mt-1 text-[12px] font-medium text-[#787585] dark:text-gray-400">
             Theo số lượng và tỉ lệ hot
           </p>
         </div>
-        <MousePointerClick className="h-5 w-5 text-[#787585]" />
+        <MousePointerClick className="h-5 w-5 text-[#787585] dark:text-gray-400" />
       </div>
 
       <div className="flex flex-1 flex-col justify-center gap-4 px-6 pb-6 pt-2">
         {sourceData.length === 0 ? (
-          <div className="rounded-[10px] bg-[#F4F3FA] px-4 py-6 text-center text-[13px] text-[#787585]">
+          <div className="rounded-[10px] bg-[#F4F3FA] dark:bg-white/5 px-4 py-6 text-center text-[13px] text-[#787585] dark:text-gray-400">
             Chưa có dữ liệu nguồn lead
           </div>
         ) : (
           sourceData.map((item, index) => (
             <div key={item.label} className="space-y-2">
               <div className="flex items-center justify-between gap-3 text-[13px]">
-                <span className="font-bold capitalize text-[#1A1B20]">{item.label}</span>
-                <span className="font-semibold text-[#787585]">
+                <span className="font-bold capitalize text-[#1A1B20] dark:text-white">{item.label}</span>
+                <span className="font-semibold text-[#787585] dark:text-gray-400">
                   {item.count} lead · {item.hotRate}% hot
                 </span>
               </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-[#EEEDF4]">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-[#EEEDF4] dark:bg-white/10">
                 <motion.div
                   initial={{ width: 0 }}
                   animate={{ width: `${item.value}%` }}
                   transition={{ duration: 0.8, delay: index * 0.08, ease: "easeOut" }}
-                  className="h-full rounded-full bg-[#5B4FCF]"
+                  className="h-full rounded-full bg-[#5B4FCF] dark:bg-[#9B8CFF]"
                 />
               </div>
             </div>

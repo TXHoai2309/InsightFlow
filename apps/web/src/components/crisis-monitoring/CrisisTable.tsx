@@ -171,27 +171,27 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
   };
 
   return (
-    <section className="overflow-hidden rounded-xl border border-[#DDD9E8] bg-white shadow-[0_8px_24px_rgba(30,31,36,0.06)]">
-      <div className="flex flex-col gap-4 border-b border-[#EEEAF6] px-5 py-5 xl:flex-row xl:items-center xl:justify-between">
+    <section className="overflow-hidden rounded-xl border border-[#DDD9E8] dark:border-white/10 bg-white dark:bg-[#1A1B20] shadow-[0_8px_24px_rgba(30,31,36,0.06)] dark:shadow-none">
+      <div className="flex flex-col gap-4 border-b border-[#EEEAF6] dark:border-white/10 px-5 py-5 xl:flex-row xl:items-center xl:justify-between">
         <div>
-          <h2 className="text-lg font-black text-[#1A1B20]">Danh sách sự vụ khẩn cấp ({filteredAlerts.length})</h2>
-          <p className="mt-1 text-xs font-medium text-[#6E6A7C]">Ưu tiên theo điểm rủi ro; chọn nội dung để mở đúng mention tại trang Cảnh báo.</p>
+          <h2 className="text-lg font-black text-[#1A1B20] dark:text-white">Danh sách sự vụ khẩn cấp ({filteredAlerts.length})</h2>
+          <p className="mt-1 text-xs font-medium text-[#6E6A7C] dark:text-gray-400">Ưu tiên theo điểm rủi ro; chọn nội dung để mở đúng mention tại trang Cảnh báo.</p>
         </div>
-        <label className="flex h-10 min-w-[260px] items-center gap-2 rounded-lg border border-[#D8D4E3] bg-white px-3 focus-within:border-[#5B4FCF]">
-          <Search className="h-4 w-4 text-[#787585]" />
-          <input value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="Tìm nội dung hoặc người đăng..." className="w-full bg-transparent text-sm outline-none placeholder:text-[#A09CAC]" />
+        <label className="flex h-10 min-w-[260px] items-center gap-2 rounded-lg border border-[#D8D4E3] dark:border-white/20 bg-white dark:bg-white/5 px-3 focus-within:border-[#5B4FCF] dark:focus-within:border-[#9B8CFF]">
+          <Search className="h-4 w-4 text-[#787585] dark:text-gray-400" />
+          <input value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="Tìm nội dung hoặc người đăng..." className="w-full bg-transparent text-sm outline-none placeholder:text-[#A09CAC] dark:placeholder:text-gray-500" />
         </label>
       </div>
 
-      <div className="flex flex-wrap gap-2 border-b border-[#EEEAF6] px-5 py-3">
+      <div className="flex flex-wrap gap-2 border-b border-[#EEEAF6] dark:border-white/10 px-5 py-3">
         {FILTERS.map((filter) => (
-          <button key={filter.id} type="button" onClick={() => setActiveFilter(filter.id)} className={cn("rounded-full border px-3 py-1.5 text-xs font-bold transition-colors", activeFilter === filter.id ? "border-[#5B4FCF] bg-[#5B4FCF] text-white" : "border-[#DDD9E8] bg-white text-[#514D5E] hover:bg-[#F7F5FC]")}>{filter.label}</button>
+          <button key={filter.id} type="button" onClick={() => setActiveFilter(filter.id)} className={cn("rounded-full border px-3 py-1.5 text-xs font-bold transition-colors", activeFilter === filter.id ? "border-[#5B4FCF] dark:border-[#6D5EF6] bg-[#5B4FCF] dark:bg-[#6D5EF6] text-white" : "border-[#DDD9E8] dark:border-white/20 bg-white dark:bg-transparent text-[#514D5E] dark:text-gray-300 hover:bg-[#F7F5FC] dark:hover:bg-white/10")}>{filter.label}</button>
         ))}
       </div>
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[1180px] border-collapse text-left">
-          <thead className="bg-[#F8F7FC] text-[11px] font-black uppercase tracking-wide text-[#6E6A7C]">
+          <thead className="bg-[#F8F7FC] dark:bg-white/5 text-[11px] font-black uppercase tracking-wide text-[#6E6A7C] dark:text-gray-400">
             <tr>
               <th className="px-5 py-3">Sự vụ & nội dung</th>
               <th className="px-4 py-3">Nền tảng</th>
@@ -202,51 +202,51 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
               <th className="px-5 py-3 text-right">Hành động</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#EEEAF6]">
+          <tbody className="divide-y divide-[#EEEAF6] dark:divide-white/10">
             {pageAlerts.map((alert) => {
               const severity = getSeverityInfo(alert);
               const sla = getSlaInfo(alert);
               const status = getStatusInfo(alert);
               const url = sourceUrl(alert);
               return (
-                <tr key={alert.id} className="align-middle hover:bg-[#FCFBFF]">
+                <tr key={alert.id} className="align-middle hover:bg-[#FCFBFF] dark:hover:bg-white/5">
                   <td className="max-w-[390px] px-5 py-4">
                     <Link href={createAlertWorkbenchHref(alert)} className="group block">
                       <div className="flex items-center gap-2">
                         <span className={cn("rounded-md px-2 py-0.5 text-[10px] font-black uppercase", severity.tone)}>{severity.label}</span>
-                        <span className="text-[11px] font-semibold text-[#787585]">{alert.topic || "Khác"}</span>
+                        <span className="text-[11px] font-semibold text-[#787585] dark:text-gray-400">{alert.topic || "Khác"}</span>
                       </div>
-                      <p className="mt-2 line-clamp-2 text-sm font-bold leading-5 text-[#1A1B20] group-hover:text-[#5B4FCF]">{alert.text || "Nội dung cảnh báo chưa được cung cấp"}</p>
-                      <p className="mt-1 text-xs text-[#787585]">{alert.author || "Người dùng ẩn danh"} · {new Date(alert.created_at).toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" })}</p>
+                      <p className="mt-2 line-clamp-2 text-sm font-bold leading-5 text-[#1A1B20] dark:text-gray-200 group-hover:text-[#5B4FCF] dark:group-hover:text-[#9B8CFF]">{alert.text || "Nội dung cảnh báo chưa được cung cấp"}</p>
+                      <p className="mt-1 text-xs text-[#787585] dark:text-gray-400">{alert.author || "Người dùng ẩn danh"} · {new Date(alert.created_at).toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" })}</p>
                     </Link>
                   </td>
                   <td className="px-4 py-4">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-[#36323F]"><PlatformLogo platform={alert.source} size="sm" /><span className="capitalize">{alert.source || "Khác"}</span></div>
+                    <div className="flex items-center gap-2 text-sm font-semibold text-[#36323F] dark:text-gray-200"><PlatformLogo platform={alert.source} size="sm" /><span className="capitalize">{alert.source || "Khác"}</span></div>
                   </td>
                   <td className="w-[135px] px-4 py-4">
-                    <div className="text-sm font-black text-[#BA1A1A]">{Math.round(severity.score)}/100</div>
-                    <div className="mt-2 h-1.5 rounded-full bg-[#EEEAF6]"><div className={cn("h-1.5 rounded-full", severity.bar)} style={{ width: `${severity.score}%` }} /></div>
+                    <div className="text-sm font-black text-[#BA1A1A] dark:text-red-400">{Math.round(severity.score)}/100</div>
+                    <div className="mt-2 h-1.5 rounded-full bg-[#EEEAF6] dark:bg-white/10"><div className={cn("h-1.5 rounded-full", severity.bar)} style={{ width: `${severity.score}%` }} /></div>
                   </td>
-                  <td className="px-4 py-4"><span className={cn("inline-flex rounded-full px-2.5 py-1 text-xs font-bold", sla.isOverdue ? "bg-red-100 text-red-700" : "bg-indigo-50 text-indigo-700")}>{sla.label}</span></td>
-                  <td className="px-4 py-4"><span className={cn("inline-flex items-center gap-2 text-xs font-bold", status.text)}><span className={cn("h-2 w-2 rounded-full", status.dot)} />{status.label}</span></td>
-                  <td className="max-w-[170px] px-4 py-4"><span className={cn("block truncate text-xs font-bold", alert.being_resolved_by ? "text-[#36323F]" : "text-amber-700")}>{alert.being_resolved_by || "Chưa giao"}</span></td>
+                  <td className="px-4 py-4"><span className={cn("inline-flex rounded-full px-2.5 py-1 text-xs font-bold", sla.isOverdue ? "bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400" : "bg-indigo-50 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300")}>{sla.label}</span></td>
+                  <td className="px-4 py-4"><span className={cn("inline-flex items-center gap-2 text-xs font-bold dark:opacity-90", status.text)}><span className={cn("h-2 w-2 rounded-full", status.dot)} />{status.label}</span></td>
+                  <td className="max-w-[170px] px-4 py-4"><span className={cn("block truncate text-xs font-bold", alert.being_resolved_by ? "text-[#36323F] dark:text-gray-200" : "text-amber-700 dark:text-amber-400")}>{alert.being_resolved_by || "Chưa giao"}</span></td>
                   <td className="relative px-5 py-4">
                     <div className="flex justify-end gap-2">
                       {canAssign && (
-                        <button type="button" onClick={() => setAssignmentAlertId(assignmentAlertId === alert.id ? null : alert.id)} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#D8D4E3] px-3 text-xs font-bold text-[#4234B6] hover:bg-[#F3F0FF]"><UserPlus className="h-4 w-4" />Giao nhiệm vụ</button>
+                        <button type="button" onClick={() => setAssignmentAlertId(assignmentAlertId === alert.id ? null : alert.id)} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#D8D4E3] dark:border-white/20 px-3 text-xs font-bold text-[#4234B6] dark:text-[#9B8CFF] hover:bg-[#F3F0FF] dark:hover:bg-white/10"><UserPlus className="h-4 w-4" />Giao nhiệm vụ</button>
                       )}
-                      <button type="button" disabled={!url} onClick={() => url && window.open(url, "_blank", "noopener,noreferrer")} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#D8D4E3] px-3 text-xs font-bold text-[#4234B6] hover:bg-[#F3F0FF] disabled:cursor-not-allowed disabled:opacity-45"><ExternalLink className="h-4 w-4" />Mở nguồn</button>
+                      <button type="button" disabled={!url} onClick={() => url && window.open(url, "_blank", "noopener,noreferrer")} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#D8D4E3] dark:border-white/20 px-3 text-xs font-bold text-[#4234B6] dark:text-[#9B8CFF] hover:bg-[#F3F0FF] dark:hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-45"><ExternalLink className="h-4 w-4" />Mở nguồn</button>
                     </div>
                     {assignmentAlertId === alert.id && (
-                      <div className="absolute right-5 top-[58px] z-20 w-64 rounded-xl border border-[#D8D4E3] bg-white p-2 shadow-xl">
-                        <div className="px-2 pb-2 text-[11px] font-black uppercase text-[#787585]">Chọn nhân viên xử lý</div>
+                      <div className="absolute right-5 top-[58px] z-20 w-64 rounded-xl border border-[#D8D4E3] dark:border-white/10 bg-white dark:bg-[#2A2B35] p-2 shadow-xl">
+                        <div className="px-2 pb-2 text-[11px] font-black uppercase text-[#787585] dark:text-gray-400">Chọn nhân viên xử lý</div>
                         <div className="max-h-56 overflow-y-auto">
                           {staff.length > 0 ? staff.map((item) => (
-                            <button key={item.uid} type="button" disabled={assigning === alert.id} onClick={() => void handleAssign(alert, item.uid)} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-[#F7F5FC] disabled:opacity-50">
-                              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#ECE9FF] text-[10px] font-black text-[#4234B6]">{(item.displayName || item.email).slice(0, 2).toUpperCase()}</span>
-                              <span className="min-w-0"><span className="block truncate text-xs font-bold text-[#1A1B20]">{item.displayName || item.email}</span><span className="block truncate text-[10px] text-[#787585]">{item.email}</span></span>
+                            <button key={item.uid} type="button" disabled={assigning === alert.id} onClick={() => void handleAssign(alert, item.uid)} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-[#F7F5FC] dark:hover:bg-white/10 disabled:opacity-50">
+                              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#ECE9FF] dark:bg-[#4234B6]/30 text-[10px] font-black text-[#4234B6] dark:text-[#9B8CFF]">{(item.displayName || item.email).slice(0, 2).toUpperCase()}</span>
+                              <span className="min-w-0"><span className="block truncate text-xs font-bold text-[#1A1B20] dark:text-white">{item.displayName || item.email}</span><span className="block truncate text-[10px] text-[#787585] dark:text-gray-400">{item.email}</span></span>
                             </button>
-                          )) : <div className="px-2 py-3 text-center text-xs text-[#787585]">Chưa có nhân viên phù hợp.</div>}
+                          )) : <div className="px-2 py-3 text-center text-xs text-[#787585] dark:text-gray-400">Chưa có nhân viên phù hợp.</div>}
                         </div>
                       </div>
                     )}
@@ -254,17 +254,17 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
                 </tr>
               );
             })}
-            {pageAlerts.length === 0 && <tr><td colSpan={7} className="px-5 py-14 text-center text-sm font-medium text-[#787585]">Không có sự vụ phù hợp với bộ lọc.</td></tr>}
+            {pageAlerts.length === 0 && <tr><td colSpan={7} className="px-5 py-14 text-center text-sm font-medium text-[#787585] dark:text-gray-400">Không có sự vụ phù hợp với bộ lọc.</td></tr>}
           </tbody>
         </table>
       </div>
 
-      <div className="flex items-center justify-between border-t border-[#EEEAF6] px-5 py-4 text-xs font-medium text-[#6E6A7C]">
+      <div className="flex items-center justify-between border-t border-[#EEEAF6] dark:border-white/10 px-5 py-4 text-xs font-medium text-[#6E6A7C] dark:text-gray-400">
         <span>{filteredAlerts.length > 0 ? `Hiển thị ${(safePage - 1) * PAGE_SIZE + 1}–${Math.min(safePage * PAGE_SIZE, filteredAlerts.length)} trong ${filteredAlerts.length}` : "Không có dữ liệu"}</span>
         <div className="flex items-center gap-2">
-          <button type="button" disabled={safePage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))} className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#D8D4E3] disabled:opacity-35"><ChevronLeft className="h-4 w-4" /></button>
-          <span className="min-w-12 text-center font-bold text-[#36323F]">{safePage}/{pageCount}</span>
-          <button type="button" disabled={safePage >= pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))} className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#D8D4E3] disabled:opacity-35"><ChevronRight className="h-4 w-4" /></button>
+          <button type="button" disabled={safePage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))} className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#D8D4E3] dark:border-white/20 disabled:opacity-35"><ChevronLeft className="h-4 w-4" /></button>
+          <span className="min-w-12 text-center font-bold text-[#36323F] dark:text-white">{safePage}/{pageCount}</span>
+          <button type="button" disabled={safePage >= pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))} className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#D8D4E3] dark:border-white/20 disabled:opacity-35"><ChevronRight className="h-4 w-4" /></button>
         </div>
       </div>
 

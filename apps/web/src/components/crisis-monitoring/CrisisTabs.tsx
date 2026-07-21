@@ -29,7 +29,7 @@ export function CrisisTabs({ tabs, activeTab, onChange }: CrisisTabsProps) {
             className={cn(
               "relative px-4 py-4 text-sm transition-colors focus:outline-none flex items-center space-x-2",
               isActive 
-                ? (isCrisisTab ? "text-[#BA1A1A] font-bold" : "text-[#4234B6] font-bold")
+                ? (isCrisisTab ? "text-[#BA1A1A] dark:text-red-400 font-bold" : "text-[#4234B6] dark:text-[#9B8CFF] font-bold")
                 : "text-[#474554] font-medium hover:text-[#1A1B20] dark:text-gray-400 dark:hover:text-gray-200"
             )}
           >
@@ -39,7 +39,7 @@ export function CrisisTabs({ tabs, activeTab, onChange }: CrisisTabsProps) {
                 className={cn(
                   "ml-1.5 flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold",
                   isActive 
-                    ? (isCrisisTab ? "bg-[#BA1A1A] text-white" : "text-[#4234B6]")
+                    ? (isCrisisTab ? "bg-[#BA1A1A] text-white dark:bg-red-500/20 dark:text-red-400" : "text-[#4234B6] dark:text-[#9B8CFF]")
                     : "bg-[#EEEDF4] text-[#474554] dark:bg-gray-800 dark:text-gray-400"
                 )}
               >
@@ -52,7 +52,7 @@ export function CrisisTabs({ tabs, activeTab, onChange }: CrisisTabsProps) {
                 layoutId="crisis-tab-indicator"
                 className={cn(
                   "absolute bottom-[-1px] left-0 right-0 h-[2px]",
-                  isCrisisTab ? "bg-[#BA1A1A]" : "bg-[#4234B6]"
+                  isCrisisTab ? "bg-[#BA1A1A] dark:bg-red-500" : "bg-[#4234B6] dark:bg-[#9B8CFF]"
                 )}
                 initial={false}
                 transition={{ type: "spring", stiffness: 500, damping: 30 }}

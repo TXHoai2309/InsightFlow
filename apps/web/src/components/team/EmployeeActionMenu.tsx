@@ -27,7 +27,7 @@ export function EmployeeActionMenu({ account, onEdit, onToggleStatus, onResetPas
     <div className="relative" ref={menuRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="p-2 rounded-lg text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+        className="p-2 rounded-lg text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="12" r="1"></circle>
@@ -37,27 +37,27 @@ export function EmployeeActionMenu({ account, onEdit, onToggleStatus, onResetPas
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-1 w-48 rounded-xl bg-white border border-gray-200 shadow-lg py-1 z-10 overflow-hidden">
+        <div className="absolute right-0 mt-1 w-48 rounded-xl bg-white dark:bg-[#1A1B20] border border-gray-200 dark:border-white/10 shadow-lg dark:shadow-none py-1 z-10 overflow-hidden">
           <button
             onClick={() => { onEdit(account); setIsOpen(false); }}
-            className="w-full text-left px-4 py-2.5 text-[13px] text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+            className="w-full text-left px-4 py-2.5 text-[13px] text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 flex items-center gap-2"
           >
             ✏️ Chỉnh sửa / Đổi vai trò
           </button>
           
           <button
             onClick={() => { onResetPassword(account); setIsOpen(false); }}
-            className="w-full text-left px-4 py-2.5 text-[13px] text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+            className="w-full text-left px-4 py-2.5 text-[13px] text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/5 flex items-center gap-2"
           >
             🔑 Reset mật khẩu
           </button>
 
-          <div className="h-px bg-gray-200 my-1"></div>
+          <div className="h-px bg-gray-200 dark:bg-white/10 my-1"></div>
 
           <button
             onClick={() => { onToggleStatus(account); setIsOpen(false); }}
             className={`w-full text-left px-4 py-2.5 text-[13px] flex items-center gap-2 ${
-              account.disabled ? "text-green-600 hover:bg-green-50" : "text-red-600 hover:bg-red-50"
+              account.disabled ? "text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-500/10" : "text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10"
             }`}
           >
             {account.disabled ? "🔓 Mở khóa tài khoản" : "🔒 Khóa tài khoản"}

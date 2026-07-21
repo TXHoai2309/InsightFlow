@@ -67,27 +67,27 @@ export function ResponseTimeTrendCard() {
   };
 
   return (
-    <div className="flex h-[280px] flex-col rounded-[14px] border border-[#E9E7EE] bg-white shadow-sm">
+    <div className="flex h-[280px] flex-col rounded-[14px] border border-[#E9E7EE] dark:border-white/10 bg-white dark:bg-[#1A1B20] shadow-sm dark:shadow-none">
       <div className="flex items-start justify-between px-6 pb-2 pt-6">
         <div>
-          <h3 className="font-sans text-[14px] font-bold uppercase tracking-wide text-[#1A1B20]">
+          <h3 className="font-sans text-[14px] font-bold uppercase tracking-wide text-[#1A1B20] dark:text-white">
             SLA phản hồi
           </h3>
-          <p className="mt-1 text-[12px] font-medium text-[#787585]">
+          <p className="mt-1 text-[12px] font-medium text-[#787585] dark:text-gray-400">
             Mục tiêu dưới 5 phút
           </p>
         </div>
-        <Gauge className="h-5 w-5 text-[#787585]" />
+        <Gauge className="h-5 w-5 text-[#787585] dark:text-gray-400" />
       </div>
 
       <div className="grid grid-cols-2 gap-3 px-6 pt-2">
-        <div className="rounded-[10px] bg-[#F4F3FA] px-3 py-2">
-          <p className="text-[11px] font-bold uppercase text-[#787585]">TB phản hồi</p>
-          <p className="mt-1 text-[20px] font-bold text-[#1A1B20]">{sla.avg}p</p>
+        <div className="rounded-[10px] bg-[#F4F3FA] dark:bg-white/10 px-3 py-2">
+          <p className="text-[11px] font-bold uppercase text-[#787585] dark:text-gray-400">TB phản hồi</p>
+          <p className="mt-1 text-[20px] font-bold text-[#1A1B20] dark:text-white">{sla.avg}p</p>
         </div>
-        <div className="rounded-[10px] bg-[#FFF4F2] px-3 py-2">
-          <p className="text-[11px] font-bold uppercase text-[#BA1A1A]">Quá SLA</p>
-          <p className="mt-1 text-[20px] font-bold text-[#BA1A1A]">{sla.overdue}</p>
+        <div className="rounded-[10px] bg-[#FFF4F2] dark:bg-red-500/20 px-3 py-2">
+          <p className="text-[11px] font-bold uppercase text-[#BA1A1A] dark:text-red-400">Quá SLA</p>
+          <p className="mt-1 text-[20px] font-bold text-[#BA1A1A] dark:text-red-400">{sla.overdue}</p>
         </div>
       </div>
 

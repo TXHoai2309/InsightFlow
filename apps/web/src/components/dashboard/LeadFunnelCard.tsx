@@ -32,8 +32,8 @@ export function LeadFunnelCard({ funnelData }: LeadFunnelProps) {
   ];
 
   return (
-    <div className="bg-white dark:bg-[#1a1b1e] rounded-[16px] border border-[var(--color-border)] shadow-sm flex flex-col overflow-hidden">
-      <div className="px-6 py-5 border-b border-[var(--color-border)] flex items-center justify-between">
+    <div className="bg-white dark:bg-[#1A1B20] rounded-[16px] border border-[var(--color-border)] dark:border-white/10 shadow-sm dark:shadow-none flex flex-col overflow-hidden">
+      <div className="px-6 py-5 border-b border-[var(--color-border)] dark:border-white/10 flex items-center justify-between">
         <h3 className="font-bold text-lg text-gray-900 dark:text-white flex items-center">
           <span className="material-symbols-outlined mr-2 text-orange-500">filter_alt</span>
           {t("dashboard.funnel.title", "Phễu chuyển đổi Lead")}
@@ -55,7 +55,7 @@ export function LeadFunnelCard({ funnelData }: LeadFunnelProps) {
               {/* Conversion Rate Arrow connecting previous to this (except for first item) */}
               {!isFirst && (
                 <div className="flex flex-col items-center">
-                  <div className="flex items-center gap-1 text-[10px] font-bold text-gray-400 my-0.5">
+                  <div className="flex items-center gap-1 text-[10px] font-bold text-gray-400 dark:text-gray-500 my-0.5">
                     <span className="material-symbols-outlined text-[14px]">arrow_downward</span>
                     <span>{rate}%</span>
                   </div>

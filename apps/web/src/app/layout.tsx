@@ -13,6 +13,7 @@ import { NativeSelectEnhancer } from "@/components/ui/NativeSelectEnhancer";
 import Footer from "@/components/home/Footer";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import NextTopLoader from "nextjs-toploader";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 
 const BrandManagerOnboarding = dynamic(
@@ -165,6 +166,17 @@ export default function RootLayout({
       >
         <I18nextProvider i18n={i18nInstance}>
           <ThemeProvider>
+            <NextTopLoader
+              color="var(--color-brand)"
+              initialPosition={0.08}
+              crawlSpeed={200}
+              height={3}
+              crawl={true}
+              showSpinner={false}
+              easing="ease"
+              speed={200}
+              shadow="0 0 10px var(--color-brand),0 0 5px var(--color-brand)"
+            />
             <LanguageProvider>
               <NativeSelectEnhancer />
               {isAuthPage ? (
