@@ -22,9 +22,9 @@ const PAGE_SIZE = 10;
 
 const FILTERS = [
   { id: "all", label: "Tất cả" },
-  { id: "high-risk", label: "Critical / Cao" },
-  { id: "overdue", label: "Quá SLA" },
-  { id: "unassigned", label: "Chưa giao" },
+  { id: "high-risk", label: "Ưu tiên cao" },
+  { id: "overdue", label: "Quá hạn phản hồi" },
+  { id: "unassigned", label: "Chưa có người xử lý" },
   { id: "processing", label: "Đang xử lý" },
 ] as const;
 
@@ -48,10 +48,10 @@ function normalizeSeverity(value?: string) {
 function getSlaInfo(alert: AlertData) {
   const severity = normalizeSeverity(alert.severity);
   const limitHours = severity === "critical" ? 1 : severity === "high" ? 2 : severity === "medium" ? 4 : 8;
-  const createdAt = new Date(alert.created_at).getTime();
+  const createdAt = new Date(alert.detected_at || alert.created_at).getTime();
   const usedMinutes = Number.isFinite(createdAt) ? Math.max(0, Math.floor((Date.now() - createdAt) / 60000)) : 0;
   const limitMinutes = limitHours * 60;
-  const isTerminal = ["resolved", "contact_failed"].includes(getAlertWorkflowStatus(alert));
+  const isTerminal = getAlertWorkflowStatus(alert) === "resolved";
   const overdueMinutes = Math.max(0, usedMinutes - limitMinutes);
 
   if (isTerminal) return { isOverdue: false, label: "Đã kết thúc", percent: 100 };
@@ -174,8 +174,8 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
     <section className="overflow-hidden rounded-xl border border-[#DDD9E8] bg-white shadow-[0_8px_24px_rgba(30,31,36,0.06)]">
       <div className="flex flex-col gap-4 border-b border-[#EEEAF6] px-5 py-5 xl:flex-row xl:items-center xl:justify-between">
         <div>
-          <h2 className="text-lg font-black text-[#1A1B20]">Danh sách sự vụ khẩn cấp ({filteredAlerts.length})</h2>
-          <p className="mt-1 text-xs font-medium text-[#6E6A7C]">Ưu tiên theo điểm rủi ro; chọn nội dung để mở đúng mention tại trang Cảnh báo.</p>
+          <h2 className="text-lg font-black text-[#1A1B20]">Danh sách cảnh báo Crisis ({filteredAlerts.length})</h2>
+          <p className="mt-1 text-xs font-medium text-[#6E6A7C]">Sắp xếp theo mức ưu tiên; chọn nội dung để xem chi tiết và lịch sử xử lý.</p>
         </div>
         <label className="flex h-10 min-w-[260px] items-center gap-2 rounded-lg border border-[#D8D4E3] bg-white px-3 focus-within:border-[#5B4FCF]">
           <Search className="h-4 w-4 text-[#787585]" />
@@ -193,13 +193,13 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
         <table className="w-full min-w-[1180px] border-collapse text-left">
           <thead className="bg-[#F8F7FC] text-[11px] font-black uppercase tracking-wide text-[#6E6A7C]">
             <tr>
-              <th className="px-5 py-3">Sự vụ & nội dung</th>
-              <th className="px-4 py-3">Nền tảng</th>
-              <th className="px-4 py-3">Rủi ro</th>
-              <th className="px-4 py-3">SLA</th>
-              <th className="px-4 py-3">Trạng thái</th>
-              <th className="px-4 py-3">Phụ trách</th>
-              <th className="px-5 py-3 text-right">Hành động</th>
+              <th className="px-5 py-3">Nội dung cảnh báo</th>
+              <th className="px-4 py-3">Kênh</th>
+              <th className="px-4 py-3">Điểm ưu tiên</th>
+              <th className="px-4 py-3">Thời hạn xử lý</th>
+              <th className="px-4 py-3">Tiến độ</th>
+              <th className="px-4 py-3">Người xử lý</th>
+              <th className="px-5 py-3 text-right">Thao tác</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#EEEAF6]">

@@ -80,10 +80,24 @@ export function AlertWorkbench(props: AlertWorkbenchProps) {
     resolved: props.alerts.filter(isResolvedAlert).length,
   };
   const urgentCount = props.alerts.filter((alert) => !isResolvedAlert(alert) && ["critical", "high"].includes(String(alert.severity).toLowerCase())).length;
+  const openCount = counts.pending + counts.processing + counts.contact_failed;
+  const timeScopeLabel = props.timeFilter === "all"
+    ? "Toàn thời gian"
+    : props.timeFilter === "24h"
+      ? "Hôm nay"
+      : props.timeFilter === "7d"
+        ? "7 ngày qua"
+        : props.timeFilter === "30d"
+          ? "30 ngày qua"
+          : props.timeFilter === "single"
+            ? (props.singleDate || "Ngày cụ thể")
+            : props.timeFilter === "custom"
+              ? `${props.customStartDate || "…"} → ${props.customEndDate || "…"}`
+              : props.timeFilter;
   const isPanelOpen = Boolean(props.selectedAlert && !props.panelCollapsed);
 
   const ALL_STATUS_VIEWS = [
-    { id: "all" as const, label: "Tất cả đang mở", count: counts.pending + counts.contact_failed },
+    { id: "all" as const, label: "Tất cả việc đang mở", count: openCount },
     { id: "pending" as const, label: "Chưa phân công", count: counts.pending },
     { id: "processing" as const, label: "Đang xử lý", count: counts.processing },
     { id: "contact_failed" as const, label: "Cần liên hệ lại", count: counts.contact_failed },
@@ -95,10 +109,11 @@ export function AlertWorkbench(props: AlertWorkbenchProps) {
       <header className="flex flex-col gap-3 min-[1320px]:flex-row min-[1320px]:items-center min-[1320px]:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2.5">
-            <h1 className="text-xl font-black text-[var(--color-text-primary)] md:text-2xl">Cảnh báo khủng hoảng</h1>
+            <h1 className="text-xl font-black text-[var(--color-text-primary)] md:text-2xl">Trung tâm xử lý cảnh báo</h1>
+            <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-2.5 py-1 text-[10px] font-black text-[var(--color-text-secondary)]">{timeScopeLabel}</span>
             {urgentCount > 0 && <span className="rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[10px] font-black text-red-700">{urgentCount} cảnh báo ưu tiên</span>}
           </div>
-          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">Chọn cảnh báo bên trái và xử lý nghiệp vụ trực tiếp trong panel.</p>
+          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">Toàn bộ đề cập tiêu cực đều được đưa vào hàng đợi; nhóm ưu tiên cao được đánh dấu riêng.</p>
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 min-[1320px]:w-auto">
           <label className="relative min-w-[220px] flex-1 min-[1320px]:w-[20rem] min-[1320px]:flex-none">
@@ -109,9 +124,9 @@ export function AlertWorkbench(props: AlertWorkbenchProps) {
       </header>
 
       <section className="grid gap-3 md:grid-cols-3">
-        <KpiCard title="Cần xử lý ngay" value={counts.pending} sub={`${urgentCount} cảnh báo Critical/High`} icon="bolt" color="var(--color-error)" bg="var(--color-error-subtle)" onClick={() => props.onStatusFilterChange("pending")} />
-        <KpiCard title="Đang xử lý" value={counts.processing} sub="Đã có người phụ trách" icon="timer" color="var(--color-warning)" bg="var(--color-warning-subtle)" onClick={() => props.onStatusFilterChange("processing")} />
-        <KpiCard title="Cần liên hệ lại" value={counts.contact_failed} sub="Việc cần quay lại" icon="event" color="var(--color-info)" bg="var(--color-info-subtle)" onClick={() => props.onStatusFilterChange("contact_failed")} />
+        <KpiCard title="Tất cả việc đang mở" value={openCount} sub={`${urgentCount} việc có mức ưu tiên cao`} icon="bolt" color="var(--color-error)" bg="var(--color-error-subtle)" onClick={() => props.onStatusFilterChange("all")} />
+        <KpiCard title="Chưa phân công" value={counts.pending} sub="Chưa có người phụ trách" icon="person_add" color="var(--color-info)" bg="var(--color-info-subtle)" onClick={() => props.onStatusFilterChange("pending")} />
+        <KpiCard title="Đang được xử lý" value={counts.processing} sub="Đã có người phụ trách" icon="timer" color="var(--color-warning)" bg="var(--color-warning-subtle)" onClick={() => props.onStatusFilterChange("processing")} />
       </section>
 
       <section className="space-y-[clamp(6px,0.55vw,10px)]">

@@ -78,8 +78,8 @@ export function CrisisAnalyticsCharts({ alerts }: { alerts: AlertData[] }) {
     <section className="grid grid-cols-1 gap-6 xl:grid-cols-[1.45fr_0.75fr]">
       <Card className="rounded-xl border-[#DDD9E8] bg-white shadow-[0_8px_24px_rgba(30,31,36,0.06)]">
         <CardHeader className="px-5 pb-2 pt-5">
-          <CardTitle className="text-base font-black text-[#1A1B20]">Xu hướng rủi ro 14 ngày</CardTitle>
-          <p className="text-xs font-medium text-[#6E6A7C]">Theo dõi tổng cảnh báo và nhóm Critical/Cao để nhận biết chiều hướng lan rộng.</p>
+          <CardTitle className="text-base font-black text-[#1A1B20]">Cảnh báo theo ngày đăng</CardTitle>
+          <p className="text-xs font-medium text-[#6E6A7C]">Số nội dung được đăng trong 14 ngày gần nhất; đường đỏ là nhóm ưu tiên cao.</p>
         </CardHeader>
         <CardContent className="h-[285px] px-2 pb-4 sm:px-5">
           <ResponsiveContainer width="100%" height="100%">
@@ -99,8 +99,8 @@ export function CrisisAnalyticsCharts({ alerts }: { alerts: AlertData[] }) {
               <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{ fill: "#787585", fontSize: 11 }} />
               <Tooltip contentStyle={{ borderRadius: 10, border: "1px solid #DDD9E8", fontSize: 12 }} />
               <Legend iconType="circle" wrapperStyle={{ fontSize: 12, paddingTop: 10 }} />
-              <Area type="monotone" dataKey="total" name="Tổng cảnh báo" stroke="#5B4FCF" strokeWidth={2.5} fill="url(#crisisTotal)" />
-              <Area type="monotone" dataKey="highRisk" name="Critical / Cao" stroke="#BA1A1A" strokeWidth={2.5} fill="url(#crisisHigh)" />
+              <Area type="monotone" dataKey="total" name="Đủ điều kiện Crisis" stroke="#5B4FCF" strokeWidth={2.5} fill="url(#crisisTotal)" />
+              <Area type="monotone" dataKey="highRisk" name="Ưu tiên cao" stroke="#BA1A1A" strokeWidth={2.5} fill="url(#crisisHigh)" />
             </AreaChart>
           </ResponsiveContainer>
         </CardContent>
@@ -108,8 +108,8 @@ export function CrisisAnalyticsCharts({ alerts }: { alerts: AlertData[] }) {
 
       <Card className="rounded-xl border-[#DDD9E8] bg-white shadow-[0_8px_24px_rgba(30,31,36,0.06)]">
         <CardHeader className="px-5 pb-2 pt-5">
-          <CardTitle className="text-base font-black text-[#1A1B20]">Cơ cấu mức độ rủi ro</CardTitle>
-          <p className="text-xs font-medium text-[#6E6A7C]">Tỷ trọng cảnh báo theo mức độ ưu tiên trong 30 ngày.</p>
+          <CardTitle className="text-base font-black text-[#1A1B20]">Phân bổ mức ưu tiên</CardTitle>
+          <p className="text-xs font-medium text-[#6E6A7C]">Mỗi cảnh báo thuộc đúng một mức ưu tiên trong kỳ 30 ngày.</p>
         </CardHeader>
         <CardContent className="h-[285px] px-2 pb-4">
           {severityData.length > 0 ? (

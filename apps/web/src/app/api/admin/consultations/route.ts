@@ -302,7 +302,12 @@ export async function PATCH(request: NextRequest) {
         );
       }
 
-      const brandId = `${slugify(company)}-${id.slice(-6).toLowerCase()}`;
+      const crawlRunMetadata = crawlRunSnapshot.data()?.metadata;
+      const trialBrandSlug = crawlRunMetadata && typeof crawlRunMetadata === "object"
+        ? text((crawlRunMetadata as Record<string, unknown>).trialBrandSlug, 100)
+        : "";
+      const brandId = trialBrandSlug
+        || `trial-${slugify(company)}-${crawlRunId.slice(0, 8).toLowerCase()}`;
       const provisionedUid = text(consultation.provisionedAccountUid, 128);
       const provisionedEmail = text(consultation.provisionedAccountEmail, 180).toLowerCase();
       let userRecord: any;

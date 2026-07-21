@@ -8,14 +8,13 @@ import { canPerformAction, type UserRoleProfile } from "@/lib/rbac";
 import { fetchSupabaseAlerts, updateSupabaseAlertLabel, supabaseRequest } from "@/lib/supabase";
 import { supabaseClient } from "@/lib/supabaseClient";
 import {
-  isCrisisClassificationLabel,
   normalizeClassificationLabel,
 } from "@/lib/label-change";
 import { calculateNegativityScore } from "@/lib/negativityScore";
-import { useDashboardStore } from "@/stores/dashboard.store";
 import type { Mention } from "@/types/dashboard";
-import { getPersistedAlertStatus, isResolvedAlert } from "@/lib/alertWorkflow";
+import { getPersistedAlertStatus } from "@/lib/alertWorkflow";
 import { canAlertBeVisibleToUser } from "@/lib/alert-visibility";
+import { getCalendarPeriodStartMs, isWithinCalendarPeriod } from "@/lib/dashboard-display";
 
 function getResolverName(emailOrId: string | null | undefined): string {
   if (!emailOrId) return "";
@@ -96,6 +95,8 @@ export interface AlertData {
   severity: string;
   negativity_score: number;
   created_at: string;
+  /** Time the mention was ingested/classified and entered the workflow. */
+  detected_at?: string;
   status: string;
   resolved_at?: string;
   collectionName?: string;
@@ -349,6 +350,7 @@ function mentionToAlertData(m: Mention): AlertData {
     severity,
     negativity_score: negativity.score,
     created_at: m.posted_at || m.created_at,
+    detected_at: m.classified_at || m.created_at || m.posted_at,
     status: resolveAlertStatusFromLabel(labelObj),
     resolved_at: labelObj.resolved_at,
     collectionName: "annotations",
@@ -412,70 +414,17 @@ function buildAlertsFromMentions(
   scopedBrandKey?: string | null,
 ): AlertData[] {
   return mentions
-    .filter((mention) =>
-      isCrisisClassificationLabel(mention.labels, {
-        sentiment: mention.sentiment,
-        relevance: mention.labels?.relevance ?? null,
-        urgency: mention.labels?.urgency ?? "none",
-        intent: mention.labels?.intent ?? "none",
-      }),
-    )
+    // Every negative mention is an actionable alert. Crisis classification is
+    // a priority subset used only by Crisis Monitoring, not an admission gate
+    // for the operational Alerts queue.
+    .filter((mention) => mention.sentiment === "negative")
     .map(mentionToAlertData)
     .filter((alert) => {
-      const history = Array.isArray(alert.resolution_history) ? alert.resolution_history : [];
-      const completedAt =
-        alert.resolved_at ||
-        alert.monitoring_started_at ||
-        history[history.length - 1]?.timestamp;
-      const reviewTimestamp = isResolvedAlert(alert)
-        ? completedAt || alert.created_at
-        : alert.created_at;
-
-      return (
-        isWithinAlertReviewWindow(reviewTimestamp) &&
-        isRecordInBrandScope({ brand: alert.brand }, scopedBrandKey ?? null)
-      );
+      // Keep the complete crisis history in the store. Each screen owns its
+      // visible time range: Crisis Monitoring uses 30 days, while /alerts can
+      // genuinely show all time or a user-selected period.
+      return isRecordInBrandScope({ brand: alert.brand }, scopedBrandKey ?? null);
     });
-}
-
-function setAlertsFromDashboardCache(
-  setState: typeof useAlertStore.setState,
-  getState: typeof useAlertStore.getState,
-  scopedBrandKey?: string | null,
-): boolean {
-  const dashboardMentions = useDashboardStore.getState().mentions;
-  // The dashboard cache is scoped by user. Reuse only the in-memory store here;
-  // reading legacy brand-only localStorage keys can expose another employee's queue.
-  const mentions = dashboardMentions;
-  if (mentions.length === 0) return false;
-
-  const recentLocks = getState().recentLocks || {};
-  const fetched = buildAlertsFromMentions(mentions, scopedBrandKey).map((alert) => {
-    const recent = recentLocks[alert.id];
-    if (recent && Date.now() - recent.timestamp < 15000) {
-      return {
-        ...alert,
-        being_resolved_by: recent.email,
-        being_resolved_at: recent.email
-          ? alert.being_resolved_at || new Date(recent.timestamp).toISOString()
-          : null,
-      };
-    }
-    return alert;
-  });
-
-  const scopedBrands = Array.from(new Set(fetched.map((alert) => alert.brand))).sort();
-  const fallbackBrands = ["Highlands Coffee", "Starbucks", "Mixue"].filter((brand) => {
-    return !scopedBrandKey || normalizeBrandName(brand) === scopedBrandKey;
-  });
-
-  setState((state) => ({
-    rawAlerts: fetched,
-    alerts: applyFilters(fetched, state.filters),
-    brands: scopedBrands.length ? scopedBrands : fallbackBrands,
-    error: null,
-  }));
-  return fetched.length > 0;
 }
 
 function applyRealtimeAnnotationUpdate(
@@ -559,18 +508,16 @@ let activeRequestsScope: string | null = null;
 /** Holds the subscribed Supabase channel so we can reuse it for broadcasts */
 let activeRealtimeChannel: ReturnType<NonNullable<typeof supabaseClient>["channel"]> | null = null;
 const ALERT_REVIEW_WINDOW_DAYS = 30;
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
 // Realtime is the primary update path. Keep polling only as a safety net so a
 // transient channel failure does not turn every alert screen into a DB scan.
 const ALERT_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
 
 export function getAlertReviewSinceIso(days = ALERT_REVIEW_WINDOW_DAYS): string {
-  return new Date(Date.now() - days * MS_PER_DAY).toISOString();
+  return new Date(getCalendarPeriodStartMs(days)).toISOString();
 }
 
 function isWithinAlertReviewWindow(value: unknown, days = ALERT_REVIEW_WINDOW_DAYS): boolean {
-  const time = new Date(parseDate(value)).getTime();
-  return Number.isFinite(time) && time >= Date.now() - days * MS_PER_DAY;
+  return isWithinCalendarPeriod(parseDate(value), days);
 }
 
 export const useAlertStore = create<AlertState>()(
@@ -614,13 +561,6 @@ export const useAlertStore = create<AlertState>()(
         return;
       }
 
-      // Dashboard cache is only an immediate visual fallback. Always continue
-      // to the authoritative Supabase load because older cached mentions may
-      // not contain workflow fields such as resolution_status/resolved_at.
-      if (!force) {
-        setAlertsFromDashboardCache(set, get, scopedBrandKey);
-      }
-
       // Clean up any existing subscription/interval
       if (activeUnsubscribe) {
         activeUnsubscribe();
@@ -628,10 +568,6 @@ export const useAlertStore = create<AlertState>()(
       }
 
       set({ isLoading: true, error: null });
-
-      if (force) {
-        setAlertsFromDashboardCache(set, get, scopedBrandKey);
-      }
 
       const loadAlerts = async () => {
         try {
@@ -676,7 +612,8 @@ export const useAlertStore = create<AlertState>()(
       };
 
       try {
-        // Initial load
+        // fetchRawData shares a 30-minute promise cache with Dashboard, so this
+        // gets the complete dataset without starting another Supabase scan.
         await loadAlerts();
 
         const cleanupFns: (() => void)[] = [];
@@ -688,7 +625,6 @@ export const useAlertStore = create<AlertState>()(
         // occurs when Supabase reuses the internal state of an old same-named channel.
         if (supabaseClient) {
           try {
-            let realtimeReloadTimer: ReturnType<typeof setTimeout> | null = null;
             const channelName = `alert-annotations-${Date.now()}`;
             const channel = supabaseClient
               .channel(channelName)
@@ -698,11 +634,6 @@ export const useAlertStore = create<AlertState>()(
                 (payload: any) => {
                   console.log("[AlertStore] Realtime postgres_changes event:", payload);
                   applyRealtimeAnnotationUpdate(set, get, payload?.new);
-                  if (realtimeReloadTimer) clearTimeout(realtimeReloadTimer);
-                  realtimeReloadTimer = setTimeout(() => {
-                    loadAlerts();
-                    realtimeReloadTimer = null;
-                  }, 250);
                 }
               )
               .on(
@@ -719,11 +650,6 @@ export const useAlertStore = create<AlertState>()(
                       being_resolved_at: payload.assignedAt,
                       status: "resolving",
                     });
-                    if (realtimeReloadTimer) clearTimeout(realtimeReloadTimer);
-                    realtimeReloadTimer = setTimeout(() => {
-                      loadAlerts();
-                      realtimeReloadTimer = null;
-                    }, 250);
                   }
                 }
               )
@@ -739,7 +665,6 @@ export const useAlertStore = create<AlertState>()(
               });
 
             cleanupFns.push(() => {
-              if (realtimeReloadTimer) clearTimeout(realtimeReloadTimer);
               activeRealtimeChannel = null;
               if (supabaseClient) supabaseClient.removeChannel(channel);
             });
