@@ -56,6 +56,7 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen, onClose, isCollapsed = false, onToggleCollapsed }: SidebarProps) {
   const pathname = usePathname();
+  const isDemoMode = pathname?.startsWith("/demo") || false;
   const router = useRouter();
   const { t } = useTranslation();
   const { theme } = useTheme();
