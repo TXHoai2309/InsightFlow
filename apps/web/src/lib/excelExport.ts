@@ -1156,6 +1156,7 @@ export interface DualOperationsExcelViewOptions {
   periodLabel?: string;
   filterLabel?: string;
   operation?: "all" | "lead" | "crisis";
+  aiInsights?: string;
 }
 
 function dualMetricCell(label: string, value: unknown, tone = "") {
@@ -1249,6 +1250,12 @@ export function buildDualOperationsReportExcelDocument(
           <p>Bản báo cáo tập trung vào kết quả, rủi ro cần chú ý và dữ liệu đối soát.</p>
           <p class="meta"><strong>Kỳ báo cáo:</strong> ${escapeHtml(periodLabel)} &nbsp;·&nbsp; <strong>Phạm vi:</strong> ${escapeHtml(filterLabel)} &nbsp;·&nbsp; <strong>Cập nhật:</strong> ${escapeHtml(new Date(report.generatedAt).toLocaleString("vi-VN"))}</p>
         </header>
+
+        ${options.aiInsights ? `
+        <section class="report-section" style="background:#f4f3ff; border-bottom:2px solid #4f46e5;">
+          <h2 style="color:#4338ca; font-size:18px;">✨ Phân tích AI Insights (Gemini Key Rotation)</h2>
+          <div style="font-size:12px; line-height:1.75; color:#1e1b4b; white-space:pre-wrap; background:#ffffff; padding:18px; border-radius:10px; border:1px solid #c7d2fe;">${escapeHtml(options.aiInsights)}</div>
+        </section>` : ""}
 
         <section class="report-section">
           <h2>Cần chú ý</h2>

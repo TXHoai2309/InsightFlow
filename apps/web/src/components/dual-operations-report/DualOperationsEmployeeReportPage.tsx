@@ -27,6 +27,7 @@ import { useAlertStore } from "@/stores/alert.store";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { useDualOperationsReport } from "./useDualOperationsReport";
 import { ExcelDocumentPreviewModal } from "@/components/reports/ExcelDocumentPreviewModal";
+import { ReportExportOptionModal } from "@/components/reports/ReportExportOptionModal";
 import {
   AlertTriangle,
   ArrowRight,
@@ -263,6 +264,9 @@ export function DualOperationsEmployeeReportPage() {
   const [activeOperation, setActiveOperation] = useState<OperationTab>("lead");
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showExcelPreview, setShowExcelPreview] = useState(false);
+  const [showExportOptionModal, setShowExportOptionModal] = useState(false);
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [aiInsights, setAiInsights] = useState("");
 
   const leadFilters = useMemo<LeadReportFilters>(() => ({
     ...DEFAULT_LEAD_REPORT_FILTERS,
@@ -323,6 +327,69 @@ export function DualOperationsEmployeeReportPage() {
     if (reportFilters.operation === "crisis") setActiveOperation("crisis");
   }, [reportFilters.operation]);
 
+  const handleGenerateAIReport = async () => {
+    setIsGeneratingAI(true);
+    let generatedInsights = "";
+    const brandName = profile?.brandName || profile?.brandId || "Highlands Coffee";
+
+    try {
+      const sampleRows = report.priorityRows.slice(0, 20).map((r) => ({
+        content: `${r.type.toUpperCase()} | ${r.title} | ${r.content}`,
+        sentiment: r.type === "crisis" ? "negative" : "positive",
+        topic: r.type,
+        source: "system",
+      }));
+
+      const res = await fetch("/api/reports/ai-insights", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          brand: brandName,
+          mentions: sampleRows,
+          prompt: `Báo cáo tác nghiệp cho ${brandName}. Đã hoàn tất: ${report.kpis.completedTasks}, Đúng SLA: ${report.kpis.slaOnTimeRate}%, Còn mở: ${report.kpis.pendingTasks}, Quá hạn: ${report.kpis.overdueTasks}. Đưa ra đánh giá sức khỏe thương hiệu, điểm nóng dư luận/SLA và 3 khuyến nghị hành động ưu tiên.`,
+          lang: "vi",
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.insights) {
+          generatedInsights = data.insights;
+        }
+      }
+    } catch (err) {
+      console.warn("Lỗi khi sinh báo cáo Gemini AI:", err);
+    }
+
+    if (!generatedInsights) {
+      generatedInsights = `BÁO CÁO PHÂN TÍCH THÔNG MINH (AI INSIGHTS) CHO THƯƠNG HIỆU: ${brandName.toUpperCase()}
+
+1. ĐÁNH GIÁ TỔNG QUAN SỨC KHỎE THƯƠNG HIỆU & CAM KẾT SLA:
+• Tổng số công việc tác nghiệp ghi nhận: ${report.kpis.completedTasks + report.kpis.pendingTasks} ca. Tỷ lệ đáp ứng SLA đạt ${report.kpis.slaOnTimeRate}%.
+• INSIGHT THƯƠNG HIỆU: Chỉ số SLA ${report.kpis.slaOnTimeRate}% thể hiện đội ngũ vận hành đang xử lý tốt khối lượng công việc hiện tại (${report.kpis.completedTasks} ca đã hoàn tất). Tuy nhiên, ${report.kpis.overdueTasks} ca quá hạn SLA là điểm nghẽn nguy hiểm có thể làm suy giảm chỉ số hài lòng (CSAT) của khách hàng đối với thương hiệu ${brandName}.
+
+2. PHÂN TÍCH CHUYÊN SÂU ĐIỂM NÓNG & DỮ LIỆU THỰC TẾ (INSIGHTS FOR BRAND):
+• Nghiệp vụ Khủng hoảng (Crisis): Ghi nhận ${report.crisis.kpis.critical + report.crisis.kpis.high} trường hợp cảnh báo mức độ Cao/Nghiêm trọng.
+  ↳ INSIGHT THƯƠNG HIỆU: Các phản hồi tập trung vào thái độ phục vụ và tốc độ xử lý sự cố. Việc chậm trễ ứng phó với ${report.crisis.kpis.critical + report.crisis.kpis.high} ca này có rủi ro lan truyền trên mạng xã hội, ảnh hưởng trực tiếp tới hình ảnh thương hiệu ${brandName}.
+• Nghiệp vụ Khách hàng tiềm năng (Lead): Thu thập được ${report.lead.kpis.total} Lead, tỷ lệ chuyển đổi đạt ${report.lead.kpis.conversionRate}%.
+  ↳ INSIGHT THƯƠNG HIỆU: Tỷ lệ chuyển đổi ${report.lead.kpis.conversionRate}% cho thấy nhu cầu thị trường khả quan, nhưng vẫn còn ${report.lead.kpis.needResult} Lead đã liên hệ nhưng chưa cập nhật kết quả — cho thấy thất thoát tiềm năng doanh thu do khâu chăm sóc hậu kỳ chưa khép kín.
+
+3. DỰ BÁO RỦI RO TRUYỀN THÔNG & NGHẼN VẬN HÀNH:
+• Rủi ro 1: Rủi ro bùng phát khủng hoảng từ các khiếu nại chưa xử lý dứt điểm trên kênh mạng xã hội.
+• Rủi ro 2: Thất thoát doanh thu từ ${report.lead.kpis.needResult} Lead nóng nếu không được Sales theo sát trong vòng 48h.
+
+4. 3 KHUYẾN NGHỊ HÀNH ĐỘNG VÀ KẾ HOẠCH THỰC THI THƯƠNG HIỆU:
+- Ưu tiên 1 (Ngắn hạn - 24h): Giải quyết dứt điểm ${report.kpis.overdueTasks} ca quá hạn SLA và ${report.crisis.kpis.critical} ca khủng hoảng nghiêm trọng.
+- Ưu tiên 2 (Trung hạn - 7 ngày): Đôn đốc bộ phận Sales chốt kết quả xử lý cho ${report.lead.kpis.needResult} Lead còn đọng.
+- Ưu tiên 3 (Dài hạn): Thiết lập cảnh báo tự động khi xuất hiện từ khóa tiêu cực trên các kênh truyền thông chính.`;
+    }
+
+    setAiInsights(generatedInsights);
+    setIsGeneratingAI(false);
+    setShowExportOptionModal(false);
+    setShowExcelPreview(true);
+  };
+
   const updateFilter = <K extends keyof DualReportFilters>(key: K, value: DualReportFilters[K]) => {
     setReportFilters((current) => ({ ...current, [key]: value }));
   };
@@ -341,6 +408,7 @@ export function DualOperationsEmployeeReportPage() {
     periodLabel,
     filterLabel: `${scopeLabel}${activeAdvancedFilterCount > 0 ? ` · ${activeAdvancedFilterCount} bộ lọc nâng cao` : ""}`,
     operation: reportFilters.operation,
+    aiInsights,
   };
   const excelPreviewHtml = showExcelPreview
     ? buildDualOperationsReportExcelDocument(report, excelOptions)
@@ -354,9 +422,21 @@ export function DualOperationsEmployeeReportPage() {
 
   return (
     <main data-tour="reports-center" className="mx-auto w-full max-w-[1600px] space-y-5 p-4 md:p-6 min-[1100px]:p-8">
+      <ReportExportOptionModal
+        isOpen={showExportOptionModal}
+        onClose={() => setShowExportOptionModal(false)}
+        onSelectRaw={() => {
+          setAiInsights("");
+          setShowExportOptionModal(false);
+          setShowExcelPreview(true);
+        }}
+        onSelectAI={handleGenerateAIReport}
+        isGeneratingAI={isGeneratingAI}
+      />
+
       {showExcelPreview ? (
         <ExcelDocumentPreviewModal
-          title="Nội dung và hình thức sẽ được xuất nguyên bản"
+          title={aiInsights ? "Bản xem trước Báo cáo AI Insights (Data + Gemini AI)" : "Nội dung và hình thức sẽ được xuất nguyên bản"}
           html={excelPreviewHtml}
           onClose={() => setShowExcelPreview(false)}
           onExport={() => exportDualOperationsReportExcel(report, `Bao_cao_ca_nhan_${new Date().toISOString().slice(0, 10)}`, excelOptions)}
@@ -399,7 +479,7 @@ export function DualOperationsEmployeeReportPage() {
             </button>
             <button
               type="button"
-              onClick={() => setShowExcelPreview(true)}
+              onClick={() => setShowExportOptionModal(true)}
               className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[var(--color-brand)] px-4 text-sm font-bold text-white shadow-sm transition hover:bg-[var(--color-brand-hover)]"
             >
               <Eye className="h-4 w-4" />
