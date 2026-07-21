@@ -29,6 +29,9 @@ import {
   SearchCheck,
   Video,
   ChevronDown,
+  Pencil,
+  Sparkles,
+  X,
 } from "lucide-react";
 
 interface ConsultationRequest {
@@ -50,6 +53,7 @@ interface ConsultationRequest {
   approvedAccountEmail?: string;
   trialEndsAt?: string;
   decisionEmailStatus?: string;
+  accountStatus?: string;
   trialCrawlRunId?: string;
   trialCrawlStatus?: string;
   status: "pending" | "contacting" | "completed" | "unreachable" | "not_approved";
@@ -66,6 +70,8 @@ interface GeneratedCredentials {
   temporaryPassword: string;
   trialEndsAt: string;
 }
+
+const TRIAL_PLATFORM_OPTIONS = ["Facebook", "Threads", "TikTok", "YouTube", "Review", "Tin tức"];
 
 const statusConfig: Record<StatusType, { label: string; bg: string; text: string; border: string; icon: any }> = {
   pending: {
@@ -192,6 +198,16 @@ export default function AdminConsultationsPage() {
   const [editContactPlan, setEditContactPlan] = useState("");
   const [generatedCredentials, setGeneratedCredentials] = useState<GeneratedCredentials | null>(null);
   const [approvalError, setApprovalError] = useState("");
+  const [editingConfiguration, setEditingConfiguration] = useState(false);
+  const [editCompany, setEditCompany] = useState("");
+  const [editKeywords, setEditKeywords] = useState("");
+  const [editPlatforms, setEditPlatforms] = useState<string[]>([]);
+  const [editConfigurationNotes, setEditConfigurationNotes] = useState("");
+  const [savingConfiguration, setSavingConfiguration] = useState(false);
+  const [suggestingKeywords, setSuggestingKeywords] = useState(false);
+  const [removingKeyword, setRemovingKeyword] = useState("");
+  const [configurationMessage, setConfigurationMessage] = useState("");
+  const [sendingAccount, setSendingAccount] = useState(false);
 
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -263,7 +279,14 @@ export default function AdminConsultationsPage() {
     return requests.find((req) => req.id === selectedId) || null;
   }, [requests, selectedId]);
   const isFinalDecision = selectedRequest?.status === "completed" || selectedRequest?.status === "not_approved";
-  const willAutoCreateAccount = editStatus === "completed" && selectedRequest?.status !== "completed";
+  const willApproveRequest = editStatus === "completed" && selectedRequest?.status !== "completed";
+  const trialIsComplete = selectedRequest?.trialCrawlStatus === "completed";
+  const accountWasSent = selectedRequest?.accountStatus === "sent" || selectedRequest?.decisionEmailStatus === "sent" && Boolean(selectedRequest?.approvedAccountEmail);
+  const hasValidTrialConfiguration = Boolean(
+    selectedRequest?.company?.trim()
+    && (selectedRequest?.keywords || []).some((keyword) => keyword.trim())
+    && (selectedRequest?.platforms || []).length > 0,
+  );
 
   // Initialize edit inputs whenever selected item changes
   useEffect(() => {
@@ -275,6 +298,12 @@ export default function AdminConsultationsPage() {
       );
       setEditNotes(selectedRequest.notes || "");
       setEditContactPlan(selectedRequest.contactPlan || "");
+      setEditCompany(selectedRequest.company || "");
+      setEditKeywords((selectedRequest.keywords || []).join("\n"));
+      setEditPlatforms(selectedRequest.platforms || []);
+      setEditConfigurationNotes(selectedRequest.configurationNotes || "");
+      setEditingConfiguration(false);
+      setConfigurationMessage("");
       setGeneratedCredentials(null);
       setApprovalError("");
       setSaveSuccess(false);
@@ -336,16 +365,9 @@ export default function AdminConsultationsPage() {
         status: editStatus,
         notes: editNotes.trim(),
         contactPlan: editContactPlan,
-        ...(editStatus === "completed" ? {
-          approvedAccountEmail: result.credentials?.email || item.approvedAccountEmail,
-          trialEndsAt: result.credentials?.trialEndsAt || item.trialEndsAt,
-          decisionEmailStatus: "sent",
-        } : {}),
+        ...(editStatus === "completed" ? { accountStatus: item.accountStatus || "not_created" } : {}),
         ...(editStatus === "not_approved" ? { decisionEmailStatus: "sent" } : {}),
       } : item));
-      if (result.credentials) {
-        setGeneratedCredentials(result.credentials as GeneratedCredentials);
-      }
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (error: any) {
@@ -356,8 +378,187 @@ export default function AdminConsultationsPage() {
     }
   };
 
+  const handleSaveConfiguration = async () => {
+    if (!selectedId) return;
+    const keywords = editKeywords.split(/[\n,]+/).map((item) => item.trim()).filter(Boolean);
+    if (!editCompany.trim() || keywords.length === 0 || editPlatforms.length === 0) {
+      setConfigurationMessage("Cần tên thương hiệu, ít nhất một từ khóa và một kênh theo dõi.");
+      return;
+    }
+
+    setSavingConfiguration(true);
+    setConfigurationMessage("");
+    try {
+      await auth.authStateReady();
+      const user = auth.currentUser;
+      if (!user) throw new Error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+      const token = await user.getIdToken();
+      const response = await fetch("/api/admin/consultations", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          id: selectedId,
+          action: "update_trial_configuration",
+          company: editCompany,
+          keywords,
+          platforms: editPlatforms,
+          configurationNotes: editConfigurationNotes,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Không thể lưu cấu hình trial.");
+      setRequests((current) => current.map((item) => item.id === selectedId ? {
+        ...item,
+        company: editCompany.trim(),
+        keywords,
+        platforms: editPlatforms,
+        configurationNotes: editConfigurationNotes.trim(),
+      } : item));
+      setEditingConfiguration(false);
+      setConfigurationMessage("Đã lưu cấu hình trial.");
+    } catch (error: any) {
+      setConfigurationMessage(error?.message || "Không thể lưu cấu hình trial.");
+    } finally {
+      setSavingConfiguration(false);
+    }
+  };
+
+  const handleSuggestKeywords = async () => {
+    if (!editCompany.trim()) {
+      setConfigurationMessage("Hãy nhập tên thương hiệu trước khi dùng AI gợi ý.");
+      return;
+    }
+
+    setSuggestingKeywords(true);
+    setConfigurationMessage("");
+    try {
+      await auth.authStateReady();
+      const user = auth.currentUser;
+      if (!user) throw new Error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+      const token = await user.getIdToken();
+      const existingKeywords = editKeywords.split(/[\n,]+/).map((item) => item.trim()).filter(Boolean);
+      const response = await fetch("/api/admin/consultations/suggest-keywords", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          brandName: editCompany,
+          industry: selectedRequest?.industry || "",
+          notes: editConfigurationNotes,
+          existingKeywords,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Không thể tạo gợi ý từ khóa.");
+
+      const combined: string[] = [];
+      const seen = new Set<string>();
+      [...existingKeywords, ...(Array.isArray(result.keywords) ? result.keywords : [])].forEach((item) => {
+        const keyword = typeof item === "string" ? item.trim() : "";
+        const key = keyword.toLocaleLowerCase("vi");
+        if (!keyword || seen.has(key)) return;
+        seen.add(key);
+        combined.push(keyword);
+      });
+      const added = combined.length - existingKeywords.length;
+      setEditKeywords(combined.join("\n"));
+      setConfigurationMessage(added > 0
+        ? `AI đã thêm ${added} từ khóa. Hãy kiểm tra, chỉnh sửa rồi bấm Lưu cấu hình.`
+        : "AI không tìm thấy gợi ý mới ngoài danh sách hiện tại.");
+    } catch (error: any) {
+      setConfigurationMessage(error?.message || "Không thể tạo gợi ý. Bạn vẫn có thể nhập thủ công.");
+    } finally {
+      setSuggestingKeywords(false);
+    }
+  };
+
+  const handleRemoveKeyword = async (keywordToRemove: string) => {
+    if (!selectedId || !selectedRequest) return;
+    const keywords = (selectedRequest.keywords || []).filter((keyword) => keyword !== keywordToRemove);
+    if (keywords.length === 0) {
+      setConfigurationMessage("Trial cần ít nhất một từ khóa. Hãy thêm từ khóa mới trước khi xóa từ khóa cuối cùng.");
+      return;
+    }
+
+    setRemovingKeyword(keywordToRemove);
+    setConfigurationMessage("");
+    try {
+      await auth.authStateReady();
+      const user = auth.currentUser;
+      if (!user) throw new Error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+      const token = await user.getIdToken();
+      const response = await fetch("/api/admin/consultations", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          id: selectedId,
+          action: "update_trial_configuration",
+          company: selectedRequest.company,
+          keywords,
+          platforms: selectedRequest.platforms || [],
+          configurationNotes: selectedRequest.configurationNotes || "",
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Không thể xóa từ khóa.");
+      setRequests((current) => current.map((item) => item.id === selectedId ? { ...item, keywords } : item));
+      setEditKeywords(keywords.join("\n"));
+      setConfigurationMessage(`Đã xóa từ khóa “${keywordToRemove}”.`);
+    } catch (error: any) {
+      setConfigurationMessage(error?.message || "Không thể xóa từ khóa.");
+    } finally {
+      setRemovingKeyword("");
+    }
+  };
+
+  const handleSendTrialAccount = async () => {
+    if (!selectedId || !selectedRequest) return;
+    setSendingAccount(true);
+    setTrialCrawlError("");
+    setTrialCrawlMessage("");
+    try {
+      await auth.authStateReady();
+      const user = auth.currentUser;
+      if (!user) throw new Error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+      const token = await user.getIdToken();
+      const response = await fetch("/api/admin/consultations", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          id: selectedId,
+          status: "completed",
+          notes: editNotes,
+          contactPlan: editContactPlan,
+          sendAccount: true,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Không thể tạo và gửi tài khoản trial.");
+      setGeneratedCredentials(result.credentials as GeneratedCredentials);
+      setRequests((current) => current.map((item) => item.id === selectedId ? {
+        ...item,
+        accountStatus: "sent",
+        decisionEmailStatus: "sent",
+        approvedAccountEmail: result.credentials?.email,
+        trialEndsAt: result.credentials?.trialEndsAt,
+      } : item));
+      setTrialCrawlMessage("Đã tạo tài khoản và gửi thông tin đăng nhập cho khách hàng.");
+    } catch (error: any) {
+      setTrialCrawlError(error?.message || "Không thể gửi tài khoản trial.");
+    } finally {
+      setSendingAccount(false);
+    }
+  };
+
   const handleStartTrialCrawl = async () => {
     if (!selectedId || !selectedRequest) return;
+    if (selectedRequest.status !== "completed") {
+      setTrialCrawlError("Hãy duyệt yêu cầu trước khi bắt đầu trial crawl.");
+      return;
+    }
+    if (!hasValidTrialConfiguration) {
+      setTrialCrawlError("Hãy bổ sung tên thương hiệu, ít nhất một từ khóa và một kênh theo dõi trước khi bắt đầu.");
+      return;
+    }
 
     setStartingTrialCrawl(true);
     setTrialCrawlError("");
@@ -701,8 +902,64 @@ export default function AdminConsultationsPage() {
                         <Layers className="h-4 w-4" />
                       </span>
                       <span className="text-[12px] font-extrabold uppercase tracking-wider text-[var(--color-brand)]">Chi tiết nhu cầu & cấu hình</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingConfiguration((value) => !value);
+                          setConfigurationMessage("");
+                        }}
+                        className="ml-auto inline-flex items-center gap-1 rounded-md border border-[var(--color-brand)]/20 bg-white px-2.5 py-1.5 text-[11px] font-bold text-[var(--color-brand)] dark:bg-white/5"
+                      >
+                        <Pencil className="h-3.5 w-3.5" /> {editingConfiguration ? "Đóng" : "Chỉnh cấu hình"}
+                      </button>
                     </div>
-                    <div className="space-y-4 p-4">
+                    {editingConfiguration ? (
+                      <div className="space-y-4 p-4">
+                        <label className="block space-y-1.5">
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">Tên thương hiệu</span>
+                          <input value={editCompany} onChange={(event) => setEditCompany(event.target.value)} className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-[13px] outline-none focus:border-[var(--color-brand)]" />
+                        </label>
+                        <div>
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">Kênh theo dõi</span>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {TRIAL_PLATFORM_OPTIONS.map((platform) => {
+                              const selected = editPlatforms.includes(platform);
+                              return (
+                                <button
+                                  key={platform}
+                                  type="button"
+                                  onClick={() => setEditPlatforms((current) => selected ? current.filter((item) => item !== platform) : [...current, platform])}
+                                  className={`rounded-full border px-3 py-1.5 text-[12px] font-bold transition ${selected ? "border-violet-500 bg-violet-500 text-white" : "border-[var(--color-border)] bg-white text-[var(--color-text-secondary)] dark:bg-white/5"}`}
+                                >
+                                  {platform}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        <label className="block space-y-1.5">
+                          <span className="flex items-center justify-between gap-3 text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
+                            <span>Từ khóa (mỗi dòng hoặc phân cách bằng dấu phẩy)</span>
+                            <button
+                              type="button"
+                              onClick={() => void handleSuggestKeywords()}
+                              disabled={suggestingKeywords || !editCompany.trim()}
+                              className="inline-flex items-center gap-1.5 rounded-md border border-violet-500/25 bg-violet-500/5 px-2.5 py-1.5 normal-case tracking-normal text-violet-600 transition hover:bg-violet-500/10 disabled:cursor-not-allowed disabled:opacity-50 dark:text-violet-300"
+                            >
+                              {suggestingKeywords ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                              {suggestingKeywords ? "Đang tạo..." : "Gợi ý bằng AI"}
+                            </button>
+                          </span>
+                          <textarea value={editKeywords} onChange={(event) => setEditKeywords(event.target.value)} rows={3} className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-[13px] outline-none focus:border-[var(--color-brand)]" />
+                        </label>
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-[11px] font-medium text-[var(--color-text-muted)]">Có thể sửa khi chưa chạy hoặc job còn ở hàng đợi.</p>
+                          <button type="button" onClick={() => void handleSaveConfiguration()} disabled={savingConfiguration} className="inline-flex h-9 items-center gap-2 rounded-lg bg-[var(--color-brand)] px-4 text-[12px] font-bold text-white disabled:opacity-50">
+                            {savingConfiguration && <Loader2 className="h-4 w-4 animate-spin" />} Lưu cấu hình
+                          </button>
+                        </div>
+                      </div>
+                    ) : <div className="space-y-4 p-4">
                       <div>
                         <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
                           <Layers className="h-3.5 w-3.5" />
@@ -724,18 +981,28 @@ export default function AdminConsultationsPage() {
                         <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">Từ khóa quan trọng</span>
                         <div className="mt-2 flex flex-wrap gap-2">
                           {(selectedRequest.keywords || []).length > 0 ? selectedRequest.keywords?.map((keyword) => (
-                            <span key={keyword} className="rounded-full border border-amber-500/15 bg-amber-500/10 px-2.5 py-1 text-[12px] font-semibold text-amber-700 dark:text-amber-300">{keyword}</span>
+                            <span key={keyword} className="inline-flex items-center gap-1 rounded-full border border-amber-500/15 bg-amber-500/10 py-1 pl-2.5 pr-1 text-[12px] font-semibold text-amber-700 dark:text-amber-300">
+                              <span>{keyword}</span>
+                              <button
+                                type="button"
+                                onClick={() => void handleRemoveKeyword(keyword)}
+                                disabled={Boolean(removingKeyword)}
+                                aria-label={`Xóa từ khóa ${keyword}`}
+                                title="Xóa từ khóa"
+                                className="inline-flex h-5 w-5 items-center justify-center rounded-full text-amber-700/70 transition hover:bg-amber-500/20 hover:text-rose-600 disabled:cursor-wait disabled:opacity-40 dark:text-amber-300/70"
+                              >
+                                {removingKeyword === keyword ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
+                              </button>
+                            </span>
                           )) : <span className="text-[12px] text-[var(--color-text-muted)]">Chưa nhập từ khóa.</span>}
                         </div>
                       </div>
-                      <div>
-                        <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">Ghi chú cấu hình</span>
-                        <p className="mt-2 whitespace-pre-wrap text-[12px] leading-5 text-[var(--color-text-secondary)]">{selectedRequest.configurationNotes || "Không có ghi chú cấu hình."}</p>
-                      </div>
-                    </div>
+                    </div>}
+                    {configurationMessage && <p className="border-t border-[var(--color-border)] px-4 py-2 text-[11px] font-semibold text-[var(--color-text-secondary)]">{configurationMessage}</p>}
                   </section>
                 </div>
 
+                {selectedRequest.status === "completed" && (
                 <section className="border-t border-[var(--color-border)] bg-white/50 p-5 dark:bg-white/[0.02]">
                   <div className="flex flex-col gap-4 rounded-xl border border-violet-500/20 bg-violet-500/5 p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
@@ -763,7 +1030,7 @@ export default function AdminConsultationsPage() {
                       <button
                         type="button"
                         onClick={() => void handleStartTrialCrawl()}
-                        disabled={startingTrialCrawl || (selectedRequest.platforms || []).length === 0}
+                        disabled={startingTrialCrawl || selectedRequest.status !== "completed" || !hasValidTrialConfiguration}
                         className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 text-[12px] font-bold text-white shadow-sm transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {startingTrialCrawl
@@ -771,17 +1038,65 @@ export default function AdminConsultationsPage() {
                           : <Play className="h-4 w-4" />}
                         {selectedRequest.trialCrawlRunId ? "Tạo lượt cào mới" : "Bắt đầu trial crawl"}
                       </button>
+                      {selectedRequest.status === "completed" && trialIsComplete && (
+                        <button
+                          type="button"
+                          onClick={() => void handleSendTrialAccount()}
+                          disabled={sendingAccount}
+                          className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-[12px] font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-50"
+                        >
+                          {sendingAccount ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
+                          {accountWasSent ? "Gửi lại tài khoản" : "Tạo & gửi tài khoản"}
+                        </button>
+                      )}
                     </div>
                   </div>
+                  {selectedRequest.status !== "completed" && (
+                    <p className="mt-2 text-[11px] font-semibold text-amber-600">Cần duyệt yêu cầu trước khi đưa trial vào hàng đợi.</p>
+                  )}
+                  {selectedRequest.status === "completed" && !hasValidTrialConfiguration && (
+                    <p className="mt-2 text-[11px] font-semibold text-amber-600">Cấu hình chưa đủ: cần tên thương hiệu, ít nhất một từ khóa và một kênh theo dõi.</p>
+                  )}
+                  {selectedRequest.status === "completed" && selectedRequest.trialCrawlRunId && !trialIsComplete && (
+                    <p className="mt-2 text-[11px] font-semibold text-[var(--color-text-muted)]">Tài khoản chỉ được tạo và gửi sau khi crawl hoàn tất.</p>
+                  )}
                   {trialCrawlMessage && (
                     <p className="mt-2 text-[12px] font-semibold text-emerald-600 dark:text-emerald-400">{trialCrawlMessage}</p>
                   )}
                   {trialCrawlError && (
                     <p className="mt-2 text-[12px] font-semibold text-rose-600 dark:text-rose-400">{trialCrawlError}</p>
                   )}
+                  {generatedCredentials && (
+                    <div className="mt-4 space-y-3 rounded-xl border border-emerald-500/30 bg-emerald-50 p-4 dark:bg-emerald-950/20">
+                      <p className="flex items-center gap-2 text-[13px] font-extrabold text-emerald-700 dark:text-emerald-400">
+                        <CheckCircle2 className="h-4 w-4" /> Tài khoản dùng thử đã được tạo
+                      </p>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="rounded-lg bg-white p-3 dark:bg-black/10">
+                          <p className="text-[11px] font-bold uppercase text-[var(--color-text-muted)]">Email đăng nhập</p>
+                          <div className="mt-1 flex items-center justify-between gap-2">
+                            <span className="break-all font-sans text-[13px] font-bold text-[var(--color-text-primary)]">{generatedCredentials.email}</span>
+                            <CopyButton value={generatedCredentials.email} label="email tài khoản" />
+                          </div>
+                        </div>
+                        <div className="rounded-lg bg-white p-3 dark:bg-black/10">
+                          <p className="text-[11px] font-bold uppercase text-[var(--color-text-muted)]">Mật khẩu tạm thời</p>
+                          <div className="mt-1 flex items-center justify-between gap-2">
+                            <span className="font-sans text-[13px] font-bold text-[var(--color-text-primary)]">{generatedCredentials.temporaryPassword}</span>
+                            <CopyButton value={generatedCredentials.temporaryPassword} label="mật khẩu tạm thời" />
+                          </div>
+                        </div>
+                      </div>
+                      <p className="text-[12px] font-medium text-emerald-700 dark:text-emerald-400">
+                        Hạn dùng thử: {formatTimestamp(generatedCredentials.trialEndsAt)}. Thông tin đăng nhập đã được gửi cho khách hàng.
+                      </p>
+                    </div>
+                  )}
                 </section>
+                )}
 
                 {/* Edit Form - Plan and Status */}
+                {!isFinalDecision && (
                 <form onSubmit={handleSave} className="space-y-4 border-t border-[var(--color-border)] bg-gradient-to-br from-[var(--color-bg-surface-raised)]/60 to-[var(--color-brand-subtle)]/25 p-5">
                   <h3 className="flex items-center gap-2 rounded-lg border border-[var(--color-brand)]/15 bg-white/70 px-3 py-2 text-[14px] font-extrabold text-[var(--color-brand)] shadow-sm dark:bg-white/5">
                     <CheckCircle2 className="h-4.5 w-4.5 text-[var(--color-brand)]" />
@@ -793,7 +1108,7 @@ export default function AdminConsultationsPage() {
                       <Check className="h-4 w-4 shrink-0" />
                       <span>
                         {editStatus === "completed"
-                          ? "Đã duyệt yêu cầu, tạo tài khoản và gửi email thành công!"
+                          ? "Đã duyệt yêu cầu. Chưa tạo hoặc gửi tài khoản."
                           : editStatus === "not_approved"
                             ? "Đã từ chối yêu cầu và gửi email thông báo!"
                             : "Cập nhật phương án & trạng thái thành công!"}
@@ -828,7 +1143,7 @@ export default function AdminConsultationsPage() {
                         <option value="unreachable">Không liên lạc được</option>
                         <option value="not_approved">Yêu cầu không được duyệt</option>
                       </select>
-                      {isFinalDecision && <p className="text-[11px] font-medium text-[var(--color-text-muted)]">Quyết định cuối cùng đã được gửi qua email và không thể đổi trạng thái.</p>}
+                      {isFinalDecision && <p className="text-[11px] font-medium text-[var(--color-text-muted)]">Quyết định cuối cùng đã được lưu và không thể đổi trạng thái.</p>}
                     </label>
 
                     <label className="space-y-1.5">
@@ -848,14 +1163,14 @@ export default function AdminConsultationsPage() {
                     </label>
                   </div>
 
-                  {willAutoCreateAccount && (
+                  {willApproveRequest && (
                     <div className="space-y-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
                       <div>
                         <p className="flex items-center gap-2 text-[13px] font-bold text-emerald-700 dark:text-emerald-400">
-                          <KeyRound className="h-4 w-4" /> Tài khoản dùng thử sẽ được tạo tự động
+                          <CheckCircle2 className="h-4 w-4" /> Bước này chỉ duyệt yêu cầu
                         </p>
                         <p className="mt-1 text-[12px] leading-5 text-[var(--color-text-secondary)]">
-                          Sau khi cập nhật, hệ thống tự tạo tài khoản Brand Manager, mật khẩu tạm thời và gửi email cho người đăng ký.
+                          Duyệt không tạo tài khoản và không gửi thông tin đăng nhập. Sau khi trial crawl hoàn tất, nút tạo và gửi tài khoản mới được mở.
                         </p>
                       </div>
 
@@ -929,7 +1244,7 @@ export default function AdminConsultationsPage() {
                         </>
                       ) : (
                         editStatus === "completed"
-                          ? "Duyệt & gửi tài khoản"
+                          ? "Duyệt yêu cầu"
                           : editStatus === "not_approved"
                             ? "Từ chối & gửi email"
                             : "Cập nhật yêu cầu"
@@ -937,6 +1252,7 @@ export default function AdminConsultationsPage() {
                     </button>
                   </div>
                 </form>
+                )}
               </div>
             ) : (
               <div className="flex h-full min-h-[400px] flex-col items-center justify-center text-center p-6 text-[var(--color-text-muted)] space-y-2">

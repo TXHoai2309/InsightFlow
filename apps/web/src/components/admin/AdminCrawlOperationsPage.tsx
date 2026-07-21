@@ -1,12 +1,30 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { collection, limit, onSnapshot, orderBy, query } from "firebase/firestore";
-import { Activity, AlertTriangle, CheckCircle2, Clock3, RefreshCw, XCircle } from "lucide-react";
-import { db } from "@/lib/firebase";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { onAuthStateChanged } from "firebase/auth";
+import {
+  Activity,
+  AlertTriangle,
+  CheckCircle2,
+  Clock3,
+  RefreshCw,
+  Trash2,
+  XCircle,
+} from "lucide-react";
+import { auth } from "@/lib/firebase";
 
 type Run = Record<string, any> & { id: string };
 type Event = Record<string, any> & { id: string };
+
+const PLATFORM_OPTIONS = [
+  ["facebook", "Facebook"],
+  ["threads", "Threads"],
+  ["tiktok", "TikTok"],
+  ["youtube", "YouTube"],
+  ["google_maps", "Google Maps"],
+  ["news_html", "Tin tức"],
+  ["website", "Website"],
+] as const;
 
 function dateText(value: any) {
   const date = value?.toDate ? value.toDate() : value ? new Date(value) : null;
@@ -15,6 +33,7 @@ function dateText(value: any) {
 
 const statusStyle: Record<string, string> = {
   queued: "bg-slate-100 text-slate-700",
+  waiting_resource: "bg-amber-100 text-amber-700",
   running: "bg-blue-100 text-blue-700",
   labeling: "bg-violet-100 text-violet-700",
   syncing: "bg-amber-100 text-amber-700",
@@ -28,26 +47,112 @@ export default function AdminCrawlOperationsPage() {
   const [runs, setRuns] = useState<Run[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [events, setEvents] = useState<Event[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [actionBusy, setActionBusy] = useState(false);
 
-  useEffect(() => {
-    const runsQuery = query(collection(db, "crawl_runs"), orderBy("createdAt", "desc"), limit(50));
-    return onSnapshot(runsQuery, (snapshot) => {
-      const next = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+  const loadRuns = useCallback(async () => {
+    const user = auth.currentUser;
+    if (!user) return;
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch("/api/admin/crawl-runs?limit=50", {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+      const next = Array.isArray(payload.runs) ? payload.runs : [];
       setRuns(next);
-      setSelectedId((current) => current && next.some((run) => run.id === current) ? current : next[0]?.id || null);
-    }, (error) => console.error("[Crawl operations] runs listener:", error));
+      setSelectedId((current) => current && next.some((run: Run) => run.id === current)
+        ? current
+        : next[0]?.id || null);
+      setErrorMessage("");
+    } catch (error) {
+      console.error("[Crawl operations] load runs:", error);
+      setErrorMessage(error instanceof Error ? error.message : "Không tải được danh sách phiên cào.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) void loadRuns();
+      else {
+        setLoading(false);
+        setErrorMessage("Phiên đăng nhập chưa sẵn sàng.");
+      }
+    });
+    const timer = window.setInterval(() => void loadRuns(), 5000);
+    return () => {
+      unsubscribe();
+      window.clearInterval(timer);
+    };
+  }, [loadRuns]);
+
+  useEffect(() => {
     if (!selectedId) { setEvents([]); return; }
-    const eventsQuery = query(collection(db, "crawl_runs", selectedId, "events"), orderBy("createdAt", "desc"), limit(100));
-    return onSnapshot(eventsQuery, (snapshot) => {
-      setEvents(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })).reverse());
-    }, (error) => console.error("[Crawl operations] events listener:", error));
+    let cancelled = false;
+    const loadDetail = async () => {
+      const user = auth.currentUser;
+      if (!user) return;
+      try {
+        const token = await user.getIdToken();
+        const response = await fetch(`/api/admin/crawl-runs/${encodeURIComponent(selectedId)}?eventLimit=100`, {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+        if (cancelled) return;
+        setEvents(Array.isArray(payload.events) ? payload.events : []);
+        if (payload.run) {
+          setRuns((current) => current.map((run) => run.id === payload.run.id ? payload.run : run));
+        }
+        setErrorMessage("");
+      } catch (error) {
+        if (cancelled) return;
+        console.error("[Crawl operations] load detail:", error);
+        setErrorMessage(error instanceof Error ? error.message : "Không tải được log phiên cào.");
+      }
+    };
+    void loadDetail();
+    const timer = window.setInterval(() => void loadDetail(), 3000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
   }, [selectedId]);
 
   const selected = useMemo(() => runs.find((run) => run.id === selectedId) || null, [runs, selectedId]);
   const iconFor = (status: string) => status === "failed" ? XCircle : status === "completed" ? CheckCircle2 : status === "running" ? Activity : Clock3;
+
+  const cancelQueuedRun = async () => {
+    if (!selected || selected.status !== "queued") return;
+    if (!window.confirm("Xóa phiên này khỏi hàng đợi? Lịch sử vẫn được giữ với trạng thái cancelled.")) return;
+    setActionBusy(true);
+    setErrorMessage("");
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error("Phiên đăng nhập đã hết hạn.");
+      const token = await user.getIdToken();
+      const response = await fetch(`/api/admin/crawl-runs/${encodeURIComponent(selected.id)}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+      if (payload.run) {
+        setRuns((current) => current.map((run) => run.id === payload.run.id ? payload.run : run));
+      }
+      await loadRuns();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Không thể xóa phiên khỏi hàng đợi.");
+    } finally {
+      setActionBusy(false);
+    }
+  };
 
   return (
     <main className="min-h-screen bg-[var(--color-background)] px-6 py-8 text-[var(--color-foreground)]">
@@ -58,11 +163,13 @@ export default function AdminCrawlOperationsPage() {
             <h1 className="mt-1 text-2xl font-black">Tiến trình cào dữ liệu</h1>
             <p className="mt-1 text-sm opacity-70">Production và trial dùng chung một luồng giám sát realtime.</p>
           </div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600"><span className="h-2 w-2 rounded-full bg-emerald-500" />Realtime</div>
+          <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600"><span className="h-2 w-2 rounded-full bg-emerald-500" />Tự cập nhật 3–5 giây</div>
         </div>
         <div className="grid gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)]">
           <section className="space-y-3">
-            {runs.length === 0 && <div className="rounded-2xl border border-dashed p-8 text-center text-sm opacity-60">Chưa có phiên cào nào.</div>}
+            {errorMessage && <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700"><AlertTriangle className="mr-2 inline" size={16} />{errorMessage}</div>}
+            {loading && runs.length === 0 && <div className="rounded-2xl border border-dashed p-8 text-center text-sm opacity-60">Đang tải các phiên cào…</div>}
+            {!loading && !errorMessage && runs.length === 0 && <div className="rounded-2xl border border-dashed p-8 text-center text-sm opacity-60">Chưa có phiên cào nào.</div>}
             {runs.map((run) => {
               const Icon = iconFor(run.status);
               const ratio = run.progressTotal ? Math.min(100, Math.round((run.progressCurrent || 0) / run.progressTotal * 100)) : 0;
@@ -76,8 +183,26 @@ export default function AdminCrawlOperationsPage() {
           </section>
           <section className="rounded-2xl border p-5">
             {!selected ? <div className="flex h-full min-h-64 items-center justify-center text-sm opacity-60">Chọn một phiên cào để xem log.</div> : <>
-              <div className="flex items-start justify-between gap-4 border-b pb-4"><div><h2 className="font-black">{selected.lastMessage || "Phiên cào"}</h2><p className="mt-1 text-xs opacity-60">Bắt đầu: {dateText(selected.startedAt || selected.createdAt)} · heartbeat: {dateText(selected.heartbeatAt)}</p></div><button type="button" onClick={() => window.location.reload()} className="rounded-lg border p-2" title="Refresh"><RefreshCw size={16} /></button></div>
+              <div className="flex items-start justify-between gap-4 border-b pb-4"><div><h2 className="font-black">{selected.lastMessage || "Phiên cào"}</h2><p className="mt-1 text-xs opacity-60">Bắt đầu: {dateText(selected.startedAt || selected.createdAt)} · heartbeat: {dateText(selected.heartbeatAt)}</p></div><button type="button" onClick={() => void loadRuns()} className="rounded-lg border p-2" title="Refresh"><RefreshCw size={16} /></button></div>
               <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs"><div className="rounded-xl bg-slate-50 p-3"><b className="block text-lg">{selected.postsFound || 0}</b>bài viết</div><div className="rounded-xl bg-slate-50 p-3"><b className="block text-lg">{selected.commentsFound || 0}</b>bình luận</div><div className="rounded-xl bg-slate-50 p-3"><b className="block text-lg">{selected.errorsCount || 0}</b>lỗi</div></div>
+              <div className="mt-5 rounded-2xl border bg-slate-50/60 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-bold">Cấu hình trial</h3>
+                    <p className="mt-1 text-xs opacity-60">Run ID: {selected.id}{selected.consultationId ? ` · Yêu cầu: ${selected.consultationId}` : ""}</p>
+                  </div>
+                  {selected.runType === "trial" && selected.status === "queued" && <div className="flex gap-2">
+                    <button type="button" onClick={() => void cancelQueuedRun()} disabled={actionBusy} className="inline-flex items-center gap-2 rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50"><Trash2 size={14} />Xóa khỏi hàng đợi</button>
+                  </div>}
+                </div>
+
+                <div className="mt-4 space-y-3 text-sm">
+                  <div><span className="text-xs font-bold opacity-60">THƯƠNG HIỆU</span><p className="mt-1 font-semibold">{String(selected.metadata?.brandName || selected.metadata?.company || "—")}</p></div>
+                  <div><span className="text-xs font-bold opacity-60">NỀN TẢNG</span><div className="mt-2 flex flex-wrap gap-2">{(selected.platforms || []).map((platform: string) => <span key={platform} className="rounded-full border bg-white px-2.5 py-1 text-xs">{PLATFORM_OPTIONS.find(([value]) => value === platform)?.[1] || platform}</span>)}</div></div>
+                  <div><span className="text-xs font-bold opacity-60">TỪ KHÓA</span><div className="mt-2 flex flex-wrap gap-2">{(Array.isArray(selected.metadata?.keywords) ? selected.metadata.keywords : []).map((keyword: string) => <span key={keyword} className="rounded-full bg-amber-50 px-2.5 py-1 text-xs text-amber-800">{keyword}</span>)}</div></div>
+                  <p className="text-xs text-[var(--color-text-muted)]">Cấu hình được quản lý tại trang Yêu cầu tư vấn.</p>
+                </div>
+              </div>
               <div className="mt-5 max-h-[520px] space-y-3 overflow-auto pr-1">{events.length === 0 && <p className="text-sm opacity-60">Chưa có event.</p>}{events.map((event) => <div key={event.id} className="border-l-2 border-slate-200 pl-3"><div className="flex items-center justify-between gap-3 text-[11px] opacity-60"><span>{event.platform || "system"} · {event.phase || ""}</span><span>{dateText(event.createdAt)}</span></div><p className={`mt-1 text-sm ${event.level === "error" ? "text-rose-600" : event.level === "warn" ? "text-amber-700" : ""}`}>{event.message}</p></div>)}</div>
             </>}
           </section>

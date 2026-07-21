@@ -31,6 +31,15 @@ const PLATFORM_ALIASES: Record<string, string> = {
   threads: "threads",
 };
 
+const TRIAL_SUPPORTED_PLATFORMS = new Set([
+  "facebook",
+  "threads",
+  "tiktok",
+  "youtube",
+  "google_maps",
+  "news_html",
+]);
+
 function text(value: unknown, maxLength: number) {
   return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
 }
@@ -40,7 +49,7 @@ function normalizePlatforms(value: unknown) {
   return [...new Set(value
     .map((item) => text(item, 80).toLowerCase())
     .map((item) => PLATFORM_ALIASES[item])
-    .filter(Boolean))];
+    .filter((item): item is string => Boolean(item) && TRIAL_SUPPORTED_PLATFORMS.has(item)))];
 }
 
 async function requireAdmin(request: NextRequest) {
@@ -83,6 +92,9 @@ export async function POST(request: NextRequest) {
     }
 
     const consultation = consultationSnapshot.data() || {};
+    if (text(consultation.status, 40) !== "completed") {
+      return NextResponse.json({ error: "Yêu cầu cần được duyệt trước khi tạo phiên cào trial." }, { status: 409 });
+    }
     const existingRunId = text(consultation.trialCrawlRunId, 120);
     if (existingRunId) {
       const existingRun = await getCrawlRun(existingRunId);
@@ -94,10 +106,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const savedConfiguration = consultation.trialCrawlConfiguration
+      && typeof consultation.trialCrawlConfiguration === "object"
+      ? consultation.trialCrawlConfiguration as Record<string, unknown>
+      : {};
     const requestedChannels = Array.isArray(consultation.platforms)
       ? consultation.platforms.map((item: unknown) => text(item, 80)).filter(Boolean)
       : [];
-    const platforms = normalizePlatforms(requestedChannels);
+    const savedPlatforms = Array.isArray(savedConfiguration.platforms)
+      ? savedConfiguration.platforms.map((item: unknown) => text(item, 80)).filter(Boolean)
+      : [];
+    const platforms = normalizePlatforms(savedPlatforms.length ? savedPlatforms : requestedChannels);
     if (platforms.length === 0) {
       return NextResponse.json(
         { error: "Yêu cầu chưa có kênh cào được hỗ trợ." },
@@ -105,10 +124,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const keywords = Array.isArray(consultation.keywords)
-      ? consultation.keywords.map((item: unknown) => text(item, 160)).filter(Boolean).slice(0, 50)
+    const keywordSource = Array.isArray(savedConfiguration.keywords)
+      ? savedConfiguration.keywords
+      : consultation.keywords;
+    const keywords = Array.isArray(keywordSource)
+      ? keywordSource.map((item: unknown) => text(item, 160)).filter(Boolean).slice(0, 50)
       : [];
-    const company = text(consultation.company, 180);
+    const company = text(savedConfiguration.brandName, 180) || text(consultation.company, 180);
+    if (!company) {
+      return NextResponse.json(
+        { error: "Yêu cầu chưa có tên thương hiệu." },
+        { status: 400 },
+      );
+    }
+    if (keywords.length === 0) {
+      return NextResponse.json(
+        { error: "Yêu cầu chưa có từ khóa để cào." },
+        { status: 400 },
+      );
+    }
     const runId = await createCrawlRun({
       runType: "trial",
       consultationId,
