@@ -58,8 +58,8 @@ export function BMTabs() {
     <div className="flex w-full items-center space-x-1 border-b border-[#C8C4D6] dark:border-gray-800 mb-6">
       {tabs.map((tab) => {
         const isActive = pathname === tab.href;
-        const isCrisisTab = tab.href.endsWith("/insights");
-        const isLeadTab = tab.href.endsWith("/lead-monitoring");
+        const isCrisisTab = tab.href === "/dashboard/insights";
+        const isLeadTab = tab.href === "/dashboard/lead-monitoring";
         
         // Active color logic based on which tab it is
         let activeColorClass = "text-[#4234B6]";
