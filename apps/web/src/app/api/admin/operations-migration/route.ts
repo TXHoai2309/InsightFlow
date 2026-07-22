@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { verifyBearerToken } from "@/lib/server/auth";
+import { hasCrawlRunIngestAccess } from "@/lib/server/crawlRunIngestAuth";
 import { db } from "@/lib/server/firebaseAdmin";
 import type { CrawlRunEventRecord, CrawlRunRecord } from "@/types/crawlRuns";
 import {
@@ -38,7 +39,7 @@ function importantEvent(event: CrawlRunEventRecord) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!(await requireAdmin(request))) {
+  if (!hasCrawlRunIngestAccess(request) && !(await requireAdmin(request))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
