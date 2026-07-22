@@ -1,6 +1,6 @@
 begin;
 
-create table if not exists public.consultations (
+create table if not exists public.ops_consultations (
   id text primary key,
   status text not null default 'pending',
   email text,
@@ -9,14 +9,14 @@ create table if not exists public.consultations (
   updated_at timestamptz not null default now()
 );
 
-create index if not exists consultations_created_at_idx
-  on public.consultations (created_at desc);
-create index if not exists consultations_status_idx
-  on public.consultations (status, created_at desc);
-create index if not exists consultations_email_idx
-  on public.consultations (lower(email));
+create index if not exists ops_consultations_created_at_idx
+  on public.ops_consultations (created_at desc);
+create index if not exists ops_consultations_status_idx
+  on public.ops_consultations (status, created_at desc);
+create index if not exists ops_consultations_email_idx
+  on public.ops_consultations (lower(email));
 
-create table if not exists public.crawl_runs (
+create table if not exists public.ops_crawl_runs (
   id text primary key,
   run_type text not null check (run_type in ('production', 'trial')),
   status text not null check (status in (
@@ -32,7 +32,7 @@ create table if not exists public.crawl_runs (
   comments_found integer not null default 0,
   errors_count integer not null default 0,
   workspace_id text,
-  consultation_id text references public.consultations(id) on delete set null,
+  consultation_id text references public.ops_consultations(id) on delete set null,
   requested_by text,
   claimed_by text,
   claimed_at timestamptz,
@@ -46,17 +46,17 @@ create table if not exists public.crawl_runs (
   updated_at timestamptz not null default now()
 );
 
-create index if not exists crawl_runs_created_at_idx
-  on public.crawl_runs (created_at desc);
-create index if not exists crawl_runs_claim_idx
-  on public.crawl_runs (status, created_at)
+create index if not exists ops_crawl_runs_created_at_idx
+  on public.ops_crawl_runs (created_at desc);
+create index if not exists ops_crawl_runs_claim_idx
+  on public.ops_crawl_runs (status, created_at)
   where run_type = 'trial' and status in ('queued', 'waiting_resource');
-create index if not exists crawl_runs_consultation_idx
-  on public.crawl_runs (consultation_id, created_at desc);
+create index if not exists ops_crawl_runs_consultation_idx
+  on public.ops_crawl_runs (consultation_id, created_at desc);
 
-create table if not exists public.crawl_run_events (
+create table if not exists public.ops_crawl_run_events (
   id bigint generated always as identity primary key,
-  run_id text not null references public.crawl_runs(id) on delete cascade,
+  run_id text not null references public.ops_crawl_runs(id) on delete cascade,
   level text not null default 'info' check (level in ('info', 'warn', 'error')),
   platform text,
   phase text,
@@ -70,32 +70,32 @@ create table if not exists public.crawl_run_events (
   created_at timestamptz not null default now()
 );
 
-alter table public.crawl_run_events
+alter table public.ops_crawl_run_events
   add column if not exists source_event_id text;
 
-create index if not exists crawl_run_events_run_created_idx
-  on public.crawl_run_events (run_id, created_at desc);
-create unique index if not exists crawl_run_events_source_idx
-  on public.crawl_run_events (run_id, source_event_id);
+create index if not exists ops_crawl_run_events_run_created_idx
+  on public.ops_crawl_run_events (run_id, created_at desc);
+create unique index if not exists ops_crawl_run_events_source_idx
+  on public.ops_crawl_run_events (run_id, source_event_id);
 
-alter table public.consultations enable row level security;
-alter table public.crawl_runs enable row level security;
-alter table public.crawl_run_events enable row level security;
+alter table public.ops_consultations enable row level security;
+alter table public.ops_crawl_runs enable row level security;
+alter table public.ops_crawl_run_events enable row level security;
 
-revoke all on public.consultations from anon, authenticated;
-revoke all on public.crawl_runs from anon, authenticated;
-revoke all on public.crawl_run_events from anon, authenticated;
-grant all on public.consultations to service_role;
-grant all on public.crawl_runs to service_role;
-grant all on public.crawl_run_events to service_role;
+revoke all on public.ops_consultations from anon, authenticated;
+revoke all on public.ops_crawl_runs from anon, authenticated;
+revoke all on public.ops_crawl_run_events from anon, authenticated;
+grant all on public.ops_consultations to service_role;
+grant all on public.ops_crawl_runs to service_role;
+grant all on public.ops_crawl_run_events to service_role;
 grant usage, select on all sequences in schema public to service_role;
 
-create or replace function public.claim_trial_crawl_run(
+create or replace function public.claim_trial_ops_crawl_run(
   p_worker_id text,
   p_capabilities text[] default '{}',
   p_lease_seconds integer default 900
 )
-returns setof public.crawl_runs
+returns setof public.ops_crawl_runs
 language plpgsql
 security definer
 set search_path = public
@@ -105,7 +105,7 @@ declare
 begin
   select run.id
     into selected_id
-    from public.crawl_runs as run
+    from public.ops_crawl_runs as run
    where run.run_type = 'trial'
      and (
        run.status = 'queued'
@@ -127,7 +127,7 @@ begin
   end if;
 
   return query
-  update public.crawl_runs
+  update public.ops_crawl_runs
      set status = 'waiting_resource',
          current_phase = 'claimed',
          claimed_by = p_worker_id,
@@ -140,7 +140,7 @@ begin
 end;
 $$;
 
-revoke all on function public.claim_trial_crawl_run(text, text[], integer) from public, anon, authenticated;
-grant execute on function public.claim_trial_crawl_run(text, text[], integer) to service_role;
+revoke all on function public.claim_trial_ops_crawl_run(text, text[], integer) from public, anon, authenticated;
+grant execute on function public.claim_trial_ops_crawl_run(text, text[], integer) to service_role;
 
 commit;

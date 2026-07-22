@@ -128,7 +128,7 @@ export async function createConsultation(data: JsonRecord) {
   const timestamp = nowIso();
   const status = typeof data.status === "string" ? data.status : "pending";
   const email = typeof data.email === "string" ? data.email : null;
-  const rows = await request<ConsultationRow[]>("consultations", {
+  const rows = await request<ConsultationRow[]>("ops_consultations", {
     method: "POST",
     headers: { Prefer: "return=representation" },
     body: JSON.stringify({
@@ -146,7 +146,7 @@ export async function createConsultation(data: JsonRecord) {
 
 export async function getConsultation(id: string) {
   const rows = await request<ConsultationRow[]>(
-    `consultations?id=eq.${encode(id)}&select=*&limit=1`,
+    `ops_consultations?id=eq.${encode(id)}&select=*&limit=1`,
   );
   return rows?.[0] ? consultationFromRow(rows[0]) : null;
 }
@@ -154,7 +154,7 @@ export async function getConsultation(id: string) {
 export async function listConsultations(limit = 500) {
   const safeLimit = Math.min(Math.max(Math.round(limit), 1), 1000);
   const rows = await request<ConsultationRow[]>(
-    `consultations?select=*&order=created_at.desc&limit=${safeLimit}`,
+    `ops_consultations?select=*&order=created_at.desc&limit=${safeLimit}`,
   );
   return (rows || []).map(consultationFromRow);
 }
@@ -170,7 +170,7 @@ export async function updateConsultation(id: string, patch: JsonRecord) {
   const status = typeof next.status === "string" ? next.status : "pending";
   const email = typeof next.email === "string" ? next.email : null;
   const rows = await request<ConsultationRow[]>(
-    `consultations?id=eq.${encode(id)}`,
+    `ops_consultations?id=eq.${encode(id)}`,
     {
       method: "PATCH",
       headers: { Prefer: "return=representation" },
@@ -185,7 +185,7 @@ export async function upsertConsultationSnapshot(id: string, data: JsonRecord) {
   const updatedAt = timestampIso(data.updatedAt, createdAt);
   const status = typeof data.status === "string" ? data.status : "pending";
   const email = typeof data.email === "string" ? data.email : null;
-  const rows = await request<ConsultationRow[]>("consultations?on_conflict=id", {
+  const rows = await request<ConsultationRow[]>("ops_consultations?on_conflict=id", {
     method: "POST",
     headers: { Prefer: "resolution=merge-duplicates,return=representation" },
     body: JSON.stringify({
@@ -237,7 +237,7 @@ export type CreateRunInput = {
 export async function insertCrawlRun(input: CreateRunInput) {
   const id = randomUUID().replace(/-/g, "");
   const timestamp = nowIso();
-  const rows = await request<CrawlRunRow[]>("crawl_runs", {
+  const rows = await request<CrawlRunRow[]>("ops_crawl_runs", {
     method: "POST",
     headers: { Prefer: "return=representation" },
     body: JSON.stringify({
@@ -263,14 +263,14 @@ export async function insertCrawlRun(input: CreateRunInput) {
 }
 
 export async function selectCrawlRun(id: string) {
-  const rows = await request<CrawlRunRow[]>(`crawl_runs?id=eq.${encode(id)}&select=*&limit=1`);
+  const rows = await request<CrawlRunRow[]>(`ops_crawl_runs?id=eq.${encode(id)}&select=*&limit=1`);
   return rows?.[0] ? runFromRow(rows[0]) : null;
 }
 
 export async function selectCrawlRuns(limit = 50) {
   const safeLimit = Math.min(Math.max(Math.round(limit), 1), 200);
   const rows = await request<CrawlRunRow[]>(
-    `crawl_runs?select=*&order=created_at.desc&limit=${safeLimit}`,
+    `ops_crawl_runs?select=*&order=created_at.desc&limit=${safeLimit}`,
   );
   return (rows || []).map(runFromRow);
 }
@@ -278,7 +278,7 @@ export async function selectCrawlRuns(limit = 50) {
 export async function upsertCrawlRunSnapshot(run: CrawlRunRecord) {
   const createdAt = timestampIso(run.createdAt);
   const updatedAt = timestampIso(run.updatedAt, createdAt);
-  const rows = await request<CrawlRunRow[]>("crawl_runs?on_conflict=id", {
+  const rows = await request<CrawlRunRow[]>("ops_crawl_runs?on_conflict=id", {
     method: "POST",
     headers: { Prefer: "resolution=merge-duplicates,return=representation" },
     body: JSON.stringify({
@@ -338,7 +338,7 @@ export async function patchCrawlRun(id: string, patch: Partial<CrawlRunRecord> &
     if (value !== undefined && columnMap[key]) payload[columnMap[key]] = value;
   }
   const statusFilter = expectedStatus ? `&status=eq.${encode(expectedStatus)}` : "";
-  const rows = await request<CrawlRunRow[]>(`crawl_runs?id=eq.${encode(id)}${statusFilter}`, {
+  const rows = await request<CrawlRunRow[]>(`ops_crawl_runs?id=eq.${encode(id)}${statusFilter}`, {
     method: "PATCH",
     headers: { Prefer: "return=representation" },
     body: JSON.stringify(payload),
@@ -359,7 +359,7 @@ export async function claimTrialCrawlRun(params: {
   capabilities: string[];
   leaseSeconds: number;
 }) {
-  const rows = await request<CrawlRunRow[]>("rpc/claim_trial_crawl_run", {
+  const rows = await request<CrawlRunRow[]>("rpc/claim_trial_ops_crawl_run", {
     method: "POST",
     body: JSON.stringify({
       p_worker_id: params.workerId,
@@ -374,7 +374,7 @@ export async function insertCrawlRunEvent(
   runId: string,
   input: Omit<CrawlRunEventRecord, "id" | "runId" | "createdAt">,
 ) {
-  const rows = await request<CrawlRunEventRow[]>("crawl_run_events", {
+  const rows = await request<CrawlRunEventRow[]>("ops_crawl_run_events", {
     method: "POST",
     headers: { Prefer: "return=representation" },
     body: JSON.stringify({
@@ -397,7 +397,7 @@ export async function insertCrawlRunEvent(
 export async function selectCrawlRunEvents(runId: string, limit = 100) {
   const safeLimit = Math.min(Math.max(Math.round(limit), 1), 500);
   const rows = await request<CrawlRunEventRow[]>(
-    `crawl_run_events?run_id=eq.${encode(runId)}&select=*&order=created_at.desc&limit=${safeLimit}`,
+    `ops_crawl_run_events?run_id=eq.${encode(runId)}&select=*&order=created_at.desc&limit=${safeLimit}`,
   );
   return (rows || []).reverse().map((row): CrawlRunEventRecord => ({
     id: String(row.id),
@@ -416,7 +416,7 @@ export async function selectCrawlRunEvents(runId: string, limit = 100) {
 
 export async function upsertCrawlRunEventSnapshot(event: CrawlRunEventRecord) {
   const rows = await request<CrawlRunEventRow[]>(
-    "crawl_run_events?on_conflict=run_id,source_event_id",
+    "ops_crawl_run_events?on_conflict=run_id,source_event_id",
     {
       method: "POST",
       headers: { Prefer: "resolution=merge-duplicates,return=representation" },
