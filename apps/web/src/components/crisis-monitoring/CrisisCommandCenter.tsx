@@ -14,9 +14,12 @@ import { Badge } from "@/components/ui/Badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { PlatformLogo } from "@/components/platform/PlatformLogo";
 import { useAuth } from "@/hooks/useAuth";
-import { canAlertBeVisibleToUser } from "@/lib/alert-visibility";
 import { getScopedBrandKey } from "@/lib/brandScope";
-import { getAlertWorkflowStatus } from "@/lib/alertWorkflow";
+import { isTerminalAlert } from "@/lib/alertWorkflow";
+import {
+  buildAlertOperationalMetrics,
+  filterOperationalAlerts,
+} from "@/lib/operational-metrics";
 import { cn } from "@/lib/utils";
 import { useAlertStore, type AlertData } from "@/stores/alert.store";
 import { CrisisAnalyticsCharts } from "./CrisisAnalyticsCharts";
@@ -83,7 +86,7 @@ function slaLimitHours(alert: AlertData) {
 }
 
 function isActive(alert: AlertData) {
-  return !["resolved", "contact_failed"].includes(getAlertWorkflowStatus(alert));
+  return !isTerminalAlert(alert);
 }
 
 function isOverdue(alert: AlertData) {
@@ -131,25 +134,22 @@ export function CrisisCommandCenter() {
   }, [fetchAlerts, profile, scopedBrandKey]);
 
   const alerts = useMemo(() => {
-    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    return rawAlerts.filter((alert) => {
-      const time = new Date(alert.created_at).getTime();
-      return Number.isFinite(time) && time >= cutoff && canAlertBeVisibleToUser(alert, profile);
-    });
+    return filterOperationalAlerts(rawAlerts, { profile });
   }, [profile, rawAlerts]);
 
   const data = useMemo(() => {
+    const operationalMetrics = buildAlertOperationalMetrics(alerts);
     const activeAlerts = alerts.filter(isActive);
-    const criticalAlerts = alerts.filter((alert) => ["critical", "high"].includes(normalizeSeverity(alert.severity)));
+    const criticalAlerts = activeAlerts.filter((alert) => ["critical", "high"].includes(normalizeSeverity(alert.severity)));
     const overdueAlerts = activeAlerts.filter(isOverdue);
     const unassignedAlerts = activeAlerts.filter((alert) => !alert.being_resolved_by);
     const platformStats = buildStats(alerts, (alert) => alert.source || "other", PLATFORM_LABELS);
     const topicStats = buildStats(alerts, (alert) => alert.topic || "other", TOPIC_LABELS);
     const latestAlert = alerts.slice().sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())[0];
     const averageRisk = alerts.length ? alerts.reduce((total, alert) => total + Math.max(0, Math.min(100, alert.negativity_score || 0)), 0) / alerts.length : 0;
-    const criticalShare = alerts.length ? Math.round((criticalAlerts.length / alerts.length) * 100) : 0;
+    const criticalShare = activeAlerts.length ? Math.round((criticalAlerts.length / activeAlerts.length) * 100) : 0;
     const riskScore = Math.round(Math.min(100, averageRisk * 0.7 + criticalShare * 0.3));
-    return { activeAlerts, criticalAlerts, overdueAlerts, unassignedAlerts, platformStats, topicStats, latestAlert, criticalShare, riskScore };
+    return { activeAlerts, criticalAlerts, overdueAlerts, unassignedAlerts, platformStats, topicStats, latestAlert, criticalShare, riskScore, operationalMetrics };
   }, [alerts]);
 
   const topPlatform = data.platformStats[0];
@@ -175,7 +175,7 @@ export function CrisisCommandCenter() {
             <div className="grid grid-cols-3 gap-3 xl:w-[360px]">
               <div className="rounded-lg border border-[#F1B7B2] bg-white p-3 text-center"><div className="text-2xl font-black text-[#BA1A1A]">{data.riskScore}</div><div className="mt-1 text-[10px] font-bold uppercase text-[#6E6A7C]">Risk score</div></div>
               <div className="rounded-lg border border-[#F1B7B2] bg-white p-3 text-center"><div className="text-2xl font-black text-[#1A1B20]">{data.criticalShare}%</div><div className="mt-1 text-[10px] font-bold uppercase text-[#6E6A7C]">Critical/Cao</div></div>
-              <div className="rounded-lg border border-[#F1B7B2] bg-white p-3 text-center"><div className="text-2xl font-black text-[#BA1A1A]">{data.activeAlerts.length}</div><div className="mt-1 text-[10px] font-bold uppercase text-[#6E6A7C]">Đang mở</div></div>
+              <div className="rounded-lg border border-[#F1B7B2] bg-white p-3 text-center"><div className="text-2xl font-black text-[#BA1A1A]">{data.operationalMetrics.active}</div><div className="mt-1 text-[10px] font-bold uppercase text-[#6E6A7C]">Đang mở</div></div>
             </div>
           </div>
         </CardContent>

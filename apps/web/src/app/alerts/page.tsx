@@ -32,7 +32,6 @@ import {
 } from "@/lib/alertWorkflow";
 import {
   canAccessAlertQueue,
-  canAlertBeVisibleToUser,
   isAlertOwnedByUser,
 } from "@/lib/alert-visibility";
 import { findAlertByNavigationTarget } from "@/lib/alert-navigation";
@@ -40,6 +39,10 @@ import { readDashboardReturnNavigation } from "@/lib/dashboard-return-context";
 import { usePinnedQueue } from "@/hooks/usePinnedQueue";
 import { useAlertViewPresence } from "@/hooks/useAlertViewPresence";
 import { getAlertSourceUrl } from "@/lib/alert-source-url";
+import {
+  filterOperationalAlerts,
+  getAlertRelevantAt,
+} from "@/lib/operational-metrics";
 
 const ALERTS_PER_PAGE = 5;
 import { collection, getDocs, doc, getDoc } from "firebase/firestore";
@@ -55,26 +58,6 @@ import {
   Legend as ChartLegend,
   Filler as ChartFiller,
 } from "chart.js";
-
-function getAlertDeduplicationKey(alert: AlertData) {
-  const contentType = String(alert.content_type || "mention").toLowerCase();
-  const sourceRecordId = contentType === "comment"
-    ? alert.comment_id || alert.source_id || alert.id
-    : alert.post_id || alert.source_id || alert.id;
-  return `${String(alert.source || "unknown").toLowerCase()}:${contentType}:${sourceRecordId}`;
-}
-
-function getAlertCompletenessScore(alert: AlertData) {
-  const workflowStatus = getAlertWorkflowStatus(alert);
-  return (
-    (workflowStatus === "pending" ? 0 : 20) +
-    (alert.being_resolved_by ? 10 : 0) +
-    (alert.customer_contact_opened_at ? 5 : 0) +
-    (alert.resolution_history?.length || 0) +
-    (alert.customer_contact_history?.length || 0)
-  );
-}
-
 
 // Helper function to calculate relative time
 function getRelativeTime(isoString: string, t: any): string {
@@ -324,40 +307,9 @@ export default function AlertsPage() {
   } = useAlertStore();
   // Filter alerts by currently selected brand filter for dashboard overview calculations
   const brandFilteredAlerts = useMemo(() => {
-    let result = rawAlerts;
-
-    if (filters.brand && filters.brand !== "all") {
-      const normalize = (b: string) => String(b || "").toLowerCase().replace(/[\s\-_.]/g, "").trim();
-      const targetKey = normalize(filters.brand);
-      result = result.filter(a => {
-        let aKey = normalize(a.brand);
-        if (aKey.includes("highland")) aKey = "highlandcoffee";
-        if (aKey.includes("starbuck")) aKey = "starbucks";
-        if (aKey.includes("mixue")) aKey = "mixue";
-
-        let tKey = targetKey;
-        if (tKey.includes("highland")) tKey = "highlandcoffee";
-        if (tKey.includes("starbuck")) tKey = "starbucks";
-        if (tKey.includes("mixue")) tKey = "mixue";
-
-        return aKey === tKey;
-      });
-    }
-
-    // Hàng đợi và lịch sử chỉ giữ các vụ việc trong cửa sổ 30 ngày.
-    // Vụ việc đang mở tính theo ngày phát hiện; vụ việc hoàn tất tính theo
-    // thời điểm giải quyết gần nhất.
-    const activeCutoffMs = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    result = result.filter((alert) => {
-      const isCompleted = isTerminalAlert(alert);
-      const lastHistoryAt = Array.isArray(alert.resolution_history) && alert.resolution_history.length > 0
-        ? alert.resolution_history[alert.resolution_history.length - 1]?.timestamp
-        : undefined;
-      const relevantAt = isCompleted
-        ? alert.resolved_at || alert.skipped_at || alert.monitoring_started_at || lastHistoryAt || alert.created_at
-        : alert.created_at;
-      const relevantAtMs = new Date(relevantAt).getTime();
-      return Number.isFinite(relevantAtMs) && relevantAtMs >= activeCutoffMs && relevantAtMs <= Date.now();
+    let result = filterOperationalAlerts(rawAlerts, {
+      profile,
+      workspaceId: filters.brand,
     });
 
     if (timeFilter !== "all") {
@@ -407,10 +359,7 @@ export default function AlertsPage() {
           // cho lịch sử cảnh báo đã hoàn tất.
           if (!isCompleted) return true;
 
-          const lastHistoryAt = Array.isArray(a.resolution_history) && a.resolution_history.length > 0
-            ? a.resolution_history[a.resolution_history.length - 1]?.timestamp
-            : undefined;
-          const completedAt = a.resolved_at || a.skipped_at || a.monitoring_started_at || lastHistoryAt || a.created_at;
+          const completedAt = getAlertRelevantAt(a);
           const completedDate = new Date(completedAt);
           if (!completedAt || isNaN(completedDate.getTime())) return false;
 
@@ -422,7 +371,7 @@ export default function AlertsPage() {
     }
 
     return result;
-  }, [rawAlerts, filters.brand, timeFilter, singleDate, customStartDate, customEndDate]);
+  }, [rawAlerts, filters.brand, profile, timeFilter, singleDate, customStartDate, customEndDate]);
 
   const availableMonths = useMemo(() => {
     const monthSet = new Set<string>();
@@ -443,19 +392,8 @@ export default function AlertsPage() {
   };
 
   const visibleBaseAlerts = useMemo(() => {
-    const scopedAlerts = brandFilteredAlerts.filter((alert) => canAlertBeVisibleToUser(alert, profile));
-    const deduplicated = new Map<string, AlertData>();
-
-    scopedAlerts.forEach((alert) => {
-      const key = getAlertDeduplicationKey(alert);
-      const existing = deduplicated.get(key);
-      if (!existing || getAlertCompletenessScore(alert) > getAlertCompletenessScore(existing)) {
-        deduplicated.set(key, alert);
-      }
-    });
-
-    return Array.from(deduplicated.values());
-  }, [brandFilteredAlerts, profile]);
+    return brandFilteredAlerts;
+  }, [brandFilteredAlerts]);
 
   useEffect(() => {
     if (isLoading || rawAlerts.length === 0) return;

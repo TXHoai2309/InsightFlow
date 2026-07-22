@@ -7,20 +7,39 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { useAlertStore } from "@/stores/alert.store";
-import { filterLeadsForDashboard } from "@/lib/lead-metrics";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  buildAlertOperationalMetrics,
+  buildLeadOperationalMetrics,
+  filterOperationalAlerts,
+  filterOperationalLeads,
+} from "@/lib/operational-metrics";
 import { useTranslation } from "react-i18next";
 
 export function BMTabs() {
   const { t } = useTranslation();
   const pathname = usePathname();
   const router = useRouter();
+  const { profile } = useAuth();
   const [pendingHref, setPendingHref] = useState<string | null>(null);
   const { leads, filters } = useDashboardStore();
-  const alertsCount = useAlertStore((state) => state.rawAlerts.length);
-  const leadsCount = useMemo(
-    () => filterLeadsForDashboard(leads, filters).length,
-    [filters, leads],
-  );
+  const rawAlerts = useAlertStore((state) => state.rawAlerts);
+  const leadsCount = useMemo(() => {
+    const scoped = filterOperationalLeads(leads, {
+      profile,
+      workspaceId: filters.workspace_id,
+      platform: filters.platform,
+    });
+    return buildLeadOperationalMetrics(scoped, profile).total;
+  }, [filters.platform, filters.workspace_id, leads, profile]);
+  const alertsCount = useMemo(() => {
+    const scoped = filterOperationalAlerts(rawAlerts, {
+      profile,
+      workspaceId: filters.workspace_id,
+      platform: filters.platform,
+    });
+    return buildAlertOperationalMetrics(scoped).total;
+  }, [filters.platform, filters.workspace_id, profile, rawAlerts]);
 
   useEffect(() => setPendingHref(null), [pathname]);
 
