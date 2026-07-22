@@ -46,27 +46,29 @@ function getDayBounds(date = new Date()) {
 
 function matchesTimeRange(lead: Lead, filters: LeadReportFilters, nowMs: number) {
   if (filters.timeRange === "all") return true;
-  const createdAt = toTime(lead.created_at || lead.posted_at);
-  if (createdAt === null) return false;
+  // Match the customer workbench's "Cập nhật gần nhất" period semantics.
+  // Legacy rows without updated_at fall back to their creation/posting time.
+  const activityAt = toTime(lead.updated_at || lead.created_at || lead.posted_at);
+  if (activityAt === null) return false;
 
   const { start: startOfToday, end: endOfToday } = getDayBounds(new Date(nowMs));
 
   if (filters.timeRange === "today") {
-    return createdAt >= startOfToday && createdAt <= endOfToday;
+    return activityAt >= startOfToday && activityAt <= endOfToday;
   }
 
   if (filters.timeRange === "7d") {
-    return createdAt >= startOfToday - 6 * 24 * 60 * 60 * 1000;
+    return activityAt >= startOfToday - 6 * 24 * 60 * 60 * 1000;
   }
 
   if (filters.timeRange === "30d") {
-    return createdAt >= startOfToday - 29 * 24 * 60 * 60 * 1000;
+    return activityAt >= startOfToday - 29 * 24 * 60 * 60 * 1000;
   }
 
   const start = filters.startDate ? new Date(`${filters.startDate}T00:00:00`).getTime() : null;
   const end = filters.endDate ? new Date(`${filters.endDate}T23:59:59`).getTime() : null;
-  if (start !== null && createdAt < start) return false;
-  if (end !== null && createdAt > end) return false;
+  if (start !== null && activityAt < start) return false;
+  if (end !== null && activityAt > end) return false;
   return true;
 }
 
