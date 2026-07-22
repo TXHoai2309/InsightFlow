@@ -13,7 +13,7 @@ interface UseMentionsOptions {
 }
 
 const DASHBOARD_CACHE_PREFIX = "insightflow_dashboard_cache_";
-const DASHBOARD_CACHE_VERSION = "v3";
+const DASHBOARD_CACHE_VERSION = "v5";
 
 // Module-level in-memory cache time tracking to avoid duplicate fetching during menu transitions
 

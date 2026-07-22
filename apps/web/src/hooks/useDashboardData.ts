@@ -28,7 +28,7 @@ interface UseDashboardOptions {
 }
 
 const DASHBOARD_CACHE_PREFIX = "insightflow_dashboard_cache_";
-const DASHBOARD_CACHE_VERSION = "v4";
+const DASHBOARD_CACHE_VERSION = "v5";
 const DASHBOARD_CACHE_LIMITS = {
   mentions: 150,
   alerts: 150,

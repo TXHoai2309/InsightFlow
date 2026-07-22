@@ -58,6 +58,12 @@ import {
   parseVietnameseRelativeDate,
 } from "@/lib/dashboard-display";
 import { isDemoRuntime } from "@/lib/demo-navigation";
+import {
+  buildLeadWorkflowLookupKeys,
+  getMissingLeadWorkflowKeys,
+  indexLeadWorkflowRows,
+  mergeLeadWorkflowRows,
+} from "@/lib/lead-workflow-state";
 
 // ─── Collection names ────────────────────────────────────────────────────────
 export const COLLECTION_NAMES = {
@@ -1016,6 +1022,74 @@ async function loadSupabaseRowsByIds<T extends SupabaseRow>(
   }
 
   return finalResults.slice(0, maxRows);
+}
+
+async function fetchSupabaseLeadWorkflowRows(
+  config: SupabaseConfig,
+  mentions: Mention[],
+) {
+  const lookupKeys = buildLeadWorkflowLookupKeys(mentions);
+  const order = { order: "updated_at.desc.nullslast" };
+  const recentRowsPromise = loadSupabaseRows<SupabaseRow>(
+    config,
+    "leads",
+    order,
+    2000,
+  );
+
+  if (lookupKeys.length === 0) return recentRowsPromise;
+
+  // The recent workflow window remains useful for active/follow-up rows that
+  // have moved outside the current mention snapshot. It must not be the source
+  // of truth for mentions on screen: older completed rows would otherwise be
+  // rebuilt as new/unassigned once they fall beyond the latest 2,000 records.
+  const [recentRows, rowsById] = await Promise.all([
+    recentRowsPromise,
+    loadSupabaseRowsByIds<SupabaseRow>(
+      config,
+      "leads",
+      "id",
+      lookupKeys,
+      ["*"],
+      order,
+      Math.max(lookupKeys.length, 2000),
+    ),
+  ]);
+
+  let targetedRows = rowsById;
+  let missingKeys = getMissingLeadWorkflowKeys(lookupKeys, targetedRows);
+
+  // Legacy ingestion versions sometimes generated a workflow primary key that
+  // differs from the mention id. Only query the legacy columns for unresolved
+  // mentions so the normal path stays bounded and fast.
+  if (missingKeys.length > 0) {
+    const rowsByMentionId = await loadSupabaseRowsByIds<SupabaseRow>(
+      config,
+      "leads",
+      "mention_id",
+      missingKeys,
+      ["*"],
+      order,
+      missingKeys.length,
+    );
+    targetedRows = mergeLeadWorkflowRows(targetedRows, rowsByMentionId);
+    missingKeys = getMissingLeadWorkflowKeys(lookupKeys, targetedRows);
+  }
+
+  if (missingKeys.length > 0) {
+    const rowsBySourceMentionId = await loadSupabaseRowsByIds<SupabaseRow>(
+      config,
+      "leads",
+      "source_mention_id",
+      missingKeys,
+      ["*"],
+      order,
+      missingKeys.length,
+    );
+    targetedRows = mergeLeadWorkflowRows(targetedRows, rowsBySourceMentionId);
+  }
+
+  return mergeLeadWorkflowRows(targetedRows, recentRows);
 }
 
 async function loadSupabaseRowsByPostIdsWithSelectFallback<T extends SupabaseRow>(
@@ -2022,24 +2096,18 @@ export class DashboardService {
       const sbLeadsById = new Map<string, SupabaseRow>();
       try {
         const sbConfig = getSupabaseConfig();
-        supabaseLeadRows = await loadSupabaseRows<SupabaseRow>(
-          sbConfig,
-          "leads",
-          { order: "updated_at.desc.nullslast" },
-          2000,
+        supabaseLeadRows = await fetchSupabaseLeadWorkflowRows(sbConfig, mentions);
+        indexLeadWorkflowRows(supabaseLeadRows).forEach((row, rowId) => {
+          sbLeadsById.set(rowId, row);
+        });
+      } catch (error) {
+        // Never rebuild persisted leads as new/unassigned when workflow state
+        // cannot be verified. Failing closed prevents employees from reopening
+        // already completed work and duplicating operational reports.
+        console.error("[DashboardService] Failed to synchronize lead workflow state:", error);
+        throw new Error(
+          "Không thể đồng bộ trạng thái xử lý khách hàng. Vui lòng thử làm mới trước khi thao tác.",
         );
-        for (const row of supabaseLeadRows) {
-          // Different ingestion versions have used either the lead id, mention
-          // id, or source mention id as the primary key. Index every known key
-          // so workflow state from Supabase is merged back into the source
-          // mention instead of silently falling back to a new/unassigned lead.
-          [row.id, row.mention_id, row.source_mention_id]
-            .map((value) => String(value || "").trim())
-            .filter(Boolean)
-            .forEach((rowId) => sbLeadsById.set(rowId, row));
-        }
-      } catch {
-        // Bảng chưa tồn tại hoặc lỗi — bỏ qua, derive từ mentions
       }
 
       // Bước 2: Luôn derive leads từ Supabase mentions thật (có intent label)
