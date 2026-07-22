@@ -10,21 +10,27 @@ import { useAlertStore } from "@/stores/alert.store";
 import { filterLeadsForDashboard } from "@/lib/lead-metrics";
 import { useTranslation } from "react-i18next";
 
+import { DEMO_MOCK_ALERTS, DEMO_MOCK_LEADS } from "@/lib/demo-mock-data";
+
 export function BMTabs() {
   const { t } = useTranslation();
   const pathname = usePathname();
   const router = useRouter();
   const [pendingHref, setPendingHref] = useState<string | null>(null);
+  const isDemo = pathname.startsWith("/demo");
   const { leads, filters } = useDashboardStore();
-  const alertsCount = useAlertStore((state) => state.rawAlerts.length);
+  const rawAlerts = useAlertStore((state) => state.rawAlerts);
+  const alertsCount = isDemo ? (rawAlerts.length === 0 ? DEMO_MOCK_ALERTS.length : rawAlerts.length) : rawAlerts.length;
   const leadsCount = useMemo(
-    () => filterLeadsForDashboard(leads, filters).length,
-    [filters, leads],
+    () => {
+      if (isDemo) return leads.length === 0 ? DEMO_MOCK_LEADS.length : leads.length;
+      return filterLeadsForDashboard(leads, filters).length;
+    },
+    [isDemo, filters, leads],
   );
 
   useEffect(() => setPendingHref(null), [pathname]);
 
-  const isDemo = pathname.startsWith("/demo");
   const basePath = isDemo ? "/demo" : "/dashboard";
 
   const tabs = [

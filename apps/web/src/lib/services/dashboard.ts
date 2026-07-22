@@ -987,7 +987,7 @@ async function loadSupabaseRowsByIds<T extends SupabaseRow>(
 ): Promise<T[]> {
   if (!ids || ids.length === 0) return [];
   const unique = Array.from(new Set(ids.filter(Boolean)));
-  const pageSize = 50;
+  const pageSize = 150;
   const chunks = chunkValues(unique, pageSize);
 
   const results = await mapWithConcurrency(chunks, 3, async (chunk) => {

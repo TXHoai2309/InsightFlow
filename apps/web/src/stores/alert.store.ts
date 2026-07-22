@@ -16,6 +16,7 @@ import { useDashboardStore } from "@/stores/dashboard.store";
 import type { Mention } from "@/types/dashboard";
 import { getPersistedAlertStatus, isResolvedAlert } from "@/lib/alertWorkflow";
 import { canAlertBeVisibleToUser } from "@/lib/alert-visibility";
+import { DEMO_MOCK_ALERTS } from "@/lib/demo-mock-data";
 
 function getResolverName(emailOrId: string | null | undefined): string {
   if (!emailOrId) return "";
@@ -443,9 +444,8 @@ function setAlertsFromDashboardCache(
   getState: typeof useAlertStore.getState,
   scopedBrandKey?: string | null,
 ): boolean {
+  if (getState().rawAlerts.length > 0) return false;
   const dashboardMentions = useDashboardStore.getState().mentions;
-  // The dashboard cache is scoped by user. Reuse only the in-memory store here;
-  // reading legacy brand-only localStorage keys can expose another employee's queue.
   const mentions = dashboardMentions;
   if (mentions.length === 0) return false;
 
@@ -474,6 +474,7 @@ function setAlertsFromDashboardCache(
     alerts: applyFilters(fetched, state.filters),
     brands: scopedBrands.length ? scopedBrands : fallbackBrands,
     error: null,
+    lastFetchedAt: Date.now(),
   }));
   return fetched.length > 0;
 }
@@ -607,17 +608,14 @@ export const useAlertStore = create<AlertState>()(
       const isFresh = now - get().lastFetchedAt < CACHE_DURATION;
 
       if (hasData && isFresh && !force) {
-        // Just refresh local filtered alerts to respect potential filter shifts
-        set((state) => ({
-          alerts: applyFilters(state.rawAlerts, state.filters)
-        }));
         return;
       }
 
-      // Dashboard cache is only an immediate visual fallback. Always continue
-      // to the authoritative Supabase load because older cached mentions may
-      // not contain workflow fields such as resolution_status/resolved_at.
-      if (!force) {
+      if (get().isLoading && !force) {
+        return;
+      }
+
+      if (!force && get().rawAlerts.length === 0) {
         setAlertsFromDashboardCache(set, get, scopedBrandKey);
       }
 
@@ -629,15 +627,15 @@ export const useAlertStore = create<AlertState>()(
 
       set({ isLoading: true, error: null });
 
-      if (force) {
-        setAlertsFromDashboardCache(set, get, scopedBrandKey);
-      }
-
       const loadAlerts = async () => {
         try {
           const rawBrandKey = (scopedBrandKey === "global" || !scopedBrandKey) ? undefined : scopedBrandKey;
           const rawData = await DashboardService.fetchRawData({ brandKey: rawBrandKey });
-          const filtered = buildAlertsFromMentions(rawData.mentions, scopedBrandKey);
+          let filtered = buildAlertsFromMentions(rawData.mentions, scopedBrandKey);
+          const isDemo = typeof window !== "undefined" && window.location.pathname.startsWith("/demo");
+          if (isDemo && filtered.length === 0) {
+            filtered = DEMO_MOCK_ALERTS;
+          }
 
           const scopedBrands = Array.from(new Set(filtered.map((alert) => alert.brand))).sort();
           const fallbackBrands = ["Highlands Coffee", "Starbucks", "Mixue"].filter((brand) => {

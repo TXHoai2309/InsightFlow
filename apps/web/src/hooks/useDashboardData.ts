@@ -14,6 +14,7 @@ import { supabaseClient } from "@/lib/supabaseClient";
 import { useAlertStore } from "@/stores/alert.store";
 import { canLeadBeVisibleToUser } from "@/lib/lead-workbench";
 import { canPerformAction } from "@/lib/rbac";
+import { DEMO_PROFILE, DEMO_MOCK_ALERTS, DEMO_MOCK_LEADS, DEMO_MOCK_MENTIONS, DEMO_MOCK_WORKSPACES } from "@/lib/demo-mock-data";
 
 interface UseDashboardOptions {
   autoFetch?: boolean;
@@ -77,7 +78,9 @@ function saveDashboardCache(cacheKey: string, primaryValue: unknown, fallbackVal
 
 export function useDashboard(options: UseDashboardOptions = {}) {
   const { autoFetch = true, refetchInterval = 1800000 } = options;
-  const { profile, loading: authLoading } = useAuth();
+  const { profile: realProfile, loading: authLoading } = useAuth();
+  const isDemo = typeof window !== "undefined" && window.location.pathname.startsWith("/demo");
+  const profile = realProfile || (isDemo ? DEMO_PROFILE : null);
 
   const {
     setStats,
@@ -155,7 +158,11 @@ export function useDashboard(options: UseDashboardOptions = {}) {
       // 1. Fetch raw data từ Supabase (lọc theo brand nếu có)
       const rawBrandKey = brandKey === "global" ? undefined : brandKey;
       const rawData =
-        await DashboardService.fetchRawData({ brandKey: rawBrandKey });
+        await DashboardService.fetchRawData({ 
+          brandKey: rawBrandKey,
+          maxMentions: 1500,
+          maxLeads: 2000
+        });
       // Ignore stale responses from a previous navigation/refresh.
       if (latestFetchGeneration.get(fetchScopeKey) !== generation) return;
       const workspaces = filterByBusinessPolicy(
@@ -166,10 +173,18 @@ export function useDashboard(options: UseDashboardOptions = {}) {
         profile,
         "view_dashboard",
       );
-      const mentions = filterByBusinessPolicy(rawData.mentions, profile, "view_mentions");
-      const alerts = filterByBusinessPolicy(rawData.alerts, profile, "view_crisis_queue");
+      let mentions = filterByBusinessPolicy(rawData.mentions, profile, "view_mentions");
+      let alerts = filterByBusinessPolicy(rawData.alerts, profile, "view_crisis_queue");
       const scopedLeads = filterByBusinessPolicy(rawData.leads, profile, "view_leads");
-      const leads = scopedLeads.filter((lead) => canLeadBeVisibleToUser(lead, profile));
+      let leads = scopedLeads.filter((lead) => canLeadBeVisibleToUser(lead, profile));
+      let effectiveWorkspaces = workspaces;
+
+      if (isDemo) {
+        if (mentions.length === 0) mentions = DEMO_MOCK_MENTIONS;
+        if (alerts.length === 0) alerts = DEMO_MOCK_ALERTS as any;
+        if (leads.length === 0) leads = DEMO_MOCK_LEADS;
+        if (effectiveWorkspaces.length === 0) effectiveWorkspaces = DEMO_MOCK_WORKSPACES;
+      }
 
       // 2. Aggregations từ toàn bộ dữ liệu
       const stats = DashboardService.calculateStats(mentions, alerts, leads);
@@ -184,7 +199,7 @@ export function useDashboard(options: UseDashboardOptions = {}) {
       );
 
       // 3. Nạp vào Zustand store
-      setWorkspaces(workspaces);
+      setWorkspaces(effectiveWorkspaces);
       setMentions(mentions);
       setAlerts(alerts);
       setLeads(leads);

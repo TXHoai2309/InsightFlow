@@ -189,7 +189,7 @@ export function LeadTable() {
     () => sortLeadsForWorkbench(monitoringLeads),
     [monitoringLeads],
   );
-  const [activeFilter, setActiveFilter] = useState<FilterChip>("hot");
+  const [activeFilter, setActiveFilter] = useState<FilterChip>("all");
   const [page, setPage] = useState(1);
   const itemsPerPage = 8;
 

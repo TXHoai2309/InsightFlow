@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useDashboard } from "@/hooks/useDashboardData";
 import { getScopedBrandKey } from "@/lib/brandScope";
@@ -27,6 +28,7 @@ import { useAlertStore } from "@/stores/alert.store";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { useDualOperationsReport } from "./useDualOperationsReport";
 import { ExcelDocumentPreviewModal } from "@/components/reports/ExcelDocumentPreviewModal";
+import { DEMO_PROFILE } from "@/lib/demo-mock-data";
 import {
   AlertTriangle,
   ArrowRight,
@@ -258,7 +260,11 @@ function PriorityRow({ row }: { row: DualOperationsPriorityRow }) {
 }
 
 export function DualOperationsEmployeeReportPage() {
-  const { profile } = useAuth();
+  const { profile: realProfile } = useAuth();
+  const pathname = usePathname();
+  const isDemo = pathname?.startsWith("/demo") ?? false;
+  const profile = realProfile || (isDemo ? DEMO_PROFILE : null);
+  const isBrandManager = profile?.role === "brand_manager" || isDemo;
   const [reportFilters, setReportFilters] = useState<DualReportFilters>(DEFAULT_DUAL_REPORT_FILTERS);
   const [activeOperation, setActiveOperation] = useState<OperationTab>("lead");
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -274,8 +280,8 @@ export function DualOperationsEmployeeReportPage() {
     keyword: reportFilters.keyword,
     status: reportFilters.leadStatus,
     intent: reportFilters.priority === "high" ? "hot" : "all",
-    owner: "mine",
-  }), [reportFilters]);
+    owner: isBrandManager ? "all" : "mine",
+  }), [isBrandManager, reportFilters]);
 
   const crisisFilters = useMemo<CrisisReportFilters>(() => ({
     ...DEFAULT_CRISIS_REPORT_FILTERS,
@@ -367,7 +373,11 @@ export function DualOperationsEmployeeReportPage() {
         <div className="flex flex-col gap-4 min-[1100px]:flex-row min-[1100px]:items-center min-[1100px]:justify-between">
           <div>
             <h1 className="text-xl font-black text-[var(--color-text-primary)] dark:text-white">Lead &amp; Khủng hoảng</h1>
-            <p className="mt-1 text-xs text-[var(--color-text-secondary)] dark:text-gray-400">Theo dõi hiệu suất, rủi ro và việc cần xử lý trong kỳ báo cáo.</p>
+            <p className="mt-1 text-xs text-[var(--color-text-secondary)] dark:text-gray-400">
+              {isBrandManager
+                ? "Theo dõi hiệu suất, rủi ro và việc cần xử lý của toàn bộ đội ngũ trong kỳ báo cáo."
+                : "Theo dõi hiệu suất, rủi ro và việc cần xử lý trong kỳ báo cáo."}
+            </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             <div className="relative">

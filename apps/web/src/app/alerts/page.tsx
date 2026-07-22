@@ -29,6 +29,7 @@ import {
   isAlertOwnedByUser,
 } from "@/lib/alert-visibility";
 import { findAlertByNavigationTarget } from "@/lib/alert-navigation";
+import { DEMO_PROFILE, DEMO_MOCK_ALERTS } from "@/lib/demo-mock-data";
 
 const ALERTS_PER_PAGE = 5;
 import { collection, getDocs, doc, getDoc } from "firebase/firestore";
@@ -216,7 +217,9 @@ function MonitoringCountdown({ alert }: MonitoringCountdownProps) {
  */
 export default function AlertsPage() {
   const router = useRouter();
-  const { profile, loading: authLoading } = useAuth();
+  const { profile: realProfile, loading: authLoading } = useAuth();
+  const isDemo = typeof window !== "undefined" && window.location.pathname.startsWith("/demo");
+  const profile = realProfile || (isDemo ? DEMO_PROFILE : null);
   const isManager = profile?.role === "brand_manager";
   const scopedBrandKey = getScopedBrandKey(profile);
   const canViewCrisisQueue = canAccessAlertQueue(profile);
@@ -334,6 +337,7 @@ export default function AlertsPage() {
   } = useAlertStore();
   // Filter alerts by currently selected brand filter for dashboard overview calculations
   const brandFilteredAlerts = useMemo(() => {
+    if (isDemo) return DEMO_MOCK_ALERTS;
     let result = rawAlerts;
 
     if (filters.brand && filters.brand !== "all") {
@@ -453,8 +457,8 @@ export default function AlertsPage() {
   };
 
   const visibleBaseAlerts = useMemo(
-    () => brandFilteredAlerts.filter((alert) => canAlertBeVisibleToUser(alert, profile)),
-    [brandFilteredAlerts, profile],
+    () => (isDemo ? DEMO_MOCK_ALERTS : brandFilteredAlerts.filter((alert) => canAlertBeVisibleToUser(alert, profile))),
+    [brandFilteredAlerts, isDemo, profile],
   );
 
   const activeAlerts = useMemo(() => {
@@ -1062,7 +1066,7 @@ export default function AlertsPage() {
     setFilters({ brand: matchedBrand });
   }, [brandFilterLocked, brands, filters.brand, scopedBrandKey, setFilters]);
 
-  if (!authLoading && !canViewCrisisQueue) {
+  if (!authLoading && !canViewCrisisQueue && !isDemo) {
     return (
       <div className="p-4 md:p-8">
         <div className="glass-card p-8 rounded-xl border border-[var(--color-border)]">
@@ -1075,7 +1079,7 @@ export default function AlertsPage() {
     );
   }
 
-  if (!authLoading && !hasBusinessBrandScope(profile)) {
+  if (!authLoading && !hasBusinessBrandScope(profile) && !isDemo) {
     return (
       <div className="p-4 md:p-8">
         <div className="glass-card p-8 rounded-xl border border-[var(--color-border)]">
@@ -1113,15 +1117,15 @@ export default function AlertsPage() {
         singleDate={singleDate}
         customStartDate={customStartDate}
         customEndDate={customEndDate}
-        brandFilterLocked={brandFilterLocked}
-        canViewAllAssignments={isManager}
+        brandFilterLocked={brandFilterLocked && !isDemo}
+        canViewAllAssignments={isDemo || isManager}
         brands={brands}
         filters={filters}
         currentPage={alertPage}
         totalPages={totalAlertPages}
         totalFiltered={processedActiveAlerts.length}
         profileEmail={profile?.email}
-        canUpdate={canUpdateCrisisStatus}
+        canUpdate={isDemo || canUpdateCrisisStatus}
         getResolverName={getResolverName}
         onRefresh={async () => {
           try {

@@ -22,6 +22,7 @@ import type {
 import { ExcelDocumentPreviewModal } from "@/components/reports/ExcelDocumentPreviewModal";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { useLeadEmployeeReport } from "./useLeadMonitoringReport";
+import { DEMO_PROFILE } from "@/lib/demo-mock-data";
 import {
   AlertTriangle,
   ArrowRight,
@@ -223,9 +224,14 @@ function DistributionSummary({ title, rows }: { title: string; rows: LeadReportB
 }
 
 export function LeadEmployeeReportPage() {
-  const { profile } = useAuth();
+  const { profile: realProfile } = useAuth();
+  const isDemo = typeof window !== "undefined" && window.location.pathname.startsWith("/demo");
+  const profile = realProfile || (isDemo ? DEMO_PROFILE : null);
   const { filters, workspaces, isLoading, error, setFilters } = useDashboardStore();
-  const [reportFilters, setReportFilters] = useState<LeadReportFilters>(DEFAULT_EMPLOYEE_FILTERS);
+  const [reportFilters, setReportFilters] = useState<LeadReportFilters>(() => ({
+    ...DEFAULT_EMPLOYEE_FILTERS,
+    owner: isDemo ? "all" : "mine",
+  }));
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showExcelPreview, setShowExcelPreview] = useState(false);
   const report = useLeadEmployeeReport(reportFilters);

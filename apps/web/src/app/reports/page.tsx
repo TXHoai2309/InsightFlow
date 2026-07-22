@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { usePathname } from "next/navigation";
 import { generateWeeklyBrandReportPDF } from "@/lib/pdfExport";
 import { generateWeeklyBrandReportExcel } from "@/lib/excelExport";
 import { DashboardService } from "@/lib/services/dashboard";
@@ -12,6 +13,7 @@ import { CrisisEmployeeReportPage } from "@/components/crisis-monitoring/CrisisE
 import { DualOperationsEmployeeReportPage } from "@/components/dual-operations-report/DualOperationsEmployeeReportPage";
 import { ReportExportPreviewModal } from "@/components/reports/ReportExportPreviewModal";
 import { canPerformAction, getEmployeeBusinessScope } from "@/lib/rbac";
+import { DEMO_PROFILE, DEMO_MOCK_MENTIONS } from "@/lib/demo-mock-data";
 
 
 /**
@@ -1111,35 +1113,35 @@ function LanguageSelectModal({
 }
 
 export default function ReportsPage() {
-  const { profile, loading: authLoading } = useAuth();
-  const hasDualOperations = getEmployeeBusinessScope(profile) === "dual";
+  const { profile, loading } = useAuth();
+  const pathname = usePathname();
+  const isDemo = pathname?.startsWith("/demo") ?? false;
+  const effectiveProfile = profile || (isDemo ? DEMO_PROFILE : null);
 
-  if (authLoading) {
+  // Khi đang tải auth, chờ
+  if (loading && !isDemo) {
     return (
-      <div className="min-h-screen bg-[#f8f7ff] px-6 py-10 text-slate-700">
-        Dang tai bao cao...
+      <div className="flex h-64 items-center justify-center">
+        <span className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--color-brand)] border-r-transparent" />
       </div>
     );
   }
 
-  if (!authLoading && hasDualOperations) {
-    return <DualOperationsEmployeeReportPage />;
+  // Admin → giao diện báo cáo legacy (export file PDF/Excel theo ngày)
+  if (effectiveProfile?.role === "admin") {
+    return <LegacyReportsPage />;
   }
 
-  if (!authLoading && profile?.role === "crisis_employee" && canPerformAction(profile, "view_crisis_queue")) {
-    return <CrisisEmployeeReportPage />;
-  }
-
-  if (!authLoading && profile?.role === "lead_employee") {
-    return <LeadEmployeeReportPage />;
-  }
-
-  return <LegacyReportsPage />;
+  // Brand manager & employee → giao diện Lead & Khủng hoảng
+  return <DualOperationsEmployeeReportPage />;
 }
 
 function LegacyReportsPage() {
   const { t, i18n } = useTranslation();
-  const { profile, loading: authLoading } = useAuth();
+  const { profile: realProfile, loading: authLoading } = useAuth();
+  const pathname = usePathname();
+  const isDemo = pathname?.startsWith("/demo") ?? false;
+  const profile = realProfile || (isDemo ? DEMO_PROFILE : null);
   const scopedBrandKey = getScopedBrandKey(profile);
   const [activeTab, setActiveTab] = useState<"periodic" | "custom" | "archive">(
     "periodic",
@@ -1234,119 +1236,47 @@ function LegacyReportsPage() {
       }
     } else {
       setArchivedReports([]);
-      return;
-      const initialMocks = [
-        {
-          id: "RPT-ARC-001",
-          title: "Báo cáo Chiến dịch Tết 2026 - Laha Coffee",
-          dateStr: "15/02/2026",
-          brand: "Laha Coffee",
-          startDate: "2026-02-01",
-          endDate: "2026-02-15",
-          filtersSummary: "7 nguồn, 11 chủ đề, 3 sắc thái",
-          size: "2.4 MB",
-          mentionsCount: 3,
-          insights:
-            "Báo cáo lưu trữ tổng hợp chiến dịch Tết Nguyên Đán 2026. Laha Coffee ghi nhận tương tác thảo luận tích cực tăng mạnh 28% so với cùng kỳ năm ngoái. Khách hàng thể hiện sự hài lòng rất lớn đối với chất lượng nước và các chương trình khuyến mãi lì xì đầu năm. Tuy nhiên, ghi nhận một vài phản hồi tiêu cực về tình trạng xếp hàng chờ đợi tại các chi nhánh trung tâm trong giờ cao điểm.",
-          stats: { total: 3, positive: 2, negative: 0, neutral: 1, score: 67 },
-          mentions: [
-            {
-              id: "m1",
-              brand: "Laha Coffee",
-              source: "Facebook",
-              content:
-                "Cà phê muối Laha ngon ghê, đợt Tết này có lì xì nữa thích quá!",
-              sentiment: "positive",
-              topic: "quality",
-              posted_at: "2026-02-10",
-            },
-            {
-              id: "m2",
-              brand: "Laha Coffee",
-              source: "TikTok",
-              content:
-                "Quán Laha Coffee chi nhánh Quận 1 đông quá trời đông, chờ 20 phút mới có nước :( nhưng nước ngon nên bỏ qua",
-              sentiment: "neutral",
-              topic: "service",
-              posted_at: "2026-02-12",
-            },
-            {
-              id: "m3",
-              brand: "Laha Coffee",
-              source: "Facebook",
-              content: "Laha phục vụ ngày Tết rất chu đáo và thân thiện nha.",
-              sentiment: "positive",
-              topic: "service",
-              posted_at: "2026-02-14",
-            },
-          ],
-        },
-        {
-          id: "RPT-ARC-002",
-          title: "Báo cáo So sánh Quý 1 - Highlands vs Mixue",
-          dateStr: "31/03/2026",
-          brand: "Mixue",
-          startDate: "2026-03-15",
-          endDate: "2026-03-31",
-          filtersSummary: "7 nguồn, 11 chủ đề, 3 sắc thái",
-          size: "4.1 MB",
-          mentionsCount: 3,
-          insights:
-            "Phân tích cạnh tranh trong Q1 giữa đối thủ trực tiếp Mixue và Highlands. Mixue dẫn đầu về lượng thảo luận giá bán, đặc biệt là dòng kem 10k và trà sữa giá rẻ. Phản hồi tích cực chiếm 55% nhờ giá cả phù hợp túi tiền học sinh sinh viên. Mặc dù vậy, có một số ý kiến phàn nàn về không gian quán nhỏ hẹp và dịch vụ vệ sinh tại một số cửa hàng nhượng quyền.",
-          stats: { total: 3, positive: 2, negative: 1, neutral: 0, score: 67 },
-          mentions: [
-            {
-              id: "m4",
-              brand: "Mixue",
-              source: "Facebook",
-              content:
-                "Kem Mixue 10k siêu ngon siêu rẻ ăn hoài không chán luôn á!",
-              sentiment: "positive",
-              topic: "price",
-              posted_at: "2026-03-20",
-            },
-            {
-              id: "m5",
-              brand: "Mixue",
-              source: "Threads",
-              content:
-                "Trà sữa Mixue bình dân, chất lượng tạm ổn so với giá tiền.",
-              sentiment: "positive",
-              topic: "price",
-              posted_at: "2026-03-25",
-            },
-            {
-              id: "m6",
-              brand: "Google Maps",
-              content:
-                "Không gian quán chật chội, bàn ghế dơ không ai lau dọn.",
-              sentiment: "negative",
-              topic: "service",
-              posted_at: "2026-03-29",
-            },
-          ],
-        },
-      ];
-      setArchivedReports(initialMocks);
-      localStorage.setItem(
-        "insightflow_archived_reports",
-        JSON.stringify(initialMocks),
-      );
     }
   }, []);
 
   useEffect(() => {
     async function fetchData() {
       try {
-        if (authLoading) return;
+        if (authLoading && !isDemo) return;
         setLoading(true);
+        const brandOrder = ["Highlands Coffee", "Starbucks", "Mixue"];
+        const brandSet = new Set<string>(brandOrder);
+
+        if (isDemo) {
+          const demoData: Mention[] = (DEMO_MOCK_MENTIONS || []).map((mention: any) => ({
+            id: mention.id,
+            parent_id: mention.parent_id,
+            brand: formatBrandName(mention.workspace_id || mention.brand),
+            source: normalizeReportPlatformKey(mention.platform || mention.source),
+            platform: normalizeReportPlatformKey(mention.platform || mention.source),
+            content: mention.content || mention.text || "",
+            post_content: mention.post_content,
+            comment_content: mention.comment_content,
+            original_content: mention.original_content,
+            author: mention.author,
+            url: mention.url,
+            content_type: mapContentType(mention.content_type),
+            sentiment: mention.sentiment || "neutral",
+            topic: normalizeTopicName(mention.topic),
+            posted_at: parsePostedAtRaw(mention.posted_at || mention.created_at),
+          }));
+          demoData.forEach((m) => brandSet.add(m.brand));
+          setMentions(demoData);
+          setBrands(Array.from(brandSet));
+          setLoading(false);
+          return;
+        }
+
         const rawData = await DashboardService.fetchRawData({
           brandKey: scopedBrandKey || undefined,
           maxMentions: scopedBrandKey ? 1000 : 30000,
         });
         const supabaseMentions = filterByBusinessPolicy(rawData.mentions, profile, "view_mentions");
-        const brandOrder = ["Highlands Coffee", "Starbucks", "Mixue"];
-        const brandSet = new Set<string>(brandOrder);
         const data: Mention[] = supabaseMentions
           .map((mention) => ({
             id: mention.id,
@@ -1396,7 +1326,7 @@ function LegacyReportsPage() {
       }
     }
     fetchData();
-  }, [authLoading, profile, scopedBrandKey]);
+  }, [authLoading, isDemo, profile, scopedBrandKey]);
 
   // Generate Reports List directly from required date range
   const reportsList = useMemo(() => {

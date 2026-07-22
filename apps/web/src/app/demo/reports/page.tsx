@@ -1,9 +1,7 @@
 "use client";
 
-import dynamic from "next/dynamic";
+import { DemoReportsPage } from "@/components/demo/DemoReportsPage";
 
-const ReportsPage = dynamic(() => import("@/app/reports/page"), { ssr: false });
-
-export default function DemoReportsPage() {
-  return <ReportsPage />;
+export default function DemoReportsRoute() {
+  return <DemoReportsPage />;
 }

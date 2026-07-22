@@ -22,6 +22,7 @@ import type {
 import { ExcelDocumentPreviewModal } from "@/components/reports/ExcelDocumentPreviewModal";
 import { useAlertStore } from "@/stores/alert.store";
 import { useCrisisEmployeeReport } from "./useCrisisMonitoringReport";
+import { DEMO_PROFILE } from "@/lib/demo-mock-data";
 import {
   AlertTriangle,
   ArrowRight,
@@ -230,7 +231,9 @@ function DistributionSummary({ title, rows }: { title: string; rows: CrisisRepor
 }
 
 export function CrisisEmployeeReportPage() {
-  const { profile } = useAuth();
+  const { profile: realProfile } = useAuth();
+  const isDemo = typeof window !== "undefined" && window.location.pathname.startsWith("/demo");
+  const profile = realProfile || (isDemo ? DEMO_PROFILE : null);
   const [reportFilters, setReportFilters] = useState<CrisisReportFilters>(DEFAULT_EMPLOYEE_FILTERS);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showExcelPreview, setShowExcelPreview] = useState(false);

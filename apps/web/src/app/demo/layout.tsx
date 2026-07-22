@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import { DemoSidebar } from "@/components/demo/DemoSidebar";
 import { useTheme } from "@/contexts/ThemeContext";
 
@@ -8,6 +9,9 @@ export default function DemoLayout({ children }: { children: React.ReactNode }) 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === "dark";
+  const pathname = usePathname();
+  // Trang reports có layout riêng với padding/max-width, không cần bọc thêm
+  const isFullWidthPage = pathname === "/demo/reports";
 
   return (
     <div className="flex h-screen w-full overflow-hidden" style={{ backgroundColor: "var(--color-bg-primary)" }}>
@@ -58,11 +62,16 @@ export default function DemoLayout({ children }: { children: React.ReactNode }) 
         </div>
 
         <main className="flex-1 overflow-y-auto" style={{ backgroundColor: "var(--color-bg-primary)" }}>
-          <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto">
-            {children}
-          </div>
+          {isFullWidthPage ? (
+            children
+          ) : (
+            <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto">
+              {children}
+            </div>
+          )}
         </main>
       </div>
     </div>
   );
 }
+

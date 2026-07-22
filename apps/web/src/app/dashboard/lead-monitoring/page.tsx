@@ -10,9 +10,12 @@ import { useDashboard } from "@/hooks/useDashboardData";
 import { useAuth } from "@/hooks/useAuth";
 import { normalizeBrandName } from "@/lib/services/dashboard";
 import { useDashboardStore } from "@/stores/dashboard.store";
+import { DEMO_PROFILE } from "@/lib/demo-mock-data";
 
 export default function DashboardLeadMonitoringPage() {
-  const { profile } = useAuth();
+  const { profile: realProfile } = useAuth();
+  const isDemo = typeof window !== "undefined" && window.location.pathname.startsWith("/demo");
+  const profile = realProfile || (isDemo ? DEMO_PROFILE : null);
   const { workspaces, filters, leads, isLoading, error, setFilters } = useDashboardStore();
 
   useDashboard({

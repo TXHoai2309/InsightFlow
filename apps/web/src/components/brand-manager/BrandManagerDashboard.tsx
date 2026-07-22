@@ -17,6 +17,7 @@ import { useTranslation } from "react-i18next";
 
 import { BMFiltersBar } from "./BMFiltersBar";
 import { BMHeroRow } from "./BMHeroRow";
+import { DEMO_MOCK_ALERTS, DEMO_MOCK_LEADS, DEMO_MOCK_MENTIONS, DEMO_MOCK_WORKSPACES } from "@/lib/demo-mock-data";
 import { BMKpiCards } from "./BMKpiCards";
 import { BMAlertBanner } from "./BMAlertBanner";
 import { BMSentimentChart } from "./BMSentimentChart";
@@ -34,16 +35,19 @@ export function BrandManagerDashboard({
   initialWorkspaces = [],
 }: BrandManagerDashboardProps) {
   const {
-    mentions,
+    mentions: rawMentions,
     alerts,
     leads,
-    workspaces,
+    workspaces: rawWorkspaces,
     filters,
     isLoading,
     error,
     setWorkspaces,
     setFilters,
   } = useDashboardStore();
+  const isDemo = typeof window !== "undefined" && window.location.pathname.startsWith("/demo");
+  const mentions = isDemo && rawMentions.length === 0 ? DEMO_MOCK_MENTIONS : rawMentions;
+  const workspaces = isDemo && rawWorkspaces.length === 0 ? DEMO_MOCK_WORKSPACES : rawWorkspaces;
   const crisisAlerts = useAlertStore((state) => state.rawAlerts);
 
   const { t } = useTranslation();
@@ -214,10 +218,12 @@ export function BrandManagerDashboard({
   }, [alerts, filters.workspace_id, checkTimeFilter]);
 
   const filteredLeads = useMemo(
-    () => filterLeadsForDashboard(leads, filters),
-    [leads, filters.workspace_id, filters.platform, filters.time_range],
+    () => {
+      const baseLeads = isDemo && leads.length === 0 ? DEMO_MOCK_LEADS : leads;
+      return filterLeadsForDashboard(baseLeads, isDemo ? { ...filters, workspace_id: "all" } : filters);
+    },
+    [isDemo, leads, filters],
   );
-
 
   const stats = useMemo(
     () => DashboardService.calculateStats(currentMentions, filteredAlerts, filteredLeads),
@@ -258,11 +264,9 @@ export function BrandManagerDashboard({
   /* ── Derived alerts from real mentions when DB alerts is empty ── */
   const derivedAlerts = useMemo(() => {
     if (filteredAlerts.length > 0) return filteredAlerts;
-    // Tạo alerts từ mentions tiêu cực nhóm theo topic
     const negMentions = currentMentions.filter((m) => m.sentiment === "negative");
     if (negMentions.length === 0) return [];
 
-    // Group by topic
     const topicCounts: Record<string, { count: number; mentions: typeof negMentions }> = {};
     negMentions.forEach((m) => {
       const topic = m.topic || "other";
@@ -308,18 +312,24 @@ export function BrandManagerDashboard({
           status: "new" as const,
         };
       });
-  }, [filteredAlerts, currentMentions]);
+  }, [filteredAlerts, currentMentions, t]);
 
   const highAlerts = derivedAlerts.filter(
     (a) => a.severity === "critical" || a.severity === "high"
   );
+
   const crisisAlertKpi = useMemo(() => {
+    const baseAlerts = isDemo && crisisAlerts.length === 0 ? DEMO_MOCK_ALERTS : crisisAlerts;
+    if (isDemo) {
+      const high = baseAlerts.filter((a) => ["critical", "high", "urgent"].includes(String(a.severity || "").toLowerCase())).length;
+      return { total: baseAlerts.length, high };
+    }
     const targetBrand =
       filters.workspace_id !== "all"
         ? normalizeBrandName(filters.workspace_id)
         : null;
 
-    const scopedAlerts = crisisAlerts.filter((alert) => {
+    const scopedAlerts = baseAlerts.filter((alert) => {
       if (targetBrand && normalizeBrandName(alert.brand || "") !== targetBrand) return false;
       if (filters.platform !== "all" && alert.source !== filters.platform) return false;
       return true;
@@ -330,7 +340,7 @@ export function BrandManagerDashboard({
     }).length;
 
     return { total: scopedAlerts.length, high };
-  }, [crisisAlerts, filters.workspace_id, filters.platform]);
+  }, [isDemo, crisisAlerts, filters.workspace_id, filters.platform]);
   const unprocessedContacts = filteredLeads.filter((l) => l.status === "new").length;
 
   const hasData = mentions.length > 0;

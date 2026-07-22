@@ -43,6 +43,7 @@ import {
   writeLeadWorkbenchFilters,
   type LeadWorkbenchFilters,
 } from "@/lib/lead-filters";
+import { DEMO_PROFILE, DEMO_MOCK_LEADS } from "@/lib/demo-mock-data";
 
 const LEADS_PAGE_SIZE = 5;
 const APP_SCROLL_ROOT_SELECTOR = '[data-app-scroll-root="true"]';
@@ -62,7 +63,9 @@ function getLeadListScrollTop() {
 }
 
 export default function LeadsPage() {
-  const { profile, loading: authLoading } = useAuth();
+  const { profile: realProfile, loading: authLoading } = useAuth();
+  const isDemo = typeof window !== "undefined" && window.location.pathname.startsWith("/demo");
+  const profile = realProfile || (isDemo ? DEMO_PROFILE : null);
   const [staffList, setStaffList] = useState<any[]>([]);
   const canLoadStaffList = canPerformAction(profile, "manage_staff");
 
@@ -133,11 +136,12 @@ export default function LeadsPage() {
 
   const {
     workspaces,
-    leads,
+    leads: storeLeads,
     mentions,
     isLoading,
     error,
   } = useDashboardStore();
+  const leads = useMemo(() => (isDemo ? DEMO_MOCK_LEADS : storeLeads), [isDemo, storeLeads]);
 
   useEffect(() => {
     if (!profile || profile.role === "admin" || workspaces.length === 0) return;
@@ -334,8 +338,8 @@ export default function LeadsPage() {
   }, [activeView, currentPage, leadFilters, leads, selectedLeadId, sortMode]);
 
   const visibleBaseLeads = useMemo(
-    () => baseLeads.filter((lead) => canLeadBeVisibleToUser(lead, profile)),
-    [baseLeads, profile],
+    () => (isDemo ? DEMO_MOCK_LEADS : baseLeads.filter((lead) => canLeadBeVisibleToUser(lead, profile))),
+    [baseLeads, isDemo, profile],
   );
 
   const sortedLeads = useMemo(
@@ -635,7 +639,7 @@ export default function LeadsPage() {
     setSelectedLeadId(nextLead?.id || null);
   };
 
-  if (!authLoading && !canViewLeads) {
+  if (!authLoading && !canViewLeads && !isDemo) {
     return (
       <div className="p-4 md:p-6">
         <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-8">
@@ -650,7 +654,7 @@ export default function LeadsPage() {
     );
   }
 
-  if (!authLoading && !hasBrandScope) {
+  if (!authLoading && !hasBrandScope && !isDemo) {
     return (
       <div className="p-4 md:p-6">
         <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-8">
