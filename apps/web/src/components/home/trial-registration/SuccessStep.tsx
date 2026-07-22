@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { ArrowRight, CheckCircle2, Clock, Mail, Hash, Calendar, MessageSquareText } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, CheckCircle2, Clock, Mail, Hash, Calendar, MessageSquareText, MonitorPlay, ShieldCheck } from "lucide-react";
 import { motion } from "framer-motion";
 
 interface SuccessStepProps {
@@ -136,40 +137,67 @@ export function SuccessStep({
         </div>
       </div>
 
-      {!consultationCompleted && (
-        <div className="relative z-10 mt-8 flex flex-col md:flex-row items-center gap-4 w-full">
-          {onFillConsultation && (
-            <div className="flex-1 flex flex-col items-center rounded-[20px] border border-[#C7D2FE] bg-[#EEF2FF] p-5 text-center sm:flex-row sm:justify-between sm:text-left w-full h-full">
-              <div>
-                <p className="flex items-center justify-center gap-2 text-[15px] font-extrabold text-[#3730A3] sm:justify-start">
-                  <MessageSquareText className="h-5 w-5" /> Cần tư vấn thêm?
-                </p>
-                <p className="mt-1 text-[13px] leading-5 text-[#4F46E5]">Bổ sung yêu cầu để nhận tư vấn sát nhất.</p>
-              </div>
-              <button
-                type="button"
-                onClick={onFillConsultation}
-                className="mt-4 inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-[12px] bg-[#6D5EF6] px-5 text-[14px] font-bold text-white shadow-[0_8px_16px_rgba(109,94,246,0.2)] transition hover:-translate-y-0.5 hover:bg-[#5B4DF5] sm:mt-0 sm:ml-4"
-              >
-                Gửi Form <ArrowRight className="h-4 w-4" />
-              </button>
-            </div>
-          )}
-
-          <div className="flex-1 flex flex-col items-center rounded-[20px] border border-[#A7F3D0] bg-[#ECFDF5] p-5 text-center sm:flex-row sm:justify-between sm:text-left w-full h-full">
+      <div className="relative z-10 mt-8 overflow-hidden rounded-[24px] border border-violet-200 bg-gradient-to-r from-[#F5F3FF] via-white to-[#EEF2FF] p-6 shadow-sm dark:border-violet-400/20 dark:from-violet-950/30 dark:via-[#1C1C2A] dark:to-indigo-950/30 md:p-8">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-start gap-4">
+            <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-lg shadow-violet-500/20">
+              <MonitorPlay className="h-7 w-7" />
+            </span>
             <div>
-              <p className="flex items-center justify-center gap-2 text-[15px] font-extrabold text-[#065F46] sm:justify-start">
-                <span className="w-5 h-5 flex items-center justify-center bg-[#10B981] text-white rounded-full text-[12px]">🚀</span> Khám phá hệ thống
+              <p className="flex flex-wrap items-center gap-2 text-[18px] font-extrabold text-[#0F172A] dark:text-white">
+                Khám phá InsightFlow trong lúc chờ
+                <span className="rounded-full bg-violet-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-violet-700 dark:bg-violet-400/15 dark:text-violet-300">Demo tương tác</span>
               </p>
-              <p className="mt-1 text-[13px] leading-5 text-[#047857]">Trải nghiệm Dashboard với dữ liệu mẫu.</p>
+              <p className="mt-2 max-w-2xl text-[14px] leading-6 text-[#64748B] dark:text-gray-400">
+                Xem tổng quan Dashboard, cảnh báo khủng hoảng, khách hàng tiềm năng và báo cáo với dữ liệu minh họa an toàn.
+              </p>
+              <p className="mt-2 flex items-center gap-1.5 text-[12px] font-bold text-emerald-700 dark:text-emerald-400"><ShieldCheck className="h-4 w-4" /> Không sử dụng dữ liệu khách hàng thật</p>
             </div>
-            <a
-              href="/demo"
-              className="mt-4 inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-[12px] bg-[#10B981] px-5 text-[14px] font-bold text-white shadow-[0_8px_16px_rgba(16,185,129,0.2)] transition hover:-translate-y-0.5 hover:bg-[#059669] sm:mt-0 sm:ml-4 whitespace-nowrap"
-            >
-              Xem Bản Demo <ArrowRight className="h-4 w-4" />
-            </a>
           </div>
+          <Link
+            href="/demo"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex h-[52px] shrink-0 items-center justify-center gap-2 rounded-[14px] bg-gradient-to-r from-[#6D5EF6] to-[#4F46E5] px-7 py-3.5 text-[14px] font-extrabold text-white shadow-[0_12px_28px_rgba(109,94,246,0.28)] transition hover:-translate-y-0.5 hover:shadow-[0_16px_34px_rgba(109,94,246,0.34)]"
+          >
+            Xem bản demo ngay <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+      </div>
+
+      {!consultationCompleted && onFillConsultation && (
+        <div className="relative z-10 mt-8 flex flex-col items-center rounded-[20px] border border-[#C7D2FE] bg-[#EEF2FF] p-5 text-center sm:flex-row sm:justify-between sm:text-left">
+          <div>
+            <p className="flex items-center justify-center gap-2 text-[15px] font-extrabold text-[#3730A3] sm:justify-start">
+              <MessageSquareText className="h-5 w-5" /> Cần tư vấn thêm?
+            </p>
+            <p className="mt-1 text-[13px] leading-5 text-[#4F46E5]">Bổ sung yêu cầu để nhận tư vấn sát nhất.</p>
+          </div>
+          <button
+            type="button"
+            onClick={onFillConsultation}
+            className="mt-4 inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-[12px] bg-[#6D5EF6] px-5 text-[14px] font-bold text-white shadow-[0_8px_16px_rgba(109,94,246,0.2)] transition hover:-translate-y-0.5 hover:bg-[#5B4DF5] sm:ml-4 sm:mt-0"
+          >
+            Gửi Form <ArrowRight className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      {onRestart && (
+        <div className="relative z-10 mt-8 flex flex-col items-center rounded-[20px] border border-[#C7D2FE] bg-[#EEF2FF] p-5 text-center sm:flex-row sm:justify-between sm:text-left">
+          <div>
+            <p className="flex items-center justify-center gap-2 text-[15px] font-extrabold text-[#3730A3] sm:justify-start">
+              <MessageSquareText className="h-5 w-5" /> Bạn muốn gửi thêm một yêu cầu?
+            </p>
+            <p className="mt-1 text-[13px] leading-5 text-[#4F46E5]">Quay lại form ban đầu để bắt đầu một đăng ký dùng thử mới.</p>
+          </div>
+          <button
+            type="button"
+            onClick={onRestart}
+            className="mt-4 inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-[14px] bg-[#6D5EF6] px-6 text-[14px] font-bold text-white shadow-[0_10px_22px_rgba(109,94,246,0.22)] transition hover:-translate-y-0.5 hover:bg-[#5B4DF5] sm:mt-0 sm:ml-5"
+          >
+            Điền form đăng ký mới <ArrowRight className="h-4 w-4" />
+          </button>
         </div>
       )}
     </motion.div>

@@ -127,7 +127,7 @@ export default function FinalCTASection() {
             ) : (
               <Link href="/login" className="cta-btn-primary justify-center">{t("home.cta.tryDashboardBtn")}</Link>
             )}
-            <button className="cta-btn-ghost" onClick={() => alert("Watch Demo triggered")}>{t("home.cta.demoBtn")}</button>
+            <Link href="/demo" className="cta-btn-ghost justify-center">{t("home.cta.demoBtn")}</Link>
           </div>
 
           {/* Trust */}

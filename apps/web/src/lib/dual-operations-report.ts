@@ -12,6 +12,19 @@ export interface DualOperationsKpi {
   leadConversionRate: number;
   crisisResolvedRate: number;
   slaOnTimeRate: number;
+  workflow: {
+    unassigned: DualOperationsKpiBreakdown;
+    inProgress: DualOperationsKpiBreakdown;
+    completed: DualOperationsKpiBreakdown;
+    completionRate: DualOperationsKpiBreakdown;
+    overdueOpen: DualOperationsKpiBreakdown;
+  };
+}
+
+export interface DualOperationsKpiBreakdown {
+  total: number;
+  lead: number;
+  crisis: number;
 }
 
 export interface DualOperationsBucket {
@@ -71,8 +84,56 @@ function averagePercent(values: Array<{ rate: number; total: number }>) {
   return Math.round(weighted / total);
 }
 
+function normalizeLabel(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
 function isBadSla(status: string) {
-  return status === "Qua han" || status === "Tre SLA";
+  const normalized = normalizeLabel(status);
+  return normalized === "qua han" || normalized === "tre sla";
+}
+
+function isOpenOverdueSla(status: string) {
+  return normalizeLabel(status) === "qua han";
+}
+
+function getLeadWorkflowStatus(row: LeadReportDetailRow) {
+  if (row.workflowStatus) return row.workflowStatus;
+  if (row.status === "completed") return "completed";
+  if (row.status === "skipped") return "skipped";
+  const owner = row.ownerName
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+  return owner === "chua phan cong" ? "unassigned" : "processing";
+}
+
+function getCrisisWorkflowStatus(row: CrisisReportDetailRow) {
+  if (row.workflowStatus) return row.workflowStatus;
+  const status = row.status.trim().toLowerCase();
+  if (["resolved", "completed", "monitoring", "responded"].includes(status)) return "resolved";
+  if (["skipped", "ignored", "dismissed"].includes(status)) return "skipped";
+  if (["contact_failed", "contact_unsuccessful"].includes(status)) return "contact_failed";
+  if ([
+    "resolving",
+    "processing",
+    "acknowledged",
+    "in_progress",
+    "pending_approval",
+    "waiting_approval",
+    "awaiting_approval",
+    "contact_waiting",
+  ].includes(status)) return "processing";
+  return "pending";
+}
+
+function toBreakdown(lead: number, crisis: number): DualOperationsKpiBreakdown {
+  return { total: lead + crisis, lead, crisis };
 }
 
 function mapLeadPriorityRow(row: LeadReportDetailRow): DualOperationsPriorityRow {
@@ -141,10 +202,10 @@ function mapCrisisPriorityRow(row: CrisisReportDetailRow): DualOperationsPriorit
 
 function buildPriorityRows(lead: LeadReportData, crisis: CrisisReportData) {
   const leadRows = lead.detailRows
-    .filter((row) => row.status !== "completed" && row.status !== "skipped")
+    .filter((row) => !["completed", "skipped"].includes(getLeadWorkflowStatus(row)))
     .map(mapLeadPriorityRow);
   const crisisRows = crisis.detailRows
-    .filter((row) => row.status !== "resolved")
+    .filter((row) => !["resolved", "skipped"].includes(getCrisisWorkflowStatus(row)))
     .map(mapCrisisPriorityRow);
 
   const urgencyRank = { urgent: 3, attention: 2, normal: 1 } as const;
@@ -161,12 +222,18 @@ function buildAttentionItems(
   lead: LeadReportData,
   crisis: CrisisReportData,
 ): DualOperationsAttentionItem[] {
+  const leadOverdueOpen = lead.detailRows.filter(
+    (row) => !["completed", "skipped"].includes(getLeadWorkflowStatus(row)) && isOpenOverdueSla(row.slaStatus),
+  ).length;
+  const crisisOverdueOpen = crisis.detailRows.filter(
+    (row) => !["resolved", "skipped"].includes(getCrisisWorkflowStatus(row)) && isOpenOverdueSla(row.slaStatus),
+  ).length;
   const items: DualOperationsAttentionItem[] = [
     {
       key: "crisis_overdue",
       title: "Cảnh báo quá hạn",
       description: "Case khủng hoảng cần được xử lý hoặc rà soát SLA ngay.",
-      count: crisis.kpis.overdue,
+      count: crisisOverdueOpen,
       href: "/alerts?sla=overdue",
       tone: "danger",
     },
@@ -174,7 +241,7 @@ function buildAttentionItems(
       key: "lead_overdue",
       title: "Lead trễ SLA",
       description: "Khách hàng tiềm năng có nguy cơ mất cơ hội chuyển đổi.",
-      count: lead.kpis.slaBreached,
+      count: leadOverdueOpen,
       href: "/leads?sla=overdue",
       tone: "warn",
     },
@@ -216,7 +283,7 @@ function buildAiSummary(report: {
     parts.push(`Co ${report.kpis.priorityTasks} viec uu tien cao, trong do can xem truoc cac dong dau danh sach uu tien.`);
   }
   if (report.kpis.overdueTasks > 0) {
-    parts.push(`${report.kpis.overdueTasks} viec dang qua han hoac tre SLA, nen xu ly truoc khi mo rong sang viec moi.`);
+    parts.push(`${report.kpis.overdueTasks} viec con mo da qua han SLA, nen xu ly truoc khi mo rong sang viec moi.`);
   }
   if (report.lead.kpis.needResult > 0) {
     parts.push(`${report.lead.kpis.needResult} lead da mo lien he nhung chua ghi ket qua.`);
@@ -234,14 +301,14 @@ function buildRecommendations(
   kpis: DualOperationsKpi,
 ) {
   const recommendations: string[] = [];
-  if (crisis.kpis.overdue > 0) {
+  if (kpis.workflow.overdueOpen.crisis > 0) {
     recommendations.push(
-      `Ưu tiên xử lý ${crisis.kpis.overdue} cảnh báo quá hạn trước khi nhận thêm case mới.`,
+      `Ưu tiên xử lý ${kpis.workflow.overdueOpen.crisis} cảnh báo còn mở đã quá hạn trước khi nhận thêm case mới.`,
     );
   }
-  if (lead.kpis.slaBreached > 0) {
+  if (kpis.workflow.overdueOpen.lead > 0) {
     recommendations.push(
-      `Liên hệ lại ${lead.kpis.slaBreached} Lead trễ SLA để giảm nguy cơ mất cơ hội.`,
+      `Liên hệ lại ${kpis.workflow.overdueOpen.lead} Lead còn mở đã quá hạn để giảm nguy cơ mất cơ hội.`,
     );
   }
   if (lead.kpis.needResult > 0) {
@@ -268,11 +335,41 @@ export function buildDualOperationsReportData(
   lead: LeadReportData,
   crisis: CrisisReportData,
 ): DualOperationsReportData {
-  const leadTotal = lead.kpis.total;
-  const crisisTotal = crisis.kpis.total;
+  const leadUnassigned = lead.detailRows.filter((row) => getLeadWorkflowStatus(row) === "unassigned").length;
+  const leadInProgress = lead.detailRows.filter((row) =>
+    ["processing", "follow_up"].includes(getLeadWorkflowStatus(row)),
+  ).length;
+  const leadCompleted = lead.detailRows.filter((row) => getLeadWorkflowStatus(row) === "completed").length;
+  const leadOverdueOpen = lead.detailRows.filter(
+    (row) => !["completed", "skipped"].includes(getLeadWorkflowStatus(row)) && isOpenOverdueSla(row.slaStatus),
+  ).length;
+
+  const crisisUnassigned = crisis.detailRows.filter((row) => getCrisisWorkflowStatus(row) === "pending").length;
+  const crisisInProgress = crisis.detailRows.filter((row) =>
+    ["processing", "contact_failed"].includes(getCrisisWorkflowStatus(row)),
+  ).length;
+  const crisisCompleted = crisis.detailRows.filter((row) => getCrisisWorkflowStatus(row) === "resolved").length;
+  const crisisOverdueOpen = crisis.detailRows.filter(
+    (row) => !["resolved", "skipped"].includes(getCrisisWorkflowStatus(row)) && isOpenOverdueSla(row.slaStatus),
+  ).length;
+
+  const workflow = {
+    unassigned: toBreakdown(leadUnassigned, crisisUnassigned),
+    inProgress: toBreakdown(leadInProgress, crisisInProgress),
+    completed: toBreakdown(leadCompleted, crisisCompleted),
+    completionRate: toBreakdown(0, 0),
+    overdueOpen: toBreakdown(leadOverdueOpen, crisisOverdueOpen),
+  };
+  const leadTotal = lead.detailRows.filter((row) => getLeadWorkflowStatus(row) !== "skipped").length;
+  const crisisTotal = crisis.detailRows.filter((row) => getCrisisWorkflowStatus(row) !== "skipped").length;
   const totalTasks = leadTotal + crisisTotal;
-  const completedTasks = lead.kpis.converted + lead.kpis.skipped + crisis.kpis.resolved;
-  const overdueTasks = lead.kpis.slaBreached + crisis.kpis.overdue;
+  workflow.completionRate = {
+    total: percentage(workflow.completed.total, totalTasks),
+    lead: percentage(leadCompleted, leadTotal),
+    crisis: percentage(crisisCompleted, crisisTotal),
+  };
+  const completedTasks = workflow.completed.total;
+  const overdueTasks = workflow.overdueOpen.total;
   const priorityTasks = lead.kpis.hot + crisis.kpis.critical + crisis.kpis.high;
   const priorityRows = buildPriorityRows(lead, crisis);
 
@@ -290,6 +387,7 @@ export function buildDualOperationsReportData(
       { rate: lead.kpis.slaOnTimeRate, total: leadTotal },
       { rate: crisis.kpis.slaOnTimeRate, total: crisisTotal },
     ]),
+    workflow,
   };
 
   return {

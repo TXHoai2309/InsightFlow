@@ -460,7 +460,7 @@ export default function BrandLandingPage() {
                   Đăng ký tư vấn dùng thử <ArrowRight className="h-5 w-5 shrink-0" />
                 </Link>
               )}
-              <Link href="#workflow" className="inline-flex h-[52px] px-8 items-center justify-center gap-2 rounded-[24px] bg-white/80 dark:bg-white/10 border border-[#ECE9FF] dark:border-white/20 text-[16px] font-bold text-[#1B1B4A] dark:text-white whitespace-nowrap backdrop-blur-md shadow-[0_18px_50px_rgba(109,94,246,0.04)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.3)] transition-all duration-300 hover:-translate-y-1 hover:border-[#6D5EF6]/30 dark:hover:border-[#6D5EF6]/50 dark:hover:bg-white/20">
+              <Link href="/demo" className="inline-flex h-[52px] px-8 items-center justify-center gap-2 rounded-[24px] bg-white/80 dark:bg-white/10 border border-[#ECE9FF] dark:border-white/20 text-[16px] font-bold text-[#1B1B4A] dark:text-white whitespace-nowrap backdrop-blur-md shadow-[0_18px_50px_rgba(109,94,246,0.04)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.3)] transition-all duration-300 hover:-translate-y-1 hover:border-[#6D5EF6]/30 dark:hover:border-[#6D5EF6]/50 dark:hover:bg-white/20">
                 Xem Demo <ChevronRight className="h-5 w-5 shrink-0" />
               </Link>
             </div>

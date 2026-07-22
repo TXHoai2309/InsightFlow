@@ -1,4 +1,5 @@
 import type { AlertData } from "@/stores/alert.store";
+import { isSkippedAlert } from "@/lib/alertWorkflow";
 
 export type CrisisReportTimeRange = "all" | "today" | "7d" | "30d" | "custom";
 export type CrisisReportSlaFilter = "all" | "in_sla" | "overdue" | "late" | "closed";
@@ -111,6 +112,7 @@ function getSlaDurationMinutes(alert: AlertData) {
 }
 
 function getCrisisSlaBucket(alert: AlertData, nowMs: number): CrisisReportSlaFilter {
+  if (isSkippedAlert(alert)) return "closed";
   const createdAt = toTime(alert.created_at);
   if (createdAt === null) return "in_sla";
   const due = createdAt + getSlaDurationMinutes(alert) * 60 * 1000;

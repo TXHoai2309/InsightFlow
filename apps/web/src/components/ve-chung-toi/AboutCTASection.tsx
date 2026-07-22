@@ -51,7 +51,8 @@ export default function AboutCTASection() {
             >
               {t("about.cta.start")}
             </Link>
-            <button 
+            <Link
+              href="/demo"
               className="bg-transparent border-2 px-8 py-4 rounded-xl text-[16px] md:text-[18px] font-bold text-white transition-all w-full sm:w-auto"
               style={{ borderColor: "rgba(255,255,255,0.5)" }}
               onMouseOver={(e) => {
@@ -62,7 +63,7 @@ export default function AboutCTASection() {
               }}
             >
               {t("about.cta.demo")}
-            </button>
+            </Link>
           </div>
         </div>
       </div>

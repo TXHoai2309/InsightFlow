@@ -19,6 +19,7 @@
   /* ── Backgrounds ─────────────────────────────────────────── */
   --color-bg-primary:        #f9f9ff;   /* Nền chính của trang */
   --color-bg-surface:        #ffffff;   /* Nền card, modal, sidebar */
+  --color-bg-modal:          #ffffff;   /* Nền đặc cho modal / onboarding */
   --color-bg-surface-raised: #f0f3ff;   /* Nền raised (hover, header search) */
   --color-bg-surface-high:   #e7eeff;   /* Nền elevated cao hơn */
   --color-bg-overlay:        #dee8ff;   /* Nền overlay / highlight */
@@ -82,6 +83,7 @@
   /* ── Backgrounds ─────────────────────────────────────────── */
   --color-bg-primary:        #0A0612;   /* Nền chính toàn hệ thống */
   --color-bg-surface:        rgba(255, 255, 255, 0.05);   /* Nền card / glassmorphism */
+  --color-bg-modal:          #17121f;   /* Nền đặc để modal không xuyên thấu */
   --color-bg-surface-raised: rgba(255, 255, 255, 0.08);   /* Nền raised (hover) */
   --color-bg-surface-high:   rgba(255, 255, 255, 0.12);   /* Nền elevated cao hơn */
   --color-bg-overlay:        rgba(255, 255, 255, 0.16);   /* Overlay / highlight */

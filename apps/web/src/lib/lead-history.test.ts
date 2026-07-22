@@ -65,3 +65,20 @@ test("keeps backfilled events explicitly marked as reconstructed data", () => {
   assert.equal(event.source, "backfill");
 });
 
+test("shows restore as a status transition in fallback history", () => {
+  const lead = makeLead({
+    status: "processing",
+    owner_id: "employee-1",
+    owner_name: "Nguyễn Lead",
+    last_action_type: "restore",
+    last_action_at: "2026-07-03T09:30:00.000Z",
+  });
+
+  const restoreEvent = buildLeadHistoryEvents(lead).find(
+    (event) => event.eventType === "status_changed",
+  );
+
+  assert.equal(restoreEvent?.kind, "status");
+  assert.equal(restoreEvent?.title, "Đã khôi phục để tiếp tục xử lý");
+  assert.equal(restoreEvent?.description, "Chuyển item về trạng thái Đang xử lý");
+});

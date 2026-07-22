@@ -110,7 +110,7 @@ export function SentimentDonut({
   return (
     <div className="bg-white dark:bg-[#1a1b1e] p-5 md:p-6 rounded-[16px] border border-[var(--color-border)] shadow-sm h-full flex flex-col">
       <h3 className="font-bold text-[15px] text-[#2A2B2F] dark:text-white mb-6">{t("dashboard.sentimentDonut.title", "Tỷ Lệ Sắc Thái")}</h3>
-      
+
       <div className="flex-1 flex flex-col sm:flex-row items-center justify-center gap-6 md:gap-8">
         <div className="relative w-[180px] h-[180px] flex-shrink-0">
           <canvas ref={canvasRef}></canvas>
@@ -124,7 +124,7 @@ export function SentimentDonut({
             </span>
           </div>
         </div>
-        
+
         <div className="flex flex-col gap-4">
           <div className="flex items-center gap-3">
             <div className="w-3 h-3 rounded-full bg-[#38A169]"></div>
@@ -149,7 +149,7 @@ export function SentimentDonut({
           </div>
         </div>
       </div>
-      
+
       <div className="mt-6 text-center">
         <a href="#" className="text-[13px] font-semibold text-[#6D5FFD] hover:underline flex items-center justify-center gap-1">
           {t("dashboard.sentimentDonut.viewDetail", "Xem chi tiết phân tích")} &rarr;

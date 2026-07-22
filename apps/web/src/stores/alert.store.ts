@@ -8,12 +8,22 @@ import { canPerformAction, type UserRoleProfile } from "@/lib/rbac";
 import { fetchSupabaseAlerts, updateSupabaseAlertLabel, supabaseRequest } from "@/lib/supabase";
 import { supabaseClient } from "@/lib/supabaseClient";
 import {
+  isCrisisClassificationLabel,
   normalizeClassificationLabel,
 } from "@/lib/label-change";
 import { calculateNegativityScore } from "@/lib/negativityScore";
 import type { Mention } from "@/types/dashboard";
-import { getPersistedAlertStatus } from "@/lib/alertWorkflow";
+import {
+  canRestoreAlert,
+  canSkipAlert,
+  getAlertWorkflowStatus,
+  getPersistedAlertStatus,
+  isResolvedAlert,
+  isTerminalAlert,
+} from "@/lib/alertWorkflow";
 import { canAlertBeVisibleToUser } from "@/lib/alert-visibility";
+import { isSameAlertRecord } from "@/lib/alertRecordIdentity";
+import { dummyMentions } from "@/lib/demoData";
 import { getCalendarPeriodStartMs, isWithinCalendarPeriod } from "@/lib/dashboard-display";
 
 function getResolverName(emailOrId: string | null | undefined): string {
@@ -50,6 +60,7 @@ export interface ResolutionAttempt {
   image_url?: string;
   resolved_by_email?: string;
   resolved_by_name?: string;
+  action_type?: "claim" | "result" | "skip" | "restore";
 }
 
 export interface InternalNote {
@@ -111,8 +122,13 @@ export interface AlertData {
   being_resolved_by?: string | null;
   being_resolved_at?: string | null;
   resolution_history?: ResolutionAttempt[];
+  resolved_by?: string | null;
   resolved_by_email?: string | null;
   resolved_by_name?: string | null;
+  skipped_at?: string | null;
+  skipped_by_uid?: string | null;
+  skipped_by_email?: string | null;
+  skipped_by_name?: string | null;
   post_content?: string;
   comment_content?: string;
   parent_id?: string | null;
@@ -121,6 +137,8 @@ export interface AlertData {
   post_id?: string;
   comment_id?: string;
   post_url?: string;
+  comment_url?: string;
+  source_url?: string;
   post_like_count?: number;
   post_comment_count?: number;
   post_share_count?: number;
@@ -203,8 +221,20 @@ interface AlertState {
       customer_response_result?: AlertData["customer_response_result"];
       customer_contact_history?: CustomerContactAttempt[];
       reset_customer_contact?: boolean;
+      opening_contact_session?: boolean;
+      action_type?: ResolutionAttempt["action_type"];
     },
     brandFallback?: string
+  ) => Promise<void>;
+  skipAlert: (
+    id: string,
+    profile: UserRoleProfile | null | undefined,
+    brandFallback?: string,
+  ) => Promise<void>;
+  restoreAlert: (
+    id: string,
+    profile: UserRoleProfile | null | undefined,
+    brandFallback?: string,
   ) => Promise<void>;
   fetchCorrectionRequests: (scopedBrandKey?: string | null, force?: boolean) => Promise<void>;
   createCorrectionRequest: (requestData: Omit<CorrectionRequest, "id" | "created_at" | "status">) => Promise<void>;
@@ -354,7 +384,7 @@ function mentionToAlertData(m: Mention): AlertData {
     status: resolveAlertStatusFromLabel(labelObj),
     resolved_at: labelObj.resolved_at,
     collectionName: "annotations",
-    url: m.url || "",
+    url: m.url || m.comment_url || m.post_url || m.source_url || "",
     reach: m.star_count || 0,
     likes: m.star_count || 0,
     comments: 0,
@@ -364,8 +394,13 @@ function mentionToAlertData(m: Mention): AlertData {
     being_resolved_by: labelObj.being_resolved_by || null,
     being_resolved_at: labelObj.being_resolved_at || null,
     resolution_history: labelObj.resolution_history || [],
+    resolved_by: labelObj.resolved_by || null,
     resolved_by_email: labelObj.resolved_by_email || null,
     resolved_by_name: labelObj.resolved_by_name || null,
+    skipped_at: labelObj.skipped_at || null,
+    skipped_by_uid: labelObj.skipped_by_uid || null,
+    skipped_by_email: labelObj.skipped_by_email || null,
+    skipped_by_name: labelObj.skipped_by_name || null,
     post_content: m.post_content,
     comment_content: m.comment_content,
     parent_id: m.parent_id,
@@ -373,7 +408,9 @@ function mentionToAlertData(m: Mention): AlertData {
     internal_notes: labelObj.internal_notes || [],
     post_id: m.post_id || m.parent_id || m.id,
     comment_id: m.comment_id || undefined,
-    post_url: m.url || "",
+    post_url: m.post_url || m.source_url || m.url || "",
+    comment_url: m.comment_url || (m.content_type !== "post" ? m.url : undefined),
+    source_url: m.source_url,
     post_like_count: m.star_count || 0,
     relevance: typeof labelObj.relevance === "boolean" ? labelObj.relevance : null,
     urgency: labelObj.urgency || "none",
@@ -396,13 +433,21 @@ function mentionToAlertData(m: Mention): AlertData {
   };
 }
 
-function isSameAlertRecord(alert: AlertData, id: string): boolean {
-  return (
-    alert.id === id ||
-    alert.source_id === id ||
-    alert.post_id === id ||
-    alert.comment_id === id
-  );
+export function buildDemoAlertData(): AlertData[] {
+  return dummyMentions
+    .filter((mention) => {
+      const labels = (mention.labels || {}) as Record<string, unknown>;
+      return (
+        mention.sentiment === "negative" ||
+        isCrisisClassificationLabel(labels, {
+          sentiment: mention.sentiment,
+          relevance: mention.labels?.relevance ?? null,
+          urgency: mention.labels?.urgency ?? "none",
+          intent: mention.labels?.intent ?? "none",
+        })
+      );
+    })
+    .map(mentionToAlertData);
 }
 
 function resolveAlertStatusFromLabel(labelObj: any): string {
@@ -417,7 +462,15 @@ function buildAlertsFromMentions(
     // Every negative mention is an actionable alert. Crisis classification is
     // a priority subset used only by Crisis Monitoring, not an admission gate
     // for the operational Alerts queue.
-    .filter((mention) => mention.sentiment === "negative")
+    .filter((mention) =>
+      mention.sentiment === "negative" ||
+      isCrisisClassificationLabel(mention.labels, {
+        sentiment: mention.sentiment,
+        relevance: mention.labels?.relevance ?? null,
+        urgency: mention.labels?.urgency ?? "none",
+        intent: mention.labels?.intent ?? "none",
+      }),
+    )
     .map(mentionToAlertData)
     .filter((alert) => {
       // Keep the complete crisis history in the store. Each screen owns its
@@ -446,6 +499,20 @@ function applyRealtimeAnnotationUpdate(
   const resolvedByEmail = row.resolved_by_email || labelObj.resolved_by_email || null;
   const resolvedByName = row.resolved_by_name || labelObj.resolved_by_name || null;
   const newStatus = row.status || row.resolution_status || resolveAlertStatusFromLabel(labelObj);
+  const getRealtimeValue = (key: string, currentValue: unknown) => {
+    if (Object.prototype.hasOwnProperty.call(row, key)) return row[key];
+    if (Object.prototype.hasOwnProperty.call(labelObj, key)) return labelObj[key];
+    return currentValue;
+  };
+
+  const realtimeEntityType = String(row.entity_type || labelObj.entity_type || "").trim().toLowerCase();
+  const realtimeEntityKey = String(row.entity_key || "").trim().toLowerCase();
+  const isCommentRealtimeRow =
+    Boolean(String(row.comment_id || "").trim()) ||
+    realtimeEntityType === "comment" ||
+    realtimeEntityType === "reply" ||
+    realtimeEntityKey.includes(":comment:") ||
+    realtimeEntityKey.includes(":reply:");
 
   const lookupIds = [
     row.id,
@@ -454,7 +521,9 @@ function applyRealtimeAnnotationUpdate(
     row.mention_id,
     row.source_id,
     row.comment_id,
-    row.post_id,
+    // A comment annotation carries its parent post_id as context, not as its
+    // workflow identity. Including it would update every sibling comment.
+    ...(isCommentRealtimeRow ? [] : [row.post_id]),
   ]
     .map((value) => String(value || "").trim())
     .filter(Boolean);
@@ -473,11 +542,16 @@ function applyRealtimeAnnotationUpdate(
       return {
         ...alert,
         status: newStatus || alert.status,
-        resolved_at: row.resolved_at || labelObj.resolved_at || alert.resolved_at,
-        being_resolved_by: beingResolvedBy,
-        being_resolved_at: beingResolvedAt,
-        resolved_by_email: resolvedByEmail,
-        resolved_by_name: resolvedByName,
+        resolved_at: getRealtimeValue("resolved_at", alert.resolved_at) || undefined,
+        being_resolved_by: getRealtimeValue("being_resolved_by", beingResolvedBy) || null,
+        being_resolved_at: getRealtimeValue("being_resolved_at", beingResolvedAt) || null,
+        resolved_by: getRealtimeValue("resolved_by", alert.resolved_by) || null,
+        resolved_by_email: getRealtimeValue("resolved_by_email", resolvedByEmail) || null,
+        resolved_by_name: getRealtimeValue("resolved_by_name", resolvedByName) || null,
+        skipped_at: getRealtimeValue("skipped_at", alert.skipped_at) || null,
+        skipped_by_uid: getRealtimeValue("skipped_by_uid", alert.skipped_by_uid) || null,
+        skipped_by_email: getRealtimeValue("skipped_by_email", alert.skipped_by_email) || null,
+        skipped_by_name: getRealtimeValue("skipped_by_name", alert.skipped_by_name) || null,
         resolution_history: Array.isArray(row.resolution_history || labelObj.resolution_history)
           ? (row.resolution_history || labelObj.resolution_history)
           : alert.resolution_history,
@@ -507,6 +581,10 @@ let activeRequestsUnsubscribe: (() => Promise<void>) | null = null;
 let activeRequestsScope: string | null = null;
 /** Holds the subscribed Supabase channel so we can reuse it for broadcasts */
 let activeRealtimeChannel: ReturnType<NonNullable<typeof supabaseClient>["channel"]> | null = null;
+let realtimeReloadTimer: ReturnType<typeof setTimeout> | null = null;
+// A slow request started before a claim/result mutation must not be allowed to
+// replace the newer optimistic or realtime state when it eventually resolves.
+let alertLoadGeneration = 0;
 const ALERT_REVIEW_WINDOW_DAYS = 30;
 // Realtime is the primary update path. Keep polling only as a safety net so a
 // transient channel failure does not turn every alert screen into a DB scan.
@@ -548,6 +626,26 @@ export const useAlertStore = create<AlertState>()(
     },
 
     fetchAlerts: async (scopedBrandKey = null, force = false) => {
+      // Demo must be completely deterministic and must never depend on the
+      // production cache/realtime pipeline. Build the same alert view model
+      // used by the real page directly from the in-memory demo mentions.
+      if (typeof window !== "undefined" && window.location.pathname.startsWith("/demo")) {
+        const demoAlerts = buildDemoAlertData();
+        const demoBrands = Array.from(
+          new Set(demoAlerts.map((alert) => alert.brand)),
+        ).sort();
+
+        set((state) => ({
+          rawAlerts: demoAlerts,
+          alerts: applyFilters(demoAlerts, state.filters),
+          brands: demoBrands,
+          isLoading: false,
+          error: null,
+          lastFetchedAt: Date.now(),
+        }));
+        return;
+      }
+
       const now = Date.now();
       const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
       const hasData = get().rawAlerts.length > 0;
@@ -569,10 +667,14 @@ export const useAlertStore = create<AlertState>()(
 
       set({ isLoading: true, error: null });
 
-      const loadAlerts = async () => {
+      const loadAlerts = async (forceRefresh = false) => {
+        const loadGeneration = ++alertLoadGeneration;
         try {
           const rawBrandKey = (scopedBrandKey === "global" || !scopedBrandKey) ? undefined : scopedBrandKey;
-          const rawData = await DashboardService.fetchRawData({ brandKey: rawBrandKey });
+          const rawData = await DashboardService.fetchRawData({
+            brandKey: rawBrandKey,
+            forceRefresh,
+          });
           const filtered = buildAlertsFromMentions(rawData.mentions, scopedBrandKey);
 
           const scopedBrands = Array.from(new Set(filtered.map((alert) => alert.brand))).sort();
@@ -596,6 +698,10 @@ export const useAlertStore = create<AlertState>()(
             return fetchedAlert;
           });
 
+          // A newer load or a local mutation started while this request was in
+          // flight. Its state is authoritative, so discard this late response.
+          if (loadGeneration !== alertLoadGeneration) return;
+
           set({
             rawAlerts: merged,
             alerts: applyFilters(merged, get().filters),
@@ -605,6 +711,7 @@ export const useAlertStore = create<AlertState>()(
             lastFetchedAt: Date.now(),
           });
         } catch (error) {
+          if (loadGeneration !== alertLoadGeneration) return;
           const message = error instanceof Error ? error.message : "Lỗi đồng bộ Supabase";
           set({ error: message, isLoading: false });
           console.error("[AlertStore] loadAlerts error:", message, error);
@@ -612,9 +719,15 @@ export const useAlertStore = create<AlertState>()(
       };
 
       try {
-        // fetchRawData shares a 30-minute promise cache with Dashboard, so this
-        // gets the complete dataset without starting another Supabase scan.
-        await loadAlerts();
+        // fetchRawData shares its promise cache with Dashboard. A forced
+        // refresh is still propagated so explicit reloads cannot reuse stale rows.
+        await loadAlerts(force);
+
+        // Demo pages use DashboardService's in-memory sample data only. Do not
+        // attach realtime listeners or polling to the production data source.
+        if (typeof window !== "undefined" && window.location.pathname.startsWith("/demo")) {
+          return;
+        }
 
         const cleanupFns: (() => void)[] = [];
 
@@ -634,6 +747,11 @@ export const useAlertStore = create<AlertState>()(
                 (payload: any) => {
                   console.log("[AlertStore] Realtime postgres_changes event:", payload);
                   applyRealtimeAnnotationUpdate(set, get, payload?.new);
+                  if (realtimeReloadTimer) clearTimeout(realtimeReloadTimer);
+                  realtimeReloadTimer = setTimeout(() => {
+                    void loadAlerts(true);
+                    realtimeReloadTimer = null;
+                  }, 250);
                 }
               )
               .on(
@@ -650,6 +768,11 @@ export const useAlertStore = create<AlertState>()(
                       being_resolved_at: payload.assignedAt,
                       status: "resolving",
                     });
+                    if (realtimeReloadTimer) clearTimeout(realtimeReloadTimer);
+                    realtimeReloadTimer = setTimeout(() => {
+                      void loadAlerts(true);
+                      realtimeReloadTimer = null;
+                    }, 250);
                   }
                 }
               )
@@ -675,9 +798,13 @@ export const useAlertStore = create<AlertState>()(
           }
         }
 
-        // ===== STRATEGY 2: Fallback polling (60 sec) =====
+        // ===== STRATEGY 2: Fallback polling =====
         const intervalId = setInterval(loadAlerts, ALERT_REFRESH_INTERVAL_MS);
         cleanupFns.push(() => clearInterval(intervalId));
+        cleanupFns.push(() => {
+          if (realtimeReloadTimer) clearTimeout(realtimeReloadTimer);
+          realtimeReloadTimer = null;
+        });
 
         activeUnsubscribe = () => cleanupFns.forEach((fn) => fn());
       } catch (error) {
@@ -689,15 +816,21 @@ export const useAlertStore = create<AlertState>()(
     },
 
     updateAlertStatus: async (id, newStatus, profile, attempt, brandFallback) => {
-      // Persist only the three-state workflow, even when an older screen sends
-      // a legacy value such as pending_approval, responded, or monitoring.
+      // Invalidate any REST snapshot that began before this mutation. Without
+      // this guard, a late response can visibly move the alert back to its old
+      // queue immediately after the optimistic update succeeds.
+      alertLoadGeneration += 1;
+      set({ isLoading: false });
+      // Normalize legacy values while preserving the dedicated skipped state.
       newStatus = getPersistedAlertStatus({ resolution_status: newStatus });
       console.log("[AlertStore] updateAlertStatus called:", { id, newStatus, profileEmail: profile?.email, profileRole: profile?.role });
       const currentAlert = get().rawAlerts.find((alert) => isSameAlertRecord(alert, id));
+      const isRestore = attempt?.action_type === "restore";
       console.log("[AlertStore] currentAlert found:", currentAlert);
 
       if (
         newStatus === "resolving" &&
+        !isRestore &&
         currentAlert?.being_resolved_by &&
         currentAlert.being_resolved_by !== profile?.email
       ) {
@@ -713,7 +846,32 @@ export const useAlertStore = create<AlertState>()(
         throw new Error("Cảnh báo không thuộc phạm vi xử lý của bạn.");
       }
 
-      if (["resolved", "contact_waiting", "contact_failed"].includes(newStatus)) {
+      if (isRestore) {
+        if (!currentAlert || !isTerminalAlert(currentAlert)) {
+          throw new Error("Chỉ có thể khôi phục cảnh báo đã đóng hoặc đã bỏ qua.");
+        }
+        if (!canRestoreAlert(currentAlert, profile, profile.role === "brand_manager")) {
+          throw new Error("Bạn không có quyền khôi phục cảnh báo này.");
+        }
+      }
+
+      if (newStatus === "skipped") {
+        if (!currentAlert) {
+          throw new Error("Không tìm thấy cảnh báo cần bỏ qua.");
+        }
+        if (getAlertWorkflowStatus(currentAlert) !== "processing") {
+          throw new Error("Chỉ có thể bỏ qua cảnh báo trong trạng thái Đang xử lý.");
+        }
+        if (!canSkipAlert(currentAlert, profile.email)) {
+          throw new Error("Bạn phải là người đang phụ trách cảnh báo để thực hiện bỏ qua.");
+        }
+      }
+
+      const isOpeningContactSession =
+        attempt?.opening_contact_session === true &&
+        Boolean(attempt.customer_contact_opened_at);
+
+      if (["resolved", "contact_waiting", "contact_failed"].includes(newStatus) && !isOpeningContactSession) {
         const hasOpenedContact = Boolean(
           attempt?.customer_contact_opened_at || currentAlert?.customer_contact_opened_at
         );
@@ -759,17 +917,56 @@ export const useAlertStore = create<AlertState>()(
         throw new Error(`Alert is outside the user's brand scope. Profile: [Name: ${profile?.brandName}, ID: ${profile?.brandId}], Alert Brand: [${resolvedBrand}]`);
       }
 
-      const resolvedAt =
-        newStatus === "resolved" ? new Date().toISOString() : null;
+      const operationAt = new Date().toISOString();
+      const resolvedAt = newStatus === "resolved" ? operationAt : null;
+      const skippedAt = newStatus === "skipped" ? operationAt : null;
       const auditFields = {
         updated_by: profile.uid,
         updated_by_role: profile.role,
-        updated_at: new Date().toISOString(),
+        updated_at: operationAt,
       };
 
       set((state) => {
         const nextRawAlerts = state.rawAlerts.map((alert) => {
           if (isSameAlertRecord(alert, id)) {
+            if (isRestore) {
+              const nextHistory = alert.resolution_history ? [...alert.resolution_history] : [];
+              nextHistory.push({
+                attempt_number: nextHistory.length + 1,
+                timestamp: operationAt,
+                note: attempt?.note || "Khôi phục cảnh báo để tiếp tục xử lý.",
+                resolved_by_email: profile.email ?? undefined,
+                resolved_by_name: profile.displayName ?? undefined,
+                action_type: "restore",
+              });
+              return {
+                ...alert,
+                status: "resolving",
+                resolution_history: nextHistory,
+                resolved_at: undefined,
+                resolved_by: null,
+                resolved_by_email: null,
+                resolved_by_name: null,
+                skipped_at: null,
+                skipped_by_uid: null,
+                skipped_by_email: null,
+                skipped_by_name: null,
+                being_resolved_by: profile.email || profile.uid,
+                being_resolved_at: operationAt,
+                monitoring_started_at: undefined,
+                monitoring_duration_hours: undefined,
+                monitoring_initial_comments: undefined,
+                monitoring_initial_likes: undefined,
+                monitoring_initial_shares: undefined,
+                customer_contact_opened_at: undefined,
+                customer_contact_opened_by: undefined,
+                customer_contact_template: undefined,
+                customer_contact_note: undefined,
+                customer_contact_evidence_image: undefined,
+                customer_response_result: undefined,
+              };
+            }
+
             // When restoring to 'new' (Khôi phục), clear history so the alert starts fresh
             if (newStatus === "new") {
               return {
@@ -779,6 +976,10 @@ export const useAlertStore = create<AlertState>()(
                 resolved_at: undefined,
                 resolved_by_email: null,
                 resolved_by_name: null,
+                skipped_at: null,
+                skipped_by_uid: null,
+                skipped_by_email: null,
+                skipped_by_name: null,
                 escalation: null,
                 monitoring_started_at: undefined,
                 monitoring_duration_hours: undefined,
@@ -799,10 +1000,11 @@ export const useAlertStore = create<AlertState>()(
             if (attempt) {
               const newAttemptItem: ResolutionAttempt = {
                 attempt_number: nextHistory.length + 1,
-                timestamp: new Date().toISOString(),
+                timestamp: operationAt,
                 note: attempt.note,
                 resolved_by_email: profile.email ?? undefined,
                 resolved_by_name: profile.displayName ?? undefined,
+                action_type: attempt.action_type,
                 ...(attempt.image_url ? { image_url: attempt.image_url } : {}),
               };
               nextHistory.push(newAttemptItem);
@@ -814,6 +1016,10 @@ export const useAlertStore = create<AlertState>()(
               resolved_at: resolvedAt || undefined,
               resolved_by_email: resolvedAt ? profile.email : null,
               resolved_by_name: resolvedAt ? profile.displayName : null,
+              skipped_at: skippedAt || alert.skipped_at || null,
+              skipped_by_uid: skippedAt ? profile.uid : alert.skipped_by_uid || null,
+              skipped_by_email: skippedAt ? profile.email : alert.skipped_by_email || null,
+              skipped_by_name: skippedAt ? profile.displayName : alert.skipped_by_name || null,
               escalation: attempt?.escalation !== undefined ? attempt.escalation : alert.escalation,
               customer_contact_opened_at: attempt?.reset_customer_contact ? undefined : attempt?.customer_contact_opened_at ?? alert.customer_contact_opened_at,
               customer_contact_opened_by: attempt?.reset_customer_contact ? undefined : attempt?.customer_contact_opened_by ?? alert.customer_contact_opened_by,
@@ -828,8 +1034,8 @@ export const useAlertStore = create<AlertState>()(
                 being_resolved_by: profile.email,
                 being_resolved_at: new Date().toISOString(),
               } : {}),
-              // When resolved, clear the lock
-              ...(newStatus === "resolved" ? {
+              // Terminal states release the active ownership lock.
+              ...(["resolved", "skipped"].includes(newStatus) ? {
                 being_resolved_by: null,
                 being_resolved_at: null,
                 ...(attempt?.monitoring_duration_hours ? {
@@ -855,22 +1061,74 @@ export const useAlertStore = create<AlertState>()(
         await updateSupabaseAlertLabel(id, (existingLabel) => {
           if (
             newStatus === "resolving" &&
+            !isRestore &&
             existingLabel.being_resolved_by &&
             existingLabel.being_resolved_by !== profile.email
           ) {
             throw new Error(`Vụ việc đã được ${getResolverName(existingLabel.being_resolved_by)} nhận xử lý.`);
           }
 
+          if (isRestore) {
+            if (!isTerminalAlert(existingLabel)) {
+              throw new Error("Cảnh báo không còn ở trạng thái có thể khôi phục.");
+            }
+            if (!canRestoreAlert(existingLabel, profile, profile.role === "brand_manager")) {
+              throw new Error("Cảnh báo không còn thuộc quyền khôi phục của bạn.");
+            }
+          }
+
+          if (newStatus === "skipped") {
+            if (getAlertWorkflowStatus(existingLabel) !== "processing") {
+              throw new Error("Cảnh báo không còn ở trạng thái Đang xử lý.");
+            }
+            if (!canSkipAlert(existingLabel, profile.email)) {
+              throw new Error("Cảnh báo không còn thuộc quyền xử lý của bạn.");
+            }
+          }
+
           let nextHistory = existingLabel.resolution_history ? [...existingLabel.resolution_history] : [];
           if (attempt) {
             nextHistory.push({
               attempt_number: nextHistory.length + 1,
-              timestamp: new Date().toISOString(),
+              timestamp: operationAt,
               note: attempt.note,
               resolved_by_email: profile.email ?? undefined,
               resolved_by_name: profile.displayName ?? undefined,
+              action_type: attempt.action_type,
               ...(attempt.image_url ? { image_url: attempt.image_url } : {}),
             });
+          }
+
+          if (isRestore) {
+            return {
+              ...existingLabel,
+              resolution_status: "resolving",
+              resolution_history: nextHistory,
+              resolved_at: null,
+              resolved_by: null,
+              resolved_by_email: null,
+              resolved_by_name: null,
+              skipped_at: null,
+              skipped_by_uid: null,
+              skipped_by_email: null,
+              skipped_by_name: null,
+              being_resolved_by: profile.email || profile.uid,
+              being_resolved_at: operationAt,
+              monitoring_started_at: null,
+              monitoring_duration_hours: null,
+              monitoring_initial_comments: null,
+              monitoring_initial_likes: null,
+              monitoring_initial_shares: null,
+              customer_contact_opened_at: null,
+              customer_contact_opened_by: null,
+              customer_contact_template: null,
+              customer_contact_note: null,
+              customer_contact_evidence_image: null,
+              customer_response_result: null,
+              updated_by: profile.uid,
+              updated_by_role: profile.role,
+              updated_at: operationAt,
+            };
           }
 
           if (newStatus === "new") {
@@ -881,6 +1139,10 @@ export const useAlertStore = create<AlertState>()(
               resolved_at: null,
               resolved_by_email: null,
               resolved_by_name: null,
+              skipped_at: null,
+              skipped_by_uid: null,
+              skipped_by_email: null,
+              skipped_by_name: null,
               being_resolved_by: null,
               being_resolved_at: null,
               monitoring_started_at: null,
@@ -910,6 +1172,10 @@ export const useAlertStore = create<AlertState>()(
             resolved_by: resolvedAt ? profile.uid : null,
             resolved_by_email: resolvedAt ? profile.email : null,
             resolved_by_name: resolvedAt ? profile.displayName : null,
+            skipped_at: skippedAt,
+            skipped_by_uid: skippedAt ? profile.uid : existingLabel.skipped_by_uid ?? null,
+            skipped_by_email: skippedAt ? profile.email : existingLabel.skipped_by_email ?? null,
+            skipped_by_name: skippedAt ? profile.displayName : existingLabel.skipped_by_name ?? null,
             escalation: attempt?.escalation !== undefined ? attempt.escalation : existingLabel.escalation ?? null,
             customer_contact_opened_at: attempt?.customer_contact_opened_at ?? existingLabel.customer_contact_opened_at ?? null,
             customer_contact_opened_by: attempt?.customer_contact_opened_by ?? existingLabel.customer_contact_opened_by ?? null,
@@ -940,7 +1206,7 @@ export const useAlertStore = create<AlertState>()(
             updateObj.monitoring_initial_shares = currentAlert?.shares || 0;
           }
 
-          if (newStatus === "resolved") {
+          if (["resolved", "skipped"].includes(newStatus)) {
             updateObj.being_resolved_by = null;
             updateObj.being_resolved_at = null;
           } else if (newStatus === "resolving") {
@@ -956,7 +1222,7 @@ export const useAlertStore = create<AlertState>()(
         // Terminal/contact outcome changes affect the summary counters. Reload
         // from Supabase before returning so the Alert page never renders a
         // stale cached queue after navigation from the detail screen.
-        if (["resolved", "contact_waiting", "contact_failed"].includes(newStatus)) {
+        if (isRestore || ["resolved", "contact_waiting", "contact_failed", "skipped"].includes(newStatus)) {
           await get().fetchAlerts(getScopedBrandKey(profile), true);
         }
       } catch (error) {
@@ -978,7 +1244,39 @@ export const useAlertStore = create<AlertState>()(
       }
     },
 
+    skipAlert: async (id, profile, brandFallback) => {
+      await get().updateAlertStatus(
+        id,
+        "skipped",
+        profile,
+        {
+          note: "Đã bỏ qua cảnh báo không liên quan.",
+          action_type: "skip",
+        },
+        brandFallback,
+      );
+    },
+
+    restoreAlert: async (id, profile, brandFallback) => {
+      await get().updateAlertStatus(
+        id,
+        "resolving",
+        profile,
+        {
+          note: "Khôi phục cảnh báo và chuyển về trạng thái Đang xử lý.",
+          action_type: "restore",
+          reset_customer_contact: true,
+        },
+        brandFallback,
+      );
+    },
+
     fetchCorrectionRequests: async (scopedBrandKey = null, force = false) => {
+      if (typeof window !== "undefined" && window.location.pathname.startsWith("/demo")) {
+        set({ correctionRequests: [], isLoadingRequests: false });
+        return;
+      }
+
       const requestScope = scopedBrandKey || null;
 
       if (activeRequestsUnsubscribe && activeRequestsScope === requestScope && !force) {

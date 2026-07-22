@@ -7,9 +7,9 @@ import type {
 } from "@/types/dashboard";
 
 export const dummyWorkspaces: Workspace[] = [
-  { 
-    id: "Demo Brand", 
-    brand_name: "Demo Brand", 
+  {
+    id: "Demo Brand",
+    brand_name: "Demo Brand",
     scale: "large",
     keywords: ["demo"],
     synonyms: [],
@@ -21,6 +21,7 @@ export const dummyWorkspaces: Workspace[] = [
 export const dummyMentions: Mention[] = [
   {
     id: "m1",
+    labels: { sentiment: "positive", topic: ["service"], relevance: true, urgency: "none", intent: "none" },
     workspace_id: "Demo Brand",
     platform: "facebook",
     post_id: "p1",
@@ -36,6 +37,7 @@ export const dummyMentions: Mention[] = [
   },
   {
     id: "m2",
+    labels: { sentiment: "negative", topic: ["quality"], relevance: true, urgency: "high", intent: "none" },
     workspace_id: "Demo Brand",
     platform: "tiktok",
     post_id: "p2",
@@ -44,7 +46,6 @@ export const dummyMentions: Mention[] = [
     author: "@trangnguyen_review",
     sentiment: "negative",
     topic: "quality",
-    labels: { urgency: "high" } as any,
     credibility_score: 98,
     url: "https://tiktok.com/123",
     posted_at: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
@@ -52,6 +53,16 @@ export const dummyMentions: Mention[] = [
   },
   {
     id: "m3",
+    labels: {
+      sentiment: "negative",
+      topic: ["service"],
+      relevance: true,
+      urgency: "high",
+      intent: "none",
+      resolution_status: "resolving",
+      being_resolved_by: "demo@example.com",
+      being_resolved_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+    } as any,
     workspace_id: "Demo Brand",
     platform: "thread",
     post_id: "p3",
@@ -60,7 +71,6 @@ export const dummyMentions: Mention[] = [
     author: "Le Minh Kiet",
     sentiment: "negative",
     topic: "service",
-    labels: { urgency: "high" } as any,
     credibility_score: 92,
     url: "https://threads.net/123",
     posted_at: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
@@ -68,6 +78,7 @@ export const dummyMentions: Mention[] = [
   },
   {
     id: "m4",
+    labels: { sentiment: "negative", topic: ["service"], relevance: true, urgency: "high", intent: "none" },
     workspace_id: "Demo Brand",
     platform: "google_maps",
     post_id: "p4",
@@ -76,7 +87,6 @@ export const dummyMentions: Mention[] = [
     author: "Trần Hữu Thắng",
     sentiment: "negative",
     topic: "staff",
-    labels: { urgency: "high" } as any,
     credibility_score: 75,
     url: "https://maps.google.com/123",
     posted_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
@@ -84,6 +94,7 @@ export const dummyMentions: Mention[] = [
   },
   {
     id: "m5",
+    labels: { sentiment: "neutral", topic: ["other"], relevance: true, urgency: "none", intent: "none" },
     workspace_id: "Demo Brand",
     platform: "news",
     post_id: "p5",
@@ -155,6 +166,12 @@ export const dummyAlerts: Alert[] = [
 export const dummyLeads: Lead[] = [
   {
     id: "l1",
+    current_label: "lead_hot",
+    labels: { sentiment: "neutral", topic: ["other"], relevance: true, urgency: "low", intent: "hot" },
+    owner_id: "demo-user",
+    owner_name: "Khách xem Demo",
+    owner_email: "demo@example.com",
+    assigned_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
     workspace_id: "Demo Brand",
     platform: "facebook",
     post_id: "p1",
@@ -170,6 +187,14 @@ export const dummyLeads: Lead[] = [
   },
   {
     id: "l2",
+    current_label: "lead_hot",
+    labels: { sentiment: "neutral", topic: ["other"], relevance: true, urgency: "low", intent: "hot" },
+    owner_id: "demo-lead-01",
+    owner_name: "Nguyễn Minh Anh",
+    owner_email: "minhanh.demo@insightflow.vn",
+    assigned_at: new Date(Date.now() - 40 * 60 * 1000).toISOString(),
+    contact_attempts: 1,
+    last_contact_at: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
     workspace_id: "Demo Brand",
     platform: "tiktok",
     post_id: "p2",
@@ -185,6 +210,12 @@ export const dummyLeads: Lead[] = [
   },
   {
     id: "l3",
+    current_label: "lead_hot",
+    labels: { sentiment: "positive", topic: ["other"], relevance: true, urgency: "low", intent: "hot" },
+    owner_id: "demo-user",
+    owner_name: "Khách xem Demo",
+    owner_email: "demo@example.com",
+    assigned_at: new Date(Date.now() - 90 * 60 * 1000).toISOString(),
     workspace_id: "Demo Brand",
     platform: "news",
     post_id: "p3",
@@ -200,6 +231,8 @@ export const dummyLeads: Lead[] = [
   },
   {
     id: "l4",
+    current_label: "lead_warm",
+    labels: { sentiment: "neutral", topic: ["other"], relevance: true, urgency: "low", intent: "warm" },
     workspace_id: "Demo Brand",
     platform: "facebook",
     post_id: "p4",
@@ -215,6 +248,12 @@ export const dummyLeads: Lead[] = [
   },
   {
     id: "l5",
+    current_label: "lead_warm",
+    labels: { sentiment: "positive", topic: ["promotion"], relevance: true, urgency: "none", intent: "warm" },
+    owner_id: "demo-user",
+    owner_name: "Khách xem Demo",
+    owner_email: "demo@example.com",
+    closed_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
     workspace_id: "Demo Brand",
     platform: "thread",
     post_id: "p5",

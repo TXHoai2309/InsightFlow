@@ -14,11 +14,13 @@ import { Badge } from "@/components/ui/Badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { PlatformLogo } from "@/components/platform/PlatformLogo";
 import { useAuth } from "@/hooks/useAuth";
-import { canAlertBeVisibleToUser } from "@/lib/alert-visibility";
 import { getScopedBrandKey } from "@/lib/brandScope";
-import { getAlertWorkflowStatus } from "@/lib/alertWorkflow";
-import { getCalendarPeriodStartMs, isWithinCalendarPeriod } from "@/lib/dashboard-display";
-import { isCrisisClassificationLabel } from "@/lib/label-change";
+import { isTerminalAlert } from "@/lib/alertWorkflow";
+import {
+  buildAlertOperationalMetrics,
+  filterOperationalAlerts,
+} from "@/lib/operational-metrics";
+import { getDiscussionPeriodDays } from "@/lib/dashboard-display";
 import { cn } from "@/lib/utils";
 import { useAlertStore, type AlertData } from "@/stores/alert.store";
 import { useDashboardStore } from "@/stores/dashboard.store";
@@ -86,7 +88,7 @@ function slaLimitHours(alert: AlertData) {
 }
 
 function isActive(alert: AlertData) {
-  return getAlertWorkflowStatus(alert) !== "resolved";
+  return !isTerminalAlert(alert);
 }
 
 function isOverdue(alert: AlertData) {
@@ -125,11 +127,15 @@ function KpiCard({ icon: Icon, label, value, tone, meta }: { icon: React.Element
 export function CrisisCommandCenter() {
   const { profile } = useAuth();
   const rawAlerts = useAlertStore((state) => state.rawAlerts);
-  const mentions = useDashboardStore((state) => state.mentions);
+  const filters = useDashboardStore((state) => state.filters);
   const isLoading = useAlertStore((state) => state.isLoading);
   const error = useAlertStore((state) => state.error);
   const fetchAlerts = useAlertStore((state) => state.fetchAlerts);
   const scopedBrandKey = getScopedBrandKey(profile);
+  const periodDays = useMemo(() => {
+    if (filters.time_range === "all") return 36_500;
+    return getDiscussionPeriodDays({ timeRange: filters.time_range, customStartDate: filters.custom_start_date, customEndDate: filters.custom_end_date });
+  }, [filters.custom_end_date, filters.custom_start_date, filters.time_range]);
 
   useEffect(() => {
     if (!profile) return;
@@ -137,35 +143,18 @@ export function CrisisCommandCenter() {
   }, [fetchAlerts, profile, scopedBrandKey]);
 
   const alerts = useMemo(() => {
-    return rawAlerts.filter((alert) => {
-      return (
-        isWithinCalendarPeriod(alert.created_at, 30) &&
-        isCrisisClassificationLabel({
-          sentiment: alert.sentiment as any,
-          relevance: alert.relevance,
-          urgency: alert.urgency as any,
-          intent: alert.intent as any,
-        }) &&
-        canAlertBeVisibleToUser(alert, profile)
-      );
+    return filterOperationalAlerts(rawAlerts, {
+      profile,
+      workspaceId: filters.workspace_id,
+      platform: filters.platform,
+      reviewWindowDays: periodDays,
+      crisisOnly: true,
+      dateBasis: "created_at",
     });
-  }, [profile, rawAlerts]);
-
-  const negativeMentionsCount = useMemo(() => {
-    const cutoff = getCalendarPeriodStartMs(30);
-    const now = Date.now();
-    return mentions.filter((mention) => {
-      const time = new Date(mention.posted_at).getTime();
-      return (
-        mention.sentiment === "negative" &&
-        Number.isFinite(time) &&
-        time >= cutoff &&
-        time <= now
-      );
-    }).length;
-  }, [mentions]);
+  }, [filters.platform, filters.workspace_id, periodDays, profile, rawAlerts]);
 
   const data = useMemo(() => {
+    const operationalMetrics = buildAlertOperationalMetrics(alerts);
     const activeAlerts = alerts.filter(isActive);
     const criticalAlerts = activeAlerts.filter((alert) => ["critical", "high"].includes(normalizeSeverity(alert.severity)));
     const overdueAlerts = activeAlerts.filter(isOverdue);
@@ -174,45 +163,40 @@ export function CrisisCommandCenter() {
     const platformStats = buildStats(alerts, (alert) => alert.source || "other", PLATFORM_LABELS);
     const topicStats = buildStats(alerts, (alert) => alert.topic || "other", TOPIC_LABELS);
     const latestAlert = alerts.slice().sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())[0];
-    return { activeAlerts, criticalAlerts, overdueAlerts, unassignedAlerts, resolvedAlerts, platformStats, topicStats, latestAlert };
+    return { activeAlerts, criticalAlerts, overdueAlerts, unassignedAlerts, resolvedAlerts, platformStats, topicStats, latestAlert, operationalMetrics };
   }, [alerts]);
 
   const topPlatform = data.platformStats[0];
   const topTopic = data.topicStats[0];
   return (
     <div data-tour="dashboard-insights" className="w-full space-y-6">
-      <Card data-tour="dashboard-insights-risk" className="rounded-xl border-[#DDD9E8] bg-white shadow-[0_8px_24px_rgba(30,31,36,0.06)]">
-        <CardContent className="p-5">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#FDECEA] text-[#BA1A1A]"><ShieldAlert className="h-6 w-6" /></div>
-              <div>
-                <div className="mb-1 flex flex-wrap items-center gap-2"><h2 className="text-xl font-black text-[#1A1B20]">Tổng quan cảnh báo Crisis</h2><Badge variant="outline" className="border-[#DDD9E8] bg-[#F8F7FC] text-[#514D5E]">30 ngày</Badge></div>
-                <p className="max-w-3xl text-sm font-medium leading-6 text-[#6E6A7C]">Hàng đợi Crisis gồm nội dung tiêu cực có mức khẩn cấp Trung bình/Cao và mọi tín hiệu được đánh dấu Khẩn cấp.</p>
+      <section data-tour="dashboard-insights-kpis" className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          { icon: ShieldAlert, label: "Tổng cảnh báo", value: alerts.length, unit: "cảnh báo", hint: "Tất cả cảnh báo Crisis trong kỳ", tone: "border-[#E2DFFF] bg-[#F7F5FF] text-[#4234B6]", iconTone: "bg-[#E2DFFF] text-[#4234B6]" },
+          { icon: AlertTriangle, label: "Ưu tiên cao", value: data.criticalAlerts.length, unit: "cảnh báo", hint: "Mức Critical hoặc Cao đang mở", tone: "border-[#FFE2C7] bg-[#FFF8F0] text-[#A14A00]", iconTone: "bg-[#FFE2C7] text-[#A14A00]" },
+          { icon: Clock3, label: "Quá SLA", value: data.overdueAlerts.length, unit: "cảnh báo", hint: "Vượt thời gian phản hồi theo mức ưu tiên", tone: "border-[#FFDAD6] bg-[#FFF4F2] text-[#BA1A1A]", iconTone: "bg-[#FFDAD6] text-[#BA1A1A]" },
+          { icon: UserRoundCheck, label: "Chưa có người xử lý", value: data.unassignedAlerts.length, unit: "cảnh báo", hint: "Cần phân công nhân viên", tone: "border-[#D7F4E2] bg-[#F3FCF6] text-[#147A3F]", iconTone: "bg-[#D7F4E2] text-[#147A3F]" },
+        ].map((item) => {
+          const Icon = item.icon;
+          return (
+            <div key={item.label} className={`rounded-[12px] border px-4 py-4 shadow-sm ${item.tone}`}>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[12px] font-bold uppercase tracking-wide text-[#474554]">{item.label}</p>
+                  <div className="mt-2 flex items-end gap-2">
+                    <span className="font-sans text-[30px] font-bold leading-none">{item.value}</span>
+                    <span className="pb-1 text-[12px] font-semibold text-[#787585]">{item.unit}</span>
+                  </div>
+                  <p className="mt-2 text-[13px] font-medium text-[#474554]">{item.hint}</p>
+                </div>
+                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] ${item.iconTone}`}><Icon className="h-5 w-5" /></div>
               </div>
             </div>
-            <div className="rounded-xl bg-[#F8F7FC] px-4 py-3 text-sm text-[#514D5E] xl:max-w-[360px]"><span className="font-black text-[#1A1B20]">Nổi bật:</span> {topPlatform?.label || "Chưa xác định"} · {topTopic?.label || "Chưa xác định"}<div className="mt-1 text-xs text-[#787585]">Dữ liệu mới nhất {formatTimeAgo(data.latestAlert?.created_at)}</div></div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <section className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        <div className="rounded-xl border border-[#DDD9E8] bg-white p-5"><div className="text-xs font-black uppercase tracking-wide text-[#787585]">Bối cảnh · Đề cập tiêu cực</div><div className="mt-2 text-3xl font-black text-[#1A1B20]">{negativeMentionsCount}</div><div className="mt-2 text-xs font-medium text-[#6E6A7C]">Toàn bộ nội dung mang cảm xúc tiêu cực</div></div>
-        <div className="rounded-xl border border-[#F1B7B2] bg-[#FFF8F7] p-5"><div className="text-xs font-black uppercase tracking-wide text-[#BA1A1A]">Hàng đợi · Cảnh báo Crisis</div><div className="mt-2 text-3xl font-black text-[#BA1A1A]">{alerts.length}</div><div className="mt-2 text-xs font-medium text-[#6E6A7C]">Nội dung thỏa quy tắc mức khẩn cấp</div></div>
-        <div className="rounded-xl border border-[#DDD9E8] bg-white p-5"><div className="text-xs font-black uppercase tracking-wide text-[#5B4FCF]">Cần làm · Đang mở</div><div className="mt-2 text-3xl font-black text-[#4234B6]">{data.activeAlerts.length}</div><div className="mt-2 text-xs font-medium text-[#6E6A7C]">Chưa kết thúc hoặc chưa liên hệ xong</div></div>
+          );
+        })}
       </section>
 
-      <section data-tour="dashboard-insights-kpis" className="space-y-3">
-        <div><h3 className="text-base font-black text-[#1A1B20]">Tình trạng vận hành</h3><p className="mt-1 text-xs font-medium text-[#6E6A7C]">Các nhóm bên dưới có thể giao nhau; ví dụ một cảnh báo vừa ưu tiên cao, vừa quá hạn và chưa được giao.</p></div>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <KpiCard icon={AlertTriangle} label="Ưu tiên cao đang mở" value={String(data.criticalAlerts.length)} meta="Mức Critical hoặc Cao" tone="bg-amber-50 text-amber-700" />
-          <KpiCard icon={Clock3} label="Quá hạn phản hồi" value={String(data.overdueAlerts.length)} meta="Vượt SLA theo mức ưu tiên" tone="bg-rose-50 text-rose-700" />
-          <KpiCard icon={UserRoundCheck} label="Chưa có người xử lý" value={String(data.unassignedAlerts.length)} meta="Cần phân công nhân viên" tone="bg-indigo-50 text-indigo-700" />
-          <KpiCard icon={CheckCircle2} label="Đã kết thúc" value={String(data.resolvedAlerts.length)} meta="Đã giải quyết hoặc liên hệ xong" tone="bg-emerald-50 text-emerald-700" />
-        </div>
-      </section>
-
-      <CrisisAnalyticsCharts alerts={alerts} />
+      <CrisisAnalyticsCharts alerts={alerts} periodDays={periodDays} />
 
       <section data-tour="dashboard-insights-breakdown" className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <Card className={cardClass}>

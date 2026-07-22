@@ -36,6 +36,7 @@ const ACTION_LABELS: Record<string, string> = {
   open_profile: "Đã mở hồ sơ nguồn",
   note: "Đã thêm ghi chú",
   skip: "Đã bỏ qua Lead",
+  restore: "Đã khôi phục để tiếp tục xử lý",
 };
 
 const RESULT_LABELS: Record<string, string> = {
@@ -205,11 +206,15 @@ export function buildLeadHistoryEvents(lead: Lead): LeadHistoryEvent[] {
       occurredAt: lead.last_action_at,
       actor: "employee",
       actorName: ownerName,
-      kind: lead.last_action_type === "skip" ? "closed" : lead.last_action_type === "note" ? "note" : "contact",
-      eventType: lead.last_action_type === "skip" ? "closed" : lead.last_action_type === "note" ? "note_updated" : "contact_action",
+      kind: lead.last_action_type === "skip" ? "closed" : lead.last_action_type === "restore" ? "status" : lead.last_action_type === "note" ? "note" : "contact",
+      eventType: lead.last_action_type === "skip" ? "closed" : lead.last_action_type === "restore" ? "status_changed" : lead.last_action_type === "note" ? "note_updated" : "contact_action",
       title: getLeadActionLabel(lead.last_action_type),
-      description: lead.last_contact_channel ? `Kênh liên hệ: ${lead.last_contact_channel}` : undefined,
-      badge: lead.last_action_type === "note" ? "Ghi chú" : "Xử lý",
+      description: lead.last_action_type === "restore"
+        ? "Chuyển item về trạng thái Đang xử lý"
+        : lead.last_contact_channel
+          ? `Kênh liên hệ: ${lead.last_contact_channel}`
+          : undefined,
+      badge: lead.last_action_type === "restore" ? "Khôi phục" : lead.last_action_type === "note" ? "Ghi chú" : "Xử lý",
       source: "derived",
     });
   }

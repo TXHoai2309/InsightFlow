@@ -1216,6 +1216,8 @@ function supabasePostToMention(row: SupabaseRow, annotationByKey: Map<string, Su
       row.created_at,
     ),
     url: normalizeOptionalUrl(row.url, row.post_url, row.source_url, payload.url),
+    post_url: normalizeOptionalUrl(row.post_url, row.url, row.source_url, payload.url),
+    source_url: normalizeOptionalUrl(row.source_url),
     contact: normalizeOptionalText(row.contact || payload.contact),
     star_count: readOptionalNumber(row.star_count, payload.star_count, payload.rating),
     location_name: normalizeOptionalText(
@@ -1285,6 +1287,9 @@ function supabaseCommentToMention(
       row.created_at,
     ),
     url: normalizeOptionalUrl(row.url, post?.url, payload.url),
+    post_url: normalizeOptionalUrl(post?.post_url, post?.url, row.post_url, payload.post_url),
+    comment_url: normalizeOptionalUrl(row.url, payload.url),
+    source_url: normalizeOptionalUrl(row.source_url, payload.source_url),
     contact: normalizeOptionalText(row.contact || payload.contact),
     star_count: readOptionalNumber(row.star_count, payload.star_count, payload.rating),
     location_name: normalizeOptionalText(
@@ -1620,6 +1625,12 @@ async function fetchSupabaseMentionThread(postId: string): Promise<Mention[]> {
 
 async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
   const cacheKey = `${normalizeBrandName(opts.brandKey || "global")}:${opts.maxMentions || 30000}`;
+  // Workflow mutations and realtime events must never be rebuilt from the
+  // 30-minute dashboard snapshot. Dropping the scoped entry also refreshes
+  // the shared cache for any page opened after the alert action completes.
+  if (opts.forceRefresh) {
+    supabaseMentionCache.delete(cacheKey);
+  }
   const cached = supabaseMentionCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.promise;
 
@@ -1781,6 +1792,8 @@ export interface FetchOptions {
   brandKey?: string;
   /** Set a max limit (default: 10,000 rows per fetch stage) */
   maxMentions?: number;
+  /** Bypass the shared snapshot after a workflow mutation or realtime event. */
+  forceRefresh?: boolean;
 }
 
 // ─── Main service ─────────────────────────────────────────────────────────────

@@ -1,11 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import dynamic from "next/dynamic";
 import { useTranslation, I18nextProvider } from "react-i18next";
+import { Be_Vietnam_Pro } from "next/font/google";
 import i18nInstance from "../i18n";
 import "./globals.css";
+
+const beVietnamPro = Be_Vietnam_Pro({
+  subsets: ["vietnamese", "latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-be-vietnam-pro",
+  display: "swap",
+});
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { MobileNav } from "@/components/layout/MobileNav";
@@ -73,10 +81,23 @@ export default function RootLayout({
     "/ve-chung-toi",
     "/profile",
   ].includes(pathname || "");
-  const isDemoPage = pathname?.startsWith("/demo");
+  const isDemoPage = pathname === "/demo" || pathname?.startsWith("/demo/") === true;
   const hideShell = isAuthPage || isPublicPage;
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    setSidebarCollapsed(window.localStorage.getItem("insightflow-sidebar-collapsed") === "true");
+  }, []);
+
+  const toggleSidebarCollapsed = () => {
+    setSidebarCollapsed((current) => {
+      const next = !current;
+      window.localStorage.setItem("insightflow-sidebar-collapsed", String(next));
+      return next;
+    });
+  };
 
   const getPageTitleKey = (path: string) => {
     switch (path) {
@@ -94,6 +115,8 @@ export default function RootLayout({
         return "metadata.profile.title";
       case "/dashboard":
         return "metadata.dashboard.title";
+      case "/demo":
+        return "InsightFlow Demo";
       case "/mentions":
         return "metadata.mentions.title";
       case "/alerts":
@@ -135,13 +158,17 @@ export default function RootLayout({
   const descKey = getPageDescriptionKey(pathname || "/");
 
   return (
-    <html lang={i18n.language} suppressHydrationWarning>
+    <html lang={i18n.language} className={beVietnamPro.variable} suppressHydrationWarning>
       <head>
         {/* Anti-FOUC: set dark class trước React render để tránh flash */}
         <script dangerouslySetInnerHTML={{ __html: antiFoucScript }} />
         <title>{t(titleKey)}</title>
         <meta name="description" content={t(descKey)} />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap"
+        />
         <link
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
@@ -156,7 +183,7 @@ export default function RootLayout({
         />
       </head>
       <body
-        className="overflow-x-hidden"
+        className="font-sans overflow-x-hidden"
         style={{
           margin: 0,
           padding: 0,
@@ -167,7 +194,33 @@ export default function RootLayout({
           <ThemeProvider>
             <LanguageProvider>
               <NativeSelectEnhancer />
-              {isAuthPage ? (
+              {isDemoPage ? (
+                <div
+                  className="flex h-screen w-full overflow-hidden"
+                  style={{ backgroundColor: "var(--color-bg-primary)" }}
+                >
+                  <Sidebar
+                    isOpen={sidebarOpen}
+                    onClose={() => setSidebarOpen(false)}
+                    isCollapsed={sidebarCollapsed}
+                    onToggleCollapsed={toggleSidebarCollapsed}
+                  />
+                  <div className={`flex min-w-0 flex-1 flex-col transition-[margin] duration-200 ${sidebarCollapsed ? "md:ml-[76px]" : "md:ml-[240px]"}`}>
+                    <Header
+                      onMenuToggle={() => setSidebarOpen((prev) => !prev)}
+                      isSidebarCollapsed={sidebarCollapsed}
+                    />
+                    <main
+                      data-app-scroll-root="true"
+                      className="flex-1 overflow-y-auto mt-16 pb-16 md:pb-0"
+                      style={{ backgroundColor: "var(--color-bg-primary)" }}
+                    >
+                      {children}
+                    </main>
+                    <MobileNav />
+                  </div>
+                </div>
+              ) : isAuthPage ? (
                 /* Trang đăng nhập/đăng ký/quên mật khẩu — không có footer */
                 <main className="flex-1">{children}</main>
               ) : hideShell ? (
@@ -176,9 +229,6 @@ export default function RootLayout({
                   <main className="flex-1">{children}</main>
                   <Footer />
                 </div>
-              ) : isDemoPage ? (
-                /* Trang demo — có layout riêng bên trong /demo/layout.tsx */
-                children
               ) : (
                 /* Trang app (Dashboard, Mentions...) — có sidebar */
                 <ProtectedRoute>
@@ -189,10 +239,13 @@ export default function RootLayout({
                     <Sidebar
                       isOpen={sidebarOpen}
                       onClose={() => setSidebarOpen(false)}
+                      isCollapsed={sidebarCollapsed}
+                      onToggleCollapsed={toggleSidebarCollapsed}
                     />
-                    <div className="flex flex-col flex-1 min-w-0 md:ml-64">
+                    <div className={`flex min-w-0 flex-1 flex-col transition-[margin] duration-200 ${sidebarCollapsed ? "md:ml-[76px]" : "md:ml-[240px]"}`}>
                       <Header
                         onMenuToggle={() => setSidebarOpen((prev) => !prev)}
+                        isSidebarCollapsed={sidebarCollapsed}
                       />
                       <main
                         data-app-scroll-root="true"

@@ -6,10 +6,12 @@ import { useTranslation } from "react-i18next";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import {
   useAlertStore,
+  type AlertData,
   type CustomerContactAttempt,
 } from "@/stores/alert.store";
-import { AlertWorkbench } from "@/components/alerts/AlertWorkbench";
+import { AlertWorkbench, type AlertStatusFilter } from "@/components/alerts/AlertWorkbench";
 import type { AlertDetailPanelTab } from "@/components/alerts/AlertDetailPanel";
+import type { AlertContactResultDraft } from "@/components/alerts/AlertContactWorkflow";
 import { useDashboard } from "@/hooks/useDashboardData";
 import { dbSecond } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
@@ -21,13 +23,27 @@ import {
   isRecordInBrandScope,
 } from "@/lib/brandScope";
 import { canPerformAction } from "@/lib/rbac";
-import { getAlertWorkflowStatus, isResolvedAlert } from "@/lib/alertWorkflow";
+import {
+  getAlertWorkflowStatus,
+  isResolvedAlert,
+  isSkippedAlert,
+  isTerminalAlert,
+} from "@/lib/alertWorkflow";
 import {
   canAccessAlertQueue,
   canAlertBeVisibleToUser,
   isAlertOwnedByUser,
 } from "@/lib/alert-visibility";
 import { findAlertByNavigationTarget } from "@/lib/alert-navigation";
+import { readDashboardReturnNavigation } from "@/lib/dashboard-return-context";
+import { usePinnedQueue } from "@/hooks/usePinnedQueue";
+import { useAlertViewPresence } from "@/hooks/useAlertViewPresence";
+import { getAlertSourceUrl } from "@/lib/alert-source-url";
+import {
+  getAlertCompletenessScore,
+  getAlertDeduplicationKey,
+} from "@/lib/operational-metrics";
+import { isCrisisClassificationLabel } from "@/lib/label-change";
 
 const ALERTS_PER_PAGE = 5;
 import { collection, getDocs, doc, getDoc } from "firebase/firestore";
@@ -43,7 +59,6 @@ import {
   Legend as ChartLegend,
   Filler as ChartFiller,
 } from "chart.js";
-
 
 // Helper function to calculate relative time
 function getRelativeTime(isoString: string, t: any): string {
@@ -100,63 +115,6 @@ function formatBrandName(brand: string): string {
     .split(/[-_\s]+/)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join(" ");
-}
-
-// Helper function to append Chromium Scroll-to-Text Fragment target
-function getUrlWithTextFragment(url: string, text: string): string {
-  if (!url || url === "#") return "#";
-
-  // Clear quotes, parentheses and other special characters that might break fragments
-  const cleanText = text
-    .replace(/["'“”`\[\]\(\)]/g, "")
-    .trim();
-
-  if (!cleanText) return url;
-
-  // Take first sentence or first 60 characters to keep URL clean and unique
-  const sentence = cleanText.split(/[.!?]/)[0];
-  const fragment = sentence.length > 60 ? sentence.substring(0, 60).trim() : sentence.trim();
-
-  try {
-    if (url.includes("#")) {
-      if (url.includes(":~:text=")) {
-        return url;
-      }
-      return `${url}:~:text=${encodeURIComponent(fragment)}`;
-    }
-    return `${url}#:~:text=${encodeURIComponent(fragment)}`;
-  } catch (e) {
-    return url;
-  }
-}
-
-// Format source URL based on platform to target the comment directly
-function getFormattedSourceUrl(url: string, text: string): string {
-  if (!url || url === "#") return "#";
-
-  const lowerUrl = url.toLowerCase();
-  const isYoutube = lowerUrl.includes("youtu.be") || lowerUrl.includes("youtube.com");
-
-  if (isYoutube) {
-    // If the URL has a comment anchor like #comment_ID or #comment-ID
-    const commentMatch = url.match(/#comment[_]([a-zA-Z0-9\-_]+)/) || url.match(/#comment[-]([a-zA-Z0-9\-_]+)/);
-    if (commentMatch) {
-      const commentId = commentMatch[1];
-      const cleanUrl = url.split("#")[0];
-      const separator = cleanUrl.includes("?") ? "&" : "?";
-      return `${cleanUrl}${separator}lc=${commentId}`;
-    }
-  }
-
-  const isTiktok = lowerUrl.includes("tiktok.com");
-  if (isTiktok) {
-    // TikTok natively supports comment anchor directly (e.g. #comment-ID)
-    return url;
-  }
-
-  // Fallback for other sources (Befood, Facebook, Google Maps, News, etc.)
-  // Use Chromium Scroll-to-Text Fragment
-  return getUrlWithTextFragment(url, text);
 }
 
 interface MonitoringCountdownProps {
@@ -218,6 +176,13 @@ export default function AlertsPage() {
   const { profile, loading: authLoading } = useAuth();
   const isManager = profile?.role === "brand_manager";
   const scopedBrandKey = getScopedBrandKey(profile);
+  const alertPinStorageKey = `insightflow:pinned-alerts:${profile?.uid || "anonymous"}:${scopedBrandKey || "global"}`;
+  const {
+    pinnedIds: pinnedAlertIds,
+    maxItems: maxPinnedAlerts,
+    togglePinned: togglePinnedAlert,
+    prunePinned: prunePinnedAlerts,
+  } = usePinnedQueue(alertPinStorageKey);
   const canViewCrisisQueue = canAccessAlertQueue(profile);
   const canUpdateCrisisStatus =
     hasBusinessBrandScope(profile) &&
@@ -237,6 +202,8 @@ export default function AlertsPage() {
   const [correctionModalItem, setCorrectionModalItem] = useState<any>(null);
   const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
   const [pendingClaimSelectionId, setPendingClaimSelectionId] = useState<string | null>(null);
+  const [contactSessionAlertId, setContactSessionAlertId] = useState<string | null>(null);
+  const contactSessionAlertRef = useRef<AlertData | null>(null);
   const [isDetailPanelCollapsed, setIsDetailPanelCollapsed] = useState(false);
   const [detailPanelTab, setDetailPanelTab] = useState<AlertDetailPanelTab>("action");
 
@@ -246,7 +213,7 @@ export default function AlertsPage() {
   const [severityFilter, setSeverityFilter] = useState<string>("all");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [contentTypeFilter, setContentTypeFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "processing" | "contact_failed" | "resolved">("all");
+  const [statusFilter, setStatusFilter] = useState<AlertStatusFilter>("all");
   const [showMineOnly, setShowMineOnly] = useState(false);
   const [sortBy, setSortBy] = useState<"risk" | "newest" | "reach">("risk");
   const [alertPage, setAlertPage] = useState(1);
@@ -267,6 +234,11 @@ export default function AlertsPage() {
   const tabParam = searchParams.get("tab");
   const alertIdParam = searchParams.get("alertId");
   const mentionIdParam = searchParams.get("mentionId");
+  const alertScope = searchParams.get("scope") === "crisis" ? "crisis" : "negative";
+  const dashboardReturnNavigation = useMemo(
+    () => readDashboardReturnNavigation(searchParams),
+    [searchParams],
+  );
   const handledAlertIdParamRef = useRef<string | null>(null);
 
 
@@ -300,8 +272,13 @@ export default function AlertsPage() {
     triggerToast(t("alerts.toast.saved"));
   };
 
-  const handleAccessSource = async (url: string, text: string) => {
-    // 1. Copy full text to clipboard for manual Ctrl+F fallback
+  const handleAccessSource = async (alert: Parameters<typeof getAlertSourceUrl>[0]) => {
+    const text = alert.comment_content || alert.text || "";
+    // Open synchronously from the click event so browsers do not block the new tab.
+    const targetUrl = getAlertSourceUrl(alert);
+    if (targetUrl) window.open(targetUrl, "_blank", "noopener,noreferrer");
+
+    // Copy full text to clipboard for manual Ctrl+F fallback.
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -310,9 +287,6 @@ export default function AlertsPage() {
       console.warn("[AlertsPage] Failed to copy source text:", err);
     }
 
-    // 2. Format with anchor and open in new tab
-    const targetUrl = getFormattedSourceUrl(url, text);
-    window.open(targetUrl, "_blank", "noopener,noreferrer");
   };
 
   const {
@@ -325,6 +299,8 @@ export default function AlertsPage() {
     setFilters,
     fetchAlerts,
     updateAlertStatus,
+    skipAlert,
+    restoreAlert,
     fetchCorrectionRequests,
     createCorrectionRequest,
     resolveCorrectionRequest,
@@ -333,7 +309,18 @@ export default function AlertsPage() {
   } = useAlertStore();
   // Filter alerts by currently selected brand filter for dashboard overview calculations
   const brandFilteredAlerts = useMemo(() => {
-    let result = rawAlerts;
+    // Alerts is the complete negative-content queue. The shared store also
+    // carries urgent non-negative records so Crisis Monitoring can honour its
+    // broader urgency rule without triggering another data scan.
+    let result = rawAlerts.filter((alert) => {
+      if (alertScope === "negative") return alert.sentiment === "negative";
+      return isCrisisClassificationLabel({
+        sentiment: alert.sentiment as any,
+        relevance: alert.relevance,
+        urgency: alert.urgency as any,
+        intent: alert.intent as any,
+      });
+    });
 
     if (filters.brand && filters.brand !== "all") {
       const normalize = (b: string) => String(b || "").toLowerCase().replace(/[\s\-_.]/g, "").trim();
@@ -407,7 +394,22 @@ export default function AlertsPage() {
     }
 
     return result;
-  }, [rawAlerts, filters.brand, timeFilter, singleDate, customStartDate, customEndDate]);
+  }, [alertScope, rawAlerts, filters.brand, timeFilter, singleDate, customStartDate, customEndDate]);
+
+  useEffect(() => {
+    const requestedTime = searchParams.get("time");
+    const requestedStatus = searchParams.get("status");
+    const requestedSource = searchParams.get("source");
+    const requestedBrand = searchParams.get("brand");
+
+    if (requestedTime) setTimeFilter(requestedTime);
+    if (requestedStatus) setStatusFilter(requestedStatus as AlertStatusFilter);
+    if (requestedSource) setSourceFilter(requestedSource);
+    if (requestedBrand) setFilters({ brand: requestedBrand });
+    setSingleDate(searchParams.get("date") || "");
+    setCustomStartDate(searchParams.get("start") || "");
+    setCustomEndDate(searchParams.get("end") || "");
+  }, [searchParams, setFilters]);
 
   const availableMonths = useMemo(() => {
     const monthSet = new Set<string>();
@@ -427,21 +429,39 @@ export default function AlertsPage() {
     return alert.negativity_score ?? 0;
   };
 
-  const visibleBaseAlerts = useMemo(
-    () => brandFilteredAlerts.filter((alert) => canAlertBeVisibleToUser(alert, profile)),
-    [brandFilteredAlerts, profile],
-  );
+  const visibleBaseAlerts = useMemo(() => {
+    const deduplicated = new Map<string, AlertData>();
+    brandFilteredAlerts
+      .filter((alert) => canAlertBeVisibleToUser(alert, profile))
+      .forEach((alert) => {
+        const key = getAlertDeduplicationKey(alert);
+        const existing = deduplicated.get(key);
+        if (!existing || getAlertCompletenessScore(alert) > getAlertCompletenessScore(existing)) {
+          deduplicated.set(key, alert);
+        }
+      });
+    return Array.from(deduplicated.values());
+  }, [brandFilteredAlerts, profile]);
+
+  useEffect(() => {
+    if (isLoading || rawAlerts.length === 0) return;
+    prunePinnedAlerts(
+      visibleBaseAlerts
+        .filter((alert) => getAlertWorkflowStatus(alert) === "processing")
+        .map((alert) => alert.id),
+    );
+  }, [isLoading, prunePinnedAlerts, rawAlerts.length, visibleBaseAlerts]);
 
   const activeAlerts = useMemo(() => {
-    return visibleBaseAlerts.filter(a => {
-      const status = getAlertWorkflowStatus(a);
-      if (status === "resolved") return false;
-      return true;
-    });
+    return visibleBaseAlerts.filter((alert) => !isTerminalAlert(alert));
   }, [visibleBaseAlerts]);
 
   const resolvedAlerts = useMemo(() => {
     return visibleBaseAlerts.filter(isResolvedAlert);
+  }, [visibleBaseAlerts]);
+
+  const skippedAlerts = useMemo(() => {
+    return visibleBaseAlerts.filter(isSkippedAlert);
   }, [visibleBaseAlerts]);
 
   useEffect(() => {
@@ -472,9 +492,11 @@ export default function AlertsPage() {
     setStatusFilter(
       workflowStatus === "resolved"
         ? "resolved"
-        : workflowStatus === "processing"
-          ? "processing"
-          : workflowStatus === "contact_failed"
+        : workflowStatus === "skipped"
+          ? "skipped"
+          : workflowStatus === "processing"
+            ? "processing"
+            : workflowStatus === "contact_failed"
             ? "contact_failed"
             : "all",
     );
@@ -485,7 +507,11 @@ export default function AlertsPage() {
   }, [alertIdParam, mentionIdParam, visibleBaseAlerts]);
 
   const processedActiveAlerts = useMemo(() => {
-    let result = statusFilter === "resolved" ? [...resolvedAlerts] : [...activeAlerts];
+    let result = statusFilter === "resolved"
+      ? [...resolvedAlerts]
+      : statusFilter === "skipped"
+        ? [...skippedAlerts]
+        : [...activeAlerts];
 
     // Lọc theo trạng thái nghiệp vụ.
     // "all" includes every non-resolved workflow state. The status tabs are
@@ -502,6 +528,8 @@ export default function AlertsPage() {
       result = result.filter((alert) => getAlertWorkflowStatus(alert) === "contact_failed");
     } else if (statusFilter === "resolved") {
       result = result.filter(isResolvedAlert);
+    } else if (statusFilter === "skipped") {
+      result = result.filter(isSkippedAlert);
     }
 
     // 1. Search text filter
@@ -536,6 +564,10 @@ export default function AlertsPage() {
     // 5. Sorting. Risk priority is severity first, then the detailed risk
     // score, then recency so urgent mentions are always at the top.
     result.sort((a, b) => {
+      if (statusFilter === "processing") {
+        const pinnedDelta = Number(pinnedAlertIds.includes(b.id)) - Number(pinnedAlertIds.includes(a.id));
+        if (pinnedDelta !== 0) return pinnedDelta;
+      }
       if (sortBy === "risk") {
         const severityRank: Record<string, number> = {
           critical: 4,
@@ -560,7 +592,7 @@ export default function AlertsPage() {
     });
 
     return result;
-  }, [activeAlerts, resolvedAlerts, statusFilter, searchText, severityFilter, sourceFilter, contentTypeFilter, showMineOnly, sortBy, profile]);
+  }, [activeAlerts, resolvedAlerts, skippedAlerts, statusFilter, searchText, severityFilter, sourceFilter, contentTypeFilter, showMineOnly, sortBy, profile, pinnedAlertIds]);
 
   const totalAlertPages = Math.max(1, Math.ceil(processedActiveAlerts.length / ALERTS_PER_PAGE));
   const paginatedActiveAlerts = useMemo(() => {
@@ -570,8 +602,17 @@ export default function AlertsPage() {
 
   const selectedAlert = useMemo(() => {
     if (!selectedAlertId) return null;
-    return processedActiveAlerts.find((alert) => alert.id === selectedAlertId) || null;
-  }, [processedActiveAlerts, selectedAlertId]);
+    return processedActiveAlerts.find((alert) => alert.id === selectedAlertId) ||
+      (contactSessionAlertId === selectedAlertId ? contactSessionAlertRef.current : null);
+  }, [contactSessionAlertId, processedActiveAlerts, selectedAlertId]);
+  const alertViewers = useAlertViewPresence({
+    alertId: selectedAlert?.id || null,
+    enabled: Boolean(
+      selectedAlert &&
+      !isDetailPanelCollapsed &&
+      getAlertWorkflowStatus(selectedAlert) === "pending",
+    ),
+  });
 
   useEffect(() => {
     if (!pendingClaimSelectionId) return;
@@ -593,15 +634,37 @@ export default function AlertsPage() {
 
   useEffect(() => {
     if (pendingClaimSelectionId) return;
+    if (contactSessionAlertId) {
+      const contactAlertIndex = processedActiveAlerts.findIndex((alert) => alert.id === contactSessionAlertId);
+      if (selectedAlertId !== contactSessionAlertId) setSelectedAlertId(contactSessionAlertId);
+      if (contactAlertIndex >= 0) {
+        const contactAlertPage = Math.floor(contactAlertIndex / ALERTS_PER_PAGE) + 1;
+        if (contactAlertPage !== alertPage) setAlertPage(contactAlertPage);
+      }
+      return;
+    }
+    // Keep the current detail panel stable while a status/contact update is
+    // reloading the queue. Clearing the selection here makes the UI jump to
+    // another alert before the evidence form can be completed.
+    if (isLoading) return;
+
+    if (selectedAlertId) {
+      const selectedIndex = processedActiveAlerts.findIndex((alert) => alert.id === selectedAlertId);
+      if (selectedIndex >= 0) {
+        const selectedPage = Math.floor(selectedIndex / ALERTS_PER_PAGE) + 1;
+        if (selectedPage !== alertPage) setAlertPage(selectedPage);
+        return;
+      }
+    }
+
     if (paginatedActiveAlerts.length === 0) {
       setSelectedAlertId(null);
       return;
     }
-    if (!selectedAlertId || !paginatedActiveAlerts.some((alert) => alert.id === selectedAlertId)) {
-      setSelectedAlertId(paginatedActiveAlerts[0].id);
-      setDetailPanelTab("action");
-    }
-  }, [paginatedActiveAlerts, pendingClaimSelectionId, selectedAlertId]);
+
+    setSelectedAlertId(paginatedActiveAlerts[0].id);
+    setDetailPanelTab("action");
+  }, [alertPage, contactSessionAlertId, isLoading, paginatedActiveAlerts, pendingClaimSelectionId, processedActiveAlerts, selectedAlertId]);
 
   const visibleAlertPages = useMemo(() => {
     const startPage = Math.max(1, Math.min(alertPage - 2, totalAlertPages - 4));
@@ -618,7 +681,20 @@ export default function AlertsPage() {
   }, [totalAlertPages]);
 
   const goToAlertPage = (pageNumber: number) => {
-    setAlertPage(Math.max(1, Math.min(totalAlertPages, pageNumber)));
+    const nextPage = Math.max(1, Math.min(totalAlertPages, pageNumber));
+    if (nextPage === alertPage) return;
+
+    // Pagination is an explicit navigation action. Move the selection with the
+    // page so the selection-preservation effect cannot immediately pull the
+    // user back to the page containing the previously selected alert.
+    const firstAlertOnNextPage = processedActiveAlerts[(nextPage - 1) * ALERTS_PER_PAGE] || null;
+    setPendingClaimSelectionId(null);
+    setContactSessionAlertId(null);
+    contactSessionAlertRef.current = null;
+    setAlertPage(nextPage);
+    setSelectedAlertId(firstAlertOnNextPage?.id || null);
+    setDetailPanelTab("action");
+
     window.requestAnimationFrame(() => {
       document.querySelector('[data-tour="alerts-queue-list"]')?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
@@ -655,7 +731,11 @@ export default function AlertsPage() {
             || t("alerts.page.dutyStaff");
           list.push({
             author: authorName,
-            action: t("alerts.page.loggedResolution", { id: a.id.slice(-4) }),
+            action: h.action_type === "skip"
+              ? `đã bỏ qua cảnh báo #${a.id.slice(-4)}`
+              : h.action_type === "restore"
+                ? `đã khôi phục cảnh báo #${a.id.slice(-4)}`
+                : t("alerts.page.loggedResolution", { id: a.id.slice(-4) }),
             timestamp: h.timestamp,
             id: a.id
           });
@@ -686,7 +766,7 @@ export default function AlertsPage() {
   // Shift Performance resolved ratio calculation
   const shiftPerformanceStats = useMemo(() => {
     const resolved = visibleBaseAlerts.filter(isResolvedAlert).length;
-    const total = visibleBaseAlerts.length;
+    const total = visibleBaseAlerts.filter((alert) => !isSkippedAlert(alert)).length;
     // We default to 100% KPI completion if there are no alerts to handle
     const percentage = total === 0 ? 100 : Math.round((resolved / total) * 100);
     return { percentage, resolved, total };
@@ -881,7 +961,7 @@ export default function AlertsPage() {
 
 
   // NOTE: No auto-unlock on unmount — tasks stay claimed by the assigned officer
-  // Unlock only happens when status changes to "resolved"
+  // Ownership remains locked until the alert reaches a terminal status.
 
   // Resolve parent post/comment text for Evidence Detail Modal
   useEffect(() => {
@@ -944,7 +1024,7 @@ export default function AlertsPage() {
   const highRiskIncidents = useMemo(() => {
     // 1. Get unresolved critical/high alerts
     const activeAlerts = visibleBaseAlerts.filter(
-      a => (a.severity.toLowerCase() === "critical" || a.severity.toLowerCase() === "high") && !isResolvedAlert(a)
+      a => (a.severity.toLowerCase() === "critical" || a.severity.toLowerCase() === "high") && !isTerminalAlert(a)
     );
 
     // 2. Enrich with lead contact details if author or content matches
@@ -1065,7 +1145,18 @@ export default function AlertsPage() {
   }
 
   return (
-    <div data-tour="alerts-page" className="p-4 md:p-6 lg:p-8 space-y-6 bg-[var(--color-bg-base)] text-[var(--color-text-primary)] animate-fade-in">
+    <div data-tour="alerts-page" className="space-y-6 bg-[var(--color-bg-base)] p-[clamp(12px,2vw,32px)] text-[var(--color-text-primary)] animate-fade-in">
+
+      {dashboardReturnNavigation && (
+        <button
+          type="button"
+          onClick={() => router.push(dashboardReturnNavigation.href)}
+          className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] px-3.5 text-sm font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-bg-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]"
+        >
+          <span className="material-symbols-outlined text-base">arrow_back</span>
+          {dashboardReturnNavigation.label}
+        </button>
+      )}
 
       {/* Redesigned Grid Section */}
       <AlertWorkbench
@@ -1096,7 +1187,11 @@ export default function AlertsPage() {
         currentPage={alertPage}
         totalPages={totalAlertPages}
         totalFiltered={processedActiveAlerts.length}
+        pinnedAlertIds={pinnedAlertIds}
+        maxPinnedAlerts={maxPinnedAlerts}
         profileEmail={profile?.email}
+        currentViewerId={profile?.uid}
+        alertViewers={alertViewers}
         canUpdate={canUpdateCrisisStatus}
         getResolverName={getResolverName}
         onRefresh={async () => {
@@ -1109,9 +1204,24 @@ export default function AlertsPage() {
           }
         }}
         onSelectAlert={(alert) => {
+          if (contactSessionAlertId && contactSessionAlertId !== alert.id) {
+            setContactSessionAlertId(null);
+            contactSessionAlertRef.current = null;
+          }
           setSelectedAlertId(alert.id);
           setDetailPanelTab("action");
           setIsDetailPanelCollapsed(false);
+        }}
+        onTogglePin={(alert) => {
+          const wasPinned = pinnedAlertIds.includes(alert.id);
+          const changed = togglePinnedAlert(alert.id);
+          triggerToast(
+            changed
+              ? wasPinned
+                ? "Đã bỏ ghim cảnh báo."
+                : "Đã ghim cảnh báo lên đầu danh sách."
+              : `Chỉ được ghim tối đa ${maxPinnedAlerts} cảnh báo.`,
+          );
         }}
         onCollapsePanel={() => setIsDetailPanelCollapsed(true)}
         onOpenPanel={() => setIsDetailPanelCollapsed(false)}
@@ -1134,21 +1244,21 @@ export default function AlertsPage() {
             throw claimError;
           }
         }}
-        onRecordResult={async (alert) => {
+        onRecordResult={async (alert, draft: AlertContactResultDraft) => {
           if (
             !alert.customer_contact_opened_at ||
-            !alert.customer_contact_note?.trim() ||
-            !alert.customer_contact_evidence_image ||
-            !alert.customer_response_result
+            !draft.note.trim() ||
+            !draft.evidenceImage ||
+            !draft.responseResult
           ) {
             const missingEvidenceError = new Error("Cần có minh chứng liên hệ và kết quả phản hồi của khách hàng.");
             triggerToast(missingEvidenceError.message);
             throw missingEvidenceError;
           }
 
-          const outcomeStatus: CustomerContactAttempt["outcome_status"] = alert.customer_response_result === "no_response"
+          const outcomeStatus: CustomerContactAttempt["outcome_status"] = draft.responseResult === "no_response"
             ? "contact_waiting"
-            : alert.customer_response_result === "still_upset"
+            : draft.responseResult === "still_upset"
               ? "contact_failed"
               : "resolved";
           const nextContactHistory: CustomerContactAttempt[] = [
@@ -1157,9 +1267,9 @@ export default function AlertsPage() {
               opened_at: alert.customer_contact_opened_at,
               opened_by: alert.customer_contact_opened_by,
               template: alert.customer_contact_template,
-              note: alert.customer_contact_note,
-              evidence_image: alert.customer_contact_evidence_image,
-              response_result: alert.customer_response_result,
+              note: draft.note,
+              evidence_image: draft.evidenceImage,
+              response_result: draft.responseResult,
               completed_at: new Date().toISOString(),
               outcome_status: outcomeStatus,
             },
@@ -1169,11 +1279,11 @@ export default function AlertsPage() {
             : outcomeStatus === "contact_failed"
               ? "contact_failed"
               : "resolved";
-          const resultLabel = alert.customer_response_result === "positive"
+          const resultLabel = draft.responseResult === "positive"
             ? "Khách hàng phản hồi tích cực"
-            : alert.customer_response_result === "no_response"
+            : draft.responseResult === "no_response"
               ? "Chưa phản hồi"
-              : alert.customer_response_result === "still_upset"
+              : draft.responseResult === "still_upset"
                 ? "Khách hàng vẫn bức xúc"
                 : "Không phù hợp";
 
@@ -1183,9 +1293,9 @@ export default function AlertsPage() {
               customer_contact_opened_at: alert.customer_contact_opened_at,
               customer_contact_opened_by: alert.customer_contact_opened_by,
               customer_contact_template: alert.customer_contact_template,
-              customer_contact_note: alert.customer_contact_note,
-              customer_contact_evidence_image: alert.customer_contact_evidence_image,
-              customer_response_result: alert.customer_response_result,
+              customer_contact_note: draft.note,
+              customer_contact_evidence_image: draft.evidenceImage,
+              customer_response_result: draft.responseResult,
               customer_contact_history: nextContactHistory,
               reset_customer_contact: outcomeStatus !== "resolved",
             }, alert.brand);
@@ -1196,12 +1306,47 @@ export default function AlertsPage() {
                   ? "Đã chuyển cảnh báo sang luồng Giải quyết thất bại."
                   : "Đã ghi nhận liên hệ và chuyển sang chờ phản hồi."
             );
+            setContactSessionAlertId(null);
+            contactSessionAlertRef.current = null;
           } catch (recordError) {
             triggerToast(recordError instanceof Error ? recordError.message : "Không thể ghi nhận kết quả cảnh báo.");
             throw recordError;
           }
         }}
-        onOpenSource={(alert) => void handleAccessSource(alert.url || "#", alert.text || alert.comment_content || "")}
+        onSkip={async (alert) => {
+          const currentIndex = paginatedActiveAlerts.findIndex((item) => item.id === alert.id);
+          const nextAlert = paginatedActiveAlerts[currentIndex + 1] || paginatedActiveAlerts[currentIndex - 1] || null;
+          await skipAlert(alert.id, profile, alert.brand);
+          setContactSessionAlertId(null);
+          contactSessionAlertRef.current = null;
+          setSelectedAlertId(nextAlert?.id || null);
+          setDetailPanelTab("action");
+          setIsDetailPanelCollapsed(false);
+        }}
+        onRestore={async (alert) => {
+          await restoreAlert(alert.id, profile, alert.brand);
+          setContactSessionAlertId(null);
+          contactSessionAlertRef.current = null;
+          setSearchText("");
+          setSeverityFilter("all");
+          setSourceFilter("all");
+          setContentTypeFilter("all");
+          setShowMineOnly(false);
+          setStatusFilter("processing");
+          setAlertPage(1);
+          setPendingClaimSelectionId(alert.id);
+          setSelectedAlertId(alert.id);
+          setDetailPanelTab("action");
+          setIsDetailPanelCollapsed(false);
+        }}
+        onOpenSource={(alert) => {
+          contactSessionAlertRef.current = alert;
+          setContactSessionAlertId(alert.id);
+          setSelectedAlertId(alert.id);
+          setDetailPanelTab("action");
+          setIsDetailPanelCollapsed(false);
+          void handleAccessSource(alert);
+        }}
         onStatusFilterChange={setStatusFilter}
         onSearchTextChange={setSearchText}
         onSeverityFilterChange={setSeverityFilter}

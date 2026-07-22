@@ -359,7 +359,7 @@ export function LeadEmployeeOnboarding() {
   if (mode === "intro") {
     return (
       <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/55 p-4" role="dialog" aria-modal="true">
-        <section className="w-full max-w-[720px] rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-5 shadow-2xl md:p-6">
+        <section className="w-full max-w-[720px] rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-modal)] p-5 shadow-2xl md:p-6">
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.08em] text-[var(--color-brand)]">
@@ -443,7 +443,7 @@ export function LeadEmployeeOnboarding() {
       )}
 
       <section
-        className="fixed rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-4 shadow-2xl md:p-5"
+        className="fixed rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-modal)] p-4 shadow-2xl md:p-5"
         style={tooltipStyle}
         aria-labelledby="lead-employee-tour-title"
       >
