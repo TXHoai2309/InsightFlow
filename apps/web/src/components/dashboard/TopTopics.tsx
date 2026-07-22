@@ -2,10 +2,11 @@
 
 import React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import type { TopTopic } from "@/types/dashboard";
 import { useDashboardStore } from "@/stores/dashboard.store";
+import { isDemoPath, toDemoHref } from "@/lib/demo-navigation";
 
 interface TopTopicsProps {
   topics: TopTopic[];
@@ -13,6 +14,7 @@ interface TopTopicsProps {
 
 export function TopTopics({ topics }: TopTopicsProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const { t } = useTranslation();
   const setFilters = useDashboardStore((state) => state.setFilters);
 
@@ -33,7 +35,7 @@ export function TopTopics({ topics }: TopTopicsProps) {
 
   const handleTopicClick = (topicName: any) => {
     setFilters({ sentiment: "negative", topic: topicName });
-    router.push(`/mentions`);
+    router.push(isDemoPath(pathname) ? toDemoHref("/mentions") || "/demo/mentions" : "/mentions");
   };
 
   // Lấy top 5 topics có số lượng đề cập tiêu cực cao nhất

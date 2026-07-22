@@ -7,7 +7,13 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { useAlertStore } from "@/stores/alert.store";
-import { filterLeadsForDashboard } from "@/lib/lead-metrics";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  buildAlertOperationalMetrics,
+  buildLeadOperationalMetrics,
+  filterOperationalAlerts,
+  filterOperationalLeads,
+} from "@/lib/operational-metrics";
 import { useTranslation } from "react-i18next";
 
 import { DEMO_MOCK_ALERTS, DEMO_MOCK_LEADS } from "@/lib/demo-mock-data";
@@ -16,18 +22,32 @@ export function BMTabs() {
   const { t } = useTranslation();
   const pathname = usePathname();
   const router = useRouter();
+  const { profile } = useAuth();
   const [pendingHref, setPendingHref] = useState<string | null>(null);
   const isDemo = pathname.startsWith("/demo");
   const { leads, filters } = useDashboardStore();
   const rawAlerts = useAlertStore((state) => state.rawAlerts);
-  const alertsCount = isDemo ? (rawAlerts.length === 0 ? DEMO_MOCK_ALERTS.length : rawAlerts.length) : rawAlerts.length;
-  const leadsCount = useMemo(
-    () => {
-      if (isDemo) return leads.length === 0 ? DEMO_MOCK_LEADS.length : leads.length;
-      return filterLeadsForDashboard(leads, filters).length;
-    },
-    [isDemo, filters, leads],
-  );
+  const leadsCount = useMemo(() => {
+    if (isDemo && leads.length === 0) return DEMO_MOCK_LEADS.length;
+    const scoped = filterOperationalLeads(leads, {
+      profile,
+      workspaceId: filters.workspace_id,
+      platform: filters.platform,
+    });
+    return buildLeadOperationalMetrics(scoped, profile).total;
+  }, [isDemo, filters.platform, filters.workspace_id, leads, profile]);
+
+  const alertsCount = useMemo(() => {
+    if (isDemo && rawAlerts.length === 0) return DEMO_MOCK_ALERTS.length;
+    const scoped = filterOperationalAlerts(rawAlerts, {
+      profile,
+      workspaceId: filters.workspace_id,
+      platform: filters.platform,
+      crisisOnly: true,
+      dateBasis: "created_at",
+    });
+    return buildAlertOperationalMetrics(scoped).total;
+  }, [isDemo, filters.platform, filters.workspace_id, profile, rawAlerts]);
 
   useEffect(() => setPendingHref(null), [pathname]);
 
@@ -43,8 +63,8 @@ export function BMTabs() {
     <div className="flex w-full items-center space-x-1 border-b border-[#C8C4D6] dark:border-gray-800 mb-6">
       {tabs.map((tab) => {
         const isActive = pathname === tab.href;
-        const isCrisisTab = tab.href === "/dashboard/insights";
-        const isLeadTab = tab.href === "/dashboard/lead-monitoring";
+        const isCrisisTab = tab.href.endsWith("/insights");
+        const isLeadTab = tab.href.endsWith("/lead-monitoring");
         
         // Active color logic based on which tab it is
         let activeColorClass = "text-[#4234B6]";

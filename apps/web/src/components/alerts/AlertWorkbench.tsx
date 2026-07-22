@@ -1,13 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, Search } from "lucide-react";
-import { getAlertWorkflowStatus, isResolvedAlert } from "@/lib/alertWorkflow";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { getAlertWorkflowStatus, isResolvedAlert, isSkippedAlert, isTerminalAlert } from "@/lib/alertWorkflow";
 import type { AlertData, AlertFilters } from "@/stores/alert.store";
 import { AlertDetailPanel, type AlertDetailPanelTab } from "./AlertDetailPanel";
+import type { AlertContactResultDraft } from "./AlertContactWorkflow";
 import { AlertWorkbenchRow } from "./AlertWorkbenchRow";
+import type { AlertViewer } from "@/hooks/useAlertViewPresence";
 
-type StatusFilter = "all" | "pending" | "processing" | "contact_failed" | "resolved";
+export type AlertStatusFilter = "all" | "pending" | "processing" | "contact_failed" | "resolved" | "skipped";
+type StatusFilter = AlertStatusFilter;
 type QueueStatus = Exclude<StatusFilter, "all">;
 
 interface AlertWorkbenchProps {
@@ -38,16 +41,23 @@ interface AlertWorkbenchProps {
   currentPage: number;
   totalPages: number;
   totalFiltered: number;
+  pinnedAlertIds: string[];
+  maxPinnedAlerts: number;
   profileEmail?: string | null;
+  currentViewerId?: string | null;
+  alertViewers: AlertViewer[];
   canUpdate: boolean;
   getResolverName: (value: string | null | undefined) => string;
   onRefresh: () => Promise<void>;
   onSelectAlert: (alert: AlertData) => void;
+  onTogglePin: (alert: AlertData) => void;
   onCollapsePanel: () => void;
   onOpenPanel: () => void;
   onDetailTabChange: (tab: AlertDetailPanelTab) => void;
   onClaim: (alert: AlertData) => Promise<void>;
-  onRecordResult: (alert: AlertData) => Promise<void>;
+  onRecordResult: (alert: AlertData, draft: AlertContactResultDraft) => Promise<void>;
+  onSkip: (alert: AlertData) => Promise<void>;
+  onRestore: (alert: AlertData) => Promise<void>;
   onOpenSource: (alert: AlertData) => void;
   onStatusFilterChange: (value: StatusFilter) => void;
   onSearchTextChange: (value: string) => void;
@@ -68,7 +78,8 @@ const STATUS_VIEWS: Array<{ id: QueueStatus; label: string }> = [
   { id: "pending", label: "Chưa phân công" },
   { id: "processing", label: "Đang xử lý" },
   { id: "contact_failed", label: "Cần liên hệ lại" },
-  { id: "resolved", label: "Đã giải quyết" },
+  { id: "resolved", label: "Đã đóng" },
+  { id: "skipped", label: "Đã bỏ qua" },
 ];
 
 export function AlertWorkbench(props: AlertWorkbenchProps) {
@@ -78,16 +89,32 @@ export function AlertWorkbench(props: AlertWorkbenchProps) {
     processing: props.alerts.filter((alert) => getAlertWorkflowStatus(alert) === "processing").length,
     contact_failed: props.alerts.filter((alert) => getAlertWorkflowStatus(alert) === "contact_failed").length,
     resolved: props.alerts.filter(isResolvedAlert).length,
+    skipped: props.alerts.filter(isSkippedAlert).length,
   };
-  const urgentCount = props.alerts.filter((alert) => !isResolvedAlert(alert) && ["critical", "high"].includes(String(alert.severity).toLowerCase())).length;
+  const urgentCount = props.alerts.filter((alert) => !isTerminalAlert(alert) && ["critical", "high"].includes(String(alert.severity).toLowerCase())).length;
+  const openCount = counts.pending + counts.processing + counts.contact_failed;
+  const timeScopeLabel = props.timeFilter === "all"
+    ? "Toàn thời gian"
+    : props.timeFilter === "24h"
+      ? "Hôm nay"
+      : props.timeFilter === "7d"
+        ? "7 ngày qua"
+        : props.timeFilter === "30d"
+          ? "30 ngày qua"
+          : props.timeFilter === "single"
+            ? (props.singleDate || "Ngày cụ thể")
+            : props.timeFilter === "custom"
+              ? `${props.customStartDate || "…"} → ${props.customEndDate || "…"}`
+              : props.timeFilter;
   const isPanelOpen = Boolean(props.selectedAlert && !props.panelCollapsed);
 
   const ALL_STATUS_VIEWS = [
-    { id: "all" as const, label: "Tất cả đang mở", count: counts.pending + counts.contact_failed },
+    { id: "all" as const, label: "Tất cả việc đang mở", count: openCount },
     { id: "pending" as const, label: "Chưa phân công", count: counts.pending },
     { id: "processing" as const, label: "Đang xử lý", count: counts.processing },
     { id: "contact_failed" as const, label: "Cần liên hệ lại", count: counts.contact_failed },
-    { id: "resolved" as const, label: "Đã giải quyết", count: counts.resolved },
+    { id: "resolved" as const, label: "Đã đóng", count: counts.resolved },
+    { id: "skipped" as const, label: "Đã bỏ qua", count: counts.skipped },
   ];
 
   return (
@@ -95,23 +122,35 @@ export function AlertWorkbench(props: AlertWorkbenchProps) {
       <header className="flex flex-col gap-3 min-[1320px]:flex-row min-[1320px]:items-center min-[1320px]:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2.5">
-            <h1 className="text-xl font-black text-[var(--color-text-primary)] md:text-2xl">Cảnh báo khủng hoảng</h1>
+            <h1 className="text-xl font-black text-[var(--color-text-primary)] md:text-2xl">Trung tâm xử lý cảnh báo</h1>
+            <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-2.5 py-1 text-[10px] font-black text-[var(--color-text-secondary)]">{timeScopeLabel}</span>
             {urgentCount > 0 && <span className="rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[10px] font-black text-red-700">{urgentCount} cảnh báo ưu tiên</span>}
           </div>
-          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">Chọn cảnh báo bên trái và xử lý nghiệp vụ trực tiếp trong panel.</p>
+          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">Toàn bộ đề cập tiêu cực đều được đưa vào hàng đợi; nhóm ưu tiên cao được đánh dấu riêng.</p>
         </div>
-        <div className="flex w-full flex-wrap items-center gap-2 min-[1320px]:w-auto">
-          <label className="relative min-w-[220px] flex-1 min-[1320px]:w-[20rem] min-[1320px]:flex-none">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" size={16} />
-            <input value={props.searchText} onChange={(event) => props.onSearchTextChange(event.target.value)} placeholder="Tìm nội dung hoặc người đăng..." className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] py-2 pl-9 pr-3 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20" />
-          </label>
-        </div>
+        <label
+          className="relative w-full min-[1320px]:w-[clamp(18rem,24%,22rem)]"
+          htmlFor="alert-header-search"
+        >
+          <span className="sr-only">Tìm kiếm nội dung hoặc người đăng</span>
+          <span className="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-base text-[var(--color-text-muted)]">
+            search
+          </span>
+          <input
+            id="alert-header-search"
+            type="search"
+            value={props.searchText}
+            onChange={(event) => props.onSearchTextChange(event.target.value)}
+            placeholder="Tìm nội dung hoặc người đăng..."
+            className="h-10 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] pl-9 pr-3 text-sm text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/20"
+          />
+        </label>
       </header>
 
       <section className="grid gap-3 md:grid-cols-3">
-        <KpiCard title="Cần xử lý ngay" value={counts.pending} sub={`${urgentCount} cảnh báo Critical/High`} icon="bolt" color="var(--color-error)" bg="var(--color-error-subtle)" onClick={() => props.onStatusFilterChange("pending")} />
-        <KpiCard title="Đang xử lý" value={counts.processing} sub="Đã có người phụ trách" icon="timer" color="var(--color-warning)" bg="var(--color-warning-subtle)" onClick={() => props.onStatusFilterChange("processing")} />
-        <KpiCard title="Cần liên hệ lại" value={counts.contact_failed} sub="Việc cần quay lại" icon="event" color="var(--color-info)" bg="var(--color-info-subtle)" onClick={() => props.onStatusFilterChange("contact_failed")} />
+        <KpiCard title="Tất cả việc đang mở" value={openCount} sub={`${urgentCount} việc có mức ưu tiên cao`} icon="bolt" color="var(--color-error)" bg="var(--color-error-subtle)" onClick={() => props.onStatusFilterChange("all")} />
+        <KpiCard title="Chưa phân công" value={counts.pending} sub="Chưa có người phụ trách" icon="person_add" color="var(--color-info)" bg="var(--color-info-subtle)" onClick={() => props.onStatusFilterChange("pending")} />
+        <KpiCard title="Đang được xử lý" value={counts.processing} sub="Đã có người phụ trách" icon="timer" color="var(--color-warning)" bg="var(--color-warning-subtle)" onClick={() => props.onStatusFilterChange("processing")} />
       </section>
 
       <section className="space-y-[clamp(6px,0.55vw,10px)]">
@@ -122,9 +161,9 @@ export function AlertWorkbench(props: AlertWorkbenchProps) {
                 key={view.id}
                 type="button"
                 onClick={() => props.onStatusFilterChange(view.id)}
-                className={`inline-flex shrink-0 items-center rounded-xl border px-3.5 py-2 text-sm font-bold tracking-tight transition-all duration-200 ${props.statusFilter === view.id
-                  ? "border-[var(--color-brand)] bg-[var(--color-brand)] text-white shadow-md shadow-[var(--color-brand)]/10"
-                  : "border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-strong)] dark:bg-slate-900/40"
+                className={`inline-flex min-h-10 shrink-0 items-center rounded-xl border px-3.5 py-2 text-sm font-bold tracking-tight transition-all duration-200 ${props.statusFilter === view.id
+                    ? "border-[var(--color-brand)] bg-[var(--color-brand)] text-white shadow-md shadow-[var(--color-brand)]/10"
+                    : "border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-strong)] dark:bg-slate-900/40"
                   }`}
               >
                 <span className="whitespace-nowrap">{view.label}</span>
@@ -138,12 +177,12 @@ export function AlertWorkbench(props: AlertWorkbenchProps) {
             ))}
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <select value={props.sortBy} onChange={(event) => props.onSortChange(event.target.value as AlertWorkbenchProps["sortBy"])} className="w-fit shrink-0 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm font-bold text-[var(--color-text-primary)]"><option value="risk">Rủi ro cao trước</option><option value="newest">Mới nhất</option><option value="reach">Tiếp cận cao nhất</option></select>
+            <select value={props.sortBy} onChange={(event) => props.onSortChange(event.target.value as AlertWorkbenchProps["sortBy"])} className="h-10 w-fit shrink-0 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 text-sm font-bold text-[var(--color-text-primary)]"><option value="risk">Rủi ro cao trước</option><option value="newest">Mới nhất</option><option value="reach">Tiếp cận cao nhất</option></select>
             <button
               type="button"
               onClick={() => void props.onRefresh()}
               disabled={props.isRefreshing}
-              className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-4 py-2 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)] disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-4 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)] disabled:cursor-not-allowed disabled:opacity-60"
             >
               <span className="material-symbols-outlined text-base">refresh</span>
               Làm mới
@@ -151,7 +190,7 @@ export function AlertWorkbench(props: AlertWorkbenchProps) {
             <button
               type="button"
               onClick={() => setShowFilters((value) => !value)}
-              className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-2.5 py-1.5 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)]"
+              className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)]"
             >
               <span className="material-symbols-outlined text-base">tune</span>
               Bộ lọc
@@ -172,16 +211,22 @@ export function AlertWorkbench(props: AlertWorkbenchProps) {
         {showFilters && <FilterPanel {...props} />}
         {props.error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{props.error}</div>}
 
-        <div className={`grid w-full items-start gap-y-[1vh] ${isPanelOpen ? "min-[1100px]:grid-cols-[clamp(390px,25vw,420px)_minmax(0,1fr)] min-[1100px]:gap-x-2.5" : "grid-cols-1"}`}>
+        <div className={`grid w-full items-start gap-y-[1vh] ${isPanelOpen ? "min-[1100px]:grid-cols-[clamp(22rem,30%,32rem)_minmax(0,1fr)] min-[1100px]:gap-x-[1%]" : "grid-cols-1"}`}>
           <main data-tour="alerts-queue-list" className="flex min-w-0 scroll-mt-24 flex-col self-start rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm min-[1100px]:sticky min-[1100px]:top-3 min-[1100px]:max-h-[calc(100vh-88px)]">
-            <header className="flex shrink-0 items-center justify-between border-b border-[var(--color-border)] px-[4%] py-[3%]"><div><h2 className="text-sm font-black text-[var(--color-text-primary)]">Danh sách cảnh báo</h2><p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">{STATUS_VIEWS.find((view) => view.id === props.statusFilter)?.label || "Cảnh báo đang mở"}</p></div><span className="rounded-full bg-[var(--color-bg-surface-raised)] px-2.5 py-1 text-xs font-black text-[var(--color-text-primary)]">{props.totalFiltered}</span></header>
+            <header className="flex shrink-0 items-center justify-between border-b border-[var(--color-border)] px-[4%] py-[3%]">
+              <div><h2 className="text-sm font-black text-[var(--color-text-primary)]">Danh sách cảnh báo</h2><p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">{STATUS_VIEWS.find((view) => view.id === props.statusFilter)?.label || "Cảnh báo đang mở"}</p></div>
+              <div className="flex items-center gap-2">
+                {props.statusFilter === "processing" && <span className="inline-flex items-center gap-1 rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 text-[10px] font-black text-orange-700 dark:border-orange-900/50 dark:bg-orange-950/30 dark:text-orange-300"><span className="material-symbols-outlined text-xs">push_pin</span>{props.pinnedAlertIds.length}/{props.maxPinnedAlerts}</span>}
+                <span className="rounded-full bg-[var(--color-bg-surface-raised)] px-2.5 py-1 text-xs font-black text-[var(--color-text-primary)]">{props.totalFiltered}</span>
+              </div>
+            </header>
             <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3 [scrollbar-gutter:stable]">
-              {props.isLoading && props.pageAlerts.length === 0 ? [0, 1, 2].map((item) => <div key={item} className="h-[18vh] animate-pulse rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)]" />) : props.pageAlerts.length === 0 ? <div className="flex min-h-[45vh] flex-col items-center justify-center rounded-lg border border-dashed border-[var(--color-border)] p-[8%] text-center"><p className="text-sm font-black text-[var(--color-text-primary)]">Không có cảnh báo phù hợp</p><p className="mt-1 text-xs text-[var(--color-text-secondary)]">{props.canViewAllAssignments ? "Thử chọn trạng thái hoặc điều chỉnh bộ lọc." : "Không có cảnh báo nào đang chờ bạn xử lý."}</p></div> : props.pageAlerts.map((alert) => <AlertWorkbenchRow key={alert.id} alert={alert} selected={props.selectedAlertId === alert.id} onSelect={props.onSelectAlert} getResolverName={props.getResolverName} />)}
+              {props.isLoading && props.pageAlerts.length === 0 ? [0, 1, 2].map((item) => <div key={item} className="h-[18vh] animate-pulse rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)]" />) : props.pageAlerts.length === 0 ? <div className="flex min-h-[45vh] flex-col items-center justify-center rounded-lg border border-dashed border-[var(--color-border)] p-[8%] text-center"><p className="text-sm font-black text-[var(--color-text-primary)]">Không có cảnh báo phù hợp</p><p className="mt-1 text-xs text-[var(--color-text-secondary)]">{props.canViewAllAssignments ? "Thử chọn trạng thái hoặc điều chỉnh bộ lọc." : "Không có cảnh báo nào đang chờ bạn xử lý."}</p></div> : props.pageAlerts.map((alert) => <AlertWorkbenchRow key={alert.id} alert={alert} selected={props.selectedAlertId === alert.id} pinned={props.pinnedAlertIds.includes(alert.id)} canPin={props.statusFilter === "processing" && getAlertWorkflowStatus(alert) === "processing"} pinDisabled={props.pinnedAlertIds.length >= props.maxPinnedAlerts} onTogglePin={props.onTogglePin} onSelect={props.onSelectAlert} getResolverName={props.getResolverName} viewers={props.selectedAlertId === alert.id ? props.alertViewers : []} currentViewerId={props.currentViewerId} />)}
             </div>
             {props.totalFiltered > 0 && <footer className="flex shrink-0 items-center justify-between border-t border-[var(--color-border)] px-[4%] py-[3%] text-xs text-[var(--color-text-secondary)]"><span>{props.totalFiltered} cảnh báo</span><div className="flex items-center gap-2"><button type="button" onClick={() => props.onPageChange(props.currentPage - 1)} disabled={props.currentPage === 1} className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--color-border)] disabled:opacity-40" title="Trang trước"><ChevronLeft size={16} /></button><span className="min-w-10 text-center font-black text-[var(--color-text-primary)]">{props.currentPage}/{props.totalPages}</span><button type="button" onClick={() => props.onPageChange(props.currentPage + 1)} disabled={props.currentPage === props.totalPages} className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--color-border)] disabled:opacity-40" title="Trang sau"><ChevronRight size={16} /></button></div></footer>}
           </main>
 
-          {props.selectedAlert && !props.panelCollapsed && <AlertDetailPanel alert={props.selectedAlert} activeTab={props.detailTab} onTabChange={props.onDetailTabChange} profileEmail={props.profileEmail} canUpdate={props.canUpdate} getResolverName={props.getResolverName} onClose={props.onCollapsePanel} onClaim={props.onClaim} onRecordResult={props.onRecordResult} onOpenSource={props.onOpenSource} />}
+          {props.selectedAlert && !props.panelCollapsed && <AlertDetailPanel alert={props.selectedAlert} activeTab={props.detailTab} statusFilter={props.statusFilter} onTabChange={props.onDetailTabChange} profileEmail={props.profileEmail} canUpdate={props.canUpdate} getResolverName={props.getResolverName} onClose={props.onCollapsePanel} onClaim={props.onClaim} onRecordResult={props.onRecordResult} onSkip={props.onSkip} onRestore={props.onRestore} onOpenSource={props.onOpenSource} />}
         </div>
       </section>
     </div>

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   ChevronLeft,
   ChevronRight,
@@ -17,14 +18,25 @@ import { getAlertWorkflowStatus } from "@/lib/alertWorkflow";
 import { canPerformAction } from "@/lib/rbac";
 import { useAlertStore, type AlertData } from "@/stores/alert.store";
 import { cn } from "@/lib/utils";
+import {
+  DASHBOARD_RETURN_CONFIG,
+  createDashboardReturnHref,
+  getAppScrollTop,
+  loadDashboardReturnContext,
+  removeDashboardReturnTokenFromCurrentUrl,
+  saveDashboardReturnContext,
+  type DashboardReturnContext,
+} from "@/lib/dashboard-return-context";
+import { isDemoPath } from "@/lib/demo-navigation";
+import { dummyStaff } from "@/lib/demoData";
 
 const PAGE_SIZE = 10;
 
 const FILTERS = [
   { id: "all", label: "Tất cả" },
-  { id: "high-risk", label: "Critical / Cao" },
-  { id: "overdue", label: "Quá SLA" },
-  { id: "unassigned", label: "Chưa giao" },
+  { id: "high-risk", label: "Ưu tiên cao" },
+  { id: "overdue", label: "Quá hạn phản hồi" },
+  { id: "unassigned", label: "Chưa có người xử lý" },
   { id: "processing", label: "Đang xử lý" },
 ] as const;
 
@@ -48,10 +60,10 @@ function normalizeSeverity(value?: string) {
 function getSlaInfo(alert: AlertData) {
   const severity = normalizeSeverity(alert.severity);
   const limitHours = severity === "critical" ? 1 : severity === "high" ? 2 : severity === "medium" ? 4 : 8;
-  const createdAt = new Date(alert.created_at).getTime();
+  const createdAt = new Date(alert.detected_at || alert.created_at).getTime();
   const usedMinutes = Number.isFinite(createdAt) ? Math.max(0, Math.floor((Date.now() - createdAt) / 60000)) : 0;
   const limitMinutes = limitHours * 60;
-  const isTerminal = ["resolved", "contact_failed"].includes(getAlertWorkflowStatus(alert));
+  const isTerminal = getAlertWorkflowStatus(alert) === "resolved";
   const overdueMinutes = Math.max(0, usedMinutes - limitMinutes);
 
   if (isTerminal) return { isOverdue: false, label: "Đã kết thúc", percent: 100 };
@@ -90,20 +102,44 @@ function sourceUrl(alert: AlertData) {
 }
 
 export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
+  const pathname = usePathname();
   const { profile } = useAuth();
   const lockAlertForResolution = useAlertStore((state) => state.lockAlertForResolution);
   const [activeFilter, setActiveFilter] = useState<FilterId>("all");
   const [searchText, setSearchText] = useState("");
   const [page, setPage] = useState(1);
+  const [highlightedAlertId, setHighlightedAlertId] = useState<string | null>(null);
+  const pendingRestoreContext = useRef<DashboardReturnContext | null>(null);
+  const isRestoringContext = useRef(false);
   const [staff, setStaff] = useState<StaffOption[]>([]);
   const [assignmentAlertId, setAssignmentAlertId] = useState<string | null>(null);
   const [assigning, setAssigning] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; error?: boolean } | null>(null);
   const canAssign = profile?.role === "brand_manager" && canPerformAction(profile, "update_crisis_status");
+  const dashboardReturnToken = DASHBOARD_RETURN_CONFIG["crisis-monitoring"].token;
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const context = loadDashboardReturnContext(params.get("dashboardReturnToken"));
+    if (!context || context.origin !== "crisis-monitoring") return;
+    isRestoringContext.current = true;
+    if (FILTERS.some((filter) => filter.id === context.filter)) {
+      setActiveFilter(context.filter as FilterId);
+    }
+    setSearchText(context.searchText || "");
+    setPage(Math.max(1, Math.floor(context.page || 1)));
+    setHighlightedAlertId(context.selectedItemId || null);
+    pendingRestoreContext.current = context;
+    removeDashboardReturnTokenFromCurrentUrl();
+  }, []);
 
   useEffect(() => {
     if (!canAssign) return;
     const loadStaff = async () => {
+      if (isDemoPath(pathname)) {
+        setStaff(dummyStaff.filter((item) => item.permissions.includes("alerts")).map((item) => ({ ...item })));
+        return;
+      }
       try {
         const token = await auth.currentUser?.getIdToken();
         if (!token) return;
@@ -117,7 +153,7 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
       }
     };
     void loadStaff();
-  }, [canAssign]);
+  }, [canAssign, pathname]);
 
   const filteredAlerts = useMemo(() => {
     const query = searchText.trim().toLowerCase();
@@ -143,10 +179,54 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
   const safePage = Math.min(page, pageCount);
   const pageAlerts = filteredAlerts.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
-  useEffect(() => setPage(1), [activeFilter, searchText]);
   useEffect(() => {
-    if (page > pageCount) setPage(pageCount);
-  }, [page, pageCount]);
+    if (isRestoringContext.current) return;
+    setPage(1);
+  }, [activeFilter, searchText]);
+  useEffect(() => {
+    if (alerts.length > 0 && page > pageCount) setPage(pageCount);
+  }, [alerts.length, page, pageCount]);
+
+  useEffect(() => {
+    const context = pendingRestoreContext.current;
+    if (!context || alerts.length === 0) return;
+    const timer = window.setTimeout(() => {
+      const row = document.getElementById(`dashboard-alert-row-${context.selectedItemId}`);
+      if (row) {
+        row.scrollIntoView({ block: "center", behavior: "smooth" });
+      } else {
+        const scrollRoot = document.querySelector<HTMLElement>('[data-app-scroll-root="true"]');
+        if (scrollRoot) scrollRoot.scrollTo({ top: Math.max(0, context.scrollTop), behavior: "smooth" });
+        else window.scrollTo({ top: Math.max(0, context.scrollTop), behavior: "smooth" });
+      }
+      pendingRestoreContext.current = null;
+      isRestoringContext.current = false;
+    }, 160);
+    const highlightTimer = window.setTimeout(() => setHighlightedAlertId(null), 4000);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearTimeout(highlightTimer);
+    };
+  }, [activeFilter, alerts.length, page, pageAlerts, searchText]);
+
+  const rememberDashboardContext = (alert: AlertData) => {
+    saveDashboardReturnContext({
+      token: dashboardReturnToken,
+      origin: "crisis-monitoring",
+      returnPath: DASHBOARD_RETURN_CONFIG["crisis-monitoring"].path,
+      filter: activeFilter,
+      searchText,
+      page: safePage,
+      selectedItemId: alert.id,
+      scrollTop: getAppScrollTop(),
+      savedAt: new Date().toISOString(),
+    });
+    window.history.replaceState(
+      window.history.state,
+      "",
+      createDashboardReturnHref("crisis-monitoring", dashboardReturnToken),
+    );
+  };
 
   const handleAssign = async (alert: AlertData, staffUid: string) => {
     const selectedStaff = staff.find((item) => item.uid === staffUid);
@@ -175,7 +255,7 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
       <div className="flex flex-col gap-4 border-b border-[#EEEAF6] dark:border-white/10 px-5 py-5 xl:flex-row xl:items-center xl:justify-between">
         <div>
           <h2 className="text-lg font-black text-[#1A1B20] dark:text-white">Danh sách sự vụ khẩn cấp ({filteredAlerts.length})</h2>
-          <p className="mt-1 text-xs font-medium text-[#6E6A7C] dark:text-gray-400">Ưu tiên theo điểm rủi ro; chọn nội dung để mở đúng mention tại trang Cảnh báo.</p>
+          <p className="mt-1 text-xs font-medium text-[#6E6A7C] dark:text-gray-400">Sắp xếp theo mức ưu tiên; chọn nội dung để xem chi tiết và lịch sử xử lý.</p>
         </div>
         <label className="flex h-10 min-w-[260px] items-center gap-2 rounded-lg border border-[#D8D4E3] dark:border-white/20 bg-white dark:bg-white/5 px-3 focus-within:border-[#5B4FCF] dark:focus-within:border-[#9B8CFF]">
           <Search className="h-4 w-4 text-[#787585] dark:text-gray-400" />
@@ -193,13 +273,13 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
         <table className="w-full min-w-[1180px] border-collapse text-left">
           <thead className="bg-[#F8F7FC] dark:bg-white/5 text-[11px] font-black uppercase tracking-wide text-[#6E6A7C] dark:text-gray-400">
             <tr>
-              <th className="px-5 py-3">Sự vụ & nội dung</th>
-              <th className="px-4 py-3">Nền tảng</th>
-              <th className="px-4 py-3">Rủi ro</th>
-              <th className="px-4 py-3">SLA</th>
-              <th className="px-4 py-3">Trạng thái</th>
-              <th className="px-4 py-3">Phụ trách</th>
-              <th className="px-5 py-3 text-right">Hành động</th>
+              <th className="px-5 py-3">Nội dung cảnh báo</th>
+              <th className="px-4 py-3">Kênh</th>
+              <th className="px-4 py-3">Điểm ưu tiên</th>
+              <th className="px-4 py-3">Thời hạn xử lý</th>
+              <th className="px-4 py-3">Tiến độ</th>
+              <th className="px-4 py-3">Người xử lý</th>
+              <th className="px-5 py-3 text-right">Thao tác</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#EEEAF6] dark:divide-white/10">
@@ -209,9 +289,9 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
               const status = getStatusInfo(alert);
               const url = sourceUrl(alert);
               return (
-                <tr key={alert.id} className="align-middle hover:bg-[#FCFBFF] dark:hover:bg-white/5">
+                <tr id={`dashboard-alert-row-${alert.id}`} key={alert.id} className={cn("align-middle hover:bg-[#FCFBFF] dark:hover:bg-white/5", highlightedAlertId === alert.id && "bg-[#EEEBFF] dark:bg-[#5B4FCF]/20 ring-2 ring-inset ring-[#5B4FCF]")}>
                   <td className="max-w-[390px] px-5 py-4">
-                    <Link href={createAlertWorkbenchHref(alert)} className="group block">
+                    <Link href={createAlertWorkbenchHref(alert, { origin: "crisis-monitoring", token: dashboardReturnToken })} onClick={() => rememberDashboardContext(alert)} onAuxClick={() => rememberDashboardContext(alert)} onContextMenu={() => rememberDashboardContext(alert)} className="group block">
                       <div className="flex items-center gap-2">
                         <span className={cn("rounded-md px-2 py-0.5 text-[10px] font-black uppercase", severity.tone)}>{severity.label}</span>
                         <span className="text-[11px] font-semibold text-[#787585] dark:text-gray-400">{alert.topic || "Khác"}</span>

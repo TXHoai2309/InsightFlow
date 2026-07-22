@@ -21,22 +21,37 @@ const mobileNavItems = [
   { href: "/reports", label: "nav.reports", icon: "assessment" },
 ];
 
+const demoNavRoutes: Record<string, string> = {
+  "/dashboard": "/demo",
+  "/mentions": "/demo/mentions",
+  "/alerts": "/demo/alerts",
+  "/leads": "/demo/leads",
+  "/reports": "/demo/reports",
+};
+
 export function MobileNav() {
   const pathname = usePathname();
   const { t } = useTranslation();
   const { profile, role } = useAuth();
-  const accessibleNavItems = mobileNavItems.filter((item) => canAccessPath(role, item.href, profile?.permissions));
+  const isDemoMode = pathname.startsWith("/demo");
+  const accessibleNavItems = mobileNavItems.filter(
+    (item) =>
+      canAccessPath(role, item.href, profile?.permissions) &&
+      (!isDemoMode || Boolean(demoNavRoutes[item.href])),
+  );
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[var(--color-bg-surface)] border-t border-[var(--color-border)] shadow-lg">
       <div className="flex items-center justify-around px-1 py-2">
         {accessibleNavItems.map((item) => {
+          const navigationHref = isDemoMode ? demoNavRoutes[item.href] : item.href;
           const isActive =
-            pathname === item.href || pathname?.startsWith(item.href);
+            pathname === navigationHref ||
+            (navigationHref !== "/demo" && pathname?.startsWith(`${navigationHref}/`));
           return (
             <Link
               key={item.href}
-              href={item.href}
+              href={navigationHref}
               data-tour={`nav-${item.href.replace(/^\//, "").replace(/\//g, "-") || "home"}`}
               className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg transition-all min-w-[52px] ${
                 isActive

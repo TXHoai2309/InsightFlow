@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   ChevronLeft,
   ChevronRight,
@@ -17,6 +18,17 @@ import { useAuth } from "@/hooks/useAuth";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { getLeadOperationErrorMessage } from "@/lib/services/dashboard";
 import { createLeadWorkbenchHref } from "@/lib/mention-navigation";
+import {
+  DASHBOARD_RETURN_CONFIG,
+  createDashboardReturnHref,
+  getAppScrollTop,
+  loadDashboardReturnContext,
+  removeDashboardReturnTokenFromCurrentUrl,
+  saveDashboardReturnContext,
+  type DashboardReturnContext,
+} from "@/lib/dashboard-return-context";
+import { isDemoPath } from "@/lib/demo-navigation";
+import { dummyStaff } from "@/lib/demoData";
 
 const filterChips = [
   { id: "all", label: "Tất cả" },
@@ -114,6 +126,7 @@ function calculateResponseTime(created: string, firstContacted?: string) {
 }
 
 export function LeadTable() {
+  const pathname = usePathname();
   const monitoringLeads = useLeadMonitoringLeads();
   const { profile } = useAuth();
   const { updateLeadDetails } = useDashboardStore();
@@ -122,6 +135,10 @@ export function LeadTable() {
 
   useEffect(() => {
     const fetchStaff = async () => {
+      if (isDemoPath(pathname)) {
+        setStaffList(dummyStaff.filter((item) => item.permissions.includes("leads")).map((item) => ({ ...item })));
+        return;
+      }
       try {
         const token = await auth.currentUser?.getIdToken();
         if (!token) return;
@@ -137,7 +154,7 @@ export function LeadTable() {
       }
     };
     fetchStaff();
-  }, []);
+  }, [pathname]);
 
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const showToast = (message: string, type: "success" | "error" = "success") => {
@@ -191,7 +208,23 @@ export function LeadTable() {
   );
   const [activeFilter, setActiveFilter] = useState<FilterChip>("all");
   const [page, setPage] = useState(1);
+  const [highlightedLeadId, setHighlightedLeadId] = useState<string | null>(null);
+  const pendingRestoreContext = useRef<DashboardReturnContext | null>(null);
   const itemsPerPage = 8;
+  const dashboardReturnToken = DASHBOARD_RETURN_CONFIG["lead-monitoring"].token;
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const context = loadDashboardReturnContext(params.get("dashboardReturnToken"));
+    if (!context || context.origin !== "lead-monitoring") return;
+    if (filterChips.some((chip) => chip.id === context.filter)) {
+      setActiveFilter(context.filter as FilterChip);
+    }
+    setPage(Math.max(1, Math.floor(context.page || 1)));
+    setHighlightedLeadId(context.selectedItemId || null);
+    pendingRestoreContext.current = context;
+    removeDashboardReturnTokenFromCurrentUrl();
+  }, []);
 
   const filteredLeads = useMemo(() => {
     if (activeFilter === "all") return rawLeads;
@@ -211,6 +244,50 @@ export function LeadTable() {
     const start = (safePage - 1) * itemsPerPage;
     return filteredLeads.slice(start, start + itemsPerPage);
   }, [filteredLeads, page, totalPages]);
+
+  useEffect(() => {
+    if (rawLeads.length === 0) return;
+    setPage((current) => Math.min(Math.max(1, current), totalPages));
+  }, [rawLeads.length, totalPages]);
+
+  useEffect(() => {
+    const context = pendingRestoreContext.current;
+    if (!context || rawLeads.length === 0) return;
+    const timer = window.setTimeout(() => {
+      const row = document.getElementById(`dashboard-lead-row-${context.selectedItemId}`);
+      if (row) {
+        row.scrollIntoView({ block: "center", behavior: "smooth" });
+      } else {
+        const scrollRoot = document.querySelector<HTMLElement>('[data-app-scroll-root="true"]');
+        if (scrollRoot) scrollRoot.scrollTo({ top: Math.max(0, context.scrollTop), behavior: "smooth" });
+        else window.scrollTo({ top: Math.max(0, context.scrollTop), behavior: "smooth" });
+      }
+      pendingRestoreContext.current = null;
+    }, 160);
+    const highlightTimer = window.setTimeout(() => setHighlightedLeadId(null), 4000);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearTimeout(highlightTimer);
+    };
+  }, [activeFilter, leads, page, rawLeads.length]);
+
+  const rememberDashboardContext = (lead: Lead) => {
+    saveDashboardReturnContext({
+      token: dashboardReturnToken,
+      origin: "lead-monitoring",
+      returnPath: DASHBOARD_RETURN_CONFIG["lead-monitoring"].path,
+      filter: activeFilter,
+      page: Math.min(page, totalPages),
+      selectedItemId: lead.id,
+      scrollTop: getAppScrollTop(),
+      savedAt: new Date().toISOString(),
+    });
+    window.history.replaceState(
+      window.history.state,
+      "",
+      createDashboardReturnHref("lead-monitoring", dashboardReturnToken),
+    );
+  };
 
   return (
     <div className="flex flex-col overflow-hidden rounded-[14px] border border-[#E9E7EE] dark:border-white/10 bg-white dark:bg-[#1A1B20] shadow-sm dark:shadow-none">
@@ -268,12 +345,15 @@ export function LeadTable() {
                 const statusInfo = getStatusInfo(lead.status);
                 const sla = formatSla(lead);
                 const sourceHref = lead.url || lead.source_url;
-                const leadHref = createLeadWorkbenchHref(lead);
+                const leadHref = createLeadWorkbenchHref(lead, {
+                  origin: "lead-monitoring",
+                  token: dashboardReturnToken,
+                });
 
                 return (
-                  <tr key={lead.id} className="transition-colors hover:bg-[#FAF8FF] dark:hover:bg-white/5">
+                  <tr id={`dashboard-lead-row-${lead.id}`} key={lead.id} className={`transition-colors hover:bg-[#FAF8FF] dark:hover:bg-white/5 ${highlightedLeadId === lead.id ? "bg-[#EEEBFF] dark:bg-[#5B4FCF]/20 ring-2 ring-inset ring-[#5B4FCF]" : ""}`}>
                     <td className="px-5 py-4 align-top">
-                      <Link href={leadHref} className="flex items-center gap-3 rounded-lg outline-none transition hover:text-[#4234B6] dark:hover:text-[#9B8CFF] focus-visible:ring-2 focus-visible:ring-[#4234B6]/30" title="Xem mention tại trang Khách hàng">
+                      <Link href={leadHref} onClick={() => rememberDashboardContext(lead)} onAuxClick={() => rememberDashboardContext(lead)} onContextMenu={() => rememberDashboardContext(lead)} className="flex items-center gap-3 rounded-lg outline-none transition hover:text-[#4234B6] dark:hover:text-[#9B8CFF] focus-visible:ring-2 focus-visible:ring-[#4234B6]/30" title="Xem mention tại trang Khách hàng">
                         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#EEEDF4] dark:bg-[#4234B6]/30 text-[13px] font-bold text-[#4234B6] dark:text-[#9B8CFF]">
                           {getAvatarInitials(lead.author)}
                         </div>
@@ -289,7 +369,7 @@ export function LeadTable() {
                     </td>
 
                     <td className="max-w-[340px] px-5 py-4 align-top">
-                      <Link href={leadHref} className="block rounded-lg outline-none transition hover:bg-[#F4F3FA] dark:hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-[#4234B6]/30" title="Xem mention tại trang Khách hàng">
+                      <Link href={leadHref} onClick={() => rememberDashboardContext(lead)} onAuxClick={() => rememberDashboardContext(lead)} onContextMenu={() => rememberDashboardContext(lead)} className="block rounded-lg outline-none transition hover:bg-[#F4F3FA] dark:hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-[#4234B6]/30" title="Xem mention tại trang Khách hàng">
                         <p className="text-[13px] font-bold text-[#1A1B20] dark:text-gray-200">
                           {getLeadSignal(lead)}
                         </p>
@@ -405,7 +485,7 @@ export function LeadTable() {
                             <ExternalLink className="h-4 w-4" />
                           </a>
                         ) : (
-                          <Link href={leadHref} className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#E9E7EE] dark:border-white/20 text-[#787585] dark:text-gray-400 hover:bg-[#F4F3FA] dark:hover:bg-white/10" title="Xem tại trang Khách hàng">
+                          <Link href={leadHref} onClick={() => rememberDashboardContext(lead)} onAuxClick={() => rememberDashboardContext(lead)} onContextMenu={() => rememberDashboardContext(lead)} className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#E9E7EE] dark:border-white/20 text-[#787585] dark:text-gray-400 hover:bg-[#F4F3FA] dark:hover:bg-white/10" title="Xem tại trang Khách hàng">
                             <MessageSquare className="h-4 w-4" />
                           </Link>
                         )}

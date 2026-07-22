@@ -11,10 +11,7 @@ import {
   exportDualOperationsReportExcel,
   type DualOperationsExcelViewOptions,
 } from "@/lib/excelExport";
-import type {
-  DualOperationsAttentionItem,
-  DualOperationsPriorityRow,
-} from "@/lib/dual-operations-report";
+import type { DualOperationsAttentionItem, DualOperationsPriorityRow } from "@/lib/dual-operations-report";
 import {
   DEFAULT_CRISIS_REPORT_FILTERS,
   type CrisisReportFilters,
@@ -29,14 +26,17 @@ import { useDashboardStore } from "@/stores/dashboard.store";
 import { useDualOperationsReport } from "./useDualOperationsReport";
 import { ExcelDocumentPreviewModal } from "@/components/reports/ExcelDocumentPreviewModal";
 import { DEMO_PROFILE } from "@/lib/demo-mock-data";
+import { isDemoPath, toDemoHref } from "@/lib/demo-navigation";
 import {
   AlertTriangle,
   ArrowRight,
   CalendarDays,
   CheckCircle2,
+  CircleDashed,
   Eye,
   Filter,
   Lightbulb,
+  LoaderCircle,
   Table2,
   TrendingUp,
 } from "lucide-react";
@@ -46,20 +46,20 @@ type OperationTab = "lead" | "crisis";
 
 interface DualReportFilters {
   operation: OperationScope;
-  timeRange: LeadReportFilters["timeRange"];
+  timeRange: "today" | "7d" | "30d" | "custom" | "all";
   startDate: string;
   endDate: string;
-  sla: LeadReportFilters["sla"];
+  sla: "all" | "in_sla" | "overdue" | "late" | "closed";
   priority: "all" | "high";
   source: string;
-  leadStatus: LeadReportFilters["status"];
+  leadStatus: "all" | "new" | "processing" | "completed" | "skipped";
   crisisStatus: string;
   keyword: string;
 }
 
 const DEFAULT_DUAL_REPORT_FILTERS: DualReportFilters = {
   operation: "all",
-  timeRange: "7d",
+  timeRange: "30d",
   startDate: "",
   endDate: "",
   sla: "all",
@@ -71,47 +71,30 @@ const DEFAULT_DUAL_REPORT_FILTERS: DualReportFilters = {
 };
 
 const SOURCE_OPTIONS = [
-  { value: "all", label: "Tất cả nguồn" },
+  { value: "all", label: "Tất cả các nguồn" },
   { value: "facebook", label: "Facebook" },
   { value: "tiktok", label: "TikTok" },
-  { value: "google_maps", label: "Google Maps" },
-  { value: "be", label: "BeFood" },
   { value: "youtube", label: "YouTube" },
-  { value: "thread", label: "Threads" },
-  { value: "news", label: "Báo điện tử" },
-];
-
-const inputClass =
-  "h-10 w-full rounded-lg border border-[var(--color-border)] dark:border-white/10 bg-[var(--color-bg-surface)] dark:bg-white/5 px-3 text-sm font-semibold text-[var(--color-text-primary)] dark:text-white outline-none focus:ring-2 focus:ring-[var(--color-brand)]/20 dark:focus:border-[#9B8CFF] dark:focus:ring-[#9B8CFF]/20 transition-all";
-
-function getPeriodLabel(filters: DualReportFilters) {
-  if (filters.timeRange === "today") return "Hôm nay";
-  if (filters.timeRange === "7d") return "7 ngày gần nhất";
-  if (filters.timeRange === "30d") return "30 ngày gần nhất";
-  if (filters.timeRange === "custom") {
-    return filters.startDate && filters.endDate
-      ? `${new Date(filters.startDate).toLocaleDateString("vi-VN")} – ${new Date(filters.endDate).toLocaleDateString("vi-VN")}`
-      : "Khoảng thời gian tùy chọn";
-  }
-  return "Toàn bộ dữ liệu";
-}
-
-function getScopeLabel(scope: OperationScope) {
-  if (scope === "lead") return "Chỉ Khách hàng tiềm năng";
-  if (scope === "crisis") return "Chỉ Khủng hoảng";
-  return "Cả hai nghiệp vụ";
-}
+  { value: "threads", label: "Threads" },
+  { value: "website", label: "Website / Báo chí" },
+] as const;
 
 function KpiCard({
   label,
   value,
   description,
   tone = "default",
+  icon: Icon = CheckCircle2,
+  breakdown,
+  valueSuffix = "",
 }: {
   label: string;
   value: React.ReactNode;
   description: string;
   tone?: "default" | "good" | "warn" | "danger";
+  icon?: React.ComponentType<{ className?: string }>;
+  breakdown?: { lead: number; crisis: number };
+  valueSuffix?: string;
 }) {
   const valueClass =
     tone === "good"
@@ -129,6 +112,43 @@ function KpiCard({
         : tone === "danger"
           ? "bg-red-500"
           : "bg-[var(--color-brand)]";
+  const iconClass =
+    tone === "good"
+      ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400"
+      : tone === "warn"
+        ? "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400"
+        : tone === "danger"
+          ? "bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400"
+          : "bg-[var(--color-brand)]/10 text-[var(--color-brand)] dark:text-[#9B8CFF]";
+
+  if (breakdown) {
+    return (
+      <article className="relative min-w-0 overflow-hidden bg-[var(--color-bg-surface)] dark:bg-transparent p-4">
+        <span className={`absolute inset-x-0 top-0 h-0.5 ${dotClass}`} />
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] font-extrabold uppercase tracking-wide text-[var(--color-text-muted)] dark:text-gray-400">{label}</p>
+            <p className={`mt-2 text-3xl font-black leading-none ${valueClass}`}>{value}{valueSuffix}</p>
+          </div>
+          <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${iconClass}`}>
+            <Icon className="h-[18px] w-[18px]" />
+          </span>
+        </div>
+        <p className="mt-2 min-h-8 text-[11px] leading-4 text-[var(--color-text-secondary)] dark:text-gray-400">{description}</p>
+        <div className="mt-3 grid grid-cols-2 gap-2 border-t border-[var(--color-border)] dark:border-white/10 pt-3">
+          <div className="rounded-lg bg-[var(--color-bg-surface-raised)] dark:bg-white/5 px-2.5 py-2">
+            <p className="truncate text-[10px] font-bold text-[var(--color-text-muted)] dark:text-gray-400">Khách hàng</p>
+            <p className="mt-0.5 text-sm font-black text-[var(--color-text-primary)] dark:text-white">{breakdown.lead}{valueSuffix}</p>
+          </div>
+          <div className="rounded-lg bg-[var(--color-bg-surface-raised)] dark:bg-white/5 px-2.5 py-2">
+            <p className="truncate text-[10px] font-bold text-[var(--color-text-muted)] dark:text-gray-400">Cảnh báo</p>
+            <p className="mt-0.5 text-sm font-black text-[var(--color-text-primary)] dark:text-white">{breakdown.crisis}{valueSuffix}</p>
+          </div>
+        </div>
+      </article>
+    );
+  }
+
   return (
     <article className="min-w-0 bg-[var(--color-bg-surface)] dark:bg-transparent p-4">
       <div className="flex items-center gap-2">
@@ -144,38 +164,40 @@ function KpiCard({
 function AttentionCard({ item }: { item: DualOperationsAttentionItem }) {
   const toneClass =
     item.tone === "danger"
-      ? "border-red-200 dark:border-red-500/20 bg-red-50/65 dark:bg-red-500/10 text-red-700 dark:text-red-400"
+      ? "border-red-200 dark:border-red-500/30 bg-red-50/70 dark:bg-red-500/10 text-red-900 dark:text-red-300"
       : item.tone === "warn"
-        ? "border-amber-200 dark:border-amber-500/20 bg-amber-50/65 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400"
-        : "border-indigo-200 dark:border-indigo-500/20 bg-indigo-50/65 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400";
+        ? "border-amber-200 dark:border-amber-500/30 bg-amber-50/70 dark:bg-amber-500/10 text-amber-900 dark:text-amber-300"
+        : "border-[var(--color-border)] dark:border-white/10 bg-[var(--color-bg-surface)] dark:bg-white/5 text-[var(--color-text-primary)] dark:text-gray-200";
+
+  const badgeClass =
+    item.tone === "danger"
+      ? "bg-red-600 text-white"
+      : item.tone === "warn"
+        ? "bg-amber-500 text-white"
+        : "bg-[var(--color-brand)] text-white";
+
   return (
-    <Link
-      href={item.href}
-      className={`group flex items-start gap-3 rounded-lg border p-3 transition hover:border-current hover:shadow-sm ${toneClass}`}
-    >
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-white/80 dark:bg-white/10 shadow-sm dark:shadow-none">
-        <AlertTriangle className="h-4 w-4" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-3">
-          <p className="font-extrabold text-[var(--color-text-primary)] dark:text-white">{item.title}</p>
-          <strong className="text-xl font-black">{item.count}</strong>
+    <Link href={item.href} className={`flex flex-col justify-between rounded-xl border p-4 transition hover:shadow-md ${toneClass}`}>
+      <div>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[10px] font-black uppercase text-[var(--color-text-muted)] dark:text-gray-400">{item.scope === "lead" ? "Khách hàng" : "Khủng hoảng"}</span>
+          <span className={`rounded-full px-2 py-0.5 text-xs font-black ${badgeClass}`}>{item.count}</span>
         </div>
-        <p className="mt-1 text-xs leading-5 text-[var(--color-text-secondary)] dark:text-gray-400">{item.description}</p>
-        <p className="mt-2 flex items-center gap-1 text-[11px] font-bold">
-          Mở danh sách xử lý
-          <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-        </p>
+        <p className="mt-2 text-sm font-black">{item.title}</p>
+        <p className="mt-1 text-xs font-medium leading-5 opacity-90">{item.description}</p>
       </div>
+      <span className="mt-3 inline-flex items-center gap-1 text-xs font-extrabold text-[var(--color-brand)] dark:text-[#9B8CFF]">
+        Xem danh sách <ArrowRight className="h-3.5 w-3.5" />
+      </span>
     </Link>
   );
 }
 
 function Metric({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] dark:border-white/5 px-3 py-3 last:border-b-0">
-      <p className="text-xs font-bold text-[var(--color-text-secondary)] dark:text-gray-400">{label}</p>
-      <p className="text-lg font-black text-[var(--color-text-primary)] dark:text-white">{value}</p>
+    <div className="flex items-center justify-between px-4 py-2 text-xs border-b border-[var(--color-border)] dark:border-white/5 last:border-b-0">
+      <span className="font-semibold text-[var(--color-text-secondary)] dark:text-gray-400">{label}</span>
+      <span className="font-black text-[var(--color-text-primary)] dark:text-white">{value}</span>
     </div>
   );
 }
@@ -193,32 +215,43 @@ function TrendBars({
   primaryLabel: string;
   secondaryLabel: string;
 }) {
-  const maxValue = Math.max(
-    1,
-    ...rows.flatMap((row) => [Number(row[primaryKey] || 0), Number(row[secondaryKey] || 0)]),
-  );
+  const maxValue = useMemo(() => {
+    return Math.max(
+      1,
+      ...rows.map((row) => Math.max(Number(row[primaryKey] || 0), Number(row[secondaryKey] || 0)))
+    );
+  }, [primaryKey, rows, secondaryKey]);
+
+  const barHeight = (val: number) => Math.max(8, Math.round((val / maxValue) * 100));
+
   return (
-    <div>
-      <div className="mb-4 flex flex-wrap gap-4 text-xs font-bold text-[var(--color-text-secondary)]">
-        <span className="flex items-center gap-2"><i className="h-2.5 w-2.5 rounded-full bg-indigo-500" />{primaryLabel}</span>
-        <span className="flex items-center gap-2"><i className="h-2.5 w-2.5 rounded-full bg-emerald-500" />{secondaryLabel}</span>
+    <div className="space-y-3">
+      <div className="flex items-center gap-4 text-[11px] font-bold">
+        <span className="flex items-center gap-1.5 text-[var(--color-text-secondary)] dark:text-gray-400">
+          <span className="h-2.5 w-2.5 rounded-sm bg-indigo-500" />
+          {primaryLabel}
+        </span>
+        <span className="flex items-center gap-1.5 text-[var(--color-text-secondary)] dark:text-gray-400">
+          <span className="h-2.5 w-2.5 rounded-sm bg-emerald-500" />
+          {secondaryLabel}
+        </span>
       </div>
-      <div className="grid min-h-40 grid-cols-7 items-end gap-2">
-        {rows.slice(-7).map((row, index) => (
-          <div key={`${row.day}-${index}`} className="flex h-full min-w-0 flex-col justify-end gap-1">
-            <div className="flex h-28 items-end justify-center gap-1">
+      <div className="grid grid-cols-7 gap-2 pt-2">
+        {rows.map((row, idx) => (
+          <div key={idx} className="flex flex-col items-center gap-1">
+            <div className="flex h-32 w-full items-end justify-center gap-1 rounded-lg bg-[var(--color-bg-surface-raised)] dark:bg-white/5 p-1">
               <div
                 className="w-3 rounded-t bg-indigo-500"
-                style={{ height: `${Math.max(4, (Number(row[primaryKey] || 0) / maxValue) * 100)}%` }}
+                style={{ height: `${barHeight(Number(row[primaryKey] || 0))}%` }}
                 title={`${primaryLabel}: ${row[primaryKey] || 0}`}
               />
               <div
                 className="w-3 rounded-t bg-emerald-500"
-                style={{ height: `${Math.max(4, (Number(row[secondaryKey] || 0) / maxValue) * 100)}%` }}
+                style={{ height: `${barHeight(Number(row[secondaryKey] || 0))}%` }}
                 title={`${secondaryLabel}: ${row[secondaryKey] || 0}`}
               />
             </div>
-            <span className="truncate text-center text-[10px] text-[var(--color-text-muted)]">{row.day}</span>
+            <span className="truncate text-center text-[10px] text-[var(--color-text-muted)] dark:text-gray-500">{row.day}</span>
           </div>
         ))}
       </div>
@@ -259,7 +292,11 @@ function PriorityRow({ row }: { row: DualOperationsPriorityRow }) {
   );
 }
 
-export function DualOperationsEmployeeReportPage() {
+export function DualOperationsEmployeeReportPage({
+  onOpenDailyReport,
+}: {
+  onOpenDailyReport?: () => void;
+} = {}) {
   const { profile: realProfile } = useAuth();
   const pathname = usePathname();
   const isDemo = pathname?.startsWith("/demo") ?? false;
@@ -301,71 +338,86 @@ export function DualOperationsEmployeeReportPage() {
     includeLead: reportFilters.operation !== "crisis",
     includeCrisis: reportFilters.operation !== "lead",
   });
-  const { filters, workspaces, isLoading: dashboardLoading, error: dashboardError, setFilters } = useDashboardStore();
-  const { isLoading: alertLoading, error: alertError, fetchAlerts, fetchCorrectionRequests } = useAlertStore();
 
-  useDashboard({ autoFetch: true, refetchInterval: 60000 });
+  const scopedBrandKey = getScopedBrandKey(profile);
+  useDashboard({ autoFetch: true, scopedBrandKey });
 
+  const fetchAlerts = useAlertStore((state) => state.fetchAlerts);
   useEffect(() => {
-    if (!profile || profile.role === "admin" || workspaces.length === 0) return;
-    if (filters.workspace_id !== "all") return;
-    const profileBrandKey = normalizeBrandName(profile.brandName || profile.brandId || "");
-    const scopedWorkspace = workspaces.find(
-      (workspace) =>
-        normalizeBrandName(workspace.id) === profileBrandKey ||
-        normalizeBrandName(workspace.brand_name) === profileBrandKey,
-    );
-    setFilters({ workspace_id: scopedWorkspace?.id || profile.brandId || profile.brandName || "all" });
-  }, [filters.workspace_id, profile, setFilters, workspaces]);
-
-  useEffect(() => {
-    const scopedBrandKey = getScopedBrandKey(profile);
-    fetchAlerts(scopedBrandKey, false);
-    fetchCorrectionRequests(scopedBrandKey, false);
-  }, [fetchAlerts, fetchCorrectionRequests, profile]);
-
-  useEffect(() => {
-    if (reportFilters.operation === "lead") setActiveOperation("lead");
-    if (reportFilters.operation === "crisis") setActiveOperation("crisis");
-  }, [reportFilters.operation]);
+    if (!profile) return;
+    void fetchAlerts(scopedBrandKey, false);
+  }, [fetchAlerts, profile, scopedBrandKey]);
 
   const updateFilter = <K extends keyof DualReportFilters>(key: K, value: DualReportFilters[K]) => {
     setReportFilters((current) => ({ ...current, [key]: value }));
   };
 
-  const activeAdvancedFilterCount = [
-    reportFilters.sla !== "all",
-    reportFilters.priority !== "all",
-    reportFilters.source !== "all",
-    reportFilters.leadStatus !== "all",
-    reportFilters.crisisStatus !== "all",
-    Boolean(reportFilters.keyword.trim()),
-  ].filter(Boolean).length;
-  const periodLabel = getPeriodLabel(reportFilters);
-  const scopeLabel = getScopeLabel(reportFilters.operation);
-  const excelOptions: DualOperationsExcelViewOptions = {
-    periodLabel,
-    filterLabel: `${scopeLabel}${activeAdvancedFilterCount > 0 ? ` · ${activeAdvancedFilterCount} bộ lọc nâng cao` : ""}`,
-    operation: reportFilters.operation,
-  };
-  const excelPreviewHtml = showExcelPreview
-    ? buildDualOperationsReportExcelDocument(report, excelOptions)
-    : "";
-  const attentionItems = report.attentionItems.slice(0, 3);
-  const visiblePriorityRows = report.priorityRows
-    .filter((row) => reportFilters.operation === "all" || row.type === reportFilters.operation)
-    .slice(0, 10);
-  const loading = dashboardLoading || alertLoading;
-  const error = dashboardError || alertError;
+  const activeAdvancedFilterCount = useMemo(() => {
+    let count = 0;
+    if (reportFilters.sla !== "all") count++;
+    if (reportFilters.priority !== "all") count++;
+    if (reportFilters.source !== "all") count++;
+    if (reportFilters.leadStatus !== "all") count++;
+    if (reportFilters.crisisStatus !== "all") count++;
+    if (reportFilters.keyword.trim()) count++;
+    if (reportFilters.timeRange === "custom") count++;
+    return count;
+  }, [reportFilters]);
+
+  const excelOptions = useMemo<DualOperationsExcelViewOptions>(() => ({
+    operationScope: reportFilters.operation,
+    timeRangeLabel:
+      reportFilters.timeRange === "today"
+        ? "Hôm nay"
+        : reportFilters.timeRange === "7d"
+          ? "7 ngày gần nhất"
+          : reportFilters.timeRange === "30d"
+            ? "30 ngày gần nhất"
+            : reportFilters.timeRange === "custom"
+              ? "Khoảng thời gian tùy chọn"
+              : "Toàn bộ dữ liệu",
+    brandLabel: profile?.brandName || "Tất cả thương hiệu",
+    exportedByName: profile?.displayName || profile?.email || "Nhân viên vận hành",
+  }), [profile, reportFilters.operation, reportFilters.timeRange]);
+
+  const excelPreviewHtml = useMemo(() => {
+    if (!showExcelPreview) return "";
+    const doc = buildDualOperationsReportExcelDocument(report, excelOptions);
+    return doc.renderHtml();
+  }, [excelOptions, report, showExcelPreview]);
+
+  const periodLabel =
+    reportFilters.timeRange === "today"
+      ? "Hôm nay"
+      : reportFilters.timeRange === "7d"
+        ? "7 ngày gần nhất"
+        : reportFilters.timeRange === "30d"
+          ? "30 ngày gần nhất"
+          : reportFilters.timeRange === "custom"
+            ? "Khoảng thời gian tùy chọn"
+            : "Toàn bộ dữ liệu";
+
+  const inputClass =
+    "w-full rounded-lg border border-[var(--color-border)] dark:border-white/10 bg-[var(--color-bg-surface)] dark:bg-white/5 px-3 py-2 text-xs font-semibold text-[var(--color-text-primary)] dark:text-white outline-none focus:border-[var(--color-brand)] dark:focus:border-[#9B8CFF]";
+
+  const attentionItems = report.attentionItems;
+  const visiblePriorityRows = report.priorityRows;
+  const loading = report.loading;
+  const error = report.error;
 
   return (
-    <main data-tour="reports-center" className="mx-auto w-full max-w-[1600px] space-y-5 p-4 md:p-6 min-[1100px]:p-8">
+    <main className="mx-auto max-w-[1600px] space-y-6 p-4 md:p-6 lg:p-8">
       {showExcelPreview ? (
         <ExcelDocumentPreviewModal
+          title="Báo cáo tổng quan vận hành thương hiệu"
+          subtitle="Xem trước nội dung Excel được xuất theo dữ liệu và bộ lọc hiện tại"
+          filename={`Bao_cao_tong_quan_thuong_hieu_${new Date().toISOString().slice(0, 10)}.xlsx`}
+          excelTitle="BÁO CÁO TỔNG QUAN VẬN HÀNH THƯƠNG HIỆU"
+          excelSubtitle="Vận hành tổng hợp Khách hàng tiềm năng & Cảnh báo khủng hoảng"
           title="Nội dung và hình thức sẽ được xuất nguyên bản"
           html={excelPreviewHtml}
           onClose={() => setShowExcelPreview(false)}
-          onExport={() => exportDualOperationsReportExcel(report, `Bao_cao_ca_nhan_${new Date().toISOString().slice(0, 10)}`, excelOptions)}
+          onExport={() => exportDualOperationsReportExcel(report, `Bao_cao_tong_quan_thuong_hieu_${new Date().toISOString().slice(0, 10)}`, excelOptions)}
         />
       ) : null}
 
@@ -380,6 +432,16 @@ export function DualOperationsEmployeeReportPage() {
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+            {onOpenDailyReport ? (
+              <button
+                type="button"
+                onClick={onOpenDailyReport}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] px-4 text-sm font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-bg-surface-high)]"
+              >
+                <CalendarDays className="h-4 w-4" />
+                Báo cáo theo ngày
+              </button>
+            ) : null}
             <div className="relative">
               <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
               <select
@@ -470,12 +532,43 @@ export function DualOperationsEmployeeReportPage() {
           </div>
           <span className="text-[11px] font-semibold text-[var(--color-text-muted)] dark:text-gray-400">{periodLabel}</span>
         </div>
-        <div className="grid gap-[1px] bg-[var(--color-border)] dark:bg-white/10 sm:grid-cols-2 min-[1100px]:grid-cols-4">
-          <KpiCard label="Đã hoàn tất" value={report.kpis.completedTasks} description="Lead đã kết thúc và case đã giải quyết." tone="good" />
-          <KpiCard label="Đúng SLA" value={`${report.kpis.slaOnTimeRate}%`} description="Tỷ lệ chung trên các việc có thể đánh giá SLA." />
-          <KpiCard label="Còn mở" value={report.kpis.pendingTasks} description="Công việc vẫn cần tiếp tục xử lý." tone="warn" />
-          <KpiCard label="Quá hạn" value={report.kpis.overdueTasks} description="Việc quá hạn hoặc đã hoàn tất trễ SLA." tone={report.kpis.overdueTasks > 0 ? "danger" : "good"} />
+        <div className="grid gap-px bg-[var(--color-border)] dark:bg-white/10 sm:grid-cols-2 min-[1100px]:grid-cols-4">
+          <KpiCard
+            label="Chưa phân công"
+            value={report.kpis.workflow.unassigned.total}
+            breakdown={report.kpis.workflow.unassigned}
+            description="Chưa có người nhận xử lý trong hàng đợi nghiệp vụ."
+            icon={CircleDashed}
+          />
+          <KpiCard
+            label="Cần tiếp tục xử lý"
+            value={report.kpis.workflow.inProgress.total}
+            breakdown={report.kpis.workflow.inProgress}
+            description="Đã nhận xử lý, đang theo dõi hoặc cần liên hệ lại."
+            icon={LoaderCircle}
+            tone="warn"
+          />
+          <KpiCard
+            label="Đã hoàn tất"
+            value={report.kpis.workflow.completed.total}
+            breakdown={report.kpis.workflow.completed}
+            description="Khách hàng đã đóng và cảnh báo đã giải quyết."
+            icon={CheckCircle2}
+            tone="good"
+          />
+          <KpiCard
+            label="Tỷ lệ hoàn thành"
+            value={report.kpis.workflow.completionRate.total}
+            valueSuffix="%"
+            breakdown={report.kpis.workflow.completionRate}
+            description="Số công việc đã đóng trên tổng công việc cần xử lý trong kỳ."
+            icon={TrendingUp}
+            tone="good"
+          />
         </div>
+        <p className="border-t border-[var(--color-border)] dark:border-white/10 bg-[var(--color-bg-surface-raised)] dark:bg-white/5 px-4 py-2 text-[10px] leading-4 text-[var(--color-text-muted)] dark:text-gray-400">
+          Tỷ lệ hoàn thành = số công việc “Đã đóng” / tổng công việc cần xử lý phát sinh trong khoảng thời gian đã chọn.
+        </p>
       </section>
 
       <div className="grid gap-4 min-[1100px]:grid-cols-[minmax(0,1.45fr)_minmax(300px,0.75fr)]">
@@ -488,9 +581,9 @@ export function DualOperationsEmployeeReportPage() {
                 <p className="mt-0.5 text-[11px] text-[var(--color-text-secondary)] dark:text-gray-400">Ưu tiên theo rủi ro và thời hạn xử lý.</p>
               </div>
             </div>
-            <span className="rounded-full bg-red-50 dark:bg-red-500/10 px-2.5 py-1 text-xs font-black text-red-700 dark:text-red-400">{attentionItems.reduce((total, item) => total + item.count, 0)}</span>
+            <span className="rounded-full bg-red-50 dark:bg-red-500/10 px-2.5 py-1 text-xs font-black text-red-700 dark:text-red-400">{attentionItems.length} nhóm</span>
           </div>
-          <div className="space-y-2 p-3">
+          <div className="grid gap-2 p-3 md:grid-cols-2">
             {attentionItems.length > 0 ? attentionItems.map((item) => <AttentionCard key={item.key} item={item} />) : (
               <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-700">Không có rủi ro nổi bật trong phạm vi báo cáo hiện tại.</div>
             )}
@@ -501,11 +594,21 @@ export function DualOperationsEmployeeReportPage() {
           <div className="flex items-center gap-2 border-b border-[var(--color-border)] dark:border-white/10 px-5 py-4">
             <Lightbulb className="h-4 w-4 text-amber-600 dark:text-amber-400" />
             <div>
-              <h2 className="text-sm font-extrabold text-[var(--color-text-primary)] dark:text-white">Hành động đề xuất</h2>
-              <p className="mt-0.5 text-[11px] text-[var(--color-text-secondary)] dark:text-gray-400">Các bước nên thực hiện trong kỳ.</p>
+              <h2 className="text-sm font-extrabold text-[var(--color-text-primary)] dark:text-white">Nhận định và hành động</h2>
+              <p className="mt-0.5 text-[11px] text-[var(--color-text-secondary)] dark:text-gray-400">Tối đa 3 vấn đề và 3 hành động dựa trên số liệu.</p>
             </div>
           </div>
+          <div className="space-y-2 border-b border-[var(--color-border)] dark:border-white/10 p-4">
+            <p className="text-[10px] font-extrabold uppercase tracking-wide text-[var(--color-text-muted)] dark:text-gray-400">Nhận định quản trị</p>
+            {report.managementInsights.map((insight) => (
+              <div key={insight} className="flex gap-2 text-xs font-semibold leading-5 text-[var(--color-text-secondary)] dark:text-gray-300">
+                <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+                <p>{insight}</p>
+              </div>
+            ))}
+          </div>
           <div className="divide-y divide-[var(--color-border)] dark:divide-white/5 px-4">
+            <p className="pt-3 text-[10px] font-extrabold uppercase tracking-wide text-[var(--color-text-muted)] dark:text-gray-400">Hành động đề xuất</p>
             {report.recommendations.map((recommendation, index) => (
               <div key={recommendation} className="flex gap-3 py-3">
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] dark:bg-[#9B8CFF]/10 text-[11px] font-black text-[var(--color-brand)] dark:text-[#9B8CFF]">{index + 1}</span>
@@ -533,13 +636,13 @@ export function DualOperationsEmployeeReportPage() {
         </div>
         <div className="grid min-[1100px]:grid-cols-[minmax(0,1fr)_280px]">
           <div className="min-w-0 p-5 min-[1100px]:border-r min-[1100px]:border-[var(--color-border)] dark:min-[1100px]:border-white/10">
-            <h3 className="mb-1 text-xs font-extrabold text-[var(--color-text-primary)] dark:text-white">Xu hướng 7 ngày</h3>
-            <p className="mb-4 text-[11px] text-[var(--color-text-secondary)] dark:text-gray-400">Dữ liệu phát sinh và kết quả hoàn thành theo ngày.</p>
-            {activeOperation === "lead" ? <TrendBars rows={report.lead.responseTrend as unknown as Array<Record<string, string | number>>} primaryKey="created" secondaryKey="contacted" primaryLabel="Lead mới" secondaryLabel="Đã liên hệ" /> : <TrendBars rows={report.crisis.responseTrend as unknown as Array<Record<string, string | number>>} primaryKey="created" secondaryKey="resolved" primaryLabel="Case mới" secondaryLabel="Đã giải quyết" />}
+            <h3 className="mb-1 text-xs font-extrabold text-[var(--color-text-primary)] dark:text-white">Xu hướng 7 ngày gần nhất</h3>
+            <p className="mb-4 text-[11px] text-[var(--color-text-secondary)] dark:text-gray-400">So sánh số công việc phát sinh và số công việc được đóng đúng theo ngày xảy ra sự kiện.</p>
+            {activeOperation === "lead" ? <TrendBars rows={report.lead.responseTrend as unknown as Array<Record<string, string | number>>} primaryKey="created" secondaryKey="completed" primaryLabel="Lead mới" secondaryLabel="Đã đóng" /> : <TrendBars rows={report.crisis.responseTrend as unknown as Array<Record<string, string | number>>} primaryKey="created" secondaryKey="resolved" primaryLabel="Case mới" secondaryLabel="Đã đóng" />}
           </div>
           <aside className="border-t border-[var(--color-border)] dark:border-t-white/10 bg-[var(--color-bg-surface-high)]/45 dark:bg-black/20 min-[1100px]:border-t-0 pt-2 pb-2">
             <p className="px-4 pb-2 pt-3 text-[10px] font-extrabold uppercase text-[var(--color-text-muted)] dark:text-gray-500">Chỉ số nghiệp vụ</p>
-            {activeOperation === "lead" ? <><Metric label="Đã liên hệ" value={`${report.lead.kpis.contacted}/${report.lead.kpis.total}`} /><Metric label="Tỷ lệ chuyển đổi" value={`${report.lead.kpis.conversionRate}%`} /><Metric label="Chưa ghi kết quả" value={report.lead.kpis.needResult} /><Metric label="Trễ SLA" value={report.lead.kpis.slaBreached} /></> : <><Metric label="Đã giải quyết" value={`${report.crisis.kpis.resolved}/${report.crisis.kpis.total}`} /><Metric label="Critical/High" value={report.crisis.kpis.critical + report.crisis.kpis.high} /><Metric label="Chờ duyệt" value={report.crisis.kpis.pendingApproval} /><Metric label="Quá hạn" value={report.crisis.kpis.overdue} /></>}
+            {activeOperation === "lead" ? <><Metric label="Đã đóng" value={`${report.kpis.workflow.completed.lead}/${report.kpis.leadTotal}`} /><Metric label="Tỷ lệ hoàn thành" value={`${report.kpis.workflow.completionRate.lead}%`} /><Metric label="Tỷ lệ chuyển đổi" value={`${report.lead.kpis.conversionRate}%`} /><Metric label="Đúng SLA" value={`${report.lead.kpis.slaOnTimeRate}%`} /><Metric label="Follow-up quá hạn" value={report.lead.kpis.followUpOverdue} /></> : <><Metric label="Đã đóng" value={`${report.kpis.workflow.completed.crisis}/${report.kpis.crisisTotal}`} /><Metric label="Tỷ lệ hoàn thành" value={`${report.kpis.workflow.completionRate.crisis}%`} /><Metric label="Critical/High còn mở" value={report.kpis.priorityOpen.crisis} /><Metric label="Quá hạn còn mở" value={report.kpis.workflow.overdueOpen.crisis} /><Metric label="Đúng SLA" value={`${report.crisis.kpis.slaOnTimeRate}%`} /></>}
           </aside>
         </div>
       </section>

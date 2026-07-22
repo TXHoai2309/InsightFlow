@@ -1,6 +1,11 @@
 import type { AlertData } from "@/stores/alert.store";
 import type { UserRoleProfile } from "@/lib/rbac";
 import { canAlertBeVisibleToUser } from "@/lib/alert-visibility";
+import {
+  getAlertWorkflowStatus,
+  isSkippedAlert,
+  type AlertWorkflowStatus,
+} from "@/lib/alertWorkflow";
 
 export interface CrisisReportKpi {
   total: number;
@@ -55,6 +60,7 @@ export interface CrisisReportDetailRow {
   severity: string;
   sentiment: string;
   status: string;
+  workflowStatus?: AlertWorkflowStatus;
   assigneeName: string;
   createdAt: string;
   firstResponseAt: string;
@@ -121,6 +127,7 @@ const STATUS_LABELS: Record<string, string> = {
   pending_approval: "Cho duyet",
   monitoring: "Dang theo doi",
   resolved: "Da xu ly",
+  skipped: "Da bo qua",
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -129,6 +136,7 @@ const STATUS_COLORS: Record<string, string> = {
   pending_approval: "#B45309",
   monitoring: "#0F766E",
   resolved: "#15803D",
+  skipped: "#64748B",
 };
 
 function toTime(value?: string | null) {
@@ -153,6 +161,14 @@ function average(values: Array<number | null>) {
 function percentage(part: number, total: number) {
   if (total <= 0) return 0;
   return Math.round((part / total) * 100);
+}
+
+function toLocalDayKey(value: number | string) {
+  const date = new Date(value);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function normalizeText(value: unknown) {
@@ -213,6 +229,8 @@ function isEscalated(alert: AlertData) {
 
 function getAssigneeKey(alert: AlertData) {
   return (
+    alert.skipped_by_email ||
+    alert.skipped_by_uid ||
     alert.resolved_by_email ||
     alert.being_resolved_by ||
     alert.resolution_history?.[alert.resolution_history.length - 1]?.resolved_by_email ||
@@ -222,6 +240,8 @@ function getAssigneeKey(alert: AlertData) {
 
 function getAssigneeName(alert: AlertData) {
   return (
+    alert.skipped_by_name ||
+    alert.skipped_by_email ||
     alert.resolved_by_name ||
     alert.resolution_history?.[alert.resolution_history.length - 1]?.resolved_by_name ||
     alert.being_resolved_by ||
@@ -230,6 +250,7 @@ function getAssigneeName(alert: AlertData) {
 }
 
 function getSlaStatus(alert: AlertData, nowMs: number) {
+  if (isSkippedAlert(alert)) return "Khong ap dung";
   const due = getDueTime(alert);
   if (due === null) return "Khong du ngay tao";
   const resolvedTime = toTime(alert.resolved_at);
@@ -263,20 +284,20 @@ function buildDistribution(
     }));
 }
 
-function buildResponseTrend(alerts: AlertData[], daysCount = 7): CrisisReportTrendPoint[] {
+function buildResponseTrend(alerts: AlertData[], daysCount = 7, nowMs = Date.now()): CrisisReportTrendPoint[] {
   const buckets: Record<string, { created: number; resolved: number; escalated: number; responseTotal: number; responseCount: number }> = {};
   for (let index = daysCount - 1; index >= 0; index -= 1) {
-    const date = new Date();
+    const date = new Date(nowMs);
     date.setDate(date.getDate() - index);
     date.setHours(0, 0, 0, 0);
-    const key = date.toISOString().slice(0, 10);
+    const key = toLocalDayKey(date.getTime());
     buckets[key] = { created: 0, resolved: 0, escalated: 0, responseTotal: 0, responseCount: 0 };
   }
 
   alerts.forEach((alert) => {
     const createdTime = toTime(alert.created_at);
     if (createdTime !== null) {
-      const key = new Date(createdTime).toISOString().slice(0, 10);
+      const key = toLocalDayKey(createdTime);
       const bucket = buckets[key];
       if (bucket) {
         bucket.created += 1;
@@ -291,7 +312,7 @@ function buildResponseTrend(alerts: AlertData[], daysCount = 7): CrisisReportTre
 
     const resolvedTime = toTime(alert.resolved_at);
     if (resolvedTime !== null) {
-      const key = new Date(resolvedTime).toISOString().slice(0, 10);
+      const key = toLocalDayKey(resolvedTime);
       if (buckets[key]) buckets[key].resolved += 1;
     }
   });
@@ -319,6 +340,7 @@ function buildDetailRows(alerts: AlertData[], nowMs: number): CrisisReportDetail
       severity: normalizeSeverity(alert.severity || alert.urgency || ""),
       sentiment: alert.sentiment || "negative",
       status: normalizeStatus(alert.status),
+      workflowStatus: getAlertWorkflowStatus(alert),
       assigneeName: getAssigneeName(alert),
       createdAt: alert.created_at,
       firstResponseAt,
@@ -386,35 +408,37 @@ export function buildCrisisReportData(
     .filter((alert) => canAlertBeVisibleToUser(alert, profile))
     .sort((a, b) => (toTime(b.created_at) || 0) - (toTime(a.created_at) || 0));
   const detailRows = buildDetailRows(scopedAlerts, nowMs);
-  const resolved = detailRows.filter((row) => row.status === "resolved").length;
-  const slaEvaluated = detailRows.filter((row) => row.slaStatus === "Dung SLA" || row.slaStatus === "Tre SLA");
+  const operationalRows = detailRows.filter((row) => row.status !== "skipped");
+  const operationalAlerts = scopedAlerts.filter((alert) => !isSkippedAlert(alert));
+  const resolved = operationalRows.filter((row) => row.status === "resolved").length;
+  const slaEvaluated = operationalRows.filter((row) => row.slaStatus === "Dung SLA" || row.slaStatus === "Tre SLA");
   const slaOnTime = slaEvaluated.filter((row) => row.slaStatus === "Dung SLA").length;
 
   const kpis: CrisisReportKpi = {
-    total: detailRows.length,
-    new: detailRows.filter((row) => row.status === "new").length,
-    resolving: detailRows.filter((row) => row.status === "resolving").length,
-    monitoring: detailRows.filter((row) => row.status === "monitoring").length,
-    pendingApproval: detailRows.filter((row) => row.status === "pending_approval").length,
+    total: operationalRows.length,
+    new: operationalRows.filter((row) => row.status === "new").length,
+    resolving: operationalRows.filter((row) => row.status === "resolving").length,
+    monitoring: operationalRows.filter((row) => row.status === "monitoring").length,
+    pendingApproval: operationalRows.filter((row) => row.status === "pending_approval").length,
     resolved,
-    overdue: detailRows.filter((row) => row.slaStatus === "Qua han" || row.slaStatus === "Tre SLA").length,
-    escalated: detailRows.filter((row) => row.escalated).length,
-    critical: detailRows.filter((row) => row.severity === "critical").length,
-    high: detailRows.filter((row) => row.severity === "high").length,
-    avgFirstResponseMinutes: average(detailRows.map((row) => row.responseMinutes)),
-    avgResolutionMinutes: average(detailRows.map((row) => row.resolutionMinutes)),
-    resolvedRate: percentage(resolved, detailRows.length),
+    overdue: operationalRows.filter((row) => row.slaStatus === "Qua han" || row.slaStatus === "Tre SLA").length,
+    escalated: operationalRows.filter((row) => row.escalated).length,
+    critical: operationalRows.filter((row) => row.severity === "critical").length,
+    high: operationalRows.filter((row) => row.severity === "high").length,
+    avgFirstResponseMinutes: average(operationalRows.map((row) => row.responseMinutes)),
+    avgResolutionMinutes: average(operationalRows.map((row) => row.resolutionMinutes)),
+    resolvedRate: percentage(resolved, operationalRows.length),
     slaOnTimeRate: percentage(slaOnTime, slaEvaluated.length),
   };
 
   const severityDistribution = buildDistribution(
-    detailRows.map((row) => row.severity),
+    operationalRows.map((row) => row.severity),
     ["critical", "high", "medium", "low"],
     SEVERITY_LABELS,
     SEVERITY_COLORS,
   );
   const sourceDistribution = buildDistribution(
-    scopedAlerts.map((alert) => normalizeSource(alert.source)),
+    operationalAlerts.map((alert) => normalizeSource(alert.source)),
     ["facebook", "tiktok", "youtube", "thread", "google_maps", "news", "be"],
     SOURCE_LABELS,
     {
@@ -433,22 +457,22 @@ export function buildCrisisReportData(
     kpis,
     severityDistribution,
     statusDistribution: buildDistribution(
-      detailRows.map((row) => row.status),
+      operationalRows.map((row) => row.status),
       ["new", "resolving", "pending_approval", "monitoring", "resolved"],
       STATUS_LABELS,
       STATUS_COLORS,
     ),
     sourceDistribution,
     topicDistribution: buildDistribution(
-      detailRows.map((row) => row.topic),
+      operationalRows.map((row) => row.topic),
       ["service", "quality", "staff", "price", "delivery", "experience", "legal", "operation", "other"],
       {},
       {},
     ),
-    responseTrend: buildResponseTrend(scopedAlerts),
-    staffPerformance: buildStaffPerformance(detailRows),
-    overdueRows: detailRows.filter((row) => row.slaStatus === "Qua han" || row.slaStatus === "Tre SLA"),
-    escalationRows: detailRows.filter((row) => row.escalated),
+    responseTrend: buildResponseTrend(operationalAlerts, 7, nowMs),
+    staffPerformance: buildStaffPerformance(operationalRows),
+    overdueRows: operationalRows.filter((row) => row.slaStatus === "Qua han" || row.slaStatus === "Tre SLA"),
+    escalationRows: operationalRows.filter((row) => row.escalated),
     detailRows,
     aiSummary: buildAiSummary(kpis, severityDistribution, sourceDistribution),
   };

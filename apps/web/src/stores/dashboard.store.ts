@@ -9,6 +9,7 @@ import { normalizeBrandName, DashboardService } from "@/lib/services/dashboard";
 import { canPerformAction, type UserRoleProfile } from "@/lib/rbac";
 import { isSameBrandScope } from "@/lib/brandScope";
 import { normalizeClassificationLabel } from "@/lib/label-change";
+import { isDemoRuntime } from "@/lib/demo-navigation";
 import type {
   DashboardStats,
   DashboardFilters,
@@ -69,6 +70,14 @@ interface DashboardState {
     profile: UserRoleProfile | null | undefined,
   ) => Promise<void>;
   claimLead: (
+    id: string,
+    profile: UserRoleProfile | null | undefined,
+  ) => Promise<Partial<Lead>>;
+  skipLead: (
+    id: string,
+    profile: UserRoleProfile | null | undefined,
+  ) => Promise<Partial<Lead>>;
+  restoreLead: (
     id: string,
     profile: UserRoleProfile | null | undefined,
   ) => Promise<Partial<Lead>>;
@@ -260,7 +269,9 @@ export const useDashboardStore = create<DashboardState>()(
           throw new Error("Lead is outside the user's brand scope.");
         }
 
-        await DashboardService.updateLeadStatus(id, status, profile, currentLead);
+        if (!isDemoRuntime()) {
+          await DashboardService.updateLeadStatus(id, status, profile, currentLead);
+        }
         set((state) => ({
           leads: state.leads.map((l) => (l.id === id ? { ...l, status } : l)),
         }));
@@ -283,7 +294,9 @@ export const useDashboardStore = create<DashboardState>()(
           throw new Error("Lead is outside the user's brand scope.");
         }
 
-        await DashboardService.updateLeadDetails(id, data, profile, currentLead);
+        if (!isDemoRuntime()) {
+          await DashboardService.updateLeadDetails(id, data, profile, currentLead);
+        }
         set((state) => ({
           leads: state.leads.map((l) => (l.id === id ? { ...l, ...data } : l)),
         }));
@@ -296,6 +309,9 @@ export const useDashboardStore = create<DashboardState>()(
     claimLead: async (id, profile) => {
       try {
         const currentLead = get().leads.find((lead) => lead.id === id);
+        if (!profile) {
+          throw new Error("User is not allowed to claim this lead.");
+        }
         if (!canPerformAction(profile, "update_lead_details")) {
           throw new Error("User is not allowed to claim this lead.");
         }
@@ -306,7 +322,19 @@ export const useDashboardStore = create<DashboardState>()(
           throw new Error("Lead is outside the user's brand scope.");
         }
 
-        const claimData = await DashboardService.claimLead(id, profile, currentLead);
+        const nowIso = new Date().toISOString();
+        const claimData: Partial<Lead> = isDemoRuntime()
+          ? {
+              status: currentLead.status === "new" ? "processing" : currentLead.status,
+              owner_id: profile.uid,
+              owner_name: profile.displayName || profile.email || "Khách xem Demo",
+              owner_email: profile.email,
+              assigned_at: nowIso,
+              assigned_by: profile.uid,
+              claimed_at: nowIso,
+              updated_at: nowIso,
+            }
+          : await DashboardService.claimLead(id, profile, currentLead);
         set((state) => ({
           leads: state.leads.map((lead) =>
             lead.id === id ? { ...lead, ...claimData } : lead,
@@ -315,6 +343,127 @@ export const useDashboardStore = create<DashboardState>()(
         return claimData;
       } catch (error) {
         console.error("[DashboardStore] claimLead error:", error);
+        throw error;
+      }
+    },
+
+    skipLead: async (id, profile) => {
+      try {
+        const currentLead = get().leads.find((lead) => lead.id === id);
+        if (
+          !profile ||
+          !canPerformAction(profile, "update_lead_details") ||
+          !canPerformAction(profile, "update_lead_status")
+        ) {
+          throw new Error("Bạn không có quyền bỏ qua khách hàng này.");
+        }
+        if (!currentLead || !isSameBrandScope(profile, currentLead)) {
+          throw new Error("Khách hàng không thuộc phạm vi xử lý của bạn.");
+        }
+        if (currentLead.status !== "processing") {
+          throw new Error("Chỉ có thể bỏ qua khách hàng đang xử lý.");
+        }
+        if (!currentLead.owner_id || currentLead.owner_id !== profile.uid) {
+          throw new Error("Bạn phải nhận xử lý khách hàng trước khi bỏ qua.");
+        }
+        if (
+          !currentLead.last_contact_at &&
+          !(currentLead.contact_attempts && currentLead.contact_attempts > 0) &&
+          currentLead.last_action_type !== "restore"
+        ) {
+          throw new Error("Khách hàng chưa thuộc hàng đợi Đang xử lý.");
+        }
+
+        const nowIso = new Date().toISOString();
+        const skipData: Partial<Lead> = {
+          status: "skipped",
+          result_type: "not_fit",
+          pending_result: false,
+          result_recorded_at: nowIso,
+          closed_at: nowIso,
+          follow_up_at: null,
+          last_action_at: nowIso,
+          last_action_type: "skip",
+          notes: [
+            currentLead.notes,
+            `[Bỏ qua] ${new Date(nowIso).toLocaleString("vi-VN")}`,
+          ].filter(Boolean).join("\n"),
+        };
+
+        if (!isDemoRuntime()) {
+          await DashboardService.updateLeadDetails(id, skipData, profile, currentLead);
+        }
+        set((state) => ({
+          leads: state.leads.map((lead) =>
+            lead.id === id ? { ...lead, ...skipData } : lead,
+          ),
+        }));
+        return skipData;
+      } catch (error) {
+        console.error("[DashboardStore] skipLead error:", error);
+        throw error;
+      }
+    },
+
+    restoreLead: async (id, profile) => {
+      try {
+        const currentLead = get().leads.find((lead) => lead.id === id);
+        if (
+          !profile ||
+          !canPerformAction(profile, "update_lead_details") ||
+          !canPerformAction(profile, "update_lead_status")
+        ) {
+          throw new Error("Bạn không có quyền khôi phục khách hàng này.");
+        }
+        if (!currentLead || !isSameBrandScope(profile, currentLead)) {
+          throw new Error("Khách hàng không thuộc phạm vi xử lý của bạn.");
+        }
+        if (currentLead.status !== "completed" && currentLead.status !== "skipped") {
+          throw new Error("Chỉ có thể khôi phục khách hàng đã đóng hoặc đã bỏ qua.");
+        }
+
+        const isManager = profile.role === "admin" || profile.role === "brand_manager";
+        if (currentLead.owner_id && currentLead.owner_id !== profile.uid && !isManager) {
+          throw new Error("Khách hàng đang thuộc phạm vi của nhân viên khác.");
+        }
+
+        const nowIso = new Date().toISOString();
+        const ownerId = currentLead.owner_id || profile.uid;
+        const ownerName = currentLead.owner_name || profile.displayName || profile.email || "Nhân viên xử lý";
+        const ownerEmail = currentLead.owner_email || profile.email || null;
+        const restoreData: Partial<Lead> = {
+          status: "processing",
+          owner_id: ownerId,
+          owner_name: ownerName,
+          owner_email: ownerEmail,
+          assigned_at: currentLead.assigned_at || nowIso,
+          assigned_by: currentLead.assigned_by || profile.uid,
+          claimed_at: currentLead.claimed_at || nowIso,
+          pending_result: false,
+          result_type: null,
+          result_recorded_at: null,
+          closed_at: null,
+          follow_up_at: null,
+          sales_status: "not_ready",
+          last_action_at: nowIso,
+          last_action_type: "restore",
+          notes: [
+            currentLead.notes,
+            `[Khôi phục] ${new Date(nowIso).toLocaleString("vi-VN")} - Tiếp tục xử lý`,
+          ].filter(Boolean).join("\n"),
+        };
+
+        if (!isDemoRuntime()) {
+          await DashboardService.updateLeadDetails(id, restoreData, profile, currentLead);
+        }
+        set((state) => ({
+          leads: state.leads.map((lead) =>
+            lead.id === id ? { ...lead, ...restoreData } : lead,
+          ),
+        }));
+        return restoreData;
+      } catch (error) {
+        console.error("[DashboardStore] restoreLead error:", error);
         throw error;
       }
     },

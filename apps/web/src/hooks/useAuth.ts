@@ -1,5 +1,6 @@
 "use client";
 import { useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { getIdTokenResult, onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
@@ -8,6 +9,44 @@ import { useAuthStore } from "@/stores/auth.store";
 
 let unsubscribeAuth: (() => void) | null = null;
 let authSubscriberCount = 0;
+
+const DEMO_USER = Object.freeze({
+  uid: "demo-user",
+  email: "demo@example.com",
+  displayName: "Khách xem Demo",
+  // Some shared panels request an auth token before loading optional history.
+  // A deterministic placeholder keeps those components compatible in demo;
+  // protected APIs still reject it and therefore can never expose real data.
+  getIdToken: async () => "insightflow-demo-token",
+}) as any;
+
+const DEMO_PROFILE = Object.freeze({
+  uid: "demo-user",
+  email: "demo@example.com",
+  displayName: "Khách xem Demo",
+  role: "brand_manager",
+  brandId: "demo_brand",
+  brandName: "Demo Brand",
+  defaultRoute: "/demo",
+  permissions: [
+    "dashboard",
+    "mentions",
+    "alerts",
+    "leads",
+    "reports",
+    "staff_management",
+    "brand_settings",
+    "label_request_review",
+    "response_settings",
+  ],
+}) as unknown as UserRoleProfile;
+
+const DEMO_AUTH_STATE = Object.freeze({
+  user: DEMO_USER,
+  profile: DEMO_PROFILE,
+  role: "brand_manager" as const,
+  loading: false,
+});
 
 async function resolveProfileFromClaims(firebaseUser: NonNullable<typeof auth.currentUser>) {
   const tokenResult = await getIdTokenResult(firebaseUser, true);
@@ -111,6 +150,8 @@ function startAuthListener() {
 }
 
 export function useAuth() {
+  const pathname = usePathname();
+  const isDemoMode = pathname.startsWith("/demo");
   const {
     user,
     profile,
@@ -124,6 +165,8 @@ export function useAuth() {
   } = useAuthStore();
 
   useEffect(() => {
+    if (isDemoMode) return;
+
     authSubscriberCount += 1;
     startAuthListener();
 
@@ -135,35 +178,11 @@ export function useAuth() {
         authSubscriberCount = 0;
       }
     };
-  }, [setLoading, setProfile, setProfileLoading, setUser]);
+  }, [isDemoMode, setLoading, setProfile, setProfileLoading, setUser]);
 
   // If in demo mode, override the auth return values
-  const isDemoMode = typeof window !== "undefined" && window.location.pathname.startsWith("/demo");
   if (isDemoMode) {
-    return {
-      user: { uid: "demo-user", email: "demo@example.com" } as any,
-      profile: {
-        uid: "demo-user",
-        email: "demo@example.com",
-        displayName: "Khách xem Demo",
-        role: "brand_manager",
-        brandId: "demo_brand",
-        brandName: "Demo Brand",
-        permissions: [
-          "dashboard",
-          "mentions",
-          "alerts",
-          "leads",
-          "reports",
-          "staff_management",
-          "brand_settings",
-          "label_request_review",
-          "response_settings",
-        ],
-      } as any,
-      role: "brand_manager",
-      loading: false,
-    };
+    return DEMO_AUTH_STATE;
   }
 
   return { user, profile, role: role as any, loading: loading || profileLoading };

@@ -1,77 +1,62 @@
 "use client";
 
-import { useState } from "react";
-import { usePathname } from "next/navigation";
-import { DemoSidebar } from "@/components/demo/DemoSidebar";
-import { useTheme } from "@/contexts/ThemeContext";
+import { useState, type MouseEvent } from "react";
+import { useRouter } from "next/navigation";
+import { useDashboard } from "@/hooks/useDashboardData";
+import { isPublicDemoExit, toDemoHref } from "@/lib/demo-navigation";
 
 export default function DemoLayout({ children }: { children: React.ReactNode }) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { theme, toggleTheme } = useTheme();
-  const isDark = theme === "dark";
-  const pathname = usePathname();
-  // Trang reports có layout riêng với padding/max-width, không cần bọc thêm
-  const isFullWidthPage = pathname === "/demo/reports";
+  const router = useRouter();
+  const [navigationNotice, setNavigationNotice] = useState("");
+
+  useDashboard({
+    autoFetch: true,
+    refetchInterval: 1800000,
+  });
+
+  const handleDemoNavigation = (event: MouseEvent<HTMLDivElement>) => {
+    if (event.defaultPrevented || event.button !== 0) return;
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+    const target = event.target as HTMLElement;
+    const anchor = target.closest("a[href]") as HTMLAnchorElement | null;
+    if (!anchor || anchor.target === "_blank" || anchor.hasAttribute("download")) return;
+
+    const url = new URL(anchor.href, window.location.origin);
+    if (url.origin !== window.location.origin) return;
+
+    const currentHref = `${url.pathname}${url.search}${url.hash}`;
+    const demoHref = toDemoHref(currentHref);
+    if (demoHref) {
+      if (demoHref === currentHref) return;
+      event.preventDefault();
+      event.stopPropagation();
+      router.push(demoHref);
+      return;
+    }
+
+    if (isPublicDemoExit(url.pathname)) return;
+
+    // Shared manager widgets sometimes link to admin-only pages that do not
+    // have a meaningful public demo. Keep visitors inside the demo instead of
+    // unexpectedly sending them to the login screen.
+    event.preventDefault();
+    event.stopPropagation();
+    setNavigationNotice("Tính năng quản trị này chỉ khả dụng sau khi đăng nhập. Bạn vẫn đang ở chế độ demo.");
+    window.setTimeout(() => setNavigationNotice(""), 3500);
+  };
 
   return (
-    <div className="flex h-screen w-full overflow-hidden" style={{ backgroundColor: "var(--color-bg-primary)" }}>
-      <DemoSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      
-      <div className="flex flex-col flex-1 min-w-0 md:ml-[240px]">
-        {/* Demo Header */}
-        <header className="h-16 flex items-center justify-between px-4 sm:px-6 z-20 border-b" style={{ backgroundColor: "var(--color-bg-surface)", borderColor: "var(--color-border)" }}>
-          <div className="flex items-center gap-3">
-            <button onClick={() => setSidebarOpen(true)} className="md:hidden p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-white/5">
-              <i className="ti ti-menu-2 text-xl"></i>
-            </button>
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#10B981]/10 border border-[#10B981]/20">
-              <span className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse" />
-              <span className="text-xs font-bold text-[#10B981]">CHẾ ĐỘ DEMO</span>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-4">
-            <button
-              onClick={toggleTheme}
-              className="w-10 h-10 rounded-full flex items-center justify-center transition-colors border"
-              style={{
-                backgroundColor: "var(--color-bg-surface-raised)",
-                borderColor: "var(--color-border)",
-                color: "var(--color-text-primary)",
-              }}
-            >
-              <i className={`ti ${isDark ? "ti-sun" : "ti-moon"} text-xl`}></i>
-            </button>
-            
-            <div className="flex items-center gap-3 pl-4 border-l border-gray-200 dark:border-gray-700">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#10B981] to-[#059669] text-white flex items-center justify-center font-bold shadow-sm">
-                KH
-              </div>
-              <div className="hidden sm:block">
-                <p className="text-sm font-bold text-gray-900 dark:text-white">Khách hàng Trial</p>
-                <p className="text-xs text-[#10B981] font-medium">Đang chờ duyệt</p>
-              </div>
-            </div>
-          </div>
-        </header>
-        
-        {/* Banner cảnh báo */}
-        <div className="bg-[#10B981] text-white text-center py-2 text-[13px] font-medium shadow-md z-10 flex justify-center items-center gap-2">
-          <span className="material-symbols-outlined text-[16px]">info</span>
-          Tất cả dữ liệu bạn đang xem đều là dữ liệu mô phỏng (hard-coded) để trải nghiệm tính năng.
+    <div onClickCapture={handleDemoNavigation}>
+      {navigationNotice ? (
+        <div
+          role="status"
+          className="fixed right-4 top-20 z-[100] max-w-sm rounded-xl border border-violet-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-xl"
+        >
+          {navigationNotice}
         </div>
-
-        <main className="flex-1 overflow-y-auto" style={{ backgroundColor: "var(--color-bg-primary)" }}>
-          {isFullWidthPage ? (
-            children
-          ) : (
-            <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto">
-              {children}
-            </div>
-          )}
-        </main>
-      </div>
+      ) : null}
+      {children}
     </div>
   );
 }
-

@@ -5,8 +5,8 @@ import {
   Activity,
   AlertTriangle,
   BarChart3,
+  CheckCircle2,
   Clock3,
-  MessageSquareWarning,
   ShieldAlert,
   UserRoundCheck,
 } from "lucide-react";
@@ -14,11 +14,16 @@ import { Badge } from "@/components/ui/Badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { PlatformLogo } from "@/components/platform/PlatformLogo";
 import { useAuth } from "@/hooks/useAuth";
-import { canAlertBeVisibleToUser } from "@/lib/alert-visibility";
 import { getScopedBrandKey } from "@/lib/brandScope";
-import { getAlertWorkflowStatus } from "@/lib/alertWorkflow";
+import { isTerminalAlert } from "@/lib/alertWorkflow";
+import {
+  buildAlertOperationalMetrics,
+  filterOperationalAlerts,
+} from "@/lib/operational-metrics";
+import { getCalendarPeriodStartMs } from "@/lib/dashboard-display";
 import { cn } from "@/lib/utils";
 import { useAlertStore, type AlertData } from "@/stores/alert.store";
+import { useDashboardStore } from "@/stores/dashboard.store";
 import { CrisisAnalyticsCharts } from "./CrisisAnalyticsCharts";
 import { CrisisTable } from "./CrisisTable";
 import { DEMO_PROFILE, DEMO_MOCK_ALERTS } from "@/lib/demo-mock-data";
@@ -84,12 +89,14 @@ function slaLimitHours(alert: AlertData) {
 }
 
 function isActive(alert: AlertData) {
-  return !["resolved", "contact_failed"].includes(getAlertWorkflowStatus(alert));
+  return !isTerminalAlert(alert);
 }
 
 function isOverdue(alert: AlertData) {
   if (!isActive(alert)) return false;
-  const createdAt = new Date(alert.created_at).getTime();
+  // SLA starts when the item is ingested/classified, not when the customer
+  // originally published the post or comment.
+  const createdAt = new Date(alert.detected_at || alert.created_at).getTime();
   return Number.isFinite(createdAt) && Date.now() - createdAt > slaLimitHours(alert) * 36e5;
 }
 
@@ -123,10 +130,12 @@ function KpiCard({ icon: Icon, label, value, tone, borderTone, meta }: { icon: R
 
 export function CrisisCommandCenter() {
   const { profile: realProfile } = useAuth();
-  const isDemo = typeof window !== "undefined" && window.location.pathname.startsWith("/demo");
+  const pathname = usePathname();
+  const isDemo = pathname?.startsWith("/demo") ?? false;
   const profile = realProfile || (isDemo ? DEMO_PROFILE : null);
   const rawAlertsStore = useAlertStore((state) => state.rawAlerts);
   const rawAlerts = rawAlertsStore.length === 0 && isDemo ? DEMO_MOCK_ALERTS : rawAlertsStore;
+  const mentions = useDashboardStore((state) => state.mentions);
   const isLoading = useAlertStore((state) => state.isLoading);
   const error = useAlertStore((state) => state.error);
   const fetchAlerts = useAlertStore((state) => state.fetchAlerts);
@@ -138,33 +147,42 @@ export function CrisisCommandCenter() {
   }, [profile?.uid, scopedBrandKey]);
 
   const alerts = useMemo(() => {
-    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    return rawAlerts.filter((alert) => {
-      const time = new Date(alert.created_at).getTime();
-      if (!Number.isFinite(time) || time < cutoff) return false;
-      if (isDemo) return true;
-      return canAlertBeVisibleToUser(alert, profile);
+    return filterOperationalAlerts(rawAlerts, {
+      profile,
+      crisisOnly: true,
+      dateBasis: "created_at",
     });
-  }, [isDemo, profile, rawAlerts]);
+  }, [profile, rawAlerts]);
+
+  const negativeMentionsCount = useMemo(() => {
+    const cutoff = getCalendarPeriodStartMs(30);
+    const now = Date.now();
+    return mentions.filter((mention) => {
+      const time = new Date(mention.posted_at).getTime();
+      return (
+        mention.sentiment === "negative" &&
+        Number.isFinite(time) &&
+        time >= cutoff &&
+        time <= now
+      );
+    }).length;
+  }, [mentions]);
 
   const data = useMemo(() => {
+    const operationalMetrics = buildAlertOperationalMetrics(alerts);
     const activeAlerts = alerts.filter(isActive);
-    const criticalAlerts = alerts.filter((alert) => ["critical", "high"].includes(normalizeSeverity(alert.severity)));
+    const criticalAlerts = activeAlerts.filter((alert) => ["critical", "high"].includes(normalizeSeverity(alert.severity)));
     const overdueAlerts = activeAlerts.filter(isOverdue);
     const unassignedAlerts = activeAlerts.filter((alert) => !alert.being_resolved_by);
+    const resolvedAlerts = alerts.filter((alert) => !isActive(alert));
     const platformStats = buildStats(alerts, (alert) => alert.source || "other", PLATFORM_LABELS);
     const topicStats = buildStats(alerts, (alert) => alert.topic || "other", TOPIC_LABELS);
     const latestAlert = alerts.slice().sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())[0];
-    const averageRisk = alerts.length ? alerts.reduce((total, alert) => total + Math.max(0, Math.min(100, alert.negativity_score || 0)), 0) / alerts.length : 0;
-    const criticalShare = alerts.length ? Math.round((criticalAlerts.length / alerts.length) * 100) : 0;
-    const riskScore = Math.round(Math.min(100, averageRisk * 0.7 + criticalShare * 0.3));
-    return { activeAlerts, criticalAlerts, overdueAlerts, unassignedAlerts, platformStats, topicStats, latestAlert, criticalShare, riskScore };
+    return { activeAlerts, criticalAlerts, overdueAlerts, unassignedAlerts, resolvedAlerts, platformStats, topicStats, latestAlert, operationalMetrics };
   }, [alerts]);
 
   const topPlatform = data.platformStats[0];
   const topTopic = data.topicStats[0];
-  const riskTone = data.riskScore >= 80 ? "CRITICAL" : data.riskScore >= 55 ? "HIGH" : "WATCH";
-
   return (
     <div data-tour="dashboard-insights" className="w-full space-y-6">
       <Card data-tour="dashboard-insights-risk" className="rounded-2xl border border-red-500/30 bg-gradient-to-r from-red-500/10 via-rose-500/5 to-amber-500/10 dark:bg-red-500/10 shadow-[0_12px_36px_rgba(225,29,72,0.12)]">
@@ -183,7 +201,6 @@ export function CrisisCommandCenter() {
                     </span>
                     CẢNH BÁO THƯƠNG HIỆU
                   </Badge>
-                  <Badge variant="outline" className="border-red-400 bg-white/80 dark:bg-transparent font-extrabold text-red-600 px-2.5 py-0.5">{riskTone}</Badge>
                 </div>
                 <h2 className="text-2xl font-black leading-tight text-[#1A1B20] dark:text-white">
                   {alerts.length > 0 ? `${alerts.length} cảnh báo cần theo dõi trong 30 ngày.` : "Chưa có rủi ro nổi bật trong 30 ngày."}
@@ -197,11 +214,11 @@ export function CrisisCommandCenter() {
             </div>
             <div className="grid grid-cols-3 gap-3 xl:w-[380px]">
               <div className="rounded-xl border border-red-200 dark:border-red-500/30 bg-white/90 dark:bg-red-500/10 p-4 text-center shadow-sm">
-                <div className="text-3xl font-black text-red-600 dark:text-red-400">{data.riskScore}</div>
-                <div className="mt-1 text-[10px] font-extrabold uppercase tracking-wider text-[#6E6A7C] dark:text-gray-400">Risk Score</div>
+                <div className="text-3xl font-black text-red-600 dark:text-red-400">{negativeMentionsCount}</div>
+                <div className="mt-1 text-[10px] font-extrabold uppercase tracking-wider text-[#6E6A7C] dark:text-gray-400">Tiêu cực</div>
               </div>
               <div className="rounded-xl border border-red-200 dark:border-red-500/30 bg-white/90 dark:bg-red-500/10 p-4 text-center shadow-sm">
-                <div className="text-3xl font-black text-[#1A1B20] dark:text-white">{data.criticalShare}%</div>
+                <div className="text-3xl font-black text-[#1A1B20] dark:text-white">{data.criticalAlerts.length}</div>
                 <div className="mt-1 text-[10px] font-extrabold uppercase tracking-wider text-[#6E6A7C] dark:text-gray-400">Critical/Cao</div>
               </div>
               <div className="rounded-xl border border-red-200 dark:border-red-500/30 bg-white/90 dark:bg-red-500/10 p-4 text-center shadow-sm">

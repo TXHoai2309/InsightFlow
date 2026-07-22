@@ -2,8 +2,7 @@
 
 import { useMemo } from "react";
 import { usePathname } from "next/navigation";
-import { filterLeadsForDashboard } from "@/lib/lead-metrics";
-import { canLeadBeVisibleToUser } from "@/lib/lead-workbench";
+import { filterOperationalLeads } from "@/lib/operational-metrics";
 import { useAuth } from "@/hooks/useAuth";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { DEMO_PROFILE, DEMO_MOCK_LEADS } from "@/lib/demo-mock-data";
@@ -17,11 +16,13 @@ export function useLeadMonitoringLeads() {
 
   return useMemo(
     () => {
-      if (isDemo) return DEMO_MOCK_LEADS;
-      const activeFilters = { ...filters, time_range: "all" as const };
-      const filtered = filterLeadsForDashboard(storeLeads, activeFilters);
-      return filtered.filter((lead) => canLeadBeVisibleToUser(lead, profile));
+      if (isDemo && storeLeads.length === 0) return DEMO_MOCK_LEADS;
+      return filterOperationalLeads(storeLeads, {
+        profile,
+        workspaceId: filters.workspace_id,
+        platform: filters.platform,
+      });
     },
-    [isDemo, filters, storeLeads, profile],
+    [isDemo, filters.platform, filters.workspace_id, storeLeads, profile],
   );
 }

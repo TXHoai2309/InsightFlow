@@ -57,6 +57,7 @@ import {
   isLocationReviewPlatform,
   parseVietnameseRelativeDate,
 } from "@/lib/dashboard-display";
+import { isDemoRuntime } from "@/lib/demo-navigation";
 
 // ─── Collection names ────────────────────────────────────────────────────────
 export const COLLECTION_NAMES = {
@@ -1203,11 +1204,21 @@ function supabasePostToMention(row: SupabaseRow, annotationByKey: Map<string, Su
         ? Math.round(row.baseline_confidence * 100)
         : 100,
     created_at: parseDate(row.updated_at || row.created_at || row.crawled_at || row.posted_at),
+    classified_at: parseDate(
+      annotation?.created_at ||
+        annotation?.updated_at ||
+        row.updated_at ||
+        row.created_at ||
+        row.crawled_at ||
+        row.posted_at,
+    ),
     posted_at: parseDate(
       row.posted_at || payload.thoi_gian_dang || payload.posted_at || row.created_at,
       row.created_at,
     ),
     url: normalizeOptionalUrl(row.url, row.post_url, row.source_url, payload.url),
+    post_url: normalizeOptionalUrl(row.post_url, row.url, row.source_url, payload.url),
+    source_url: normalizeOptionalUrl(row.source_url),
     contact: normalizeOptionalText(row.contact || payload.contact),
     star_count: readOptionalNumber(row.star_count, payload.star_count, payload.rating),
     location_name: normalizeOptionalText(
@@ -1264,11 +1275,22 @@ function supabaseCommentToMention(
         ? Math.round(row.baseline_confidence * 100)
         : 100,
     created_at: parseDate(row.updated_at || row.created_at || row.crawled_at || row.posted_at),
+    classified_at: parseDate(
+      annotation?.created_at ||
+        annotation?.updated_at ||
+        row.updated_at ||
+        row.created_at ||
+        row.crawled_at ||
+        row.posted_at,
+    ),
     posted_at: parseDate(
       row.posted_at || payload.gio_comment || payload.posted_at || row.created_at,
       row.created_at,
     ),
     url: normalizeOptionalUrl(row.url, post?.url, payload.url),
+    post_url: normalizeOptionalUrl(post?.post_url, post?.url, row.post_url, payload.post_url),
+    comment_url: normalizeOptionalUrl(row.url, payload.url),
+    source_url: normalizeOptionalUrl(row.source_url, payload.source_url),
     contact: normalizeOptionalText(row.contact || payload.contact),
     star_count: readOptionalNumber(row.star_count, payload.star_count, payload.rating),
     location_name: normalizeOptionalText(
@@ -1604,6 +1626,12 @@ async function fetchSupabaseMentionThread(postId: string): Promise<Mention[]> {
 
 async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
   const cacheKey = `${normalizeBrandName(opts.brandKey || "global")}:${opts.maxMentions || 30000}`;
+  // Workflow mutations and realtime events must never be rebuilt from the
+  // 30-minute dashboard snapshot. Dropping the scoped entry also refreshes
+  // the shared cache for any page opened after the alert action completes.
+  if (opts.forceRefresh) {
+    supabaseMentionCache.delete(cacheKey);
+  }
   const cached = supabaseMentionCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.promise;
 
@@ -1765,6 +1793,8 @@ export interface FetchOptions {
   brandKey?: string;
   /** Set a max limit (default: 10,000 rows per fetch stage) */
   maxMentions?: number;
+  /** Bypass the shared snapshot after a workflow mutation or realtime event. */
+  forceRefresh?: boolean;
 }
 
 // ─── Main service ─────────────────────────────────────────────────────────────
@@ -1774,6 +1804,12 @@ export class DashboardService {
    * Results are cached per post so switching between leads in the same thread is cheap.
    */
   static async fetchMentionThread(postId: string): Promise<Mention[]> {
+    if (isDemoRuntime()) {
+      const { dummyMentions } = await import("@/lib/demoData");
+      return dummyMentions.filter(
+        (mention) => mention.id === postId || mention.post_id === postId,
+      );
+    }
     return fetchSupabaseMentionThread(postId);
   }
 
@@ -2335,6 +2371,7 @@ export class DashboardService {
       assigned_by: profile.uid,
       claimed_at: nowIso,
     };
+    if (isDemoRuntime()) return claimData;
     const auditFields = {
       updated_by: profile.uid,
       updated_by_name: getProfileDisplayName(profile),
@@ -2358,6 +2395,8 @@ export class DashboardService {
     if (!profile || !canPerformAction(profile, "update_lead_status")) {
       throw new Error("User is not allowed to update lead status.");
     }
+
+    if (isDemoRuntime()) return;
 
     const auditFields = {
       updated_by: profile.uid,
@@ -2417,6 +2456,8 @@ export class DashboardService {
     if (data.status && !canPerformAction(profile, "update_lead_status")) {
       throw new Error("User is not allowed to update lead status.");
     }
+
+    if (isDemoRuntime()) return;
 
     const auditFields = {
       updated_by: profile.uid,
@@ -2624,6 +2665,13 @@ export class DashboardService {
       updated_by_role: profile.role,
     });
 
+    if (isDemoRuntime()) {
+      return {
+        ...requestData,
+        id: `demo-label-request-${Date.now()}`,
+      } as LabelChangeRequest;
+    }
+
     const config = getSupabaseConfig();
     const insertedRows = await supabaseWrite<any[]>(
       config,
@@ -2693,6 +2741,8 @@ export class DashboardService {
       updated_by_role: profile.role,
       revision_count: (request.revision_count || 0) + 1,
     };
+
+    if (isDemoRuntime()) return updatedRequest;
 
     const updateData = stripUndefinedFields({
       requested_labels: data.requested_labels,
@@ -2781,6 +2831,8 @@ export class DashboardService {
       cancelled_by_name: profile.displayName || profile.email,
       cancel_reason: cancelReason.trim(),
     };
+
+    if (isDemoRuntime()) return cancelledRequest;
 
     const cancelData = stripUndefinedFields({
       status: "cancelled",

@@ -1113,13 +1113,15 @@ function LanguageSelectModal({
 }
 
 export default function ReportsPage() {
-  const { profile, loading } = useAuth();
+  const { profile: realProfile, loading: authLoading } = useAuth();
   const pathname = usePathname();
   const isDemo = pathname?.startsWith("/demo") ?? false;
-  const effectiveProfile = profile || (isDemo ? DEMO_PROFILE : null);
+  const profile = realProfile || (isDemo ? DEMO_PROFILE : null);
+  const [managerReportView, setManagerReportView] = useState<"overview" | "daily">("overview");
+  const isEmployeeRole = profile?.role === "crisis_employee" || profile?.role === "lead_employee";
+  const hasDualOperations = isEmployeeRole && getEmployeeBusinessScope(profile) === "dual";
 
-  // Khi đang tải auth, chờ
-  if (loading && !isDemo) {
+  if (authLoading && !isDemo) {
     return (
       <div className="flex h-64 items-center justify-center">
         <span className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--color-brand)] border-r-transparent" />
@@ -1127,16 +1129,41 @@ export default function ReportsPage() {
     );
   }
 
-  // Admin → giao diện báo cáo legacy (export file PDF/Excel theo ngày)
-  if (effectiveProfile?.role === "admin") {
+  if (profile?.role === "brand_manager") {
+    if (managerReportView === "daily") {
+      return (
+        <LegacyReportsPage
+          dailyOnly
+          onBack={() => setManagerReportView("overview")}
+        />
+      );
+    }
+
+    return (
+      <DualOperationsEmployeeReportPage
+        onOpenDailyReport={() => setManagerReportView("daily")}
+      />
+    );
+  }
+
+  if (!authLoading && hasDualOperations) {
+    return <DualOperationsEmployeeReportPage />;
+  }
+
+  if (profile?.role === "admin") {
     return <LegacyReportsPage />;
   }
 
-  // Brand manager & employee → giao diện Lead & Khủng hoảng
   return <DualOperationsEmployeeReportPage />;
 }
 
-function LegacyReportsPage() {
+function LegacyReportsPage({
+  dailyOnly = false,
+  onBack,
+}: {
+  dailyOnly?: boolean;
+  onBack?: () => void;
+} = {}) {
   const { t, i18n } = useTranslation();
   const { profile: realProfile, loading: authLoading } = useAuth();
   const pathname = usePathname();
@@ -2044,17 +2071,28 @@ function LegacyReportsPage() {
             {t("reports.header.desc", { defaultValue: "Quản lý và tải xuống các báo cáo phân tích định kỳ từ AI." })}
           </p>
         </div>
-        <button
-          onClick={() => {
-            setActiveTab("custom");
-            setCustomReportGenerated(false);
-          }}
-          data-tour="reports-create-custom"
-          className="flex items-center justify-center gap-2 bg-primary text-white px-5 py-3 rounded-xl font-bold text-sm hover:bg-primary/90 active:scale-95 transition-all shadow-sm w-full sm:w-auto"
-        >
-          <span className="material-symbols-outlined text-xl">add_chart</span>
-          {t("reports.header.createCustomBtn", { defaultValue: "Tạo báo cáo thủ công" })}
-        </button>
+        {dailyOnly ? (
+          <button
+            type="button"
+            onClick={onBack}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] px-5 py-3 text-sm font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-bg-surface-high)] sm:w-auto"
+          >
+            <span className="material-symbols-outlined text-xl">arrow_back</span>
+            Quay lại báo cáo tổng hợp
+          </button>
+        ) : (
+          <button
+            onClick={() => {
+              setActiveTab("custom");
+              setCustomReportGenerated(false);
+            }}
+            data-tour="reports-create-custom"
+            className="flex items-center justify-center gap-2 bg-primary text-white px-5 py-3 rounded-xl font-bold text-sm hover:bg-primary/90 active:scale-95 transition-all shadow-sm w-full sm:w-auto"
+          >
+            <span className="material-symbols-outlined text-xl">add_chart</span>
+            {t("reports.header.createCustomBtn", { defaultValue: "Tạo báo cáo thủ công" })}
+          </button>
+        )}
       </div>
 
       {/* ── Stats Cards ── */}
@@ -2129,29 +2167,33 @@ function LegacyReportsPage() {
             >
               {t("reports.tabs.periodic", { defaultValue: "Định kỳ" })}
             </button>
-            <button
-              onClick={() => {
-                setActiveTab("custom");
-                setCustomReportGenerated(false);
-              }}
-              className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap flex-shrink-0 transition-colors ${
-                activeTab === "custom"
-                  ? "text-[var(--color-brand)] bg-[var(--color-brand-subtle)]"
-                  : "text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-high)]"
-              }`}
-            >
-              {t("reports.tabs.custom", { defaultValue: "Tùy chỉnh" })}
-            </button>
-            <button
-              onClick={() => setActiveTab("archive")}
-              className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap flex-shrink-0 transition-colors ${
-                activeTab === "archive"
-                  ? "text-[var(--color-brand)] bg-[var(--color-brand-subtle)]"
-                  : "text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-high)]"
-              }`}
-            >
-              {t("reports.tabs.archive", { defaultValue: "Lưu trữ" })}
-            </button>
+            {!dailyOnly ? (
+              <>
+                <button
+                  onClick={() => {
+                    setActiveTab("custom");
+                    setCustomReportGenerated(false);
+                  }}
+                  className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap flex-shrink-0 transition-colors ${
+                    activeTab === "custom"
+                      ? "text-[var(--color-brand)] bg-[var(--color-brand-subtle)]"
+                      : "text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-high)]"
+                  }`}
+                >
+                  {t("reports.tabs.custom", { defaultValue: "Tùy chỉnh" })}
+                </button>
+                <button
+                  onClick={() => setActiveTab("archive")}
+                  className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap flex-shrink-0 transition-colors ${
+                    activeTab === "archive"
+                      ? "text-[var(--color-brand)] bg-[var(--color-brand-subtle)]"
+                      : "text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-high)]"
+                  }`}
+                >
+                  {t("reports.tabs.archive", { defaultValue: "Lưu trữ" })}
+                </button>
+              </>
+            ) : null}
           </div>
 
           {/* Filters */}
@@ -2300,17 +2342,33 @@ function LegacyReportsPage() {
                           )}
                           {generatingPdfId === rpt.id ? t("reports.common.generating", { defaultValue: "Đang tạo..." }) : "PDF"}
                         </button>
-                        <button className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-brand)] hover:text-white hover:border-[var(--color-brand)] transition-all text-[11px] font-bold">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPreviewReport(rpt);
+                          }}
+                          className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-brand)] hover:text-white hover:border-[var(--color-brand)] transition-all text-[11px] font-bold"
+                        >
                           <span className="material-symbols-outlined text-[16px]">
                             visibility
                           </span>
                           Xem
                         </button>
-                        <button className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)] transition-all text-[11px] font-bold">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleExportExcel(rpt);
+                          }}
+                          disabled={
+                            generatingPdfId === rpt.id ||
+                            rpt.mentions.length === 0
+                          }
+                          className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)] transition-all text-[11px] font-bold disabled:opacity-50"
+                        >
                           <span className="material-symbols-outlined text-[16px]">
-                            more_horiz
+                            download
                           </span>
-                          Thêm
+                          Excel
                         </button>
                       </div>
                     </div>

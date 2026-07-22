@@ -7,6 +7,13 @@
 
 import { useEffect, useState } from "react";
 import { useDashboardStore } from "@/stores/dashboard.store";
+import {
+  dummyAlerts,
+  dummyLabelChangeRequests,
+  dummyLeads,
+  dummyMentions,
+  dummyWorkspaces,
+} from "@/lib/demoData";
 import { DashboardService } from "@/lib/services/dashboard";
 import { filterByBusinessPolicy, getScopedBrandKey } from "@/lib/brandScope";
 import { useAuth } from "@/hooks/useAuth";
@@ -22,7 +29,7 @@ interface UseDashboardOptions {
 }
 
 const DASHBOARD_CACHE_PREFIX = "insightflow_dashboard_cache_";
-const DASHBOARD_CACHE_VERSION = "v3";
+const DASHBOARD_CACHE_VERSION = "v4";
 const DASHBOARD_CACHE_LIMITS = {
   mentions: 150,
   alerts: 150,
@@ -102,6 +109,8 @@ export function useDashboard(options: UseDashboardOptions = {}) {
   const [isInitialized, setIsInitialized] = useState(false);
 
   const fetchDashboardData = async (force: boolean = false) => {
+    const isDemoMode =
+      typeof window !== "undefined" && window.location.pathname.startsWith("/demo");
     const brandKey = getScopedBrandKey(profile) || "global";
     // Scope browser cache by user as well as brand. Brand-only cache keys can
     // otherwise render another employee's assigned work after account changes
@@ -120,22 +129,32 @@ export function useDashboard(options: UseDashboardOptions = {}) {
       let hasRenderedCache = false;
 
       // Check client-side localStorage cache if not forcing refresh
-      if (!force && typeof window !== "undefined") {
+      if (!force && !isDemoMode && typeof window !== "undefined") {
         const cached = localStorage.getItem(cacheKey);
         if (cached) {
           try {
             const { timestamp, data, partial } = JSON.parse(cached);
+            const currentState = useDashboardStore.getState();
+            const hasAuthoritativeStore =
+              currentState.mentions.length > (data.mentions?.length || 0) ||
+              currentState.alerts.length > (data.alerts?.length || 0) ||
+              currentState.leads.length > (data.leads?.length || 0);
             setWorkspaces(data.workspaces || []);
-            setMentions(data.mentions || []);
-            setAlerts(data.alerts || []);
-            setLeads(data.leads || []);
-            setLabelChangeRequests(data.labelChangeRequests || []);
+            // A compact cache is only a preview, never an authoritative input
+            // for operational counters. Keep a complete in-memory snapshot if
+            // one exists; otherwise wait for the full fetch behind the loader.
+            if (!partial) {
+              setMentions(data.mentions || []);
+              setAlerts(data.alerts || []);
+              setLeads(data.leads || []);
+              setLabelChangeRequests(data.labelChangeRequests || []);
+            }
             setStats(data.stats);
             setTopSources(data.topSources || []);
             setTopTopics(data.topTopics || []);
             setTrendData(data.trendData || []);
             setError(null);
-            hasRenderedCache = true;
+            hasRenderedCache = !partial || hasAuthoritativeStore;
 
             const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes fresh cache window
             const hasCachedMentions = data.mentions && data.mentions.length > 0;
@@ -157,12 +176,19 @@ export function useDashboard(options: UseDashboardOptions = {}) {
 
       // 1. Fetch raw data từ Supabase (lọc theo brand nếu có)
       const rawBrandKey = brandKey === "global" ? undefined : brandKey;
-      const rawData =
-        await DashboardService.fetchRawData({ 
-          brandKey: rawBrandKey,
-          maxMentions: 1500,
-          maxLeads: 2000
-        });
+      const rawData = isDemoMode
+        ? {
+            workspaces: dummyWorkspaces,
+            mentions: dummyMentions,
+            alerts: dummyAlerts,
+            leads: dummyLeads,
+            labelChangeRequests: dummyLabelChangeRequests,
+          }
+        : await DashboardService.fetchRawData({
+            brandKey: rawBrandKey,
+            maxMentions: 1500,
+            maxLeads: 2000,
+          });
       // Ignore stale responses from a previous navigation/refresh.
       if (latestFetchGeneration.get(fetchScopeKey) !== generation) return;
       const workspaces = filterByBusinessPolicy(
@@ -210,7 +236,7 @@ export function useDashboard(options: UseDashboardOptions = {}) {
       setTrendData(trendData);
 
       // Save to localStorage cache
-      if (typeof window !== "undefined") {
+      if (!isDemoMode && typeof window !== "undefined") {
         const timestamp = Date.now();
         const compactData = {
           workspaces,
@@ -252,7 +278,7 @@ export function useDashboard(options: UseDashboardOptions = {}) {
         error instanceof Error
           ? error.message
           : "Không thể kết nối Supabase";
-      
+
       console.error("[useDashboard] fetch error:", error);
 
       // Fallback: If DB errors, keep old data in store or load from localStorage cache
@@ -265,17 +291,19 @@ export function useDashboard(options: UseDashboardOptions = {}) {
           if (!hasDataInStore) {
             const cached = localStorage.getItem(cacheKey);
             if (cached) {
-              const { data } = JSON.parse(cached);
-              setWorkspaces(data.workspaces || []);
-              setMentions(data.mentions || []);
-              setAlerts(data.alerts || []);
-              setLeads(data.leads || []);
-              setLabelChangeRequests(data.labelChangeRequests || []);
-              setStats(data.stats);
-              setTopSources(data.topSources || []);
-              setTopTopics(data.topTopics || []);
-              setTrendData(data.trendData || []);
-              loadedFromCache = true;
+              const { data, partial } = JSON.parse(cached);
+              if (!partial) {
+                setWorkspaces(data.workspaces || []);
+                setMentions(data.mentions || []);
+                setAlerts(data.alerts || []);
+                setLeads(data.leads || []);
+                setLabelChangeRequests(data.labelChangeRequests || []);
+                setStats(data.stats);
+                setTopSources(data.topSources || []);
+                setTopTopics(data.topTopics || []);
+                setTrendData(data.trendData || []);
+                loadedFromCache = true;
+              }
             }
           } else {
             loadedFromCache = true;
@@ -304,11 +332,12 @@ export function useDashboard(options: UseDashboardOptions = {}) {
     const fetchScopeKey = `${DASHBOARD_CACHE_VERSION}:${brandKey}:${profileKey}`;
     const lastFetched = lastFetchedAtMap[fetchScopeKey] || 0;
     const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes cache window
+    const isDemoMode = window.location.pathname.startsWith("/demo");
 
     // Only fetch if we don't have data in the Zustand store or it is older than 30 minutes
     const hasData = useDashboardStore.getState().mentions.length > 0;
-    if (!hasData || Date.now() - lastFetched >= CACHE_DURATION) {
-      fetchDashboardData();
+    if (isDemoMode || !hasData || Date.now() - lastFetched >= CACHE_DURATION) {
+      fetchDashboardData(isDemoMode);
     }
 
     setIsInitialized(true);
@@ -321,7 +350,10 @@ export function useDashboard(options: UseDashboardOptions = {}) {
       const isAlertsFresh = Date.now() - alertStore.lastFetchedAt < 30 * 60 * 1000;
       if (!hasAlerts || !isAlertsFresh) {
         alertStore.fetchAlerts(brandKey === "global" ? null : brandKey);
-        alertStore.fetchCorrectionRequests(brandKey === "global" ? null : brandKey);
+        const isDemoMode = window.location.pathname.startsWith("/demo");
+        if (!isDemoMode) {
+          alertStore.fetchCorrectionRequests(brandKey === "global" ? null : brandKey);
+        }
       }
     }, 1500);
 
@@ -335,6 +367,7 @@ export function useDashboard(options: UseDashboardOptions = {}) {
   // Realtime subscription on leads table to sync assignee and status instantly
   useEffect(() => {
     if (!profile || authLoading || !canPerformAction(profile, "view_leads")) return;
+    if (window.location.pathname.startsWith("/demo")) return;
 
     if (supabaseClient) {
       console.log("[useDashboard] Initializing Realtime leads subscription");
@@ -352,25 +385,34 @@ export function useDashboard(options: UseDashboardOptions = {}) {
                 useDashboardStore.getState().leads.map((l) =>
                   l.id === updated.id
                     ? {
-                        ...l,
-                        status: updated.status ?? l.status,
-                        owner_id: updated.owner_id ?? undefined,
-                        owner_name: updated.owner_name ?? undefined,
-                        owner_email: updated.owner_email ?? undefined,
-                        assigned_at: updated.assigned_at ?? undefined,
-                        assigned_by: updated.assigned_by ?? undefined,
-                        claimed_at: updated.claimed_at ?? undefined,
-                        first_contacted_at: updated.first_contacted_at ?? undefined,
-                        contact_attempts: updated.contact_attempts ?? l.contact_attempts,
-                        last_contact_at: updated.last_contact_at ?? undefined,
-                        pending_result: updated.pending_result ?? l.pending_result,
-                        notes: updated.notes ?? l.notes,
-                        sales_status: updated.sales_status ?? l.sales_status,
-                        sales_owner_id: updated.sales_owner_id ?? l.sales_owner_id,
-                        sales_owner_name: updated.sales_owner_name ?? l.sales_owner_name,
-                        sales_transferred_at: updated.sales_transferred_at ?? l.sales_transferred_at,
-                        crm_deal_id: updated.crm_deal_id ?? l.crm_deal_id,
-                      }
+                      ...l,
+                      status: updated.status ?? l.status,
+                      owner_id: updated.owner_id ?? undefined,
+                      owner_name: updated.owner_name ?? undefined,
+                      owner_email: updated.owner_email ?? undefined,
+                      assigned_at: updated.assigned_at ?? undefined,
+                      assigned_by: updated.assigned_by ?? undefined,
+                      claimed_at: updated.claimed_at ?? undefined,
+                      first_contacted_at: updated.first_contacted_at ?? undefined,
+                      contact_attempts: updated.contact_attempts ?? l.contact_attempts,
+                      last_contact_at: updated.last_contact_at ?? undefined,
+                      pending_result: updated.pending_result ?? l.pending_result,
+                      last_action_at: updated.last_action_at ?? undefined,
+                      last_action_type: updated.last_action_type ?? undefined,
+                      last_contact_channel: updated.last_contact_channel ?? undefined,
+                      result_type: updated.result_type ?? null,
+                      result_recorded_at: updated.result_recorded_at ?? null,
+                      follow_up_at: updated.follow_up_at ?? null,
+                      closed_at: updated.closed_at ?? null,
+                      updated_at: updated.updated_at ?? l.updated_at,
+                      expiry_at: updated.expiry_at ?? l.expiry_at,
+                      notes: updated.notes ?? l.notes,
+                      sales_status: updated.sales_status ?? l.sales_status,
+                      sales_owner_id: updated.sales_owner_id ?? l.sales_owner_id,
+                      sales_owner_name: updated.sales_owner_name ?? l.sales_owner_name,
+                      sales_transferred_at: updated.sales_transferred_at ?? l.sales_transferred_at,
+                      crm_deal_id: updated.crm_deal_id ?? l.crm_deal_id,
+                    }
                     : l
                 )
               );
