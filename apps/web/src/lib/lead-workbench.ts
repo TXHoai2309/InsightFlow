@@ -2,6 +2,7 @@ import type { Lead } from "@/types/dashboard";
 import type { UserRoleProfile } from "@/lib/rbac";
 
 export type LeadWorkbenchView =
+  | "all"
   | "unassigned"
   | "priority"
   | "active"
@@ -71,6 +72,7 @@ export const WORKBENCH_VIEWS: Array<{
   id: LeadWorkbenchView;
   label: string;
 }> = [
+  { id: "all", label: "Tất cả lead" },
   { id: "unassigned", label: "Chưa phân công" },
   { id: "priority", label: "Chờ xử lý" },
   { id: "active", label: "Đang xử lý" },
@@ -552,6 +554,8 @@ export function matchesLeadWorkbenchView(
 
   const meta = getLeadWorkbenchMeta(lead, nowMs);
   const ownership = getLeadOwnershipMeta(lead, profile);
+
+  if (view === "all") return true;
 
   if (view === "unassigned") {
     return ownership.status === "unassigned" && lead.status !== "completed" && lead.status !== "skipped";
