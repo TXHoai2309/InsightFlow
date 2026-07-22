@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import {
@@ -43,8 +43,7 @@ import {
   getAlertCompletenessScore,
   getAlertDeduplicationKey,
 } from "@/lib/operational-metrics";
-import { isDemoPath, toDemoHref } from "@/lib/demo-navigation";
-import { copyTextToClipboard } from "@/lib/clipboard";
+import { isCrisisClassificationLabel } from "@/lib/label-change";
 
 const ALERTS_PER_PAGE = 5;
 import { collection, getDocs, doc, getDoc } from "firebase/firestore";
@@ -174,7 +173,6 @@ function MonitoringCountdown({ alert }: MonitoringCountdownProps) {
  */
 export default function AlertsPage() {
   const router = useRouter();
-  const pathname = usePathname();
   const { profile, loading: authLoading } = useAuth();
   const isManager = profile?.role === "brand_manager";
   const scopedBrandKey = getScopedBrandKey(profile);
@@ -236,6 +234,7 @@ export default function AlertsPage() {
   const tabParam = searchParams.get("tab");
   const alertIdParam = searchParams.get("alertId");
   const mentionIdParam = searchParams.get("mentionId");
+  const alertScope = searchParams.get("scope") === "crisis" ? "crisis" : "negative";
   const dashboardReturnNavigation = useMemo(
     () => readDashboardReturnNavigation(searchParams),
     [searchParams],
@@ -280,10 +279,12 @@ export default function AlertsPage() {
     if (targetUrl) window.open(targetUrl, "_blank", "noopener,noreferrer");
 
     // Copy full text to clipboard for manual Ctrl+F fallback.
-    const didCopy = await copyTextToClipboard(text);
-    if (didCopy) {
+    try {
+      await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 3000);
+    } catch (err) {
+      console.warn("[AlertsPage] Failed to copy source text:", err);
     }
 
   };
@@ -311,7 +312,15 @@ export default function AlertsPage() {
     // Alerts is the complete negative-content queue. The shared store also
     // carries urgent non-negative records so Crisis Monitoring can honour its
     // broader urgency rule without triggering another data scan.
-    let result = rawAlerts.filter((alert) => alert.sentiment === "negative");
+    let result = rawAlerts.filter((alert) => {
+      if (alertScope === "negative") return alert.sentiment === "negative";
+      return isCrisisClassificationLabel({
+        sentiment: alert.sentiment as any,
+        relevance: alert.relevance,
+        urgency: alert.urgency as any,
+        intent: alert.intent as any,
+      });
+    });
 
     if (filters.brand && filters.brand !== "all") {
       const normalize = (b: string) => String(b || "").toLowerCase().replace(/[\s\-_.]/g, "").trim();
@@ -385,7 +394,22 @@ export default function AlertsPage() {
     }
 
     return result;
-  }, [rawAlerts, filters.brand, timeFilter, singleDate, customStartDate, customEndDate]);
+  }, [alertScope, rawAlerts, filters.brand, timeFilter, singleDate, customStartDate, customEndDate]);
+
+  useEffect(() => {
+    const requestedTime = searchParams.get("time");
+    const requestedStatus = searchParams.get("status");
+    const requestedSource = searchParams.get("source");
+    const requestedBrand = searchParams.get("brand");
+
+    if (requestedTime) setTimeFilter(requestedTime);
+    if (requestedStatus) setStatusFilter(requestedStatus as AlertStatusFilter);
+    if (requestedSource) setSourceFilter(requestedSource);
+    if (requestedBrand) setFilters({ brand: requestedBrand });
+    setSingleDate(searchParams.get("date") || "");
+    setCustomStartDate(searchParams.get("start") || "");
+    setCustomEndDate(searchParams.get("end") || "");
+  }, [searchParams, setFilters]);
 
   const availableMonths = useMemo(() => {
     const monthSet = new Set<string>();
@@ -1126,11 +1150,7 @@ export default function AlertsPage() {
       {dashboardReturnNavigation && (
         <button
           type="button"
-          onClick={() => router.push(
-            isDemoPath(pathname)
-              ? toDemoHref(dashboardReturnNavigation.href) || "/demo/insights"
-              : dashboardReturnNavigation.href,
-          )}
+          onClick={() => router.push(dashboardReturnNavigation.href)}
           className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] px-3.5 text-sm font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-bg-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]"
         >
           <span className="material-symbols-outlined text-base">arrow_back</span>
@@ -1423,7 +1443,6 @@ function TrendModal({ alert, onClose }: TrendModalProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<any>(null);
   const router = useRouter();
-  const pathname = usePathname();
   const { setFilters: setDashboardFilters, workspaces } = useDashboardStore();
 
   const brandName = formatBrandName(alert.brand);
@@ -1633,7 +1652,7 @@ function TrendModal({ alert, onClose }: TrendModalProps) {
     });
 
     onClose();
-    router.push(isDemoPath(pathname) ? toDemoHref("/mentions") || "/demo/mentions" : "/mentions");
+    router.push("/mentions");
   };
 
   return (

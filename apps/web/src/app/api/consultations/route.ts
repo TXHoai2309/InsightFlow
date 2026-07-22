@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { FieldValue } from "firebase-admin/firestore";
-import { db } from "@/lib/server/firebaseAdmin";
 import { sendConsultationEmail } from "@/lib/server/consultationEmail";
+import {
+  createConsultation,
+  getConsultation,
+  updateConsultation,
+} from "@/lib/server/vpsOperationalStore";
 
 const PLATFORM_LABELS = new Map<string, string>([
   ["facebook", "Facebook"],
@@ -79,11 +82,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Vui lòng chọn ít nhất một kênh theo dõi." }, { status: 400 });
     }
 
-    const consultationRef = db.collection("consultations").doc();
-    const now = FieldValue.serverTimestamp();
-    const batch = db.batch();
-
-    batch.set(consultationRef, {
+    const consultation = await createConsultation({
       fullName,
       email,
       phone,
@@ -101,13 +100,8 @@ export async function POST(request: NextRequest) {
       contactPlan: "",
       configurationEmbedded: true,
       trialRegistration: true,
-      createdAt: now,
-      updatedAt: now,
     });
-
-    await batch.commit();
-
-    return NextResponse.json({ success: true, consultationId: consultationRef.id }, { status: 201 });
+    return NextResponse.json({ success: true, consultationId: consultation.id }, { status: 201 });
   } catch (error) {
     console.error("[Consultations API] submit error:", error);
     return NextResponse.json({ error: "Chưa thể gửi yêu cầu. Vui lòng thử lại sau." }, { status: 500 });
@@ -129,22 +123,19 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const consultationRef = db.collection("consultations").doc(consultationId);
-    const consultationSnapshot = await consultationRef.get();
-    if (!consultationSnapshot.exists) {
+    const consultation = await getConsultation(consultationId);
+    if (!consultation) {
       return NextResponse.json({ error: "Không tìm thấy yêu cầu dùng thử." }, { status: 404 });
     }
 
-    const consultation = consultationSnapshot.data() || {};
     if (text(consultation.email, 180).toLowerCase() !== email || consultation.requestSource !== "trial-registration") {
       return NextResponse.json({ error: "Thông tin xác nhận yêu cầu không hợp lệ." }, { status: 403 });
     }
 
-    await consultationRef.update({
+    await updateConsultation(consultationId, {
       need,
       consultationNotes,
       consultationRequested: true,
-      updatedAt: FieldValue.serverTimestamp(),
     });
 
     let emailSent = Boolean(consultation.consultationConfirmationEmailSentAt);
@@ -159,16 +150,14 @@ export async function PATCH(request: NextRequest) {
           need,
         });
         emailSent = true;
-        await consultationRef.update({
+        await updateConsultation(consultationId, {
           consultationConfirmationEmailStatus: "sent",
-          consultationConfirmationEmailSentAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
+          consultationConfirmationEmailSentAt: new Date().toISOString(),
         });
       } catch (emailError) {
         console.error("[Consultations API] confirmation email error:", emailError);
-        await consultationRef.update({
+        await updateConsultation(consultationId, {
           consultationConfirmationEmailStatus: "failed",
-          updatedAt: FieldValue.serverTimestamp(),
         });
       }
     }

@@ -15,6 +15,8 @@ interface KpiDef {
   label: string;
   value: string | number;
   sub?: string;
+  resolved?: number;
+  remaining?: number;
   subColor?: string;
   trend?: { value: string; positive: boolean };
   status: "neutral" | "positive" | "warning" | "danger";
@@ -22,15 +24,15 @@ interface KpiDef {
 }
 
 interface BMKpiCardsProps {
-  totalMentions: number;
-  totalTrend: number;
   negativeMentions: number;
   negativePrev: number;
-  alertsTotal: number;
-  alertsHigh: number;
+  negativeResolved: number;
   unprocessed: number;
   crises: number;
   hotLeads: number;
+  leadsResolved: number;
+  negativeHref?: string;
+  leadsHref?: string;
 }
 
 const STATUS_STYLES: Record<
@@ -44,33 +46,20 @@ const STATUS_STYLES: Record<
 };
 
 export function BMKpiCards({
-  totalMentions,
-  totalTrend,
   negativeMentions,
   negativePrev,
-  alertsTotal,
-  alertsHigh,
+  negativeResolved,
   unprocessed,
   crises,
   hotLeads,
+  leadsResolved,
+  negativeHref = "/alerts?scope=negative",
+  leadsHref = "/leads?view=unassigned",
 }: BMKpiCardsProps) {
   const { t } = useTranslation();
   const negDelta = negativeMentions - negativePrev;
 
   const cards: KpiDef[] = [
-    {
-      id: "bm-kpi-mentions",
-      icon: "forum",
-      label: t("bm.kpi.mentions"),
-      value: totalMentions.toLocaleString("vi-VN"),
-      trend: {
-        value: `${totalTrend >= 0 ? "+" : ""}${totalTrend}%`,
-        positive: totalTrend >= 0,
-      },
-      sub: t("bm.kpi.vsLastPeriod"),
-      status: "neutral",
-      href: "/mentions",
-    },
     {
       id: "bm-kpi-negative",
       icon: "sentiment_dissatisfied",
@@ -81,22 +70,10 @@ export function BMKpiCards({
         positive: negDelta <= 0,
       },
       sub: t("bm.kpi.needsAction"),
+      resolved: negativeResolved,
+      remaining: negativeMentions,
       status: negativeMentions > 0 ? "danger" : "positive",
-      href: "/mentions?sentiment=negative",
-    },
-    {
-      id: "bm-kpi-alerts",
-      icon: "warning",
-      label: t("bm.kpi.alerts"),
-      value: alertsTotal,
-      sub: alertsHigh > 0
-        ? `${alertsHigh} ${t("bm.kpi.highLevel")} · ${t("bm.kpi.last30Days")}`
-        : alertsTotal > 0
-          ? t("bm.kpi.last30Days")
-          : t("bm.kpi.noAlerts"),
-      subColor: alertsHigh > 0 ? "#EF4444" : "#22C55E",
-      status: alertsHigh > 0 ? "warning" : "neutral",
-      href: "/alerts",
+      href: negativeHref,
     },
     {
       id: "bm-kpi-leads",
@@ -104,8 +81,10 @@ export function BMKpiCards({
       label: t("bm.kpi.leads"),
       value: hotLeads,
       sub: t("bm.kpi.needsAssign"),
+      resolved: leadsResolved,
+      remaining: hotLeads,
       status: hotLeads > 0 ? "positive" : "neutral",
-      href: "/leads",
+      href: leadsHref,
     },
   ];
 
@@ -113,6 +92,11 @@ export function BMKpiCards({
     <div className="bm-kpi-grid">
       {cards.map((card) => {
         const s = STATUS_STYLES[card.status];
+        const resolved = card.resolved ?? 0;
+        const remaining = card.remaining ?? 0;
+        const taskTotal = resolved + remaining;
+        const resolvedPct = taskTotal === 0 ? 0 : Math.round((resolved / taskTotal) * 100);
+        const remainingColor = card.status === "danger" ? "#EF4444" : "#6366F1";
         return (
           <Link
             key={card.id}
@@ -148,25 +132,44 @@ export function BMKpiCards({
               )}
             </div>
 
-            {/* Value */}
-            <div
-              className="bm-kpi-value"
-              style={{ color: s.valueColor ?? "var(--color-text-primary)" }}
-            >
-              {card.value}
+            <div className="bm-kpi-body">
+              <div className="bm-kpi-copy">
+                <div
+                  className="bm-kpi-value"
+                  style={{ color: s.valueColor ?? "var(--color-text-primary)" }}
+                >
+                  {card.value}
+                </div>
+                <div className="bm-kpi-label">{card.label}</div>
+                {card.sub && (
+                  <div className="bm-kpi-sub" style={{ color: card.subColor ?? "var(--color-text-muted)" }}>
+                    {card.sub}
+                  </div>
+                )}
+              </div>
+
+              {card.resolved !== undefined && (
+                <div className="bm-kpi-donut-wrap">
+                  <div
+                    className="bm-kpi-donut"
+                    style={{ background: `conic-gradient(#22C55E 0 ${resolvedPct}%, ${remainingColor} ${resolvedPct}% 100%)` }}
+                    aria-label={`Đã xử lý ${resolvedPct}%, còn lại ${100 - resolvedPct}%`}
+                  >
+                    <div className="bm-kpi-donut-center">
+                      <strong>{resolvedPct}%</strong>
+                      <span>đã xử lý</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Label + sub */}
-            <div className="bm-kpi-label">{card.label}</div>
-            {card.sub && (
-              <div
-                className="bm-kpi-sub"
-                style={{ color: card.subColor ?? "var(--color-text-muted)" }}
-              >
-                {card.sub}
+            {card.resolved !== undefined && (
+              <div className="bm-kpi-progress">
+                <span className="bm-kpi-progress-done"><i />Đã xử lý: {resolved.toLocaleString("vi-VN")}</span>
+                <span className="bm-kpi-progress-left"><i style={{ background: s.iconColor }} />Còn lại: {remaining.toLocaleString("vi-VN")}</span>
               </div>
             )}
-
             {/* Hover indicator */}
             <div className="bm-kpi-arrow">
               <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
@@ -180,7 +183,7 @@ export function BMKpiCards({
       <style>{`
         .bm-kpi-grid {
           display: grid;
-          grid-template-columns: repeat(4, 1fr);
+          grid-template-columns: repeat(3, 1fr);
           gap: 16px;
         }
         @media (max-width: 1280px) { .bm-kpi-grid { grid-template-columns: repeat(3, 1fr); } }
@@ -191,7 +194,7 @@ export function BMKpiCards({
           background: var(--color-bg-surface);
           border: 1px solid var(--color-border);
           border-radius: 16px;
-          padding: 20px;
+          padding: 16px 18px;
           display: flex; flex-direction: column;
           gap: 4px; position: relative; overflow: hidden;
           text-decoration: none;
@@ -215,7 +218,7 @@ export function BMKpiCards({
 
         .bm-kpi-top {
           display: flex; align-items: flex-start;
-          justify-content: space-between; margin-bottom: 10px;
+          justify-content: space-between; margin-bottom: 4px;
         }
         .bm-kpi-icon {
           width: 40px; height: 40px; border-radius: 11px;
@@ -227,6 +230,25 @@ export function BMKpiCards({
           padding: 3px 8px; border-radius: 6px;
           font-size: 12px; font-weight: 700;
         }
+        .bm-kpi-body {
+          display:flex; align-items:center; justify-content:space-between; gap:18px;
+          min-height:76px;
+        }
+        .bm-kpi-copy { min-width:0; flex:1; }
+        .bm-kpi-donut-wrap { flex:0 0 80px; display:flex; justify-content:center; }
+        .bm-kpi-donut {
+          width:76px; height:76px; border-radius:50%; padding:8px;
+          box-shadow:0 6px 16px rgba(15,23,42,.10);
+          transition:transform .2s ease;
+        }
+        .bm-kpi-card:hover .bm-kpi-donut { transform:rotate(2deg) scale(1.03); }
+        .bm-kpi-donut-center {
+          width:100%; height:100%; border-radius:50%;
+          display:flex; flex-direction:column; align-items:center; justify-content:center;
+          background:var(--color-bg-surface); box-shadow:inset 0 0 0 1px var(--color-border);
+        }
+        .bm-kpi-donut-center strong { font-size:16px; line-height:1; color:var(--color-text-primary); }
+        .bm-kpi-donut-center span { margin-top:4px; font-size:9px; font-weight:700; color:var(--color-text-muted); }
         .bm-kpi-value {
           font-size: 30px; font-weight: 800; line-height: 1;
           letter-spacing: -0.02em;
@@ -236,6 +258,12 @@ export function BMKpiCards({
           color: var(--color-text-secondary); margin-top: 4px;
           text-transform: uppercase;
         }
+        .bm-kpi-progress { display:flex; justify-content:space-between; gap:10px; margin-top:6px; padding-top:7px; border-top:1px solid var(--color-border); font-size:11px; font-weight:700; }
+        .bm-kpi-progress span { display:flex; align-items:center; gap:5px; white-space:nowrap; }
+        .bm-kpi-progress i { width:7px; height:7px; border-radius:50%; background:#22C55E; }
+        .bm-kpi-progress-done { color:#16A34A; }
+        .bm-kpi-progress-left { color:var(--color-text-muted); }
+        @media (max-width: 480px) { .bm-kpi-donut-wrap { flex-basis:80px; } .bm-kpi-donut { width:76px; height:76px; } }
         .bm-kpi-sub {
           font-size: 12px; font-weight: 500; margin-top: 2px;
         }
