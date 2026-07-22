@@ -12,7 +12,6 @@ import {
   normalizeClassificationLabel,
 } from "@/lib/label-change";
 import { calculateNegativityScore } from "@/lib/negativityScore";
-import { useDashboardStore } from "@/stores/dashboard.store";
 import type { Mention } from "@/types/dashboard";
 import {
   canRestoreAlert,
@@ -25,6 +24,7 @@ import {
 import { canAlertBeVisibleToUser } from "@/lib/alert-visibility";
 import { isSameAlertRecord } from "@/lib/alertRecordIdentity";
 import { dummyMentions } from "@/lib/demoData";
+import { getCalendarPeriodStartMs, isWithinCalendarPeriod } from "@/lib/dashboard-display";
 
 function getResolverName(emailOrId: string | null | undefined): string {
   if (!emailOrId) return "";
@@ -106,6 +106,8 @@ export interface AlertData {
   severity: string;
   negativity_score: number;
   created_at: string;
+  /** Time the mention was ingested/classified and entered the workflow. */
+  detected_at?: string;
   status: string;
   resolved_at?: string;
   collectionName?: string;
@@ -378,6 +380,7 @@ function mentionToAlertData(m: Mention): AlertData {
     severity,
     negativity_score: negativity.score,
     created_at: m.posted_at || m.created_at,
+    detected_at: m.classified_at || m.created_at || m.posted_at,
     status: resolveAlertStatusFromLabel(labelObj),
     resolved_at: labelObj.resolved_at,
     collectionName: "annotations",
@@ -435,9 +438,13 @@ export function buildDemoAlertData(): AlertData[] {
     .filter((mention) => {
       const labels = (mention.labels || {}) as Record<string, unknown>;
       return (
-        labels.relevance === true &&
-        labels.sentiment === "negative" &&
-        (labels.urgency === "high" || labels.urgency === "urgent")
+        mention.sentiment === "negative" ||
+        isCrisisClassificationLabel(labels, {
+          sentiment: mention.sentiment,
+          relevance: mention.labels?.relevance ?? null,
+          urgency: mention.labels?.urgency ?? "none",
+          intent: mention.labels?.intent ?? "none",
+        })
       );
     })
     .map(mentionToAlertData);
@@ -452,7 +459,11 @@ function buildAlertsFromMentions(
   scopedBrandKey?: string | null,
 ): AlertData[] {
   return mentions
+    // Every negative mention is an actionable alert. Crisis classification is
+    // a priority subset used only by Crisis Monitoring, not an admission gate
+    // for the operational Alerts queue.
     .filter((mention) =>
+      mention.sentiment === "negative" ||
       isCrisisClassificationLabel(mention.labels, {
         sentiment: mention.sentiment,
         relevance: mention.labels?.relevance ?? null,
@@ -462,61 +473,11 @@ function buildAlertsFromMentions(
     )
     .map(mentionToAlertData)
     .filter((alert) => {
-      const history = Array.isArray(alert.resolution_history) ? alert.resolution_history : [];
-      const completedAt =
-        alert.resolved_at ||
-        alert.skipped_at ||
-        alert.monitoring_started_at ||
-        history[history.length - 1]?.timestamp;
-      const reviewTimestamp = isTerminalAlert(alert)
-        ? completedAt || alert.created_at
-        : alert.created_at;
-
-      return (
-        isWithinAlertReviewWindow(reviewTimestamp) &&
-        isRecordInBrandScope({ brand: alert.brand }, scopedBrandKey ?? null)
-      );
+      // Keep the complete crisis history in the store. Each screen owns its
+      // visible time range: Crisis Monitoring uses 30 days, while /alerts can
+      // genuinely show all time or a user-selected period.
+      return isRecordInBrandScope({ brand: alert.brand }, scopedBrandKey ?? null);
     });
-}
-
-function setAlertsFromDashboardCache(
-  setState: typeof useAlertStore.setState,
-  getState: typeof useAlertStore.getState,
-  scopedBrandKey?: string | null,
-): boolean {
-  const dashboardMentions = useDashboardStore.getState().mentions;
-  // The dashboard cache is scoped by user. Reuse only the in-memory store here;
-  // reading legacy brand-only localStorage keys can expose another employee's queue.
-  const mentions = dashboardMentions;
-  if (mentions.length === 0) return false;
-
-  const recentLocks = getState().recentLocks || {};
-  const fetched = buildAlertsFromMentions(mentions, scopedBrandKey).map((alert) => {
-    const recent = recentLocks[alert.id];
-    if (recent && Date.now() - recent.timestamp < 15000) {
-      return {
-        ...alert,
-        being_resolved_by: recent.email,
-        being_resolved_at: recent.email
-          ? alert.being_resolved_at || new Date(recent.timestamp).toISOString()
-          : null,
-      };
-    }
-    return alert;
-  });
-
-  const scopedBrands = Array.from(new Set(fetched.map((alert) => alert.brand))).sort();
-  const fallbackBrands = ["Highlands Coffee", "Starbucks", "Mixue"].filter((brand) => {
-    return !scopedBrandKey || normalizeBrandName(brand) === scopedBrandKey;
-  });
-
-  setState((state) => ({
-    rawAlerts: fetched,
-    alerts: applyFilters(fetched, state.filters),
-    brands: scopedBrands.length ? scopedBrands : fallbackBrands,
-    error: null,
-  }));
-  return fetched.length > 0;
 }
 
 function applyRealtimeAnnotationUpdate(
@@ -620,22 +581,21 @@ let activeRequestsUnsubscribe: (() => Promise<void>) | null = null;
 let activeRequestsScope: string | null = null;
 /** Holds the subscribed Supabase channel so we can reuse it for broadcasts */
 let activeRealtimeChannel: ReturnType<NonNullable<typeof supabaseClient>["channel"]> | null = null;
+let realtimeReloadTimer: ReturnType<typeof setTimeout> | null = null;
 // A slow request started before a claim/result mutation must not be allowed to
 // replace the newer optimistic or realtime state when it eventually resolves.
 let alertLoadGeneration = 0;
 const ALERT_REVIEW_WINDOW_DAYS = 30;
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
 // Realtime is the primary update path. Keep polling only as a safety net so a
 // transient channel failure does not turn every alert screen into a DB scan.
 const ALERT_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
 
 export function getAlertReviewSinceIso(days = ALERT_REVIEW_WINDOW_DAYS): string {
-  return new Date(Date.now() - days * MS_PER_DAY).toISOString();
+  return new Date(getCalendarPeriodStartMs(days)).toISOString();
 }
 
 function isWithinAlertReviewWindow(value: unknown, days = ALERT_REVIEW_WINDOW_DAYS): boolean {
-  const time = new Date(parseDate(value)).getTime();
-  return Number.isFinite(time) && time >= Date.now() - days * MS_PER_DAY;
+  return isWithinCalendarPeriod(parseDate(value), days);
 }
 
 export const useAlertStore = create<AlertState>()(
@@ -699,13 +659,6 @@ export const useAlertStore = create<AlertState>()(
         return;
       }
 
-      // Dashboard cache is only an immediate visual fallback. Always continue
-      // to the authoritative Supabase load because older cached mentions may
-      // not contain workflow fields such as resolution_status/resolved_at.
-      if (!force) {
-        setAlertsFromDashboardCache(set, get, scopedBrandKey);
-      }
-
       // Clean up any existing subscription/interval
       if (activeUnsubscribe) {
         activeUnsubscribe();
@@ -766,7 +719,8 @@ export const useAlertStore = create<AlertState>()(
       };
 
       try {
-        // Initial load
+        // fetchRawData shares its promise cache with Dashboard. A forced
+        // refresh is still propagated so explicit reloads cannot reuse stale rows.
         await loadAlerts(force);
 
         // Demo pages use DashboardService's in-memory sample data only. Do not
@@ -784,7 +738,6 @@ export const useAlertStore = create<AlertState>()(
         // occurs when Supabase reuses the internal state of an old same-named channel.
         if (supabaseClient) {
           try {
-            let realtimeReloadTimer: ReturnType<typeof setTimeout> | null = null;
             const channelName = `alert-annotations-${Date.now()}`;
             const channel = supabaseClient
               .channel(channelName)
@@ -835,7 +788,6 @@ export const useAlertStore = create<AlertState>()(
               });
 
             cleanupFns.push(() => {
-              if (realtimeReloadTimer) clearTimeout(realtimeReloadTimer);
               activeRealtimeChannel = null;
               if (supabaseClient) supabaseClient.removeChannel(channel);
             });
@@ -846,9 +798,13 @@ export const useAlertStore = create<AlertState>()(
           }
         }
 
-        // ===== STRATEGY 2: Fallback polling (60 sec) =====
+        // ===== STRATEGY 2: Fallback polling =====
         const intervalId = setInterval(loadAlerts, ALERT_REFRESH_INTERVAL_MS);
         cleanupFns.push(() => clearInterval(intervalId));
+        cleanupFns.push(() => {
+          if (realtimeReloadTimer) clearTimeout(realtimeReloadTimer);
+          realtimeReloadTimer = null;
+        });
 
         activeUnsubscribe = () => cleanupFns.forEach((fn) => fn());
       } catch (error) {

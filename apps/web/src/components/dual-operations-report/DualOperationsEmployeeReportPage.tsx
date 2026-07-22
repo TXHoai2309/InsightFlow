@@ -33,9 +33,11 @@ import {
   ArrowRight,
   CalendarDays,
   CheckCircle2,
+  CircleDashed,
   Eye,
   Filter,
   Lightbulb,
+  LoaderCircle,
   Table2,
   TrendingUp,
 } from "lucide-react";
@@ -104,12 +106,18 @@ function getScopeLabel(scope: OperationScope) {
 function KpiCard({
   label,
   value,
+  valueSuffix = "",
   description,
+  breakdown,
+  icon: Icon,
   tone = "default",
 }: {
   label: string;
-  value: React.ReactNode;
+  value: number;
+  valueSuffix?: string;
   description: string;
+  breakdown: { lead: number; crisis: number };
+  icon: React.ElementType;
   tone?: "default" | "good" | "warn" | "danger";
 }) {
   const valueClass =
@@ -128,14 +136,37 @@ function KpiCard({
         : tone === "danger"
           ? "bg-red-500"
           : "bg-[var(--color-brand)]";
+  const iconClass =
+    tone === "good"
+      ? "bg-emerald-50 text-emerald-700"
+      : tone === "warn"
+        ? "bg-amber-50 text-amber-700"
+        : tone === "danger"
+          ? "bg-red-50 text-red-700"
+          : "bg-[var(--color-brand)]/10 text-[var(--color-brand)]";
   return (
-    <article className="min-w-0 bg-[var(--color-bg-surface)] p-4">
-      <div className="flex items-center gap-2">
-        <span className={`h-2 w-2 rounded-full ${dotClass}`} />
-        <p className="text-[11px] font-extrabold uppercase text-[var(--color-text-muted)]">{label}</p>
+    <article className="relative min-w-0 overflow-hidden bg-[var(--color-bg-surface)] p-4">
+      <span className={`absolute inset-x-0 top-0 h-0.5 ${dotClass}`} />
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-extrabold uppercase tracking-wide text-[var(--color-text-muted)]">{label}</p>
+          <p className={`mt-2 text-3xl font-black leading-none ${valueClass}`}>{value}{valueSuffix}</p>
+        </div>
+        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${iconClass}`}>
+          <Icon className="h-[18px] w-[18px]" />
+        </span>
       </div>
-      <p className={`mt-2 text-2xl font-black leading-none ${valueClass}`}>{value}</p>
-      <p className="mt-2 line-clamp-2 text-[11px] leading-4 text-[var(--color-text-secondary)]">{description}</p>
+      <p className="mt-2 min-h-8 text-[11px] leading-4 text-[var(--color-text-secondary)]">{description}</p>
+      <div className="mt-3 grid grid-cols-2 gap-2 border-t border-[var(--color-border)] pt-3">
+        <div className="rounded-lg bg-[var(--color-bg-surface-raised)] px-2.5 py-2">
+          <p className="truncate text-[10px] font-bold text-[var(--color-text-muted)]">Khách hàng</p>
+          <p className="mt-0.5 text-sm font-black text-[var(--color-text-primary)]">{breakdown.lead}{valueSuffix}</p>
+        </div>
+        <div className="rounded-lg bg-[var(--color-bg-surface-raised)] px-2.5 py-2">
+          <p className="truncate text-[10px] font-bold text-[var(--color-text-muted)]">Cảnh báo</p>
+          <p className="mt-0.5 text-sm font-black text-[var(--color-text-primary)]">{breakdown.crisis}{valueSuffix}</p>
+        </div>
+      </div>
     </article>
   );
 }
@@ -282,7 +313,7 @@ export function DualOperationsEmployeeReportPage({
     keyword: reportFilters.keyword,
     status: reportFilters.leadStatus,
     intent: reportFilters.priority === "high" ? "hot" : "all",
-    owner: "mine",
+    owner: "all",
   }), [reportFilters]);
 
   const crisisFilters = useMemo<CrisisReportFilters>(() => ({
@@ -550,16 +581,50 @@ export function DualOperationsEmployeeReportPage({
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-border)] px-4 py-3">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="h-4 w-4 text-[var(--color-brand)]" />
-            <h2 className="text-sm font-extrabold text-[var(--color-text-primary)]">Tình trạng công việc</h2>
+            <div>
+              <h2 className="text-sm font-extrabold text-[var(--color-text-primary)]">Tình trạng công việc</h2>
+              <p className="mt-0.5 text-[11px] text-[var(--color-text-secondary)]">Đối soát theo cùng trạng thái trên trang Khách hàng và Cảnh báo.</p>
+            </div>
           </div>
-          <span className="text-[11px] font-semibold text-[var(--color-text-muted)]">{periodLabel}</span>
+          <span className="rounded-full bg-[var(--color-bg-surface-raised)] px-2.5 py-1 text-[11px] font-bold text-[var(--color-text-muted)]">{periodLabel}</span>
         </div>
         <div className="grid gap-px bg-[var(--color-border)] sm:grid-cols-2 min-[1100px]:grid-cols-4">
-          <KpiCard label="Đã hoàn tất" value={report.kpis.completedTasks} description="Lead đã kết thúc và case đã giải quyết." tone="good" />
-          <KpiCard label="Đúng SLA" value={`${report.kpis.slaOnTimeRate}%`} description="Tỷ lệ chung trên các việc có thể đánh giá SLA." />
-          <KpiCard label="Còn mở" value={report.kpis.pendingTasks} description="Công việc vẫn cần tiếp tục xử lý." tone="warn" />
-          <KpiCard label="Quá hạn" value={report.kpis.overdueTasks} description="Việc quá hạn hoặc đã hoàn tất trễ SLA." tone={report.kpis.overdueTasks > 0 ? "danger" : "good"} />
+          <KpiCard
+            label="Chưa phân công"
+            value={report.kpis.workflow.unassigned.total}
+            breakdown={report.kpis.workflow.unassigned}
+            description="Chưa có người nhận xử lý trong hàng đợi nghiệp vụ."
+            icon={CircleDashed}
+          />
+          <KpiCard
+            label="Cần tiếp tục xử lý"
+            value={report.kpis.workflow.inProgress.total}
+            breakdown={report.kpis.workflow.inProgress}
+            description="Đã nhận xử lý, đang theo dõi hoặc cần liên hệ lại."
+            icon={LoaderCircle}
+            tone="warn"
+          />
+          <KpiCard
+            label="Đã hoàn tất"
+            value={report.kpis.workflow.completed.total}
+            breakdown={report.kpis.workflow.completed}
+            description="Khách hàng đã đóng và cảnh báo đã giải quyết."
+            icon={CheckCircle2}
+            tone="good"
+          />
+          <KpiCard
+            label="Tỷ lệ hoàn thành"
+            value={report.kpis.workflow.completionRate.total}
+            valueSuffix="%"
+            breakdown={report.kpis.workflow.completionRate}
+            description="Số công việc đã đóng trên tổng công việc cần xử lý trong kỳ."
+            icon={TrendingUp}
+            tone="good"
+          />
         </div>
+        <p className="border-t border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] px-4 py-2 text-[10px] leading-4 text-[var(--color-text-muted)]">
+          Tỷ lệ hoàn thành = số công việc “Đã đóng” / tổng công việc cần xử lý phát sinh trong khoảng thời gian đã chọn.
+        </p>
       </section>
 
       <div className="grid gap-4 min-[1100px]:grid-cols-[minmax(0,1.45fr)_minmax(300px,0.75fr)]">

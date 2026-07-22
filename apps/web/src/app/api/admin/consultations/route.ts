@@ -17,8 +17,48 @@ const BRAND_MANAGER_PERMISSIONS = [
   "staff_management",
 ];
 
+const ACTIVE_CRAWL_STATUSES = new Set(["queued", "waiting_resource", "running", "labeling", "syncing"]);
+const PLATFORM_ALIASES: Record<string, string> = {
+  facebook: "facebook",
+  threads: "threads",
+  tiktok: "tiktok",
+  youtube: "youtube",
+  review: "google_maps",
+  reviews: "google_maps",
+  google_maps: "google_maps",
+  "google maps": "google_maps",
+  "tin tức": "news_html",
+  "tin tuc": "news_html",
+  news: "news_html",
+  news_html: "news_html",
+  website: "website",
+};
+
+const TRIAL_SUPPORTED_PLATFORMS = new Set([
+  "facebook",
+  "threads",
+  "tiktok",
+  "youtube",
+  "google_maps",
+  "news_html",
+]);
+
 function text(value: unknown, maxLength: number) {
   return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
+}
+
+function textList(value: unknown, maxItems: number, maxLength: number) {
+  if (!Array.isArray(value)) return [];
+  return Array.from(new Set(value
+    .map((item) => text(item, maxLength))
+    .filter(Boolean)))
+    .slice(0, maxItems);
+}
+
+function normalizePlatforms(platforms: string[]) {
+  return Array.from(new Set(platforms
+    .map((platform) => PLATFORM_ALIASES[platform.toLowerCase()])
+    .filter((platform): platform is string => Boolean(platform) && TRIAL_SUPPORTED_PLATFORMS.has(platform))));
 }
 
 function slugify(value: string) {
@@ -125,10 +165,24 @@ export async function GET(request: NextRequest) {
     }
 
     const snapshot = await db.collection("consultations").orderBy("createdAt", "desc").limit(500).get();
-    const consultations = snapshot.docs.map((document: any) => ({
-      id: document.id,
-      ...(serializeValue(document.data()) as Record<string, unknown>),
-    }));
+    const runIds = Array.from(new Set(snapshot.docs
+      .map((document: any) => text(document.data()?.trialCrawlRunId, 120))
+      .filter(Boolean)));
+    const runSnapshots = runIds.length
+      ? await db.getAll(...runIds.map((runId) => db.collection("crawl_runs").doc(runId)))
+      : [];
+    const runStatuses = new Map(runSnapshots
+      .filter((runSnapshot: any) => runSnapshot.exists)
+      .map((runSnapshot: any) => [runSnapshot.id, text(runSnapshot.data()?.status, 40)]));
+    const consultations = snapshot.docs.map((document: any) => {
+      const data = document.data() || {};
+      const runId = text(data.trialCrawlRunId, 120);
+      return {
+        id: document.id,
+        ...(serializeValue(data) as Record<string, unknown>),
+        ...(runId && runStatuses.has(runId) ? { trialCrawlStatus: runStatuses.get(runId) } : {}),
+      };
+    });
 
     return NextResponse.json({ consultations });
   } catch (error) {
@@ -146,11 +200,12 @@ export async function PATCH(request: NextRequest) {
 
     const body = await request.json();
     const id = text(body.id, 120);
+    const action = text(body.action, 80);
     const status = text(body.status, 40);
     const notes = text(body.notes, 3000);
     const contactPlan = text(body.contactPlan, 1000);
 
-    if (!id || !ALLOWED_STATUSES.has(status)) {
+    if (!id) {
       return NextResponse.json({ error: "Dữ liệu cập nhật không hợp lệ." }, { status: 400 });
     }
 
@@ -162,6 +217,60 @@ export async function PATCH(request: NextRequest) {
 
     const consultation = snapshot.data() || {};
     const currentStatus = text(consultation.status, 40) || "pending";
+
+    if (action === "update_trial_configuration") {
+      const company = text(body.company, 180);
+      const keywords = textList(body.keywords, 50, 120);
+      const platforms = textList(body.platforms, 20, 80);
+      const normalizedPlatforms = normalizePlatforms(platforms);
+      const configurationNotes = text(body.configurationNotes, 3000);
+      const crawlRunId = text(consultation.trialCrawlRunId, 120);
+      const crawlRunSnapshot = crawlRunId
+        ? await db.collection("crawl_runs").doc(crawlRunId).get()
+        : null;
+      const crawlStatus = crawlRunSnapshot?.exists
+        ? text(crawlRunSnapshot.data()?.status, 40)
+        : text(consultation.trialCrawlStatus, 40);
+
+      if (!company || keywords.length === 0 || normalizedPlatforms.length === 0) {
+        return NextResponse.json(
+          { error: "Cấu hình trial cần tên thương hiệu, ít nhất một từ khóa và một kênh hợp lệ." },
+          { status: 400 },
+        );
+      }
+      if (ACTIVE_CRAWL_STATUSES.has(crawlStatus) && crawlStatus !== "queued") {
+        return NextResponse.json(
+          { error: "Phiên cào đang chạy. Hãy dừng hoặc chờ phiên hiện tại kết thúc trước khi sửa cấu hình." },
+          { status: 409 },
+        );
+      }
+
+      const configuration = { brandName: company, keywords, platforms: normalizedPlatforms };
+      const batch = db.batch();
+      batch.update(reference, {
+        company,
+        keywords,
+        platforms: normalizedPlatforms,
+        configurationNotes,
+        trialCrawlConfiguration: configuration,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      if (crawlStatus === "queued" && crawlRunId) {
+        batch.update(db.collection("crawl_runs").doc(crawlRunId), {
+          platforms: normalizedPlatforms,
+          "metadata.brandName": company,
+          "metadata.keywords": keywords,
+          "metadata.configurationNotes": configurationNotes,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+      await batch.commit();
+      return NextResponse.json({ success: true, configuration });
+    }
+
+    if (!ALLOWED_STATUSES.has(status)) {
+      return NextResponse.json({ error: "Dữ liệu cập nhật không hợp lệ." }, { status: 400 });
+    }
     if (FINAL_STATUSES.has(currentStatus) && status !== currentStatus) {
       return NextResponse.json(
         { error: "Yêu cầu đã có quyết định cuối cùng và không thể đổi sang trạng thái khác." },
@@ -175,7 +284,17 @@ export async function PATCH(request: NextRequest) {
     const need = text(consultation.need, 180);
     const companyEmailDomain = text(consultation.companyEmailDomain, 253).toLowerCase().replace(/^@+/, "");
 
-    if (status === "completed" && currentStatus !== "completed") {
+    if (status === "completed" && body.sendAccount === true) {
+      if (currentStatus !== "completed") {
+        return NextResponse.json({ error: "Yêu cầu cần được duyệt trước khi tạo tài khoản." }, { status: 409 });
+      }
+      const crawlRunId = text(consultation.trialCrawlRunId, 120);
+      const crawlRunSnapshot = crawlRunId
+        ? await db.collection("crawl_runs").doc(crawlRunId).get()
+        : null;
+      if (!crawlRunSnapshot?.exists || text(crawlRunSnapshot.data()?.status, 40) !== "completed") {
+        return NextResponse.json({ error: "Chỉ có thể gửi tài khoản sau khi trial crawl hoàn tất." }, { status: 409 });
+      }
       if (!companyEmailDomain) {
         return NextResponse.json(
           { error: "Yêu cầu chưa có đuôi email doanh nghiệp nên chưa thể tự tạo tài khoản." },
@@ -183,7 +302,12 @@ export async function PATCH(request: NextRequest) {
         );
       }
 
-      const brandId = `${slugify(company)}-${id.slice(-6).toLowerCase()}`;
+      const crawlRunMetadata = crawlRunSnapshot.data()?.metadata;
+      const trialBrandSlug = crawlRunMetadata && typeof crawlRunMetadata === "object"
+        ? text((crawlRunMetadata as Record<string, unknown>).trialBrandSlug, 100)
+        : "";
+      const brandId = trialBrandSlug
+        || `trial-${slugify(company)}-${crawlRunId.slice(0, 8).toLowerCase()}`;
       const provisionedUid = text(consultation.provisionedAccountUid, 128);
       const provisionedEmail = text(consultation.provisionedAccountEmail, 180).toLowerCase();
       let userRecord: any;
@@ -286,6 +410,7 @@ export async function PATCH(request: NextRequest) {
         provisionedAccountEmail: accountEmail,
         provisionedTrialStartAt: trialStartAt,
         provisionedTrialEndsAt: trialEndsAt,
+        accountStatus: "sending",
         decisionEmailStatus: "sending",
         notes,
         contactPlan,
@@ -312,6 +437,7 @@ export async function PATCH(request: NextRequest) {
           ? emailError.message
           : "EmailJS trả về lỗi không xác định.";
         await reference.update({
+          accountStatus: "email_failed",
           decisionEmailStatus: "failed",
           decisionEmailError: emailErrorMessage.slice(0, 500),
           updatedAt: FieldValue.serverTimestamp(),
@@ -339,6 +465,7 @@ export async function PATCH(request: NextRequest) {
         trialPlan: "14_day_trial",
         trialStartAt,
         trialEndsAt,
+        accountStatus: "sent",
         decisionEmailStatus: "sent",
         decisionEmailError: FieldValue.delete(),
         decisionEmailSentAt: FieldValue.serverTimestamp(),
@@ -362,6 +489,19 @@ export async function PATCH(request: NextRequest) {
           trialEndsAt: trialEndsAt.toISOString(),
         },
       });
+    }
+
+    if (status === "completed" && currentStatus !== "completed") {
+      await reference.update({
+        status: "completed",
+        approvedAt: FieldValue.serverTimestamp(),
+        approvedBy: admin.uid,
+        accountStatus: "not_created",
+        notes,
+        contactPlan,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return NextResponse.json({ success: true, approved: true, accountCreated: false, emailSent: false });
     }
 
     if (status === "not_approved" && currentStatus !== "not_approved") {

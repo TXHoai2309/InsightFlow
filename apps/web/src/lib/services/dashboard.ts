@@ -1203,6 +1203,14 @@ function supabasePostToMention(row: SupabaseRow, annotationByKey: Map<string, Su
         ? Math.round(row.baseline_confidence * 100)
         : 100,
     created_at: parseDate(row.updated_at || row.created_at || row.crawled_at || row.posted_at),
+    classified_at: parseDate(
+      annotation?.created_at ||
+        annotation?.updated_at ||
+        row.updated_at ||
+        row.created_at ||
+        row.crawled_at ||
+        row.posted_at,
+    ),
     posted_at: parseDate(
       row.posted_at || payload.thoi_gian_dang || payload.posted_at || row.created_at,
       row.created_at,
@@ -1266,6 +1274,14 @@ function supabaseCommentToMention(
         ? Math.round(row.baseline_confidence * 100)
         : 100,
     created_at: parseDate(row.updated_at || row.created_at || row.crawled_at || row.posted_at),
+    classified_at: parseDate(
+      annotation?.created_at ||
+        annotation?.updated_at ||
+        row.updated_at ||
+        row.created_at ||
+        row.crawled_at ||
+        row.posted_at,
+    ),
     posted_at: parseDate(
       row.posted_at || payload.gio_comment || payload.posted_at || row.created_at,
       row.created_at,

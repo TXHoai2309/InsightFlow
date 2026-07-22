@@ -3,7 +3,11 @@ import test from "node:test";
 
 import type { UserRoleProfile } from "./rbac";
 import type { AlertData } from "../stores/alert.store";
-import { canAlertBeVisibleToUser, getEffectiveAlertOwner } from "./alert-visibility";
+import {
+  canAlertBeVisibleToUser,
+  getEffectiveAlertOwner,
+  isAlertOwnedByUser,
+} from "./alert-visibility";
 
 const employee: UserRoleProfile = {
   uid: "employee-1",
@@ -47,5 +51,34 @@ test("does not expose a skipped alert to another employee", () => {
       displayName: "Nhân viên khác",
     }),
     false,
+  );
+});
+
+test("recognizes a manager assignment stored as uid or display name", () => {
+  const manager: UserRoleProfile = {
+    ...employee,
+    uid: "manager-1",
+    email: "manager@highlandscoffee.com",
+    displayName: "Highlands Brand Manager",
+    role: "brand_manager",
+    permissions: ["alerts", "leads", "reports"],
+  };
+  const processingAlert: AlertData = {
+    ...skippedAlert,
+    id: "processing-alert",
+    status: "resolving",
+    skipped_at: null,
+    skipped_by_email: null,
+    skipped_by_name: null,
+    being_resolved_by: manager.uid,
+  };
+
+  assert.equal(isAlertOwnedByUser(processingAlert, manager), true);
+  assert.equal(
+    isAlertOwnedByUser(
+      { ...processingAlert, being_resolved_by: manager.displayName },
+      manager,
+    ),
+    true,
   );
 });

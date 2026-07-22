@@ -13,6 +13,13 @@ import { useDashboardStore } from "@/stores/dashboard.store";
 import { useAlertStore } from "@/stores/alert.store";
 import { DashboardService, normalizeBrandName } from "@/lib/services/dashboard";
 import { filterLeadsForDashboard } from "@/lib/lead-metrics";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  buildAlertOperationalMetrics,
+  buildLeadOperationalMetrics,
+  filterOperationalAlerts,
+  filterOperationalLeads,
+} from "@/lib/operational-metrics";
 import { useTranslation } from "react-i18next";
 
 import { BMFiltersBar } from "./BMFiltersBar";
@@ -33,6 +40,7 @@ interface BrandManagerDashboardProps {
 export function BrandManagerDashboard({
   initialWorkspaces = [],
 }: BrandManagerDashboardProps) {
+  const { profile } = useAuth();
   const {
     mentions,
     alerts,
@@ -314,24 +322,24 @@ export function BrandManagerDashboard({
     (a) => a.severity === "critical" || a.severity === "high"
   );
   const crisisAlertKpi = useMemo(() => {
-    const targetBrand =
-      filters.workspace_id !== "all"
-        ? normalizeBrandName(filters.workspace_id)
-        : null;
-
-    const scopedAlerts = crisisAlerts.filter((alert) => {
-      if (targetBrand && normalizeBrandName(alert.brand || "") !== targetBrand) return false;
-      if (filters.platform !== "all" && alert.source !== filters.platform) return false;
-      return true;
+    const scopedAlerts = filterOperationalAlerts(crisisAlerts, {
+      profile,
+      workspaceId: filters.workspace_id,
+      platform: filters.platform,
+      crisisOnly: true,
+      dateBasis: "created_at",
     });
-    const high = scopedAlerts.filter((alert) => {
-      const severity = String(alert.severity || alert.urgency || "").toLowerCase();
-      return severity === "critical" || severity === "high" || severity === "urgent";
-    }).length;
-
-    return { total: scopedAlerts.length, high };
-  }, [crisisAlerts, filters.workspace_id, filters.platform]);
-  const unprocessedContacts = filteredLeads.filter((l) => l.status === "new").length;
+    return buildAlertOperationalMetrics(scopedAlerts);
+  }, [crisisAlerts, filters.workspace_id, filters.platform, profile]);
+  const leadOperationalMetrics = useMemo(() => {
+    const scopedLeads = filterOperationalLeads(leads, {
+      profile,
+      workspaceId: filters.workspace_id,
+      platform: filters.platform,
+    });
+    return buildLeadOperationalMetrics(scopedLeads, profile);
+  }, [filters.platform, filters.workspace_id, leads, profile]);
+  const unprocessedContacts = leadOperationalMetrics.unassigned;
 
   const hasData = mentions.length > 0;
   if ((!isMounted && !hasData) || (!isFirstLoadDone && isLoading)) {
@@ -401,11 +409,11 @@ export function BrandManagerDashboard({
         totalTrend={totalTrend}
         negativeMentions={stats.negative_count}
         negativePrev={prevStats.negative_count}
-        alertsTotal={crisisAlertKpi.total}
-        alertsHigh={crisisAlertKpi.high}
+        alertsTotal={crisisAlertKpi.active}
+        alertsHigh={crisisAlertKpi.highActive}
         unprocessed={unprocessedContacts}
         crises={derivedAlerts.filter((a) => a.severity === "critical").length}
-        hotLeads={filteredLeads.length}
+        hotLeads={leadOperationalMetrics.unassigned}
       />
 
       {/* ── 5. Row 2: Sentiment Trend (Full Width) ──────────────── */}

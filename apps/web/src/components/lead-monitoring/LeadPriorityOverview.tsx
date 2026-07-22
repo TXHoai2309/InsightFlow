@@ -2,7 +2,8 @@
 
 import React, { useMemo } from "react";
 import { AlertTriangle, Clock3, Flame, UserPlus } from "lucide-react";
-import { getLeadWorkbenchMeta } from "@/lib/lead-workbench";
+import { useAuth } from "@/hooks/useAuth";
+import { buildLeadOperationalMetrics } from "@/lib/operational-metrics";
 import { useLeadMonitoringLeads } from "./useLeadMonitoringLeads";
 
 const cardStyles = {
@@ -33,23 +34,17 @@ const cardStyles = {
 };
 
 export function LeadPriorityOverview() {
+  const { profile } = useAuth();
   const leads = useLeadMonitoringLeads();
 
-  const metrics = useMemo(() => {
-    const nowMs = Date.now();
-    const pending = leads.filter((lead) => lead.status === "new" || lead.status === "processing");
-
-    return {
-      new: leads.filter((lead) => lead.status === "new").length,
-      hot: pending.filter((lead) => lead.intent === "hot").length,
-      overdue: pending.filter((lead) => getLeadWorkbenchMeta(lead, nowMs).isOverdue).length,
-      unassigned: pending.filter((lead) => !lead.owner_id).length,
-    };
-  }, [leads]);
+  const metrics = useMemo(
+    () => buildLeadOperationalMetrics(leads, profile),
+    [leads, profile],
+  );
 
   const items = [
     { key: "new", value: leads.length, hint: "Tất cả lead trong kỳ" },
-    { key: "hot", value: metrics.hot, hint: "Ưu tiên kiểm tra tư vấn" },
+    { key: "hot", value: metrics.hotPending, hint: "Ưu tiên kiểm tra tư vấn" },
     { key: "overdue", value: metrics.overdue, hint: "Có nguy cơ mất khách" },
     { key: "unassigned", value: metrics.unassigned, hint: "Cần chia cho nhân sự" },
   ] as const;

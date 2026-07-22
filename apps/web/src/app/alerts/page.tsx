@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import {
-  getAlertReviewSinceIso,
   useAlertStore,
   type AlertData,
   type CustomerContactAttempt,
@@ -40,6 +39,10 @@ import { readDashboardReturnNavigation } from "@/lib/dashboard-return-context";
 import { usePinnedQueue } from "@/hooks/usePinnedQueue";
 import { useAlertViewPresence } from "@/hooks/useAlertViewPresence";
 import { getAlertSourceUrl } from "@/lib/alert-source-url";
+import {
+  getAlertCompletenessScore,
+  getAlertDeduplicationKey,
+} from "@/lib/operational-metrics";
 
 const ALERTS_PER_PAGE = 5;
 import { collection, getDocs, doc, getDoc } from "firebase/firestore";
@@ -55,26 +58,6 @@ import {
   Legend as ChartLegend,
   Filler as ChartFiller,
 } from "chart.js";
-
-function getAlertDeduplicationKey(alert: AlertData) {
-  const contentType = String(alert.content_type || "mention").toLowerCase();
-  const sourceRecordId = contentType === "comment"
-    ? alert.comment_id || alert.source_id || alert.id
-    : alert.post_id || alert.source_id || alert.id;
-  return `${String(alert.source || "unknown").toLowerCase()}:${contentType}:${sourceRecordId}`;
-}
-
-function getAlertCompletenessScore(alert: AlertData) {
-  const workflowStatus = getAlertWorkflowStatus(alert);
-  return (
-    (workflowStatus === "pending" ? 0 : 20) +
-    (alert.being_resolved_by ? 10 : 0) +
-    (alert.customer_contact_opened_at ? 5 : 0) +
-    (alert.resolution_history?.length || 0) +
-    (alert.customer_contact_history?.length || 0)
-  );
-}
-
 
 // Helper function to calculate relative time
 function getRelativeTime(isoString: string, t: any): string {
@@ -324,7 +307,10 @@ export default function AlertsPage() {
   } = useAlertStore();
   // Filter alerts by currently selected brand filter for dashboard overview calculations
   const brandFilteredAlerts = useMemo(() => {
-    let result = rawAlerts;
+    // Alerts is the complete negative-content queue. The shared store also
+    // carries urgent non-negative records so Crisis Monitoring can honour its
+    // broader urgency rule without triggering another data scan.
+    let result = rawAlerts.filter((alert) => alert.sentiment === "negative");
 
     if (filters.brand && filters.brand !== "all") {
       const normalize = (b: string) => String(b || "").toLowerCase().replace(/[\s\-_.]/g, "").trim();
@@ -343,22 +329,6 @@ export default function AlertsPage() {
         return aKey === tKey;
       });
     }
-
-    // Hàng đợi và lịch sử chỉ giữ các vụ việc trong cửa sổ 30 ngày.
-    // Vụ việc đang mở tính theo ngày phát hiện; vụ việc hoàn tất tính theo
-    // thời điểm giải quyết gần nhất.
-    const activeCutoffMs = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    result = result.filter((alert) => {
-      const isCompleted = isTerminalAlert(alert);
-      const lastHistoryAt = Array.isArray(alert.resolution_history) && alert.resolution_history.length > 0
-        ? alert.resolution_history[alert.resolution_history.length - 1]?.timestamp
-        : undefined;
-      const relevantAt = isCompleted
-        ? alert.resolved_at || alert.skipped_at || alert.monitoring_started_at || lastHistoryAt || alert.created_at
-        : alert.created_at;
-      const relevantAtMs = new Date(relevantAt).getTime();
-      return Number.isFinite(relevantAtMs) && relevantAtMs >= activeCutoffMs && relevantAtMs <= Date.now();
-    });
 
     if (timeFilter !== "all") {
       const now = new Date();
@@ -402,20 +372,12 @@ export default function AlertsPage() {
 
       if (startDate || endDate) {
         result = result.filter(a => {
-          const isCompleted = isTerminalAlert(a);
-          // Việc còn mở trong 30 ngày luôn hiện; bộ lọc ngày chỉ áp dụng
-          // cho lịch sử cảnh báo đã hoàn tất.
-          if (!isCompleted) return true;
-
-          const lastHistoryAt = Array.isArray(a.resolution_history) && a.resolution_history.length > 0
-            ? a.resolution_history[a.resolution_history.length - 1]?.timestamp
-            : undefined;
-          const completedAt = a.resolved_at || a.skipped_at || a.monitoring_started_at || lastHistoryAt || a.created_at;
-          const completedDate = new Date(completedAt);
-          if (!completedAt || isNaN(completedDate.getTime())) return false;
-
-          if (startDate && completedDate < startDate) return false;
-          if (endDate && completedDate > endDate) return false;
+          // The time selector consistently refers to the publication date of
+          // the post/comment that generated the alert, regardless of status.
+          const eventDate = new Date(a.created_at);
+          if (isNaN(eventDate.getTime())) return false;
+          if (startDate && eventDate < startDate) return false;
+          if (endDate && eventDate > endDate) return false;
           return true;
         });
       }
@@ -443,17 +405,16 @@ export default function AlertsPage() {
   };
 
   const visibleBaseAlerts = useMemo(() => {
-    const scopedAlerts = brandFilteredAlerts.filter((alert) => canAlertBeVisibleToUser(alert, profile));
     const deduplicated = new Map<string, AlertData>();
-
-    scopedAlerts.forEach((alert) => {
-      const key = getAlertDeduplicationKey(alert);
-      const existing = deduplicated.get(key);
-      if (!existing || getAlertCompletenessScore(alert) > getAlertCompletenessScore(existing)) {
-        deduplicated.set(key, alert);
-      }
-    });
-
+    brandFilteredAlerts
+      .filter((alert) => canAlertBeVisibleToUser(alert, profile))
+      .forEach((alert) => {
+        const key = getAlertDeduplicationKey(alert);
+        const existing = deduplicated.get(key);
+        if (!existing || getAlertCompletenessScore(alert) > getAlertCompletenessScore(existing)) {
+          deduplicated.set(key, alert);
+        }
+      });
     return Array.from(deduplicated.values());
   }, [brandFilteredAlerts, profile]);
 
@@ -528,10 +489,10 @@ export default function AlertsPage() {
         : [...activeAlerts];
 
     // Lọc theo trạng thái nghiệp vụ.
-    // "all": Chỉ hiển thị các công việc chưa phân công hoặc cần liên hệ lại;
-    // các task đã phân công/đang xử lý sẽ ẩn khỏi "Tất cả đang mở" và chuyển sang tab "Đang xử lý".
+    // "all" includes every non-resolved workflow state. The status tabs are
+    // mutually exclusive, so their counts always add up to the open total.
     if (statusFilter === "all") {
-      result = result.filter((alert) => getAlertWorkflowStatus(alert) !== "processing");
+      result = result.filter((alert) => getAlertWorkflowStatus(alert) !== "resolved");
     } else if (statusFilter === "pending") {
       result = result.filter((alert) => {
         return getAlertWorkflowStatus(alert) === "pending";
@@ -1106,11 +1067,12 @@ export default function AlertsPage() {
     }
   }, [activeTab, highRiskIncidents, selectedIncidentId]);
 
-  // Load alerts on mount only – realtime + 60s polling handles subsequent updates
+  // Load from the shared 30-minute cache on mount. Realtime updates existing
+  // workflow records and the polling safety net refreshes every 30 minutes.
   useEffect(() => {
     if (authLoading || !canViewCrisisQueue) return;
     setFilters({ status: "all" });
-    fetchAlerts(scopedBrandKey, true);
+    fetchAlerts(scopedBrandKey, false);
     fetchCorrectionRequests(scopedBrandKey);
   }, [authLoading, canViewCrisisQueue, scopedBrandKey, fetchAlerts, fetchCorrectionRequests, setFilters]);
 

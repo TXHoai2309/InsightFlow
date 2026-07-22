@@ -361,11 +361,21 @@ export default function LeadsPage() {
     [visibleBaseLeads, currentTime, profile],
   );
 
+  const filteredBaseLeads = useMemo(
+    () => filterLeadWorkbenchItems(
+      visibleBaseLeads,
+      { ...leadFilters, workspaceId: "all" },
+      currentTime,
+      profile?.uid,
+    ),
+    [currentTime, leadFilters, profile?.uid, visibleBaseLeads],
+  );
+
   const viewCounts = useMemo(() => {
     const allViews: LeadWorkbenchView[] = ["unassigned", "priority", "active", "follow_up", "closed", "skipped", "need_result"];
     return allViews.reduce(
       (acc, viewId) => {
-        acc[viewId] = visibleBaseLeads.filter((lead) =>
+        acc[viewId] = filteredBaseLeads.filter((lead) =>
           matchesLeadWorkbenchView(lead, viewId, currentTime, profile),
         ).length;
         return acc;
@@ -374,8 +384,8 @@ export default function LeadsPage() {
     );
   }, [
     currentTime,
+    filteredBaseLeads,
     profile,
-    visibleBaseLeads,
   ]);
 
   const leadsInActiveView = useMemo(() => {
@@ -607,7 +617,6 @@ export default function LeadsPage() {
     visibleLeads.length === 0 ? 0 : (currentPage - 1) * LEADS_PAGE_SIZE + 1;
   const lastLeadNumber = Math.min(currentPage * LEADS_PAGE_SIZE, visibleLeads.length);
 
-  const brandPlatformFilteredLeads = visibleBaseLeads;
   const isDetailPanelOpen = Boolean(selectedLead && !isPanelCollapsed);
   const brandLocked = profile?.role !== "admin";
   const selectedWorkspace = workspaces.find(
@@ -629,10 +638,10 @@ export default function LeadsPage() {
   };
 
   const pendingResultLead = useMemo(() => {
-    return sortedLeads.find((lead) =>
+    return filteredBaseLeads.find((lead) =>
       matchesLeadWorkbenchView(lead, "need_result", currentTime, profile),
     );
-  }, [sortedLeads, currentTime, profile]);
+  }, [filteredBaseLeads, currentTime, profile]);
 
   const handleSelectSummaryView = (view: LeadWorkbenchView) => {
     setActiveView(view);
@@ -851,7 +860,7 @@ export default function LeadsPage() {
       </header>
 
       <LeadStats
-        leads={brandPlatformFilteredLeads}
+        leads={filteredBaseLeads}
         isLoading={isLoading}
         profile={profile}
         onSelectView={handleSelectSummaryView}

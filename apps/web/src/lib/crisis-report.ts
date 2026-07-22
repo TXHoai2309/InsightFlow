@@ -1,7 +1,11 @@
 import type { AlertData } from "@/stores/alert.store";
 import type { UserRoleProfile } from "@/lib/rbac";
 import { canAlertBeVisibleToUser } from "@/lib/alert-visibility";
-import { isSkippedAlert } from "@/lib/alertWorkflow";
+import {
+  getAlertWorkflowStatus,
+  isSkippedAlert,
+  type AlertWorkflowStatus,
+} from "@/lib/alertWorkflow";
 
 export interface CrisisReportKpi {
   total: number;
@@ -56,6 +60,7 @@ export interface CrisisReportDetailRow {
   severity: string;
   sentiment: string;
   status: string;
+  workflowStatus?: AlertWorkflowStatus;
   assigneeName: string;
   createdAt: string;
   firstResponseAt: string;
@@ -327,6 +332,7 @@ function buildDetailRows(alerts: AlertData[], nowMs: number): CrisisReportDetail
       severity: normalizeSeverity(alert.severity || alert.urgency || ""),
       sentiment: alert.sentiment || "negative",
       status: normalizeStatus(alert.status),
+      workflowStatus: getAlertWorkflowStatus(alert),
       assigneeName: getAssigneeName(alert),
       createdAt: alert.created_at,
       firstResponseAt,
