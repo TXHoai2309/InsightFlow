@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import {
   Activity,
   CheckCircle2,
@@ -26,6 +27,9 @@ import {
 import { CustomerInteractionHistoryPanel } from "@/components/customer-interactions/CustomerInteractionHistoryPanel";
 import { getAlertSourceUrl } from "@/lib/alert-source-url";
 import { isAlertOwnedByUser } from "@/lib/alert-visibility";
+import { isDemoPath } from "@/lib/demo-navigation";
+import { dummyStaff } from "@/lib/demoData";
+import { copyTextToClipboard } from "@/lib/clipboard";
 
 export type AlertDetailPanelTab = "action" | "profile" | "interactions" | "history";
 
@@ -110,6 +114,7 @@ export function AlertDetailPanel({
   onOpenSource,
 }: AlertDetailPanelProps) {
   const { role, profile, user } = useAuth();
+  const pathname = usePathname();
   const workflowStatus = getAlertWorkflowStatus(alert);
   const isTerminal = workflowStatus === "resolved" || workflowStatus === "skipped";
   const [optimisticClaimId, setOptimisticClaimId] = useState<string | null>(null);
@@ -195,6 +200,11 @@ export function AlertDetailPanel({
     if (role === "brand_manager") {
       const loadStaff = async () => {
         setLoadingStaff(true);
+        if (isDemoPath(pathname)) {
+          setStaffList(dummyStaff.filter((item) => item.permissions.includes("alerts")).map((item) => ({ ...item })));
+          setLoadingStaff(false);
+          return;
+        }
         try {
           const token = await user?.getIdToken();
           const res = await fetch("/api/staff", { headers: { Authorization: `Bearer ${token}` } });
@@ -209,7 +219,7 @@ export function AlertDetailPanel({
       };
       loadStaff();
     }
-  }, [role, user]);
+  }, [pathname, role, user]);
 
   const handleAssignTo = async (uid: string) => {
     if (!uid || !canUpdate || !profile) return;
@@ -262,15 +272,15 @@ export function AlertDetailPanel({
       template,
     });
 
-    void navigator.clipboard.writeText(template).catch((error) => {
-      console.warn("Could not copy the default contact template:", error);
-    });
+    const didCopyTemplate = await copyTextToClipboard(template);
 
     // Opening a source is a local preparation step. Do not call
     // updateAlertStatus here: doing so can upsert another annotation and makes
     // the same alert appear twice in the Processing queue. The opened-at data
     // is persisted together with the evidence when the result is submitted.
-    showToast("Đã sao chép mẫu xin lỗi và mở nguồn. Hãy bổ sung minh chứng bên dưới.");
+    showToast(didCopyTemplate
+      ? "Đã sao chép mẫu xin lỗi và mở nguồn. Hãy bổ sung minh chứng bên dưới."
+      : "Đã mở nguồn. Trình duyệt không cho phép sao chép tự động; bạn có thể sao chép lại mẫu trong panel.");
   };
   const historyEntries = useMemo<AlertHistoryViewEntry[]>(() => {
     const entries: AlertHistoryViewEntry[] = [

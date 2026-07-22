@@ -1162,7 +1162,7 @@ function dualMetricCell(label: string, value: unknown, tone = "") {
   return `<td class="metric ${tone}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></td>`;
 }
 
-function dualDetailTable(title: string, headers: string[], rows: unknown[][]) {
+function dualSummaryTable(title: string, headers: string[], rows: unknown[][]) {
   return `
     <section class="report-section details">
       <h2>${escapeHtml(title)}</h2>
@@ -1185,24 +1185,51 @@ export function buildDualOperationsReportExcelDocument(
   const filterLabel = options.filterLabel || "Tất cả nghiệp vụ";
   const showLead = options.operation !== "crisis";
   const showCrisis = options.operation !== "lead";
-  const leadRows = report.lead.detailRows.map((row) => [
-    row.id,
-    row.customer,
-    row.intent.toUpperCase(),
-    row.status,
-    row.slaStatus,
-    row.ownerName,
-    row.content,
+  const leadTrendRows = report.lead.responseTrend.map((row) => [
+    row.day,
+    row.created,
+    row.completed,
   ]);
-  const crisisRows = report.crisis.detailRows.map((row) => [
-    row.id,
-    row.topic,
-    row.severity.toUpperCase(),
-    row.status,
-    row.slaStatus,
-    row.assigneeName,
-    row.content,
+  const crisisTrendRows = report.crisis.responseTrend.map((row) => [
+    row.day,
+    row.created,
+    row.resolved,
   ]);
+  const leadCreated7d = report.lead.responseTrend.reduce((total, row) => total + row.created, 0);
+  const leadClosed7d = report.lead.responseTrend.reduce((total, row) => total + row.completed, 0);
+  const crisisCreated7d = report.crisis.responseTrend.reduce((total, row) => total + row.created, 0);
+  const crisisClosed7d = report.crisis.responseTrend.reduce((total, row) => total + row.resolved, 0);
+  const totalCreated7d = (showLead ? leadCreated7d : 0) + (showCrisis ? crisisCreated7d : 0);
+  const totalClosed7d = (showLead ? leadClosed7d : 0) + (showCrisis ? crisisClosed7d : 0);
+  const backlogDelta7d = totalCreated7d - totalClosed7d;
+  const trendAssessment = backlogDelta7d > 0
+    ? `Tồn đọng có xu hướng tăng ${backlogDelta7d} công việc trong 7 ngày.`
+    : backlogDelta7d < 0
+      ? `Tồn đọng có xu hướng giảm ${Math.abs(backlogDelta7d)} công việc trong 7 ngày.`
+      : "Khối lượng phát sinh và hoàn tất đang cân bằng trong 7 ngày.";
+  const workflowRows = [
+    ["Chưa phân công", report.kpis.workflow.unassigned.lead, report.kpis.workflow.unassigned.crisis, report.kpis.workflow.unassigned.total],
+    ["Cần tiếp tục xử lý", report.kpis.workflow.inProgress.lead, report.kpis.workflow.inProgress.crisis, report.kpis.workflow.inProgress.total],
+    ["Đã hoàn tất (Đã đóng)", report.kpis.workflow.completed.lead, report.kpis.workflow.completed.crisis, report.kpis.workflow.completed.total],
+    ["Quá hạn còn mở", report.kpis.workflow.overdueOpen.lead, report.kpis.workflow.overdueOpen.crisis, report.kpis.workflow.overdueOpen.total],
+    ["Tỷ lệ hoàn thành", `${report.kpis.workflow.completionRate.lead}%`, `${report.kpis.workflow.completionRate.crisis}%`, `${report.kpis.workflow.completionRate.total}%`],
+  ];
+  const sourceRows = Array.from(new Set([
+    ...(showLead ? report.lead.sourceDistribution.map((item) => item.label) : []),
+    ...(showCrisis ? report.crisis.sourceDistribution.map((item) => item.label) : []),
+  ])).map((label) => {
+    const leadCount = showLead
+      ? report.lead.sourceDistribution.find((item) => item.label === label)?.count || 0
+      : 0;
+    const crisisCount = showCrisis
+      ? report.crisis.sourceDistribution.find((item) => item.label === label)?.count || 0
+      : 0;
+    return [label, leadCount, crisisCount, leadCount + crisisCount];
+  }).sort((first, second) => Number(second[3]) - Number(first[3]));
+  const attentionRows = Array.from(
+    { length: Math.ceil(report.attentionItems.length / 3) },
+    (_, index) => report.attentionItems.slice(index * 3, index * 3 + 3),
+  );
 
   return `<!doctype html>
   <html xmlns:o="urn:schemas-microsoft-com:office:office"
@@ -1233,6 +1260,8 @@ export function buildDualOperationsReportExcelDocument(
         .operation-grid td { padding: 7px 0; border-bottom: 1px solid #efedf5; font-size: 12px; }
         .operation-grid td:last-child { text-align: right; font-weight: 700; }
         .recommendation { margin: 8px 0; padding: 11px 13px; border-left: 4px solid #4f46e5; background: #f4f3ff; font-size: 12px; }
+        .summary { margin: 0; padding: 14px 16px; border: 1px solid #d8d4ff; background: #f7f6ff; font-size: 12px; line-height: 1.65; }
+        .note { margin: 7px 0; color: #5d596b; font-size: 11px; line-height: 1.55; }
         .data-table { border-spacing: 0; table-layout: fixed; }
         .data-table th { padding: 9px; color: #fff; background: #4f46e5; border: 1px solid #3932bd; font-size: 11px; text-align: left; }
         .data-table td { padding: 8px; border: 1px solid #dedcea; font-size: 10px; white-space: normal; word-break: break-word; }
@@ -1244,19 +1273,25 @@ export function buildDualOperationsReportExcelDocument(
     <body>
       <main class="report">
         <header class="hero">
-          <p class="eyebrow">Báo cáo công việc cá nhân</p>
-          <h1>Lead &amp; Khủng hoảng</h1>
-          <p>Bản báo cáo tập trung vào kết quả, rủi ro cần chú ý và dữ liệu đối soát.</p>
+          <p class="eyebrow">Báo cáo tổng quan thương hiệu</p>
+          <h1>Vận hành Khách hàng &amp; Cảnh báo</h1>
+          <p>Bản báo cáo quản trị tập trung vào khối lượng, kết quả, rủi ro và xu hướng; không bao gồm nội dung mention chi tiết.</p>
           <p class="meta"><strong>Kỳ báo cáo:</strong> ${escapeHtml(periodLabel)} &nbsp;·&nbsp; <strong>Phạm vi:</strong> ${escapeHtml(filterLabel)} &nbsp;·&nbsp; <strong>Cập nhật:</strong> ${escapeHtml(new Date(report.generatedAt).toLocaleString("vi-VN"))}</p>
         </header>
 
         <section class="report-section">
+          <h2>Tóm tắt điều hành</h2>
+          <p class="summary">Trong <strong>${escapeHtml(periodLabel)}</strong>, báo cáo ghi nhận <strong>${report.kpis.totalTasks}</strong> công việc cần xử lý; đã đóng <strong>${report.kpis.completedTasks}</strong>, còn <strong>${report.kpis.pendingTasks}</strong> công việc chưa đóng và đạt tỷ lệ hoàn thành <strong>${report.kpis.workflow.completionRate.total}%</strong>. ${escapeHtml(trendAssessment)}</p>
+          <p class="note"><strong>Phạm vi và bộ lọc:</strong> ${escapeHtml(filterLabel)}. <strong>So sánh kỳ trước:</strong> chưa hiển thị vì nguồn dữ liệu hiện tại chưa cung cấp tập dữ liệu kỳ đối chiếu tương đương.</p>
+        </section>
+
+        <section class="report-section">
           <h2>Cần chú ý</h2>
-          <table><tr>
-            ${report.attentionItems.length > 0
-              ? report.attentionItems.slice(0, 4).map((item) => `<td class="attention"><span>${escapeHtml(item.title)}</span><strong>${item.count}</strong><p>${escapeHtml(item.description)}</p></td>`).join("")
-              : `<td class="attention"><span>Trạng thái</span><strong>0</strong><p>Không có rủi ro nổi bật trong phạm vi báo cáo.</p></td>`}
-          </tr></table>
+          <table>
+            ${attentionRows.length > 0
+              ? attentionRows.map((items) => `<tr>${items.map((item) => `<td class="attention"><span>${escapeHtml(item.title)}</span><strong>${item.count}</strong><p>${escapeHtml(item.description)}</p></td>`).join("")}</tr>`).join("")
+              : `<tr><td class="attention"><span>Trạng thái</span><strong>0</strong><p>Không có rủi ro nổi bật trong phạm vi báo cáo.</p></td></tr>`}
+          </table>
         </section>
 
         <section class="report-section">
@@ -1269,25 +1304,29 @@ export function buildDualOperationsReportExcelDocument(
           </tr></table>
         </section>
 
+        ${dualSummaryTable("Tình trạng công việc theo nghiệp vụ", ["Trạng thái", "Khách hàng tiềm năng", "Cảnh báo", "Tổng"], workflowRows)}
+
         <section class="report-section">
           <h2>Kết quả theo nghiệp vụ</h2>
           <table><tr>
             ${showLead ? `<td class="operation">
               <h3>Khách hàng tiềm năng</h3>
               <table class="operation-grid">
-                <tr><td>Đã liên hệ</td><td>${report.lead.kpis.contacted}/${report.lead.kpis.total}</td></tr>
+                <tr><td>Đã đóng</td><td>${report.kpis.workflow.completed.lead}/${report.kpis.leadTotal}</td></tr>
+                <tr><td>Tỷ lệ hoàn thành</td><td>${report.kpis.workflow.completionRate.lead}%</td></tr>
                 <tr><td>Tỷ lệ chuyển đổi</td><td>${report.lead.kpis.conversionRate}%</td></tr>
-                <tr><td>Chưa ghi kết quả</td><td>${report.lead.kpis.needResult}</td></tr>
-                <tr><td>Trễ SLA</td><td>${report.lead.kpis.slaBreached}</td></tr>
+                <tr><td>Đúng SLA</td><td>${report.lead.kpis.slaOnTimeRate}%</td></tr>
+                <tr><td>Follow-up quá hạn</td><td>${report.lead.kpis.followUpOverdue}</td></tr>
               </table>
             </td>` : ""}
             ${showCrisis ? `<td class="operation">
               <h3>Khủng hoảng</h3>
               <table class="operation-grid">
-                <tr><td>Đã giải quyết</td><td>${report.crisis.kpis.resolved}/${report.crisis.kpis.total}</td></tr>
-                <tr><td>Critical/High còn mở</td><td>${report.crisis.kpis.critical + report.crisis.kpis.high}</td></tr>
-                <tr><td>Chờ duyệt</td><td>${report.crisis.kpis.pendingApproval}</td></tr>
-                <tr><td>Quá hạn</td><td>${report.crisis.kpis.overdue}</td></tr>
+                <tr><td>Đã đóng</td><td>${report.kpis.workflow.completed.crisis}/${report.kpis.crisisTotal}</td></tr>
+                <tr><td>Tỷ lệ hoàn thành</td><td>${report.kpis.workflow.completionRate.crisis}%</td></tr>
+                <tr><td>Critical/High còn mở</td><td>${report.kpis.priorityOpen.crisis}</td></tr>
+                <tr><td>Quá hạn còn mở</td><td>${report.kpis.workflow.overdueOpen.crisis}</td></tr>
+                <tr><td>Đúng SLA</td><td>${report.crisis.kpis.slaOnTimeRate}%</td></tr>
               </table>
             </td>` : ""}
           </tr></table>
@@ -1295,12 +1334,31 @@ export function buildDualOperationsReportExcelDocument(
 
         <section class="report-section">
           <h2>Nhận định và đề xuất</h2>
-          ${report.recommendations.map((item) => `<p class="recommendation">${escapeHtml(item)}</p>`).join("")}
+          ${report.managementInsights.map((item) => `<p class="recommendation"><strong>Nhận định:</strong> ${escapeHtml(item)}</p>`).join("")}
+          ${report.recommendations.map((item) => `<p class="recommendation"><strong>Hành động:</strong> ${escapeHtml(item)}</p>`).join("")}
         </section>
 
-        ${showLead ? dualDetailTable("Chi tiết Lead", ["ID", "Khách hàng", "Intent", "Trạng thái", "SLA", "Phụ trách", "Nội dung"], leadRows) : ""}
-        ${showCrisis ? dualDetailTable("Chi tiết Khủng hoảng", ["ID", "Chủ đề", "Mức độ", "Trạng thái", "SLA", "Phụ trách", "Nội dung"], crisisRows) : ""}
-        <footer class="footer">InsightFlow · Nội dung trong bản xem trước và file Excel được tạo từ cùng một tài liệu.</footer>
+        <section class="report-section">
+          <h2>Xu hướng và biến động tồn đọng 7 ngày</h2>
+          <table><tr>
+            ${dualMetricCell("Phát sinh mới", totalCreated7d)}
+            ${dualMetricCell("Đã đóng", totalClosed7d, "good")}
+            ${dualMetricCell("Biến động tồn đọng", backlogDelta7d > 0 ? `+${backlogDelta7d}` : backlogDelta7d, backlogDelta7d > 0 ? "danger" : "good")}
+            ${dualMetricCell("Đánh giá", backlogDelta7d > 0 ? "Tăng" : backlogDelta7d < 0 ? "Giảm" : "Cân bằng", backlogDelta7d > 0 ? "danger" : "good")}
+          </tr></table>
+          <p class="note">${escapeHtml(trendAssessment)} Số phát sinh được ghi theo ngày tạo; số hoàn tất được ghi theo ngày đóng thực tế.</p>
+        </section>
+
+        ${showLead ? dualSummaryTable("Xu hướng Khách hàng 7 ngày", ["Ngày", "Lead mới", "Đã đóng"], leadTrendRows) : ""}
+        ${showCrisis ? dualSummaryTable("Xu hướng Cảnh báo 7 ngày", ["Ngày", "Case mới", "Đã đóng"], crisisTrendRows) : ""}
+        ${dualSummaryTable("Cơ cấu nguồn phát sinh", ["Nguồn", "Khách hàng tiềm năng", "Cảnh báo", "Tổng"], sourceRows)}
+        <section class="report-section">
+          <h2>Ghi chú cách tính</h2>
+          <p class="note">“Cần tiếp tục xử lý” của Khách hàng gồm Đang xử lý và Follow-up; của Cảnh báo gồm Đang xử lý và Cần liên hệ lại.</p>
+          <p class="note">“Đã hoàn tất” chỉ tính trạng thái Đã đóng, không tính Đã bỏ qua. Tỷ lệ hoàn thành = số công việc Đã đóng / tổng công việc cần xử lý trong phạm vi và bộ lọc đang áp dụng.</p>
+          <p class="note">Các nhóm rủi ro trong “Cần chú ý” có thể giao nhau và không được cộng thành tổng số công việc.</p>
+        </section>
+        <footer class="footer">InsightFlow · Báo cáo quản trị tổng hợp, không chứa mention hoặc hồ sơ công việc chi tiết.</footer>
       </main>
     </body>
   </html>`;

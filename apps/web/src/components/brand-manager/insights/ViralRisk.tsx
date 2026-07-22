@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import type { ViralRiskItem } from "./insightEngine";
+import { isDemoPath } from "@/lib/demo-navigation";
 
 interface ViralRiskProps {
   risks: ViralRiskItem[];
@@ -57,7 +58,9 @@ function ReplyModal({ selectedRisk, onClose }: ReplyModalProps) {
 export function ViralRisk({ risks }: ViralRiskProps) {
   const { t } = useTranslation();
   const router = useRouter();
+  const pathname = usePathname();
   const [selectedRisk, setSelectedRisk] = useState<ViralRiskItem | null>(null);
+  const [trackedRisks, setTrackedRisks] = useState<Set<number>>(() => new Set());
 
   const PLATFORM_ICON: Record<string, string> = {
     facebook: "🔵", tiktok: "⚫", google: "🔴", instagram: "🟣", other: "🌐",
@@ -144,11 +147,20 @@ export function ViralRisk({ risks }: ViralRiskProps) {
               </div>
 
               <div className="mt-4 flex items-center gap-2 pt-3 border-t border-[var(--color-border)]/50">
-                <button className="flex-1 py-1.5 px-2 bg-gray-100 hover:bg-gray-200 text-[var(--color-text-secondary)] text-[12px] font-bold rounded-lg transition-colors">
-                  👁️ {t("bm.viral.track", "Theo dõi")}
+                <button
+                  type="button"
+                  onClick={() => setTrackedRisks((current) => {
+                    const next = new Set(current);
+                    if (next.has(i)) next.delete(i);
+                    else next.add(i);
+                    return next;
+                  })}
+                  className="flex-1 py-1.5 px-2 bg-gray-100 hover:bg-gray-200 text-[var(--color-text-secondary)] text-[12px] font-bold rounded-lg transition-colors"
+                >
+                  👁️ {trackedRisks.has(i) ? "Đang theo dõi" : t("bm.viral.track", "Theo dõi")}
                 </button>
                 <button
-                  onClick={() => router.push("/team/staff?role=crisis")}
+                  onClick={() => router.push(isDemoPath(pathname) ? "/demo/alerts" : "/team/staff?role=crisis")}
                   className="flex-1 py-1.5 px-2 bg-[var(--color-brand-subtle)] hover:bg-[var(--color-brand)] hover:text-white text-[var(--color-brand)] text-[12px] font-bold rounded-lg transition-colors"
                 >
                   👥 {t("bm.viral.assign", "Phân công")}

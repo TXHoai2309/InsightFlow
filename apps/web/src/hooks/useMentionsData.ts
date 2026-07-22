@@ -5,6 +5,7 @@ import { DashboardService } from "@/lib/services/dashboard";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { filterByBusinessPolicy, getScopedBrandKey } from "@/lib/brandScope";
 import { useAuth } from "@/hooks/useAuth";
+import { isDemoRuntime } from "@/lib/demo-navigation";
 
 interface UseMentionsOptions {
   autoFetch?: boolean;
@@ -43,7 +44,7 @@ export function useMentionsData(options: UseMentionsOptions = {}) {
       let hasRenderedCache = false;
 
       // Check client-side localStorage cache if not forcing refresh
-      if (!force && typeof window !== "undefined") {
+      if (!force && !isDemoRuntime() && typeof window !== "undefined") {
         const cached = localStorage.getItem(cacheKey);
         if (cached) {
           try {
@@ -97,7 +98,7 @@ export function useMentionsData(options: UseMentionsOptions = {}) {
       setStats(stats);
 
       // Save to localStorage cache
-      if (typeof window !== "undefined") {
+      if (!isDemoRuntime() && typeof window !== "undefined") {
         try {
           localStorage.setItem(
             cacheKey,

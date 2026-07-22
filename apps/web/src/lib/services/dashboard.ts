@@ -57,6 +57,7 @@ import {
   isLocationReviewPlatform,
   parseVietnameseRelativeDate,
 } from "@/lib/dashboard-display";
+import { isDemoRuntime } from "@/lib/demo-navigation";
 
 // ─── Collection names ────────────────────────────────────────────────────────
 export const COLLECTION_NAMES = {
@@ -1803,6 +1804,12 @@ export class DashboardService {
    * Results are cached per post so switching between leads in the same thread is cheap.
    */
   static async fetchMentionThread(postId: string): Promise<Mention[]> {
+    if (isDemoRuntime()) {
+      const { dummyMentions } = await import("@/lib/demoData");
+      return dummyMentions.filter(
+        (mention) => mention.id === postId || mention.post_id === postId,
+      );
+    }
     return fetchSupabaseMentionThread(postId);
   }
 
@@ -2364,6 +2371,7 @@ export class DashboardService {
       assigned_by: profile.uid,
       claimed_at: nowIso,
     };
+    if (isDemoRuntime()) return claimData;
     const auditFields = {
       updated_by: profile.uid,
       updated_by_name: getProfileDisplayName(profile),
@@ -2387,6 +2395,8 @@ export class DashboardService {
     if (!profile || !canPerformAction(profile, "update_lead_status")) {
       throw new Error("User is not allowed to update lead status.");
     }
+
+    if (isDemoRuntime()) return;
 
     const auditFields = {
       updated_by: profile.uid,
@@ -2424,6 +2434,8 @@ export class DashboardService {
     if (data.status && !canPerformAction(profile, "update_lead_status")) {
       throw new Error("User is not allowed to update lead status.");
     }
+
+    if (isDemoRuntime()) return;
 
     const auditFields = {
       updated_by: profile.uid,
@@ -2599,6 +2611,13 @@ export class DashboardService {
       updated_by_role: profile.role,
     });
 
+    if (isDemoRuntime()) {
+      return {
+        ...requestData,
+        id: `demo-label-request-${Date.now()}`,
+      } as LabelChangeRequest;
+    }
+
     const config = getSupabaseConfig();
     const insertedRows = await supabaseWrite<any[]>(
       config,
@@ -2668,6 +2687,8 @@ export class DashboardService {
       updated_by_role: profile.role,
       revision_count: (request.revision_count || 0) + 1,
     };
+
+    if (isDemoRuntime()) return updatedRequest;
 
     const updateData = stripUndefinedFields({
       requested_labels: data.requested_labels,
@@ -2756,6 +2777,8 @@ export class DashboardService {
       cancelled_by_name: profile.displayName || profile.email,
       cancel_reason: cancelReason.trim(),
     };
+
+    if (isDemoRuntime()) return cancelledRequest;
 
     const cancelData = stripUndefinedFields({
       status: "cancelled",

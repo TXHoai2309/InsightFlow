@@ -14,6 +14,7 @@ import {
   DEFAULT_LEAD_REPORT_FILTERS,
   filterLeadReportItems,
 } from "./lead-report-filters";
+import { buildLeadReportData } from "./lead-report";
 
 const NOW = new Date("2026-07-16T08:00:00.000Z").getTime();
 const PROFILE: UserRoleProfile = {
@@ -174,4 +175,29 @@ test("report periods use the same latest-update timestamp as customer filters", 
   );
 
   assert.deepEqual(filtered.map((lead) => lead.id), ["recently-updated"]);
+});
+
+test("lead trend assigns created, contacted and closed events to their actual days", () => {
+  const report = buildLeadReportData([
+    makeLead({
+      id: "multi-day-lead",
+      status: "completed",
+      created_at: "2026-07-14T12:00:00.000Z",
+      first_contacted_at: "2026-07-15T12:00:00.000Z",
+      last_contact_at: "2026-07-15T12:00:00.000Z",
+      result_recorded_at: "2026-07-16T07:00:00.000Z",
+      closed_at: "2026-07-16T07:00:00.000Z",
+      updated_at: "2026-07-16T07:00:00.000Z",
+      result_type: "converted",
+    }),
+  ], PROFILE, NOW);
+  const createdDay = report.responseTrend.at(-3);
+  const contactedDay = report.responseTrend.at(-2);
+  const closedDay = report.responseTrend.at(-1);
+
+  assert.equal(createdDay?.created, 1);
+  assert.equal(createdDay?.contacted, 0);
+  assert.equal(contactedDay?.contacted, 1);
+  assert.equal(contactedDay?.completed, 0);
+  assert.equal(closedDay?.completed, 1);
 });

@@ -1,20 +1,12 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { BMTabs } from "@/components/brand-manager";
 import { BMLayoutHeader } from "@/components/brand-manager/BMLayoutHeader";
-
-const BrandManagerDashboard = dynamic(
-  () =>
-    import("@/components/brand-manager/BrandManagerDashboard").then(
-      (mod) => mod.BrandManagerDashboard,
-    ),
-  { ssr: false },
-);
+import { BrandManagerDashboard } from "@/components/brand-manager/BrandManagerDashboard";
 
 export default function DemoPage() {
   return (
-    <div className="p-4 md:p-8 max-w-[1600px] mx-auto">
+    <div className="mx-auto max-w-[1600px] p-4 md:p-8">
       <BMLayoutHeader />
       <BMTabs />
       <div className="mt-4">

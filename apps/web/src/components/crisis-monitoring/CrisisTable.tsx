@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   ChevronLeft,
   ChevronRight,
@@ -26,6 +27,8 @@ import {
   saveDashboardReturnContext,
   type DashboardReturnContext,
 } from "@/lib/dashboard-return-context";
+import { isDemoPath } from "@/lib/demo-navigation";
+import { dummyStaff } from "@/lib/demoData";
 
 const PAGE_SIZE = 10;
 
@@ -99,6 +102,7 @@ function sourceUrl(alert: AlertData) {
 }
 
 export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
+  const pathname = usePathname();
   const { profile } = useAuth();
   const lockAlertForResolution = useAlertStore((state) => state.lockAlertForResolution);
   const [activeFilter, setActiveFilter] = useState<FilterId>("all");
@@ -132,6 +136,10 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
   useEffect(() => {
     if (!canAssign) return;
     const loadStaff = async () => {
+      if (isDemoPath(pathname)) {
+        setStaff(dummyStaff.filter((item) => item.permissions.includes("alerts")).map((item) => ({ ...item })));
+        return;
+      }
       try {
         const token = await auth.currentUser?.getIdToken();
         if (!token) return;
@@ -145,7 +153,7 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
       }
     };
     void loadStaff();
-  }, [canAssign]);
+  }, [canAssign, pathname]);
 
   const filteredAlerts = useMemo(() => {
     const query = searchText.trim().toLowerCase();

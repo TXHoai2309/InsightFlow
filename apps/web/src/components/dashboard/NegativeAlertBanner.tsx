@@ -3,9 +3,10 @@
 import React, { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import type { Alert, DashboardStats, DashboardFilters } from "@/types/dashboard";
 import { useDashboardStore } from "@/stores/dashboard.store";
+import { isDemoPath, toDemoHref } from "@/lib/demo-navigation";
 
 interface NegativeAlertBannerProps {
   alerts?: Alert[];
@@ -16,13 +17,14 @@ interface NegativeAlertBannerProps {
 export function NegativeAlertBanner({ alerts = [], stats, prevStats }: NegativeAlertBannerProps) {
   const { t } = useTranslation();
   const router = useRouter();
+  const pathname = usePathname();
   const setFilters = useDashboardStore((state) => state.setFilters);
 
   const handleNavigate = (link: string, filterUpdates?: Partial<DashboardFilters>) => {
     if (filterUpdates) {
       setFilters(filterUpdates);
     }
-    router.push(link);
+    router.push(isDemoPath(pathname) ? toDemoHref(link) || "/demo" : link);
   };
 
   // Compute metrics from real data

@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { PLATFORM_META } from "@/lib/services/dashboard";
 import { useAuth } from "@/hooks/useAuth";
@@ -14,6 +14,7 @@ import {
 } from "@/lib/mention-navigation";
 import { PlatformLogo } from "@/components/platform/PlatformLogo";
 import type { Lead, Mention } from "@/types/dashboard";
+import { isDemoPath, toDemoHref } from "@/lib/demo-navigation";
 
 interface LeadCardProps {
   lead: Lead;
@@ -58,6 +59,7 @@ const STATUS_META: Record<
 export function LeadCard({ lead, currentTime }: LeadCardProps) {
   const { t, i18n } = useTranslation();
   const router = useRouter();
+  const pathname = usePathname();
   const { profile } = useAuth();
   const { mentions, updateLeadDetails } = useDashboardStore();
   const leadInScope = isSameBrandScope(profile, lead);
@@ -420,7 +422,10 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
 
   const handleNavigateToMention = () => {
     if (!mentionTarget) return;
-    router.push(mentionTarget.href);
+    const href = isDemoPath(pathname)
+      ? toDemoHref(mentionTarget.href) || "/demo/mentions"
+      : mentionTarget.href;
+    router.push(href);
   };
 
   const handleOpenLeadSource = () => {

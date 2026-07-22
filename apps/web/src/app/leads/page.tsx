@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useDashboard } from "@/hooks/useDashboardData";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import {
@@ -52,6 +52,8 @@ import {
 } from "@/lib/dashboard-return-context";
 import { usePinnedQueue } from "@/hooks/usePinnedQueue";
 import { useLeadViewPresence } from "@/hooks/useAlertViewPresence";
+import { isDemoPath, toDemoHref } from "@/lib/demo-navigation";
+import { dummyStaff } from "@/lib/demoData";
 
 const LEADS_PAGE_SIZE = 5;
 const APP_SCROLL_ROOT_SELECTOR = '[data-app-scroll-root="true"]';
@@ -72,6 +74,7 @@ function getLeadListScrollTop() {
 
 export default function LeadsPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const { profile, loading: authLoading } = useAuth();
   const leadPinStorageKey = `insightflow:pinned-leads:${profile?.uid || "anonymous"}:${normalizeBrandName(profile?.brandName || profile?.brandId || "global")}`;
   const {
@@ -85,6 +88,10 @@ export default function LeadsPage() {
 
   useEffect(() => {
     const fetchStaff = async () => {
+      if (isDemoPath(pathname)) {
+        setStaffList(dummyStaff.map((staff) => ({ ...staff })));
+        return;
+      }
       try {
         const token = await auth.currentUser?.getIdToken();
         if (!token) return;
@@ -108,7 +115,7 @@ export default function LeadsPage() {
     } else if (profile && !authLoading) {
       setStaffList([]);
     }
-  }, [profile, authLoading, canLoadStaffList]);
+  }, [profile, authLoading, canLoadStaffList, pathname]);
 
   const [activeView, setActiveView] = useState<LeadWorkbenchView>("priority");
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
@@ -822,7 +829,11 @@ export default function LeadsPage() {
       {dashboardReturnNavigation && (
         <button
           type="button"
-          onClick={() => router.push(dashboardReturnNavigation.href)}
+          onClick={() => router.push(
+            isDemoPath(pathname)
+              ? toDemoHref(dashboardReturnNavigation.href) || "/demo"
+              : dashboardReturnNavigation.href,
+          )}
           className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] px-3.5 text-sm font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-bg-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]"
         >
           <span className="material-symbols-outlined text-base">arrow_back</span>

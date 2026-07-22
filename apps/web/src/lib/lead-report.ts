@@ -50,6 +50,7 @@ export interface LeadReportTrendPoint {
   created: number;
   contacted: number;
   converted: number;
+  completed: number;
   avgResponseMinutes: number;
   slaOnTimeRate: number;
 }
@@ -161,6 +162,14 @@ function hasContacted(lead: Lead) {
   return Boolean(lead.first_contacted_at || lead.last_contact_at || (lead.contact_attempts || 0) > 0);
 }
 
+function toLocalDayKey(value: number | string) {
+  const date = new Date(value);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function getLeadReportWorkflowStatus(lead: Lead, nowMs: number): LeadReportWorkflowStatus {
   if (lead.status === "completed") return "completed";
   if (lead.status === "skipped") return "skipped";
@@ -253,32 +262,55 @@ function buildPipeline(leads: Lead[]): LeadReportBucket[] {
 }
 
 function buildResponseTrend(leads: Lead[], daysCount = 7, nowMs: number = Date.now()): LeadReportTrendPoint[] {
-  const buckets: Record<string, { created: number; contacted: number; converted: number; responseTotal: number; responseCount: number; slaEvaluated: number; slaOnTime: number }> = {};
+  const buckets: Record<string, { created: number; contacted: number; converted: number; completed: number; responseTotal: number; responseCount: number; slaEvaluated: number; slaOnTime: number }> = {};
   for (let index = daysCount - 1; index >= 0; index -= 1) {
-    const date = new Date();
+    const date = new Date(nowMs);
     date.setDate(date.getDate() - index);
     date.setHours(0, 0, 0, 0);
-    const key = date.toISOString().slice(0, 10);
-    buckets[key] = { created: 0, contacted: 0, converted: 0, responseTotal: 0, responseCount: 0, slaEvaluated: 0, slaOnTime: 0 };
+    const key = toLocalDayKey(date.getTime());
+    buckets[key] = { created: 0, contacted: 0, converted: 0, completed: 0, responseTotal: 0, responseCount: 0, slaEvaluated: 0, slaOnTime: 0 };
   }
 
   leads.forEach((lead) => {
     const createdTime = toTime(lead.created_at);
-    if (createdTime === null) return;
-    const key = new Date(createdTime).toISOString().slice(0, 10);
-    const bucket = buckets[key];
-    if (!bucket) return;
-    bucket.created += 1;
-    if (hasContacted(lead)) {
-      bucket.contacted += 1;
-      bucket.slaEvaluated += 1;
-      if (getSlaStatus(lead, nowMs) === "Dung SLA") bucket.slaOnTime += 1;
+    if (createdTime !== null) {
+      const createdBucket = buckets[toLocalDayKey(createdTime)];
+      if (createdBucket) createdBucket.created += 1;
     }
-    if (isConverted(lead)) bucket.converted += 1;
+
+    const contactedTime = toTime(lead.first_contacted_at || lead.last_contact_at);
     const responseMinutes = minutesBetween(lead.created_at, lead.first_contacted_at || lead.last_contact_at);
-    if (responseMinutes !== null) {
-      bucket.responseTotal += responseMinutes;
-      bucket.responseCount += 1;
+    if (contactedTime !== null) {
+      const contactedBucket = buckets[toLocalDayKey(contactedTime)];
+      if (contactedBucket) {
+        contactedBucket.contacted += 1;
+        contactedBucket.slaEvaluated += 1;
+        if (getSlaStatus(lead, nowMs) === "Dung SLA") contactedBucket.slaOnTime += 1;
+        if (responseMinutes !== null) {
+          contactedBucket.responseTotal += responseMinutes;
+          contactedBucket.responseCount += 1;
+        }
+      }
+    }
+
+    if (isConverted(lead)) {
+      const convertedTime = toTime(
+        lead.result_recorded_at || lead.closed_at || lead.updated_at || lead.created_at,
+      );
+      if (convertedTime !== null) {
+        const convertedBucket = buckets[toLocalDayKey(convertedTime)];
+        if (convertedBucket) convertedBucket.converted += 1;
+      }
+    }
+
+    if (lead.status === "completed") {
+      const completedTime = toTime(
+        lead.closed_at || lead.result_recorded_at || lead.updated_at || lead.created_at,
+      );
+      if (completedTime !== null) {
+        const completedBucket = buckets[toLocalDayKey(completedTime)];
+        if (completedBucket) completedBucket.completed += 1;
+      }
     }
   });
 
@@ -287,6 +319,7 @@ function buildResponseTrend(leads: Lead[], daysCount = 7, nowMs: number = Date.n
     created: bucket.created,
     contacted: bucket.contacted,
     converted: bucket.converted,
+    completed: bucket.completed,
     avgResponseMinutes:
       bucket.responseCount > 0 ? Math.round(bucket.responseTotal / bucket.responseCount) : 0,
     slaOnTimeRate: percentage(bucket.slaOnTime, bucket.slaEvaluated),
