@@ -337,9 +337,98 @@ function usesLocationContainerPosts(platform: PlatformFilter): boolean {
   return platform === 'google_maps' || platform === 'befood';
 }
 
+interface BrandPostScope {
+  postIds: string[];
+  totalPosts: number;
+}
+
+function normalizeBrand(value: string): string {
+  return value.toLowerCase().replace(/[\s_-]+/g, '').replace(/s$/, '');
+}
+
+function postMatchesBrand(
+  post: Pick<SupabasePost, 'brand' | 'brand_slug'>,
+  brand: string,
+): boolean {
+  const target = normalizeBrand(brand);
+  if (!target) return true;
+  const postBrand = normalizeBrand(post.brand ?? '');
+  const postBrandSlug = normalizeBrand(post.brand_slug ?? '');
+  return postBrand.includes(target) || postBrandSlug.includes(target);
+}
+
+async function loadBrandPostScope(
+  config: SupabaseConfig,
+  platformFilter: string,
+  brand: string,
+): Promise<BrandPostScope> {
+  const pageSize = 1000;
+  const matchingRows: Array<Pick<SupabasePost, 'post_id'>> = [];
+
+  for (let offset = 0; ; offset += pageSize) {
+    const query = new URLSearchParams({
+      select: 'post_id,brand,brand_slug',
+      platform: platformFilter,
+      crawl_status: 'eq.active',
+      limit: String(pageSize),
+      offset: String(offset),
+      order: 'post_id.asc',
+    }).toString();
+    const rows = await requestActiveRows<Array<Pick<SupabasePost, 'post_id' | 'brand' | 'brand_slug'>>>(
+      config,
+      'posts',
+      query,
+    );
+    matchingRows.push(...rows.filter(post => postMatchesBrand(post, brand)));
+    if (rows.length < pageSize) break;
+  }
+
+  return {
+    postIds: Array.from(new Set(matchingRows.map(post => post.post_id))),
+    totalPosts: matchingRows.length,
+  };
+}
+
+async function countRowsForPostIds(
+  config: SupabaseConfig,
+  table: 'annotations' | 'comments',
+  postIds: string[],
+  baseQuery: Record<string, string>,
+  useActiveRows = false,
+): Promise<number> {
+  if (postIds.length === 0) return 0;
+  const chunkSize = 100;
+  const chunks: string[][] = [];
+  for (let index = 0; index < postIds.length; index += chunkSize) {
+    chunks.push(postIds.slice(index, index + chunkSize));
+  }
+
+  const counts = await mapWithConcurrency(chunks, LOAD_CONCURRENCY, async chunk => {
+    const params = new URLSearchParams({
+      ...baseQuery,
+      post_id: `in.(${chunk.join(',')})`,
+      ...(useActiveRows ? { crawl_status: 'eq.active' } : {}),
+      limit: '1',
+    });
+    if (!useActiveRows) {
+      return requestExactCount(config, table, params.toString());
+    }
+    const fallbackParams = new URLSearchParams(params);
+    fallbackParams.delete('crawl_status');
+    return requestExactCountWithFallback(
+      config,
+      table,
+      params.toString(),
+      fallbackParams.toString(),
+    );
+  });
+  return counts.reduce((total, count) => total + count, 0);
+}
+
 export async function loadPendingAssignmentCounts(
   config: SupabaseConfig,
   platform: PlatformFilter,
+  brand = 'all',
 ): Promise<PendingAssignmentCounts> {
   const platformFilter = platform === 'news'
     ? 'in.(news,news_html)'
@@ -355,57 +444,97 @@ export async function loadPendingAssignmentCounts(
     limit: '1',
   };
 
-  const [
-    labeledPosts,
-    labeledComments,
-    aiPendingPosts,
-    aiPendingComments,
-    totalPosts,
-    totalComments,
-  ] = await Promise.all([
-    commentsOnly
-      ? Promise.resolve(0)
-      : requestExactCount(config, 'annotations', new URLSearchParams({
+  let labeledPosts: number;
+  let labeledComments: number;
+  let aiPendingPosts: number;
+  let aiPendingComments: number;
+  let totalPosts: number;
+  let totalComments: number;
+
+  if (brand && brand !== 'all') {
+    const scope = await loadBrandPostScope(config, platformFilter, brand);
+    totalPosts = scope.totalPosts;
+    [labeledPosts, labeledComments, aiPendingPosts, aiPendingComments, totalComments] = await Promise.all([
+      commentsOnly
+        ? Promise.resolve(0)
+        : countRowsForPostIds(config, 'annotations', scope.postIds, {
+          ...annotationBase,
+          entity_type: 'eq.post',
+        }),
+      countRowsForPostIds(config, 'annotations', scope.postIds, {
         ...annotationBase,
-        entity_type: 'eq.post',
-      }).toString()),
-    requestExactCount(config, 'annotations', new URLSearchParams({
-      ...annotationBase,
-      entity_type: 'eq.comment',
-    }).toString()),
-    commentsOnly
-      ? Promise.resolve(0)
-      : requestExactCount(config, 'annotations', new URLSearchParams({
+        entity_type: 'eq.comment',
+      }),
+      commentsOnly
+        ? Promise.resolve(0)
+        : countRowsForPostIds(config, 'annotations', scope.postIds, {
+          ...annotationBase,
+          status: 'eq.ai_pending',
+          entity_type: 'eq.post',
+        }),
+      countRowsForPostIds(config, 'annotations', scope.postIds, {
         ...annotationBase,
         status: 'eq.ai_pending',
-        entity_type: 'eq.post',
+        entity_type: 'eq.comment',
+      }),
+      countRowsForPostIds(config, 'comments', scope.postIds, {
+        select: 'comment_id',
+        platform: platformFilter,
+      }, true),
+    ]);
+  } else {
+    [
+      labeledPosts,
+      labeledComments,
+      aiPendingPosts,
+      aiPendingComments,
+      totalPosts,
+      totalComments,
+    ] = await Promise.all([
+      commentsOnly
+        ? Promise.resolve(0)
+        : requestExactCount(config, 'annotations', new URLSearchParams({
+          ...annotationBase,
+          entity_type: 'eq.post',
+        }).toString()),
+      requestExactCount(config, 'annotations', new URLSearchParams({
+        ...annotationBase,
+        entity_type: 'eq.comment',
       }).toString()),
-    requestExactCount(config, 'annotations', new URLSearchParams({
-      ...annotationBase,
-      status: 'eq.ai_pending',
-      entity_type: 'eq.comment',
-    }).toString()),
-    requestExactCountWithFallback(config, 'posts', new URLSearchParams({
-      select: 'post_id',
-      platform: platformFilter,
-      crawl_status: 'eq.active',
-      limit: '1',
-    }).toString(), new URLSearchParams({
-      select: 'post_id',
-      platform: platformFilter,
-      limit: '1',
-    }).toString()),
-    requestExactCountWithFallback(config, 'comments', new URLSearchParams({
-      select: 'comment_id',
-      platform: platformFilter,
-      crawl_status: 'eq.active',
-      limit: '1',
-    }).toString(), new URLSearchParams({
-      select: 'comment_id',
-      platform: platformFilter,
-      limit: '1',
-    }).toString()),
-  ]);
+      commentsOnly
+        ? Promise.resolve(0)
+        : requestExactCount(config, 'annotations', new URLSearchParams({
+          ...annotationBase,
+          status: 'eq.ai_pending',
+          entity_type: 'eq.post',
+        }).toString()),
+      requestExactCount(config, 'annotations', new URLSearchParams({
+        ...annotationBase,
+        status: 'eq.ai_pending',
+        entity_type: 'eq.comment',
+      }).toString()),
+      requestExactCountWithFallback(config, 'posts', new URLSearchParams({
+        select: 'post_id',
+        platform: platformFilter,
+        crawl_status: 'eq.active',
+        limit: '1',
+      }).toString(), new URLSearchParams({
+        select: 'post_id',
+        platform: platformFilter,
+        limit: '1',
+      }).toString()),
+      requestExactCountWithFallback(config, 'comments', new URLSearchParams({
+        select: 'comment_id',
+        platform: platformFilter,
+        crawl_status: 'eq.active',
+        limit: '1',
+      }).toString(), new URLSearchParams({
+        select: 'comment_id',
+        platform: platformFilter,
+        limit: '1',
+      }).toString()),
+    ]);
+  }
 
   // Assignments and annotations overlap while a labeler is running. Keep the
   // dashboard categories mutually exclusive by deriving remaining work from
