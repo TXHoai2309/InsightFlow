@@ -7,6 +7,10 @@ import {
   getCrawlRun,
   listCrawlRuns,
 } from "@/lib/server/crawlRuns";
+import {
+  getConsultation,
+  updateConsultation,
+} from "@/lib/server/vpsOperationalStore";
 
 const ACTIVE_STATUSES = new Set([
   "queued",
@@ -55,6 +59,7 @@ function normalizePlatforms(value: unknown) {
 async function requireAdmin(request: NextRequest) {
   const token = await verifyBearerToken(request.headers.get("authorization"));
   if (!token) return null;
+  if (token.role === "admin") return token;
   const profile = await db.collection("users").doc(token.uid).get();
   return (profile.data()?.role || token.role) === "admin" ? token : null;
 }
@@ -85,13 +90,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Thiếu mã yêu cầu dùng thử." }, { status: 400 });
     }
 
-    const consultationReference = db.collection("consultations").doc(consultationId);
-    const consultationSnapshot = await consultationReference.get();
-    if (!consultationSnapshot.exists) {
+    const consultation = await getConsultation(consultationId);
+    if (!consultation) {
       return NextResponse.json({ error: "Không tìm thấy yêu cầu dùng thử." }, { status: 404 });
     }
-
-    const consultation = consultationSnapshot.data() || {};
     if (text(consultation.status, 40) !== "completed") {
       return NextResponse.json({ error: "Yêu cầu cần được duyệt trước khi tạo phiên cào trial." }, { status: 409 });
     }
@@ -171,13 +173,12 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    await consultationReference.set({
+    await updateConsultation(consultationId, {
       trialCrawlRunId: runId,
       trialCrawlStatus: "queued",
-      trialCrawlRequestedAt: new Date(),
+      trialCrawlRequestedAt: new Date().toISOString(),
       trialCrawlRequestedBy: admin.uid,
-      updatedAt: new Date(),
-    }, { merge: true });
+    });
 
     return NextResponse.json({ success: true, runId, status: "queued" }, { status: 201 });
   } catch (error) {

@@ -1,17 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  DocumentData,
-  DocumentReference,
-  FieldValue,
-  Transaction,
-} from "firebase-admin/firestore";
 import { verifyBearerToken } from "@/lib/server/auth";
 import { db } from "@/lib/server/firebaseAdmin";
 import {
   appendCrawlRunEvent,
   getCrawlRun,
   listCrawlRunEvents,
+  updateCrawlRun,
 } from "@/lib/server/crawlRuns";
+import {
+  patchQueuedCrawlRun,
+  updateConsultation,
+} from "@/lib/server/vpsOperationalStore";
 
 const SUPPORTED_PLATFORMS = new Set([
   "facebook",
@@ -38,6 +37,7 @@ function stringList(value: unknown, maxItems: number, maxLength: number) {
 async function requireAdmin(request: NextRequest) {
   const token = await verifyBearerToken(request.headers.get("authorization"));
   if (!token) return false;
+  if (token.role === "admin") return true;
   const profile = await db.collection("users").doc(token.uid).get();
   return (profile.data()?.role || token.role) === "admin";
 }
@@ -86,34 +86,37 @@ export async function PATCH(
       return NextResponse.json({ error: "Cần chọn ít nhất một nền tảng." }, { status: 400 });
     }
 
-    const runReference = db.collection("crawl_runs").doc(context.params.runId) as DocumentReference<DocumentData>;
-    let consultationId = "";
-    await db.runTransaction(async (transaction: Transaction) => {
-      const snapshot = await transaction.get(runReference);
-      if (!snapshot.exists) throw new Error("NOT_FOUND");
-      const run = snapshot.data() || {};
-      if (run.runType !== "trial") throw new Error("NOT_TRIAL");
-      if (run.status !== "queued") throw new Error("NOT_QUEUED");
-      consultationId = text(run.consultationId, 120);
-      transaction.set(runReference, {
-        platforms,
-        progressTotal: platforms.length,
-        metadata: {
-          ...(run.metadata || {}),
-          brandName,
-          company: brandName,
-          keywords,
-          configurationUpdatedAt: new Date().toISOString(),
-        },
-        updatedAt: FieldValue.serverTimestamp(),
-      }, { merge: true });
-    });
+    const current = await getCrawlRun(context.params.runId);
+    if (!current) return NextResponse.json({ error: "Không tìm thấy phiên cào." }, { status: 404 });
+    if (current.runType !== "trial") {
+      return NextResponse.json({ error: "Chỉ được sửa cấu hình phiên trial." }, { status: 409 });
+    }
+    if (current.status !== "queued") {
+      return NextResponse.json({ error: "Chỉ được sửa khi phiên còn trong hàng đợi." }, { status: 409 });
+    }
 
-    if (consultationId) {
-      await db.collection("consultations").doc(consultationId).set({
+    const result = await patchQueuedCrawlRun(context.params.runId, {
+      platforms,
+      progressTotal: platforms.length,
+      metadata: {
+        ...(current.metadata || {}),
+        brandName,
+        company: brandName,
+        keywords,
+        configurationUpdatedAt: new Date().toISOString(),
+      },
+    });
+    if (result.reason === "not_found") {
+      return NextResponse.json({ error: "Không tìm thấy phiên cào." }, { status: 404 });
+    }
+    if (result.reason === "not_queued") {
+      return NextResponse.json({ error: "Phiên vừa được worker nhận; không thể sửa cấu hình." }, { status: 409 });
+    }
+
+    if (current.consultationId) {
+      await updateConsultation(current.consultationId, {
         trialCrawlConfiguration: { brandName, keywords, platforms },
-        updatedAt: FieldValue.serverTimestamp(),
-      }, { merge: true });
+      });
     }
 
     await appendCrawlRunEvent(context.params.runId, {
@@ -125,15 +128,6 @@ export async function PATCH(
     });
     return NextResponse.json({ success: true, run: await getCrawlRun(context.params.runId) });
   } catch (error) {
-    if (error instanceof Error && error.message === "NOT_FOUND") {
-      return NextResponse.json({ error: "Không tìm thấy phiên cào." }, { status: 404 });
-    }
-    if (error instanceof Error && error.message === "NOT_TRIAL") {
-      return NextResponse.json({ error: "Chỉ được sửa cấu hình phiên trial." }, { status: 409 });
-    }
-    if (error instanceof Error && error.message === "NOT_QUEUED") {
-      return NextResponse.json({ error: "Chỉ được sửa khi phiên còn trong hàng đợi." }, { status: 409 });
-    }
     console.error("[Admin crawl runs API] update error:", error);
     return NextResponse.json({ error: "Không thể cập nhật cấu hình trial." }, { status: 500 });
   }
@@ -148,49 +142,33 @@ export async function DELETE(
   }
 
   try {
-    const runReference = db.collection("crawl_runs").doc(context.params.runId) as DocumentReference<DocumentData>;
-    let consultationId = "";
-    await db.runTransaction(async (transaction: Transaction) => {
-      const snapshot = await transaction.get(runReference);
-      if (!snapshot.exists) throw new Error("NOT_FOUND");
-      const run = snapshot.data() || {};
-      if (run.status !== "queued") throw new Error("NOT_QUEUED");
-      consultationId = text(run.consultationId, 120);
-      transaction.set(runReference, {
-        status: "cancelled",
-        currentPhase: "cancelled",
-        finishedAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      }, { merge: true });
+    const current = await getCrawlRun(context.params.runId);
+    if (!current) return NextResponse.json({ error: "Không tìm thấy phiên cào." }, { status: 404 });
+    if (current.status !== "queued") {
+      return NextResponse.json({ error: "Chỉ được xóa phiên chưa được worker nhận." }, { status: 409 });
+    }
+
+    const result = await patchQueuedCrawlRun(context.params.runId, {
+      status: "cancelled",
+      currentPhase: "cancelled",
+      finishedAt: new Date().toISOString(),
     });
+    if (result.reason) {
+      return NextResponse.json({ error: "Phiên vừa được worker nhận; không thể xóa khỏi hàng đợi." }, { status: 409 });
+    }
 
     await appendCrawlRunEvent(context.params.runId, {
       level: "warn",
       eventType: "cancelled",
       phase: "cancelled",
       message: "Admin đã xóa phiên trial khỏi hàng đợi.",
-      update: {
-        status: "cancelled",
-        currentPhase: "cancelled",
-        finishedAt: true,
-      },
     });
-    if (consultationId) {
-      await db.collection("consultations").doc(consultationId).set({
-        trialCrawlStatus: "cancelled",
-        updatedAt: FieldValue.serverTimestamp(),
-      }, { merge: true });
+    if (current.consultationId) {
+      await updateConsultation(current.consultationId, { trialCrawlStatus: "cancelled" });
     }
     return NextResponse.json({ success: true, run: await getCrawlRun(context.params.runId) });
   } catch (error) {
-    if (error instanceof Error && error.message === "NOT_FOUND") {
-      return NextResponse.json({ error: "Không tìm thấy phiên cào." }, { status: 404 });
-    }
-    if (error instanceof Error && error.message === "NOT_QUEUED") {
-      return NextResponse.json({ error: "Chỉ được xóa phiên chưa được worker nhận." }, { status: 409 });
-    }
     console.error("[Admin crawl runs API] cancel error:", error);
     return NextResponse.json({ error: "Không thể xóa phiên khỏi hàng đợi." }, { status: 500 });
   }
 }
-
