@@ -114,6 +114,11 @@ function crisisReport(): CrisisReportData {
 test("builds explainable attention and urgency data for both operations", () => {
   const report = buildDualOperationsReportData(leadReport(), crisisReport());
 
+  assert.deepEqual(report.kpis.workflow.inProgress, { total: 2, lead: 1, crisis: 1 });
+  assert.deepEqual(report.kpis.workflow.unassigned, { total: 0, lead: 0, crisis: 0 });
+  assert.deepEqual(report.kpis.workflow.completionRate, { total: 0, lead: 0, crisis: 0 });
+  assert.equal(report.kpis.workflow.overdueOpen.total, 2);
+  assert.ok(report.kpis.overdueTasks <= report.kpis.pendingTasks);
   assert.equal(report.attentionItems[0]?.count, 1);
   assert.equal(report.priorityRows[0]?.urgencyLevel, "urgent");
   assert.ok(report.priorityRows.some((row) => row.type === "lead"));
@@ -121,6 +126,62 @@ test("builds explainable attention and urgency data for both operations", () => 
   assert.ok(report.priorityRows.every((row) => row.urgencyReasons.length > 0));
   assert.ok(report.recommendations.length > 0);
   assert.ok(report.recommendations.length <= 3);
+});
+
+test("does not count completed late work as open or overdue", () => {
+  const lead = leadReport();
+  const crisis = crisisReport();
+  lead.detailRows = lead.detailRows.map((row) => ({
+    ...row,
+    status: "completed",
+    workflowStatus: "completed",
+    slaStatus: "Tre SLA",
+  }));
+  crisis.detailRows = crisis.detailRows.map((row) => ({
+    ...row,
+    status: "resolved",
+    workflowStatus: "resolved",
+    slaStatus: "Tre SLA",
+  }));
+
+  const report = buildDualOperationsReportData(lead, crisis);
+
+  assert.deepEqual(report.kpis.workflow.completed, { total: 2, lead: 1, crisis: 1 });
+  assert.deepEqual(report.kpis.workflow.completionRate, { total: 100, lead: 100, crisis: 100 });
+  assert.equal(report.kpis.pendingTasks, 0);
+  assert.equal(report.kpis.overdueTasks, 0);
+});
+
+test("uses the same actionable queues as the customer and alert pages", () => {
+  const lead = leadReport();
+  const crisis = crisisReport();
+  const leadRow = lead.detailRows[0];
+  const crisisRow = crisis.detailRows[0];
+
+  lead.detailRows = [
+    { ...leadRow, id: "lead-unassigned", workflowStatus: "unassigned" },
+    { ...leadRow, id: "lead-waiting", workflowStatus: "waiting" },
+    { ...leadRow, id: "lead-processing", workflowStatus: "processing" },
+    { ...leadRow, id: "lead-follow-up", workflowStatus: "follow_up" },
+    { ...leadRow, id: "lead-completed", status: "completed", workflowStatus: "completed" },
+    { ...leadRow, id: "lead-skipped", status: "skipped", workflowStatus: "skipped" },
+  ];
+  crisis.detailRows = [
+    { ...crisisRow, id: "alert-pending", workflowStatus: "pending" },
+    { ...crisisRow, id: "alert-processing", workflowStatus: "processing" },
+    { ...crisisRow, id: "alert-contact-failed", workflowStatus: "contact_failed" },
+    { ...crisisRow, id: "alert-resolved", status: "resolved", workflowStatus: "resolved" },
+    { ...crisisRow, id: "alert-skipped", status: "skipped", workflowStatus: "skipped" },
+  ];
+
+  const report = buildDualOperationsReportData(lead, crisis);
+
+  assert.deepEqual(report.kpis.workflow.unassigned, { total: 2, lead: 1, crisis: 1 });
+  assert.deepEqual(report.kpis.workflow.inProgress, { total: 4, lead: 2, crisis: 2 });
+  assert.deepEqual(report.kpis.workflow.completed, { total: 2, lead: 1, crisis: 1 });
+  assert.deepEqual(report.kpis.workflow.completionRate, { total: 22, lead: 20, crisis: 25 });
+  assert.equal(report.kpis.totalTasks, 9);
+  assert.equal(report.kpis.pendingTasks, 7);
 });
 
 test("Excel preview document contains the same report sections and filtered context", () => {
@@ -134,6 +195,7 @@ test("Excel preview document contains the same report sections and filtered cont
   assert.match(document, /7 ngày gần nhất/);
   assert.match(document, /Cả hai nghiệp vụ/);
   assert.match(document, /Kết quả trong kỳ/);
+  assert.match(document, /Tỷ lệ hoàn thành/);
   assert.match(document, /Chi tiết Lead/);
   assert.match(document, /Chi tiết Khủng hoảng/);
   assert.match(document, /Khách hàng A/);

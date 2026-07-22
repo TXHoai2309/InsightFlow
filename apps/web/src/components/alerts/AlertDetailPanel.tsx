@@ -25,6 +25,7 @@ import {
 } from "./AlertContactWorkflow";
 import { CustomerInteractionHistoryPanel } from "@/components/customer-interactions/CustomerInteractionHistoryPanel";
 import { getAlertSourceUrl } from "@/lib/alert-source-url";
+import { isAlertOwnedByUser } from "@/lib/alert-visibility";
 
 export type AlertDetailPanelTab = "action" | "profile" | "interactions" | "history";
 
@@ -124,9 +125,11 @@ export function AlertDetailPanel({
   const [isRestoring, setIsRestoring] = useState(false);
   const [skipError, setSkipError] = useState("");
   const claimedOptimistically = optimisticClaimId === alert.id;
-  const normalizedOwner = String(alert.being_resolved_by || "").trim().toLowerCase();
-  const normalizedProfileEmail = String(profileEmail || "").trim().toLowerCase();
-  const isMine = claimedOptimistically || Boolean(normalizedProfileEmail && normalizedOwner === normalizedProfileEmail);
+  // Assignment records from different ingestion versions may store the actor
+  // as email, Firebase UID, or display name. Use the shared identity matcher so
+  // a manager who self-claims a case keeps access to the contact workflow.
+  const ownedByProfile = isAlertOwnedByUser(alert, profile);
+  const isMine = claimedOptimistically || ownedByProfile;
   const effectiveWorkflowStatus = claimedOptimistically ? "processing" : workflowStatus;
   const effectiveOwner = claimedOptimistically
     ? profileEmail
@@ -382,10 +385,10 @@ export function AlertDetailPanel({
   }, [alert.id]);
 
   useEffect(() => {
-    if (claimedOptimistically && workflowStatus !== "pending" && normalizedOwner === normalizedProfileEmail) {
+    if (claimedOptimistically && workflowStatus !== "pending" && ownedByProfile) {
       setOptimisticClaimId(null);
     }
-  }, [claimedOptimistically, normalizedOwner, normalizedProfileEmail, workflowStatus]);
+  }, [claimedOptimistically, ownedByProfile, workflowStatus]);
 
   const handlePrimaryAction = async () => {
     if (canClaim) {
