@@ -123,7 +123,8 @@ export function getLeadExpiryTime(lead: Lead) {
         ? 24 * 60
         : 7 * 24 * 60;
 
-  return new Date(lead.created_at).getTime() + durationMin * 60 * 1000;
+  const baseTimeStr = lead.posted_at || lead.created_at;
+  return new Date(baseTimeStr).getTime() + durationMin * 60 * 1000;
 }
 
 export function getLeadOwnershipMeta(

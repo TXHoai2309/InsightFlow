@@ -76,6 +76,12 @@ function formatLeadTimeAgo(value: string | undefined, nowMs: number) {
   });
 }
 
+function formatCompletedTime(lead: Lead, nowMs: number) {
+  const completedTimeStr = lead.closed_at || lead.result_recorded_at || lead.updated_at || lead.created_at;
+  if (!completedTimeStr) return "";
+  return formatLeadTimeAgo(completedTimeStr, nowMs).toLowerCase();
+}
+
 export function LeadWorkbenchRow({
   lead,
   rank,
@@ -315,7 +321,13 @@ export function LeadWorkbenchRow({
       ? followUpMeta.isOverdue ? "bg-[var(--color-error)]" : "bg-[var(--color-info)]"
       : "bg-[var(--color-border-strong)]";
 
-  const leadTimeAgo = formatLeadTimeAgo(lead.posted_at || lead.created_at, nowMs);
+  const isCompleted = lead.status === "completed";
+  const postedTime = lead.posted_at || lead.created_at;
+  const leadTimeAgo = isCompleted
+    ? `Đã xử lý ${formatCompletedTime(lead, nowMs)}`
+    : postedTime
+      ? `Được đăng ${formatLeadTimeAgo(postedTime, nowMs).toLowerCase()}`
+      : "";
   const intentLabel = lead.intent === "none" ? "N/A" : lead.intent.toUpperCase();
 
   const renderPinButton = () => canPin ? (
@@ -450,12 +462,14 @@ export function LeadWorkbenchRow({
             <div className="mt-2.5 flex items-end justify-between gap-3 border-t border-[var(--color-border)] pt-2.5">
               <div className="min-w-0">
                 <p className={`flex items-center gap-1 truncate text-xs font-black ${isUrgentFollowUp || meta.isOverdue || meta.isUrgent ? "text-[var(--color-error)]" : isActiveFollowUp ? "text-[var(--color-info)]" : "text-[var(--color-text-primary)]"}`}>
-                  {(isActiveFollowUp || meta.isOverdue || meta.isUrgent) && <span className="material-symbols-outlined text-sm">{isActiveFollowUp ? "event_upcoming" : "schedule"}</span>}
-                  <span className="truncate">{timingLabel}</span>
+                  {!isCompleted && (isActiveFollowUp || meta.isOverdue || meta.isUrgent) && <span className="material-symbols-outlined text-sm">{isActiveFollowUp ? "event_upcoming" : "schedule"}</span>}
+                  <span className="truncate">{isCompleted ? `Đã xử lý ${formatCompletedTime(lead, nowMs)}` : timingLabel}</span>
                 </p>
-                <p className="mt-0.5 truncate text-[11px] font-semibold text-[var(--color-text-muted)]">
-                  {isActiveFollowUp ? timingCaption : meta.needsResultCapture ? "Cần ghi nhận kết quả" : leadTimeAgo || "SLA xử lý"}
-                </p>
+                {!isCompleted && (
+                  <p className="mt-0.5 truncate text-[11px] font-semibold text-[var(--color-text-muted)]">
+                    {isActiveFollowUp ? timingCaption : meta.needsResultCapture ? "Cần ghi nhận kết quả" : leadTimeAgo || "SLA xử lý"}
+                  </p>
+                )}
               </div>
               <div className="shrink-0 text-right">
                 <p className="text-lg font-black leading-none text-[var(--color-brand)]">
@@ -573,18 +587,22 @@ export function LeadWorkbenchRow({
 
             <div className="flex min-w-[100px] flex-col gap-0.5 text-left lg:text-right">
               <div className="flex items-center gap-1 lg:justify-end">
-                <span className={`material-symbols-outlined text-[16px] ${meta.isOverdue || meta.isUrgent ? "text-[var(--color-error)] animate-pulse" : "text-[var(--color-text-secondary)]"
-                  }`}>
-                  {isActiveFollowUp ? "event_upcoming" : meta.needsResultCapture ? "task_alt" : "schedule"}
-                </span>
+                {!isCompleted && (
+                  <span className={`material-symbols-outlined text-[16px] ${meta.isOverdue || meta.isUrgent ? "text-[var(--color-error)] animate-pulse" : "text-[var(--color-text-secondary)]"
+                    }`}>
+                    {isActiveFollowUp ? "event_upcoming" : meta.needsResultCapture ? "task_alt" : "schedule"}
+                  </span>
+                )}
                 <span className={`text-sm font-extrabold tracking-tight ${meta.isOverdue || meta.isUrgent ? "text-[var(--color-error)]" : "text-[var(--color-text-secondary)]"
                   }`}>
-                  {timingLabel}
+                  {isCompleted ? `Đã xử lý ${formatCompletedTime(lead, nowMs)}` : timingLabel}
                 </span>
               </div>
-              <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
-                {timingCaption}
-              </span>
+              {!isCompleted && (
+                <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
+                  {timingCaption}
+                </span>
+              )}
             </div>
 
             <div className="flex min-w-[130px] items-center gap-2">
@@ -720,22 +738,26 @@ export function LeadWorkbenchRow({
             </div>
 
             <div className="flex min-w-0 items-center gap-2">
-              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${meta.isOverdue || meta.isUrgent
-                  ? "bg-[var(--color-error-subtle)] text-[var(--color-error)]"
-                  : "bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]"
-                }`}>
-                <span className="material-symbols-outlined text-[20px]">
-                  {isActiveFollowUp ? "event_upcoming" : meta.needsResultCapture ? "task_alt" : "schedule"}
+              {!isCompleted && (
+                <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${meta.isOverdue || meta.isUrgent
+                    ? "bg-[var(--color-error-subtle)] text-[var(--color-error)]"
+                    : "bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)]"
+                  }`}>
+                  <span className="material-symbols-outlined text-[20px]">
+                    {isActiveFollowUp ? "event_upcoming" : meta.needsResultCapture ? "task_alt" : "schedule"}
+                  </span>
                 </span>
-              </span>
+              )}
               <div className="min-w-0">
                 <p className={`truncate text-sm font-black ${meta.isOverdue || meta.isUrgent ? "text-[var(--color-error)]" : "text-[var(--color-text-primary)]"
                   }`}>
-                  {timingLabel}
+                  {isCompleted ? `Đã xử lý ${formatCompletedTime(lead, nowMs)}` : timingLabel}
                 </p>
-                <p className="mt-0.5 text-[11px] font-semibold text-[var(--color-text-muted)]">
-                  {timingCaption}
-                </p>
+                {!isCompleted && (
+                  <p className="mt-0.5 text-[11px] font-semibold text-[var(--color-text-muted)]">
+                    {timingCaption}
+                  </p>
+                )}
               </div>
             </div>
 
