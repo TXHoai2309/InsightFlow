@@ -44,6 +44,7 @@ export interface Mention {
   | (string & {});
   credibility_score: number;  // 0–100 (từ baseline_confidence × 100)
   created_at: string;         // ISO string (từ crawled_at)
+  classified_at?: string;     // ISO string (annotation created/updated time)
   posted_at: string;          // ISO string (ngày đăng bài thật: post_date / created_at từ nguồn)
   url?: string;
   post_url?: string;

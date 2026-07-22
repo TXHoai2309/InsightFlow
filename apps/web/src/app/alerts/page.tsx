@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import {
-  getAlertReviewSinceIso,
   useAlertStore,
   type AlertData,
   type CustomerContactAttempt,
@@ -344,22 +343,6 @@ export default function AlertsPage() {
       });
     }
 
-    // Hàng đợi và lịch sử chỉ giữ các vụ việc trong cửa sổ 30 ngày.
-    // Vụ việc đang mở tính theo ngày phát hiện; vụ việc hoàn tất tính theo
-    // thời điểm giải quyết gần nhất.
-    const activeCutoffMs = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    result = result.filter((alert) => {
-      const isCompleted = isTerminalAlert(alert);
-      const lastHistoryAt = Array.isArray(alert.resolution_history) && alert.resolution_history.length > 0
-        ? alert.resolution_history[alert.resolution_history.length - 1]?.timestamp
-        : undefined;
-      const relevantAt = isCompleted
-        ? alert.resolved_at || alert.skipped_at || alert.monitoring_started_at || lastHistoryAt || alert.created_at
-        : alert.created_at;
-      const relevantAtMs = new Date(relevantAt).getTime();
-      return Number.isFinite(relevantAtMs) && relevantAtMs >= activeCutoffMs && relevantAtMs <= Date.now();
-    });
-
     if (timeFilter !== "all") {
       const now = new Date();
       let startDate: Date | null = null;
@@ -402,20 +385,12 @@ export default function AlertsPage() {
 
       if (startDate || endDate) {
         result = result.filter(a => {
-          const isCompleted = isTerminalAlert(a);
-          // Việc còn mở trong 30 ngày luôn hiện; bộ lọc ngày chỉ áp dụng
-          // cho lịch sử cảnh báo đã hoàn tất.
-          if (!isCompleted) return true;
-
-          const lastHistoryAt = Array.isArray(a.resolution_history) && a.resolution_history.length > 0
-            ? a.resolution_history[a.resolution_history.length - 1]?.timestamp
-            : undefined;
-          const completedAt = a.resolved_at || a.skipped_at || a.monitoring_started_at || lastHistoryAt || a.created_at;
-          const completedDate = new Date(completedAt);
-          if (!completedAt || isNaN(completedDate.getTime())) return false;
-
-          if (startDate && completedDate < startDate) return false;
-          if (endDate && completedDate > endDate) return false;
+          // The time selector consistently refers to the publication date of
+          // the post/comment that generated the alert, regardless of status.
+          const eventDate = new Date(a.created_at);
+          if (isNaN(eventDate.getTime())) return false;
+          if (startDate && eventDate < startDate) return false;
+          if (endDate && eventDate > endDate) return false;
           return true;
         });
       }
@@ -528,10 +503,10 @@ export default function AlertsPage() {
         : [...activeAlerts];
 
     // Lọc theo trạng thái nghiệp vụ.
-    // "all": Chỉ hiển thị các công việc chưa phân công hoặc cần liên hệ lại;
-    // các task đã phân công/đang xử lý sẽ ẩn khỏi "Tất cả đang mở" và chuyển sang tab "Đang xử lý".
+    // "all" includes every non-resolved workflow state. The status tabs are
+    // mutually exclusive, so their counts always add up to the open total.
     if (statusFilter === "all") {
-      result = result.filter((alert) => getAlertWorkflowStatus(alert) !== "processing");
+      result = result.filter((alert) => getAlertWorkflowStatus(alert) !== "resolved");
     } else if (statusFilter === "pending") {
       result = result.filter((alert) => {
         return getAlertWorkflowStatus(alert) === "pending";
@@ -1106,11 +1081,12 @@ export default function AlertsPage() {
     }
   }, [activeTab, highRiskIncidents, selectedIncidentId]);
 
-  // Load alerts on mount only – realtime + 60s polling handles subsequent updates
+  // Load from the shared 30-minute cache on mount. Realtime updates existing
+  // workflow records and the polling safety net refreshes every 30 minutes.
   useEffect(() => {
     if (authLoading || !canViewCrisisQueue) return;
     setFilters({ status: "all" });
-    fetchAlerts(scopedBrandKey, true);
+    fetchAlerts(scopedBrandKey, false);
     fetchCorrectionRequests(scopedBrandKey);
   }, [authLoading, canViewCrisisQueue, scopedBrandKey, fetchAlerts, fetchCorrectionRequests, setFilters]);
 
