@@ -39,6 +39,10 @@ import { readDashboardReturnNavigation } from "@/lib/dashboard-return-context";
 import { usePinnedQueue } from "@/hooks/usePinnedQueue";
 import { useAlertViewPresence } from "@/hooks/useAlertViewPresence";
 import { getAlertSourceUrl } from "@/lib/alert-source-url";
+import {
+  getAlertCompletenessScore,
+  getAlertDeduplicationKey,
+} from "@/lib/operational-metrics";
 
 const ALERTS_PER_PAGE = 5;
 import { collection, getDocs, doc, getDoc } from "firebase/firestore";
@@ -54,26 +58,6 @@ import {
   Legend as ChartLegend,
   Filler as ChartFiller,
 } from "chart.js";
-
-function getAlertDeduplicationKey(alert: AlertData) {
-  const contentType = String(alert.content_type || "mention").toLowerCase();
-  const sourceRecordId = contentType === "comment"
-    ? alert.comment_id || alert.source_id || alert.id
-    : alert.post_id || alert.source_id || alert.id;
-  return `${String(alert.source || "unknown").toLowerCase()}:${contentType}:${sourceRecordId}`;
-}
-
-function getAlertCompletenessScore(alert: AlertData) {
-  const workflowStatus = getAlertWorkflowStatus(alert);
-  return (
-    (workflowStatus === "pending" ? 0 : 20) +
-    (alert.being_resolved_by ? 10 : 0) +
-    (alert.customer_contact_opened_at ? 5 : 0) +
-    (alert.resolution_history?.length || 0) +
-    (alert.customer_contact_history?.length || 0)
-  );
-}
-
 
 // Helper function to calculate relative time
 function getRelativeTime(isoString: string, t: any): string {
@@ -323,7 +307,10 @@ export default function AlertsPage() {
   } = useAlertStore();
   // Filter alerts by currently selected brand filter for dashboard overview calculations
   const brandFilteredAlerts = useMemo(() => {
-    let result = rawAlerts;
+    // Alerts is the complete negative-content queue. The shared store also
+    // carries urgent non-negative records so Crisis Monitoring can honour its
+    // broader urgency rule without triggering another data scan.
+    let result = rawAlerts.filter((alert) => alert.sentiment === "negative");
 
     if (filters.brand && filters.brand !== "all") {
       const normalize = (b: string) => String(b || "").toLowerCase().replace(/[\s\-_.]/g, "").trim();
@@ -418,17 +405,16 @@ export default function AlertsPage() {
   };
 
   const visibleBaseAlerts = useMemo(() => {
-    const scopedAlerts = brandFilteredAlerts.filter((alert) => canAlertBeVisibleToUser(alert, profile));
     const deduplicated = new Map<string, AlertData>();
-
-    scopedAlerts.forEach((alert) => {
-      const key = getAlertDeduplicationKey(alert);
-      const existing = deduplicated.get(key);
-      if (!existing || getAlertCompletenessScore(alert) > getAlertCompletenessScore(existing)) {
-        deduplicated.set(key, alert);
-      }
-    });
-
+    brandFilteredAlerts
+      .filter((alert) => canAlertBeVisibleToUser(alert, profile))
+      .forEach((alert) => {
+        const key = getAlertDeduplicationKey(alert);
+        const existing = deduplicated.get(key);
+        if (!existing || getAlertCompletenessScore(alert) > getAlertCompletenessScore(existing)) {
+          deduplicated.set(key, alert);
+        }
+      });
     return Array.from(deduplicated.values());
   }, [brandFilteredAlerts, profile]);
 

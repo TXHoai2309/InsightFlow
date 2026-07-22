@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PlatformLogo } from "@/components/platform/PlatformLogo";
 import { getAlertWorkflowStatus } from "@/lib/alertWorkflow";
 import { getEffectiveAlertOwner } from "@/lib/alert-visibility";
@@ -49,10 +49,38 @@ function getStatusLabel(alert: AlertData) {
 
 export function AlertWorkbenchRow({ alert, selected, pinned = false, canPin = false, pinDisabled = false, onSelect, onTogglePin, getResolverName, viewers = [], currentViewerId }: AlertWorkbenchRowProps) {
   const [showViewers, setShowViewers] = useState(false);
+  const viewerTriggerRef = useRef<HTMLButtonElement>(null);
+  const viewerPopoverRef = useRef<HTMLDivElement>(null);
   const severityKey = String(alert.severity || "low").toLowerCase();
   const severity = SEVERITY_STYLE[severityKey] || SEVERITY_STYLE.low;
   const owner = getResolverName(getEffectiveAlertOwner(alert));
   const workflowStatus = getAlertWorkflowStatus(alert);
+
+  useEffect(() => {
+    if (!showViewers) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (
+        viewerTriggerRef.current?.contains(target) ||
+        viewerPopoverRef.current?.contains(target)
+      ) {
+        return;
+      }
+      setShowViewers(false);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    return () => document.removeEventListener("pointerdown", handlePointerDown, true);
+  }, [showViewers]);
+
+  useEffect(() => {
+    if (!selected || workflowStatus !== "pending") {
+      setShowViewers(false);
+    }
+  }, [selected, workflowStatus]);
+
   const statusLabel = getStatusLabel(alert);
   const statusAccent = workflowStatus === "contact_failed"
     ? { dot: "bg-rose-500", text: "text-rose-700 dark:text-rose-300" }
@@ -90,6 +118,7 @@ export function AlertWorkbenchRow({ alert, selected, pinned = false, canPin = fa
         <div className="flex shrink-0 items-center gap-1.5">
           {selected && workflowStatus === "pending" && (
             <button
+              ref={viewerTriggerRef}
               type="button"
               onClick={(event) => {
                 event.stopPropagation();
@@ -148,6 +177,7 @@ export function AlertWorkbenchRow({ alert, selected, pinned = false, canPin = fa
 
       {selected && workflowStatus === "pending" && showViewers && (
         <div
+          ref={viewerPopoverRef}
           role="dialog"
           aria-label="Danh sách người đang xem cảnh báo"
           onClick={(event) => event.stopPropagation()}

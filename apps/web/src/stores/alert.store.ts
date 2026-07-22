@@ -8,6 +8,7 @@ import { canPerformAction, type UserRoleProfile } from "@/lib/rbac";
 import { fetchSupabaseAlerts, updateSupabaseAlertLabel, supabaseRequest } from "@/lib/supabase";
 import { supabaseClient } from "@/lib/supabaseClient";
 import {
+  isCrisisClassificationLabel,
   normalizeClassificationLabel,
 } from "@/lib/label-change";
 import { calculateNegativityScore } from "@/lib/negativityScore";
@@ -437,9 +438,13 @@ export function buildDemoAlertData(): AlertData[] {
     .filter((mention) => {
       const labels = (mention.labels || {}) as Record<string, unknown>;
       return (
-        labels.relevance === true &&
-        labels.sentiment === "negative" &&
-        (labels.urgency === "high" || labels.urgency === "urgent")
+        mention.sentiment === "negative" ||
+        isCrisisClassificationLabel(labels, {
+          sentiment: mention.sentiment,
+          relevance: mention.labels?.relevance ?? null,
+          urgency: mention.labels?.urgency ?? "none",
+          intent: mention.labels?.intent ?? "none",
+        })
       );
     })
     .map(mentionToAlertData);
@@ -457,7 +462,15 @@ function buildAlertsFromMentions(
     // Every negative mention is an actionable alert. Crisis classification is
     // a priority subset used only by Crisis Monitoring, not an admission gate
     // for the operational Alerts queue.
-    .filter((mention) => mention.sentiment === "negative")
+    .filter((mention) =>
+      mention.sentiment === "negative" ||
+      isCrisisClassificationLabel(mention.labels, {
+        sentiment: mention.sentiment,
+        relevance: mention.labels?.relevance ?? null,
+        urgency: mention.labels?.urgency ?? "none",
+        intent: mention.labels?.intent ?? "none",
+      }),
+    )
     .map(mentionToAlertData)
     .filter((alert) => {
       // Keep the complete crisis history in the store. Each screen owns its
@@ -568,6 +581,7 @@ let activeRequestsUnsubscribe: (() => Promise<void>) | null = null;
 let activeRequestsScope: string | null = null;
 /** Holds the subscribed Supabase channel so we can reuse it for broadcasts */
 let activeRealtimeChannel: ReturnType<NonNullable<typeof supabaseClient>["channel"]> | null = null;
+let realtimeReloadTimer: ReturnType<typeof setTimeout> | null = null;
 // A slow request started before a claim/result mutation must not be allowed to
 // replace the newer optimistic or realtime state when it eventually resolves.
 let alertLoadGeneration = 0;
@@ -705,8 +719,8 @@ export const useAlertStore = create<AlertState>()(
       };
 
       try {
-        // fetchRawData shares a 30-minute promise cache with Dashboard, so this
-        // gets the complete dataset without starting another Supabase scan.
+        // fetchRawData shares its promise cache with Dashboard. A forced
+        // refresh is still propagated so explicit reloads cannot reuse stale rows.
         await loadAlerts(force);
 
         // Demo pages use DashboardService's in-memory sample data only. Do not
@@ -733,6 +747,11 @@ export const useAlertStore = create<AlertState>()(
                 (payload: any) => {
                   console.log("[AlertStore] Realtime postgres_changes event:", payload);
                   applyRealtimeAnnotationUpdate(set, get, payload?.new);
+                  if (realtimeReloadTimer) clearTimeout(realtimeReloadTimer);
+                  realtimeReloadTimer = setTimeout(() => {
+                    void loadAlerts(true);
+                    realtimeReloadTimer = null;
+                  }, 250);
                 }
               )
               .on(
@@ -749,6 +768,11 @@ export const useAlertStore = create<AlertState>()(
                       being_resolved_at: payload.assignedAt,
                       status: "resolving",
                     });
+                    if (realtimeReloadTimer) clearTimeout(realtimeReloadTimer);
+                    realtimeReloadTimer = setTimeout(() => {
+                      void loadAlerts(true);
+                      realtimeReloadTimer = null;
+                    }, 250);
                   }
                 }
               )
@@ -774,9 +798,13 @@ export const useAlertStore = create<AlertState>()(
           }
         }
 
-        // ===== STRATEGY 2: Fallback polling (60 sec) =====
+        // ===== STRATEGY 2: Fallback polling =====
         const intervalId = setInterval(loadAlerts, ALERT_REFRESH_INTERVAL_MS);
         cleanupFns.push(() => clearInterval(intervalId));
+        cleanupFns.push(() => {
+          if (realtimeReloadTimer) clearTimeout(realtimeReloadTimer);
+          realtimeReloadTimer = null;
+        });
 
         activeUnsubscribe = () => cleanupFns.forEach((fn) => fn());
       } catch (error) {

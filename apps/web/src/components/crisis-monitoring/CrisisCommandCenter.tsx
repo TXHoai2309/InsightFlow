@@ -14,11 +14,13 @@ import { Badge } from "@/components/ui/Badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { PlatformLogo } from "@/components/platform/PlatformLogo";
 import { useAuth } from "@/hooks/useAuth";
-import { canAlertBeVisibleToUser } from "@/lib/alert-visibility";
 import { getScopedBrandKey } from "@/lib/brandScope";
-import { getAlertWorkflowStatus } from "@/lib/alertWorkflow";
-import { getCalendarPeriodStartMs, isWithinCalendarPeriod } from "@/lib/dashboard-display";
-import { isCrisisClassificationLabel } from "@/lib/label-change";
+import { isTerminalAlert } from "@/lib/alertWorkflow";
+import {
+  buildAlertOperationalMetrics,
+  filterOperationalAlerts,
+} from "@/lib/operational-metrics";
+import { getCalendarPeriodStartMs } from "@/lib/dashboard-display";
 import { cn } from "@/lib/utils";
 import { useAlertStore, type AlertData } from "@/stores/alert.store";
 import { useDashboardStore } from "@/stores/dashboard.store";
@@ -86,7 +88,7 @@ function slaLimitHours(alert: AlertData) {
 }
 
 function isActive(alert: AlertData) {
-  return getAlertWorkflowStatus(alert) !== "resolved";
+  return !isTerminalAlert(alert);
 }
 
 function isOverdue(alert: AlertData) {
@@ -137,17 +139,10 @@ export function CrisisCommandCenter() {
   }, [fetchAlerts, profile, scopedBrandKey]);
 
   const alerts = useMemo(() => {
-    return rawAlerts.filter((alert) => {
-      return (
-        isWithinCalendarPeriod(alert.created_at, 30) &&
-        isCrisisClassificationLabel({
-          sentiment: alert.sentiment as any,
-          relevance: alert.relevance,
-          urgency: alert.urgency as any,
-          intent: alert.intent as any,
-        }) &&
-        canAlertBeVisibleToUser(alert, profile)
-      );
+    return filterOperationalAlerts(rawAlerts, {
+      profile,
+      crisisOnly: true,
+      dateBasis: "created_at",
     });
   }, [profile, rawAlerts]);
 
@@ -166,6 +161,7 @@ export function CrisisCommandCenter() {
   }, [mentions]);
 
   const data = useMemo(() => {
+    const operationalMetrics = buildAlertOperationalMetrics(alerts);
     const activeAlerts = alerts.filter(isActive);
     const criticalAlerts = activeAlerts.filter((alert) => ["critical", "high"].includes(normalizeSeverity(alert.severity)));
     const overdueAlerts = activeAlerts.filter(isOverdue);
@@ -174,7 +170,7 @@ export function CrisisCommandCenter() {
     const platformStats = buildStats(alerts, (alert) => alert.source || "other", PLATFORM_LABELS);
     const topicStats = buildStats(alerts, (alert) => alert.topic || "other", TOPIC_LABELS);
     const latestAlert = alerts.slice().sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())[0];
-    return { activeAlerts, criticalAlerts, overdueAlerts, unassignedAlerts, resolvedAlerts, platformStats, topicStats, latestAlert };
+    return { activeAlerts, criticalAlerts, overdueAlerts, unassignedAlerts, resolvedAlerts, platformStats, topicStats, latestAlert, operationalMetrics };
   }, [alerts]);
 
   const topPlatform = data.platformStats[0];
@@ -199,7 +195,7 @@ export function CrisisCommandCenter() {
       <section className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <div className="rounded-xl border border-[#DDD9E8] bg-white p-5"><div className="text-xs font-black uppercase tracking-wide text-[#787585]">Bối cảnh · Đề cập tiêu cực</div><div className="mt-2 text-3xl font-black text-[#1A1B20]">{negativeMentionsCount}</div><div className="mt-2 text-xs font-medium text-[#6E6A7C]">Toàn bộ nội dung mang cảm xúc tiêu cực</div></div>
         <div className="rounded-xl border border-[#F1B7B2] bg-[#FFF8F7] p-5"><div className="text-xs font-black uppercase tracking-wide text-[#BA1A1A]">Hàng đợi · Cảnh báo Crisis</div><div className="mt-2 text-3xl font-black text-[#BA1A1A]">{alerts.length}</div><div className="mt-2 text-xs font-medium text-[#6E6A7C]">Nội dung thỏa quy tắc mức khẩn cấp</div></div>
-        <div className="rounded-xl border border-[#DDD9E8] bg-white p-5"><div className="text-xs font-black uppercase tracking-wide text-[#5B4FCF]">Cần làm · Đang mở</div><div className="mt-2 text-3xl font-black text-[#4234B6]">{data.activeAlerts.length}</div><div className="mt-2 text-xs font-medium text-[#6E6A7C]">Chưa kết thúc hoặc chưa liên hệ xong</div></div>
+        <div className="rounded-xl border border-[#DDD9E8] bg-white p-5"><div className="text-xs font-black uppercase tracking-wide text-[#5B4FCF]">Cần làm · Đang mở</div><div className="mt-2 text-3xl font-black text-[#4234B6]">{data.operationalMetrics.active}</div><div className="mt-2 text-xs font-medium text-[#6E6A7C]">Chưa kết thúc hoặc chưa liên hệ xong</div></div>
       </section>
 
       <section data-tour="dashboard-insights-kpis" className="space-y-3">

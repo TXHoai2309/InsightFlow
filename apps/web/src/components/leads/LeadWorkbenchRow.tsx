@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import {
   getLeadOperationErrorMessage,
@@ -100,6 +100,8 @@ export function LeadWorkbenchRow({
   const [error, setError] = useState("");
   const [showMenu, setShowMenu] = useState(false);
   const [showViewers, setShowViewers] = useState(false);
+  const viewerTriggerRef = useRef<HTMLButtonElement>(null);
+  const viewerPopoverRef = useRef<HTMLDivElement>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const showToast = (message: string, type: "success" | "error" = "success") => {
     setToast({ message, type });
@@ -119,6 +121,32 @@ export function LeadWorkbenchRow({
       ? "Cần ghi nhận kết quả"
       : "SLA còn lại";
   const ownership = getLeadOwnershipMeta(lead, profile);
+
+  useEffect(() => {
+    if (!showViewers) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (
+        viewerTriggerRef.current?.contains(target) ||
+        viewerPopoverRef.current?.contains(target)
+      ) {
+        return;
+      }
+      setShowViewers(false);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    return () => document.removeEventListener("pointerdown", handlePointerDown, true);
+  }, [showViewers]);
+
+  useEffect(() => {
+    if (!selected || ownership.status !== "unassigned") {
+      setShowViewers(false);
+    }
+  }, [ownership.status, selected]);
+
   const primaryAction = getPrimaryLeadAction(lead);
   const platformMeta = PLATFORM_META[lead.platform];
   const canEdit =
@@ -351,6 +379,7 @@ export function LeadWorkbenchRow({
                 {renderPinButton()}
                 {selected && ownership.status === "unassigned" && (
                   <button
+                    ref={viewerTriggerRef}
                     type="button"
                     onClick={(event) => {
                       event.stopPropagation();
@@ -373,6 +402,7 @@ export function LeadWorkbenchRow({
 
             {selected && ownership.status === "unassigned" && showViewers && (
               <div
+                ref={viewerPopoverRef}
                 role="dialog"
                 aria-label="Danh sách người đang xem khách hàng"
                 onClick={(event) => event.stopPropagation()}

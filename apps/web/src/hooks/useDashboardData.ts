@@ -28,7 +28,7 @@ interface UseDashboardOptions {
 }
 
 const DASHBOARD_CACHE_PREFIX = "insightflow_dashboard_cache_";
-const DASHBOARD_CACHE_VERSION = "v3";
+const DASHBOARD_CACHE_VERSION = "v4";
 const DASHBOARD_CACHE_LIMITS = {
   mentions: 150,
   alerts: 150,
@@ -131,17 +131,27 @@ export function useDashboard(options: UseDashboardOptions = {}) {
         if (cached) {
           try {
             const { timestamp, data, partial } = JSON.parse(cached);
+            const currentState = useDashboardStore.getState();
+            const hasAuthoritativeStore =
+              currentState.mentions.length > (data.mentions?.length || 0) ||
+              currentState.alerts.length > (data.alerts?.length || 0) ||
+              currentState.leads.length > (data.leads?.length || 0);
             setWorkspaces(data.workspaces || []);
-            setMentions(data.mentions || []);
-            setAlerts(data.alerts || []);
-            setLeads(data.leads || []);
-            setLabelChangeRequests(data.labelChangeRequests || []);
+            // A compact cache is only a preview, never an authoritative input
+            // for operational counters. Keep a complete in-memory snapshot if
+            // one exists; otherwise wait for the full fetch behind the loader.
+            if (!partial) {
+              setMentions(data.mentions || []);
+              setAlerts(data.alerts || []);
+              setLeads(data.leads || []);
+              setLabelChangeRequests(data.labelChangeRequests || []);
+            }
             setStats(data.stats);
             setTopSources(data.topSources || []);
             setTopTopics(data.topTopics || []);
             setTrendData(data.trendData || []);
             setError(null);
-            hasRenderedCache = true;
+            hasRenderedCache = !partial || hasAuthoritativeStore;
 
             const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes fresh cache window
             const hasCachedMentions = data.mentions && data.mentions.length > 0;
@@ -266,17 +276,19 @@ export function useDashboard(options: UseDashboardOptions = {}) {
           if (!hasDataInStore) {
             const cached = localStorage.getItem(cacheKey);
             if (cached) {
-              const { data } = JSON.parse(cached);
-              setWorkspaces(data.workspaces || []);
-              setMentions(data.mentions || []);
-              setAlerts(data.alerts || []);
-              setLeads(data.leads || []);
-              setLabelChangeRequests(data.labelChangeRequests || []);
-              setStats(data.stats);
-              setTopSources(data.topSources || []);
-              setTopTopics(data.topTopics || []);
-              setTrendData(data.trendData || []);
-              loadedFromCache = true;
+              const { data, partial } = JSON.parse(cached);
+              if (!partial) {
+                setWorkspaces(data.workspaces || []);
+                setMentions(data.mentions || []);
+                setAlerts(data.alerts || []);
+                setLeads(data.leads || []);
+                setLabelChangeRequests(data.labelChangeRequests || []);
+                setStats(data.stats);
+                setTopSources(data.topSources || []);
+                setTopTopics(data.topTopics || []);
+                setTrendData(data.trendData || []);
+                loadedFromCache = true;
+              }
             }
           } else {
             loadedFromCache = true;
@@ -370,6 +382,15 @@ export function useDashboard(options: UseDashboardOptions = {}) {
                       contact_attempts: updated.contact_attempts ?? l.contact_attempts,
                       last_contact_at: updated.last_contact_at ?? undefined,
                       pending_result: updated.pending_result ?? l.pending_result,
+                      last_action_at: updated.last_action_at ?? undefined,
+                      last_action_type: updated.last_action_type ?? undefined,
+                      last_contact_channel: updated.last_contact_channel ?? undefined,
+                      result_type: updated.result_type ?? null,
+                      result_recorded_at: updated.result_recorded_at ?? null,
+                      follow_up_at: updated.follow_up_at ?? null,
+                      closed_at: updated.closed_at ?? null,
+                      updated_at: updated.updated_at ?? l.updated_at,
+                      expiry_at: updated.expiry_at ?? l.expiry_at,
                       notes: updated.notes ?? l.notes,
                       sales_status: updated.sales_status ?? l.sales_status,
                       sales_owner_id: updated.sales_owner_id ?? l.sales_owner_id,
