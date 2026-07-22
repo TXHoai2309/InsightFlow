@@ -326,6 +326,8 @@ export function BrandManagerDashboard({
       profile,
       workspaceId: filters.workspace_id,
       platform: filters.platform,
+      crisisOnly: true,
+      dateBasis: "created_at",
     });
     return buildAlertOperationalMetrics(scopedAlerts);
   }, [crisisAlerts, filters.workspace_id, filters.platform, profile]);

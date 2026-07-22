@@ -1,7 +1,9 @@
 import { canAlertBeVisibleToUser } from "@/lib/alert-visibility";
 import { getAlertWorkflowStatus, isTerminalAlert } from "@/lib/alertWorkflow";
 import { getScopedBrandKey, isRecordInBrandScope } from "@/lib/brandScope";
+import { isWithinCalendarPeriod } from "@/lib/dashboard-display";
 import { isIntentLead } from "@/lib/lead-intent";
+import { isCrisisClassificationLabel } from "@/lib/label-change";
 import {
   canLeadBeVisibleToUser,
   getLeadWorkbenchMeta,
@@ -141,12 +143,31 @@ export function filterOperationalAlerts(
     platform = "all",
     nowMs = Date.now(),
     reviewWindowDays = ALERT_REVIEW_WINDOW_DAYS,
-  }: OperationalScopeOptions & { nowMs?: number; reviewWindowDays?: number },
+    crisisOnly = false,
+    dateBasis = "relevant_at",
+  }: OperationalScopeOptions & {
+    nowMs?: number;
+    reviewWindowDays?: number;
+    crisisOnly?: boolean;
+    dateBasis?: "created_at" | "relevant_at";
+  },
 ) {
   const deduplicated = new Map<string, AlertData>();
 
   alerts.forEach((alert) => {
-    if (!isAlertInReviewWindow(alert, nowMs, reviewWindowDays)) return;
+    const isInWindow = dateBasis === "created_at"
+      ? isWithinCalendarPeriod(alert.created_at, reviewWindowDays, new Date(nowMs))
+      : isAlertInReviewWindow(alert, nowMs, reviewWindowDays);
+    if (!isInWindow) return;
+    if (
+      crisisOnly &&
+      !isCrisisClassificationLabel({
+        sentiment: alert.sentiment as any,
+        relevance: alert.relevance,
+        urgency: alert.urgency as any,
+        intent: alert.intent as any,
+      })
+    ) return;
     if (!matchesSelectedWorkspace(alert, workspaceId)) return;
     if (platform && platform !== "all" && alert.source !== platform) return;
     if (!canAlertBeVisibleToUser(alert, profile)) return;

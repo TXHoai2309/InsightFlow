@@ -97,3 +97,44 @@ test("alert operational scope deduplicates records and exposes queue-compatible 
   assert.equal(metrics.resolved, 1);
   assert.equal(metrics.highActive, 1);
 });
+
+test("keeps every negative mention in Alerts but only threshold-qualified items in Crisis", () => {
+  const now = new Date("2026-07-21T00:00:00.000Z").getTime();
+  const alerts = [
+    alert({ id: "negative-low", sentiment: "negative", relevance: true, urgency: "low", intent: "none", severity: "low" }),
+    alert({ id: "negative-medium", sentiment: "negative", relevance: true, urgency: "medium", intent: "none", severity: "medium" }),
+    alert({ id: "neutral-urgent", sentiment: "neutral", relevance: true, urgency: "urgent", intent: "none", severity: "critical" }),
+  ];
+
+  const alertQueue = filterOperationalAlerts(alerts, { profile: manager, nowMs: now });
+  const crisisQueue = filterOperationalAlerts(alerts, {
+    profile: manager,
+    nowMs: now,
+    crisisOnly: true,
+    dateBasis: "created_at",
+  });
+
+  assert.deepEqual(alertQueue.map((item) => item.id), ["negative-low", "negative-medium", "neutral-urgent"]);
+  assert.deepEqual(crisisQueue.map((item) => item.id), ["negative-medium", "neutral-urgent"]);
+});
+
+test("Crisis calendar window is anchored to publication time, not a recent closing action", () => {
+  const now = new Date("2026-07-21T00:00:00.000Z").getTime();
+  const oldResolved = alert({
+    id: "old-resolved",
+    relevance: true,
+    urgency: "high",
+    intent: "none",
+    created_at: "2026-01-01T00:00:00.000Z",
+    status: "resolved",
+    resolved_at: "2026-07-20T00:00:00.000Z",
+  });
+
+  assert.equal(filterOperationalAlerts([oldResolved], { profile: manager, nowMs: now }).length, 1);
+  assert.equal(filterOperationalAlerts([oldResolved], {
+    profile: manager,
+    nowMs: now,
+    crisisOnly: true,
+    dateBasis: "created_at",
+  }).length, 0);
+});

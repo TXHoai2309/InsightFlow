@@ -37,6 +37,8 @@ export function BMTabs() {
       profile,
       workspaceId: filters.workspace_id,
       platform: filters.platform,
+      crisisOnly: true,
+      dateBasis: "created_at",
     });
     return buildAlertOperationalMetrics(scoped).total;
   }, [filters.platform, filters.workspace_id, profile, rawAlerts]);
