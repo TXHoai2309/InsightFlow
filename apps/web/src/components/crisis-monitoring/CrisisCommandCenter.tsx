@@ -143,12 +143,15 @@ export function CrisisCommandCenter() {
   }, [fetchAlerts, profile, scopedBrandKey]);
 
   const alerts = useMemo(() => {
-    return filterOperationalAlerts(rawAlerts, {
+    // Every negative mention must enter the Crisis work queue. The crisis
+    // classification is a priority signal, not an admission condition.
+    return filterOperationalAlerts(rawAlerts.filter(
+      (alert) => alert.sentiment === "negative",
+    ), {
       profile,
       workspaceId: filters.workspace_id,
       platform: filters.platform,
       reviewWindowDays: periodDays,
-      crisisOnly: true,
       dateBasis: "created_at",
     });
   }, [filters.platform, filters.workspace_id, periodDays, profile, rawAlerts]);
@@ -172,7 +175,7 @@ export function CrisisCommandCenter() {
     <div data-tour="dashboard-insights" className="w-full space-y-6">
       <section data-tour="dashboard-insights-kpis" className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          { icon: ShieldAlert, label: "Tổng cảnh báo", value: alerts.length, unit: "cảnh báo", hint: "Tất cả cảnh báo Crisis trong kỳ", tone: "border-[#E2DFFF] bg-[#F7F5FF] text-[#4234B6]", iconTone: "bg-[#E2DFFF] text-[#4234B6]" },
+          { icon: ShieldAlert, label: "Tổng tiêu cực", value: alerts.length, unit: "đề cập", hint: "Tất cả đề cập tiêu cực cần theo dõi trong kỳ", tone: "border-[#E2DFFF] bg-[#F7F5FF] text-[#4234B6]", iconTone: "bg-[#E2DFFF] text-[#4234B6]" },
           { icon: AlertTriangle, label: "Ưu tiên cao", value: data.criticalAlerts.length, unit: "cảnh báo", hint: "Mức Critical hoặc Cao đang mở", tone: "border-[#FFE2C7] bg-[#FFF8F0] text-[#A14A00]", iconTone: "bg-[#FFE2C7] text-[#A14A00]" },
           { icon: Clock3, label: "Quá SLA", value: data.overdueAlerts.length, unit: "cảnh báo", hint: "Vượt thời gian phản hồi theo mức ưu tiên", tone: "border-[#FFDAD6] bg-[#FFF4F2] text-[#BA1A1A]", iconTone: "bg-[#FFDAD6] text-[#BA1A1A]" },
           { icon: UserRoundCheck, label: "Chưa có người xử lý", value: data.unassignedAlerts.length, unit: "cảnh báo", hint: "Cần phân công nhân viên", tone: "border-[#D7F4E2] bg-[#F3FCF6] text-[#147A3F]", iconTone: "bg-[#D7F4E2] text-[#147A3F]" },

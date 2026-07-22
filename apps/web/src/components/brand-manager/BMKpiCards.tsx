@@ -71,7 +71,7 @@ export function BMKpiCards({
       },
       sub: t("bm.kpi.needsAction"),
       resolved: negativeResolved,
-      remaining: negativeMentions,
+      remaining: Math.max(0, negativeMentions - negativeResolved),
       status: negativeMentions > 0 ? "danger" : "positive",
       href: negativeHref,
     },

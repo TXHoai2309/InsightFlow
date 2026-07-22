@@ -482,7 +482,7 @@ export function BrandManagerDashboard({
         />
 
         <BMKpiCards
-          negativeMentions={dashboardNegativeAlertKpi.active}
+          negativeMentions={stats.negative_count}
           negativePrev={prevStats.negative_count}
           negativeResolved={dashboardNegativeAlertKpi.resolved + dashboardNegativeAlertKpi.skipped}
           unprocessed={unprocessedContacts}
