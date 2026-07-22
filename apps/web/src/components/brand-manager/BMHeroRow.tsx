@@ -5,7 +5,7 @@
  * Hàng đầu tiên của dashboard: nhìn vào là biết ngay tình trạng thương hiệu.
  */
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
@@ -15,6 +15,7 @@ import {
   DoughnutController,
 } from "chart.js";
 import { useTranslation } from "react-i18next";
+import { useAuth } from "@/hooks/useAuth";
 
 ChartJS.register(ArcElement, DoughnutController, Tooltip);
 ChartJS.defaults.font.family = 'Inter, "Segoe UI", Arial, sans-serif';
@@ -28,9 +29,18 @@ interface BMHeroRowProps {
     negative: number;
   };
   totalMentions: number;
+  brandName?: string;
+  timeRange?: string;
+  topics?: Array<{ name: string; count: number; negative: number }>;
   onViewDetail?: () => void;
 }
 
+interface DashboardAiAnalysis {
+  summary: string;
+  riskLevel: "low" | "medium" | "high";
+  riskTrend: "decreasing" | "stable" | "increasing";
+  confidence: number;
+}
 /* ── Gauge arc drawing ──────────────────────────────────────── */
 function GaugeChart({ score }: { score: number }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -229,8 +239,20 @@ function SentimentDonut({
 }
 
 /* ── Main component ─────────────────────────────────────────── */
-export function BMHeroRow({ score, trend, sentiment, totalMentions, onViewDetail }: BMHeroRowProps) {
+export function BMHeroRow({
+  score,
+  trend,
+  sentiment,
+  totalMentions,
+  brandName,
+  timeRange,
+  topics = [],
+  onViewDetail,
+}: BMHeroRowProps) {
   const { t } = useTranslation();
+  const { user } = useAuth();
+  const [aiAnalysis, setAiAnalysis] = useState<DashboardAiAnalysis | null>(null);
+  const [aiState, setAiState] = useState<"loading" | "ready" | "error">("loading");
   const isHealthy = score >= 70;
   const isWarning = score < 70 && score >= 40;
 
@@ -238,11 +260,80 @@ export function BMHeroRow({ score, trend, sentiment, totalMentions, onViewDetail
   const statusColor = isHealthy ? "#22C55E" : isWarning ? "#F59E0B" : "#EF4444";
   const statusBg = isHealthy ? "rgba(34,197,94,0.1)" : isWarning ? "rgba(245,158,11,0.1)" : "rgba(239,68,68,0.1)";
 
-  const aiText = isHealthy
+  const fallbackAiText = isHealthy
     ? t("bm.hero.aiText.good")
     : isWarning
       ? t("bm.hero.aiText.warning")
       : t("bm.hero.aiText.danger");
+
+  const topicsKey = JSON.stringify(topics);
+  const analysisInput = useMemo(() => ({
+    brandName,
+    timeRange,
+    score,
+    trend,
+    totalMentions,
+    sentiment: {
+      positive: sentiment.positive,
+      neutral: sentiment.neutral,
+      negative: sentiment.negative,
+    },
+    topics: JSON.parse(topicsKey),
+  }), [brandName, score, sentiment.negative, sentiment.neutral, sentiment.positive, timeRange, topicsKey, totalMentions, trend]);
+
+  useEffect(() => {
+    if (!user) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setAiState("loading");
+      try {
+        const token = await user.getIdToken();
+        const response = await fetch("/api/dashboard/ai-analysis", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(analysisInput),
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error(`Dashboard AI request failed (${response.status})`);
+        const result = await response.json() as DashboardAiAnalysis;
+        if (!controller.signal.aborted) {
+          setAiAnalysis(result);
+          setAiState("ready");
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          console.warn("Dashboard AI analysis unavailable:", error);
+          setAiState("error");
+        }
+      }
+    }, 350);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [analysisInput, user]);
+
+  const aiText = aiState === "loading"
+    ? "AI đang phân tích dữ liệu mới nhất…"
+    : aiAnalysis?.summary || fallbackAiText;
+  const riskLevelLabels = {
+    low: t("bm.hero.risk.low", "Thấp"),
+    medium: t("bm.hero.risk.medium", "Trung bình"),
+    high: t("bm.hero.risk.high", "Cao"),
+  };
+  const riskTrendLabels = {
+    decreasing: t("bm.hero.risk.decreasing", "Đang giảm"),
+    stable: t("bm.hero.risk.stable", "Ổn định"),
+    increasing: t("bm.hero.risk.increasing", "Đang tăng"),
+  };
+  const riskLabel = aiAnalysis ? riskLevelLabels[aiAnalysis.riskLevel] : statusLabel;
+  const riskTrendLabel = aiAnalysis
+    ? riskTrendLabels[aiAnalysis.riskTrend]
+    : isHealthy ? t("bm.hero.risk.stable") : isWarning ? t("bm.hero.risk.slightInc") : t("bm.hero.risk.high");
 
   return (
     <div className="bm-hero-row">
@@ -402,23 +493,23 @@ export function BMHeroRow({ score, trend, sentiment, totalMentions, onViewDetail
               animation: "bm-pulse 2s infinite",
             }} />
             <span style={{ fontSize: 12, fontWeight: 700, color: statusColor, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-              {t("bm.hero.riskLevel")}: {statusLabel}
+              {t("bm.hero.riskLevel")}: {riskLabel}
             </span>
           </div>
 
           <p className="bm-ai-text">“{aiText}”</p>
 
           <div className="bm-ai-metrics">
-            <div className="bm-ai-metric">
+            <div className="bm-ai-metric" title={aiState === "error" ? "Đang hiển thị nhận định dự phòng vì AI tạm thời không khả dụng" : undefined}>
               <span className="bm-ai-metric-val" style={{ color: "#6366F1" }}>
-                {Math.round((trend >= 0 ? trend : 0) * 0.7 + 60)}%
+                {aiState === "loading" ? "…" : `${aiAnalysis?.confidence ?? Math.min(95, Math.max(35, Math.round(totalMentions / 2)))}%`}
               </span>
               <span className="bm-ai-metric-label">{t("bm.hero.aiTrust")}</span>
             </div>
             <div className="bm-ai-metric-sep" />
-            <div className="bm-ai-metric">
+            <div className="bm-ai-metric" title={aiState === "error" ? "Đang hiển thị nhận định dự phòng vì AI tạm thời không khả dụng" : undefined}>
               <span className="bm-ai-metric-val" style={{ color: statusColor }}>
-                {isHealthy ? t("bm.hero.risk.stable") : isWarning ? t("bm.hero.risk.slightInc") : t("bm.hero.risk.high")}
+                {aiState === "loading" ? "…" : riskTrendLabel}
               </span>
               <span className="bm-ai-metric-label">{t("bm.hero.riskTrend")}</span>
             </div>

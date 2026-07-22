@@ -400,6 +400,13 @@ export function BrandManagerDashboard({
           negative: stats.negative_count,
         }}
         totalMentions={stats.total_mentions}
+        brandName={filters.workspace_id !== "all" ? filters.workspace_id : profile?.brandName}
+        timeRange={filters.time_range}
+        topics={topTopics.slice(0, 5).map((topic) => ({
+          name: topic.name,
+          count: topic.count,
+          negative: topic.sentiment_breakdown.negative,
+        }))}
         onViewDetail={() => setViewMode("platform")}
       />
 
