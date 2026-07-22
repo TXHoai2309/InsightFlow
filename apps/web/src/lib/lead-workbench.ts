@@ -26,8 +26,10 @@ export interface LeadOwnershipMeta {
 }
 
 export interface LeadWorkbenchMeta {
+  slaStartedAt: number;
   expiryTime: number;
   remainingMs: number;
+  wasOverdueOnIngest: boolean;
   isPending: boolean;
   isOverdue: boolean;
   isUrgent: boolean;
@@ -113,9 +115,17 @@ export function canLeadBeVisibleToUser(
   return !ownerId || ownerId === profile.uid;
 }
 
-export function getLeadExpiryTime(lead: Lead) {
-  if (lead.expiry_at) return new Date(lead.expiry_at).getTime();
+export function getLeadSlaStartTime(lead: Lead) {
+  const postedTime = lead.posted_at ? new Date(lead.posted_at).getTime() : Number.NaN;
+  if (Number.isFinite(postedTime)) return postedTime;
 
+  const createdTime = new Date(lead.created_at).getTime();
+  return Number.isFinite(createdTime) ? createdTime : Number.NaN;
+}
+
+export function getLeadExpiryTime(lead: Lead) {
+  const slaStartedAt = getLeadSlaStartTime(lead);
+  if (!Number.isFinite(slaStartedAt)) return Number.NaN;
   const durationMin =
     lead.intent === "hot"
       ? 30
@@ -123,8 +133,7 @@ export function getLeadExpiryTime(lead: Lead) {
         ? 24 * 60
         : 7 * 24 * 60;
 
-  const baseTimeStr = lead.posted_at || lead.created_at;
-  return new Date(baseTimeStr).getTime() + durationMin * 60 * 1000;
+  return slaStartedAt + durationMin * 60 * 1000;
 }
 
 export function getLeadOwnershipMeta(
@@ -450,17 +459,21 @@ export function getLeadWorkbenchMeta(
   lead: Lead,
   nowMs = Date.now(),
 ): LeadWorkbenchMeta {
+  const slaStartedAt = getLeadSlaStartTime(lead);
   const expiryTime = getLeadExpiryTime(lead);
   const remainingMs = expiryTime - nowMs;
   const isPending = lead.status === "new" || lead.status === "processing";
-  const isOverdue = isPending && remainingMs <= 0;
+  const hasValidSla = Number.isFinite(expiryTime);
+  const isOverdue = isPending && hasValidSla && remainingMs <= 0;
   const urgentWindow =
     lead.intent === "hot"
       ? 10 * 60 * 1000
       : lead.intent === "warm"
         ? 2 * 60 * 60 * 1000
         : 24 * 60 * 60 * 1000;
-  const isUrgent = isPending && remainingMs > 0 && remainingMs <= urgentWindow;
+  const isUrgent = isPending && hasValidSla && remainingMs > 0 && remainingMs <= urgentWindow;
+  const ingestedAt = new Date(lead.created_at).getTime();
+  const wasOverdueOnIngest = Number.isFinite(ingestedAt) && hasValidSla && ingestedAt >= expiryTime;
   const isFollowUp = getLeadFollowUpMeta(lead, nowMs).isActive;
   const contactable = hasContactChannel(lead);
   const needsResult = needsLeadResultCapture(lead);
@@ -485,8 +498,10 @@ export function getLeadWorkbenchMeta(
   if (lead.status === "completed" || lead.status === "skipped") priorityScore = 0;
 
   return {
+    slaStartedAt,
     expiryTime,
     remainingMs,
+    wasOverdueOnIngest,
     isPending,
     isOverdue,
     isUrgent,
@@ -507,6 +522,7 @@ export function getLeadWorkbenchMeta(
 
 export function formatLeadSla(meta: LeadWorkbenchMeta) {
   if (!meta.isPending) return "Đã xử lý";
+  if (!Number.isFinite(meta.expiryTime)) return "Chưa xác định SLA";
 
   const formatDuration = (totalMinutes: number) => {
     if (totalMinutes < 60) return `${totalMinutes} phút`;

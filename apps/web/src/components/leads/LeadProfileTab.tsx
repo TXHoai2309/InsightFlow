@@ -125,7 +125,11 @@ export function LeadProfileTab({
           <AlarmClock className={meta.isOverdue ? "text-[var(--color-error)]" : "text-[var(--color-warning)]"} size={24} aria-hidden="true" />
           <div className="min-w-0">
             <p className={`truncate text-sm font-bold ${meta.isOverdue ? "text-[var(--color-error)]" : "text-[var(--color-text-primary)]"}`}>{slaLabel}</p>
-            <p className="text-xs text-[var(--color-text-secondary)]">SLA xử lý</p>
+            <p className={`text-xs ${meta.wasOverdueOnIngest ? "font-semibold text-[var(--color-error)]" : "text-[var(--color-text-secondary)]"}`}>
+              {meta.wasOverdueOnIngest
+                ? "Quá hạn trước khi hệ thống ghi nhận"
+                : "SLA tính từ thời gian đăng"}
+            </p>
           </div>
         </div>
         <button type="button" onClick={onOpenSource} disabled={!canOpenSource} className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-bg-surface)] px-3 text-sm font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-brand-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] disabled:cursor-not-allowed disabled:opacity-45">

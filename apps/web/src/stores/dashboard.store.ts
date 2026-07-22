@@ -10,6 +10,7 @@ import { canPerformAction, type UserRoleProfile } from "@/lib/rbac";
 import { isSameBrandScope } from "@/lib/brandScope";
 import { normalizeClassificationLabel } from "@/lib/label-change";
 import { isDemoRuntime } from "@/lib/demo-navigation";
+import { getLeadExpiryTime } from "@/lib/lead-workbench";
 import type {
   DashboardStats,
   DashboardFilters,
@@ -737,22 +738,11 @@ export const useDashboardStore = create<DashboardState>()(
 
       // 2. Urgency and status filters
       const nowMs = Date.now();
-      const getExpiryTime = (lead: Lead) => {
-        if (lead.expiry_at) return new Date(lead.expiry_at).getTime();
-        const durationMin =
-          lead.intent === "hot"
-            ? 30
-            : lead.intent === "warm"
-              ? 24 * 60
-              : 7 * 24 * 60;
-        return new Date(lead.created_at).getTime() + durationMin * 60 * 1000;
-      };
-
       const urgency = filters.urgency || "pending";
       if (urgency !== "all") {
         result = result.filter((l) => {
           const isPending = l.status === "new" || l.status === "processing";
-          const expiryTime = getExpiryTime(l);
+          const expiryTime = getLeadExpiryTime(l);
           const isExpired = expiryTime <= nowMs;
 
           if (urgency === "pending") {
@@ -767,7 +757,7 @@ export const useDashboardStore = create<DashboardState>()(
             if (l.intent === "warm") {
               return remainingMs > 0 && remainingMs < 2 * 60 * 60 * 1000; // < 2 hours
             }
-            return false;
+            return remainingMs > 0 && remainingMs < 24 * 60 * 60 * 1000; // < 24 hours
           }
           if (urgency === "overdue") {
             return isPending && isExpired;
@@ -787,8 +777,8 @@ export const useDashboardStore = create<DashboardState>()(
         const aPending = a.status === "new" || a.status === "processing";
         const bPending = b.status === "new" || b.status === "processing";
 
-        const aExpiry = getExpiryTime(a);
-        const bExpiry = getExpiryTime(b);
+        const aExpiry = getLeadExpiryTime(a);
+        const bExpiry = getLeadExpiryTime(b);
         const aExpired = aExpiry <= nowMs;
         const bExpired = bExpiry <= nowMs;
 

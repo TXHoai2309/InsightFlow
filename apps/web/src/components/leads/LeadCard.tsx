@@ -15,6 +15,7 @@ import {
 import { PlatformLogo } from "@/components/platform/PlatformLogo";
 import type { Lead, Mention } from "@/types/dashboard";
 import { isDemoPath, toDemoHref } from "@/lib/demo-navigation";
+import { getLeadExpiryTime } from "@/lib/lead-workbench";
 
 interface LeadCardProps {
   lead: Lead;
@@ -85,20 +86,7 @@ export function LeadCard({ lead, currentTime }: LeadCardProps) {
     setNoteText(lead.notes || "");
   }, [lead.notes]);
 
-  // Compute Expiry Time based on intent
-  const getExpiryTime = () => {
-    if (lead.expiry_at) return new Date(lead.expiry_at).getTime();
-    const durationMin =
-      lead.intent === "hot"
-        ? 30
-        : lead.intent === "warm"
-          ? 24 * 60
-          : 7 * 24 * 60;
-    const baseTimeStr = lead.posted_at || lead.created_at;
-    return new Date(baseTimeStr).getTime() + durationMin * 60 * 1000;
-  };
-
-  const expiryTime = getExpiryTime();
+  const expiryTime = getLeadExpiryTime(lead);
   const remainingSeconds = Math.max(
     0,
     Math.floor((expiryTime - currentTime) / 1000),

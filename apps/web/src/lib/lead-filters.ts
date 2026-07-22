@@ -1,4 +1,7 @@
-import { getLeadWorkbenchMeta } from "@/lib/lead-workbench";
+import {
+  getLeadWorkbenchMeta,
+  type LeadWorkbenchView,
+} from "@/lib/lead-workbench";
 import type { Lead, Platform } from "@/types/dashboard";
 
 export type LeadPriorityFilter = "all" | "hot" | "warm" | "cold";
@@ -9,7 +12,8 @@ export type LeadSlaFilter =
   | "overdue"
   | "unknown";
 export type LeadOwnershipFilter = "all" | "mine" | "unassigned" | "staff";
-export type LeadUpdatedRangeFilter = "all" | "today" | "7d" | "30d";
+export type LeadUpdatedRangeFilter = "all" | "today" | "7d" | "30d" | "custom";
+export type LeadDateFilterBasis = "posted" | "follow_up" | "terminal" | "none";
 
 export interface LeadWorkbenchFilters {
   query: string;
@@ -20,6 +24,8 @@ export interface LeadWorkbenchFilters {
   ownership: LeadOwnershipFilter;
   ownerId?: string;
   updatedRange: LeadUpdatedRangeFilter;
+  customStartDate?: string;
+  customEndDate?: string;
 }
 
 export const DEFAULT_LEAD_WORKBENCH_FILTERS: LeadWorkbenchFilters = {
@@ -29,8 +35,16 @@ export const DEFAULT_LEAD_WORKBENCH_FILTERS: LeadWorkbenchFilters = {
   priority: "all",
   sla: "all",
   ownership: "all",
-  updatedRange: "all",
+  updatedRange: "today",
+  customStartDate: undefined,
+  customEndDate: undefined,
 };
+
+export function getLeadDateFilterBasis(view: LeadWorkbenchView): LeadDateFilterBasis {
+  if (view === "closed" || view === "skipped") return "terminal";
+  if (view === "follow_up") return "follow_up";
+  return "posted";
+}
 
 const KNOWN_PLATFORMS = new Set([
   "facebook",
@@ -60,6 +74,7 @@ const UPDATED_RANGES = new Set<LeadUpdatedRangeFilter>([
   "today",
   "7d",
   "30d",
+  "custom",
 ]);
 
 function normalizeSearchText(value: unknown) {
@@ -128,24 +143,81 @@ function matchesOwnership(
   return Boolean(filters.ownerId && ownerId === filters.ownerId);
 }
 
+const VIETNAM_OFFSET_MS = 7 * 60 * 60 * 1000;
+
+function getVietnamDayStartMs(timestamp: number) {
+  const vietnamTime = new Date(timestamp + VIETNAM_OFFSET_MS);
+  return Date.UTC(
+    vietnamTime.getUTCFullYear(),
+    vietnamTime.getUTCMonth(),
+    vietnamTime.getUTCDate(),
+  ) - VIETNAM_OFFSET_MS;
+}
+
+function parseVietnamDateStart(value?: string) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return Number.NaN;
+  return new Date(`${value}T00:00:00+07:00`).getTime();
+}
+
+function getLeadTerminalTime(lead: Lead) {
+  const candidates = lead.status === "skipped"
+    ? [
+      lead.last_action_type === "skip" ? lead.last_action_at : null,
+      lead.closed_at,
+      lead.result_recorded_at,
+      lead.updated_at,
+    ]
+    : [lead.closed_at, lead.result_recorded_at, lead.last_action_at, lead.updated_at];
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const timestamp = new Date(candidate).getTime();
+    if (Number.isFinite(timestamp)) return timestamp;
+  }
+  return Number.NaN;
+}
+
+function getLeadDateForFilter(lead: Lead, basis: LeadDateFilterBasis) {
+  if (basis === "none") return Number.NaN;
+  if (basis === "terminal") return getLeadTerminalTime(lead);
+  if (basis === "follow_up") {
+    return lead.follow_up_at ? new Date(lead.follow_up_at).getTime() : Number.NaN;
+  }
+
+  const postedAt = lead.posted_at ? new Date(lead.posted_at).getTime() : Number.NaN;
+  if (Number.isFinite(postedAt)) return postedAt;
+  return new Date(lead.created_at).getTime();
+}
+
 function matchesUpdatedRange(
   lead: Lead,
-  range: LeadUpdatedRangeFilter,
+  filters: LeadWorkbenchFilters,
   nowMs: number,
+  basis: LeadDateFilterBasis,
 ) {
+  const range = filters.updatedRange;
+  if (basis === "none") return true;
   if (range === "all") return true;
-  const leadTime = new Date(lead.updated_at || lead.created_at).getTime();
+  const leadTime = getLeadDateForFilter(lead, basis);
   if (!Number.isFinite(leadTime)) return false;
 
-  const startOfToday = new Date(nowMs);
-  startOfToday.setHours(0, 0, 0, 0);
+  const startOfToday = getVietnamDayStartMs(nowMs);
+  const endOfToday = startOfToday + 24 * 60 * 60 * 1000;
 
   if (range === "today") {
-    return leadTime >= startOfToday.getTime();
+    return leadTime >= startOfToday && leadTime < endOfToday;
+  }
+
+  if (range === "custom") {
+    const start = parseVietnamDateStart(filters.customStartDate);
+    const end = parseVietnamDateStart(filters.customEndDate);
+    if (Number.isFinite(start) && leadTime < start) return false;
+    if (Number.isFinite(end) && leadTime >= end + 24 * 60 * 60 * 1000) return false;
+    return Number.isFinite(start) || Number.isFinite(end);
   }
 
   const days = range === "7d" ? 6 : 29;
-  return leadTime >= startOfToday.getTime() - days * 24 * 60 * 60 * 1000;
+  return leadTime >= startOfToday - days * 24 * 60 * 60 * 1000 && leadTime < endOfToday;
 }
 
 export function filterLeadWorkbenchItems(
@@ -153,6 +225,7 @@ export function filterLeadWorkbenchItems(
   filters: LeadWorkbenchFilters,
   nowMs = Date.now(),
   currentUserId?: string,
+  dateBasis: LeadDateFilterBasis = "posted",
 ) {
   const workspaceKey =
     filters.workspaceId === "all"
@@ -175,13 +248,14 @@ export function filterLeadWorkbenchItems(
     if (!matchesQuery(lead, filters.query)) return false;
     if (!matchesSla(lead, filters.sla, nowMs)) return false;
     if (!matchesOwnership(lead, filters, currentUserId)) return false;
-    return matchesUpdatedRange(lead, filters.updatedRange, nowMs);
+    return matchesUpdatedRange(lead, filters, nowMs, dateBasis);
   });
 }
 
 export function countActiveLeadFilters(
   filters: LeadWorkbenchFilters,
   includeWorkspace = false,
+  defaultDateRange: LeadUpdatedRangeFilter = DEFAULT_LEAD_WORKBENCH_FILTERS.updatedRange,
 ) {
   return [
     Boolean(filters.query.trim()),
@@ -190,7 +264,7 @@ export function countActiveLeadFilters(
     filters.priority !== "all",
     filters.sla !== "all",
     filters.ownership !== "all",
-    filters.updatedRange !== "all",
+    filters.updatedRange !== defaultDateRange,
   ].filter(Boolean).length;
 }
 
@@ -225,6 +299,8 @@ export function readLeadWorkbenchFilters(
     updatedRange: UPDATED_RANGES.has(updatedRange as LeadUpdatedRangeFilter)
       ? (updatedRange as LeadUpdatedRangeFilter)
       : fallback.updatedRange,
+    customStartDate: params.get("dateFrom") || fallback.customStartDate,
+    customEndDate: params.get("dateTo") || fallback.customEndDate,
   };
 }
 
@@ -243,7 +319,17 @@ export function writeLeadWorkbenchFilters(
   setOrDelete("priority", filters.priority, "all");
   setOrDelete("sla", filters.sla, "all");
   setOrDelete("ownership", filters.ownership, "all");
-  setOrDelete("updatedRange", filters.updatedRange, "all");
+  setOrDelete("updatedRange", filters.updatedRange, DEFAULT_LEAD_WORKBENCH_FILTERS.updatedRange);
+  if (filters.updatedRange === "custom" && filters.customStartDate) {
+    params.set("dateFrom", filters.customStartDate);
+  } else {
+    params.delete("dateFrom");
+  }
+  if (filters.updatedRange === "custom" && filters.customEndDate) {
+    params.set("dateTo", filters.customEndDate);
+  } else {
+    params.delete("dateTo");
+  }
   if (filters.ownership === "staff" && filters.ownerId) {
     params.set("ownerId", filters.ownerId);
   } else {

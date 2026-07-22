@@ -201,6 +201,8 @@ function getOwnerName(lead: Lead) {
 }
 
 function getSlaStatus(lead: Lead, nowMs: number) {
+  const meta = getLeadWorkbenchMeta(lead, nowMs);
+  if (meta.wasOverdueOnIngest) return "Qua han truoc ghi nhan";
   const expiry = getLeadExpiryTime(lead);
   const responseTime = toTime(lead.first_contacted_at || lead.last_contact_at);
   if (responseTime !== null) return responseTime <= expiry ? "Dung SLA" : "Tre SLA";
@@ -284,8 +286,10 @@ function buildResponseTrend(leads: Lead[], daysCount = 7, nowMs: number = Date.n
       const contactedBucket = buckets[toLocalDayKey(contactedTime)];
       if (contactedBucket) {
         contactedBucket.contacted += 1;
-        contactedBucket.slaEvaluated += 1;
-        if (getSlaStatus(lead, nowMs) === "Dung SLA") contactedBucket.slaOnTime += 1;
+        if (!getLeadWorkbenchMeta(lead, nowMs).wasOverdueOnIngest) {
+          contactedBucket.slaEvaluated += 1;
+          if (getSlaStatus(lead, nowMs) === "Dung SLA") contactedBucket.slaOnTime += 1;
+        }
         if (responseMinutes !== null) {
           contactedBucket.responseTotal += responseMinutes;
           contactedBucket.responseCount += 1;
@@ -405,7 +409,9 @@ export function buildLeadReportData(
   const scopedLeads = leads.filter((lead) => canLeadBeVisibleToUser(lead, profile));
   const contacted = scopedLeads.filter(hasContacted).length;
   const converted = scopedLeads.filter(isConverted).length;
-  const slaEvaluated = scopedLeads.filter((lead) => hasContacted(lead));
+  const slaEvaluated = scopedLeads.filter(
+    (lead) => hasContacted(lead) && !getLeadWorkbenchMeta(lead, nowMs).wasOverdueOnIngest,
+  );
   const slaOnTime = slaEvaluated.filter((lead) => getSlaStatus(lead, nowMs) === "Dung SLA").length;
   const followUpDue = scopedLeads.filter(
     (lead) => lead.follow_up_at && lead.status !== "completed" && lead.status !== "skipped",
@@ -428,7 +434,10 @@ export function buildLeadReportData(
     salesHandoff: scopedLeads.filter(isSalesHandoff).length,
     converted,
     skipped: scopedLeads.filter((lead) => lead.status === "skipped").length,
-    slaBreached: scopedLeads.filter((lead) => getSlaStatus(lead, nowMs) === "Qua han" || getSlaStatus(lead, nowMs) === "Tre SLA").length,
+    slaBreached: scopedLeads.filter((lead) => {
+      const status = getSlaStatus(lead, nowMs);
+      return status === "Qua han" || status === "Tre SLA" || status === "Qua han truoc ghi nhan";
+    }).length,
     avgFirstResponseMinutes: average(
       scopedLeads.map((lead) => minutesBetween(lead.created_at, lead.first_contacted_at || lead.last_contact_at)),
     ),

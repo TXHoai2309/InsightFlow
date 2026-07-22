@@ -170,7 +170,11 @@ export function LeadHistoryTab({ lead, meta, slaLabel }: LeadHistoryTabProps) {
     {
       label: "Trạng thái hiện tại",
       value: statusLabel,
-      sub: meta.isOverdue ? slaLabel : "Trong quy trình xử lý",
+      sub: meta.wasOverdueOnIngest
+        ? "Quá hạn trước khi hệ thống ghi nhận"
+        : meta.isOverdue
+          ? slaLabel
+          : "Trong quy trình xử lý",
       icon: meta.isOverdue ? TriangleAlert : CheckCircle2,
       tone: meta.isOverdue
         ? "bg-[var(--color-error-subtle)] text-[var(--color-error)]"

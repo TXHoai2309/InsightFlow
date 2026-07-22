@@ -467,7 +467,13 @@ export function LeadWorkbenchRow({
                 </p>
                 {!isCompleted && (
                   <p className="mt-0.5 truncate text-[11px] font-semibold text-[var(--color-text-muted)]">
-                    {isActiveFollowUp ? timingCaption : meta.needsResultCapture ? "Cần ghi nhận kết quả" : leadTimeAgo || "SLA xử lý"}
+                    {isActiveFollowUp
+                      ? timingCaption
+                      : meta.wasOverdueOnIngest
+                        ? "Quá hạn trước khi hệ thống ghi nhận"
+                        : meta.needsResultCapture
+                          ? "Cần ghi nhận kết quả"
+                          : leadTimeAgo || "SLA xử lý"}
                   </p>
                 )}
               </div>
@@ -599,8 +605,12 @@ export function LeadWorkbenchRow({
                 </span>
               </div>
               {!isCompleted && (
-                <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
-                  {timingCaption}
+                <span
+                  className={`text-[9px] font-bold uppercase tracking-wider ${meta.wasOverdueOnIngest ? "text-[var(--color-error)]" : "text-[var(--color-text-muted)]"}`}
+                >
+                  {meta.wasOverdueOnIngest
+                    ? "Quá hạn trước khi hệ thống ghi nhận"
+                    : timingCaption}
                 </span>
               )}
             </div>
