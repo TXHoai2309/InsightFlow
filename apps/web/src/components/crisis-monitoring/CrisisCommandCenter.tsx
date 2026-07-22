@@ -5,8 +5,8 @@ import {
   Activity,
   AlertTriangle,
   BarChart3,
+  CheckCircle2,
   Clock3,
-  MessageSquareWarning,
   ShieldAlert,
   UserRoundCheck,
 } from "lucide-react";
@@ -20,8 +20,10 @@ import {
   buildAlertOperationalMetrics,
   filterOperationalAlerts,
 } from "@/lib/operational-metrics";
+import { getCalendarPeriodStartMs } from "@/lib/dashboard-display";
 import { cn } from "@/lib/utils";
 import { useAlertStore, type AlertData } from "@/stores/alert.store";
+import { useDashboardStore } from "@/stores/dashboard.store";
 import { CrisisAnalyticsCharts } from "./CrisisAnalyticsCharts";
 import { CrisisTable } from "./CrisisTable";
 
@@ -91,7 +93,9 @@ function isActive(alert: AlertData) {
 
 function isOverdue(alert: AlertData) {
   if (!isActive(alert)) return false;
-  const createdAt = new Date(alert.created_at).getTime();
+  // SLA starts when the item is ingested/classified, not when the customer
+  // originally published the post or comment.
+  const createdAt = new Date(alert.detected_at || alert.created_at).getTime();
   return Number.isFinite(createdAt) && Date.now() - createdAt > slaLimitHours(alert) * 36e5;
 }
 
@@ -123,6 +127,7 @@ function KpiCard({ icon: Icon, label, value, tone, meta }: { icon: React.Element
 export function CrisisCommandCenter() {
   const { profile } = useAuth();
   const rawAlerts = useAlertStore((state) => state.rawAlerts);
+  const mentions = useDashboardStore((state) => state.mentions);
   const isLoading = useAlertStore((state) => state.isLoading);
   const error = useAlertStore((state) => state.error);
   const fetchAlerts = useAlertStore((state) => state.fetchAlerts);
@@ -134,8 +139,26 @@ export function CrisisCommandCenter() {
   }, [fetchAlerts, profile, scopedBrandKey]);
 
   const alerts = useMemo(() => {
-    return filterOperationalAlerts(rawAlerts, { profile });
+    return filterOperationalAlerts(rawAlerts, {
+      profile,
+      crisisOnly: true,
+      dateBasis: "created_at",
+    });
   }, [profile, rawAlerts]);
+
+  const negativeMentionsCount = useMemo(() => {
+    const cutoff = getCalendarPeriodStartMs(30);
+    const now = Date.now();
+    return mentions.filter((mention) => {
+      const time = new Date(mention.posted_at).getTime();
+      return (
+        mention.sentiment === "negative" &&
+        Number.isFinite(time) &&
+        time >= cutoff &&
+        time <= now
+      );
+    }).length;
+  }, [mentions]);
 
   const data = useMemo(() => {
     const operationalMetrics = buildAlertOperationalMetrics(alerts);
@@ -143,49 +166,46 @@ export function CrisisCommandCenter() {
     const criticalAlerts = activeAlerts.filter((alert) => ["critical", "high"].includes(normalizeSeverity(alert.severity)));
     const overdueAlerts = activeAlerts.filter(isOverdue);
     const unassignedAlerts = activeAlerts.filter((alert) => !alert.being_resolved_by);
+    const resolvedAlerts = alerts.filter((alert) => !isActive(alert));
     const platformStats = buildStats(alerts, (alert) => alert.source || "other", PLATFORM_LABELS);
     const topicStats = buildStats(alerts, (alert) => alert.topic || "other", TOPIC_LABELS);
     const latestAlert = alerts.slice().sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())[0];
-    const averageRisk = alerts.length ? alerts.reduce((total, alert) => total + Math.max(0, Math.min(100, alert.negativity_score || 0)), 0) / alerts.length : 0;
-    const criticalShare = activeAlerts.length ? Math.round((criticalAlerts.length / activeAlerts.length) * 100) : 0;
-    const riskScore = Math.round(Math.min(100, averageRisk * 0.7 + criticalShare * 0.3));
-    return { activeAlerts, criticalAlerts, overdueAlerts, unassignedAlerts, platformStats, topicStats, latestAlert, criticalShare, riskScore, operationalMetrics };
+    return { activeAlerts, criticalAlerts, overdueAlerts, unassignedAlerts, resolvedAlerts, platformStats, topicStats, latestAlert, operationalMetrics };
   }, [alerts]);
 
   const topPlatform = data.platformStats[0];
   const topTopic = data.topicStats[0];
-  const riskTone = data.riskScore >= 80 ? "CRITICAL" : data.riskScore >= 55 ? "HIGH" : "WATCH";
-
   return (
     <div data-tour="dashboard-insights" className="w-full space-y-6">
-      <Card data-tour="dashboard-insights-risk" className="rounded-xl border-[#F1B7B2] bg-[#FFF7F6] shadow-[0_10px_30px_rgba(186,26,26,0.08)]">
+      <Card data-tour="dashboard-insights-risk" className="rounded-xl border-[#DDD9E8] bg-white shadow-[0_8px_24px_rgba(30,31,36,0.06)]">
         <CardContent className="p-5">
-          <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-[#BA1A1A] text-white shadow-sm"><ShieldAlert className="h-6 w-6" /></div>
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#FDECEA] text-[#BA1A1A]"><ShieldAlert className="h-6 w-6" /></div>
               <div>
-                <div className="mb-2 flex flex-wrap items-center gap-2">
-                  <Badge className="bg-[#BA1A1A] text-white hover:bg-[#BA1A1A]">CẢNH BÁO THƯƠNG HIỆU</Badge>
-                  <Badge variant="outline" className="border-[#F1B7B2] bg-white text-[#BA1A1A]">{riskTone}</Badge>
-                </div>
-                <h2 className="text-xl font-black leading-tight text-[#1A1B20]">{alerts.length > 0 ? `${alerts.length} cảnh báo cần theo dõi trong 30 ngày.` : "Chưa có rủi ro nổi bật trong 30 ngày."}</h2>
-                <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-[#514D5E]">Nguồn chính: <span className="font-bold text-[#1A1B20]">{topPlatform?.label || "Chưa xác định"}</span>. Chủ đề nổi bật: <span className="font-bold text-[#1A1B20]">{topTopic?.label || "Chưa xác định"}</span>. Cập nhật mới nhất {formatTimeAgo(data.latestAlert?.created_at)}.</p>
+                <div className="mb-1 flex flex-wrap items-center gap-2"><h2 className="text-xl font-black text-[#1A1B20]">Tổng quan cảnh báo Crisis</h2><Badge variant="outline" className="border-[#DDD9E8] bg-[#F8F7FC] text-[#514D5E]">30 ngày</Badge></div>
+                <p className="max-w-3xl text-sm font-medium leading-6 text-[#6E6A7C]">Hàng đợi Crisis gồm nội dung tiêu cực có mức khẩn cấp Trung bình/Cao và mọi tín hiệu được đánh dấu Khẩn cấp.</p>
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-3 xl:w-[360px]">
-              <div className="rounded-lg border border-[#F1B7B2] bg-white p-3 text-center"><div className="text-2xl font-black text-[#BA1A1A]">{data.riskScore}</div><div className="mt-1 text-[10px] font-bold uppercase text-[#6E6A7C]">Risk score</div></div>
-              <div className="rounded-lg border border-[#F1B7B2] bg-white p-3 text-center"><div className="text-2xl font-black text-[#1A1B20]">{data.criticalShare}%</div><div className="mt-1 text-[10px] font-bold uppercase text-[#6E6A7C]">Critical/Cao</div></div>
-              <div className="rounded-lg border border-[#F1B7B2] bg-white p-3 text-center"><div className="text-2xl font-black text-[#BA1A1A]">{data.operationalMetrics.active}</div><div className="mt-1 text-[10px] font-bold uppercase text-[#6E6A7C]">Đang mở</div></div>
-            </div>
+            <div className="rounded-xl bg-[#F8F7FC] px-4 py-3 text-sm text-[#514D5E] xl:max-w-[360px]"><span className="font-black text-[#1A1B20]">Nổi bật:</span> {topPlatform?.label || "Chưa xác định"} · {topTopic?.label || "Chưa xác định"}<div className="mt-1 text-xs text-[#787585]">Dữ liệu mới nhất {formatTimeAgo(data.latestAlert?.created_at)}</div></div>
           </div>
         </CardContent>
       </Card>
 
-      <section data-tour="dashboard-insights-kpis" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard icon={MessageSquareWarning} label="Cảnh báo" value={String(alerts.length)} meta="Trong 30 ngày gần nhất" tone="bg-red-50 text-[#BA1A1A]" />
-        <KpiCard icon={AlertTriangle} label="Critical / Cao" value={String(data.criticalAlerts.length)} meta="Cần ưu tiên kiểm tra" tone="bg-amber-50 text-amber-700" />
-        <KpiCard icon={Clock3} label="Trễ SLA" value={String(data.overdueAlerts.length)} meta="Cần xử lý ngay" tone="bg-rose-50 text-rose-700" />
-        <KpiCard icon={UserRoundCheck} label="Chưa giao" value={String(data.unassignedAlerts.length)} meta="Đang chờ người phụ trách" tone="bg-indigo-50 text-indigo-700" />
+      <section className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div className="rounded-xl border border-[#DDD9E8] bg-white p-5"><div className="text-xs font-black uppercase tracking-wide text-[#787585]">Bối cảnh · Đề cập tiêu cực</div><div className="mt-2 text-3xl font-black text-[#1A1B20]">{negativeMentionsCount}</div><div className="mt-2 text-xs font-medium text-[#6E6A7C]">Toàn bộ nội dung mang cảm xúc tiêu cực</div></div>
+        <div className="rounded-xl border border-[#F1B7B2] bg-[#FFF8F7] p-5"><div className="text-xs font-black uppercase tracking-wide text-[#BA1A1A]">Hàng đợi · Cảnh báo Crisis</div><div className="mt-2 text-3xl font-black text-[#BA1A1A]">{alerts.length}</div><div className="mt-2 text-xs font-medium text-[#6E6A7C]">Nội dung thỏa quy tắc mức khẩn cấp</div></div>
+        <div className="rounded-xl border border-[#DDD9E8] bg-white p-5"><div className="text-xs font-black uppercase tracking-wide text-[#5B4FCF]">Cần làm · Đang mở</div><div className="mt-2 text-3xl font-black text-[#4234B6]">{data.operationalMetrics.active}</div><div className="mt-2 text-xs font-medium text-[#6E6A7C]">Chưa kết thúc hoặc chưa liên hệ xong</div></div>
+      </section>
+
+      <section data-tour="dashboard-insights-kpis" className="space-y-3">
+        <div><h3 className="text-base font-black text-[#1A1B20]">Tình trạng vận hành</h3><p className="mt-1 text-xs font-medium text-[#6E6A7C]">Các nhóm bên dưới có thể giao nhau; ví dụ một cảnh báo vừa ưu tiên cao, vừa quá hạn và chưa được giao.</p></div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <KpiCard icon={AlertTriangle} label="Ưu tiên cao đang mở" value={String(data.criticalAlerts.length)} meta="Mức Critical hoặc Cao" tone="bg-amber-50 text-amber-700" />
+          <KpiCard icon={Clock3} label="Quá hạn phản hồi" value={String(data.overdueAlerts.length)} meta="Vượt SLA theo mức ưu tiên" tone="bg-rose-50 text-rose-700" />
+          <KpiCard icon={UserRoundCheck} label="Chưa có người xử lý" value={String(data.unassignedAlerts.length)} meta="Cần phân công nhân viên" tone="bg-indigo-50 text-indigo-700" />
+          <KpiCard icon={CheckCircle2} label="Đã kết thúc" value={String(data.resolvedAlerts.length)} meta="Đã giải quyết hoặc liên hệ xong" tone="bg-emerald-50 text-emerald-700" />
+        </div>
       </section>
 
       <CrisisAnalyticsCharts alerts={alerts} />

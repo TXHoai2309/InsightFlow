@@ -75,6 +75,28 @@ function calendarDayStart(value: string | number | Date): number | null {
   return date.getTime();
 }
 
+/** Start of an inclusive calendar-day window in the browser timezone. */
+export function getCalendarPeriodStartMs(days: number, now = new Date()): number {
+  const normalizedDays = Math.max(1, Math.floor(days));
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - (normalizedDays - 1));
+  return start.getTime();
+}
+
+export function isWithinCalendarPeriod(
+  value: unknown,
+  days: number,
+  now = new Date(),
+): boolean {
+  const time = new Date(String(value || "")).getTime();
+  return (
+    Number.isFinite(time) &&
+    time >= getCalendarPeriodStartMs(days, now) &&
+    time <= now.getTime()
+  );
+}
+
 function inclusiveCalendarDays(start: number, end: number): number {
   return Math.max(1, Math.round((end - start) / DAY_MS) + 1);
 }
