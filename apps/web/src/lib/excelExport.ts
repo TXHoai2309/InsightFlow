@@ -1262,10 +1262,10 @@ export function buildDualOperationsReportExcelDocument(
         <section class="report-section">
           <h2>Kết quả trong kỳ</h2>
           <table><tr>
-            ${dualMetricCell("Đã hoàn tất", report.kpis.completedTasks, "good")}
-            ${dualMetricCell("Đúng SLA", `${report.kpis.slaOnTimeRate}%`)}
-            ${dualMetricCell("Còn mở", report.kpis.pendingTasks, "warn")}
-            ${dualMetricCell("Quá hạn", report.kpis.overdueTasks, report.kpis.overdueTasks > 0 ? "danger" : "good")}
+            ${dualMetricCell("Chưa phân công", report.kpis.workflow.unassigned.total)}
+            ${dualMetricCell("Cần tiếp tục xử lý", report.kpis.workflow.inProgress.total, "warn")}
+            ${dualMetricCell("Đã hoàn tất", report.kpis.workflow.completed.total, "good")}
+            ${dualMetricCell("Tỷ lệ hoàn thành", `${report.kpis.workflow.completionRate.total}%`, "good")}
           </tr></table>
         </section>
 

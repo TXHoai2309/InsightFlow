@@ -3,9 +3,18 @@ import type { UserRoleProfile } from "@/lib/rbac";
 import {
   canLeadBeVisibleToUser,
   getLeadExpiryTime,
+  getLeadFollowUpMeta,
   getLeadWorkbenchMeta,
   needsLeadResultCapture,
 } from "@/lib/lead-workbench";
+
+export type LeadReportWorkflowStatus =
+  | "unassigned"
+  | "waiting"
+  | "processing"
+  | "follow_up"
+  | "completed"
+  | "skipped";
 
 export interface LeadReportKpi {
   total: number;
@@ -64,6 +73,7 @@ export interface LeadReportDetailRow {
   platform: string;
   intent: Lead["intent"];
   status: Lead["status"];
+  workflowStatus?: LeadReportWorkflowStatus;
   ownerName: string;
   createdAt: string;
   firstContactedAt: string;
@@ -149,6 +159,20 @@ function percentage(part: number, total: number) {
 
 function hasContacted(lead: Lead) {
   return Boolean(lead.first_contacted_at || lead.last_contact_at || (lead.contact_attempts || 0) > 0);
+}
+
+function getLeadReportWorkflowStatus(lead: Lead, nowMs: number): LeadReportWorkflowStatus {
+  if (lead.status === "completed") return "completed";
+  if (lead.status === "skipped") return "skipped";
+  if (!lead.owner_id?.trim()) return "unassigned";
+  if (getLeadFollowUpMeta(lead, nowMs).isActive) return "follow_up";
+
+  const isActivelyProcessing = Boolean(
+    lead.last_contact_at ||
+    (lead.contact_attempts && lead.contact_attempts > 0) ||
+    lead.last_action_type === "restore"
+  );
+  return isActivelyProcessing ? "processing" : "waiting";
 }
 
 function isConverted(lead: Lead) {
@@ -309,6 +333,7 @@ function buildDetailRows(leads: Lead[], nowMs: number): LeadReportDetailRow[] {
       platform: SOURCE_LABELS[lead.platform] || lead.platform,
       intent: lead.intent,
       status: lead.status,
+      workflowStatus: getLeadReportWorkflowStatus(lead, nowMs),
       ownerName: getOwnerName(lead),
       createdAt: lead.created_at,
       firstContactedAt: lead.first_contacted_at || lead.last_contact_at || "",
