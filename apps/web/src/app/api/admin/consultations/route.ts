@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomInt } from "crypto";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldValue } from "firebase-admin/firestore";
 import { verifyBearerToken } from "@/lib/server/auth";
 import { authAdmin, db } from "@/lib/server/firebaseAdmin";
 import { sendConsultationEmail } from "@/lib/server/consultationEmail";
+import {
+  getCrawlRun,
+  updateCrawlRun,
+} from "@/lib/server/crawlRuns";
+import {
+  getConsultation,
+  listConsultations,
+  updateConsultation,
+} from "@/lib/server/vpsOperationalStore";
 
 const ALLOWED_STATUSES = new Set(["pending", "contacting", "completed", "unreachable", "not_approved"]);
 const FINAL_STATUSES = new Set(["completed", "not_approved"]);
@@ -91,8 +100,10 @@ function generateTemporaryPassword() {
 }
 
 function timestampToDate(value: unknown) {
-  if (value instanceof Timestamp) return value.toDate();
   if (value instanceof Date) return value;
+  if (value && typeof value === "object" && "toDate" in value && typeof (value as { toDate?: unknown }).toDate === "function") {
+    return (value as { toDate: () => Date }).toDate();
+  }
   if (typeof value === "string" || typeof value === "number") {
     const date = new Date(value);
     if (!Number.isNaN(date.getTime())) return date;
@@ -144,13 +155,14 @@ async function resolveAutomaticAccount(
 async function requireAdmin(request: NextRequest) {
   const token = await verifyBearerToken(request.headers.get("authorization"));
   if (!token) return null;
+  if (token.role === "admin") return token;
   const profile = await db.collection("users").doc(token.uid).get();
   const role = profile.data()?.role || token.role;
   return role === "admin" ? token : null;
 }
 
 function serializeValue(value: unknown): unknown {
-  if (value instanceof Timestamp) return value.toDate().toISOString();
+  if (value instanceof Date) return value.toISOString();
   if (Array.isArray(value)) return value.map(serializeValue);
   if (value && typeof value === "object") {
     return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, serializeValue(item)]));
@@ -164,21 +176,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Bạn không có quyền xem yêu cầu tư vấn." }, { status: 403 });
     }
 
-    const snapshot = await db.collection("consultations").orderBy("createdAt", "desc").limit(500).get();
-    const runIds = Array.from(new Set(snapshot.docs
-      .map((document: any) => text(document.data()?.trialCrawlRunId, 120))
+    const storedConsultations = await listConsultations(500);
+    const runIds = Array.from(new Set(storedConsultations
+      .map((consultation) => text(consultation.trialCrawlRunId, 120))
       .filter(Boolean)));
-    const runSnapshots = runIds.length
-      ? await db.getAll(...runIds.map((runId) => db.collection("crawl_runs").doc(runId)))
-      : [];
-    const runStatuses = new Map(runSnapshots
-      .filter((runSnapshot: any) => runSnapshot.exists)
-      .map((runSnapshot: any) => [runSnapshot.id, text(runSnapshot.data()?.status, 40)]));
-    const consultations = snapshot.docs.map((document: any) => {
-      const data = document.data() || {};
+    const runs = await Promise.all(runIds.map((runId) => getCrawlRun(runId)));
+    const runStatuses = new Map(runs
+      .filter((run): run is NonNullable<typeof run> => Boolean(run))
+      .map((run) => [run.id, run.status]));
+    const consultations = storedConsultations.map((data) => {
       const runId = text(data.trialCrawlRunId, 120);
       return {
-        id: document.id,
         ...(serializeValue(data) as Record<string, unknown>),
         ...(runId && runStatuses.has(runId) ? { trialCrawlStatus: runStatuses.get(runId) } : {}),
       };
@@ -209,13 +217,11 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Dữ liệu cập nhật không hợp lệ." }, { status: 400 });
     }
 
-    const reference = db.collection("consultations").doc(id);
-    const snapshot = await reference.get();
-    if (!snapshot.exists) {
+    const consultation = await getConsultation(id);
+    if (!consultation) {
       return NextResponse.json({ error: "Không tìm thấy yêu cầu tư vấn." }, { status: 404 });
     }
 
-    const consultation = snapshot.data() || {};
     const currentStatus = text(consultation.status, 40) || "pending";
 
     if (action === "update_trial_configuration") {
@@ -225,11 +231,9 @@ export async function PATCH(request: NextRequest) {
       const normalizedPlatforms = normalizePlatforms(platforms);
       const configurationNotes = text(body.configurationNotes, 3000);
       const crawlRunId = text(consultation.trialCrawlRunId, 120);
-      const crawlRunSnapshot = crawlRunId
-        ? await db.collection("crawl_runs").doc(crawlRunId).get()
-        : null;
-      const crawlStatus = crawlRunSnapshot?.exists
-        ? text(crawlRunSnapshot.data()?.status, 40)
+      const crawlRun = crawlRunId ? await getCrawlRun(crawlRunId) : null;
+      const crawlStatus = crawlRun
+        ? crawlRun.status
         : text(consultation.trialCrawlStatus, 40);
 
       if (!company || keywords.length === 0 || normalizedPlatforms.length === 0) {
@@ -246,25 +250,24 @@ export async function PATCH(request: NextRequest) {
       }
 
       const configuration = { brandName: company, keywords, platforms: normalizedPlatforms };
-      const batch = db.batch();
-      batch.update(reference, {
+      await updateConsultation(id, {
         company,
         keywords,
         platforms: normalizedPlatforms,
         configurationNotes,
         trialCrawlConfiguration: configuration,
-        updatedAt: FieldValue.serverTimestamp(),
       });
       if (crawlStatus === "queued" && crawlRunId) {
-        batch.update(db.collection("crawl_runs").doc(crawlRunId), {
+        await updateCrawlRun(crawlRunId, {
           platforms: normalizedPlatforms,
-          "metadata.brandName": company,
-          "metadata.keywords": keywords,
-          "metadata.configurationNotes": configurationNotes,
-          updatedAt: FieldValue.serverTimestamp(),
+          metadata: {
+            ...(crawlRun?.metadata || {}),
+            brandName: company,
+            keywords,
+            configurationNotes,
+          },
         });
       }
-      await batch.commit();
       return NextResponse.json({ success: true, configuration });
     }
 
@@ -289,10 +292,8 @@ export async function PATCH(request: NextRequest) {
         return NextResponse.json({ error: "Yêu cầu cần được duyệt trước khi tạo tài khoản." }, { status: 409 });
       }
       const crawlRunId = text(consultation.trialCrawlRunId, 120);
-      const crawlRunSnapshot = crawlRunId
-        ? await db.collection("crawl_runs").doc(crawlRunId).get()
-        : null;
-      if (!crawlRunSnapshot?.exists || text(crawlRunSnapshot.data()?.status, 40) !== "completed") {
+      const crawlRun = crawlRunId ? await getCrawlRun(crawlRunId) : null;
+      if (!crawlRun || crawlRun.status !== "completed") {
         return NextResponse.json({ error: "Chỉ có thể gửi tài khoản sau khi trial crawl hoàn tất." }, { status: 409 });
       }
       if (!companyEmailDomain) {
@@ -302,7 +303,7 @@ export async function PATCH(request: NextRequest) {
         );
       }
 
-      const crawlRunMetadata = crawlRunSnapshot.data()?.metadata;
+      const crawlRunMetadata = crawlRun.metadata;
       const trialBrandSlug = crawlRunMetadata && typeof crawlRunMetadata === "object"
         ? text((crawlRunMetadata as Record<string, unknown>).trialBrandSlug, 100)
         : "";
@@ -405,16 +406,15 @@ export async function PATCH(request: NextRequest) {
         trialEndsAt,
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
-      batch.update(reference, {
+      await updateConsultation(id, {
         provisionedAccountUid: userRecord.uid,
         provisionedAccountEmail: accountEmail,
-        provisionedTrialStartAt: trialStartAt,
-        provisionedTrialEndsAt: trialEndsAt,
+        provisionedTrialStartAt: trialStartAt.toISOString(),
+        provisionedTrialEndsAt: trialEndsAt.toISOString(),
         accountStatus: "sending",
         decisionEmailStatus: "sending",
         notes,
         contactPlan,
-        updatedAt: FieldValue.serverTimestamp(),
       });
       await batch.commit();
 
@@ -436,11 +436,10 @@ export async function PATCH(request: NextRequest) {
         const emailErrorMessage = emailError instanceof Error
           ? emailError.message
           : "EmailJS trả về lỗi không xác định.";
-        await reference.update({
+        await updateConsultation(id, {
           accountStatus: "email_failed",
           decisionEmailStatus: "failed",
           decisionEmailError: emailErrorMessage.slice(0, 500),
-          updatedAt: FieldValue.serverTimestamp(),
         });
         return NextResponse.json(
           {
@@ -456,25 +455,24 @@ export async function PATCH(request: NextRequest) {
         disabled: false,
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
-      finalizeBatch.update(reference, {
-        status: "completed",
-        approvedAccountUid: userRecord.uid,
-        approvedAccountEmail: accountEmail,
-        approvedAt: FieldValue.serverTimestamp(),
-        approvedBy: admin.uid,
-        trialPlan: "14_day_trial",
-        trialStartAt,
-        trialEndsAt,
-        accountStatus: "sent",
-        decisionEmailStatus: "sent",
-        decisionEmailError: FieldValue.delete(),
-        decisionEmailSentAt: FieldValue.serverTimestamp(),
-        notes,
-        contactPlan,
-        updatedAt: FieldValue.serverTimestamp(),
-      });
       try {
         await finalizeBatch.commit();
+        await updateConsultation(id, {
+          status: "completed",
+          approvedAccountUid: userRecord.uid,
+          approvedAccountEmail: accountEmail,
+          approvedAt: new Date().toISOString(),
+          approvedBy: admin.uid,
+          trialPlan: "14_day_trial",
+          trialStartAt: trialStartAt.toISOString(),
+          trialEndsAt: trialEndsAt.toISOString(),
+          accountStatus: "sent",
+          decisionEmailStatus: "sent",
+          decisionEmailError: undefined,
+          decisionEmailSentAt: new Date().toISOString(),
+          notes,
+          contactPlan,
+        });
       } catch (finalizeError) {
         await authAdmin.updateUser(userRecord.uid, { disabled: true }).catch(() => undefined);
         throw finalizeError;
@@ -492,14 +490,13 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (status === "completed" && currentStatus !== "completed") {
-      await reference.update({
+      await updateConsultation(id, {
         status: "completed",
-        approvedAt: FieldValue.serverTimestamp(),
+        approvedAt: new Date().toISOString(),
         approvedBy: admin.uid,
         accountStatus: "not_created",
         notes,
         contactPlan,
-        updatedAt: FieldValue.serverTimestamp(),
       });
       return NextResponse.json({ success: true, approved: true, accountCreated: false, emailSent: false });
     }
@@ -519,10 +516,9 @@ export async function PATCH(request: NextRequest) {
         const emailErrorMessage = emailError instanceof Error
           ? emailError.message
           : "EmailJS trả về lỗi không xác định.";
-        await reference.update({
+        await updateConsultation(id, {
           decisionEmailStatus: "failed",
           decisionEmailError: emailErrorMessage.slice(0, 500),
-          updatedAt: FieldValue.serverTimestamp(),
         });
         return NextResponse.json(
           { error: `EmailJS chưa gửi được email từ chối. ${emailErrorMessage}` },
@@ -530,21 +526,20 @@ export async function PATCH(request: NextRequest) {
         );
       }
 
-      await reference.update({
+      await updateConsultation(id, {
         status: "not_approved",
-        rejectedAt: FieldValue.serverTimestamp(),
+        rejectedAt: new Date().toISOString(),
         rejectedBy: admin.uid,
         decisionEmailStatus: "sent",
-        decisionEmailError: FieldValue.delete(),
-        decisionEmailSentAt: FieldValue.serverTimestamp(),
+        decisionEmailError: undefined,
+        decisionEmailSentAt: new Date().toISOString(),
         notes,
         contactPlan,
-        updatedAt: FieldValue.serverTimestamp(),
       });
       return NextResponse.json({ success: true, emailSent: true });
     }
 
-    await reference.update({ status, notes, contactPlan, updatedAt: FieldValue.serverTimestamp() });
+    await updateConsultation(id, { status, notes, contactPlan });
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("[Admin consultations API] update error:", error);
