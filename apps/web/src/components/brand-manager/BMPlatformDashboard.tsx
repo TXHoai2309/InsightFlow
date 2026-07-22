@@ -21,13 +21,21 @@ export function BMPlatformDashboard({ onBack, currentMentions }: BMPlatformDashb
 
   const platforms: Platform[] = ["facebook", "thread", "tiktok", "youtube", "google_maps", "be", "news"];
 
+  const platformAliases: Record<string, string[]> = {
+    thread: ["thread", "threads"],
+    be: ["be", "befood"],
+    news: ["news", "news_html", "news_rss"],
+    google_maps: ["google_maps", "googlemap"],
+  };
+
   const handlePlatformChange = (p: Platform) => {
     setFilters({ platform: p });
   };
 
   // Filter mentions for the selected platform
   const platformMentions = useMemo(() => {
-    return currentMentions.filter((m) => m.platform === selectedPlatform);
+    const aliases = platformAliases[selectedPlatform] ?? [selectedPlatform];
+    return currentMentions.filter((m) => aliases.includes(String(m.platform).toLowerCase()));
   }, [currentMentions, selectedPlatform]);
 
   // Sentiment counts

@@ -32,6 +32,7 @@ interface BMHeroRowProps {
   brandName?: string;
   timeRange?: string;
   topics?: Array<{ name: string; count: number; negative: number }>;
+  trendData?: Array<number | null>;
   onViewDetail?: () => void;
 }
 
@@ -247,14 +248,43 @@ export function BMHeroRow({
   brandName,
   timeRange,
   topics = [],
+  trendData = [],
   onViewDetail,
 }: BMHeroRowProps) {
   const { t } = useTranslation();
   const { user } = useAuth();
   const [aiAnalysis, setAiAnalysis] = useState<DashboardAiAnalysis | null>(null);
   const [aiState, setAiState] = useState<"loading" | "ready" | "error">("loading");
+  const [showAiDetail, setShowAiDetail] = useState(false);
   const isHealthy = score >= 70;
   const isWarning = score < 70 && score >= 40;
+  const sparkValues = useMemo(() => {
+    const values = trendData.slice(-7).map((value) => (Number.isFinite(value) ? Number(value) : null));
+    if (values.length < 2) return [];
+    const known = values.filter((value): value is number => value !== null);
+    if (known.length < 2) return [];
+    return values.map((value, index) => {
+      if (value !== null) return value;
+      const previous = values.slice(0, index).reverse().find((item): item is number => item !== null);
+      const next = values.slice(index + 1).find((item): item is number => item !== null);
+      return previous ?? next ?? known[0];
+    });
+  }, [trendData]);
+
+  const sparkPath = useMemo(() => {
+    if (sparkValues.length < 2) return null;
+    const width = 200;
+    const min = Math.min(...sparkValues);
+    const max = Math.max(...sparkValues);
+    const range = Math.max(1, max - min);
+    const points = sparkValues.map((value, index) => {
+      const x = (index / (sparkValues.length - 1)) * width;
+      const y = 35 - ((value - min) / range) * 30;
+      return [x, y] as const;
+    });
+    const line = points.map(([x, y], index) => `${index === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+    return { line, area: `${line} L ${width},40 L 0,40 Z` };
+  }, [sparkValues]);
 
   const statusLabel = isHealthy ? t("bm.hero.status.good") : isWarning ? t("bm.hero.status.warning") : t("bm.hero.status.danger");
   const statusColor = isHealthy ? "#22C55E" : isWarning ? "#F59E0B" : "#EF4444";
@@ -320,6 +350,7 @@ export function BMHeroRow({
   const aiText = aiState === "loading"
     ? "AI đang phân tích dữ liệu mới nhất…"
     : aiAnalysis?.summary || fallbackAiText;
+  const canExpandAiText = aiText.length > 220;
   const riskLevelLabels = {
     low: t("bm.hero.risk.low", "Thấp"),
     medium: t("bm.hero.risk.medium", "Trung bình"),
@@ -413,7 +444,7 @@ export function BMHeroRow({
       </div>
 
       {/* ── B. Sentiment Donut ────────────────────────────────── */}
-      <div className="bm-hero-card">
+      <div className="bm-hero-card bm-hero-sentiment">
         <div className="bm-card-header">
           <div className="bm-card-icon" style={{ background: "rgba(99,102,241,0.1)", color: "#6366F1" }}>
             <span className="material-symbols-outlined" style={{ fontSize: 18, fontVariationSettings: "'FILL' 1" }}>
@@ -435,33 +466,14 @@ export function BMHeroRow({
           />
         </div>
 
-        <div style={{ marginTop: 20 }}>
+        <div style={{ marginTop: 20, display: "flex", justifyContent: "center" }}>
           {onViewDetail ? (
-            <button
-              onClick={onViewDetail}
-              id="bm-hero-sentiment-link"
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center",
-                gap: 6, fontSize: 13, fontWeight: 600,
-                color: "var(--color-brand)", textDecoration: "none",
-                background: "none", border: "none", cursor: "pointer", width: "100%"
-              }}
-            >
-              <span>{t("bm.hero.viewDetail")}</span>
-              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>arrow_forward</span>
+            <button type="button" onClick={onViewDetail} id="bm-hero-sentiment-link" style={{ border: 0, background: "transparent", color: "#6366F1", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+              Xem phân tích chi tiết <span aria-hidden="true">→</span>
             </button>
           ) : (
-            <Link
-              href="/mentions"
-              id="bm-hero-sentiment-link"
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center",
-                gap: 6, fontSize: 13, fontWeight: 600,
-                color: "var(--color-brand)", textDecoration: "none",
-              }}
-            >
-              <span>{t("bm.hero.viewDetail")}</span>
-              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>arrow_forward</span>
+            <Link href="/mentions" id="bm-hero-sentiment-link" style={{ color: "#6366F1", fontSize: 13, fontWeight: 700, textDecoration: "none" }}>
+              Xem phân tích chi tiết <span aria-hidden="true">→</span>
             </Link>
           )}
         </div>
@@ -498,6 +510,16 @@ export function BMHeroRow({
           </div>
 
           <p className="bm-ai-text">“{aiText}”</p>
+          {canExpandAiText && (
+            <button
+              type="button"
+              className="bm-ai-read-more"
+              onClick={() => setShowAiDetail(true)}
+            >
+              Xem thêm
+              <span className="material-symbols-outlined" style={{ fontSize: 15 }}>open_in_full</span>
+            </button>
+          )}
 
           <div className="bm-ai-metrics">
             <div className="bm-ai-metric" title={aiState === "error" ? "Đang hiển thị nhận định dự phòng vì AI tạm thời không khả dụng" : undefined}>
@@ -515,26 +537,6 @@ export function BMHeroRow({
             </div>
           </div>
 
-          {onViewDetail ? (
-            <button
-              onClick={onViewDetail}
-              id="bm-ai-insight-link"
-              className="bm-ai-cta cursor-pointer w-full justify-center"
-              style={{ border: "none" }}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: 15 }}>analytics</span>
-              {t("bm.hero.aiAction")}
-            </button>
-          ) : (
-            <Link
-              href="/mentions"
-              id="bm-ai-insight-link"
-              className="bm-ai-cta"
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: 15 }}>analytics</span>
-              {t("bm.hero.aiAction")}
-            </Link>
-          )}
         </div>
 
         {/* 7-day mini sparkline */}
@@ -550,12 +552,13 @@ export function BMHeroRow({
               </linearGradient>
             </defs>
             <path
-              d={isHealthy
-                ? "M0,35 L28,28 L56,20 L84,15 L112,12 L140,10 L168,8 L200,5"
-                : isWarning
-                  ? "M0,20 L28,22 L56,18 L84,24 L112,20 L140,26 L168,22 L200,28"
-                  : "M0,15 L28,20 L56,25 L84,22 L112,30 L140,28 L168,34 L200,38"}
+              d={sparkPath?.area ?? "M0,35 L200,35 L200,40 L0,40 Z"}
               fill="url(#bm-spark-grad)"
+              stroke="none"
+            />
+            <path
+              d={sparkPath?.line ?? "M0,35 L200,35"}
+              fill="none"
               stroke={statusColor}
               strokeWidth="2"
               strokeLinecap="round"
@@ -565,11 +568,38 @@ export function BMHeroRow({
         </div>
       </div>
 
+      {showAiDetail && (
+        <div
+          className="bm-ai-modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="bm-ai-modal-title"
+          onClick={() => setShowAiDetail(false)}
+        >
+          <div className="bm-ai-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="bm-ai-modal-header">
+              <div>
+                <p className="bm-ai-modal-eyebrow">Phân tích AI</p>
+                <h3 id="bm-ai-modal-title">Nhận định chi tiết</h3>
+              </div>
+              <button type="button" className="bm-ai-modal-close" aria-label="Đóng" onClick={() => setShowAiDetail(false)}>
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <p className="bm-ai-modal-text">“{aiText}”</p>
+            <div className="bm-ai-modal-footer">
+              <span>{t("bm.hero.aiTrust")}: {aiAnalysis?.confidence ?? "—"}%</span>
+              <button type="button" className="bm-ai-modal-done" onClick={() => setShowAiDetail(false)}>Đóng</button>
+            </div>
+          </div>
+        </div>
+      )}
       <style>{`
         .bm-hero-row {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
           gap: 20px;
+          align-items: start;
         }
         @media (max-width: 1024px) {
           .bm-hero-row { grid-template-columns: 1fr 1fr; }
@@ -588,6 +618,8 @@ export function BMHeroRow({
           box-shadow: var(--shadow-card);
           transition: var(--transition-theme), transform 0.2s ease, box-shadow 0.2s ease;
           position: relative; overflow: hidden;
+          align-self: start;
+          height: fit-content;
         }
         .bm-hero-card:hover {
           transform: translateY(-3px);
@@ -612,7 +644,29 @@ export function BMHeroRow({
         }
 
         /* AI Insight */
-        .bm-ai-insight-box {
+        .bm-ai-read-more {
+          display: inline-flex; align-items: center; gap: 4px;
+          margin: -5px 0 12px; padding: 0; border: 0; background: transparent;
+          color: var(--color-brand); font-size: 12px; font-weight: 700; cursor: pointer;
+        }
+        .bm-ai-read-more:hover { text-decoration: underline; }
+        .bm-ai-modal-backdrop {
+          position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center;
+          padding: 20px; background: rgba(15, 23, 42, 0.42);
+        }
+        .bm-ai-modal {
+          width: min(620px, 100%); max-height: min(680px, 90vh); overflow: auto;
+          border: 1px solid var(--color-border); border-radius: 18px; padding: 24px;
+          background: var(--color-bg-surface); box-shadow: 0 24px 80px rgba(15, 23, 42, 0.24);
+        }
+        .bm-ai-modal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+        .bm-ai-modal-eyebrow { margin: 0 0 4px; color: var(--color-brand); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
+        .bm-ai-modal h3 { margin: 0; color: var(--color-text-primary); font-size: 20px; font-weight: 800; }
+        .bm-ai-modal-close { display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 9px; color: var(--color-text-secondary); background: var(--color-bg-surface-raised); cursor: pointer; }
+        .bm-ai-modal-close:hover { color: var(--color-text-primary); }
+        .bm-ai-modal-text { margin: 24px 0; color: var(--color-text-primary); font-size: 15px; line-height: 1.75; font-style: italic; white-space: pre-wrap; }
+        .bm-ai-modal-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--color-text-muted); font-size: 12px; font-weight: 600; }
+        .bm-ai-modal-done { border: 0; border-radius: 8px; padding: 8px 14px; color: #fff; background: var(--color-brand); font-size: 12px; font-weight: 700; cursor: pointer; }        .bm-ai-insight-box {
           margin-top: 16px;
           background: linear-gradient(135deg, rgba(139,92,246,0.06), rgba(99,102,241,0.04));
           border: 1px solid rgba(139,92,246,0.15);
@@ -635,6 +689,10 @@ export function BMHeroRow({
           color: var(--color-text-primary); font-weight: 500;
           margin: 0 0 14px; position: relative; z-index: 1;
           font-style: italic;
+           display: -webkit-box;
+           -webkit-box-orient: vertical;
+           -webkit-line-clamp: 5;
+           overflow: hidden;
         }
         .bm-ai-metrics {
           display: flex; align-items: center; gap: 12px;

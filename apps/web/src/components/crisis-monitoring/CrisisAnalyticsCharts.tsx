@@ -38,12 +38,13 @@ function startOfDay(value: Date) {
   return date;
 }
 
-export function CrisisAnalyticsCharts({ alerts }: { alerts: AlertData[] }) {
+export function CrisisAnalyticsCharts({ alerts, periodDays = 14 }: { alerts: AlertData[]; periodDays?: number }) {
   const trendData = useMemo(() => {
     const today = startOfDay(new Date());
-    return Array.from({ length: 14 }, (_, index) => {
+    const visibleDays = Math.min(Math.max(1, periodDays), 30);
+    return Array.from({ length: visibleDays }, (_, index) => {
       const day = new Date(today);
-      day.setDate(day.getDate() - (13 - index));
+      day.setDate(day.getDate() - (visibleDays - 1 - index));
       const nextDay = new Date(day);
       nextDay.setDate(nextDay.getDate() + 1);
       const dayAlerts = alerts.filter((alert) => {
@@ -59,7 +60,7 @@ export function CrisisAnalyticsCharts({ alerts }: { alerts: AlertData[] }) {
         }).length,
       };
     });
-  }, [alerts]);
+  }, [alerts, periodDays]);
 
   const severityData = useMemo(() => {
     const counts = alerts.reduce<Record<keyof typeof SEVERITY_META, number>>(
@@ -72,14 +73,14 @@ export function CrisisAnalyticsCharts({ alerts }: { alerts: AlertData[] }) {
     return (Object.keys(SEVERITY_META) as Array<keyof typeof SEVERITY_META>)
       .map((key) => ({ key, ...SEVERITY_META[key], value: counts[key] }))
       .filter((item) => item.value > 0);
-  }, [alerts]);
+  }, [alerts, periodDays]);
 
   return (
     <section className="grid grid-cols-1 gap-6 xl:grid-cols-[1.45fr_0.75fr]">
       <Card className="rounded-xl border-[#DDD9E8] bg-white shadow-[0_8px_24px_rgba(30,31,36,0.06)]">
         <CardHeader className="px-5 pb-2 pt-5">
           <CardTitle className="text-base font-black text-[#1A1B20]">Cảnh báo theo ngày đăng</CardTitle>
-          <p className="text-xs font-medium text-[#6E6A7C]">Số nội dung được đăng trong 14 ngày gần nhất; đường đỏ là nhóm ưu tiên cao.</p>
+          <p className="text-xs font-medium text-[#6E6A7C]">Số cảnh báo được tạo trong khoảng thời gian đang chọn; đường đỏ là nhóm ưu tiên cao.</p>
         </CardHeader>
         <CardContent className="h-[285px] px-2 pb-4 sm:px-5">
           <ResponsiveContainer width="100%" height="100%">

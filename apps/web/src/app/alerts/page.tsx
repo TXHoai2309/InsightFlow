@@ -43,6 +43,7 @@ import {
   getAlertCompletenessScore,
   getAlertDeduplicationKey,
 } from "@/lib/operational-metrics";
+import { isCrisisClassificationLabel } from "@/lib/label-change";
 
 const ALERTS_PER_PAGE = 5;
 import { collection, getDocs, doc, getDoc } from "firebase/firestore";
@@ -233,6 +234,7 @@ export default function AlertsPage() {
   const tabParam = searchParams.get("tab");
   const alertIdParam = searchParams.get("alertId");
   const mentionIdParam = searchParams.get("mentionId");
+  const alertScope = searchParams.get("scope") === "crisis" ? "crisis" : "negative";
   const dashboardReturnNavigation = useMemo(
     () => readDashboardReturnNavigation(searchParams),
     [searchParams],
@@ -310,7 +312,15 @@ export default function AlertsPage() {
     // Alerts is the complete negative-content queue. The shared store also
     // carries urgent non-negative records so Crisis Monitoring can honour its
     // broader urgency rule without triggering another data scan.
-    let result = rawAlerts.filter((alert) => alert.sentiment === "negative");
+    let result = rawAlerts.filter((alert) => {
+      if (alertScope === "negative") return alert.sentiment === "negative";
+      return isCrisisClassificationLabel({
+        sentiment: alert.sentiment as any,
+        relevance: alert.relevance,
+        urgency: alert.urgency as any,
+        intent: alert.intent as any,
+      });
+    });
 
     if (filters.brand && filters.brand !== "all") {
       const normalize = (b: string) => String(b || "").toLowerCase().replace(/[\s\-_.]/g, "").trim();
@@ -384,7 +394,22 @@ export default function AlertsPage() {
     }
 
     return result;
-  }, [rawAlerts, filters.brand, timeFilter, singleDate, customStartDate, customEndDate]);
+  }, [alertScope, rawAlerts, filters.brand, timeFilter, singleDate, customStartDate, customEndDate]);
+
+  useEffect(() => {
+    const requestedTime = searchParams.get("time");
+    const requestedStatus = searchParams.get("status");
+    const requestedSource = searchParams.get("source");
+    const requestedBrand = searchParams.get("brand");
+
+    if (requestedTime) setTimeFilter(requestedTime);
+    if (requestedStatus) setStatusFilter(requestedStatus as AlertStatusFilter);
+    if (requestedSource) setSourceFilter(requestedSource);
+    if (requestedBrand) setFilters({ brand: requestedBrand });
+    setSingleDate(searchParams.get("date") || "");
+    setCustomStartDate(searchParams.get("start") || "");
+    setCustomEndDate(searchParams.get("end") || "");
+  }, [searchParams, setFilters]);
 
   const availableMonths = useMemo(() => {
     const monthSet = new Set<string>();
