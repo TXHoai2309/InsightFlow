@@ -18,6 +18,7 @@ import {
   MessageCircle,
   Music2,
   Newspaper,
+  PauseCircle,
   Play,
   RefreshCw,
   Search,
@@ -31,6 +32,12 @@ import { auth } from "@/lib/firebase";
 type Run = Record<string, any> & { id: string };
 type RunEvent = Record<string, any> & { id: string };
 type RunTab = "production" | "trial";
+type ProductionControl = {
+  paused: boolean;
+  updatedAt?: string;
+  updatedBy?: string;
+  reason?: string;
+};
 
 const PAGE_SIZE = 6;
 
@@ -162,6 +169,8 @@ export default function AdminCrawlOperationsPage() {
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
+  const [controlBusy, setControlBusy] = useState(false);
+  const [productionControl, setProductionControl] = useState<ProductionControl>({ paused: false });
   const [retryingPlatform, setRetryingPlatform] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<RunTab>("trial");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -180,7 +189,8 @@ export default function AdminCrawlOperationsPage() {
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
-      const next = Array.isArray(payload.runs) ? payload.runs : [];
+      const next = (Array.isArray(payload.runs) ? payload.runs : [])
+        .filter((run: Run) => run.metadata?.controlScope !== "production");
       setRuns(next);
       setErrorMessage("");
     } catch (error) {
@@ -191,20 +201,48 @@ export default function AdminCrawlOperationsPage() {
     }
   }, []);
 
+  const loadCrawlControl = useCallback(async () => {
+    const user = auth.currentUser;
+    if (!user) return;
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch("/api/admin/crawl-control", {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+      setProductionControl({
+        paused: payload.production?.paused === true,
+        updatedAt: payload.production?.updatedAt,
+        updatedBy: payload.production?.updatedBy,
+        reason: payload.production?.reason,
+      });
+    } catch (error) {
+      console.error("[Crawl operations] load control:", error);
+    }
+  }, []);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) void loadRuns();
+      if (user) {
+        void loadRuns();
+        void loadCrawlControl();
+      }
       else {
         setLoading(false);
         setErrorMessage("Phiên đăng nhập chưa sẵn sàng.");
       }
     });
-    const timer = window.setInterval(() => void loadRuns(), 60000);
+    const timer = window.setInterval(() => {
+      void loadRuns();
+      void loadCrawlControl();
+    }, 60000);
     return () => {
       unsubscribe();
       window.clearInterval(timer);
     };
-  }, [loadRuns]);
+  }, [loadCrawlControl, loadRuns]);
 
   const filteredRuns = useMemo(() => {
     const normalizedSearch = searchText.trim().toLocaleLowerCase("vi");
@@ -392,6 +430,42 @@ export default function AdminCrawlOperationsPage() {
     }
   };
 
+  const setProductionPaused = async (paused: boolean) => {
+    setControlBusy(true);
+    setErrorMessage("");
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error("Phiên đăng nhập đã hết hạn.");
+      const token = await user.getIdToken();
+      const response = await fetch("/api/admin/crawl-control", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          paused,
+          reason: paused
+            ? "Tạm dừng production để ưu tiên trial hoặc thao tác thủ công."
+            : "Tiếp tục production sau khi xử lý xong.",
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+      setProductionControl({
+        paused: payload.production?.paused === true,
+        updatedAt: payload.production?.updatedAt,
+        updatedBy: payload.production?.updatedBy,
+        reason: payload.production?.reason,
+      });
+      await loadRuns();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Không thể cập nhật trạng thái tạm dừng production.");
+    } finally {
+      setControlBusy(false);
+    }
+  };
+
   return (
     <main className="min-h-screen bg-[var(--color-background)] px-4 py-6 text-[var(--color-foreground)] sm:px-6 lg:py-8">
       <div className="mx-auto max-w-[1500px]">
@@ -407,6 +481,27 @@ export default function AdminCrawlOperationsPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => void setProductionPaused(!productionControl.paused)}
+              disabled={controlBusy}
+              className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-bold shadow-sm transition disabled:cursor-wait disabled:opacity-60 ${
+                productionControl.paused
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                  : "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
+              }`}
+              title={productionControl.paused
+                ? "Cho phép production chạy lại từ lượt kế tiếp"
+                : "Không kill tiến trình hiện tại; chỉ dừng các lượt production kế tiếp"}
+            >
+              {productionControl.paused ? <Play size={15} /> : <PauseCircle size={15} />}
+              {productionControl.paused ? "Tiếp tục production" : "Tạm dừng production"}
+            </button>
+            {productionControl.paused && (
+              <div className="rounded-full border border-amber-100 bg-white/80 px-4 py-2 text-xs font-semibold text-amber-700 shadow-sm">
+                Production đang tạm dừng sau bước hiện tại
+              </div>
+            )}
             <div className="rounded-full border bg-white/80 px-4 py-2 text-xs font-semibold shadow-sm">
               <span className="mr-2 inline-block h-2 w-2 rounded-full bg-blue-500 shadow-[0_0_0_3px_rgba(59,130,246,0.12)]" />
               {counts.active} phiên đang hoạt động
