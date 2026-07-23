@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getIdTokenResult, signInWithEmailAndPassword, signOut } from "firebase/auth";
+import type { User as FirebaseUser } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -22,6 +23,37 @@ export default function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const trialError = window.sessionStorage.getItem("insightflow-trial-access-error");
+    if (!trialError) return;
+    window.sessionStorage.removeItem("insightflow-trial-access-error");
+    setError(trialError);
+  }, []);
+
+  const ensureTrialAccess = async (user: FirebaseUser) => {
+    const token = await user.getIdToken();
+    const response = await fetch("/api/auth/trial-status", {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (response.ok) return;
+    const result = await response.json().catch(() => null);
+    await signOut(auth);
+    throw new Error(result?.error || "Không thể xác minh thời hạn tài khoản. Vui lòng thử lại.");
+  };
+
+  const recordTrialActivation = async (user: FirebaseUser) => {
+    const token = await user.getIdToken();
+    const response = await fetch("/api/auth/trial-activation", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (response.ok) return;
+    const result = await response.json().catch(() => null);
+    await signOut(auth);
+    throw new Error(result?.error || "Không thể ghi nhận trạng thái kích hoạt. Vui lòng đăng nhập lại.");
+  };
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,9 +91,15 @@ export default function LoginForm() {
           storedPermissions: claims.permissions,
           storedDefaultRoute: claims.defaultRoute,
           storedTemporaryPasswordIssued: claims.temporaryPasswordIssued,
+          storedTrialAccount: claims.trialAccount,
+          storedTrialDays: claims.trialDays,
+          storedTrialStartAt: claims.trialStartAt,
+          storedTrialEndsAt: claims.trialEndsAt,
           storedOnboarding: claims.onboarding,
         });
 
+        await ensureTrialAccess(credential.user);
+        await recordTrialActivation(credential.user);
         setUser(credential.user);
         setProfile(profileFromClaims);
         setAuthLoading(false);
@@ -87,9 +125,15 @@ export default function LoginForm() {
         storedPermissions: userData.permissions,
         storedDefaultRoute: userData.defaultRoute,
         storedTemporaryPasswordIssued: userData.temporaryPasswordIssued,
+        storedTrialAccount: userData.trialAccount,
+        storedTrialDays: userData.trialDays,
+        storedTrialStartAt: userData.trialStartAt,
+        storedTrialEndsAt: userData.trialEndsAt,
         storedOnboarding: userData.onboarding,
       });
 
+      await ensureTrialAccess(credential.user);
+      await recordTrialActivation(credential.user);
       setUser(credential.user);
       setProfile(profileFromStore);
       setAuthLoading(false);

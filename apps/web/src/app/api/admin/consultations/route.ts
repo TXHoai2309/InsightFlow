@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { randomInt } from "crypto";
 import { FieldValue } from "firebase-admin/firestore";
 import { verifyBearerToken } from "@/lib/server/auth";
 import { authAdmin, db } from "@/lib/server/firebaseAdmin";
@@ -95,10 +94,6 @@ function emailLocalPart(value: string) {
     .slice(0, 48) || "brand.manager";
 }
 
-function generateTemporaryPassword() {
-  return `IF@Trial${randomInt(100000, 1000000)}x`;
-}
-
 function timestampToDate(value: unknown) {
   if (value instanceof Date) return value;
   if (value && typeof value === "object" && "toDate" in value && typeof (value as { toDate?: unknown }).toDate === "function") {
@@ -111,7 +106,7 @@ function timestampToDate(value: unknown) {
   return null;
 }
 
-function resolvePublicLoginUrl(request: NextRequest) {
+function resolvePublicAppUrl(request: NextRequest) {
   const configuredUrl = text(process.env.NEXT_PUBLIC_APP_URL, 500).replace(/\/$/, "");
   const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
   const requestHost = forwardedHost || request.headers.get("host")?.trim() || request.nextUrl.host;
@@ -119,16 +114,40 @@ function resolvePublicLoginUrl(request: NextRequest) {
   const configuredIsLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(configuredUrl);
 
   if (configuredUrl && (!configuredIsLocal || requestIsLocal)) {
-    return `${configuredUrl}/login`;
+    return configuredUrl;
   }
 
   const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
   const protocol = forwardedProto || request.nextUrl.protocol.replace(":", "") || (requestIsLocal ? "http" : "https");
-  return `${protocol}://${requestHost}/login`;
+  return `${protocol}://${requestHost}`;
+}
+
+async function hasPublishedTrialPosts(brandSlug: string) {
+  const baseUrl = text(process.env.NEXT_PUBLIC_SUPABASE_URL, 500)
+    .replace(/\/rest\/v1\/?$/, "")
+    .replace(/\/$/, "");
+  const serviceKey = text(process.env.SUPABASE_SERVICE_ROLE_KEY, 1000);
+  if (!baseUrl || !serviceKey) {
+    throw new Error("Supabase chưa được cấu hình để xác minh dữ liệu trial.");
+  }
+  const query = new URLSearchParams({
+    select: "post_id",
+    brand_slug: `eq.${brandSlug}`,
+    crawl_status: "eq.active",
+    limit: "1",
+  });
+  const response = await fetch(`${baseUrl}/rest/v1/posts?${query}`, {
+    cache: "no-store",
+    headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+  });
+  if (!response.ok) {
+    throw new Error(`Không thể xác minh dữ liệu trial trên Supabase (${response.status}).`);
+  }
+  const rows = await response.json();
+  return Array.isArray(rows) && rows.length > 0;
 }
 
 async function resolveAutomaticAccount(
-  consultationId: string,
   fullName: string,
   companyEmailDomain: string,
 ) {
@@ -139,9 +158,7 @@ async function resolveAutomaticAccount(
     try {
       const existingUser = await authAdmin.getUserByEmail(email);
       const profile = await db.collection("users").doc(existingUser.uid).get();
-      if (profile.data()?.createdFromConsultationId === consultationId) {
-        return { email, userRecord: existingUser, profile: profile.data() || {} };
-      }
+      return { email, userRecord: existingUser, profile: profile.data() || {} };
     } catch (error: any) {
       if (isAuthUserNotFound(error)) {
         return { email, userRecord: null, profile: {} };
@@ -271,10 +288,10 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ success: true, configuration });
     }
 
-    if (!ALLOWED_STATUSES.has(status)) {
+    if (!action && !ALLOWED_STATUSES.has(status)) {
       return NextResponse.json({ error: "Dữ liệu cập nhật không hợp lệ." }, { status: 400 });
     }
-    if (FINAL_STATUSES.has(currentStatus) && status !== currentStatus) {
+    if (!action && FINAL_STATUSES.has(currentStatus) && status !== currentStatus) {
       return NextResponse.json(
         { error: "Yêu cầu đã có quyết định cuối cùng và không thể đổi sang trạng thái khác." },
         { status: 409 },
@@ -287,14 +304,58 @@ export async function PATCH(request: NextRequest) {
     const need = text(consultation.need, 180);
     const companyEmailDomain = text(consultation.companyEmailDomain, 253).toLowerCase().replace(/^@+/, "");
 
-    if (status === "completed" && body.sendAccount === true) {
+    if (action === "publish_trial_data") {
+      if (currentStatus !== "completed") {
+        return NextResponse.json({ error: "Yêu cầu cần được duyệt trước khi xuất bản dữ liệu trial." }, { status: 409 });
+      }
+      const crawlRunId = text(consultation.trialCrawlRunId, 120);
+      const crawlRun = crawlRunId ? await getCrawlRun(crawlRunId) : null;
+      if (!crawlRun || crawlRun.status !== "completed") {
+        return NextResponse.json({ error: "Chỉ có thể xuất bản sau khi trial crawl hoàn tất." }, { status: 409 });
+      }
+      const crawlRunMetadata = crawlRun.metadata;
+      const trialBrandSlug = crawlRunMetadata && typeof crawlRunMetadata === "object"
+        ? text((crawlRunMetadata as Record<string, unknown>).trialBrandSlug, 100)
+        : "";
+      const brandId = trialBrandSlug
+        || `trial-${slugify(company)}-${crawlRunId.slice(0, 8).toLowerCase()}`;
+      if (!(await hasPublishedTrialPosts(brandId))) {
+        return NextResponse.json(
+          { error: "Chưa tìm thấy dữ liệu trial đã đồng bộ trên Supabase. Hãy kiểm tra bước sync của worker." },
+          { status: 409 },
+        );
+      }
+      const publishedAt = new Date().toISOString();
+      await updateCrawlRun(crawlRunId, {
+        currentPhase: "published",
+        metadata: { ...(crawlRun.metadata || {}), trialBrandSlug: brandId, trialPublishedAt: publishedAt },
+      });
+      await updateConsultation(id, {
+        trialDataStatus: "published",
+        trialPublishedAt: publishedAt,
+        trialBrandSlug: brandId,
+        notes,
+        contactPlan,
+      });
+      return NextResponse.json({ success: true, brandSlug: brandId, publishedAt });
+    }
+
+    if (action === "create_trial_account") {
       if (currentStatus !== "completed") {
         return NextResponse.json({ error: "Yêu cầu cần được duyệt trước khi tạo tài khoản." }, { status: 409 });
       }
       const crawlRunId = text(consultation.trialCrawlRunId, 120);
       const crawlRun = crawlRunId ? await getCrawlRun(crawlRunId) : null;
       if (!crawlRun || crawlRun.status !== "completed") {
-        return NextResponse.json({ error: "Chỉ có thể gửi tài khoản sau khi trial crawl hoàn tất." }, { status: 409 });
+        return NextResponse.json({ error: "Chỉ có thể tạo tài khoản sau khi trial crawl hoàn tất." }, { status: 409 });
+      }
+      const brandId = text(consultation.trialBrandSlug, 100)
+        || text(crawlRun.metadata?.trialBrandSlug, 100)
+        || `trial-${slugify(company)}-${crawlRunId.slice(0, 8).toLowerCase()}`;
+      const publishedAt = text(consultation.trialPublishedAt, 80)
+        || text(crawlRun.metadata?.trialPublishedAt, 80);
+      if (!publishedAt || !(await hasPublishedTrialPosts(brandId))) {
+        return NextResponse.json({ error: "Hãy xuất bản dữ liệu trial trước khi tạo tài khoản." }, { status: 409 });
       }
       if (!companyEmailDomain) {
         return NextResponse.json(
@@ -302,13 +363,10 @@ export async function PATCH(request: NextRequest) {
           { status: 400 },
         );
       }
-
-      const crawlRunMetadata = crawlRun.metadata;
-      const trialBrandSlug = crawlRunMetadata && typeof crawlRunMetadata === "object"
-        ? text((crawlRunMetadata as Record<string, unknown>).trialBrandSlug, 100)
-        : "";
-      const brandId = trialBrandSlug
-        || `trial-${slugify(company)}-${crawlRunId.slice(0, 8).toLowerCase()}`;
+      const requestedTrialDays = body.trialDays === undefined ? 14 : Number(body.trialDays);
+      if (requestedTrialDays !== 7 && requestedTrialDays !== 14) {
+        return NextResponse.json({ error: "Thời hạn dùng thử chỉ hỗ trợ 7 hoặc 14 ngày." }, { status: 400 });
+      }
       const provisionedUid = text(consultation.provisionedAccountUid, 128);
       const provisionedEmail = text(consultation.provisionedAccountEmail, 180).toLowerCase();
       let userRecord: any;
@@ -327,45 +385,72 @@ export async function PATCH(request: NextRequest) {
       }
 
       if (!userRecord) {
-        const automaticAccount = await resolveAutomaticAccount(id, requesterName, companyEmailDomain);
+        const automaticAccount = await resolveAutomaticAccount(requesterName, companyEmailDomain);
         accountEmail = automaticAccount.email;
         userRecord = automaticAccount.userRecord;
         userProfile = automaticAccount.profile;
       }
 
-      const accountPassword = text(userProfile.temporaryPassword, 128) || generateTemporaryPassword();
+      const accountAlreadyExisted = Boolean(userRecord);
+      const trialAccount = userProfile.trialAccount === true || !accountAlreadyExisted;
+
       if (userRecord) {
         userRecord = await authAdmin.updateUser(userRecord.uid, {
           email: accountEmail,
-          password: accountPassword,
-          displayName: requesterName,
-          emailVerified: true,
-          disabled: true,
+          displayName: userRecord.displayName || requesterName,
+          disabled: false,
         });
       } else {
         userRecord = await authAdmin.createUser({
           email: accountEmail,
-          password: accountPassword,
           displayName: requesterName,
-          emailVerified: true,
-          disabled: true,
+          emailVerified: false,
+          disabled: false,
         });
       }
 
       const existingTrialStart = timestampToDate(consultation.provisionedTrialStartAt);
       const existingTrialEnd = timestampToDate(consultation.provisionedTrialEndsAt);
+      const storedTrialDays = Number(consultation.trialDays);
+      const trialDays = existingTrialStart && (storedTrialDays === 7 || storedTrialDays === 14)
+        ? storedTrialDays as 7 | 14
+        : requestedTrialDays as 7 | 14;
       const trialStartAt = existingTrialStart || new Date();
-      const trialEndsAt = existingTrialEnd || new Date(trialStartAt.getTime() + 14 * 24 * 60 * 60 * 1000);
+      const trialEndsAt = existingTrialEnd || new Date(trialStartAt.getTime() + trialDays * 24 * 60 * 60 * 1000);
+      const trialPlan = `${trialDays}_day_trial`;
 
-      await authAdmin.setCustomUserClaims(userRecord.uid, {
-        ...(userRecord.customClaims || {}),
-        role: "brand_manager",
+      const existingClaims = userRecord.customClaims || {};
+      const brandIds = Array.from(new Set([
+        ...(Array.isArray(existingClaims.brandIds) ? existingClaims.brandIds : []),
+        ...(Array.isArray(userProfile.brandIds) ? userProfile.brandIds : []),
+        ...(Array.isArray(userProfile.workspaceIds) ? userProfile.workspaceIds : []),
+        ...(text(existingClaims.brandId, 100) ? [text(existingClaims.brandId, 100)] : []),
+        ...(text(userProfile.brandId, 100) ? [text(userProfile.brandId, 100)] : []),
         brandId,
-        brandName: company,
-        permissions: BRAND_MANAGER_PERMISSIONS,
+      ]));
+      const permissions = Array.from(new Set([
+        ...(Array.isArray(existingClaims.permissions) ? existingClaims.permissions : []),
+        ...BRAND_MANAGER_PERMISSIONS,
+      ]));
+      const trialConsultationIds = Array.from(new Set([
+        ...(Array.isArray(userProfile.trialConsultationIds) ? userProfile.trialConsultationIds : []),
+        ...(text(userProfile.createdFromConsultationId, 120) ? [text(userProfile.createdFromConsultationId, 120)] : []),
+        id,
+      ]));
+      await authAdmin.setCustomUserClaims(userRecord.uid, {
+        ...existingClaims,
+        role: text(existingClaims.role, 50) || "brand_manager",
+        brandId: text(existingClaims.brandId, 100) || brandId,
+        brandName: text(existingClaims.brandName, 180) || company,
+        brandIds,
+        workspaceIds: brandIds,
+        trialConsultationIds,
+        permissions,
         defaultRoute: "/dashboard",
-        temporaryPasswordIssued: true,
-        trialPlan: "14_day_trial",
+        trialPlan,
+        trialDays,
+        trialAccount,
+        trialStartAt: trialStartAt.toISOString(),
         trialEndsAt: trialEndsAt.toISOString(),
       });
 
@@ -377,22 +462,28 @@ export async function PATCH(request: NextRequest) {
         email: accountEmail,
         displayName: requesterName,
         photoURL: "",
-        role: "brand_manager",
-        brandId,
-        brandName: company,
+        role: text(userProfile.role, 50) || "brand_manager",
+        brandId: text(userProfile.brandId, 100) || brandId,
+        brandName: text(userProfile.brandName, 180) || company,
+        brandIds,
+        workspaceIds: brandIds,
+        trialConsultationIds,
         companyDomain: companyEmailDomain || accountEmail.split("@")[1] || "",
-        permissions: BRAND_MANAGER_PERMISSIONS,
+        permissions,
         defaultRoute: "/dashboard",
-        disabled: true,
-        temporaryPasswordIssued: true,
-        temporaryPassword: accountPassword,
-        trialPlan: "14_day_trial",
+        disabled: false,
+        temporaryPasswordIssued: false,
+        trialPlan,
+        trialDays,
+        trialAccount,
         trialStartAt,
         trialEndsAt,
-        createdFromConsultationId: id,
-        createdBy: admin.uid,
         updatedAt: FieldValue.serverTimestamp(),
-        ...(!userSnapshot.exists ? { createdAt: FieldValue.serverTimestamp() } : {}),
+        ...(!userSnapshot.exists ? {
+          createdAt: FieldValue.serverTimestamp(),
+          createdFromConsultationId: id,
+          createdBy: admin.uid,
+        } : {}),
       }, { merge: true });
       batch.set(db.collection("brands").doc(brandId), {
         id: brandId,
@@ -401,9 +492,18 @@ export async function PATCH(request: NextRequest) {
         brandManagerUid: userRecord.uid,
         brandManagerEmail: accountEmail,
         trialConsultationId: id,
-        trialPlan: "14_day_trial",
+        trialPlan,
+        trialDays,
         trialStartAt,
         trialEndsAt,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+      batch.set(db.collection("brands").doc(brandId).collection("members").doc(userRecord.uid), {
+        uid: userRecord.uid,
+        email: accountEmail,
+        role: "brand_manager",
+        permissions: BRAND_MANAGER_PERMISSIONS,
+        addedFromConsultationId: id,
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
       await updateConsultation(id, {
@@ -411,12 +511,53 @@ export async function PATCH(request: NextRequest) {
         provisionedAccountEmail: accountEmail,
         provisionedTrialStartAt: trialStartAt.toISOString(),
         provisionedTrialEndsAt: trialEndsAt.toISOString(),
-        accountStatus: "sending",
-        decisionEmailStatus: "sending",
+        trialPlan,
+        trialDays,
+        accountStatus: "created",
+        decisionEmailStatus: "not_sent",
         notes,
         contactPlan,
       });
       await batch.commit();
+
+      return NextResponse.json({
+        success: true,
+        accountCreated: true,
+        account: {
+          email: accountEmail,
+          brandName: company,
+          brandSlug: brandId,
+          role: "Brand Manager",
+          platforms: normalizePlatforms(textList(consultation.platforms, 20, 80)),
+          trialDays,
+          trialEndsAt: trialEndsAt.toISOString(),
+        },
+      });
+    }
+
+    if (action === "send_trial_activation") {
+      const userUid = text(consultation.provisionedAccountUid, 128);
+      const accountEmail = text(consultation.provisionedAccountEmail, 180).toLowerCase();
+      if (!userUid || !accountEmail) {
+        return NextResponse.json({ error: "Hãy tạo tài khoản dùng thử trước khi gửi link kích hoạt." }, { status: 409 });
+      }
+      const trialEndsAt = timestampToDate(consultation.provisionedTrialEndsAt)
+        || timestampToDate(consultation.trialEndsAt)
+        || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+      const storedTrialDays = Number(consultation.trialDays);
+      const trialDays = storedTrialDays === 7 ? 7 : 14;
+      const trialPlan = `${trialDays}_day_trial`;
+      const appUrl = resolvePublicAppUrl(request);
+      const activationLink = await authAdmin.generatePasswordResetLink(accountEmail, {
+        url: `${appUrl}/login`,
+        handleCodeInApp: false,
+      });
+      await updateConsultation(id, {
+        accountStatus: "created",
+        decisionEmailStatus: "sending",
+        notes,
+        contactPlan,
+      });
 
       try {
         await sendConsultationEmail({
@@ -427,9 +568,9 @@ export async function PATCH(request: NextRequest) {
           company,
           need,
           accountEmail,
-          temporaryPassword: accountPassword,
+          activationLink,
+          trialDays,
           trialEndsAt,
-          loginUrl: resolvePublicLoginUrl(request),
         });
       } catch (emailError) {
         console.error("[Admin consultations API] approval email error:", emailError);
@@ -443,47 +584,36 @@ export async function PATCH(request: NextRequest) {
         });
         return NextResponse.json(
           {
-            error: `Tài khoản đã được chuẩn bị nhưng EmailJS chưa gửi được email. ${emailErrorMessage}`,
+            error: `Tài khoản đã được tạo nhưng EmailJS chưa gửi được link kích hoạt. ${emailErrorMessage}`,
           },
           { status: 502 },
         );
       }
 
-      await authAdmin.updateUser(userRecord.uid, { disabled: false });
-      const finalizeBatch = db.batch();
-      finalizeBatch.set(userRef, {
-        disabled: false,
-        updatedAt: FieldValue.serverTimestamp(),
-      }, { merge: true });
-      try {
-        await finalizeBatch.commit();
-        await updateConsultation(id, {
+      const sentAt = new Date().toISOString();
+      await updateConsultation(id, {
           status: "completed",
-          approvedAccountUid: userRecord.uid,
+          approvedAccountUid: userUid,
           approvedAccountEmail: accountEmail,
-          approvedAt: new Date().toISOString(),
+          approvedAt: text(consultation.approvedAt, 80) || sentAt,
           approvedBy: admin.uid,
-          trialPlan: "14_day_trial",
-          trialStartAt: trialStartAt.toISOString(),
+          trialPlan,
+          trialDays,
+          trialStartAt: timestampToDate(consultation.provisionedTrialStartAt)?.toISOString(),
           trialEndsAt: trialEndsAt.toISOString(),
           accountStatus: "sent",
           decisionEmailStatus: "sent",
           decisionEmailError: undefined,
-          decisionEmailSentAt: new Date().toISOString(),
+          decisionEmailSentAt: sentAt,
           notes,
           contactPlan,
-        });
-      } catch (finalizeError) {
-        await authAdmin.updateUser(userRecord.uid, { disabled: true }).catch(() => undefined);
-        throw finalizeError;
-      }
+      });
       return NextResponse.json({
         success: true,
-        accountCreated: true,
         emailSent: true,
-        credentials: {
+        sentAt,
+        account: {
           email: accountEmail,
-          temporaryPassword: accountPassword,
           trialEndsAt: trialEndsAt.toISOString(),
         },
       });

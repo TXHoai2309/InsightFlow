@@ -20,8 +20,10 @@ import {
   approveAllSupabaseAiAnnotations,
   approveSupabaseAiAnnotations,
   loadPendingAssignmentCounts,
+  loadSupabaseBrands,
   PendingAssignmentCounts,
   PlatformFilter,
+  SupabaseBrandOption,
   SupabaseConfig,
 } from './utils/supabaseRest';
 
@@ -55,6 +57,12 @@ const PLATFORM_LABELS: Record<PlatformFilter, string> = {
   befood: 'BeFood',
   news: 'News',
 };
+
+const DEFAULT_BRANDS: SupabaseBrandOption[] = [
+  { value: 'highlands-coffee', label: 'Highlands Coffee' },
+  { value: 'starbucks', label: 'Starbucks' },
+  { value: 'mixue', label: 'Mixue' },
+];
 
 interface LabelingSession {
   platform: PlatformFilter;
@@ -123,6 +131,7 @@ export default function App() {
     () => initialSessionRef.current?.brand ?? 'all',
   );
   const [pendingCounts, setPendingCounts] = useState<PendingAssignmentCounts | null>(null);
+  const [brandOptions, setBrandOptions] = useState<SupabaseBrandOption[]>(DEFAULT_BRANDS);
   const [pendingCountsLoading, setPendingCountsLoading] = useState(false);
   const [approvingAi, setApprovingAi] = useState(false);
   const [approvingAllAi, setApprovingAllAi] = useState(false);
@@ -132,6 +141,22 @@ export default function App() {
   );
   const autoLoadAttemptedRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    if (!supabaseUrl.trim() || !supabaseAnonKey.trim()) return;
+    const controller = new AbortController();
+    loadSupabaseBrands({ url: supabaseUrl.trim(), anonKey: supabaseAnonKey.trim() }, controller.signal)
+      .then((loadedBrands) => {
+        const merged = new Map(DEFAULT_BRANDS.map((brand) => [brand.value, brand]));
+        loadedBrands.forEach((brand) => merged.set(brand.value, brand));
+        setBrandOptions(Array.from(merged.values()).sort((left, right) => left.label.localeCompare(right.label, 'vi')));
+      })
+      .catch((brandError) => {
+        if (brandError instanceof Error && brandError.name === 'AbortError') return;
+        console.warn('[Labeling] Không thể tải danh sách thương hiệu động.', brandError);
+      });
+    return () => controller.abort();
+  }, [supabaseAnonKey, supabaseUrl]);
 
   const handleCancelLoad = useCallback(() => {
     if (abortControllerRef.current) {
@@ -670,9 +695,9 @@ export default function App() {
                   title="Thương hiệu cần gán nhãn"
                 >
                   <option value="all">Tất cả Brand</option>
-                  <option value="highlands-coffee">Highlands Coffee</option>
-                  <option value="starbucks">Starbucks</option>
-                  <option value="mixue">Mixue</option>
+                  {brandOptions.map((brand) => (
+                    <option key={brand.value} value={brand.value}>{brand.label}</option>
+                  ))}
                 </select>
 
                 <input

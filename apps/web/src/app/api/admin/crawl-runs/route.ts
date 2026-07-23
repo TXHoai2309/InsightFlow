@@ -97,6 +97,12 @@ export async function POST(request: NextRequest) {
     if (text(consultation.status, 40) !== "completed") {
       return NextResponse.json({ error: "Yêu cầu cần được duyệt trước khi tạo phiên cào trial." }, { status: 409 });
     }
+    if (text(consultation.provisionedAccountUid, 128)) {
+      return NextResponse.json(
+        { error: "Tài khoản trial đã được tạo. Không thể tạo run mới vì brand slug đã gắn với tài khoản." },
+        { status: 409 },
+      );
+    }
     const existingRunId = text(consultation.trialCrawlRunId, 120);
     if (existingRunId) {
       const existingRun = await getCrawlRun(existingRunId);
@@ -178,6 +184,9 @@ export async function POST(request: NextRequest) {
       trialCrawlStatus: "queued",
       trialCrawlRequestedAt: new Date().toISOString(),
       trialCrawlRequestedBy: admin.uid,
+      trialDataStatus: "pending",
+      trialPublishedAt: "",
+      trialBrandSlug: "",
     });
 
     return NextResponse.json({ success: true, runId, status: "queued" }, { status: 201 });
