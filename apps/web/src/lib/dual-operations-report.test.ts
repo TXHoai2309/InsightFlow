@@ -196,7 +196,7 @@ test("Excel preview document contains the same report sections and filtered cont
   assert.match(document, /Báo cáo tổng quan thương hiệu/);
   assert.match(document, /7 ngày gần nhất/);
   assert.match(document, /Cả hai nghiệp vụ/);
-  assert.match(document, /Kết quả trong kỳ/);
+  assert.match(document, /Kết quả chỉ số trong kỳ/);
   assert.match(document, /Tóm tắt điều hành/);
   assert.match(document, /Tình trạng công việc theo nghiệp vụ/);
   assert.match(document, /Tỷ lệ hoàn thành/);

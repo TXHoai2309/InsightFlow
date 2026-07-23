@@ -135,6 +135,28 @@ export function getAlertCompletenessScore(alert: AlertData) {
   );
 }
 
+function getOperationalAlertSlaHours(alert: AlertData) {
+  const severity = String(alert.severity || alert.urgency || "").trim().toLowerCase();
+  if (severity === "critical" || severity === "urgent") return 1;
+  if (severity === "high") return 2;
+  if (severity === "medium" || severity === "normal") return 4;
+  return 8;
+}
+
+export function getAlertOperationalDueAt(alert: AlertData) {
+  const startedAt = new Date(alert.detected_at || alert.created_at || "").getTime();
+  if (!Number.isFinite(startedAt)) return null;
+  return startedAt + getOperationalAlertSlaHours(alert) * 60 * 60 * 1000;
+}
+
+export function getAlertOperationalSlaBucket(
+  alert: AlertData,
+  nowMs = Date.now(),
+): "in_sla" | "overdue" | "closed" {
+  if (isTerminalAlert(alert)) return "closed";
+  const dueAt = getAlertOperationalDueAt(alert);
+  return dueAt !== null && dueAt <= nowMs ? "overdue" : "in_sla";
+}
 export function filterOperationalAlerts(
   alerts: AlertData[],
   {
@@ -182,6 +204,15 @@ export function filterOperationalAlerts(
   return Array.from(deduplicated.values());
 }
 
+export function filterNegativeOperationalAlerts(
+  alerts: AlertData[],
+  options: Parameters<typeof filterOperationalAlerts>[1],
+) {
+  return filterOperationalAlerts(
+    alerts.filter((alert) => alert.sentiment === "negative"),
+    options,
+  );
+}
 export function buildAlertOperationalMetrics(alerts: AlertData[]): AlertOperationalMetrics {
   const statuses = alerts.map(getAlertWorkflowStatus);
   const activeAlerts = alerts.filter((alert) => !isTerminalAlert(alert));

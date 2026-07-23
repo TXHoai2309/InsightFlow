@@ -19,7 +19,7 @@ import { getScopedBrandKey } from "@/lib/brandScope";
 import { isSkippedAlert, isTerminalAlert } from "@/lib/alertWorkflow";
 import {
   buildAlertOperationalMetrics,
-  filterOperationalAlerts,
+  filterNegativeOperationalAlerts,
   getAlertDeduplicationKey,
 } from "@/lib/operational-metrics";
 import { getDiscussionPeriodDays } from "@/lib/dashboard-display";
@@ -147,9 +147,7 @@ export function CrisisCommandCenter() {
   const alerts = useMemo(() => {
     // Every negative mention must enter the Crisis work queue. The crisis
     // classification is a priority signal, not an admission condition.
-    return filterOperationalAlerts(rawAlerts.filter(
-      (alert) => alert.sentiment === "negative",
-    ), {
+    return filterNegativeOperationalAlerts(rawAlerts, {
       profile,
       workspaceId: filters.workspace_id,
       platform: filters.platform,
