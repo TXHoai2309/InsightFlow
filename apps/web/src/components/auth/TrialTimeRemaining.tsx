@@ -19,6 +19,14 @@ function formatRemaining(remainingMs: number, language: string) {
   return language === "en" ? `${days} days left` : `Còn ${days} ngày`;
 }
 
+function formatCompactRemaining(remainingMs: number) {
+  const minutes = Math.max(0, Math.ceil(remainingMs / 60_000));
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.ceil(remainingMs / 3_600_000);
+  if (hours < 48) return `${hours}h`;
+  return `${Math.ceil(remainingMs / 86_400_000)}d`;
+}
+
 export function TrialTimeRemaining() {
   const { profile } = useAuth();
   const { language } = useLanguage();
@@ -45,7 +53,7 @@ export function TrialTimeRemaining() {
 
   return (
     <div
-      className={`hidden items-center gap-2 rounded-full border px-3 py-2 text-[12px] font-bold sm:inline-flex ${
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-2 text-[11px] font-bold sm:gap-2 sm:px-3 sm:text-[12px] ${
         urgent
           ? "border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"
           : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
@@ -54,7 +62,8 @@ export function TrialTimeRemaining() {
       aria-label={`${label}. ${language === "en" ? "Expires" : "Hết hạn lúc"} ${fullDate}`}
     >
       <span className="material-symbols-outlined text-[17px]">schedule</span>
-      <span>{label}</span>
+      <span className="sm:hidden">{expired ? "0m" : formatCompactRemaining(remainingMs)}</span>
+      <span className="hidden sm:inline">{label}</span>
     </div>
   );
 }
