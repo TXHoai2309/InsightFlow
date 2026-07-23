@@ -3,9 +3,13 @@ import { hasCrawlRunIngestAccess } from "@/lib/server/crawlRunIngestAuth";
 import {
   appendCrawlRunEvent,
 } from "@/lib/server/crawlRuns";
-import { claimTrialCrawlRun } from "@/lib/server/vpsOperationalStore";
+import {
+  claimTrialCrawlRun,
+  failStaleTrialCrawlRuns,
+} from "@/lib/server/vpsOperationalStore";
 
 const DEFAULT_LEASE_SECONDS = 15 * 60;
+const STALE_HEARTBEAT_SECONDS = 15 * 60;
 
 function text(value: unknown, maxLength: number) {
   return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
@@ -35,6 +39,23 @@ export async function POST(request: NextRequest) {
 
     if (!workerId) {
       return NextResponse.json({ error: "workerId is required" }, { status: 400 });
+    }
+
+    const staleBefore = new Date(Date.now() - STALE_HEARTBEAT_SECONDS * 1000).toISOString();
+    const staleRuns = await failStaleTrialCrawlRuns(staleBefore);
+    for (const staleRun of staleRuns) {
+      await appendCrawlRunEvent(staleRun.id, {
+        eventType: "failed",
+        level: "error",
+        phase: "worker_lost",
+        message: "Worker trial mất heartbeat; phiên cào đã được đóng để có thể cào lại.",
+        update: {
+          status: "failed",
+          currentPhase: "worker_lost",
+          finishedAt: true,
+          errorsCount: Math.max(staleRun.errorsCount || 0, 1),
+        },
+      });
     }
 
     const claimedRun = await claimTrialCrawlRun({ workerId, capabilities, leaseSeconds });

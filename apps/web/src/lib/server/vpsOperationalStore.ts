@@ -370,6 +370,30 @@ export async function claimTrialCrawlRun(params: {
   return rows?.[0] ? runFromRow(rows[0]) : null;
 }
 
+export async function failStaleTrialCrawlRuns(staleBefore: string) {
+  const timestamp = nowIso();
+  const rows = await request<CrawlRunRow[]>(
+    (
+      "ops_crawl_runs?run_type=eq.trial"
+      + "&status=in.(running,labeling,syncing)"
+      + `&heartbeat_at=lt.${encode(staleBefore)}`
+    ),
+    {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({
+        status: "failed",
+        current_phase: "worker_lost",
+        finished_at: timestamp,
+        lease_expires_at: null,
+        last_message: "Worker trial mất heartbeat; phiên cào đã được đóng để có thể cào lại.",
+        updated_at: timestamp,
+      }),
+    },
+  );
+  return (rows || []).map(runFromRow);
+}
+
 export async function insertCrawlRunEvent(
   runId: string,
   input: Omit<CrawlRunEventRecord, "id" | "runId" | "createdAt">,

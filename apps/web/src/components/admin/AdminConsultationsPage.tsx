@@ -51,11 +51,18 @@ interface ConsultationRequest {
   consultationRequested?: boolean;
   requestSource?: string;
   approvedAccountEmail?: string;
+  provisionedAccountEmail?: string;
   trialEndsAt?: string;
+  provisionedTrialEndsAt?: string;
   decisionEmailStatus?: string;
+  decisionEmailSentAt?: string;
+  customerActivatedAt?: string;
   accountStatus?: string;
   trialCrawlRunId?: string;
   trialCrawlStatus?: string;
+  trialDataStatus?: string;
+  trialPublishedAt?: string;
+  trialBrandSlug?: string;
   status: "pending" | "contacting" | "completed" | "unreachable" | "not_approved";
   notes?: string;
   contactPlan?: string;
@@ -67,8 +74,12 @@ type EditableStatus = "" | StatusType;
 
 interface GeneratedCredentials {
   email: string;
-  temporaryPassword: string;
   trialEndsAt: string;
+  trialDays?: 7 | 14;
+  brandName?: string;
+  brandSlug?: string;
+  role?: string;
+  platforms?: string[];
 }
 
 const TRIAL_PLATFORM_OPTIONS = ["Facebook", "Threads", "TikTok", "YouTube", "Review", "Tin tức"];
@@ -208,6 +219,10 @@ export default function AdminConsultationsPage() {
   const [removingKeyword, setRemovingKeyword] = useState("");
   const [configurationMessage, setConfigurationMessage] = useState("");
   const [sendingAccount, setSendingAccount] = useState(false);
+  const [publishingTrial, setPublishingTrial] = useState(false);
+  const [creatingAccount, setCreatingAccount] = useState(false);
+  const [showAccountConfirmation, setShowAccountConfirmation] = useState(false);
+  const [trialDays, setTrialDays] = useState<7 | 14>(14);
 
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -281,6 +296,14 @@ export default function AdminConsultationsPage() {
   const isFinalDecision = selectedRequest?.status === "completed" || selectedRequest?.status === "not_approved";
   const willApproveRequest = editStatus === "completed" && selectedRequest?.status !== "completed";
   const trialIsComplete = selectedRequest?.trialCrawlStatus === "completed";
+  const trialCrawlActive = ["queued", "waiting_resource", "running", "labeling", "syncing"]
+    .includes(selectedRequest?.trialCrawlStatus || "");
+  const trialNeedsRecrawl = ["partial", "failed", "cancelled"]
+    .includes(selectedRequest?.trialCrawlStatus || "");
+  const trialIsPublished = selectedRequest?.trialDataStatus === "published" || Boolean(selectedRequest?.trialPublishedAt);
+  const accountWasCreated = Boolean(selectedRequest?.provisionedAccountEmail)
+    || ["created", "sent", "email_failed", "activated"].includes(selectedRequest?.accountStatus || "");
+  const accountWasActivated = selectedRequest?.accountStatus === "activated" || Boolean(selectedRequest?.customerActivatedAt);
   const accountWasSent = selectedRequest?.accountStatus === "sent" || selectedRequest?.decisionEmailStatus === "sent" && Boolean(selectedRequest?.approvedAccountEmail);
   const hasValidTrialConfiguration = Boolean(
     selectedRequest?.company?.trim()
@@ -309,6 +332,8 @@ export default function AdminConsultationsPage() {
       setSaveSuccess(false);
       setTrialCrawlError("");
       setTrialCrawlMessage("");
+      setShowAccountConfirmation(false);
+      setTrialDays(14);
     }
   }, [selectedRequest]);
 
@@ -510,40 +535,85 @@ export default function AdminConsultationsPage() {
     }
   };
 
-  const handleSendTrialAccount = async () => {
+  const callTrialAction = async (action: string, extra: Record<string, unknown> = {}) => {
     if (!selectedId || !selectedRequest) return;
+    await auth.authStateReady();
+    const user = auth.currentUser;
+    if (!user) throw new Error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+    const token = await user.getIdToken();
+    const response = await fetch("/api/admin/consultations", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ id: selectedId, action, notes: editNotes, contactPlan: editContactPlan, ...extra }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Không thể cập nhật quy trình trial.");
+    return result;
+  };
+
+  const handlePublishTrialData = async () => {
+    if (!selectedId) return;
+    setPublishingTrial(true);
+    setTrialCrawlError("");
+    setTrialCrawlMessage("");
+    try {
+      const result = await callTrialAction("publish_trial_data");
+      setRequests((current) => current.map((item) => item.id === selectedId ? {
+        ...item,
+        trialDataStatus: "published",
+        trialPublishedAt: result.publishedAt,
+        trialBrandSlug: result.brandSlug,
+      } : item));
+      setTrialCrawlMessage(`Đã xuất bản dữ liệu trial với brand slug ${result.brandSlug}.`);
+    } catch (error: any) {
+      setTrialCrawlError(error?.message || "Không thể xuất bản dữ liệu trial.");
+    } finally {
+      setPublishingTrial(false);
+    }
+  };
+
+  const handleCreateTrialAccount = async () => {
+    if (!selectedId) return;
+    setCreatingAccount(true);
+    setTrialCrawlError("");
+    setTrialCrawlMessage("");
+    try {
+      const result = await callTrialAction("create_trial_account", { trialDays });
+      setGeneratedCredentials(result.account as GeneratedCredentials);
+      setRequests((current) => current.map((item) => item.id === selectedId ? {
+        ...item,
+        accountStatus: "created",
+        decisionEmailStatus: "not_sent",
+        provisionedAccountEmail: result.account?.email,
+        provisionedTrialEndsAt: result.account?.trialEndsAt,
+      } : item));
+      setShowAccountConfirmation(false);
+      setTrialCrawlMessage("Đã tạo tài khoản dùng thử. Chưa gửi email cho khách hàng.");
+    } catch (error: any) {
+      setTrialCrawlError(error?.message || "Không thể tạo tài khoản dùng thử.");
+    } finally {
+      setCreatingAccount(false);
+    }
+  };
+
+  const handleSendTrialActivation = async () => {
+    if (!selectedId) return;
     setSendingAccount(true);
     setTrialCrawlError("");
     setTrialCrawlMessage("");
     try {
-      await auth.authStateReady();
-      const user = auth.currentUser;
-      if (!user) throw new Error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
-      const token = await user.getIdToken();
-      const response = await fetch("/api/admin/consultations", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          id: selectedId,
-          status: "completed",
-          notes: editNotes,
-          contactPlan: editContactPlan,
-          sendAccount: true,
-        }),
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "Không thể tạo và gửi tài khoản trial.");
-      setGeneratedCredentials(result.credentials as GeneratedCredentials);
+      const result = await callTrialAction("send_trial_activation");
       setRequests((current) => current.map((item) => item.id === selectedId ? {
         ...item,
         accountStatus: "sent",
         decisionEmailStatus: "sent",
-        approvedAccountEmail: result.credentials?.email,
-        trialEndsAt: result.credentials?.trialEndsAt,
+        decisionEmailSentAt: result.sentAt,
+        approvedAccountEmail: result.account?.email,
+        trialEndsAt: result.account?.trialEndsAt,
       } : item));
-      setTrialCrawlMessage("Đã tạo tài khoản và gửi thông tin đăng nhập cho khách hàng.");
+      setTrialCrawlMessage("Đã gửi link kích hoạt và thiết lập mật khẩu cho khách hàng.");
     } catch (error: any) {
-      setTrialCrawlError(error?.message || "Không thể gửi tài khoản trial.");
+      setTrialCrawlError(error?.message || "Không thể gửi link kích hoạt.");
     } finally {
       setSendingAccount(false);
     }
@@ -588,7 +658,14 @@ export default function AdminConsultationsPage() {
       if (!response.ok) throw new Error(result.error || "Chưa thể tạo phiên cào trial.");
 
       setRequests((current) => current.map((item) => item.id === selectedId
-        ? { ...item, trialCrawlRunId: result.runId, trialCrawlStatus: result.status }
+        ? {
+          ...item,
+          trialCrawlRunId: result.runId,
+          trialCrawlStatus: result.status,
+          trialDataStatus: "pending",
+          trialPublishedAt: undefined,
+          trialBrandSlug: undefined,
+        }
         : item));
       setTrialCrawlMessage("Đã xếp hàng phiên cào trial. VPS sẽ nhận job ở bước tiếp theo.");
     } catch (error: any) {
@@ -1030,23 +1107,57 @@ export default function AdminConsultationsPage() {
                       <button
                         type="button"
                         onClick={() => void handleStartTrialCrawl()}
-                        disabled={startingTrialCrawl || selectedRequest.status !== "completed" || !hasValidTrialConfiguration}
+                        disabled={startingTrialCrawl || trialCrawlActive || accountWasCreated || selectedRequest.status !== "completed" || !hasValidTrialConfiguration}
+                        title={accountWasCreated ? "Tài khoản đã gắn với brand slug hiện tại nên không thể tạo run mới." : undefined}
                         className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 text-[12px] font-bold text-white shadow-sm transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {startingTrialCrawl
                           ? <Loader2 className="h-4 w-4 animate-spin" />
                           : <Play className="h-4 w-4" />}
-                        {selectedRequest.trialCrawlRunId ? "Tạo lượt cào mới" : "Bắt đầu trial crawl"}
+                        {trialNeedsRecrawl ? "Cào lại" : selectedRequest.trialCrawlRunId ? "Tạo lượt cào mới" : "Bắt đầu trial crawl"}
                       </button>
-                      {selectedRequest.status === "completed" && trialIsComplete && (
+                      {selectedRequest.trialCrawlRunId && trialCrawlActive && (
                         <button
                           type="button"
-                          onClick={() => void handleSendTrialAccount()}
-                          disabled={sendingAccount}
-                          className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-[12px] font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-50"
+                          disabled
+                          className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-slate-400 px-4 text-[12px] font-bold text-white opacity-70"
                         >
-                          {sendingAccount ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
-                          {accountWasSent ? "Gửi lại tài khoản" : "Tạo & gửi tài khoản"}
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Đang thu thập dữ liệu
+                        </button>
+                      )}
+                      {trialIsComplete && !trialIsPublished && (
+                        <button
+                          type="button"
+                          onClick={() => void handlePublishTrialData()}
+                          disabled={publishingTrial}
+                          className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-cyan-600 px-4 text-[12px] font-bold text-white shadow-sm transition hover:bg-cyan-700 disabled:opacity-50"
+                        >
+                          {publishingTrial ? <Loader2 className="h-4 w-4 animate-spin" /> : <Globe2 className="h-4 w-4" />}
+                          Xuất bản dữ liệu trial
+                        </button>
+                      )}
+                      {trialIsPublished && !accountWasCreated && (
+                        <button
+                          type="button"
+                          onClick={() => setShowAccountConfirmation(true)}
+                          className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-[12px] font-bold text-white shadow-sm transition hover:bg-emerald-700"
+                        >
+                          <KeyRound className="h-4 w-4" /> Tạo tài khoản dùng thử
+                        </button>
+                      )}
+                      {accountWasCreated && !accountWasActivated && (
+                        <button
+                          type="button"
+                          onClick={() => void handleSendTrialActivation()}
+                          disabled={sendingAccount}
+                          className={`inline-flex h-10 items-center justify-center gap-2 rounded-lg px-4 text-[12px] font-bold shadow-sm transition disabled:opacity-50 ${accountWasSent
+                            ? "border border-emerald-500/30 bg-white text-emerald-700 hover:bg-emerald-50 dark:bg-white/5 dark:text-emerald-300"
+                            : "bg-emerald-600 text-white hover:bg-emerald-700"
+                          }`}
+                        >
+                          {sendingAccount ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+                          {accountWasSent ? "Gửi lại" : "Gửi link kích hoạt"}
                         </button>
                       )}
                     </div>
@@ -1057,8 +1168,17 @@ export default function AdminConsultationsPage() {
                   {selectedRequest.status === "completed" && !hasValidTrialConfiguration && (
                     <p className="mt-2 text-[11px] font-semibold text-amber-600">Cấu hình chưa đủ: cần tên thương hiệu, ít nhất một từ khóa và một kênh theo dõi.</p>
                   )}
-                  {selectedRequest.status === "completed" && selectedRequest.trialCrawlRunId && !trialIsComplete && (
-                    <p className="mt-2 text-[11px] font-semibold text-[var(--color-text-muted)]">Tài khoản chỉ được tạo và gửi sau khi crawl hoàn tất.</p>
+                  {selectedRequest.status === "completed" && selectedRequest.trialCrawlRunId && trialCrawlActive && (
+                    <p className="mt-2 text-[11px] font-semibold text-[var(--color-text-muted)]">Đang thu thập dữ liệu. Bước xuất bản và tạo tài khoản đang được khóa.</p>
+                  )}
+                  {trialNeedsRecrawl && (
+                    <p className="mt-2 text-[11px] font-semibold text-rose-600">Phiên cào {selectedRequest.trialCrawlStatus}. Hãy kiểm tra tiến trình rồi bấm “Cào lại”.</p>
+                  )}
+                  {accountWasSent && selectedRequest.decisionEmailSentAt && (
+                    <p className="mt-2 text-[11px] font-semibold text-emerald-600">Đã gửi lúc {formatTimestamp(selectedRequest.decisionEmailSentAt)}.</p>
+                  )}
+                  {accountWasActivated && (
+                    <p className="mt-2 flex items-center gap-1.5 text-[11px] font-bold text-emerald-600"><CheckCircle2 className="h-3.5 w-3.5" /> Khách đã kích hoạt{selectedRequest.customerActivatedAt ? ` lúc ${formatTimestamp(selectedRequest.customerActivatedAt)}` : ""}.</p>
                   )}
                   {trialCrawlMessage && (
                     <p className="mt-2 text-[12px] font-semibold text-emerald-600 dark:text-emerald-400">{trialCrawlMessage}</p>
@@ -1080,16 +1200,53 @@ export default function AdminConsultationsPage() {
                           </div>
                         </div>
                         <div className="rounded-lg bg-white p-3 dark:bg-black/10">
-                          <p className="text-[11px] font-bold uppercase text-[var(--color-text-muted)]">Mật khẩu tạm thời</p>
-                          <div className="mt-1 flex items-center justify-between gap-2">
-                            <span className="font-sans text-[13px] font-bold text-[var(--color-text-primary)]">{generatedCredentials.temporaryPassword}</span>
-                            <CopyButton value={generatedCredentials.temporaryPassword} label="mật khẩu tạm thời" />
-                          </div>
+                          <p className="text-[11px] font-bold uppercase text-[var(--color-text-muted)]">Brand slug / workspace</p>
+                          <p className="mt-1 break-all font-sans text-[13px] font-bold text-[var(--color-text-primary)]">{generatedCredentials.brandSlug || selectedRequest.trialBrandSlug}</p>
                         </div>
                       </div>
                       <p className="text-[12px] font-medium text-emerald-700 dark:text-emerald-400">
-                        Hạn dùng thử: {formatTimestamp(generatedCredentials.trialEndsAt)}. Thông tin đăng nhập đã được gửi cho khách hàng.
+                        Quyền mặc định: {generatedCredentials.role || "Brand Manager"}. Hạn dùng thử: {formatTimestamp(generatedCredentials.trialEndsAt)}. Chưa gửi mật khẩu; hãy dùng nút Gửi link kích hoạt.
                       </p>
+                    </div>
+                  )}
+                  {showAccountConfirmation && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4" role="dialog" aria-modal="true" aria-labelledby="trial-account-confirm-title">
+                      <div className="w-full max-w-lg rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-5 shadow-2xl">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <h3 id="trial-account-confirm-title" className="text-[17px] font-extrabold text-[var(--color-text-primary)]">Xác nhận tạo tài khoản dùng thử</h3>
+                            <p className="mt-1 text-[12px] text-[var(--color-text-secondary)]">Tài khoản được tạo trước; link thiết lập mật khẩu sẽ gửi ở bước riêng.</p>
+                          </div>
+                          <button type="button" onClick={() => setShowAccountConfirmation(false)} className="rounded-lg p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-raised)]" aria-label="Đóng"><X className="h-4 w-4" /></button>
+                        </div>
+                        <dl className="mt-4 grid gap-3 rounded-xl bg-[var(--color-bg-surface-raised)] p-4 text-[12px] sm:grid-cols-2">
+                          <div><dt className="font-bold text-[var(--color-text-muted)]">Email đăng nhập</dt><dd className="mt-1 break-all font-semibold text-[var(--color-text-primary)]">{getAutomaticAccountPreview(selectedRequest.fullName, selectedRequest.companyEmailDomain)}</dd></div>
+                          <div><dt className="font-bold text-[var(--color-text-muted)]">Thương hiệu / workspace</dt><dd className="mt-1 font-semibold text-[var(--color-text-primary)]">{selectedRequest.company}</dd></div>
+                          <div>
+                            <dt className="font-bold text-[var(--color-text-muted)]">Thời hạn dùng thử</dt>
+                            <dd className="mt-1">
+                              <select
+                                value={trialDays}
+                                onChange={(event) => setTrialDays(Number(event.target.value) as 7 | 14)}
+                                disabled={creatingAccount}
+                                className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-2.5 py-2 text-[12px] font-semibold text-[var(--color-text-primary)] outline-none focus:border-[var(--color-brand)]"
+                              >
+                                <option value={7}>7 ngày</option>
+                                <option value={14}>14 ngày</option>
+                              </select>
+                            </dd>
+                          </div>
+                          <div><dt className="font-bold text-[var(--color-text-muted)]">Quyền mặc định</dt><dd className="mt-1 font-semibold text-[var(--color-text-primary)]">Brand Manager</dd></div>
+                          <div className="sm:col-span-2"><dt className="font-bold text-[var(--color-text-muted)]">Nền tảng có dữ liệu</dt><dd className="mt-1 font-semibold text-[var(--color-text-primary)]">{(selectedRequest.platforms || []).map((platform) => getPlatformVisual(platform).label).join(", ") || "Chưa xác định"}</dd></div>
+                          <div className="sm:col-span-2"><dt className="font-bold text-[var(--color-text-muted)]">Brand slug gắn với dữ liệu</dt><dd className="mt-1 break-all font-mono font-semibold text-[var(--color-text-primary)]">{selectedRequest.trialBrandSlug || "Đang đồng bộ"}</dd></div>
+                        </dl>
+                        <div className="mt-5 flex justify-end gap-2">
+                          <button type="button" onClick={() => setShowAccountConfirmation(false)} disabled={creatingAccount} className="h-10 rounded-lg border border-[var(--color-border)] px-4 text-[12px] font-bold text-[var(--color-text-secondary)]">Hủy</button>
+                          <button type="button" onClick={() => void handleCreateTrialAccount()} disabled={creatingAccount} className="inline-flex h-10 items-center gap-2 rounded-lg bg-emerald-600 px-4 text-[12px] font-bold text-white disabled:opacity-50">
+                            {creatingAccount && <Loader2 className="h-4 w-4 animate-spin" />} Xác nhận tạo tài khoản
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </section>
@@ -1170,7 +1327,7 @@ export default function AdminConsultationsPage() {
                           <CheckCircle2 className="h-4 w-4" /> Bước này chỉ duyệt yêu cầu
                         </p>
                         <p className="mt-1 text-[12px] leading-5 text-[var(--color-text-secondary)]">
-                          Duyệt không tạo tài khoản và không gửi thông tin đăng nhập. Sau khi trial crawl hoàn tất, nút tạo và gửi tài khoản mới được mở.
+                          Duyệt không tạo tài khoản và không gửi email. Sau khi crawl hoàn tất, admin sẽ xuất bản dữ liệu, tạo tài khoản rồi gửi link kích hoạt ở hai bước riêng.
                         </p>
                       </div>
 
@@ -1184,38 +1341,11 @@ export default function AdminConsultationsPage() {
                         <div className="rounded-lg border border-emerald-500/15 bg-white/60 p-3 dark:bg-black/10">
                           <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">Thương hiệu & thời hạn</p>
                           <p className="mt-1 text-[13px] font-bold text-[var(--color-text-primary)]">{selectedRequest.company}</p>
-                          <p className="mt-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">Dùng thử miễn phí 14 ngày</p>
+                          <p className="mt-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">Chọn thời hạn 7 hoặc 14 ngày khi tạo tài khoản</p>
                         </div>
                       </div>
                       <p className="text-[11px] leading-5 text-[var(--color-text-muted)]">
-                        Nếu email dự kiến đã tồn tại, hệ thống sẽ tự thêm số phía sau tên. Mật khẩu đáp ứng chính sách bảo mật và phải được đổi ở lần đăng nhập đầu tiên.
-                      </p>
-                    </div>
-                  )}
-
-                  {generatedCredentials && (
-                    <div className="space-y-3 rounded-xl border border-emerald-500/30 bg-emerald-50 p-4 dark:bg-emerald-950/20">
-                      <p className="flex items-center gap-2 text-[13px] font-extrabold text-emerald-700 dark:text-emerald-400">
-                        <CheckCircle2 className="h-4 w-4" /> Tài khoản dùng thử đã được tạo
-                      </p>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="rounded-lg bg-white p-3 dark:bg-black/10">
-                          <p className="text-[11px] font-bold uppercase text-[var(--color-text-muted)]">Email đăng nhập</p>
-                          <div className="mt-1 flex items-center justify-between gap-2">
-                            <span className="break-all font-sans text-[13px] font-bold text-[var(--color-text-primary)]">{generatedCredentials.email}</span>
-                            <CopyButton value={generatedCredentials.email} label="email tài khoản" />
-                          </div>
-                        </div>
-                        <div className="rounded-lg bg-white p-3 dark:bg-black/10">
-                          <p className="text-[11px] font-bold uppercase text-[var(--color-text-muted)]">Mật khẩu tạm thời</p>
-                          <div className="mt-1 flex items-center justify-between gap-2">
-                            <span className="font-sans text-[13px] font-bold text-[var(--color-text-primary)]">{generatedCredentials.temporaryPassword}</span>
-                            <CopyButton value={generatedCredentials.temporaryPassword} label="mật khẩu tạm thời" />
-                          </div>
-                        </div>
-                      </div>
-                      <p className="text-[12px] font-medium text-emerald-700 dark:text-emerald-400">
-                        Hạn dùng thử: {formatTimestamp(generatedCredentials.trialEndsAt)}. Email cảm ơn và thông tin đăng nhập đã được gửi cho khách hàng.
+                        Nếu email dự kiến đã tồn tại, hệ thống dùng lại user đó và gắn thêm workspace trial. Hệ thống không tạo hay gửi mật khẩu cố định.
                       </p>
                     </div>
                   )}

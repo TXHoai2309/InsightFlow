@@ -67,6 +67,10 @@ async function resolveProfileFromClaims(firebaseUser: NonNullable<typeof auth.cu
     storedPermissions: claims.permissions,
     storedDefaultRoute: claims.defaultRoute,
     storedTemporaryPasswordIssued: claims.temporaryPasswordIssued,
+    storedTrialAccount: claims.trialAccount,
+    storedTrialDays: claims.trialDays,
+    storedTrialStartAt: claims.trialStartAt,
+    storedTrialEndsAt: claims.trialEndsAt,
     storedOnboarding: claims.onboarding,
   });
 }
@@ -100,6 +104,10 @@ async function resolveUserProfile(firebaseUser: NonNullable<typeof auth.currentU
       storedPermissions: storedData.permissions,
       storedDefaultRoute: storedData.defaultRoute,
       storedTemporaryPasswordIssued: storedData.temporaryPasswordIssued,
+      storedTrialAccount: storedData.trialAccount,
+      storedTrialDays: storedData.trialDays,
+      storedTrialStartAt: storedData.trialStartAt,
+      storedTrialEndsAt: storedData.trialEndsAt,
       storedOnboarding: storedData.onboarding,
     });
   } else {

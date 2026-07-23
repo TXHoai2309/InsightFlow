@@ -25,6 +25,10 @@ export interface UserRoleProfile {
   permissions: string[];
   defaultRoute: string;
   temporaryPasswordIssued?: boolean;
+  trialAccount?: boolean;
+  trialDays?: number;
+  trialStartAt?: string;
+  trialEndsAt?: string;
   onboarding?: Partial<Record<UserRole, RoleOnboardingState>>;
 }
 
@@ -378,6 +382,10 @@ export function buildUserRoleProfile(params: {
   storedPermissions?: unknown;
   storedDefaultRoute?: unknown;
   storedTemporaryPasswordIssued?: unknown;
+  storedTrialAccount?: unknown;
+  storedTrialDays?: unknown;
+  storedTrialStartAt?: unknown;
+  storedTrialEndsAt?: unknown;
   storedOnboarding?: unknown;
 }): UserRoleProfile {
   const email = (params.email || "").trim().toLowerCase();
@@ -398,6 +406,23 @@ export function buildUserRoleProfile(params: {
     !Array.isArray(params.storedOnboarding)
       ? (params.storedOnboarding as UserRoleProfile["onboarding"])
       : undefined;
+  const normalizeTimestamp = (value: unknown) => {
+    if (typeof value === "string") {
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
+    }
+    if (value && typeof value === "object" && "toDate" in value) {
+      const toDate = (value as { toDate?: unknown }).toDate;
+      if (typeof toDate === "function") {
+        const parsed = toDate.call(value);
+        return parsed instanceof Date && !Number.isNaN(parsed.getTime())
+          ? parsed.toISOString()
+          : undefined;
+      }
+    }
+    return undefined;
+  };
+  const trialDays = Number(params.storedTrialDays);
 
   return {
     uid: params.uid,
@@ -420,6 +445,10 @@ export function buildUserRoleProfile(params: {
         ? params.storedDefaultRoute
         : ROLE_CONFIG[role].defaultRoute,
     temporaryPasswordIssued: params.storedTemporaryPasswordIssued === true,
+    trialAccount: params.storedTrialAccount === true,
+    trialDays: Number.isFinite(trialDays) && trialDays > 0 ? trialDays : undefined,
+    trialStartAt: normalizeTimestamp(params.storedTrialStartAt),
+    trialEndsAt: normalizeTimestamp(params.storedTrialEndsAt),
     onboarding,
   };
 }
