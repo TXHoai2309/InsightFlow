@@ -13,6 +13,7 @@ import {
   buildLeadOperationalMetrics,
   filterOperationalAlerts,
   filterOperationalLeads,
+  isAlertWithinTimeScope,
 } from "@/lib/operational-metrics";
 import { useTranslation } from "react-i18next";
 
@@ -37,15 +38,32 @@ export function BMTabs() {
     // Severity/urgency only controls priority; it must not exclude records
     // from the total shown in the tab.
     const scoped = filterOperationalAlerts(rawAlerts.filter(
-      (alert) => alert.sentiment === "negative",
+      (alert) =>
+        alert.sentiment === "negative" &&
+        isAlertWithinTimeScope(alert, {
+          timeRange: filters.time_range,
+          singleDate: filters.single_date,
+          customStartDate: filters.custom_start_date,
+          customEndDate: filters.custom_end_date,
+        }),
     ), {
       profile,
       workspaceId: filters.workspace_id,
       platform: filters.platform,
+      reviewWindowDays: 36_500,
       dateBasis: "created_at",
     });
     return buildAlertOperationalMetrics(scoped).total;
-  }, [filters.platform, filters.workspace_id, profile, rawAlerts]);
+  }, [
+    filters.custom_end_date,
+    filters.custom_start_date,
+    filters.platform,
+    filters.single_date,
+    filters.time_range,
+    filters.workspace_id,
+    profile,
+    rawAlerts,
+  ]);
 
   useEffect(() => setPendingHref(null), [pathname]);
 
@@ -62,8 +80,8 @@ export function BMTabs() {
     <div className="flex w-full items-center space-x-1 border-b border-[#C8C4D6] dark:border-gray-800 mb-6">
       {tabs.map((tab) => {
         const isActive = pathname === tab.href;
-        const isCrisisTab = tab.href.endsWith("/insights");
-        const isLeadTab = tab.href.endsWith("/lead-monitoring");
+        const isCrisisTab = tab.href === "/dashboard/insights";
+        const isLeadTab = tab.href === "/dashboard/lead-monitoring";
         
         // Active color logic based on which tab it is
         let activeColorClass = "text-[#4234B6]";

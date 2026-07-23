@@ -243,7 +243,7 @@ export function AlertDetailPanel({
     }
   };
 
-  const handleOpenCustomerContact = async () => {
+  const handleOpenCustomerContact = async (copyTemplate = false) => {
     if (!canOpenSource) return;
     if (!sourceUrl) {
       showToast("Cảnh báo này chưa có liên kết nguồn.", "error");
@@ -257,7 +257,20 @@ export function AlertDetailPanel({
 
     // Opening again should never hide the button or add duplicate workflow history.
     if (contactAlert.customer_contact_opened_at) {
-      showToast("Đã mở lại bài viết tại vị trí bình luận cảnh báo.");
+      const template =
+        contactAlert.customer_contact_template ||
+        createDefaultContactTemplate(alert.author || "Anh/Chị", alert.brand);
+      const didCopyTemplate = copyTemplate
+        ? await copyTextToClipboard(template)
+        : false;
+      showToast(
+        copyTemplate
+          ? didCopyTemplate
+            ? "Đã mở nguồn và sao chép mẫu xin lỗi."
+            : "Đã mở nguồn nhưng không thể sao chép tự động."
+          : "Đã mở lại nguồn.",
+        copyTemplate && !didCopyTemplate ? "error" : "success",
+      );
       return;
     }
 
@@ -272,15 +285,22 @@ export function AlertDetailPanel({
       template,
     });
 
-    const didCopyTemplate = await copyTextToClipboard(template);
+    const didCopyTemplate = copyTemplate
+      ? await copyTextToClipboard(template)
+      : false;
 
     // Opening a source is a local preparation step. Do not call
     // updateAlertStatus here: doing so can upsert another annotation and makes
     // the same alert appear twice in the Processing queue. The opened-at data
     // is persisted together with the evidence when the result is submitted.
-    showToast(didCopyTemplate
-      ? "Đã sao chép mẫu xin lỗi và mở nguồn. Hãy bổ sung minh chứng bên dưới."
-      : "Đã mở nguồn. Trình duyệt không cho phép sao chép tự động; bạn có thể sao chép lại mẫu trong panel.");
+    showToast(
+      copyTemplate
+        ? didCopyTemplate
+          ? "Đã mở nguồn và sao chép mẫu xin lỗi."
+          : "Đã mở nguồn nhưng không thể sao chép tự động."
+        : "Đã mở nguồn.",
+      copyTemplate && !didCopyTemplate ? "error" : "success",
+    );
   };
   const historyEntries = useMemo<AlertHistoryViewEntry[]>(() => {
     const entries: AlertHistoryViewEntry[] = [
@@ -547,7 +567,7 @@ export function AlertDetailPanel({
                 </button>
               )
             ) : canOpenSource ? (
-              <button type="button" onClick={() => void handleOpenCustomerContact()} disabled={!sourceUrl} className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 text-[13px] font-semibold text-white shadow-sm hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50" title={!sourceUrl ? "Cảnh báo chưa có liên kết nguồn" : "Mở bài viết và đi tới bình luận cảnh báo"}>
+              <button type="button" onClick={() => void handleOpenCustomerContact()} disabled={!sourceUrl} className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 text-[13px] font-semibold text-white shadow-sm hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50" title={!sourceUrl ? "Cảnh báo chưa có liên kết nguồn" : "Mở nguồn"}>
                 <ExternalLink size={16} />
                 <span className="hidden sm:inline">Mở nguồn</span>
               </button>
@@ -633,6 +653,7 @@ export function AlertDetailPanel({
                 <AlertContactWorkflow
                   alert={contactAlert}
                   getResolverName={getResolverName}
+                  onOpenSourceWithTemplate={() => handleOpenCustomerContact(true)}
                   onRecordResult={async (draft) => {
                     await onRecordResult(contactAlert, draft);
                     setOptimisticContactSession(null);

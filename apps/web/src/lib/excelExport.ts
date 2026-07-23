@@ -1402,7 +1402,7 @@ export function buildUnifiedBIInsightHTML(params: {
         <h2 style="font-family:'Georgia', 'Times New Roman', serif; color:#6B5B4D; font-size:19px; font-weight:700; margin:0 0 16px 0; letter-spacing:-0.1px;">
           Trực quan hóa
         </h2>
-        
+
         <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; background:#FAF9F6; padding:28px 24px; border-radius:12px;">
           <!-- SLA Donut SVG -->
           <div style="text-align:center; margin-bottom:24px;">
@@ -1563,6 +1563,24 @@ export function buildDualOperationsReportExcelDocument(
     row.created,
     row.resolved,
   ]);
+  const leadDetailRows = report.lead.detailRows.map((row) => [
+    row.id,
+    row.customer,
+    row.intent.toUpperCase(),
+    row.status,
+    row.slaStatus,
+    row.ownerName,
+    row.content,
+  ]);
+  const crisisDetailRows = report.crisis.detailRows.map((row) => [
+    row.id,
+    row.topic,
+    row.severity.toUpperCase(),
+    row.status,
+    row.slaStatus,
+    row.assigneeName,
+    row.content,
+  ]);
   const leadCreated7d = report.lead.responseTrend.reduce((total, row) => total + row.created, 0);
   const leadClosed7d = report.lead.responseTrend.reduce((total, row) => total + row.completed, 0);
   const crisisCreated7d = report.crisis.responseTrend.reduce((total, row) => total + row.created, 0);
@@ -1660,8 +1678,8 @@ export function buildDualOperationsReportExcelDocument(
         .recommendation { margin: 8px 0; padding: 11px 13px; border-left: 4px solid #4f46e5; background: #f4f3ff; font-size: 12px; }
         .summary { margin: 0; padding: 14px 16px; border: 1px solid #d8d4ff; background: #f7f6ff; font-size: 12px; line-height: 1.65; }
         .note { margin: 7px 0; color: #5d596b; font-size: 11px; line-height: 1.55; }
-        .data-table { border-spacing: 0; table-layout: fixed; }
-        .data-table th { padding: 9px; color: #fff; background: #4f46e5; border: 1px solid #3932bd; font-size: 11px; text-align: left; }
+        .data-table { border-spacing: 0; table-layout: fixed; width: 100%; }
+        .data-table th { padding: 9px 12px; color: #fff; background: #4f46e5; border: 1px solid #3932bd; font-size: 11px; font-weight: 700; text-align: left; }
         .data-table td { padding: 8px; border: 1px solid #dedcea; font-size: 10px; white-space: normal; word-break: break-word; }
         .data-table tr:nth-child(even) td { background: #f8f7fc; }
         .empty { padding: 20px !important; color: #6f6b7e; text-align: center; }
@@ -1673,7 +1691,7 @@ export function buildDualOperationsReportExcelDocument(
         <header class="hero">
           <p class="eyebrow">Báo cáo tổng quan thương hiệu</p>
           <h1>Vận hành Khách hàng &amp; Cảnh báo</h1>
-          <p>Bản báo cáo quản trị tập trung vào khối lượng, kết quả, rủi ro và xu hướng; không bao gồm nội dung mention chi tiết.</p>
+          <p>Bản báo cáo quản trị kết hợp chỉ số tổng quan, rủi ro, xu hướng và dữ liệu đối soát chi tiết.</p>
           <p class="meta"><strong>Kỳ báo cáo:</strong> ${escapeHtml(periodLabel)} &nbsp;·&nbsp; <strong>Phạm vi:</strong> ${escapeHtml(filterLabel)} &nbsp;·&nbsp; <strong>Cập nhật:</strong> ${escapeHtml(new Date(report.generatedAt).toLocaleString("vi-VN"))}</p>
         </header>
 
@@ -1684,7 +1702,7 @@ export function buildDualOperationsReportExcelDocument(
         </section>
 
         <section class="report-section">
-          <h2>Cần chú ý</h2>
+          <h2>Dữ liệu đối soát — Cần chú ý</h2>
           <table>
             ${attentionRows.length > 0
       ? attentionRows.map((items) => `<tr>${items.map((item) => `<td class="attention"><span>${escapeHtml(item.title)}</span><strong>${item.count}</strong><p>${escapeHtml(item.description)}</p></td>`).join("")}</tr>`).join("")

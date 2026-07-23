@@ -8,6 +8,7 @@ import { AlertDetailPanel, type AlertDetailPanelTab } from "./AlertDetailPanel";
 import type { AlertContactResultDraft } from "./AlertContactWorkflow";
 import { AlertWorkbenchRow } from "./AlertWorkbenchRow";
 import type { AlertViewer } from "@/hooks/useAlertViewPresence";
+import { isHighPriorityAlert } from "@/lib/operational-metrics";
 
 export type AlertStatusFilter = "all" | "pending" | "processing" | "contact_failed" | "resolved" | "skipped";
 type StatusFilter = AlertStatusFilter;
@@ -98,7 +99,9 @@ export function AlertWorkbench(props: AlertWorkbenchProps) {
     resolved: props.alerts.filter(isResolvedAlert).length,
     skipped: props.alerts.filter(isSkippedAlert).length,
   };
-  const urgentCount = props.alerts.filter((alert) => !isTerminalAlert(alert) && ["critical", "high"].includes(String(alert.severity).toLowerCase())).length;
+  const urgentCount = props.alerts.filter(
+    (alert) => !isTerminalAlert(alert) && isHighPriorityAlert(alert),
+  ).length;
   const openCount = counts.pending + counts.processing + counts.contact_failed;
   const timeScopeLabel = props.timeFilter === "all"
     ? "Toàn thời gian"

@@ -1099,7 +1099,7 @@ export default function LeadsPage() {
       <section id="lead-follow-up-queue" className="scroll-mt-20 space-y-[clamp(6px,0.55vw,10px)]">
         <div className="flex items-center justify-between gap-4 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <div data-tour="lead-view-tabs" className="flex min-w-max shrink-0 items-center gap-2">
-            {workbenchViews.map((view) => (
+            {workbenchViews.filter((view) => view.id !== "all").map((view) => (
               <button
                 key={view.id}
                 type="button"

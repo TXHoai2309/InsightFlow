@@ -1,10 +1,11 @@
 "use client";
 
-import React from "react";
+import React, { useMemo, useState } from "react";
 import Link from "next/link";
 import { useTranslation } from "react-i18next";
 import {
   Building2,
+  CalendarDays,
   CheckCircle2,
   Clock3,
   ExternalLink,
@@ -15,13 +16,17 @@ import {
   User,
 } from "lucide-react";
 import {
+  filterEmployeeOperationsTasks,
+  formatOperationsDueTime,
   formatOperationsRelativeTime,
+  type EmployeeOperationsPeriod,
   type EmployeeOperationsTask,
   type EmployeeTaskStatus,
 } from "@/lib/employee-operations";
 
 interface AgentKanbanBoardProps {
   tasks: EmployeeOperationsTask[];
+  nowMs: number;
 }
 
 const statusColorConfig: Record<
@@ -54,8 +59,21 @@ const statusColorConfig: Record<
   },
 };
 
-export function AgentKanbanBoard({ tasks }: AgentKanbanBoardProps) {
+const PERIOD_OPTIONS: EmployeeOperationsPeriod[] = [
+  "today",
+  "yesterday",
+  "last7Days",
+  "last30Days",
+  "all",
+];
+
+export function AgentKanbanBoard({ tasks, nowMs }: AgentKanbanBoardProps) {
   const { t } = useTranslation();
+  const [period, setPeriod] = useState<EmployeeOperationsPeriod>("today");
+  const filteredTasks = useMemo(
+    () => filterEmployeeOperationsTasks(tasks, period, nowMs),
+    [nowMs, period, tasks],
+  );
 
   const columns: Array<{
     id: EmployeeTaskStatus;
@@ -69,19 +87,39 @@ export function AgentKanbanBoard({ tasks }: AgentKanbanBoardProps) {
   ];
 
   return (
-    <div className="grid min-h-[560px] grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-4">
-      {columns.map((column) => {
-        const config = statusColorConfig[column.id];
-        const columnTasks = tasks.filter((task) => task.status === column.id);
-        const visibleTasks = columnTasks.slice(0, 20);
-        const hiddenCount = Math.max(0, columnTasks.length - visibleTasks.length);
-        const Icon = column.icon;
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-[16px] border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-[#262338] dark:bg-[#13111C]">
+        <div className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-gray-200">
+          <CalendarDays className="h-4 w-4 text-indigo-500" />
+          {t("agentDashboard.kanban.periodLabel", { defaultValue: "Thời gian hiển thị" })}
+        </div>
+        <select
+          value={period}
+          onChange={(event) => setPeriod(event.target.value as EmployeeOperationsPeriod)}
+          aria-label={t("agentDashboard.kanban.periodLabel", { defaultValue: "Thời gian hiển thị" })}
+          className="min-w-[160px] rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-700 outline-none transition-colors focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:border-[#353149] dark:bg-[#0B0914] dark:text-gray-200 dark:focus:ring-indigo-500/20"
+        >
+          {PERIOD_OPTIONS.map((option) => (
+            <option key={option} value={option}>
+              {t(`agentDashboard.kanban.period.${option}`)}
+            </option>
+          ))}
+        </select>
+      </div>
 
-        return (
-          <section
-            key={column.id}
-            className={`flex min-w-0 flex-col overflow-hidden rounded-[20px] border bg-white shadow-sm dark:bg-[#13111C] ${config.border}`}
-          >
+      <div className="grid min-h-[560px] grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-4">
+        {columns.map((column) => {
+          const config = statusColorConfig[column.id];
+          const columnTasks = filteredTasks.filter((task) => task.status === column.id);
+          const visibleTasks = columnTasks.slice(0, 20);
+          const hiddenCount = Math.max(0, columnTasks.length - visibleTasks.length);
+          const Icon = column.icon;
+
+          return (
+            <section
+              key={column.id}
+              className={`flex min-w-0 flex-col overflow-hidden rounded-[20px] border bg-white shadow-sm dark:bg-[#13111C] ${config.border}`}
+            >
             <header
               className={`flex items-center justify-between border-b px-4 py-3 ${config.border} ${config.background}`}
             >
@@ -113,8 +151,8 @@ export function AgentKanbanBoard({ tasks }: AgentKanbanBoardProps) {
                 visibleTasks.map((task) => {
                   const taskTime =
                     task.status === "completed"
-                      ? formatOperationsRelativeTime(task.completedAt)
-                      : formatOperationsRelativeTime(task.dueAt);
+                      ? formatOperationsRelativeTime(task.completedAt, nowMs)
+                      : formatOperationsDueTime(task.dueAt, nowMs);
 
                   return (
                     <Link
@@ -141,12 +179,7 @@ export function AgentKanbanBoard({ tasks }: AgentKanbanBoardProps) {
                       <div className="mt-3 flex items-center gap-1.5 text-[11px] font-bold">
                         <Clock3 className={`h-3.5 w-3.5 ${task.isOverdue ? "text-rose-500" : config.text}`} />
                         <span className={task.isOverdue ? "text-rose-600 dark:text-rose-400" : config.text}>
-                          {task.isOverdue
-                            ? t("agentDashboard.kanban.overdueAt", {
-                                time: taskTime,
-                                defaultValue: `Quá hạn · ${taskTime}`,
-                              })
-                            : taskTime}
+                          {taskTime}
                         </span>
                       </div>
 
@@ -174,9 +207,10 @@ export function AgentKanbanBoard({ tasks }: AgentKanbanBoardProps) {
                 </p>
               )}
             </div>
-          </section>
-        );
-      })}
+            </section>
+          );
+        })}
+      </div>
     </div>
   );
 }

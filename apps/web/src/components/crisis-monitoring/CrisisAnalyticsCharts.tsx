@@ -16,6 +16,10 @@ import {
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import type { AlertData } from "@/stores/alert.store";
+import {
+  getAlertCanonicalSeverity,
+  isHighPriorityAlert,
+} from "@/lib/operational-metrics";
 
 const SEVERITY_META = {
   critical: { label: "Critical", color: "#BA1A1A" },
@@ -23,14 +27,6 @@ const SEVERITY_META = {
   medium: { label: "Trung bình", color: "#5B4FCF" },
   low: { label: "Thấp", color: "#36A269" },
 } as const;
-
-function normalizeSeverity(value?: string) {
-  const severity = String(value || "").toLowerCase();
-  if (severity === "critical" || severity === "urgent") return "critical";
-  if (severity === "high") return "high";
-  if (severity === "medium" || severity === "normal") return "medium";
-  return "low";
-}
 
 function startOfDay(value: Date) {
   const date = new Date(value);
@@ -54,10 +50,7 @@ export function CrisisAnalyticsCharts({ alerts, periodDays = 14 }: { alerts: Ale
       return {
         label: day.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" }),
         total: dayAlerts.length,
-        highRisk: dayAlerts.filter((alert) => {
-          const severity = normalizeSeverity(alert.severity);
-          return severity === "critical" || severity === "high";
-        }).length,
+        highRisk: dayAlerts.filter(isHighPriorityAlert).length,
       };
     });
   }, [alerts, periodDays]);
@@ -65,7 +58,7 @@ export function CrisisAnalyticsCharts({ alerts, periodDays = 14 }: { alerts: Ale
   const severityData = useMemo(() => {
     const counts = alerts.reduce<Record<keyof typeof SEVERITY_META, number>>(
       (result, alert) => {
-        result[normalizeSeverity(alert.severity)] += 1;
+        result[getAlertCanonicalSeverity(alert)] += 1;
         return result;
       },
       { critical: 0, high: 0, medium: 0, low: 0 },

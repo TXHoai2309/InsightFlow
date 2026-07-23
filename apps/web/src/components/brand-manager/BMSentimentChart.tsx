@@ -176,15 +176,17 @@ export function BMSentimentChart({ filteredMentions }: BMSentimentChartProps) {
     return () => { chartRef.current?.destroy(); chartRef.current = null; };
   }, [filteredMentions, timeRange, theme, sentimentFilter]);
 
-  // Legend totals
-  const trend = DashboardService.calculateSentimentTrend(filteredMentions, timeRange);
-  const totals = trend.reduce(
-    (acc, d) => ({
-      positive: acc.positive + d.positive,
-      negative: acc.negative + d.negative,
-      neutral:  acc.neutral  + d.neutral,
-    }),
-    { positive: 0, negative: 0, neutral: 0 }
+  // Use the same filtered mention set as the overview cards. The chart series
+  // may use wider buckets for long periods, but its legend must always expose
+  // the exact operational totals for the selected scope.
+  const totals = filteredMentions.reduce(
+    (acc, mention) => {
+      if (mention.sentiment === "positive") acc.positive += 1;
+      else if (mention.sentiment === "negative") acc.negative += 1;
+      else acc.neutral += 1;
+      return acc;
+    },
+    { positive: 0, negative: 0, neutral: 0 },
   );
 
   const getRangeLabel = () => {
