@@ -14,6 +14,7 @@ import { auth } from "@/lib/firebase";
 import { useTheme } from "@/contexts/ThemeContext";
 import { canAccessPath } from "@/lib/rbac";
 import { useAuth } from "@/hooks/useAuth";
+import { resetDemoClientSession } from "@/lib/reset-demo-session";
 
 interface NavItem {
   href: string;
@@ -27,7 +28,7 @@ const navItems: NavItem[] = [
   { href: "/admin/create-brand-manager", label: "nav.admin_create_brand", fallback: "Tạo tài khoản Brand", icon: "ti-user-plus" },
   { href: "/admin/brand-managers", label: "nav.admin_brand_list", fallback: "Danh sách Brand", icon: "ti-building-store" },
   { href: "/admin/consultations", label: "nav.admin_consultations", fallback: "Yêu cầu tư vấn", icon: "ti-headset" },
-  { href: "/admin/crawl-operations", label: "nav.admin_crawl_operations", fallback: "Tiến trình cào", icon: "ti-pulse" },
+  { href: "/admin/crawl-operations", label: "nav.admin_crawl_operations", fallback: "Tiến trình cào", icon: "ti-loader-2" },
   { href: "/labeling_tool", label: "nav.labeling_tool", fallback: "Gắn nhãn dữ liệu", icon: "ti-tags" },
 
   { href: "/dashboard", label: "nav.dashboard", fallback: "Tổng quan", icon: "ti-layout-dashboard" },
@@ -116,6 +117,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed = false, onToggleCollapse
 
   const handleLogout = async () => {
     if (isDemoMode) {
+      resetDemoClientSession();
       router.push("/");
       return;
     }

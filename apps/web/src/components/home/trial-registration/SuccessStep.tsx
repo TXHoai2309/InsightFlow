@@ -56,7 +56,9 @@ export function SuccessStep({
             ? consultationEmailSent
               ? <>Đội ngũ InsightFlow đã nhận nhu cầu tư vấn. Email xác nhận đã được gửi tới <span className="font-bold text-[#0F172A] dark:text-white">{email}</span>; vui lòng chờ phản hồi.</>
               : "Đội ngũ InsightFlow đã nhận nhu cầu tư vấn. Yêu cầu đã được lưu, nhưng EmailJS chưa gửi được email xác nhận; đội ngũ sẽ vẫn tiếp tục xử lý."
-            : <>Đội ngũ InsightFlow đang kiểm tra thông tin xác thực. Tài khoản của doanh nghiệp sẽ được cấu hình và kích hoạt trong vòng <span className="font-bold text-[#0F172A] dark:text-white">1–2 giờ</span> tới.</>}
+            : consultationEmailSent
+              ? <>Email cảm ơn và xác nhận đăng ký đã được gửi tới <span className="font-bold text-[#0F172A] dark:text-white">{email}</span>. Đội ngũ InsightFlow đang kiểm tra thông tin trước khi phê duyệt và kích hoạt tài khoản dùng thử.</>
+              : <>Đăng ký của bạn đã được lưu thành công. Email xác nhận chưa gửi được, nhưng đội ngũ InsightFlow vẫn sẽ kiểm tra thông tin trước khi phê duyệt và kích hoạt tài khoản dùng thử.</>}
         </p>
       </div>
 
