@@ -183,8 +183,7 @@ export function LeadFilters({
               )}
             </div>
             <p className="mt-0.5 max-w-2xl text-xs text-[var(--color-text-secondary)]">
-              Thu hẹp khách hàng trong nhóm “{activeViewLabel}” theo từ khóa, nền tảng,
-              mức ưu tiên và SLA.
+              Thu hẹp khách hàng trong nhóm “{activeViewLabel}” theo nền tảng, mức ưu tiên và SLA.
             </p>
           </div>
 
@@ -199,26 +198,7 @@ export function LeadFilters({
           )}
         </header>
 
-        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-6">
-          <div className="md:col-span-2 xl:col-span-2">
-            <label htmlFor="lead-filter-query" className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
-              Tìm kiếm
-            </label>
-            <div className="relative">
-              <span className="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-base text-[var(--color-text-muted)]">
-                search
-              </span>
-              <input
-                id="lead-filter-query"
-                type="search"
-                value={value.query}
-                onChange={(event) => patchValue({ query: event.target.value })}
-                placeholder="Tên khách hàng hoặc nội dung"
-                className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] py-2 pl-9 pr-3 text-sm text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]"
-              />
-            </div>
-          </div>
-
+        <div className={`grid gap-2 md:grid-cols-2 ${brandLocked ? "xl:grid-cols-5" : "xl:grid-cols-6"}`}>
           {!brandLocked && (
             <div>
               <label htmlFor="lead-filter-workspace" className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
