@@ -671,11 +671,11 @@ export const useAlertStore = create<AlertState>()(
         const loadGeneration = ++alertLoadGeneration;
         try {
           const rawBrandKey = (scopedBrandKey === "global" || !scopedBrandKey) ? undefined : scopedBrandKey;
-          const rawData = await DashboardService.fetchRawData({
+          const mentions = await DashboardService.fetchAlertMentions({
             brandKey: rawBrandKey,
             forceRefresh,
           });
-          const filtered = buildAlertsFromMentions(rawData.mentions, scopedBrandKey);
+          const filtered = buildAlertsFromMentions(mentions, scopedBrandKey);
 
           const scopedBrands = Array.from(new Set(filtered.map((alert) => alert.brand))).sort();
           const fallbackBrands = ["Highlands Coffee", "Starbucks", "Mixue"].filter((brand) => {
@@ -719,8 +719,8 @@ export const useAlertStore = create<AlertState>()(
       };
 
       try {
-        // fetchRawData shares its promise cache with Dashboard. A forced
-        // refresh is still propagated so explicit reloads cannot reuse stale rows.
+        // The alert-only mention snapshot shares the mention cache with the
+        // dashboard, but never waits for Lead workflow hydration.
         await loadAlerts(force);
 
         // Demo pages use DashboardService's in-memory sample data only. Do not

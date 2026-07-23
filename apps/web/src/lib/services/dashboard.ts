@@ -1896,6 +1896,22 @@ export class DashboardService {
   }
 
   /**
+   * Load the brand-scoped mention snapshot used by the operational Alerts queue.
+   *
+   * This path deliberately does not hydrate Lead workflow rows. Alerts and the
+   * employee operations dashboard must remain available even when the `leads`
+   * table is large or temporarily unavailable.
+   */
+  static async fetchAlertMentions(opts: FetchOptions = {}): Promise<Mention[]> {
+    if (typeof window !== "undefined" && window.location.pathname.startsWith("/demo")) {
+      const { dummyMentions } = await import("@/lib/demoData");
+      return dummyMentions;
+    }
+
+    return fetchSupabaseMentions(opts);
+  }
+
+  /**
    * Fetch raw data from Firestore.
    * Mapping field names Firestore → internal types happens here.
    */
