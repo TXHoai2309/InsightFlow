@@ -97,6 +97,7 @@ export interface EscalationData {
 
 export interface AlertData {
   id: string;
+  annotation_id?: string;
   source_id?: string;
   brand: string;
   source: string;
@@ -106,6 +107,8 @@ export interface AlertData {
   severity: string;
   negativity_score: number;
   created_at: string;
+  /** Latest persisted workflow/annotation update used to reject stale realtime events. */
+  updated_at?: string;
   /** Time the mention was ingested/classified and entered the workflow. */
   detected_at?: string;
   status: string;
@@ -380,6 +383,7 @@ function mentionToAlertData(m: Mention): AlertData {
     severity,
     negativity_score: negativity.score,
     created_at: m.posted_at || m.created_at,
+    updated_at: labelObj.updated_at || labelObj.workflow_updated_at || m.classified_at,
     detected_at: m.classified_at || m.created_at || m.posted_at,
     status: resolveAlertStatusFromLabel(labelObj),
     resolved_at: labelObj.resolved_at,
@@ -499,6 +503,13 @@ function applyRealtimeAnnotationUpdate(
   const resolvedByEmail = row.resolved_by_email || labelObj.resolved_by_email || null;
   const resolvedByName = row.resolved_by_name || labelObj.resolved_by_name || null;
   const newStatus = row.status || row.resolution_status || resolveAlertStatusFromLabel(labelObj);
+  const incomingUpdatedAt = String(
+    row.updated_at ||
+    labelObj.updated_at ||
+    row.being_resolved_at ||
+    labelObj.being_resolved_at ||
+    "",
+  ).trim();
   const getRealtimeValue = (key: string, currentValue: unknown) => {
     if (Object.prototype.hasOwnProperty.call(row, key)) return row[key];
     if (Object.prototype.hasOwnProperty.call(labelObj, key)) return labelObj[key];
@@ -534,6 +545,17 @@ function applyRealtimeAnnotationUpdate(
     const nextRecentLocks = { ...state.recentLocks };
     const nextRawAlerts = state.rawAlerts.map((alert) => {
       if (!lookupIds.some((lookupId) => isSameAlertRecord(alert, lookupId))) return alert;
+
+      const currentUpdatedAtMs = new Date(alert.updated_at || 0).getTime();
+      const incomingUpdatedAtMs = new Date(incomingUpdatedAt || 0).getTime();
+      if (
+        Number.isFinite(currentUpdatedAtMs) &&
+        Number.isFinite(incomingUpdatedAtMs) &&
+        currentUpdatedAtMs > incomingUpdatedAtMs
+      ) {
+        return alert;
+      }
+
       changed = true;
       nextRecentLocks[alert.id] = {
         email: beingResolvedBy,
@@ -542,6 +564,7 @@ function applyRealtimeAnnotationUpdate(
       return {
         ...alert,
         status: newStatus || alert.status,
+        updated_at: incomingUpdatedAt || alert.updated_at,
         resolved_at: getRealtimeValue("resolved_at", alert.resolved_at) || undefined,
         being_resolved_by: getRealtimeValue("being_resolved_by", beingResolvedBy) || null,
         being_resolved_at: getRealtimeValue("being_resolved_at", beingResolvedAt) || null,
@@ -552,6 +575,11 @@ function applyRealtimeAnnotationUpdate(
         skipped_by_uid: getRealtimeValue("skipped_by_uid", alert.skipped_by_uid) || null,
         skipped_by_email: getRealtimeValue("skipped_by_email", alert.skipped_by_email) || null,
         skipped_by_name: getRealtimeValue("skipped_by_name", alert.skipped_by_name) || null,
+        monitoring_started_at: getRealtimeValue("monitoring_started_at", alert.monitoring_started_at) || undefined,
+        monitoring_duration_hours: getRealtimeValue("monitoring_duration_hours", alert.monitoring_duration_hours) || undefined,
+        monitoring_initial_comments: getRealtimeValue("monitoring_initial_comments", alert.monitoring_initial_comments) || undefined,
+        monitoring_initial_likes: getRealtimeValue("monitoring_initial_likes", alert.monitoring_initial_likes) || undefined,
+        monitoring_initial_shares: getRealtimeValue("monitoring_initial_shares", alert.monitoring_initial_shares) || undefined,
         resolution_history: Array.isArray(row.resolution_history || labelObj.resolution_history)
           ? (row.resolution_history || labelObj.resolution_history)
           : alert.resolution_history,
@@ -1012,6 +1040,7 @@ export const useAlertStore = create<AlertState>()(
             return {
               ...alert,
               status: newStatus,
+              updated_at: operationAt,
               resolution_history: nextHistory,
               resolved_at: resolvedAt || undefined,
               resolved_by_email: resolvedAt ? profile.email : null,
@@ -1032,7 +1061,20 @@ export const useAlertStore = create<AlertState>()(
               // so the filter hides it from other officers instantly
               ...(newStatus === "resolving" ? {
                 being_resolved_by: profile.email,
-                being_resolved_at: new Date().toISOString(),
+                being_resolved_at: operationAt,
+                resolved_at: undefined,
+                resolved_by: null,
+                resolved_by_email: null,
+                resolved_by_name: null,
+                skipped_at: null,
+                skipped_by_uid: null,
+                skipped_by_email: null,
+                skipped_by_name: null,
+                monitoring_started_at: undefined,
+                monitoring_duration_hours: undefined,
+                monitoring_initial_comments: undefined,
+                monitoring_initial_likes: undefined,
+                monitoring_initial_shares: undefined,
               } : {}),
               // Terminal states release the active ownership lock.
               ...(["resolved", "skipped"].includes(newStatus) ? {
@@ -1213,7 +1255,20 @@ export const useAlertStore = create<AlertState>()(
             // Persist ownership together with the workflow status. The Alert
             // list and detail page then agree after a single "Nhận xử lý" click.
             updateObj.being_resolved_by = existingLabel.being_resolved_by || profile.email;
-            updateObj.being_resolved_at = existingLabel.being_resolved_at || new Date().toISOString();
+            updateObj.being_resolved_at = operationAt;
+            updateObj.resolved_at = null;
+            updateObj.resolved_by = null;
+            updateObj.resolved_by_email = null;
+            updateObj.resolved_by_name = null;
+            updateObj.skipped_at = null;
+            updateObj.skipped_by_uid = null;
+            updateObj.skipped_by_email = null;
+            updateObj.skipped_by_name = null;
+            updateObj.monitoring_started_at = null;
+            updateObj.monitoring_duration_hours = null;
+            updateObj.monitoring_initial_comments = null;
+            updateObj.monitoring_initial_likes = null;
+            updateObj.monitoring_initial_shares = null;
           }
 
           return updateObj;

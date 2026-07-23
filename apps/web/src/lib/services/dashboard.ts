@@ -1224,6 +1224,9 @@ function getSupabaseLabel(
   const rawLabel = {
     ...rowLabels,
     ...annotationLabel,
+    // Preserve the workflow clock so downstream deduplication can choose the
+    // newest annotation instead of the copy with the longest old history.
+    updated_at: annotationLabel.updated_at || annotation?.updated_at,
     intent:
       hasAnnotationIntent || hasRowLabelIntent || inferredIntent !== "none"
         ? inferredIntent
@@ -1296,8 +1299,8 @@ function supabasePostToMention(row: SupabaseRow, annotationByKey: Map<string, Su
         : 100,
     created_at: parseDate(row.updated_at || row.created_at || row.crawled_at || row.posted_at),
     classified_at: parseDate(
-      annotation?.created_at ||
-        annotation?.updated_at ||
+      annotation?.updated_at ||
+        annotation?.created_at ||
         row.updated_at ||
         row.created_at ||
         row.crawled_at ||
@@ -1367,8 +1370,8 @@ function supabaseCommentToMention(
         : 100,
     created_at: parseDate(row.updated_at || row.created_at || row.crawled_at || row.posted_at),
     classified_at: parseDate(
-      annotation?.created_at ||
-        annotation?.updated_at ||
+      annotation?.updated_at ||
+        annotation?.created_at ||
         row.updated_at ||
         row.created_at ||
         row.crawled_at ||
@@ -1961,7 +1964,7 @@ export class DashboardService {
   * the background and replaces this preview when it is ready.
   */
   static async fetchTodayLeadPreview(opts: LeadPreviewOptions): Promise<Lead[]> {
-    if (typeof window !== "undefined" && window.location.pathname.startsWith("/demo")) {
+    if (isDemoRuntime()) {
       const { dummyLeads } = await import("@/lib/demoData");
       const start = new Date(opts.postedFrom).getTime();
       const end = new Date(opts.postedBefore).getTime();

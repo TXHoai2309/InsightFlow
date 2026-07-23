@@ -103,6 +103,40 @@ test("alert operational scope deduplicates records and exposes queue-compatible 
   assert.equal(metrics.highActive, 1);
 });
 
+test("deduplication prefers a newer claim over an older closed copy", () => {
+  const now = new Date("2026-07-23T12:00:00.000Z").getTime();
+  const alerts = [
+    alert({
+      id: "closed-copy",
+      source_id: "same-native-alert",
+      status: "resolved",
+      resolved_at: "2026-07-14T08:00:00.000Z",
+      updated_at: "2026-07-14T08:00:00.000Z",
+      resolution_history: [
+        {
+          attempt_number: 1,
+          timestamp: "2026-07-14T08:00:00.000Z",
+          note: "Old completion",
+        },
+      ],
+    }),
+    alert({
+      id: "processing-copy",
+      source_id: "same-native-alert",
+      status: "resolving",
+      being_resolved_by: "agent@highlandscoffee.com",
+      being_resolved_at: "2026-07-23T08:00:00.000Z",
+      updated_at: "2026-07-23T08:00:00.000Z",
+    }),
+  ];
+
+  const scoped = filterOperationalAlerts(alerts, { profile: manager, nowMs: now });
+
+  assert.equal(scoped.length, 1);
+  assert.equal(scoped[0]?.id, "processing-copy");
+  assert.equal(scoped[0]?.status, "resolving");
+});
+
 test("urgent is normalized as critical and counted in the shared high-priority metric", () => {
   const alerts = [
     alert({ id: "critical", severity: "critical" }),
