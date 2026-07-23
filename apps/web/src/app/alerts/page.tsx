@@ -31,7 +31,6 @@ import {
 } from "@/lib/alertWorkflow";
 import {
   canAccessAlertQueue,
-  canAlertBeVisibleToUser,
   isAlertOwnedByUser,
 } from "@/lib/alert-visibility";
 import { findAlertByNavigationTarget } from "@/lib/alert-navigation";
@@ -40,8 +39,9 @@ import { usePinnedQueue } from "@/hooks/usePinnedQueue";
 import { useAlertViewPresence } from "@/hooks/useAlertViewPresence";
 import { getAlertSourceUrl } from "@/lib/alert-source-url";
 import {
-  getAlertCompletenessScore,
-  getAlertDeduplicationKey,
+  filterOperationalAlerts,
+  isAlertWithinTimeScope,
+  isHighPriorityAlert,
 } from "@/lib/operational-metrics";
 import { isCrisisClassificationLabel } from "@/lib/label-change";
 import { isDemoPath, toDemoHref } from "@/lib/demo-navigation";
@@ -347,58 +347,14 @@ export default function AlertsPage() {
       });
     }
 
-    if (timeFilter !== "all") {
-      const now = new Date();
-      let startDate: Date | null = null;
-      let endDate: Date | null = null;
-
-      const startOfToday = new Date();
-      startOfToday.setHours(0, 0, 0, 0);
-      const startOfTodayMs = startOfToday.getTime();
-
-      if (timeFilter === "24h") {
-        startDate = new Date(startOfTodayMs);
-      } else if (timeFilter === "2d") {
-        startDate = new Date(startOfTodayMs - 1 * 24 * 60 * 60 * 1000);
-      } else if (timeFilter === "3d") {
-        startDate = new Date(startOfTodayMs - 2 * 24 * 60 * 60 * 1000);
-      } else if (timeFilter === "5d") {
-        startDate = new Date(startOfTodayMs - 4 * 24 * 60 * 60 * 1000);
-      } else if (timeFilter === "7d") {
-        startDate = new Date(startOfTodayMs - 6 * 24 * 60 * 60 * 1000);
-      } else if (timeFilter === "30d") {
-        startDate = new Date(startOfTodayMs - 29 * 24 * 60 * 60 * 1000);
-      } else if (timeFilter === "this_month") {
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-      } else if (timeFilter === "last_month") {
-        startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        endDate = new Date(now.getFullYear(), now.getMonth(), 1);
-      } else if (timeFilter === "single") {
-        if (singleDate) {
-          startDate = new Date(singleDate + "T00:00:00");
-          endDate = new Date(singleDate + "T23:59:59");
-        }
-      } else if (timeFilter === "custom") {
-        if (customStartDate) startDate = new Date(customStartDate + "T00:00:00");
-        if (customEndDate) endDate = new Date(customEndDate + "T23:59:59");
-      } else if (/^\d{4}-\d{2}$/.test(timeFilter)) {
-        const [year, month] = timeFilter.split("-").map(Number);
-        startDate = new Date(year, month - 1, 1);
-        endDate = new Date(year, month, 1);
-      }
-
-      if (startDate || endDate) {
-        result = result.filter(a => {
-          // The time selector consistently refers to the publication date of
-          // the post/comment that generated the alert, regardless of status.
-          const eventDate = new Date(a.created_at);
-          if (isNaN(eventDate.getTime())) return false;
-          if (startDate && eventDate < startDate) return false;
-          if (endDate && eventDate > endDate) return false;
-          return true;
-        });
-      }
-    }
+    result = result.filter((alert) =>
+      isAlertWithinTimeScope(alert, {
+        timeRange: timeFilter,
+        singleDate,
+        customStartDate,
+        customEndDate,
+      }),
+    );
 
     return result;
   }, [alertScope, rawAlerts, filters.brand, timeFilter, singleDate, customStartDate, customEndDate]);
@@ -443,17 +399,11 @@ export default function AlertsPage() {
   };
 
   const visibleBaseAlerts = useMemo(() => {
-    const deduplicated = new Map<string, AlertData>();
-    brandFilteredAlerts
-      .filter((alert) => canAlertBeVisibleToUser(alert, profile))
-      .forEach((alert) => {
-        const key = getAlertDeduplicationKey(alert);
-        const existing = deduplicated.get(key);
-        if (!existing || getAlertCompletenessScore(alert) > getAlertCompletenessScore(existing)) {
-          deduplicated.set(key, alert);
-        }
-      });
-    return Array.from(deduplicated.values());
+    return filterOperationalAlerts(brandFilteredAlerts, {
+      profile,
+      reviewWindowDays: 36_500,
+      dateBasis: "created_at",
+    });
   }, [brandFilteredAlerts, profile]);
 
   useEffect(() => {
@@ -558,7 +508,7 @@ export default function AlertsPage() {
     // 2. Severity filter
     if (severityFilter !== "all") {
       result = result.filter(a => severityFilter === "high_priority"
-        ? ["critical", "high"].includes(String(a.severity || "").toLowerCase())
+        ? isHighPriorityAlert(a)
         : String(a.severity || "").toLowerCase() === severityFilter.toLowerCase());
     }
 

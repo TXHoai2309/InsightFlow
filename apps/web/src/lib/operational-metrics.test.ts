@@ -9,7 +9,11 @@ import {
   filterNegativeOperationalAlerts,
   filterOperationalAlerts,
   filterOperationalLeads,
+  getAlertCanonicalSeverity,
+  isAlertWithinTimeScope,
+  isHighPriorityAlert,
   isAlertInReviewWindow,
+  normalizeAlertSeverity,
 } from "./operational-metrics";
 
 const manager: UserRoleProfile = {
@@ -97,6 +101,45 @@ test("alert operational scope deduplicates records and exposes queue-compatible 
   assert.equal(metrics.active, 1);
   assert.equal(metrics.resolved, 1);
   assert.equal(metrics.highActive, 1);
+});
+
+test("urgent is normalized as critical and counted in the shared high-priority metric", () => {
+  const alerts = [
+    alert({ id: "critical", severity: "critical" }),
+    alert({ id: "urgent", severity: "urgent" }),
+    alert({ id: "high", severity: "high" }),
+    alert({ id: "medium", severity: "medium" }),
+    alert({ id: "resolved-urgent", severity: "urgent", status: "resolved" }),
+  ];
+
+  assert.equal(normalizeAlertSeverity("urgent"), "critical");
+  assert.equal(isHighPriorityAlert(alerts[1]), true);
+  assert.equal(
+    getAlertCanonicalSeverity(
+      alert({ severity: "low", urgency: "urgent" }),
+    ),
+    "critical",
+  );
+  assert.equal(buildAlertOperationalMetrics(alerts).highActive, 3);
+});
+
+test("shared alert time scope uses exact calendar and custom ranges", () => {
+  const item = alert({ created_at: "2026-06-15T08:00:00.000Z" });
+  const nowMs = new Date("2026-07-23T12:00:00.000Z").getTime();
+
+  assert.equal(
+    isAlertWithinTimeScope(item, { timeRange: "30d", nowMs }),
+    false,
+  );
+  assert.equal(
+    isAlertWithinTimeScope(item, {
+      timeRange: "custom",
+      customStartDate: "2026-06-01",
+      customEndDate: "2026-06-30",
+      nowMs,
+    }),
+    true,
+  );
 });
 
 test("alert operational scope collapses a native Threads object stored as post and comment", () => {

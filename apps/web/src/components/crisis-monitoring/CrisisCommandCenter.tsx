@@ -20,7 +20,10 @@ import { isSkippedAlert, isTerminalAlert } from "@/lib/alertWorkflow";
 import {
   buildAlertOperationalMetrics,
   filterNegativeOperationalAlerts,
+  getAlertCanonicalSeverity,
   getAlertDeduplicationKey,
+  isAlertWithinTimeScope,
+  isHighPriorityAlert,
 } from "@/lib/operational-metrics";
 import { getDiscussionPeriodDays } from "@/lib/dashboard-display";
 import { cn } from "@/lib/utils";
@@ -73,16 +76,8 @@ function buildStats(alerts: AlertData[], getKey: (alert: AlertData) => string, l
     .sort((left, right) => right.count - left.count);
 }
 
-function normalizeSeverity(value?: string) {
-  const severity = String(value || "").toLowerCase();
-  if (severity === "critical" || severity === "urgent") return "critical";
-  if (severity === "high") return "high";
-  if (severity === "medium" || severity === "normal") return "medium";
-  return "low";
-}
-
 function slaLimitHours(alert: AlertData) {
-  const severity = normalizeSeverity(alert.severity);
+  const severity = getAlertCanonicalSeverity(alert);
   if (severity === "critical") return 1;
   if (severity === "high") return 2;
   if (severity === "medium") return 4;
@@ -147,20 +142,37 @@ export function CrisisCommandCenter() {
   const alerts = useMemo(() => {
     // Every negative mention must enter the Crisis work queue. The crisis
     // classification is a priority signal, not an admission condition.
-    return filterNegativeOperationalAlerts(rawAlerts, {
+    const timeScopedAlerts = rawAlerts.filter((alert) =>
+      isAlertWithinTimeScope(alert, {
+        timeRange: filters.time_range,
+        singleDate: filters.single_date,
+        customStartDate: filters.custom_start_date,
+        customEndDate: filters.custom_end_date,
+      }),
+    );
+    return filterNegativeOperationalAlerts(timeScopedAlerts, {
       profile,
       workspaceId: filters.workspace_id,
       platform: filters.platform,
-      reviewWindowDays: periodDays,
+      reviewWindowDays: 36_500,
       dateBasis: "created_at",
     });
-  }, [filters.platform, filters.workspace_id, periodDays, profile, rawAlerts]);
+  }, [
+    filters.custom_end_date,
+    filters.custom_start_date,
+    filters.platform,
+    filters.single_date,
+    filters.time_range,
+    filters.workspace_id,
+    profile,
+    rawAlerts,
+  ]);
 
   const data = useMemo(() => {
     const operationalMetrics = buildAlertOperationalMetrics(alerts);
     const skippedAlertKeys = new Set(rawAlerts.filter(isSkippedAlert).map(getAlertDeduplicationKey));
     const activeAlerts = alerts.filter((alert) => isActive(alert) && !skippedAlertKeys.has(getAlertDeduplicationKey(alert)));
-    const criticalAlerts = activeAlerts.filter((alert) => alert.sentiment === "negative" && ["critical", "high"].includes(normalizeSeverity(alert.severity)));
+    const criticalAlerts = activeAlerts.filter(isHighPriorityAlert);
     const overdueAlerts = activeAlerts.filter((alert) => !isSkippedAlert(alert) && isOverdue(alert));
     const unassignedAlerts = activeAlerts.filter((alert) => !isSkippedAlert(alert) && !alert.being_resolved_by);
     const resolvedAlerts = alerts.filter((alert) => !isActive(alert));
@@ -170,12 +182,8 @@ export function CrisisCommandCenter() {
     return { activeAlerts, criticalAlerts, overdueAlerts, unassignedAlerts, resolvedAlerts, platformStats, topicStats, latestAlert, operationalMetrics };
   }, [alerts, rawAlerts]);
 
-  const totalNegativeHref = `/alerts?status=all&time=${encodeURIComponent(filters.time_range)}`;
-  const highPriorityHref = `/alerts?status=all&time=${encodeURIComponent(filters.time_range)}&severity=high_priority`;
-  const overdueHref = `/alerts?status=all&time=${encodeURIComponent(filters.time_range)}&sla=overdue`;
-  const unassignedHref = `/alerts?status=pending&time=${encodeURIComponent(filters.time_range)}`;
   const alertFilterHref = (extra: Record<string, string> = {}) => {
-    const params = new URLSearchParams({ scope: "crisis", status: "all", time: filters.time_range, ...extra });
+    const params = new URLSearchParams({ scope: "negative", status: "all", time: filters.time_range, ...extra });
     if (filters.workspace_id !== "all") params.set("brand", filters.workspace_id);
     if (filters.platform !== "all") params.set("source", filters.platform);
     if (filters.single_date) params.set("date", filters.single_date);
@@ -183,6 +191,10 @@ export function CrisisCommandCenter() {
     if (filters.custom_end_date) params.set("end", filters.custom_end_date);
     return `/alerts?${params.toString()}`;
   };
+  const totalNegativeHref = alertFilterHref();
+  const highPriorityHref = alertFilterHref({ severity: "high_priority" });
+  const overdueHref = alertFilterHref({ sla: "overdue" });
+  const unassignedHref = alertFilterHref({ status: "pending" });
   const topPlatform = data.platformStats[0];
   const topTopic = data.topicStats[0];
   return (

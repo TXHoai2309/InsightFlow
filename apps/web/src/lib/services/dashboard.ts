@@ -64,6 +64,7 @@ import {
   mergeLeadWorkflowRows,
 } from "@/lib/lead-workflow-state";
 import { deduplicateSourceRecords } from "@/lib/source-content-identity";
+import { buildSentimentTrend } from "@/lib/sentiment-trend";
 
 // ─── Collection names ────────────────────────────────────────────────────────
 export const COLLECTION_NAMES = {
@@ -3374,87 +3375,6 @@ export class DashboardService {
     mentions: Mention[],
     timeRange: DashboardFilters["time_range"],
   ): SentimentTrendPoint[] {
-    const now = Date.now();
-
-    if (timeRange === "24h") {
-      const result: SentimentTrendPoint[] = [];
-      for (let i = 23; i >= 0; i--) {
-        const slotEnd = now - i * 60 * 60 * 1000;
-        const slotStart = slotEnd - 60 * 60 * 1000;
-        const slot = mentions.filter((m) => {
-          // Dùng posted_at (ngày đăng bài) để vẽ biểu đồ
-          const t = new Date(m.posted_at).getTime();
-          return t >= slotStart && t < slotEnd;
-        });
-        const d = new Date(slotEnd);
-        result.push({
-          date: `${String(d.getHours()).padStart(2, "0")}:00`,
-          positive: slot.filter((m) => m.sentiment === "positive").length,
-          negative: slot.filter((m) => m.sentiment === "negative").length,
-          neutral: slot.filter((m) => m.sentiment === "neutral").length,
-        });
-      }
-      return result;
-    }
-
-    // Group theo ngày đăng bài (posted_at)
-    let days = 30;
-    if (timeRange === "2d") {
-      days = 2;
-    } else if (timeRange === "3d") {
-      days = 3;
-    } else if (timeRange === "5d") {
-      days = 5;
-    } else if (timeRange === "7d") {
-      days = 7;
-    } else if (timeRange === "30d") {
-      days = 30;
-    } else if (timeRange === "all") {
-      if (mentions.length === 0) {
-        return [];
-      }
-      const timestamps = mentions.map((m) => new Date(m.posted_at).getTime());
-      const minTimestamp = Math.min(...timestamps);
-      const diffMs = now - minTimestamp;
-      const diffDays = Math.ceil(diffMs / (24 * 60 * 60 * 1000));
-      // Giới hạn tối thiểu 1 ngày, tối đa 90 ngày để tránh render quá tải
-      days = Math.max(1, Math.min(90, diffDays));
-    } else if (timeRange === "custom") {
-      if (mentions.length > 0) {
-        const timestamps = mentions.map((m) => new Date(m.posted_at).getTime());
-        const minTimestamp = Math.min(...timestamps);
-        const maxTimestamp = Math.max(...timestamps, now);
-        const diffMs = maxTimestamp - minTimestamp;
-        days = Math.max(1, Math.min(90, Math.ceil(diffMs / (24 * 60 * 60 * 1000))));
-      } else {
-        days = 30;
-      }
-    }
-
-    const result: SentimentTrendPoint[] = [];
-    for (let i = days - 1; i >= 0; i--) {
-      const dayStart = new Date(now);
-      dayStart.setDate(dayStart.getDate() - i);
-      dayStart.setHours(0, 0, 0, 0);
-      const dayEnd = new Date(dayStart);
-      dayEnd.setDate(dayEnd.getDate() + 1);
-
-      const slot = mentions.filter((m) => {
-        // Dùng posted_at (ngày đăng bài thật) thay vì created_at (ngày cào)
-        const t = new Date(m.posted_at).getTime();
-        return t >= dayStart.getTime() && t < dayEnd.getTime();
-      });
-
-      result.push({
-        date: dayStart.toLocaleDateString("vi-VN", {
-          day: "2-digit",
-          month: "2-digit",
-        }),
-        positive: slot.filter((m) => m.sentiment === "positive").length,
-        negative: slot.filter((m) => m.sentiment === "negative").length,
-        neutral: slot.filter((m) => m.sentiment === "neutral").length,
-      });
-    }
-    return result;
+    return buildSentimentTrend(mentions, timeRange);
   }
 }

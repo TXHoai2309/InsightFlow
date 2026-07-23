@@ -124,6 +124,115 @@ export function getAlertDeduplicationKey(alert: AlertData) {
   return getSourceRecordTypedKey(alert);
 }
 
+export type CanonicalAlertSeverity =
+  | "critical"
+  | "high"
+  | "medium"
+  | "low";
+
+export function normalizeAlertSeverity(
+  value: unknown,
+): CanonicalAlertSeverity {
+  const severity = String(value || "").trim().toLowerCase();
+  if (severity === "critical" || severity === "urgent") return "critical";
+  if (severity === "high") return "high";
+  if (severity === "medium" || severity === "normal") return "medium";
+  return "low";
+}
+
+export function getAlertCanonicalSeverity(
+  alert: Pick<AlertData, "severity" | "urgency">,
+) {
+  const severityRank: Record<CanonicalAlertSeverity, number> = {
+    critical: 4,
+    high: 3,
+    medium: 2,
+    low: 1,
+  };
+  const severity = normalizeAlertSeverity(alert.severity);
+  const urgency = normalizeAlertSeverity(alert.urgency);
+  return severityRank[urgency] > severityRank[severity] ? urgency : severity;
+}
+
+export function isHighPriorityAlert(
+  alert: Pick<AlertData, "severity" | "urgency">,
+) {
+  const severity = getAlertCanonicalSeverity(alert);
+  return severity === "critical" || severity === "high";
+}
+
+export function isAlertWithinTimeScope(
+  alert: Pick<AlertData, "created_at">,
+  {
+    timeRange,
+    singleDate = "",
+    customStartDate = "",
+    customEndDate = "",
+    nowMs = Date.now(),
+  }: {
+    timeRange: string;
+    singleDate?: string;
+    customStartDate?: string;
+    customEndDate?: string;
+    nowMs?: number;
+  },
+) {
+  if (timeRange === "all") return true;
+
+  const eventMs = new Date(alert.created_at || "").getTime();
+  if (!Number.isFinite(eventMs)) return false;
+
+  const today = new Date(nowMs);
+  today.setHours(0, 0, 0, 0);
+  let startMs: number | null = null;
+  let endMs: number | null = null;
+
+  const calendarDays: Record<string, number> = {
+    "24h": 1,
+    "2d": 2,
+    "3d": 3,
+    "5d": 5,
+    "7d": 7,
+    "30d": 30,
+  };
+  const dayCount = calendarDays[timeRange];
+
+  if (dayCount) {
+    startMs = today.getTime() - (dayCount - 1) * 24 * 60 * 60 * 1000;
+    endMs = today.getTime() + 24 * 60 * 60 * 1000;
+  } else if (timeRange === "this_month") {
+    startMs = new Date(today.getFullYear(), today.getMonth(), 1).getTime();
+    endMs = new Date(today.getFullYear(), today.getMonth() + 1, 1).getTime();
+  } else if (timeRange === "last_month") {
+    startMs = new Date(today.getFullYear(), today.getMonth() - 1, 1).getTime();
+    endMs = new Date(today.getFullYear(), today.getMonth(), 1).getTime();
+  } else if (timeRange === "single" && singleDate) {
+    startMs = new Date(`${singleDate}T00:00:00`).getTime();
+    endMs = new Date(`${singleDate}T00:00:00`).getTime() + 24 * 60 * 60 * 1000;
+  } else if (timeRange === "custom") {
+    if (customStartDate) {
+      startMs = new Date(`${customStartDate}T00:00:00`).getTime();
+    }
+    if (customEndDate) {
+      endMs =
+        new Date(`${customEndDate}T00:00:00`).getTime() +
+        24 * 60 * 60 * 1000;
+    }
+  } else if (/^\d{4}-\d{2}$/.test(timeRange)) {
+    const [year, month] = timeRange.split("-").map(Number);
+    startMs = new Date(year, month - 1, 1).getTime();
+    endMs = new Date(year, month, 1).getTime();
+  }
+
+  if (startMs !== null && (!Number.isFinite(startMs) || eventMs < startMs)) {
+    return false;
+  }
+  if (endMs !== null && (!Number.isFinite(endMs) || eventMs >= endMs)) {
+    return false;
+  }
+  return true;
+}
+
 export function getAlertCompletenessScore(alert: AlertData) {
   const workflowStatus = getAlertWorkflowStatus(alert);
   return (
@@ -136,10 +245,10 @@ export function getAlertCompletenessScore(alert: AlertData) {
 }
 
 function getOperationalAlertSlaHours(alert: AlertData) {
-  const severity = String(alert.severity || alert.urgency || "").trim().toLowerCase();
-  if (severity === "critical" || severity === "urgent") return 1;
+  const severity = getAlertCanonicalSeverity(alert);
+  if (severity === "critical") return 1;
   if (severity === "high") return 2;
-  if (severity === "medium" || severity === "normal") return 4;
+  if (severity === "medium") return 4;
   return 8;
 }
 
@@ -217,10 +326,7 @@ export function filterNegativeOperationalAlerts(
 export function buildAlertOperationalMetrics(alerts: AlertData[]): AlertOperationalMetrics {
   const statuses = alerts.map(getAlertWorkflowStatus);
   const activeAlerts = alerts.filter((alert) => !isTerminalAlert(alert));
-  const highActive = activeAlerts.filter((alert) => {
-    const severity = String(alert.severity || alert.urgency || "").toLowerCase();
-    return severity === "critical" || severity === "high" || severity === "urgent";
-  }).length;
+  const highActive = activeAlerts.filter(isHighPriorityAlert).length;
 
   return {
     total: alerts.length,
