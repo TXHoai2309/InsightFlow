@@ -1797,8 +1797,115 @@ export interface FetchOptions {
   forceRefresh?: boolean;
 }
 
+export interface LeadPreviewOptions {
+  brandKey?: string;
+  postedFrom: string;
+  postedBefore: string;
+  maxRows?: number;
+}
+
+function mapSupabaseLeadPreviewRow(row: SupabaseRow): Lead | null {
+  const { intent, labels } = resolveSupabaseLeadClassification(row);
+  if (!isQualifiedLeadClassification(intent, labels)) return null;
+
+  const id = String(row.id || row.mention_id || row.source_mention_id || "").trim();
+  if (!id) return null;
+
+  const parsedContact = parseContactString(normalizeOptionalText(row.contact));
+  const workspaceId = readFirstText(row.workspace_id, row.brand, row.brand_slug);
+  const persistedSignals = parseSupabaseStringArray(row.intent_signals);
+
+  return {
+    id,
+    mention_id: normalizeOptionalText(row.mention_id) || id,
+    source_mention_id: normalizeOptionalText(row.source_mention_id) || id,
+    parent_id: normalizeOptionalText(row.parent_id) || null,
+    content_type: ["post", "comment", "reply"].includes(String(row.content_type || "").toLowerCase())
+      ? (String(row.content_type).toLowerCase() as Lead["content_type"])
+      : undefined,
+    post_id: normalizeOptionalText(row.post_id) || id,
+    workspace_id: workspaceId,
+    platform: mapSourceToPlatform(String(row.platform || row.source || "")),
+    author: normalizeOptionalText(row.author || row.author_name),
+    content: readFirstText(row.content, row.text),
+    intent,
+    current_label: row.current_label ? mapLabelValue(row.current_label) : undefined,
+    labels,
+    intent_signals: persistedSignals.length > 0 ? persistedSignals : labels.topic,
+    status: mapLeadStatus(row.status),
+    created_at: parseDate(row.created_at || row.posted_at || row.updated_at),
+    updated_at: row.updated_at ? parseDate(row.updated_at) : undefined,
+    expiry_at: row.expiry_at ? parseDate(row.expiry_at) : undefined,
+    posted_at: row.posted_at ? parseDate(row.posted_at) : undefined,
+    url: normalizeOptionalUrl(row.url, row.post_url, row.source_url),
+    source_url: normalizeOptionalUrl(row.source_url, row.url, row.post_url),
+    phone: normalizeOptionalText(row.phone) || parsedContact.phone,
+    email: normalizeOptionalText(row.email) || parsedContact.email,
+    zalo_id: normalizeOptionalText(row.zalo_id) || parsedContact.zalo_id,
+    messenger_id: normalizeOptionalText(row.messenger_id) || parsedContact.messenger_id,
+    social_profile_url:
+      normalizeOptionalUrl(row.social_profile_url, row.profile_url) ||
+      parsedContact.social_profile_url,
+    owner_id: normalizeOptionalText(row.owner_id || row.firebase_uid),
+    owner_name: normalizeOptionalText(row.owner_name),
+    owner_email: normalizeOptionalText(row.owner_email),
+    assigned_at: row.assigned_at ? parseDate(row.assigned_at) : undefined,
+    assigned_by: normalizeOptionalText(row.assigned_by),
+    claimed_at: row.claimed_at ? parseDate(row.claimed_at) : undefined,
+    first_contacted_at: row.first_contacted_at ? parseDate(row.first_contacted_at) : undefined,
+    contact_attempts: Number.isFinite(Number(row.contact_attempts)) ? Number(row.contact_attempts) : 0,
+    last_contact_at: row.last_contact_at ? parseDate(row.last_contact_at) : undefined,
+    pending_result: row.pending_result === true,
+    last_action_at: row.last_action_at ? parseDate(row.last_action_at) : undefined,
+    last_action_type: normalizeOptionalText(row.last_action_type) as Lead["last_action_type"],
+    last_contact_channel: normalizeOptionalText(row.last_contact_channel),
+    result_type: normalizeOptionalText(row.result_type) as Lead["result_type"],
+    result_recorded_at: row.result_recorded_at ? parseDate(row.result_recorded_at) : undefined,
+    follow_up_at: row.follow_up_at ? parseDate(row.follow_up_at) : undefined,
+    closed_at: row.closed_at ? parseDate(row.closed_at) : undefined,
+    notes: normalizeOptionalText(row.notes),
+  };
+}
+
 // ─── Main service ─────────────────────────────────────────────────────────────
 export class DashboardService {
+  /**
+   * Small, server-filtered snapshot used to render the default Lead queue
+   * immediately. The authoritative all-time workflow snapshot continues in
+   * the background and replaces this preview when it is ready.
+   */
+  static async fetchTodayLeadPreview(opts: LeadPreviewOptions): Promise<Lead[]> {
+    if (isDemoRuntime()) {
+      const { dummyLeads } = await import("@/lib/demoData");
+      const start = new Date(opts.postedFrom).getTime();
+      const end = new Date(opts.postedBefore).getTime();
+      return dummyLeads.filter((lead) => {
+        const postedAt = new Date(lead.posted_at || lead.created_at).getTime();
+        return postedAt >= start && postedAt < end;
+      });
+    }
+
+    const config = getSupabaseConfig();
+    const rows = await loadSupabaseRows<SupabaseRow>(
+      config,
+      "leads",
+      {
+        order: "posted_at.desc.nullslast",
+        and: `(posted_at.gte.${opts.postedFrom},posted_at.lt.${opts.postedBefore})`,
+      },
+      opts.maxRows || 1000,
+    );
+
+    const normalizedBrand = normalizeBrandName(opts.brandKey || "");
+    return rows
+      .map(mapSupabaseLeadPreviewRow)
+      .filter((lead): lead is Lead => Boolean(lead))
+      .filter(
+        (lead) =>
+          !normalizedBrand || normalizeBrandName(lead.workspace_id) === normalizedBrand,
+      );
+  }
+
   /**
    * Load the complete post/comment/reply context only when a detail view needs it.
    * Results are cached per post so switching between leads in the same thread is cheap.
