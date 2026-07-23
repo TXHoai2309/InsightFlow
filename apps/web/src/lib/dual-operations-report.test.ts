@@ -2,7 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import type { CrisisReportData } from "./crisis-report";
 import type { LeadReportData } from "./lead-report";
-import { buildDualOperationsReportData } from "./dual-operations-report";
+import {
+  buildDualOperationsAIRequestData,
+  buildDualOperationsReportData,
+} from "./dual-operations-report";
 import { buildDualOperationsReportExcelDocument } from "./excelExport";
 
 function leadReport(): LeadReportData {
@@ -186,6 +189,25 @@ test("uses the same actionable queues as the customer and alert pages", () => {
   assert.equal(report.kpis.pendingTasks, 7);
 });
 
+test("AI request data follows the active report tab without changing the overview prompt", () => {
+  const report = buildDualOperationsReportData(leadReport(), crisisReport());
+  const overview = buildDualOperationsAIRequestData(report, "all", "Highlands Coffee");
+  const leadOnly = buildDualOperationsAIRequestData(report, "lead", "Highlands Coffee");
+  const crisisOnly = buildDualOperationsAIRequestData(report, "crisis", "Highlands Coffee");
+
+  assert.deepEqual(overview.mentions.map((item) => item.topic).sort(), ["lead", "Dịch vụ"].sort());
+  assert.equal(overview.prompt.includes("Phạm vi báo cáo chỉ gồm"), false);
+
+  assert.equal(leadOnly.mentions.length, 1);
+  assert.equal(leadOnly.mentions[0]?.topic, "lead");
+  assert.match(leadOnly.prompt, /chỉ gồm Khách hàng tiềm năng/);
+  assert.match(leadOnly.prompt, /không đưa nhận định hoặc số liệu về Cảnh báo\/Khủng hoảng/);
+
+  assert.equal(crisisOnly.mentions.length, 1);
+  assert.equal(crisisOnly.mentions[0]?.topic, "Dịch vụ");
+  assert.match(crisisOnly.prompt, /chỉ gồm Cảnh báo\/Khủng hoảng/);
+  assert.match(crisisOnly.prompt, /không đưa nhận định hoặc số liệu về Lead/);
+});
 test("Excel preview document contains the same report sections and filtered context", () => {
   const report = buildDualOperationsReportData(leadReport(), crisisReport());
   const document = buildDualOperationsReportExcelDocument(report, {

@@ -63,6 +63,46 @@ export interface DualOperationsReportData {
   aiSummary: string;
 }
 
+export type DualOperationsReportScope = "all" | "lead" | "crisis";
+
+export function buildDualOperationsAIRequestData(
+  report: DualOperationsReportData,
+  scope: DualOperationsReportScope,
+  brandName: string,
+) {
+  const leadSamples = scope === "crisis"
+    ? []
+    : report.lead.detailRows.map((row) => ({
+        content: `LEAD | ${row.customer} | ${row.content}`,
+        sentiment: "positive",
+        topic: "lead",
+        source: row.platform || "system",
+        priority: row.priorityScore,
+      }));
+  const crisisSamples = scope === "lead"
+    ? []
+    : report.crisis.detailRows.map((row) => ({
+        content: `CRISIS | ${row.topic || row.brand} | ${row.content}`,
+        sentiment: row.sentiment || "negative",
+        topic: row.topic || "crisis",
+        source: row.platform || "system",
+        priority:
+          row.severity === "critical" ? 100 : row.severity === "high" ? 75 : row.negativityScore,
+      }));
+  const mentions = [...crisisSamples, ...leadSamples]
+    .sort((a, b) => b.priority - a.priority)
+    .slice(0, 20)
+    .map(({ priority: _priority, ...row }) => row);
+
+  const basePrompt = `Báo cáo tác nghiệp cho ${brandName}. Đã hoàn tất: ${report.kpis.completedTasks}, Đúng SLA: ${report.kpis.slaOnTimeRate}%, Còn mở: ${report.kpis.pendingTasks}, Quá hạn: ${report.kpis.overdueTasks}. Đưa ra đánh giá sức khỏe thương hiệu, điểm nóng dư luận/SLA và 3 khuyến nghị hành động ưu tiên.`;
+  if (scope === "all") return { mentions, prompt: basePrompt };
+
+  const scopeInstruction = scope === "lead"
+    ? "Phạm vi báo cáo chỉ gồm Khách hàng tiềm năng (Lead). Chỉ phân tích dữ liệu Lead được cung cấp, không đưa nhận định hoặc số liệu về Cảnh báo/Khủng hoảng."
+    : "Phạm vi báo cáo chỉ gồm Cảnh báo/Khủng hoảng. Chỉ phân tích dữ liệu Cảnh báo được cung cấp, không đưa nhận định hoặc số liệu về Lead.";
+
+  return { mentions, prompt: `${basePrompt} ${scopeInstruction}` };
+}
 function percentage(part: number, total: number) {
   if (total <= 0) return 0;
   return Math.round((part / total) * 100);

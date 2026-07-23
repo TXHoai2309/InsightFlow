@@ -11,7 +11,10 @@ import {
   exportDualOperationsReportExcel,
   type DualOperationsExcelViewOptions,
 } from "@/lib/excelExport";
-import type { DualOperationsAttentionItem } from "@/lib/dual-operations-report";
+import {
+  buildDualOperationsAIRequestData,
+  type DualOperationsAttentionItem,
+} from "@/lib/dual-operations-report";
 import {
   DEFAULT_CRISIS_REPORT_FILTERS,
   type CrisisReportFilters,
@@ -336,37 +339,18 @@ export function DualOperationsEmployeeReportPage({
     const brandName = profile?.brandName || profile?.brandId || "Highlands Coffee";
 
     try {
-      const leadSamples = reportFilters.operation === "crisis"
-        ? []
-        : report.lead.detailRows.map((row) => ({
-            content: `LEAD | ${row.customer} | ${row.content}`,
-            sentiment: "positive",
-            topic: "lead",
-            source: row.platform || "system",
-            priority: row.priorityScore,
-          }));
-      const crisisSamples = reportFilters.operation === "lead"
-        ? []
-        : report.crisis.detailRows.map((row) => ({
-            content: `CRISIS | ${row.topic || row.brand} | ${row.content}`,
-            sentiment: row.sentiment || "negative",
-            topic: row.topic || "crisis",
-            source: row.platform || "system",
-            priority:
-              row.severity === "critical" ? 100 : row.severity === "high" ? 75 : row.negativityScore,
-          }));
-      const sampleRows = [...crisisSamples, ...leadSamples]
-        .sort((a, b) => b.priority - a.priority)
-        .slice(0, 20)
-        .map(({ priority: _priority, ...row }) => row);
-
+      const aiRequestData = buildDualOperationsAIRequestData(
+        report,
+        reportFilters.operation,
+        brandName,
+      );
       const res = await fetch("/api/reports/ai-insights", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           brand: brandName,
-          mentions: sampleRows,
-          prompt: `Báo cáo tác nghiệp cho ${brandName}. Đã hoàn tất: ${report.kpis.completedTasks}, Đúng SLA: ${report.kpis.slaOnTimeRate}%, Còn mở: ${report.kpis.pendingTasks}, Quá hạn: ${report.kpis.overdueTasks}. Đưa ra đánh giá sức khỏe thương hiệu, điểm nóng dư luận/SLA và 3 khuyến nghị hành động ưu tiên.`,
+          mentions: aiRequestData.mentions,
+          prompt: aiRequestData.prompt,
           lang: "vi",
         }),
       });
