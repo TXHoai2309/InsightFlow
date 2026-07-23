@@ -23,6 +23,7 @@ import {
 } from "@/components/onboarding/events";
 import { dbSecond } from "@/lib/firebase";
 import { normalizeBrandName } from "@/lib/services/dashboard";
+import { TrialTimeRemaining } from "@/components/auth/TrialTimeRemaining";
 import { collection, doc, limit, onSnapshot, query, updateDoc } from "firebase/firestore";
 
 interface HeaderProps {
@@ -187,6 +188,8 @@ export function Header({ onMenuToggle, isSidebarCollapsed = false }: HeaderProps
 
       {/* Right Section */}
       <div className="flex items-center gap-4 md:gap-6">
+        {!isDemoMode && <TrialTimeRemaining />}
+
         {!isDemoMode && (role === "brand_manager" || role === "crisis_employee" || role === "lead_employee") && (
           <button
             type="button"

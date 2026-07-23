@@ -391,6 +391,9 @@ export async function PATCH(request: NextRequest) {
         userProfile = automaticAccount.profile;
       }
 
+      const accountAlreadyExisted = Boolean(userRecord);
+      const trialAccount = userProfile.trialAccount === true || !accountAlreadyExisted;
+
       if (userRecord) {
         userRecord = await authAdmin.updateUser(userRecord.uid, {
           email: accountEmail,
@@ -446,6 +449,8 @@ export async function PATCH(request: NextRequest) {
         defaultRoute: "/dashboard",
         trialPlan,
         trialDays,
+        trialAccount,
+        trialStartAt: trialStartAt.toISOString(),
         trialEndsAt: trialEndsAt.toISOString(),
       });
 
@@ -470,6 +475,7 @@ export async function PATCH(request: NextRequest) {
         temporaryPasswordIssued: false,
         trialPlan,
         trialDays,
+        trialAccount,
         trialStartAt,
         trialEndsAt,
         updatedAt: FieldValue.serverTimestamp(),
