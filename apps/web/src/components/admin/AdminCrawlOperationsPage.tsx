@@ -162,6 +162,7 @@ export default function AdminCrawlOperationsPage() {
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
+  const [retryingPlatform, setRetryingPlatform] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<RunTab>("trial");
   const [statusFilter, setStatusFilter] = useState("all");
   const [platformFilter, setPlatformFilter] = useState("all");
@@ -325,6 +326,12 @@ export default function AdminCrawlOperationsPage() {
     active: runs.filter((run) => ACTIVE_RUN_STATUSES.has(run.status)).length,
   }), [runs]);
 
+  const canRetrySelectedPlatform = Boolean(
+    selected
+    && selected.runType === "trial"
+    && !ACTIVE_RUN_STATUSES.has(selected.status)
+  );
+
   const cancelQueuedRun = async () => {
     if (!selected || selected.status !== "queued") return;
     if (!window.confirm("Xóa phiên này khỏi hàng đợi? Lịch sử vẫn được giữ với trạng thái đã hủy.")) return;
@@ -350,6 +357,38 @@ export default function AdminCrawlOperationsPage() {
       setErrorMessage(error instanceof Error ? error.message : "Không thể xóa phiên khỏi hàng đợi.");
     } finally {
       setActionBusy(false);
+    }
+  };
+
+  const retryPlatform = async (platform: string) => {
+    if (!selected || selected.runType !== "trial" || ACTIVE_RUN_STATUSES.has(selected.status)) return;
+    const label = platformLabel(platform);
+    if (!window.confirm(`Cào lại riêng ${label} cho phiên trial này? Các nền tảng đã xong sẽ được giữ nguyên.`)) return;
+    setRetryingPlatform(platform);
+    setErrorMessage("");
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error("Phiên đăng nhập đã hết hạn.");
+      const token = await user.getIdToken();
+      const response = await fetch(
+        `/api/admin/crawl-runs/${encodeURIComponent(selected.id)}/retry-platform`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ platform }),
+        },
+      );
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+      await loadRuns();
+      if (payload.runId) setSelectedId(payload.runId);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Không thể xếp hàng cào lại nền tảng.");
+    } finally {
+      setRetryingPlatform(null);
     }
   };
 
@@ -675,10 +714,25 @@ export default function AdminCrawlOperationsPage() {
                         {(selected.platforms || []).map((platform: string) => (
                           <span
                             key={platform}
-                            className="inline-flex items-center gap-1.5 rounded-full border bg-white px-3 py-1.5 text-xs font-semibold"
+                            className="inline-flex items-center gap-1.5 rounded-full border bg-white px-2.5 py-1.5 text-xs font-semibold"
                           >
                             <PlatformIcon platform={platform} size={13} />
                             {platformLabel(platform)}
+                            {canRetrySelectedPlatform && (
+                              <button
+                                type="button"
+                                onClick={() => void retryPlatform(platform)}
+                                disabled={retryingPlatform === platform}
+                                className="ml-1 inline-flex h-5 items-center gap-1 rounded-full border border-[var(--color-brand)]/20 px-1.5 text-[10px] font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-brand)]/10 disabled:cursor-wait disabled:opacity-60"
+                                title={`Cào lại riêng ${platformLabel(platform)}`}
+                              >
+                                <RefreshCw
+                                  size={10}
+                                  className={retryingPlatform === platform ? "animate-spin" : ""}
+                                />
+                                Cào lại
+                              </button>
+                            )}
                           </span>
                         ))}
                       </div>
