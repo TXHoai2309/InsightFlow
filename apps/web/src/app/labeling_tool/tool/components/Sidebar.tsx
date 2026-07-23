@@ -9,6 +9,7 @@ interface SidebarProps {
   pendingCounts: PendingAssignmentCounts | null;
   pendingCountsLoading: boolean;
   platform: PlatformFilter;
+  brand: string;
 }
 
 function StatBar({ pct, colorClass }: { pct: number; colorClass: string }) {
@@ -29,9 +30,13 @@ export default function Sidebar({
   pendingCounts,
   pendingCountsLoading,
   platform,
+  brand,
 }: SidebarProps) {
   const total = stats.totalLabeled + stats.totalSkipped;
   const pctOf = (n: number) => total === 0 ? 0 : Math.round((n / total) * 100);
+  const brandLabel = !brand || brand === 'all'
+    ? 'Tất cả'
+    : brand.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
 
   return (
     <div className="flex flex-col gap-4">
@@ -133,7 +138,11 @@ export default function Sidebar({
           Hàng chờ toàn bộ
         </h3>
         <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
-          Nền tảng: <span className="capitalize">{platform.replace('_', ' ')}</span> · Không phụ thuộc lô đang tải
+          Nền tảng: <span className="capitalize">{platform.replace('_', ' ')}</span>
+          {' · '}Thương hiệu: <span className="font-medium text-gray-700 dark:text-gray-300">
+            {brandLabel}
+          </span>
+          {' · '}Không phụ thuộc lô đang tải
         </p>
         {pendingCountsLoading ? (
           <div className="flex items-center justify-center gap-2 py-5 text-sm text-gray-500">

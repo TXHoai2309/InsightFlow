@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo } from "react";
+import Link from "next/link";
 import { AlertTriangle, Clock3, Flame, UserPlus } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { buildLeadOperationalMetrics } from "@/lib/operational-metrics";
@@ -43,10 +44,10 @@ export function LeadPriorityOverview() {
   );
 
   const items = [
-    { key: "new", value: leads.length, hint: "Tất cả lead trong kỳ" },
-    { key: "hot", value: metrics.hotPending, hint: "Ưu tiên kiểm tra tư vấn" },
-    { key: "overdue", value: metrics.overdue, hint: "Có nguy cơ mất khách" },
-    { key: "unassigned", value: metrics.unassigned, hint: "Cần chia cho nhân sự" },
+    { key: "new", value: leads.length, href: "/leads?view=all", hint: "Tất cả lead trong kỳ" },
+    { key: "hot", value: metrics.hotPending, href: "/leads?view=all&priority=hot", hint: "Ưu tiên kiểm tra tư vấn" },
+    { key: "overdue", value: metrics.overdue, href: "/leads?view=all&sla=overdue", hint: "Có nguy cơ mất khách" },
+    { key: "unassigned", value: metrics.unassigned, href: "/leads?view=unassigned", hint: "Cần chia cho nhân sự" },
   ] as const;
 
   return (
@@ -56,9 +57,10 @@ export function LeadPriorityOverview() {
         const Icon = style.icon;
 
         return (
-          <div
+          <Link
+            href={item.href}
             key={item.key}
-            className={`rounded-[12px] border px-4 py-4 shadow-sm ${style.tone}`}
+            className={`block rounded-[12px] border px-4 py-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${style.tone}`}
           >
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -81,7 +83,7 @@ export function LeadPriorityOverview() {
                 <Icon className="h-5 w-5" />
               </div>
             </div>
-          </div>
+          </Link>
         );
       })}
     </section>

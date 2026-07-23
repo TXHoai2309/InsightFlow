@@ -6,6 +6,7 @@ import type { Lead } from "@/types/dashboard";
 import {
   buildAlertOperationalMetrics,
   buildLeadOperationalMetrics,
+  filterNegativeOperationalAlerts,
   filterOperationalAlerts,
   filterOperationalLeads,
   isAlertInReviewWindow,
@@ -150,6 +151,24 @@ test("keeps every negative mention in Alerts but only threshold-qualified items 
   assert.deepEqual(crisisQueue.map((item) => item.id), ["negative-medium", "neutral-urgent"]);
 });
 
+test("report and alert page share the same negative, brand-scoped, deduplicated queue", () => {
+  const now = new Date("2026-07-21T00:00:00.000Z").getTime();
+  const alerts = [
+    alert({ id: "negative-short", source_id: "same-negative", text: "short" }),
+    alert({ id: "negative-complete", source_id: "same-negative", being_resolved_by: "agent@highlandscoffee.com" }),
+    alert({ id: "neutral", sentiment: "neutral" }),
+    alert({ id: "other-brand", brand: "Starbucks" }),
+  ];
+
+  const scoped = filterNegativeOperationalAlerts(alerts, {
+    profile: manager,
+    nowMs: now,
+    reviewWindowDays: 36_500,
+    dateBasis: "created_at",
+  });
+
+  assert.deepEqual(scoped.map((item) => item.id), ["negative-complete"]);
+});
 test("Crisis calendar window is anchored to publication time, not a recent closing action", () => {
   const now = new Date("2026-07-21T00:00:00.000Z").getTime();
   const oldResolved = alert({

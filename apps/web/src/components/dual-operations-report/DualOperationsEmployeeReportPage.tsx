@@ -25,8 +25,8 @@ import { useAlertStore } from "@/stores/alert.store";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { useDualOperationsReport } from "./useDualOperationsReport";
 import { ExcelDocumentPreviewModal } from "@/components/reports/ExcelDocumentPreviewModal";
-import { isDemoPath, toDemoHref } from "@/lib/demo-navigation";
 import { ReportExportOptionModal } from "@/components/reports/ReportExportOptionModal";
+import { isDemoPath, toDemoHref } from "@/lib/demo-navigation";
 import {
   AlertTriangle,
   ArrowRight,
@@ -58,7 +58,7 @@ interface DualReportFilters {
 
 const DEFAULT_DUAL_REPORT_FILTERS: DualReportFilters = {
   operation: "all",
-  timeRange: "7d",
+  timeRange: "30d",
   startDate: "",
   endDate: "",
   sla: "all",
@@ -336,20 +336,29 @@ export function DualOperationsEmployeeReportPage({
     const brandName = profile?.brandName || profile?.brandId || "Highlands Coffee";
 
     try {
-      const sampleRows = [
-        ...report.crisis.detailRows.map((row) => ({
-          content: `CRISIS | ${row.topic || "other"} | ${row.content}`,
-          sentiment: row.sentiment || "negative",
-          topic: row.topic || "crisis",
-          source: row.platform || "system",
-        })),
-        ...report.lead.detailRows.map((row) => ({
-          content: `LEAD | ${row.intent || "other"} | ${row.content}`,
-          sentiment: "positive",
-          topic: row.intent || "lead",
-          source: row.platform || "system",
-        })),
-      ].slice(0, 20);
+      const leadSamples = reportFilters.operation === "crisis"
+        ? []
+        : report.lead.detailRows.map((row) => ({
+            content: `LEAD | ${row.customer} | ${row.content}`,
+            sentiment: "positive",
+            topic: "lead",
+            source: row.platform || "system",
+            priority: row.priorityScore,
+          }));
+      const crisisSamples = reportFilters.operation === "lead"
+        ? []
+        : report.crisis.detailRows.map((row) => ({
+            content: `CRISIS | ${row.topic || row.brand} | ${row.content}`,
+            sentiment: row.sentiment || "negative",
+            topic: row.topic || "crisis",
+            source: row.platform || "system",
+            priority:
+              row.severity === "critical" ? 100 : row.severity === "high" ? 75 : row.negativityScore,
+          }));
+      const sampleRows = [...crisisSamples, ...leadSamples]
+        .sort((a, b) => b.priority - a.priority)
+        .slice(0, 20)
+        .map(({ priority: _priority, ...row }) => row);
 
       const res = await fetch("/api/reports/ai-insights", {
         method: "POST",

@@ -28,6 +28,8 @@ interface AlertWorkbenchProps {
   severityFilter: string;
   sourceFilter: string;
   contentTypeFilter: string;
+  slaFilter: "all" | "overdue" | "due_soon";
+  includeClosed: boolean;
   showMineOnly: boolean;
   sortBy: "risk" | "newest" | "reach";
   timeFilter: string;
@@ -64,6 +66,7 @@ interface AlertWorkbenchProps {
   onSeverityFilterChange: (value: string) => void;
   onSourceFilterChange: (value: string) => void;
   onContentTypeFilterChange: (value: string) => void;
+  onSlaFilterChange: (value: "all" | "overdue" | "due_soon") => void;
   onMineOnlyChange: (value: boolean) => void;
   onSortChange: (value: "risk" | "newest" | "reach") => void;
   onTimeFilterChange: (value: string) => void;
@@ -83,7 +86,11 @@ const STATUS_VIEWS: Array<{ id: QueueStatus; label: string }> = [
 ];
 
 export function AlertWorkbench(props: AlertWorkbenchProps) {
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const params = new URLSearchParams(window.location.search);
+    return ["severity", "sla", "source", "brand", "status", "include"].some((key) => params.has(key));
+  });
   const counts = {
     pending: props.alerts.filter((alert) => getAlertWorkflowStatus(alert) === "pending").length,
     processing: props.alerts.filter((alert) => getAlertWorkflowStatus(alert) === "processing").length,
@@ -109,7 +116,7 @@ export function AlertWorkbench(props: AlertWorkbenchProps) {
   const isPanelOpen = Boolean(props.selectedAlert && !props.panelCollapsed);
 
   const ALL_STATUS_VIEWS = [
-    { id: "all" as const, label: "Tất cả việc đang mở", count: openCount },
+    { id: "all" as const, label: props.includeClosed ? "Tất cả cảnh báo" : "Tất cả việc đang mở", count: props.includeClosed ? props.alerts.length : openCount },
     { id: "pending" as const, label: "Chưa phân công", count: counts.pending },
     { id: "processing" as const, label: "Đang xử lý", count: counts.processing },
     { id: "contact_failed" as const, label: "Cần liên hệ lại", count: counts.contact_failed },
@@ -148,7 +155,7 @@ export function AlertWorkbench(props: AlertWorkbenchProps) {
       </header>
 
       <section className="grid gap-3 md:grid-cols-3">
-        <KpiCard title="Tất cả việc đang mở" value={openCount} sub={`${urgentCount} việc có mức ưu tiên cao`} icon="bolt" color="var(--color-error)" bg="var(--color-error-subtle)" onClick={() => props.onStatusFilterChange("all")} />
+        <KpiCard title={props.includeClosed ? "Tất cả cảnh báo" : "Tất cả việc đang mở"} value={props.includeClosed ? props.alerts.length : openCount} sub={`${urgentCount} việc có mức ưu tiên cao`} icon="bolt" color="var(--color-error)" bg="var(--color-error-subtle)" onClick={() => props.onStatusFilterChange("all")} />
         <KpiCard title="Chưa phân công" value={counts.pending} sub="Chưa có người phụ trách" icon="person_add" color="var(--color-info)" bg="var(--color-info-subtle)" onClick={() => props.onStatusFilterChange("pending")} />
         <KpiCard title="Đang được xử lý" value={counts.processing} sub="Đã có người phụ trách" icon="timer" color="var(--color-warning)" bg="var(--color-warning-subtle)" onClick={() => props.onStatusFilterChange("processing")} />
       </section>
@@ -274,9 +281,10 @@ function KpiCard({ title, value, sub, icon, color, bg, onClick }: { title: strin
 function FilterPanel(props: AlertWorkbenchProps) {
   return <div className="grid gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-3 sm:grid-cols-2 xl:grid-cols-6">
     {!props.brandFilterLocked && <select value={props.filters.brand} onChange={(event) => props.onFiltersChange({ brand: event.target.value })} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm"><option value="all">Tất cả thương hiệu</option>{props.brands.map((brand) => <option key={brand} value={brand}>{brand}</option>)}</select>}
-    <select value={props.severityFilter} onChange={(event) => props.onSeverityFilterChange(event.target.value)} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm"><option value="all">Tất cả mức độ</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select>
+    <select value={props.severityFilter} onChange={(event) => props.onSeverityFilterChange(event.target.value)} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm"><option value="all">Tất cả mức độ</option><option value="high_priority">Critical &amp; High</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select>
     <select value={props.sourceFilter} onChange={(event) => props.onSourceFilterChange(event.target.value)} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm"><option value="all">Tất cả nền tảng</option><option value="facebook">Facebook</option><option value="tiktok">TikTok</option><option value="youtube">YouTube</option><option value="google_maps">Google Maps</option><option value="thread">Threads</option><option value="news">News</option></select>
     <select value={props.contentTypeFilter} onChange={(event) => props.onContentTypeFilterChange(event.target.value)} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm"><option value="all">Tất cả nội dung</option><option value="post">Bài viết</option><option value="comment">Bình luận</option></select>
+    <select value={props.slaFilter} onChange={(event) => props.onSlaFilterChange(event.target.value as AlertWorkbenchProps["slaFilter"])} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm"><option value="all">Tất cả SLA</option><option value="due_soon">Sắp hết hạn</option><option value="overdue">Quá hạn</option></select>
     <select value={props.timeFilter} onChange={(event) => props.onTimeFilterChange(event.target.value)} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2 text-sm"><option value="all">Toàn thời gian</option><option value="24h">Hôm nay</option><option value="7d">7 ngày qua</option><option value="30d">30 ngày qua</option><option value="single">Ngày cụ thể</option><option value="custom">Khoảng ngày</option></select>
     {props.canViewAllAssignments && <button type="button" onClick={() => props.onMineOnlyChange(!props.showMineOnly)} className={`rounded-lg border px-3 py-2 text-sm font-bold ${props.showMineOnly ? "border-[var(--color-brand)] bg-[var(--color-brand-subtle)] text-[var(--color-brand)]" : "border-[var(--color-border)] text-[var(--color-text-secondary)]"}`}>Chỉ việc của tôi</button>}
     {props.timeFilter === "single" && <input type="date" value={props.singleDate} onChange={(event) => props.onSingleDateChange(event.target.value)} className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm" />}

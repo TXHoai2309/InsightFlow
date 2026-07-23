@@ -100,7 +100,7 @@ export function CrisisAnalyticsCharts({ alerts, periodDays = 14 }: { alerts: Ale
               <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{ fill: "#787585", fontSize: 11 }} />
               <Tooltip contentStyle={{ borderRadius: 10, border: "1px solid #DDD9E8", fontSize: 12 }} />
               <Legend iconType="circle" wrapperStyle={{ fontSize: 12, paddingTop: 10 }} />
-              <Area type="monotone" dataKey="total" name="Đủ điều kiện Crisis" stroke="#5B4FCF" strokeWidth={2.5} fill="url(#crisisTotal)" />
+              <Area type="monotone" dataKey="total" name="Đề cập tiêu cực" stroke="#5B4FCF" strokeWidth={2.5} fill="url(#crisisTotal)" />
               <Area type="monotone" dataKey="highRisk" name="Ưu tiên cao" stroke="#BA1A1A" strokeWidth={2.5} fill="url(#crisisHigh)" />
             </AreaChart>
           </ResponsiveContainer>

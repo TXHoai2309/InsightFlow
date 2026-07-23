@@ -6,6 +6,7 @@ import {
   isSkippedAlert,
   type AlertWorkflowStatus,
 } from "@/lib/alertWorkflow";
+import { getAlertOperationalDueAt } from "@/lib/operational-metrics";
 
 export interface CrisisReportKpi {
   total: number;
@@ -251,14 +252,13 @@ function getAssigneeName(alert: AlertData) {
 
 function getSlaStatus(alert: AlertData, nowMs: number) {
   if (isSkippedAlert(alert)) return "Khong ap dung";
-  const due = getDueTime(alert);
+  const due = getAlertOperationalDueAt(alert);
   if (due === null) return "Khong du ngay tao";
   const resolvedTime = toTime(alert.resolved_at);
   if (resolvedTime !== null) return resolvedTime <= due ? "Dung SLA" : "Tre SLA";
-  if (normalizeStatus(alert.status) === "resolved") return "Da dong";
+  if (getAlertWorkflowStatus(alert) === "resolved") return "Da dong";
   return due < nowMs ? "Qua han" : "Trong SLA";
 }
-
 function buildDistribution(
   values: string[],
   order: string[],

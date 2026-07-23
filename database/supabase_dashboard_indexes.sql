@@ -17,6 +17,14 @@ CREATE INDEX IF NOT EXISTS annotations_created_at_desc_idx
 CREATE INDEX IF NOT EXISTS leads_created_at_desc_idx
   ON public.leads (created_at DESC);
 
+-- Default Lead workbench opens on the Vietnam "today" publication window.
+-- Keep this query index-backed even as workflow history grows.
+CREATE INDEX IF NOT EXISTS leads_posted_at_desc_idx
+  ON public.leads (posted_at DESC);
+
+CREATE INDEX IF NOT EXISTS leads_workspace_posted_at_desc_idx
+  ON public.leads (workspace_id, posted_at DESC);
+
 CREATE INDEX IF NOT EXISTS label_change_requests_requested_at_desc_idx
   ON public.label_change_requests (requested_at DESC);
 

@@ -44,6 +44,8 @@ import {
   getAlertDeduplicationKey,
 } from "@/lib/operational-metrics";
 import { isCrisisClassificationLabel } from "@/lib/label-change";
+import { isDemoPath, toDemoHref } from "@/lib/demo-navigation";
+import { copyTextToClipboard } from "@/lib/clipboard";
 
 const ALERTS_PER_PAGE = 5;
 import { collection, getDocs, doc, getDoc } from "firebase/firestore";
@@ -213,13 +215,18 @@ export default function AlertsPage() {
   const [severityFilter, setSeverityFilter] = useState<string>("all");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [contentTypeFilter, setContentTypeFilter] = useState<string>("all");
+  const [slaFilter, setSlaFilter] = useState<"all" | "overdue" | "due_soon">("all");
   const [statusFilter, setStatusFilter] = useState<AlertStatusFilter>("all");
+  const [includeClosed, setIncludeClosed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return new URLSearchParams(window.location.search).get("include") === "all";
+  });
   const [showMineOnly, setShowMineOnly] = useState(false);
   const [sortBy, setSortBy] = useState<"risk" | "newest" | "reach">("risk");
   const [alertPage, setAlertPage] = useState(1);
   const [isResolvedExpanded, setIsResolvedExpanded] = useState(false);
   const [isRequestsExpanded, setIsRequestsExpanded] = useState(false);
-  const [timeFilter, setTimeFilter] = useState<string>("all");
+  const [timeFilter, setTimeFilter] = useState<string>("30d");
   const [singleDate, setSingleDate] = useState<string>("");
   const [customStartDate, setCustomStartDate] = useState<string>("");
   const [customEndDate, setCustomEndDate] = useState<string>("");
@@ -400,11 +407,17 @@ export default function AlertsPage() {
     const requestedTime = searchParams.get("time");
     const requestedStatus = searchParams.get("status");
     const requestedSource = searchParams.get("source");
+    const requestedSeverity = searchParams.get("severity");
+    const requestedSla = searchParams.get("sla");
+    const requestedInclude = searchParams.get("include");
     const requestedBrand = searchParams.get("brand");
 
     if (requestedTime) setTimeFilter(requestedTime);
     if (requestedStatus) setStatusFilter(requestedStatus as AlertStatusFilter);
     if (requestedSource) setSourceFilter(requestedSource);
+    if (requestedSeverity) setSeverityFilter(requestedSeverity);
+    if (requestedSla === "overdue" || requestedSla === "due_soon") setSlaFilter(requestedSla);
+    setIncludeClosed(requestedInclude === "all");
     if (requestedBrand) setFilters({ brand: requestedBrand });
     setSingleDate(searchParams.get("date") || "");
     setCustomStartDate(searchParams.get("start") || "");
@@ -488,6 +501,7 @@ export default function AlertsPage() {
     setSeverityFilter("all");
     setSourceFilter("all");
     setContentTypeFilter("all");
+    setSlaFilter("all");
     setShowMineOnly(false);
     setStatusFilter(
       workflowStatus === "resolved"
@@ -497,8 +511,8 @@ export default function AlertsPage() {
           : workflowStatus === "processing"
             ? "processing"
             : workflowStatus === "contact_failed"
-            ? "contact_failed"
-            : "all",
+              ? "contact_failed"
+              : "all",
     );
     setAlertPage(1);
     setDetailPanelTab("action");
@@ -507,7 +521,7 @@ export default function AlertsPage() {
   }, [alertIdParam, mentionIdParam, visibleBaseAlerts]);
 
   const processedActiveAlerts = useMemo(() => {
-    let result = statusFilter === "resolved"
+    let result = includeClosed && statusFilter === "all" ? [...visibleBaseAlerts] : statusFilter === "resolved"
       ? [...resolvedAlerts]
       : statusFilter === "skipped"
         ? [...skippedAlerts]
@@ -543,7 +557,9 @@ export default function AlertsPage() {
 
     // 2. Severity filter
     if (severityFilter !== "all") {
-      result = result.filter(a => a.severity.toLowerCase() === severityFilter.toLowerCase());
+      result = result.filter(a => severityFilter === "high_priority"
+        ? ["critical", "high"].includes(String(a.severity || "").toLowerCase())
+        : String(a.severity || "").toLowerCase() === severityFilter.toLowerCase());
     }
 
     // 3. Source filter
@@ -556,7 +572,24 @@ export default function AlertsPage() {
       result = result.filter(a => String(a.content_type || "").toLowerCase() === contentTypeFilter.toLowerCase());
     }
 
-    // 4. Mine only filter
+    // 4. SLA filter: same priority windows used by Crisis Monitoring.
+    if (slaFilter !== "all") {
+      const nowMs = Date.now();
+      result = result.filter((alert) => {
+        if (isTerminalAlert(alert)) return false;
+        const severity = String(alert.severity || alert.urgency || "").toLowerCase();
+        const slaHours = severity === "critical" || severity === "urgent" ? 1 : severity === "high" ? 2 : severity === "medium" || severity === "normal" ? 4 : 8;
+        const startedAt = new Date(alert.detected_at || alert.created_at).getTime();
+        if (!Number.isFinite(startedAt)) return false;
+        const durationMs = slaHours * 60 * 60 * 1000;
+        const remainingMs = startedAt + durationMs - nowMs;
+        if (slaFilter === "overdue") return remainingMs <= 0;
+        const dueSoonWindowMs = Math.max(30 * 60 * 1000, durationMs * 0.2);
+        return remainingMs > 0 && remainingMs <= dueSoonWindowMs;
+      });
+    }
+
+    // 5. Mine only filter
     if (showMineOnly) {
       result = result.filter(a => isAlertOwnedByUser(a, profile));
     }
@@ -592,7 +625,7 @@ export default function AlertsPage() {
     });
 
     return result;
-  }, [activeAlerts, resolvedAlerts, skippedAlerts, statusFilter, searchText, severityFilter, sourceFilter, contentTypeFilter, showMineOnly, sortBy, profile, pinnedAlertIds]);
+  }, [activeAlerts, resolvedAlerts, skippedAlerts, visibleBaseAlerts, includeClosed, statusFilter, searchText, severityFilter, sourceFilter, contentTypeFilter, slaFilter, showMineOnly, sortBy, profile, pinnedAlertIds]);
 
   const totalAlertPages = Math.max(1, Math.ceil(processedActiveAlerts.length / ALERTS_PER_PAGE));
   const paginatedActiveAlerts = useMemo(() => {
@@ -674,7 +707,7 @@ export default function AlertsPage() {
 
   useEffect(() => {
     setAlertPage(1);
-  }, [statusFilter, searchText, severityFilter, sourceFilter, contentTypeFilter, showMineOnly, sortBy, filters.brand]);
+  }, [statusFilter, searchText, severityFilter, sourceFilter, contentTypeFilter, slaFilter, showMineOnly, sortBy, filters.brand]);
 
   useEffect(() => {
     setAlertPage((current) => Math.min(current, totalAlertPages));
@@ -1174,6 +1207,8 @@ export default function AlertsPage() {
         severityFilter={severityFilter}
         sourceFilter={sourceFilter}
         contentTypeFilter={contentTypeFilter}
+        slaFilter={slaFilter}
+        includeClosed={includeClosed}
         showMineOnly={showMineOnly}
         sortBy={sortBy}
         timeFilter={timeFilter}
@@ -1331,6 +1366,7 @@ export default function AlertsPage() {
           setSeverityFilter("all");
           setSourceFilter("all");
           setContentTypeFilter("all");
+          setSlaFilter("all");
           setShowMineOnly(false);
           setStatusFilter("processing");
           setAlertPage(1);
@@ -1352,6 +1388,7 @@ export default function AlertsPage() {
         onSeverityFilterChange={setSeverityFilter}
         onSourceFilterChange={setSourceFilter}
         onContentTypeFilterChange={setContentTypeFilter}
+        onSlaFilterChange={setSlaFilter}
         onMineOnlyChange={setShowMineOnly}
         onSortChange={setSortBy}
         onTimeFilterChange={setTimeFilter}

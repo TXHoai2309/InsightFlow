@@ -28,7 +28,6 @@ interface BMKpiCardsProps {
   negativeMentions: number;
   negativePrev: number;
   negativeResolved: number;
-  negativeRemaining: number;
   unprocessed: number;
   crises: number;
   hotLeads: number;
@@ -51,7 +50,6 @@ export function BMKpiCards({
   negativeMentions,
   negativePrev,
   negativeResolved,
-  negativeRemaining,
   unprocessed,
   crises,
   hotLeads,
@@ -74,9 +72,8 @@ export function BMKpiCards({
       },
       sub: t("bm.kpi.needsAction"),
       resolved: negativeResolved,
-      remaining: negativeRemaining,
-      resolvedLabel: t("bm.kpi.ended", "Đã kết thúc"),
-      status: negativeRemaining > 0 ? "danger" : "positive",
+      remaining: Math.max(0, negativeMentions - negativeResolved),
+      status: negativeMentions > 0 ? "danger" : "positive",
       href: negativeHref,
     },
     {
