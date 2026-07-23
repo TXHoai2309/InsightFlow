@@ -40,6 +40,7 @@ import type {
   Platform,
   DashboardFilters,
 } from "@/types/dashboard";
+import { broadcastLeadRealtimeUpdate } from "@/lib/realtimeLeads";
 import { canPerformAction, type UserRoleProfile } from "@/lib/rbac";
 import {
   getChangedLabelFields,
@@ -2650,6 +2651,13 @@ export class DashboardService {
         id,
         buildLeadWorkflowPayload(lead, data, profile, auditFields),
       );
+
+      // Broadcast realtime update to all connected clients immediately
+      void broadcastLeadRealtimeUpdate({
+        leadId: id,
+        ...data,
+        updated_at: auditFields.updated_at,
+      });
 
       // Gửi thông báo đến nhân viên nếu được phân công mới
       const isNewAssignment = data.owner_id && data.owner_id !== (lead?.owner_id || null);
