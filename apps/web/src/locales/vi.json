@@ -1770,6 +1770,14 @@
       "processing": "Đang xử lý",
       "waiting": "Chờ khách phản hồi",
       "completed": "Nhật ký hoàn thành",
+      "periodLabel": "Thời gian hiển thị",
+      "period": {
+        "today": "Hôm nay",
+        "yesterday": "Hôm qua",
+        "last7Days": "7 ngày qua",
+        "last30Days": "30 ngày qua",
+        "all": "Toàn bộ"
+      },
       "emptyTitle": "Không còn công việc",
       "emptySub": "Tuyệt vời, hãy xem mục khác!",
       "completedCount": "Đã hoàn thành {{count}} nhiệm vụ",

@@ -4,6 +4,7 @@ import { isIntentLead } from "@/lib/lead-intent";
 import {
   canLeadBeVisibleToUser,
   getLeadExpiryTime,
+  getLeadFollowUpMeta,
 } from "@/lib/lead-workbench";
 import type { UserRoleProfile } from "@/lib/rbac";
 import type { AlertData } from "@/stores/alert.store";
@@ -11,6 +12,7 @@ import type { Lead } from "@/types/dashboard";
 
 export type EmployeeOperationsRole = "crisis_employee" | "lead_employee";
 export type EmployeeTaskStatus = "urgent" | "processing" | "waiting" | "completed";
+export type EmployeeOperationsPeriod = "today" | "yesterday" | "last7Days" | "last30Days" | "all";
 
 export interface EmployeeOperationsTask {
   id: string;
@@ -23,6 +25,8 @@ export interface EmployeeOperationsTask {
   source: string;
   priority: string;
   createdAt: string;
+  /** Business timestamp used by the operations period filter. */
+  periodAt?: string;
   dueAt?: string;
   completedAt?: string;
   isOverdue: boolean;
@@ -65,6 +69,7 @@ interface BuildEmployeeOperationsDataParams {
 }
 
 const VIETNAM_TIME_ZONE = "Asia/Ho_Chi_Minh";
+const DAY_MS = 24 * 60 * 60 * 1000;
 const STATUS_ORDER: Record<EmployeeTaskStatus, number> = {
   urgent: 0,
   processing: 1,
@@ -74,6 +79,7 @@ const STATUS_ORDER: Record<EmployeeTaskStatus, number> = {
 
 function toTime(value: unknown) {
   if (!value) return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
   const time = new Date(String(value)).getTime();
   return Number.isFinite(time) ? time : null;
 }
@@ -99,6 +105,11 @@ function vietnamDateKey(value: unknown) {
 
 function isToday(value: unknown, nowMs: number) {
   return Boolean(value) && vietnamDateKey(value) === vietnamDateKey(nowMs);
+}
+
+function getVietnamDayStart(nowMs: number) {
+  const dateKey = vietnamDateKey(nowMs);
+  return dateKey ? Date.parse(`${dateKey}T00:00:00+07:00`) : Number.NaN;
 }
 
 function truncate(value: unknown, maxLength = 96) {
@@ -140,6 +151,9 @@ function getAlertTaskStatus(alert: AlertData): EmployeeTaskStatus {
   const rawStatus = normalize(alert.status);
 
   if (workflowStatus === "resolved") return "completed";
+  // A failed contact attempt is still active work and belongs with the
+  // processing queue, not the new/urgent or customer-waiting queues.
+  if (workflowStatus === "contact_failed") return "processing";
   if (rawStatus === "contact_waiting" || alert.customer_response_result === "no_response") {
     return "waiting";
   }
@@ -182,28 +196,77 @@ function getLeadCompletedAt(lead: Lead) {
 }
 
 function getLeadDueAt(lead: Lead) {
-  const followUpAt = toIso(lead.follow_up_at);
-  if (followUpAt) return followUpAt;
+  const followUp = getLeadFollowUpMeta(lead);
+  if (followUp.isActive && followUp.scheduledAt !== null) {
+    return new Date(followUp.scheduledAt).toISOString();
+  }
   const expiryTime = getLeadExpiryTime(lead);
   return Number.isFinite(expiryTime) ? new Date(expiryTime).toISOString() : undefined;
 }
 
 function getLeadTaskStatus(lead: Lead, nowMs: number): EmployeeTaskStatus {
-  if (lead.status === "completed" || lead.status === "skipped") return "completed";
+  if (lead.status === "completed") return "completed";
 
-  const followUpTime = toTime(lead.follow_up_at);
+  const followUp = getLeadFollowUpMeta(lead, nowMs);
+  const followUpTime = followUp.isActive ? followUp.scheduledAt : null;
   const dueTime = toTime(getLeadDueAt(lead));
   if ((followUpTime !== null && followUpTime <= nowMs) || (dueTime !== null && dueTime <= nowMs)) {
     return "urgent";
   }
 
-  const isWaiting =
-    lead.result_type === "no_response" ||
-    lead.result_type === "follow_up" ||
-    (followUpTime !== null && followUpTime > nowMs);
-  if (isWaiting) return "waiting";
+  // A scheduled follow-up is work that remains in progress. Only a lead for
+  // which the employee is actually waiting for a customer response belongs
+  // in the waiting column.
+  if (followUp.isActive) return "processing";
+  if (lead.result_type === "no_response") return "waiting";
   if (lead.status === "processing") return "processing";
   return "urgent";
+}
+
+function getLeadPeriodAt(
+  lead: Lead,
+  status: EmployeeTaskStatus,
+  nowMs: number,
+  dueAt?: string,
+) {
+  if (status === "completed") return getLeadCompletedAt(lead);
+
+  const dueTime = toTime(dueAt);
+  // An overdue Lead belongs to the period in which its SLA/follow-up expired.
+  // A later sync or action must not pull an old overdue Lead into "7 days".
+  if (dueTime !== null && dueTime <= nowMs) return dueAt;
+
+  const followUp = getLeadFollowUpMeta(lead, nowMs);
+  if (followUp.isActive && followUp.scheduledAt !== null) {
+    return new Date(followUp.scheduledAt).toISOString();
+  }
+
+  if (lead.result_type === "no_response") {
+    return toIso(
+      lead.result_recorded_at ||
+        lead.last_contact_at ||
+        lead.last_action_at ||
+        lead.updated_at ||
+        lead.created_at,
+    );
+  }
+
+  // Keep the latest workflow activity as the filter timestamp even when an
+  // overdue processing Lead is promoted to the urgent display column.
+  if (lead.status === "processing") {
+    return toIso(
+      lead.last_action_at ||
+        lead.last_contact_at ||
+        lead.claimed_at ||
+        lead.assigned_at ||
+        lead.updated_at ||
+        lead.posted_at ||
+        lead.created_at,
+    );
+  }
+
+  // New work is scoped by publication time, matching the Lead workbench.
+  return toIso(lead.posted_at || lead.created_at);
 }
 
 function leadToTask(lead: Lead, nowMs: number): EmployeeOperationsTask {
@@ -224,11 +287,43 @@ function leadToTask(lead: Lead, nowMs: number): EmployeeOperationsTask {
     source: String(lead.platform || "unknown"),
     priority: intent,
     createdAt: toIso(lead.created_at) || new Date(nowMs).toISOString(),
+    periodAt: getLeadPeriodAt(lead, status, nowMs, dueAt),
     dueAt,
     completedAt,
     isOverdue: status !== "completed" && dueTime !== null && dueTime <= nowMs,
     href: `/leads?leadId=${encodeURIComponent(lead.id)}`,
   };
+}
+
+export function filterEmployeeOperationsTasks(
+  tasks: EmployeeOperationsTask[],
+  period: EmployeeOperationsPeriod,
+  nowMs = Date.now(),
+) {
+  if (period === "all") return tasks;
+
+  const todayStart = getVietnamDayStart(nowMs);
+  if (!Number.isFinite(todayStart)) return [];
+
+  let startTime = todayStart;
+  let endTime = todayStart + DAY_MS;
+
+  if (period === "yesterday") {
+    startTime -= DAY_MS;
+    endTime = todayStart;
+  } else if (period === "last7Days") {
+    startTime -= 6 * DAY_MS;
+  } else if (period === "last30Days") {
+    startTime -= 29 * DAY_MS;
+  }
+
+  return tasks.filter((task) => {
+    const activityTime = toTime(
+      task.periodAt ||
+        (task.status === "completed" ? task.completedAt : task.createdAt),
+    );
+    return activityTime !== null && activityTime >= startTime && activityTime < endTime;
+  });
 }
 
 function compareTasks(a: EmployeeOperationsTask, b: EmployeeOperationsTask) {
@@ -306,11 +401,13 @@ export function buildEmployeeOperationsData({
   if (role === "crisis_employee") {
     tasks = alerts
       .filter((alert) => canAlertBeVisibleToUser(alert, profile))
+      .filter((alert) => getAlertWorkflowStatus(alert) !== "skipped")
       .map((alert) => alertToTask(alert, nowMs));
   } else {
     tasks = leads
       .filter(isIntentLead)
       .filter((lead) => canLeadBeVisibleToUser(lead, profile))
+      .filter((lead) => lead.status !== "skipped")
       .map((lead) => leadToTask(lead, nowMs));
   }
 
@@ -360,4 +457,22 @@ export function formatOperationsRelativeTime(value: string | undefined, nowMs = 
   if (absoluteMinutes < 60) return `${absoluteMinutes} phút trước`;
   if (absoluteMinutes < 24 * 60) return `${Math.floor(absoluteMinutes / 60)} giờ trước`;
   return formatOperationsTime(value);
+}
+
+export function formatOperationsDueTime(value: string | undefined, nowMs = Date.now()) {
+  const dueTime = toTime(value);
+  if (dueTime === null) return "Chưa xác định thời hạn";
+  if (dueTime > nowMs) return formatOperationsRelativeTime(value, nowMs);
+
+  const overdueMinutes = Math.max(1, Math.ceil((nowMs - dueTime) / 60000));
+  const days = Math.floor(overdueMinutes / (24 * 60));
+  const hours = Math.floor((overdueMinutes % (24 * 60)) / 60);
+  const minutes = overdueMinutes % 60;
+  const parts: string[] = [];
+
+  if (days > 0) parts.push(`${days} ngày`);
+  if (hours > 0) parts.push(`${hours} giờ`);
+  if (minutes > 0 && days === 0) parts.push(`${minutes} phút`);
+
+  return `Quá hạn ${parts.join(" ") || "1 phút"}`;
 }
