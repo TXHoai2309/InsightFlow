@@ -11,6 +11,59 @@
 >   Tất cả các thay đổi đáng chú ý đối với dự án này sẽ được ghi lại trong file này.
 >   Định dạng dựa trên [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) và dự án này tuân thủ [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-07-23
+
+### Added
+
+- **Bộ lọc thời gian cho trang Vận hành nhân viên**:
+  - Mặc định hiển thị công việc trong ngày hôm nay.
+  - Bổ sung các lựa chọn `Hôm nay`, `Hôm qua`, `7 ngày qua`, `30 ngày qua` và `Toàn bộ`.
+  - Áp dụng đồng nhất cho bốn cột `Cần xử lý ngay`, `Đang xử lý`, `Chờ khách phản hồi` và `Nhật ký hoàn thành`.
+
+- **Template hỗ trợ liên hệ khách hàng**:
+  - Hiển thị sẵn mẫu xin lỗi trong panel xử lý Cảnh báo.
+  - Hiển thị sẵn mẫu cảm ơn trong panel xử lý Khách hàng tiềm năng.
+  - Bổ sung thao tác `Mở nguồn và sao chép` ngay tại template.
+  - Giữ nút `Mở nguồn` phía trên panel là thao tác độc lập, chỉ mở nội dung nguồn và không tự động sao chép.
+
+### Changed
+
+- **Phân loại công việc trên bảng Vận hành**:
+  - `Cần xử lý ngay` chỉ chứa công việc mới, cần ưu tiên hoặc đã quá hạn.
+  - `Đang xử lý` bao gồm công việc đang thực hiện và các trường hợp cần liên hệ lại/follow-up.
+  - `Chờ khách phản hồi` chỉ chứa các trường hợp đã liên hệ và thực sự đang chờ khách hàng phản hồi.
+  - `Nhật ký hoàn thành` chỉ chứa các công việc đã hoàn thành; các mục `Đã bỏ qua` không còn xuất hiện trong bốn cột.
+
+- **Mốc thời gian dùng để lọc Khách hàng tiềm năng**:
+  - Lead mới được lọc theo thời gian đăng nguồn.
+  - Lead đang xử lý được lọc theo lần thao tác, liên hệ, nhận hoặc phân công gần nhất.
+  - Lead follow-up được lọc theo thời gian hẹn liên hệ lại.
+  - Lead đang chờ phản hồi được lọc theo thời điểm ghi nhận kết quả/liên hệ.
+  - Lead hoàn thành được lọc theo thời điểm đóng.
+  - Lead đã quá hạn được lọc theo ngày hết SLA hoặc ngày follow-up, không dùng `updated_at` để tránh đưa công việc cũ vào kỳ gần đây.
+
+- **Hiển thị thời hạn/SLA**:
+  - Chuẩn hóa mốc SLA của Lead theo thời gian đăng nguồn và thời gian follow-up còn hiệu lực.
+  - Hiển thị thời gian quá hạn theo khoảng thời gian thực tế, ví dụ `Quá hạn 1 ngày 2 giờ`.
+
+### Fixed
+
+- Sửa lỗi timestamp dạng số (`Date.now()`) bị parse sai, làm phép so sánh `Hôm nay` trả kết quả không chính xác.
+- Sửa lỗi cảnh báo `Đã bỏ qua` rơi vào nhánh mặc định và xuất hiện sai trong cột `Cần xử lý ngay`.
+- Sửa lỗi trạng thái `Cần liên hệ lại`/`contact_failed` và Lead follow-up bị đưa sai cột.
+- Sửa lỗi Lead `Đã bỏ qua` bị coi như đã hoàn thành trên bảng Vận hành.
+- Sửa lỗi bộ lọc `7 ngày qua` vẫn hiển thị Lead quá hạn từ nhiều tuần trước do sử dụng lần cập nhật gần nhất thay cho ngày hết hạn.
+- Sửa thứ tự template liên hệ để người dùng xem nội dung trước và chủ động chọn mở nguồn có hoặc không sao chép.
+
+### Verification
+
+- Bổ sung test cho lọc ngày theo múi giờ Việt Nam, thời gian quá hạn, ánh xạ trạng thái Cảnh báo/Lead và Lead quá hạn cũ.
+- Toàn bộ 5 test của module Vận hành nhân viên đã hoàn tất thành công.
+- TypeScript typecheck của ứng dụng web hoàn tất thành công.
+- Các route `/operations`, `/alerts` và `/leads` trả về trạng thái `200` trên dev server sau thay đổi.
+
+---
+
 ## [Unreleased] - 2026-07-20
 
 ### Added

@@ -37,6 +37,7 @@ import {
 } from "@/lib/lead-workbench";
 import { isDemoPath } from "@/lib/demo-navigation";
 import { dummyStaff } from "@/lib/demoData";
+import { copyTextToClipboard } from "@/lib/clipboard";
 
 interface LeadDetailPanelProps {
   lead: Lead | null;
@@ -114,6 +115,26 @@ function formatCompactEventTime(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function formatLeadBrandName(brand: string) {
+  if (!brand) return "thương hiệu";
+  const normalized = brand.toLowerCase();
+  if (normalized.includes("starbuck")) return "Starbucks";
+  if (normalized.includes("highland")) return "Highlands Coffee";
+  if (normalized.includes("mixue")) return "Mixue";
+  return brand
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+}
+
+export function createLeadThankYouTemplate(
+  customerName: string,
+  brand: string,
+) {
+  return `Xin chào ${customerName || "Anh/Chị"}, cảm ơn Anh/Chị đã quan tâm đến sản phẩm/dịch vụ của ${formatLeadBrandName(brand)}. Chúng tôi rất vui được hỗ trợ Anh/Chị. Anh/Chị có thể chia sẻ thêm nhu cầu hoặc thông tin cần tư vấn để chúng tôi hỗ trợ nhanh và phù hợp nhất nhé.`;
 }
 
 export function LeadDetailPanel({
@@ -477,6 +498,27 @@ export function LeadDetailPanel({
     }
   };
 
+  const handleOpenSourceWithThankYouTemplate = async () => {
+    if (!sourceAction) {
+      showToast("Khách hàng này chưa có liên kết nguồn hợp lệ.", "error");
+      return;
+    }
+
+    const template = createLeadThankYouTemplate(
+      lead.author || "Anh/Chị",
+      profile?.brandName || lead.workspace_id,
+    );
+    const copyPromise = copyTextToClipboard(template);
+    await handleOpenAction(sourceAction, true);
+    const didCopy = await copyPromise;
+    showToast(
+      didCopy
+        ? "Đã mở nguồn và sao chép mẫu cảm ơn."
+        : "Đã mở nguồn nhưng không thể sao chép tự động.",
+      didCopy ? "success" : "error",
+    );
+  };
+
   const handleOpenTerminalSource = () => {
     if (!sourceAction || !canOpenTerminalSource) {
       showToast("Item này không có liên kết nguồn hợp lệ.", "error");
@@ -733,7 +775,7 @@ export function LeadDetailPanel({
                   <button
                     type="button"
                     disabled={!ownership.canWork || Boolean(isOpening)}
-                    onClick={() => handleOpenAction(sourceAction, true)}
+                    onClick={() => void handleOpenAction(sourceAction, true)}
                     className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-bg-surface)] px-3 text-[13px] font-semibold text-[var(--color-brand)] shadow-sm transition hover:bg-[var(--color-brand-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     title="Mở lại nguồn của Lead"
                   >
@@ -829,6 +871,29 @@ export function LeadDetailPanel({
             </div>
 
             <aside className="space-y-2 min-[1280px]:min-h-0 min-[1280px]:overflow-y-auto min-[1280px]:pl-1 min-[1280px]:[scrollbar-gutter:stable]" aria-label="Thao tác nhanh với lead">
+              {lead.status === "processing" && ownership.canWork && (
+                <section className="space-y-2 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 dark:border-emerald-900/40 dark:bg-emerald-950/15">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+                      Mẫu cảm ơn tham khảo
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => void handleOpenSourceWithThankYouTemplate()}
+                      disabled={!sourceAction || Boolean(isOpening)}
+                      className="text-[10px] font-bold text-emerald-700 hover:underline disabled:cursor-not-allowed disabled:opacity-50 dark:text-emerald-400"
+                    >
+                      Mở nguồn và sao chép
+                    </button>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-[var(--color-text-secondary)]">
+                    {createLeadThankYouTemplate(
+                      lead.author || "Anh/Chị",
+                      profile?.brandName || lead.workspace_id,
+                    )}
+                  </p>
+                </section>
+              )}
               <section className="hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-2.5 min-[1280px]:block">
                 <div className="flex items-center justify-between gap-2">
                   <h4 className="text-sm font-bold text-[var(--color-text-primary)]">Tổng quan xử lý</h4>

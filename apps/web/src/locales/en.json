@@ -1752,6 +1752,14 @@
       "processing": "Processing",
       "waiting": "Waiting for reply",
       "completed": "Completed log",
+      "periodLabel": "Display period",
+      "period": {
+        "today": "Today",
+        "yesterday": "Yesterday",
+        "last7Days": "Last 7 days",
+        "last30Days": "Last 30 days",
+        "all": "All time"
+      },
       "emptyTitle": "No tasks left",
       "emptySub": "Great, check other sections!",
       "completedCount": "Completed {{count}} tasks",

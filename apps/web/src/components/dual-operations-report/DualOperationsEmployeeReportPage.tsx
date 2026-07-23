@@ -339,9 +339,9 @@ export function DualOperationsEmployeeReportPage({
       const leadSamples = reportFilters.operation === "crisis"
         ? []
         : report.lead.detailRows.map((row) => ({
-            content: `LEAD | ${row.customer} | ${row.content}`,
+            content: `LEAD | ${row.customer} | ${row.intent || "other"} | ${row.content}`,
             sentiment: "positive",
-            topic: "lead",
+            topic: row.intent || "lead",
             source: row.platform || "system",
             priority: row.priorityScore,
           }));

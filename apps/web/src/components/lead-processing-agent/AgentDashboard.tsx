@@ -239,7 +239,7 @@ export function AgentDashboard() {
 
         <section className="grid grid-cols-1 items-start gap-6 xl:grid-cols-4">
           <div className="min-h-[560px] xl:col-span-3">
-            <AgentKanbanBoard tasks={data.tasks} />
+            <AgentKanbanBoard tasks={data.tasks} nowMs={nowMs} />
           </div>
           <div className="xl:col-span-1">
             <AgentNotifications notifications={data.notifications} />
