@@ -63,6 +63,7 @@ import {
   indexLeadWorkflowRows,
   mergeLeadWorkflowRows,
 } from "@/lib/lead-workflow-state";
+import { deduplicateSourceRecords } from "@/lib/source-content-identity";
 
 // ─── Collection names ────────────────────────────────────────────────────────
 export const COLLECTION_NAMES = {
@@ -1770,13 +1771,8 @@ function parseDate(field: unknown, referenceField?: unknown): string {
   return s.includes("+") || s.endsWith("Z") ? s : s + "Z";
 }
 
-function uniqueRecordsById<T extends { id: string }>(records: T[]): T[] {
-  const seen = new Set<string>();
-  return records.filter((record) => {
-    if (!record.id || seen.has(record.id)) return false;
-    seen.add(record.id);
-    return true;
-  });
+function uniqueRecordsById(records: Mention[]): Mention[] {
+  return deduplicateSourceRecords(records);
 }
 
 function getProfileDisplayName(profile: UserRoleProfile) {

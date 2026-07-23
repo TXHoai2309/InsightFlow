@@ -13,6 +13,10 @@ import { normalizeBrandName } from "@/lib/brand-normalization";
 import type { UserRoleProfile } from "@/lib/rbac";
 import type { AlertData } from "@/stores/alert.store";
 import type { Lead } from "@/types/dashboard";
+import {
+  deduplicateSourceRecords,
+  getSourceRecordTypedKey,
+} from "@/lib/source-content-identity";
 
 export const ALERT_REVIEW_WINDOW_DAYS = 30;
 
@@ -117,11 +121,7 @@ export function isAlertInReviewWindow(
 }
 
 export function getAlertDeduplicationKey(alert: AlertData) {
-  const contentType = String(alert.content_type || "mention").toLowerCase();
-  const sourceRecordId = contentType === "comment" || contentType === "reply"
-    ? alert.comment_id || alert.source_id || alert.id
-    : alert.post_id || alert.source_id || alert.id;
-  return `${String(alert.source || "unknown").toLowerCase()}:${contentType}:${sourceRecordId}`;
+  return getSourceRecordTypedKey(alert);
 }
 
 export function getAlertCompletenessScore(alert: AlertData) {
@@ -152,7 +152,7 @@ export function filterOperationalAlerts(
     dateBasis?: "created_at" | "relevant_at";
   },
 ) {
-  const deduplicated = new Map<string, AlertData>();
+  const scopedAlerts: AlertData[] = [];
 
   alerts.forEach((alert) => {
     const isInWindow = dateBasis === "created_at"
@@ -172,14 +172,15 @@ export function filterOperationalAlerts(
     if (platform && platform !== "all" && alert.source !== platform) return;
     if (!canAlertBeVisibleToUser(alert, profile)) return;
 
-    const key = getAlertDeduplicationKey(alert);
-    const existing = deduplicated.get(key);
-    if (!existing || getAlertCompletenessScore(alert) > getAlertCompletenessScore(existing)) {
-      deduplicated.set(key, alert);
-    }
+    scopedAlerts.push(alert);
   });
 
-  return Array.from(deduplicated.values());
+  return deduplicateSourceRecords(scopedAlerts, {
+    selectPreferred: (existing, candidate) =>
+      getAlertCompletenessScore(candidate) > getAlertCompletenessScore(existing)
+        ? candidate
+        : existing,
+  });
 }
 
 export function buildAlertOperationalMetrics(alerts: AlertData[]): AlertOperationalMetrics {
