@@ -8,9 +8,9 @@ interface ConsultationEmailInput {
   company: string;
   need: string;
   accountEmail?: string;
-  temporaryPassword?: string;
+  activationLink?: string;
+  trialDays?: 7 | 14;
   trialEndsAt?: Date;
-  loginUrl?: string;
 }
 
 const SUBJECTS: Record<ConsultationEmailKind, string> = {
@@ -50,15 +50,15 @@ function buildMessage(input: ConsultationEmailInput) {
       `Mã yêu cầu: ${input.requestId}`,
       `Doanh nghiệp: ${input.company}`,
       "",
-      "Tài khoản của bạn được sử dụng miễn phí trong 14 ngày.",
+      `Tài khoản của bạn được sử dụng miễn phí trong ${input.trialDays || 14} ngày.`,
       ...(trialEndLabel ? [`Thời hạn dùng thử đến: ${trialEndLabel}`] : []),
       "",
       "Thông tin tài khoản dùng thử:",
       `Email đăng nhập: ${input.accountEmail}`,
-      `Mật khẩu tạm thời: ${input.temporaryPassword}`,
-      `Đăng nhập tại: ${input.loginUrl}`,
+      "InsightFlow không gửi mật khẩu cố định qua email.",
+      `Thiết lập mật khẩu và kích hoạt tài khoản tại: ${input.activationLink}`,
       "",
-      "Vì lý do bảo mật, hệ thống sẽ yêu cầu bạn đổi mật khẩu trong lần đăng nhập đầu tiên.",
+      "Link chỉ dùng một lần và có thời hạn theo chính sách bảo mật của Firebase. Nếu link hết hạn, vui lòng liên hệ InsightFlow để được gửi lại.",
       "",
       "Trân trọng,",
       "Đội ngũ InsightFlow",
@@ -122,9 +122,9 @@ export async function sendConsultationEmail(input: ConsultationEmailInput) {
       status: input.kind,
       account_email: input.accountEmail || "",
       login_email: input.accountEmail || "",
-      temporary_password: input.temporaryPassword || "",
-      password: input.temporaryPassword || "",
-      login_url: input.loginUrl || "",
+      activation_link: input.activationLink || "",
+      login_url: input.activationLink || "",
+      trial_days: input.trialDays || 14,
       trial_ends_at: input.trialEndsAt?.toISOString() || "",
     },
   };

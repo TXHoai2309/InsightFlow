@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getIdTokenResult, signInWithEmailAndPassword, signOut } from "firebase/auth";
+import type { User as FirebaseUser } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -22,6 +23,18 @@ export default function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const recordTrialActivation = async (user: FirebaseUser) => {
+    const token = await user.getIdToken();
+    const response = await fetch("/api/auth/trial-activation", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (response.ok) return;
+    const result = await response.json().catch(() => null);
+    await signOut(auth);
+    throw new Error(result?.error || "Không thể ghi nhận trạng thái kích hoạt. Vui lòng đăng nhập lại.");
+  };
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,6 +75,7 @@ export default function LoginForm() {
           storedOnboarding: claims.onboarding,
         });
 
+        await recordTrialActivation(credential.user);
         setUser(credential.user);
         setProfile(profileFromClaims);
         setAuthLoading(false);
@@ -90,6 +104,7 @@ export default function LoginForm() {
         storedOnboarding: userData.onboarding,
       });
 
+      await recordTrialActivation(credential.user);
       setUser(credential.user);
       setProfile(profileFromStore);
       setAuthLoading(false);

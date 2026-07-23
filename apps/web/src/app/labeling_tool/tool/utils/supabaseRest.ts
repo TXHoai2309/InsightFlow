@@ -337,6 +337,11 @@ function usesLocationContainerPosts(platform: PlatformFilter): boolean {
   return platform === 'google_maps' || platform === 'befood';
 }
 
+export interface SupabaseBrandOption {
+  value: string;
+  label: string;
+}
+
 interface BrandPostScope {
   postIds: string[];
   totalPosts: number;
@@ -387,6 +392,40 @@ async function loadBrandPostScope(
     postIds: Array.from(new Set(matchingRows.map(post => post.post_id))),
     totalPosts: matchingRows.length,
   };
+}
+
+export async function loadSupabaseBrands(
+  config: SupabaseConfig,
+  signal?: AbortSignal,
+): Promise<SupabaseBrandOption[]> {
+  const pageSize = 1000;
+  const brands = new Map<string, string>();
+
+  for (let offset = 0; ; offset += pageSize) {
+    const query = new URLSearchParams({
+      select: 'brand,brand_slug',
+      crawl_status: 'eq.active',
+      limit: String(pageSize),
+      offset: String(offset),
+      order: 'brand_slug.asc',
+    }).toString();
+    const rows = await requestActiveRows<Array<Pick<SupabasePost, 'brand' | 'brand_slug'>>>(
+      config,
+      'posts',
+      query,
+      signal,
+    );
+    rows.forEach((row) => {
+      const value = (row.brand_slug || row.brand || '').trim();
+      if (!value) return;
+      const label = (row.brand || row.brand_slug || value).trim();
+      if (!brands.has(value)) brands.set(value, label);
+    });
+    if (rows.length < pageSize) break;
+  }
+
+  return Array.from(brands, ([value, label]) => ({ value, label }))
+    .sort((left, right) => left.label.localeCompare(right.label, 'vi'));
 }
 
 async function countRowsForPostIds(
