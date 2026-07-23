@@ -107,6 +107,18 @@ const statusStyle: Record<string, string> = {
   cancelled: "bg-slate-200 text-slate-700",
 };
 
+const statusDotStyle: Record<string, string> = {
+  queued: "bg-slate-400",
+  waiting_resource: "bg-amber-500",
+  running: "bg-blue-500",
+  labeling: "bg-violet-500",
+  syncing: "bg-cyan-500",
+  completed: "bg-emerald-500",
+  partial: "bg-orange-500",
+  failed: "bg-rose-500",
+  cancelled: "bg-slate-500",
+};
+
 function dateText(value: any) {
   const date = value?.toDate ? value.toDate() : value ? new Date(value) : null;
   return date && !Number.isNaN(date.getTime())
@@ -346,22 +358,22 @@ export default function AdminCrawlOperationsPage() {
       <div className="mx-auto max-w-[1500px]">
         <header className="mb-6 flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
           <div>
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[var(--color-brand)]">
-              <Activity size={15} />
-              Vận hành hệ thống
+            <div className="inline-flex items-center gap-2 rounded-full border border-[var(--color-brand)]/10 bg-white/90 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.08em] text-[var(--color-brand)] shadow-[0_4px_14px_rgba(76,66,190,0.08)] backdrop-blur-sm">
+              <Activity size={12} strokeWidth={2.4} />
+              <span>Vận hành hệ thống</span>
             </div>
-            <h1 className="mt-1 text-2xl font-black sm:text-3xl">Tiến trình cào dữ liệu</h1>
+            <h1 className="mt-2 text-2xl font-black sm:text-3xl">Tiến trình cào dữ liệu</h1>
             <p className="mt-1 text-sm opacity-70">
               Theo dõi các phiên production và dùng thử theo thời gian thực.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <div className="rounded-xl border bg-white/70 px-3 py-2 text-xs font-semibold">
-              <span className="mr-2 inline-block h-2 w-2 rounded-full bg-blue-500" />
+            <div className="rounded-full border bg-white/80 px-4 py-2 text-xs font-semibold shadow-sm">
+              <span className="mr-2 inline-block h-2 w-2 rounded-full bg-blue-500 shadow-[0_0_0_3px_rgba(59,130,246,0.12)]" />
               {counts.active} phiên đang hoạt động
             </div>
-            <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600">
-              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+            <div className="flex items-center gap-2 rounded-full border bg-white/80 px-4 py-2 text-xs font-semibold text-emerald-600 shadow-sm">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.12)]" />
               Tự cập nhật sau 30–60 giây
             </div>
           </div>
@@ -484,9 +496,10 @@ export default function AdminCrawlOperationsPage() {
                           </p>
                         </div>
                       </div>
-                      <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${
+                      <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-1 text-[10px] font-bold ${
                         statusStyle[run.status] || statusStyle.queued
                       }`}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${statusDotStyle[run.status] || statusDotStyle.queued}`} />
                         {STATUS_LABELS[run.status] || run.status}
                       </span>
                     </div>
@@ -575,9 +588,10 @@ export default function AdminCrawlOperationsPage() {
                 <div className="flex items-start justify-between gap-4 border-b pb-5">
                   <div className="min-w-0">
                     <div className="mb-2 flex flex-wrap items-center gap-2">
-                      <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
+                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold ${
                         statusStyle[selected.status] || statusStyle.queued
                       }`}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${statusDotStyle[selected.status] || statusDotStyle.queued}`} />
                         {STATUS_LABELS[selected.status] || selected.status}
                       </span>
                       <span className="text-xs font-semibold text-slate-500">
