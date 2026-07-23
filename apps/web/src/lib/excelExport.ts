@@ -1693,7 +1693,7 @@ export function buildDualOperationsReportExcelDocument(
         </section>
 
         <section class="report-section">
-          <h2>Kết quả trong kỳ</h2>
+          <h2>Kết quả chỉ số trong kỳ</h2>
           <table><tr>
             ${dualMetricCell("Chưa phân công", report.kpis.workflow.unassigned.total)}
             ${dualMetricCell("Cần tiếp tục xử lý", report.kpis.workflow.inProgress.total, "warn")}

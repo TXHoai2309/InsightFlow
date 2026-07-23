@@ -1955,11 +1955,11 @@ function mapSupabaseLeadPreviewRow(row: SupabaseRow): Lead | null {
 export class DashboardService {
   /**
    * Small, server-filtered snapshot used to render the default Lead queue
-   * immediately. The authoritative all-time workflow snapshot continues in
-   * the background and replaces this preview when it is ready.
-   */
+  * immediately. The authoritative all-time workflow snapshot continues in
+  * the background and replaces this preview when it is ready.
+  */
   static async fetchTodayLeadPreview(opts: LeadPreviewOptions): Promise<Lead[]> {
-    if (isDemoRuntime()) {
+    if (typeof window !== "undefined" && window.location.pathname.startsWith("/demo")) {
       const { dummyLeads } = await import("@/lib/demoData");
       const start = new Date(opts.postedFrom).getTime();
       const end = new Date(opts.postedBefore).getTime();
