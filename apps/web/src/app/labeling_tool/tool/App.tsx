@@ -253,6 +253,7 @@ export default function App() {
     loadPendingAssignmentCounts(
       { url: supabaseUrl.trim(), anonKey: supabaseAnonKey.trim() },
       platformFilter,
+      supabaseBrandQuery,
     )
       .then(counts => {
         if (!cancelled) setPendingCounts(counts);
@@ -266,7 +267,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [completedThreadCount, platformFilter, supabaseAnonKey, supabaseUrl]);
+  }, [completedThreadCount, platformFilter, supabaseAnonKey, supabaseBrandQuery, supabaseUrl]);
 
   // ─── All items in current thread (flat, ordered) ───────
   const threadItems = useMemo(() => {
@@ -541,7 +542,11 @@ export default function App() {
       setApprovalMessage(
         `Đã duyệt ${result.approved.toLocaleString()}/${result.total.toLocaleString()} nhãn AI của ${platformLabel}.`,
       );
-      const counts = await loadPendingAssignmentCounts(activeSupabaseConfig, platformFilter);
+      const counts = await loadPendingAssignmentCounts(
+        activeSupabaseConfig,
+        platformFilter,
+        supabaseBrandQuery,
+      );
       setPendingCounts(counts);
       await handleSupabaseLoad(null);
     } catch (error) {
@@ -558,6 +563,7 @@ export default function App() {
     handleSupabaseLoad,
     platformAiPendingCount,
     platformFilter,
+    supabaseBrandQuery,
   ]);
 
   useEffect(() => {
@@ -922,6 +928,7 @@ export default function App() {
                   pendingCounts={pendingCounts}
                   pendingCountsLoading={pendingCountsLoading}
                   platform={platformFilter}
+                  brand={supabaseBrandQuery}
                 />
               </div>
             </div>

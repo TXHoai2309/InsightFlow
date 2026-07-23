@@ -150,7 +150,16 @@ export function BrandManagerDashboard({
       if (normFilter && b !== normFilter) return false;
 
       // 2. Platform filter
-      if (filters.platform !== "all" && m.platform !== filters.platform) return false;
+      if (filters.platform !== "all") {
+        const aliases: Record<string, string[]> = {
+          thread: ["thread", "threads"],
+          be: ["be", "befood"],
+          news: ["news", "news_html", "news_rss"],
+          google_maps: ["google_maps", "googlemap"],
+        };
+        const accepted = aliases[filters.platform] ?? [filters.platform];
+        if (!accepted.includes(String(m.platform).toLowerCase())) return false;
+      }
 
       // 3. Time filter
       return checkTimeFilter(m.posted_at);
@@ -162,6 +171,24 @@ export function BrandManagerDashboard({
     checkTimeFilter,
   ]);
 
+
+  const aiTrendData = useMemo<Array<number | null>>(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const days = Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(today);
+      date.setDate(today.getDate() - (6 - index));
+      return date;
+    });
+    return days.map((day) => {
+      const key = day.toISOString().slice(0, 10);
+      const daily = currentMentions.filter((mention) => new Date(mention.posted_at).toISOString().slice(0, 10) === key);
+      if (daily.length === 0) return null;
+      const positive = daily.filter((mention) => mention.sentiment === "positive").length;
+      const negative = daily.filter((mention) => mention.sentiment === "negative").length;
+      return Math.round(50 + ((positive - negative) / daily.length) * 50);
+    });
+  }, [currentMentions]);
 
   /* ── Filtered mentions for previous period (trend calc) ────── */
   const previousMentions = useMemo(() => {
@@ -206,7 +233,16 @@ export function BrandManagerDashboard({
     return mentions.filter((m) => {
       const b = m.workspace_id ? normalizeBrandName(m.workspace_id) : "";
       if (normFilter && b !== normFilter) return false;
-      if (filters.platform !== "all" && m.platform !== filters.platform) return false;
+      if (filters.platform !== "all") {
+        const aliases: Record<string, string[]> = {
+          thread: ["thread", "threads"],
+          be: ["be", "befood"],
+          news: ["news", "news_html", "news_rss"],
+          google_maps: ["google_maps", "googlemap"],
+        };
+        const accepted = aliases[filters.platform] ?? [filters.platform];
+        if (!accepted.includes(String(m.platform).toLowerCase())) return false;
+      }
       const time = new Date(m.posted_at).getTime();
       return time >= previousCutoff && time < currentCutoff;
     });
@@ -254,10 +290,6 @@ export function BrandManagerDashboard({
   }, [currentMentions, previousMentions]);
 
   /* ── Derived KPIs ───────────────────────────────────────────── */
-  const total = stats.total_mentions;
-  const prevTotal = prevStats.total_mentions;
-  const totalTrend =
-    prevTotal === 0 ? 0 : Math.round(((total - prevTotal) / prevTotal) * 100);
 
   const baseHealth = 60 + stats.net_sentiment / 2;
   const brandHealthScore = Math.min(100, Math.max(0, Math.round(baseHealth)));
@@ -321,16 +353,25 @@ export function BrandManagerDashboard({
   const highAlerts = derivedAlerts.filter(
     (a) => a.severity === "critical" || a.severity === "high"
   );
-  const crisisAlertKpi = useMemo(() => {
-    const scopedAlerts = filterOperationalAlerts(crisisAlerts, {
-      profile,
-      workspaceId: filters.workspace_id,
-      platform: filters.platform,
-      crisisOnly: true,
-      dateBasis: "created_at",
-    });
-    return buildAlertOperationalMetrics(scopedAlerts);
-  }, [crisisAlerts, filters.workspace_id, filters.platform, profile]);
+  const dashboardNegativeAlerts = useMemo(() => {
+    return filterOperationalAlerts(
+      crisisAlerts.filter(
+        (alert) => alert.sentiment === "negative" && checkTimeFilter(alert.created_at),
+      ),
+      {
+        profile,
+        workspaceId: filters.workspace_id,
+        platform: filters.platform,
+        reviewWindowDays: 36_500,
+        dateBasis: "created_at",
+      },
+    );
+  }, [checkTimeFilter, crisisAlerts, filters.platform, filters.workspace_id, profile]);
+  const dashboardNegativeAlertKpi = useMemo(
+    () => buildAlertOperationalMetrics(dashboardNegativeAlerts),
+    [dashboardNegativeAlerts],
+  );
+
   const leadOperationalMetrics = useMemo(() => {
     const scopedLeads = filterOperationalLeads(leads, {
       profile,
@@ -340,6 +381,34 @@ export function BrandManagerDashboard({
     return buildLeadOperationalMetrics(scopedLeads, profile);
   }, [filters.platform, filters.workspace_id, leads, profile]);
   const unprocessedContacts = leadOperationalMetrics.unassigned;
+  const kpiDrilldownLinks = useMemo(() => {
+    const alertLink = (scope: "negative" | "crisis") => {
+      const params = new URLSearchParams({ scope, status: "all" });
+      if (filters.workspace_id !== "all") params.set("brand", filters.workspace_id);
+      if (filters.platform !== "all") params.set("source", filters.platform);
+      params.set("time", filters.time_range);
+      if (filters.single_date) params.set("date", filters.single_date);
+      if (filters.custom_start_date) params.set("start", filters.custom_start_date);
+      if (filters.custom_end_date) params.set("end", filters.custom_end_date);
+      return `/alerts?${params.toString()}`;
+    };
+
+    const leadParams = new URLSearchParams({ view: "unassigned" });
+    if (filters.workspace_id !== "all") leadParams.set("workspace", filters.workspace_id);
+    if (filters.platform !== "all") leadParams.set("platform", filters.platform);
+
+    return {
+      negative: alertLink("negative"),
+      leads: `/leads?${leadParams.toString()}`,
+    };
+  }, [
+    filters.custom_end_date,
+    filters.custom_start_date,
+    filters.platform,
+    filters.single_date,
+    filters.time_range,
+    filters.workspace_id,
+  ]);
 
   const hasData = mentions.length > 0;
   if ((!isMounted && !hasData) || (!isFirstLoadDone && isLoading)) {
@@ -391,31 +460,82 @@ export function BrandManagerDashboard({
       {highAlerts.length > 0 && <BMAlertBanner alerts={highAlerts} />}
 
       {/* ── 3. Hero Row: Brand Health Gauge + Sentiment Donut ─── */}
-      <BMHeroRow
-        score={brandHealthScore}
-        trend={brandHealthTrend}
-        sentiment={{
-          positive: stats.positive_count,
-          neutral: stats.neutral_count,
-          negative: stats.negative_count,
-        }}
-        totalMentions={stats.total_mentions}
-        onViewDetail={() => setViewMode("platform")}
-      />
+      <div className="bm-overview-combined">
+        <BMHeroRow
+          score={brandHealthScore}
+          trend={brandHealthTrend}
+          sentiment={{
+            positive: stats.positive_count,
+            neutral: stats.neutral_count,
+            negative: stats.negative_count,
+          }}
+          totalMentions={stats.total_mentions}
+          trendData={aiTrendData}
+          brandName={filters.workspace_id !== "all" ? filters.workspace_id : profile?.brandName}
+          timeRange={filters.time_range}
+          topics={topTopics.slice(0, 5).map((topic) => ({
+            name: topic.name,
+            count: topic.count,
+            negative: topic.sentiment_breakdown.negative,
+          }))}
+          onViewDetail={() => setViewMode("platform")}
+        />
 
-      {/* ── 4. KPI Cards ────────────────────────────────────────── */}
-      <BMKpiCards
-        totalMentions={stats.total_mentions}
-        totalTrend={totalTrend}
-        negativeMentions={stats.negative_count}
-        negativePrev={prevStats.negative_count}
-        alertsTotal={crisisAlertKpi.active}
-        alertsHigh={crisisAlertKpi.highActive}
-        unprocessed={unprocessedContacts}
-        crises={derivedAlerts.filter((a) => a.severity === "critical").length}
-        hotLeads={leadOperationalMetrics.unassigned}
-      />
+        <BMKpiCards
+          negativeMentions={stats.negative_count}
+          negativePrev={prevStats.negative_count}
+          negativeResolved={dashboardNegativeAlertKpi.resolved + dashboardNegativeAlertKpi.skipped}
+          unprocessed={unprocessedContacts}
+          crises={derivedAlerts.filter((a) => a.severity === "critical").length}
+          hotLeads={leadOperationalMetrics.unassigned}
+          leadsResolved={leadOperationalMetrics.closed + leadOperationalMetrics.skipped}
+          negativeHref={kpiDrilldownLinks.negative}
+          leadsHref={kpiDrilldownLinks.leads}
+        />
 
+        <style>{`
+          .bm-overview-combined {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-template-areas:
+              "health sentiment insight"
+              "negative leads insight";
+            gap: 20px;
+            align-items: stretch;
+          }
+          .bm-overview-combined > .bm-hero-row,
+          .bm-overview-combined > .bm-kpi-grid { display: contents; }
+          .bm-overview-combined .bm-hero-gauge,
+          .bm-overview-combined .bm-hero-sentiment {
+            align-self: stretch;
+            height: auto;
+          }
+          .bm-overview-combined .bm-hero-gauge { grid-area: health; }
+          .bm-overview-combined .bm-hero-sentiment { grid-area: sentiment; }
+          .bm-overview-combined .bm-hero-insight {
+            grid-area: insight;
+            align-self: stretch;
+            height: auto;
+          }
+          .bm-overview-combined #bm-kpi-negative { grid-area: negative; }
+          .bm-overview-combined #bm-kpi-leads { grid-area: leads; }
+          @media (max-width: 1024px) {
+            .bm-overview-combined {
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+              grid-template-areas:
+                "health sentiment"
+                "negative leads"
+                "insight insight";
+            }
+          }
+          @media (max-width: 640px) {
+            .bm-overview-combined {
+              grid-template-columns: 1fr;
+              grid-template-areas: "health" "negative" "sentiment" "leads" "insight";
+            }
+          }
+        `}</style>
+      </div>
       {/* ── 5. Row 2: Sentiment Trend (Full Width) ──────────────── */}
       <div className="grid grid-cols-1 gap-6">
         <BMSentimentChart filteredMentions={currentMentions} />

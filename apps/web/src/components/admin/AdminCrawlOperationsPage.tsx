@@ -22,6 +22,7 @@ const PLATFORM_OPTIONS = [
   ["tiktok", "TikTok"],
   ["youtube", "YouTube"],
   ["google_maps", "Google Maps"],
+  ["befood", "BeFood"],
   ["news_html", "Tin tức"],
   ["website", "Website"],
 ] as const;

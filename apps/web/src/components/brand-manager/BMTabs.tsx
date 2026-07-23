@@ -33,11 +33,15 @@ export function BMTabs() {
     return buildLeadOperationalMetrics(scoped, profile).total;
   }, [filters.platform, filters.workspace_id, leads, profile]);
   const alertsCount = useMemo(() => {
-    const scoped = filterOperationalAlerts(rawAlerts, {
+    // Crisis Monitoring is the operational queue for every negative mention.
+    // Severity/urgency only controls priority; it must not exclude records
+    // from the total shown in the tab.
+    const scoped = filterOperationalAlerts(rawAlerts.filter(
+      (alert) => alert.sentiment === "negative",
+    ), {
       profile,
       workspaceId: filters.workspace_id,
       platform: filters.platform,
-      crisisOnly: true,
       dateBasis: "created_at",
     });
     return buildAlertOperationalMetrics(scoped).total;
