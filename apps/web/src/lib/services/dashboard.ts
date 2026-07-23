@@ -57,6 +57,7 @@ import {
   isLocationReviewPlatform,
   parseVietnameseRelativeDate,
 } from "@/lib/dashboard-display";
+import { isDemoRuntime } from "@/lib/demo-navigation";
 import {
   buildLeadWorkflowLookupKeys,
   getMissingLeadWorkflowKeys,

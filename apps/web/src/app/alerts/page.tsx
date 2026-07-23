@@ -43,11 +43,8 @@ import {
   getAlertCompletenessScore,
   getAlertDeduplicationKey,
 } from "@/lib/operational-metrics";
-<<<<<<< HEAD
 import { isDemoPath, toDemoHref } from "@/lib/demo-navigation";
 import { copyTextToClipboard } from "@/lib/clipboard";
-=======
->>>>>>> 64d1c2b40afb1d7afc2b85f63914a8b648f5086f
 import { isCrisisClassificationLabel } from "@/lib/label-change";
 
 const ALERTS_PER_PAGE = 5;

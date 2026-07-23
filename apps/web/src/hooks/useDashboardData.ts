@@ -265,7 +265,7 @@ export function useDashboard(options: UseDashboardOptions = {}) {
 
       // Give the small Lead query priority so the full mentions/dashboard scan
       // cannot compete with the first useful result on a cold page visit.
-      const rawDataPromise = isDemoMode
+      const rawData = isDemoMode
         ? {
             workspaces: dummyWorkspaces,
             mentions: dummyMentions,
@@ -273,13 +273,7 @@ export function useDashboard(options: UseDashboardOptions = {}) {
             leads: dummyLeads,
             labelChangeRequests: dummyLabelChangeRequests,
           }
-<<<<<<< HEAD
-        : DashboardService.fetchRawData({ brandKey: rawBrandKey });
-
-      const rawData = await rawDataPromise;
-=======
         : await DashboardService.fetchRawData({ brandKey: rawBrandKey }, profile);
->>>>>>> 64d1c2b40afb1d7afc2b85f63914a8b648f5086f
       // Ignore stale responses from a previous navigation/refresh.
       if (latestFetchGeneration.get(fetchScopeKey) !== generation) return;
       const workspaces = filterByBusinessPolicy(
