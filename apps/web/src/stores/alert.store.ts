@@ -18,6 +18,7 @@ import {
   canSkipAlert,
   getAlertWorkflowStatus,
   getPersistedAlertStatus,
+  getRealtimeAlertWorkflowStatus,
   isResolvedAlert,
   isTerminalAlert,
 } from "@/lib/alertWorkflow";
@@ -249,7 +250,12 @@ interface AlertState {
   ) => Promise<void>;
   lockAlertForResolution: (id: string, profile: UserRoleProfile | null | undefined) => Promise<void>;
   unlockAlertForResolution: (id: string) => Promise<void>;
-  recentLocks: Record<string, { email: string | null; timestamp: number }>;
+  recentLocks: Record<string, {
+    email: string | null;
+    timestamp: number;
+    workflowStatus?: string;
+    workflowUpdatedAt?: string;
+  }>;
 }
 
 function parseDate(field: unknown): string {
@@ -502,7 +508,10 @@ function applyRealtimeAnnotationUpdate(
   const beingResolvedAt = row.being_resolved_at || labelObj.being_resolved_at || null;
   const resolvedByEmail = row.resolved_by_email || labelObj.resolved_by_email || null;
   const resolvedByName = row.resolved_by_name || labelObj.resolved_by_name || null;
-  const newStatus = row.status || row.resolution_status || resolveAlertStatusFromLabel(labelObj);
+  // `row.status` belongs to the annotation classification pipeline and is
+  // commonly "completed". Treating it as a crisis workflow status makes a
+  // freshly claimed alert jump to Closed until the next full reload.
+  const newStatus = getRealtimeAlertWorkflowStatus(row, labelObj);
   const incomingUpdatedAt = String(
     row.updated_at ||
     labelObj.updated_at ||
@@ -560,6 +569,8 @@ function applyRealtimeAnnotationUpdate(
       nextRecentLocks[alert.id] = {
         email: beingResolvedBy,
         timestamp: Date.now(),
+        workflowStatus: newStatus,
+        workflowUpdatedAt: incomingUpdatedAt || undefined,
       };
       return {
         ...alert,
@@ -710,11 +721,42 @@ export const useAlertStore = create<AlertState>()(
             return !scopedBrandKey || normalizeBrandName(brand) === scopedBrandKey;
           });
 
-          // Merge with recent lock cache to avoid race condition overwrites from slow REST API responses
+          // Merge with recent workflow mutations to avoid a stale snapshot
+          // replacing the optimistic claim before Supabase has converged.
           const recentLocks = get().recentLocks || {};
           const merged = filtered.map((fetchedAlert) => {
-            const recent = recentLocks[fetchedAlert.id];
+            const recent = recentLocks[fetchedAlert.id] ||
+              Object.entries(recentLocks).find(([lookupId]) =>
+                isSameAlertRecord(fetchedAlert, lookupId)
+              )?.[1];
             if (recent && Date.now() - recent.timestamp < 60000) {
+              const workflowUpdatedAt =
+                recent.workflowUpdatedAt ||
+                new Date(recent.timestamp).toISOString();
+
+              if (recent.workflowStatus === "resolving" && recent.email) {
+                return {
+                  ...fetchedAlert,
+                  status: "resolving",
+                  updated_at: workflowUpdatedAt,
+                  being_resolved_by: recent.email,
+                  being_resolved_at: workflowUpdatedAt,
+                  resolved_at: undefined,
+                  resolved_by: null,
+                  resolved_by_email: null,
+                  resolved_by_name: null,
+                  skipped_at: null,
+                  skipped_by_uid: null,
+                  skipped_by_email: null,
+                  skipped_by_name: null,
+                  monitoring_started_at: undefined,
+                  monitoring_duration_hours: undefined,
+                  monitoring_initial_comments: undefined,
+                  monitoring_initial_likes: undefined,
+                  monitoring_initial_shares: undefined,
+                };
+              }
+
               return {
                 ...fetchedAlert,
                 being_resolved_by: recent.email,
@@ -794,7 +836,7 @@ export const useAlertStore = create<AlertState>()(
                       entity_key: payload.alertId,
                       being_resolved_by: payload.assignedTo,
                       being_resolved_at: payload.assignedAt,
-                      status: "resolving",
+                      resolution_status: "resolving",
                     });
                     if (realtimeReloadTimer) clearTimeout(realtimeReloadTimer);
                     realtimeReloadTimer = setTimeout(() => {
@@ -1096,6 +1138,17 @@ export const useAlertStore = create<AlertState>()(
         return {
           rawAlerts: nextRawAlerts,
           alerts: applyFilters(nextRawAlerts, state.filters),
+          recentLocks: newStatus === "resolving"
+            ? {
+                ...state.recentLocks,
+                [id]: {
+                  email: profile.email,
+                  timestamp: Date.now(),
+                  workflowStatus: "resolving",
+                  workflowUpdatedAt: operationAt,
+                },
+              }
+            : state.recentLocks,
         };
       });
 
@@ -1290,9 +1343,12 @@ export const useAlertStore = create<AlertState>()(
             }
             return alert;
           });
+          const nextRecentLocks = { ...state.recentLocks };
+          delete nextRecentLocks[id];
           return {
             rawAlerts: nextRawAlerts,
             alerts: applyFilters(nextRawAlerts, state.filters),
+            recentLocks: nextRecentLocks,
           };
         });
         throw error;

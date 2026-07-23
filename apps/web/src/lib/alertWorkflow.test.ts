@@ -6,6 +6,7 @@ import {
   canRestoreAlert,
   getAlertWorkflowStatus,
   getPersistedAlertStatus,
+  getRealtimeAlertWorkflowStatus,
   isResolvedAlert,
   isSkippedAlert,
   isTerminalAlert,
@@ -68,6 +69,27 @@ test("newer terminal evidence still protects legacy stale active statuses", () =
       resolved_at: "2026-07-23T08:00:00.000Z",
     }),
     "resolved",
+  );
+});
+
+test("realtime ignores the annotation pipeline completed status", () => {
+  assert.equal(
+    getRealtimeAlertWorkflowStatus(
+      { status: "completed", updated_at: "2026-07-23T08:00:00.000Z" },
+      {
+        resolution_status: "resolving",
+        being_resolved_by: "crisis@example.com",
+        being_resolved_at: "2026-07-23T08:00:00.000Z",
+      },
+    ),
+    "resolving",
+  );
+  assert.equal(
+    getRealtimeAlertWorkflowStatus(
+      { status: "completed" },
+      {},
+    ),
+    "new",
   );
 });
 

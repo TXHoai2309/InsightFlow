@@ -80,6 +80,26 @@ export function getPersistedAlertStatus(alert: AlertStatusSource): "new" | "reso
   return "new";
 }
 
+/**
+ * Annotation rows have a top-level `status` for the classification pipeline
+ * (normally "completed"). It is not the crisis workflow status. Realtime
+ * consumers must read the workflow fields stored in the annotation label.
+ */
+export function getRealtimeAlertWorkflowStatus(
+  row: Record<string, unknown>,
+  label: Record<string, unknown>,
+): ReturnType<typeof getPersistedAlertStatus> {
+  const resolutionStatus =
+    row.resolution_status ??
+    label.resolution_status ??
+    label.status;
+
+  return getPersistedAlertStatus({
+    ...label,
+    resolution_status: typeof resolutionStatus === "string" ? resolutionStatus : null,
+  });
+}
+
 export function isResolvedAlert(alert: AlertStatusSource): boolean {
   return getAlertWorkflowStatus(alert) === "resolved";
 }
