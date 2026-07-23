@@ -7,7 +7,9 @@ interface ProgressBarProps {
 
 export default function ProgressBar({ current, total }: ProgressBarProps) {
   if (total === 0) return null;
-  const pct = Math.round((current / total) * 100);
+  const safeCurrent = Math.max(0, Math.min(current, total - 1));
+  const displayCurrent = safeCurrent + 1;
+  const pct = Math.max(0, Math.min(100, Math.round((displayCurrent / total) * 100)));
 
   return (
     <div className="flex items-center gap-3">
@@ -18,7 +20,7 @@ export default function ProgressBar({ current, total }: ProgressBarProps) {
         />
       </div>
       <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 whitespace-nowrap">
-        {current} / {total} threads ({pct}%)
+        {displayCurrent} / {total} threads ({pct}%)
       </span>
     </div>
   );
