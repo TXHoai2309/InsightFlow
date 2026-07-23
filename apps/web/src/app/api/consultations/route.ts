@@ -100,8 +100,44 @@ export async function POST(request: NextRequest) {
       contactPlan: "",
       configurationEmbedded: true,
       trialRegistration: true,
+      consultationConfirmationEmailStatus: "sending",
     });
-    return NextResponse.json({ success: true, consultationId: consultation.id }, { status: 201 });
+
+    let emailSent = false;
+    try {
+      await sendConsultationEmail({
+        kind: "received",
+        toEmail: email,
+        toName: fullName,
+        requestId: consultation.id,
+        company,
+        need,
+      });
+      emailSent = true;
+      await updateConsultation(consultation.id, {
+        consultationConfirmationEmailStatus: "sent",
+        consultationConfirmationEmailSentAt: new Date().toISOString(),
+        consultationConfirmationEmailError: undefined,
+      }).catch((updateError) => {
+        console.error("[Consultations API] cannot persist sent email status:", updateError);
+      });
+    } catch (emailError) {
+      console.error("[Consultations API] registration thank-you email error:", emailError);
+      const emailErrorMessage = emailError instanceof Error
+        ? emailError.message
+        : "EmailJS trả về lỗi không xác định.";
+      await updateConsultation(consultation.id, {
+        consultationConfirmationEmailStatus: "failed",
+        consultationConfirmationEmailError: emailErrorMessage.slice(0, 500),
+      }).catch((updateError) => {
+        console.error("[Consultations API] cannot persist email failure:", updateError);
+      });
+    }
+
+    return NextResponse.json(
+      { success: true, consultationId: consultation.id, emailSent },
+      { status: 201 },
+    );
   } catch (error) {
     console.error("[Consultations API] submit error:", error);
     return NextResponse.json({ error: "Chưa thể gửi yêu cầu. Vui lòng thử lại sau." }, { status: 500 });
@@ -153,11 +189,16 @@ export async function PATCH(request: NextRequest) {
         await updateConsultation(consultationId, {
           consultationConfirmationEmailStatus: "sent",
           consultationConfirmationEmailSentAt: new Date().toISOString(),
+          consultationConfirmationEmailError: undefined,
         });
       } catch (emailError) {
         console.error("[Consultations API] confirmation email error:", emailError);
+        const emailErrorMessage = emailError instanceof Error
+          ? emailError.message
+          : "EmailJS trả về lỗi không xác định.";
         await updateConsultation(consultationId, {
           consultationConfirmationEmailStatus: "failed",
+          consultationConfirmationEmailError: emailErrorMessage.slice(0, 500),
         });
       }
     }

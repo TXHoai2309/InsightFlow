@@ -1876,6 +1876,7 @@
   "nav.admin_create_brand": "Create Brand Account",
   "nav.admin_brand_list": "Brand List",
   "nav.admin_consultations": "Consultation Requests",
+  "nav.admin_crawl_operations": "Crawl Progress",
   "nav.labeling_tool": "Data Labeling",
   "nav.operations": "Operations",
   "nav.team": "Team Management",
