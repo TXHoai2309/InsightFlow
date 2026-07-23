@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useDashboard } from "@/hooks/useDashboardData";
 import { getScopedBrandKey } from "@/lib/brandScope";
@@ -10,10 +11,7 @@ import {
   exportDualOperationsReportExcel,
   type DualOperationsExcelViewOptions,
 } from "@/lib/excelExport";
-import type {
-  DualOperationsAttentionItem,
-  DualOperationsPriorityRow,
-} from "@/lib/dual-operations-report";
+import type { DualOperationsAttentionItem } from "@/lib/dual-operations-report";
 import {
   DEFAULT_CRISIS_REPORT_FILTERS,
   type CrisisReportFilters,
@@ -28,6 +26,7 @@ import { useDashboardStore } from "@/stores/dashboard.store";
 import { useDualOperationsReport } from "./useDualOperationsReport";
 import { ExcelDocumentPreviewModal } from "@/components/reports/ExcelDocumentPreviewModal";
 import { ReportExportOptionModal } from "@/components/reports/ReportExportOptionModal";
+import { isDemoPath, toDemoHref } from "@/lib/demo-navigation";
 import {
   AlertTriangle,
   ArrowRight,
@@ -38,7 +37,6 @@ import {
   Filter,
   Lightbulb,
   LoaderCircle,
-  Table2,
   TrendingUp,
 } from "lucide-react";
 
@@ -172,6 +170,8 @@ function KpiCard({
 }
 
 function AttentionCard({ item }: { item: DualOperationsAttentionItem }) {
+  const pathname = usePathname();
+  const href = isDemoPath(pathname) ? toDemoHref(item.href) || "/demo" : item.href;
   const toneClass =
     item.tone === "danger"
       ? "border-red-200 bg-red-50/65 text-red-700"
@@ -180,7 +180,7 @@ function AttentionCard({ item }: { item: DualOperationsAttentionItem }) {
         : "border-indigo-200 bg-indigo-50/65 text-indigo-700";
   return (
     <Link
-      href={item.href}
+      href={href}
       className={`group flex items-start gap-3 rounded-lg border p-3 transition hover:border-current hover:shadow-sm ${toneClass}`}
     >
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-white/80 shadow-sm">
@@ -227,6 +227,7 @@ function TrendBars({
     1,
     ...rows.flatMap((row) => [Number(row[primaryKey] || 0), Number(row[secondaryKey] || 0)]),
   );
+  const barHeight = (value: number) => value <= 0 ? 0 : Math.max(4, (value / maxValue) * 100);
   return (
     <div>
       <div className="mb-4 flex flex-wrap gap-4 text-xs font-bold text-[var(--color-text-secondary)]">
@@ -239,12 +240,12 @@ function TrendBars({
             <div className="flex h-28 items-end justify-center gap-1">
               <div
                 className="w-3 rounded-t bg-indigo-500"
-                style={{ height: `${Math.max(4, (Number(row[primaryKey] || 0) / maxValue) * 100)}%` }}
+                style={{ height: `${barHeight(Number(row[primaryKey] || 0))}%` }}
                 title={`${primaryLabel}: ${row[primaryKey] || 0}`}
               />
               <div
                 className="w-3 rounded-t bg-emerald-500"
-                style={{ height: `${Math.max(4, (Number(row[secondaryKey] || 0) / maxValue) * 100)}%` }}
+                style={{ height: `${barHeight(Number(row[secondaryKey] || 0))}%` }}
                 title={`${secondaryLabel}: ${row[secondaryKey] || 0}`}
               />
             </div>
@@ -253,39 +254,6 @@ function TrendBars({
         ))}
       </div>
     </div>
-  );
-}
-
-function PriorityRow({ row }: { row: DualOperationsPriorityRow }) {
-  const urgencyClass =
-    row.urgencyLevel === "urgent"
-      ? "bg-red-50 text-red-700"
-      : row.urgencyLevel === "attention"
-        ? "bg-amber-50 text-amber-700"
-        : "bg-slate-100 text-slate-700";
-  return (
-    <Link
-      href={row.href}
-      className="block border-t border-[var(--color-border)] px-4 py-3 first:border-t-0 hover:bg-[var(--color-bg-surface-high)]"
-    >
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-[var(--color-brand-subtle)] px-2 py-1 text-[10px] font-black uppercase text-[var(--color-brand)]">
-              {row.typeLabel}
-            </span>
-            <p className="truncate text-sm font-black text-[var(--color-text-primary)]">{row.title}</p>
-          </div>
-          <p className="mt-1 line-clamp-1 text-xs text-[var(--color-text-secondary)]">{row.content}</p>
-          <p className="mt-2 text-xs font-semibold text-[var(--color-text-muted)]">
-            {row.urgencyReasons.length > 0 ? row.urgencyReasons.join(" · ") : "Theo dõi theo thứ tự SLA"}
-          </p>
-        </div>
-        <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-black ${urgencyClass}`}>
-          {row.urgencyLevel === "urgent" ? "Khẩn cấp" : row.urgencyLevel === "attention" ? "Cần chú ý" : "Theo dõi"}
-        </span>
-      </div>
-    </Link>
   );
 }
 
@@ -448,10 +416,7 @@ export function DualOperationsEmployeeReportPage({
   const excelPreviewHtml = showExcelPreview
     ? buildDualOperationsReportExcelDocument(report, excelOptions)
     : "";
-  const attentionItems = report.attentionItems.slice(0, 3);
-  const visiblePriorityRows = report.priorityRows
-    .filter((row) => reportFilters.operation === "all" || row.type === reportFilters.operation)
-    .slice(0, 10);
+  const attentionItems = report.attentionItems;
   const loading = dashboardLoading || alertLoading;
   const error = dashboardError || alertError;
 
@@ -474,15 +439,15 @@ export function DualOperationsEmployeeReportPage({
           title={aiInsights ? "Bản xem trước Báo cáo AI Insights (Data + Gemini AI)" : "Nội dung và hình thức sẽ được xuất nguyên bản"}
           html={excelPreviewHtml}
           onClose={() => setShowExcelPreview(false)}
-          onExport={() => exportDualOperationsReportExcel(report, `Bao_cao_ca_nhan_${new Date().toISOString().slice(0, 10)}`, excelOptions)}
+          onExport={() => exportDualOperationsReportExcel(report, `Bao_cao_tong_quan_thuong_hieu_${new Date().toISOString().slice(0, 10)}`, excelOptions)}
         />
       ) : null}
 
       <header className="border-b border-[var(--color-border)] pb-4">
         <div className="flex flex-col gap-4 min-[1100px]:flex-row min-[1100px]:items-center min-[1100px]:justify-between">
           <div>
-            <h1 className="text-xl font-black text-[var(--color-text-primary)]">Lead &amp; Khủng hoảng</h1>
-            <p className="mt-1 text-xs text-[var(--color-text-secondary)]">Theo dõi hiệu suất, rủi ro và việc cần xử lý trong kỳ báo cáo.</p>
+            <h1 className="text-xl font-black text-[var(--color-text-primary)]">Tổng quan vận hành thương hiệu</h1>
+            <p className="mt-1 text-xs text-[var(--color-text-secondary)]">Theo dõi khối lượng, kết quả, rủi ro và xu hướng xử lý ở cấp tổng quan.</p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             {onOpenDailyReport ? (
@@ -637,9 +602,9 @@ export function DualOperationsEmployeeReportPage({
                 <p className="mt-0.5 text-[11px] text-[var(--color-text-secondary)]">Ưu tiên theo rủi ro và thời hạn xử lý.</p>
               </div>
             </div>
-            <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-black text-red-700">{attentionItems.reduce((total, item) => total + item.count, 0)}</span>
+            <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-black text-red-700">{attentionItems.length} nhóm</span>
           </div>
-          <div className="space-y-2 p-3">
+          <div className="grid gap-2 p-3 md:grid-cols-2">
             {attentionItems.length > 0 ? attentionItems.map((item) => <AttentionCard key={item.key} item={item} />) : (
               <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-700">Không có rủi ro nổi bật trong phạm vi báo cáo hiện tại.</div>
             )}
@@ -650,11 +615,21 @@ export function DualOperationsEmployeeReportPage({
           <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-4 py-3">
             <Lightbulb className="h-4 w-4 text-amber-600" />
             <div>
-              <h2 className="text-sm font-extrabold text-[var(--color-text-primary)]">Hành động đề xuất</h2>
-              <p className="mt-0.5 text-[11px] text-[var(--color-text-secondary)]">Các bước nên thực hiện trong kỳ.</p>
+              <h2 className="text-sm font-extrabold text-[var(--color-text-primary)]">Nhận định và hành động</h2>
+              <p className="mt-0.5 text-[11px] text-[var(--color-text-secondary)]">Tối đa 3 vấn đề và 3 hành động dựa trên số liệu.</p>
             </div>
           </div>
+          <div className="space-y-2 border-b border-[var(--color-border)] p-4">
+            <p className="text-[10px] font-extrabold uppercase tracking-wide text-[var(--color-text-muted)]">Nhận định quản trị</p>
+            {report.managementInsights.map((insight) => (
+              <div key={insight} className="flex gap-2 text-xs font-semibold leading-5 text-[var(--color-text-secondary)]">
+                <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+                <p>{insight}</p>
+              </div>
+            ))}
+          </div>
           <div className="divide-y divide-[var(--color-border)] px-4">
+            <p className="pt-3 text-[10px] font-extrabold uppercase tracking-wide text-[var(--color-text-muted)]">Hành động đề xuất</p>
             {report.recommendations.map((recommendation, index) => (
               <div key={recommendation} className="flex gap-3 py-3">
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-[11px] font-black text-[var(--color-brand)]">{index + 1}</span>
@@ -682,33 +657,14 @@ export function DualOperationsEmployeeReportPage({
         </div>
         <div className="grid min-[1100px]:grid-cols-[minmax(0,1fr)_280px]">
           <div className="min-w-0 p-4 min-[1100px]:border-r min-[1100px]:border-[var(--color-border)]">
-            <h3 className="mb-1 text-xs font-extrabold text-[var(--color-text-primary)]">Xu hướng 7 ngày</h3>
-            <p className="mb-4 text-[11px] text-[var(--color-text-secondary)]">Dữ liệu phát sinh và kết quả hoàn thành theo ngày.</p>
-            {activeOperation === "lead" ? <TrendBars rows={report.lead.responseTrend as unknown as Array<Record<string, string | number>>} primaryKey="created" secondaryKey="contacted" primaryLabel="Lead mới" secondaryLabel="Đã liên hệ" /> : <TrendBars rows={report.crisis.responseTrend as unknown as Array<Record<string, string | number>>} primaryKey="created" secondaryKey="resolved" primaryLabel="Case mới" secondaryLabel="Đã giải quyết" />}
+            <h3 className="mb-1 text-xs font-extrabold text-[var(--color-text-primary)]">Xu hướng 7 ngày gần nhất</h3>
+            <p className="mb-4 text-[11px] text-[var(--color-text-secondary)]">So sánh số công việc phát sinh và số công việc được đóng đúng theo ngày xảy ra sự kiện.</p>
+            {activeOperation === "lead" ? <TrendBars rows={report.lead.responseTrend as unknown as Array<Record<string, string | number>>} primaryKey="created" secondaryKey="completed" primaryLabel="Lead mới" secondaryLabel="Đã đóng" /> : <TrendBars rows={report.crisis.responseTrend as unknown as Array<Record<string, string | number>>} primaryKey="created" secondaryKey="resolved" primaryLabel="Case mới" secondaryLabel="Đã đóng" />}
           </div>
           <aside className="border-t border-[var(--color-border)] bg-[var(--color-bg-surface-high)]/45 min-[1100px]:border-t-0">
             <p className="px-3 pb-1 pt-3 text-[10px] font-extrabold uppercase text-[var(--color-text-muted)]">Chỉ số nghiệp vụ</p>
-            {activeOperation === "lead" ? <><Metric label="Đã liên hệ" value={`${report.lead.kpis.contacted}/${report.lead.kpis.total}`} /><Metric label="Tỷ lệ chuyển đổi" value={`${report.lead.kpis.conversionRate}%`} /><Metric label="Chưa ghi kết quả" value={report.lead.kpis.needResult} /><Metric label="Trễ SLA" value={report.lead.kpis.slaBreached} /></> : <><Metric label="Đã giải quyết" value={`${report.crisis.kpis.resolved}/${report.crisis.kpis.total}`} /><Metric label="Critical/High" value={report.crisis.kpis.critical + report.crisis.kpis.high} /><Metric label="Chờ duyệt" value={report.crisis.kpis.pendingApproval} /><Metric label="Quá hạn" value={report.crisis.kpis.overdue} /></>}
+            {activeOperation === "lead" ? <><Metric label="Đã đóng" value={`${report.kpis.workflow.completed.lead}/${report.kpis.leadTotal}`} /><Metric label="Tỷ lệ hoàn thành" value={`${report.kpis.workflow.completionRate.lead}%`} /><Metric label="Tỷ lệ chuyển đổi" value={`${report.lead.kpis.conversionRate}%`} /><Metric label="Đúng SLA" value={`${report.lead.kpis.slaOnTimeRate}%`} /><Metric label="Follow-up quá hạn" value={report.lead.kpis.followUpOverdue} /></> : <><Metric label="Đã đóng" value={`${report.kpis.workflow.completed.crisis}/${report.kpis.crisisTotal}`} /><Metric label="Tỷ lệ hoàn thành" value={`${report.kpis.workflow.completionRate.crisis}%`} /><Metric label="Critical/High còn mở" value={report.kpis.priorityOpen.crisis} /><Metric label="Quá hạn còn mở" value={report.kpis.workflow.overdueOpen.crisis} /><Metric label="Đúng SLA" value={`${report.crisis.kpis.slaOnTimeRate}%`} /></>}
           </aside>
-        </div>
-      </section>
-
-      <section className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm">
-        <div className="flex flex-col gap-3 border-b border-[var(--color-border)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2">
-            <Table2 className="h-4 w-4 text-[var(--color-brand)]" />
-            <div>
-              <h2 className="text-sm font-extrabold text-[var(--color-text-primary)]">Chi tiết công việc ưu tiên</h2>
-              <p className="mt-0.5 text-[11px] text-[var(--color-text-secondary)]">Mở từng mục để xử lý hoặc đối soát dữ liệu.</p>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {reportFilters.operation !== "crisis" ? <Link href="/leads" className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-brand-subtle)]">Khách hàng <ArrowRight className="h-3.5 w-3.5" /></Link> : null}
-            {reportFilters.operation !== "lead" ? <Link href="/alerts" className="inline-flex items-center gap-1 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-brand-subtle)]">Cảnh báo <ArrowRight className="h-3.5 w-3.5" /></Link> : null}
-          </div>
-        </div>
-        <div>
-          {visiblePriorityRows.length > 0 ? visiblePriorityRows.map((row) => <PriorityRow key={`${row.type}-${row.id}`} row={row} />) : <p className="p-8 text-center text-sm text-[var(--color-text-secondary)]">Không có công việc ưu tiên trong phạm vi hiện tại.</p>}
         </div>
       </section>
     </main>

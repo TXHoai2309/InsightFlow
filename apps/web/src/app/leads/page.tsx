@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useDashboard } from "@/hooks/useDashboardData";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import {
@@ -42,16 +42,27 @@ import {
   DEFAULT_LEAD_WORKBENCH_FILTERS,
   countActiveLeadFilters,
   filterLeadWorkbenchItems,
+  getLeadDateFilterBasis,
   readLeadWorkbenchFilters,
   writeLeadWorkbenchFilters,
   type LeadWorkbenchFilters,
 } from "@/lib/lead-filters";
+import {
+  getDefaultLeadDateFilterState,
+  getLeadDateFilterState,
+  readLeadDateFilterSession,
+  writeLeadDateFilterSession,
+  type LeadDateFilterState,
+  type LeadFilterSessionIdentity,
+} from "@/lib/lead-filter-session";
 import {
   readDashboardReturnNavigation,
   type DashboardReturnNavigation,
 } from "@/lib/dashboard-return-context";
 import { usePinnedQueue } from "@/hooks/usePinnedQueue";
 import { useLeadViewPresence } from "@/hooks/useAlertViewPresence";
+import { isDemoPath, toDemoHref } from "@/lib/demo-navigation";
+import { dummyStaff } from "@/lib/demoData";
 
 const LEADS_PAGE_SIZE = 5;
 const APP_SCROLL_ROOT_SELECTOR = '[data-app-scroll-root="true"]';
@@ -72,7 +83,22 @@ function getLeadListScrollTop() {
 
 export default function LeadsPage() {
   const router = useRouter();
-  const { profile, loading: authLoading } = useAuth();
+  const pathname = usePathname();
+  const { user, profile, loading: authLoading } = useAuth();
+  const leadFilterSessionIdentity = useMemo<LeadFilterSessionIdentity | null>(() => {
+    if (!profile?.uid) return null;
+    if (isDemoPath(pathname)) {
+      return { userId: profile.uid, loginSessionId: "demo-session" };
+    }
+
+    return {
+      userId: profile.uid,
+      loginSessionId:
+        user?.metadata?.lastSignInTime ||
+        user?.metadata?.creationTime ||
+        "current-login-session",
+    };
+  }, [pathname, profile?.uid, user?.metadata?.creationTime, user?.metadata?.lastSignInTime]);
   const leadPinStorageKey = `insightflow:pinned-leads:${profile?.uid || "anonymous"}:${normalizeBrandName(profile?.brandName || profile?.brandId || "global")}`;
   const {
     pinnedIds: pinnedLeadIds,
@@ -85,6 +111,10 @@ export default function LeadsPage() {
 
   useEffect(() => {
     const fetchStaff = async () => {
+      if (isDemoPath(pathname)) {
+        setStaffList(dummyStaff.map((staff) => ({ ...staff })));
+        return;
+      }
       try {
         const token = await auth.currentUser?.getIdToken();
         if (!token) return;
@@ -108,7 +138,7 @@ export default function LeadsPage() {
     } else if (profile && !authLoading) {
       setStaffList([]);
     }
-  }, [profile, authLoading, canLoadStaffList]);
+  }, [profile, authLoading, canLoadStaffList, pathname]);
 
   const [activeView, setActiveView] = useState<LeadWorkbenchView>("priority");
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
@@ -125,14 +155,17 @@ export default function LeadsPage() {
   const [restoreNotice, setRestoreNotice] = useState("");
   const [optimisticLeadsById, setOptimisticLeadsById] = useState<Record<string, Lead>>({});
   const [dashboardReturnNavigation, setDashboardReturnNavigation] = useState<DashboardReturnNavigation | null>(null);
-  const hasRestoredReturnContext = useRef(false);
+  const initializedLeadFilterSessionKey = useRef<string | null>(null);
+  const skipDateFilterPersistenceForSession = useRef<string | null>(null);
   const skipNextPageReset = useRef(false);
   const pendingRestoreLeadId = useRef<string | null>(null);
   const pendingRestoreMentionId = useRef<string | null>(null);
   const pendingRestoreScrollTop = useRef<number | null>(null);
   const pendingRestorePanelScrollTop = useRef<number | null>(null);
   const hasReconciledRestoreLead = useRef(false);
-  const hasInitializedLeadFilters = useRef(false);
+  const [hasInitializedLeadFilters, setHasInitializedLeadFilters] = useState(false);
+  const temporaryDateFilterSnapshot = useRef<LeadDateFilterState | null>(null);
+  const suspendDateFilterPersistence = useRef(false);
   const canViewLeads = canPerformAction(profile, "view_leads");
   const hasBrandScope = hasBusinessBrandScope(profile);
 
@@ -238,7 +271,21 @@ export default function LeadsPage() {
   }, [profile, workbenchViews]);
 
   useEffect(() => {
-    if (hasRestoredReturnContext.current || workbenchViews.length === 0) return;
+    const sessionKey = leadFilterSessionIdentity
+      ? `${leadFilterSessionIdentity.userId}:${leadFilterSessionIdentity.loginSessionId}`
+      : null;
+    if (
+      !sessionKey ||
+      initializedLeadFilterSessionKey.current === sessionKey ||
+      workbenchViews.length === 0 ||
+      !leadFilterSessionIdentity
+    ) return;
+
+    initializedLeadFilterSessionKey.current = sessionKey;
+    skipDateFilterPersistenceForSession.current = sessionKey;
+    hasReconciledRestoreLead.current = false;
+    temporaryDateFilterSnapshot.current = null;
+    suspendDateFilterPersistence.current = false;
 
     const params = new URLSearchParams(window.location.search);
     const returnToken = params.get("returnToken");
@@ -260,8 +307,14 @@ export default function LeadsPage() {
       returnContext?.leadId ||
       requestedLeadId;
 
-    const urlFilters = readLeadWorkbenchFilters(params);
-    const restoredFilters: LeadWorkbenchFilters = requestedFilters
+    const sessionDateFilter =
+      readLeadDateFilterSession(window.localStorage, leadFilterSessionIdentity) ||
+      getDefaultLeadDateFilterState();
+    const urlFilters = readLeadWorkbenchFilters(params, {
+      ...DEFAULT_LEAD_WORKBENCH_FILTERS,
+      ...sessionDateFilter,
+    });
+    const restoredFiltersFromNavigation: LeadWorkbenchFilters = requestedFilters
       ? {
         ...urlFilters,
         workspaceId:
@@ -269,6 +322,15 @@ export default function LeadsPage() {
         platform: requestedFilters.platform || urlFilters.platform,
       }
       : urlFilters;
+    const restoredFilters: LeadWorkbenchFilters = {
+      ...restoredFiltersFromNavigation,
+      ...sessionDateFilter,
+    };
+    writeLeadDateFilterSession(
+      window.localStorage,
+      leadFilterSessionIdentity,
+      sessionDateFilter,
+    );
     skipNextPageReset.current = true;
     setLeadFilters(restoredFilters);
     if (isLeadSortMode(requestedSort)) setSortMode(requestedSort);
@@ -287,6 +349,7 @@ export default function LeadsPage() {
     }
 
     if (nextLeadId || requestedMentionId) {
+      suspendDateFilterPersistence.current = true;
       const pendingLeadId = nextLeadId || requestedMentionId;
       pendingRestoreLeadId.current = pendingLeadId;
       pendingRestoreMentionId.current = requestedMentionId;
@@ -301,13 +364,37 @@ export default function LeadsPage() {
       );
     }
 
-    hasRestoredReturnContext.current = true;
-    hasInitializedLeadFilters.current = true;
+    setHasInitializedLeadFilters(true);
     clearLeadReturnContext(returnToken);
-  }, [workbenchViews]);
+  }, [leadFilterSessionIdentity, workbenchViews]);
 
   useEffect(() => {
-    if (!hasInitializedLeadFilters.current) return;
+    const sessionKey = leadFilterSessionIdentity
+      ? `${leadFilterSessionIdentity.userId}:${leadFilterSessionIdentity.loginSessionId}`
+      : null;
+    if (
+      !hasInitializedLeadFilters ||
+      !leadFilterSessionIdentity ||
+      suspendDateFilterPersistence.current
+    ) return;
+    if (skipDateFilterPersistenceForSession.current === sessionKey) {
+      skipDateFilterPersistenceForSession.current = null;
+      return;
+    }
+
+    writeLeadDateFilterSession(
+      window.localStorage,
+      leadFilterSessionIdentity,
+      leadFilters,
+    );
+  }, [
+    hasInitializedLeadFilters,
+    leadFilterSessionIdentity,
+    leadFilters,
+  ]);
+
+  useEffect(() => {
+    if (!hasInitializedLeadFilters) return;
 
     const params = new URLSearchParams(window.location.search);
     writeLeadWorkbenchFilters(params, leadFilters);
@@ -340,7 +427,7 @@ export default function LeadsPage() {
       "",
       query ? `${window.location.pathname}?${query}` : window.location.pathname,
     );
-  }, [activeView, currentPage, leadFilters, leads, selectedLeadId, sortMode]);
+  }, [activeView, currentPage, hasInitializedLeadFilters, leadFilters, leads, selectedLeadId, sortMode]);
 
   const visibleBaseLeads = useMemo(
     () => baseLeads.filter((lead) => canLeadBeVisibleToUser(lead, profile)),
@@ -361,21 +448,55 @@ export default function LeadsPage() {
     [visibleBaseLeads, currentTime, profile],
   );
 
-  const filteredBaseLeads = useMemo(
+  const nonDateFilteredLeads = useMemo(
     () => filterLeadWorkbenchItems(
       visibleBaseLeads,
+      { ...leadFilters, workspaceId: "all", updatedRange: "all" },
+      currentTime,
+      profile?.uid,
+      "none",
+    ),
+    [currentTime, leadFilters, profile?.uid, visibleBaseLeads],
+  );
+
+  const activeDateBasis = getLeadDateFilterBasis(activeView);
+  const activeDefaultDateRange = DEFAULT_LEAD_WORKBENCH_FILTERS.updatedRange;
+
+  const postedFilteredLeads = useMemo(
+    () => filterLeadWorkbenchItems(
+      nonDateFilteredLeads,
       { ...leadFilters, workspaceId: "all" },
       currentTime,
       profile?.uid,
+      "posted",
     ),
-    [currentTime, leadFilters, profile?.uid, visibleBaseLeads],
+    [currentTime, leadFilters, nonDateFilteredLeads, profile?.uid],
+  );
+
+  const followUpFilteredLeads = useMemo(
+    () => filterLeadWorkbenchItems(
+      nonDateFilteredLeads,
+      { ...leadFilters, workspaceId: "all" },
+      currentTime,
+      profile?.uid,
+      "follow_up",
+    ),
+    [currentTime, leadFilters, nonDateFilteredLeads, profile?.uid],
   );
 
   const viewCounts = useMemo(() => {
     const allViews: LeadWorkbenchView[] = ["unassigned", "priority", "active", "follow_up", "closed", "skipped", "need_result"];
     return allViews.reduce(
       (acc, viewId) => {
-        acc[viewId] = filteredBaseLeads.filter((lead) =>
+        const dateBasis = getLeadDateFilterBasis(viewId);
+        const scopedLeads = filterLeadWorkbenchItems(
+          nonDateFilteredLeads,
+          { ...leadFilters, workspaceId: "all" },
+          currentTime,
+          profile?.uid,
+          dateBasis,
+        );
+        acc[viewId] = scopedLeads.filter((lead) =>
           matchesLeadWorkbenchView(lead, viewId, currentTime, profile),
         ).length;
         return acc;
@@ -384,7 +505,8 @@ export default function LeadsPage() {
     );
   }, [
     currentTime,
-    filteredBaseLeads,
+    leadFilters,
+    nonDateFilteredLeads,
     profile,
   ]);
 
@@ -400,6 +522,7 @@ export default function LeadsPage() {
       { ...leadFilters, workspaceId: "all" },
       currentTime,
       profile?.uid,
+      activeDateBasis,
     );
     let result = activeView === "follow_up"
       ? sortFollowUpLeads(filtered, currentTime, profile)
@@ -427,22 +550,23 @@ export default function LeadsPage() {
       );
     }
     return result;
-  }, [activeView, currentTime, leadFilters, leadsInActiveView, pinnedLeadIds, profile, sortMode]);
+  }, [activeDateBasis, activeView, currentTime, leadFilters, leadsInActiveView, pinnedLeadIds, profile, sortMode]);
 
   const followUpQueue = useMemo(
     () => sortFollowUpLeads(
-      visibleBaseLeads.filter((lead) =>
+      followUpFilteredLeads.filter((lead) =>
         matchesLeadWorkbenchView(lead, "follow_up", currentTime, profile),
       ),
       currentTime,
       profile,
     ),
-    [currentTime, profile, visibleBaseLeads],
+    [currentTime, followUpFilteredLeads, profile],
   );
 
   const activeFilterCount = countActiveLeadFilters(
     leadFilters,
     profile?.role === "admin",
+    activeDefaultDateRange,
   );
 
   const totalPages = Math.max(1, Math.ceil(visibleLeads.length / LEADS_PAGE_SIZE));
@@ -504,6 +628,7 @@ export default function LeadsPage() {
     const restoredMentionId = pendingRestoreMentionId.current;
     if (!restoredLeadId || hasReconciledRestoreLead.current || isLoading) return;
     if (visibleBaseLeads.length === 0 && leads.length > 0) {
+      suspendDateFilterPersistence.current = false;
       setRestoreNotice(
         "Lead vừa kiểm tra không còn trong phạm vi hàng chờ tiềm năng hiện tại.",
       );
@@ -534,12 +659,23 @@ export default function LeadsPage() {
       if (nextView) {
         skipNextPageReset.current = true;
         setActiveView(nextView.id);
+        suspendDateFilterPersistence.current = true;
+        setLeadFilters((current) => {
+          temporaryDateFilterSnapshot.current ||= getLeadDateFilterState(current);
+          return {
+            ...current,
+            updatedRange: "all",
+            customStartDate: undefined,
+            customEndDate: undefined,
+          };
+        });
         setRestoreNotice(
-          `Lead vừa kiểm tra đã đổi nhóm, hệ thống đã mở lại trong "${nextView.label}".`,
+          `Lead nằm ngoài phạm vi thời gian đang chọn. Hệ thống tạm mở "${nextView.label}" trong Tất cả thời gian để hiển thị đúng mục.`,
         );
         return;
       }
 
+      suspendDateFilterPersistence.current = false;
       setRestoreNotice(
         "Lead vừa kiểm tra không còn nằm trong hàng chờ xử lý tiềm năng.",
       );
@@ -557,6 +693,9 @@ export default function LeadsPage() {
       }
     }
 
+    if (!temporaryDateFilterSnapshot.current) {
+      suspendDateFilterPersistence.current = false;
+    }
     hasReconciledRestoreLead.current = true;
   }, [
     currentPage,
@@ -629,8 +768,44 @@ export default function LeadsPage() {
   const activeViewLabel =
     workbenchViews.find((view) => view.id === activeView)?.label ||
     "Hàng chờ hiện tại";
+  const activeDatePrefix = activeDateBasis === "terminal"
+    ? "Hoàn tất"
+    : activeDateBasis === "follow_up"
+      ? "Hẹn"
+      : "Đăng";
+  const activeDateScopeLabel = activeDateBasis === "none"
+    ? "Tất cả công việc đang mở"
+    : leadFilters.updatedRange === "today"
+      ? `${activeDatePrefix} hôm nay`
+      : leadFilters.updatedRange === "7d"
+        ? `${activeDatePrefix} trong 7 ngày`
+        : leadFilters.updatedRange === "30d"
+          ? `${activeDatePrefix} trong 30 ngày`
+          : leadFilters.updatedRange === "custom"
+            ? "Khoảng ngày đã chọn"
+            : "Tất cả thời gian";
+
+  const finishTemporaryDateScope = useCallback(() => {
+    const snapshot = temporaryDateFilterSnapshot.current;
+    temporaryDateFilterSnapshot.current = null;
+    suspendDateFilterPersistence.current = false;
+    setRestoreNotice("");
+    if (snapshot) {
+      setLeadFilters((current) => ({ ...current, ...snapshot }));
+    }
+  }, []);
+
+  const handleLeadFiltersChange = (next: LeadWorkbenchFilters) => {
+    temporaryDateFilterSnapshot.current = null;
+    suspendDateFilterPersistence.current = false;
+    setRestoreNotice("");
+    setLeadFilters(next);
+  };
 
   const resetLeadFilters = () => {
+    temporaryDateFilterSnapshot.current = null;
+    suspendDateFilterPersistence.current = false;
+    setRestoreNotice("");
     setLeadFilters({
       ...DEFAULT_LEAD_WORKBENCH_FILTERS,
       workspaceId: brandLocked ? leadFilters.workspaceId : "all",
@@ -638,21 +813,23 @@ export default function LeadsPage() {
   };
 
   const pendingResultLead = useMemo(() => {
-    return filteredBaseLeads.find((lead) =>
+    return postedFilteredLeads.find((lead) =>
       matchesLeadWorkbenchView(lead, "need_result", currentTime, profile),
     );
-  }, [filteredBaseLeads, currentTime, profile]);
+  }, [postedFilteredLeads, currentTime, profile]);
 
   const handleSelectSummaryView = (view: LeadWorkbenchView) => {
+    finishTemporaryDateScope();
     setActiveView(view);
     setCurrentPage(1);
 
     if (view !== "follow_up") return;
 
-    setLeadFilters({
+    setLeadFilters((current) => ({
       ...DEFAULT_LEAD_WORKBENCH_FILTERS,
-      workspaceId: leadFilters.workspaceId,
-    });
+      workspaceId: current.workspaceId,
+      ...getLeadDateFilterState(current),
+    }));
     setSortMode("recommended");
     const firstFollowUp = followUpQueue[0] || null;
     setSelectedLeadId(firstFollowUp?.id || null);
@@ -689,9 +866,8 @@ export default function LeadsPage() {
           ?.scrollIntoView({ block: "start", behavior: "smooth" });
       }, 80);
     }
-    setActiveView(
-      meta.needsResultCapture ? "active" : getDefaultLeadWorkbenchView(profile),
-    );
+    const nextView = meta.needsResultCapture ? "active" : getDefaultLeadWorkbenchView(profile);
+    setActiveView(nextView);
   };
 
   const handleAfterResult = (updatedLead: Lead, resultType?: Lead["result_type"]) => {
@@ -742,7 +918,8 @@ export default function LeadsPage() {
 
     const currentIndex = visibleLeads.findIndex((lead) => lead.id === updatedLead.id);
     const nextLead = visibleLeads[currentIndex + 1] || visibleLeads[0] || null;
-    setActiveView(getDefaultLeadWorkbenchView(profile));
+    const nextView = getDefaultLeadWorkbenchView(profile);
+    setActiveView(nextView);
     setSelectedLeadId(nextLead?.id || null);
   };
 
@@ -760,10 +937,11 @@ export default function LeadsPage() {
   const handleAfterRestore = (restoredLead: Lead) => {
     rememberOptimisticLead(restoredLead);
     skipNextPageReset.current = true;
-    setLeadFilters({
+    setLeadFilters((current) => ({
       ...DEFAULT_LEAD_WORKBENCH_FILTERS,
-      workspaceId: leadFilters.workspaceId,
-    });
+      workspaceId: current.workspaceId,
+      ...getLeadDateFilterState(current),
+    }));
     setSortMode("recommended");
     setActiveView("active");
     setCurrentPage(1);
@@ -822,7 +1000,11 @@ export default function LeadsPage() {
       {dashboardReturnNavigation && (
         <button
           type="button"
-          onClick={() => router.push(dashboardReturnNavigation.href)}
+          onClick={() => router.push(
+            isDemoPath(pathname)
+              ? toDemoHref(dashboardReturnNavigation.href) || "/demo"
+              : dashboardReturnNavigation.href,
+          )}
           className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] px-3.5 text-sm font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-bg-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]"
         >
           <span className="material-symbols-outlined text-base">arrow_back</span>
@@ -860,7 +1042,8 @@ export default function LeadsPage() {
       </header>
 
       <LeadStats
-        leads={filteredBaseLeads}
+        leads={postedFilteredLeads}
+        followUpLeads={followUpFilteredLeads}
         isLoading={isLoading}
         profile={profile}
         onSelectView={handleSelectSummaryView}
@@ -871,7 +1054,7 @@ export default function LeadsPage() {
           <span>{restoreNotice}</span>
           <button
             type="button"
-            onClick={() => setRestoreNotice("")}
+            onClick={finishTemporaryDateScope}
             className="rounded-lg px-2 py-1 text-[var(--color-brand)] hover:bg-[var(--color-bg-surface)]"
           >
             Đóng
@@ -898,6 +1081,7 @@ export default function LeadsPage() {
             <button
               type="button"
               onClick={() => {
+                finishTemporaryDateScope();
                 skipNextPageReset.current = true;
                 setActiveView("active");
                 setSelectedLeadId(pendingResultLead.id);
@@ -920,6 +1104,7 @@ export default function LeadsPage() {
                 key={view.id}
                 type="button"
                 onClick={() => {
+                  finishTemporaryDateScope();
                   setActiveView(view.id);
                 }}
                 className={`inline-flex min-h-10 shrink-0 items-center rounded-xl border px-3.5 py-2 text-sm font-bold tracking-tight transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-1 ${activeView === view.id
@@ -1006,7 +1191,9 @@ export default function LeadsPage() {
             }
             staffList={staffList}
             canSelectStaff={canLoadStaffList}
-            onChange={setLeadFilters}
+            dateBasis={activeDateBasis}
+            defaultDateRange={activeDefaultDateRange}
+            onChange={handleLeadFiltersChange}
             onReset={resetLeadFilters}
           />
         )}
@@ -1031,7 +1218,7 @@ export default function LeadsPage() {
                   Danh sách khách hàng
                 </h2>
                 <p className="mt-0.5 truncate text-xs text-[var(--color-text-secondary)]">
-                  {workbenchViews.find((view) => view.id === activeView)?.label || "Hàng chờ hiện tại"}
+                  {activeViewLabel} · {activeDateScopeLabel}
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-2">

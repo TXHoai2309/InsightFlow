@@ -2413,17 +2413,33 @@ function LegacyReportsPage({
                           )}
                           {generatingPdfId === rpt.id ? t("reports.common.generating", { defaultValue: "Đang tạo..." }) : "PDF"}
                         </button>
-                        <button className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-brand)] hover:text-white hover:border-[var(--color-brand)] transition-all text-[11px] font-bold">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPreviewReport(rpt);
+                          }}
+                          className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-brand)] hover:text-white hover:border-[var(--color-brand)] transition-all text-[11px] font-bold"
+                        >
                           <span className="material-symbols-outlined text-[16px]">
                             visibility
                           </span>
                           Xem
                         </button>
-                        <button className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)] transition-all text-[11px] font-bold">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleExportExcel(rpt);
+                          }}
+                          disabled={
+                            generatingPdfId === rpt.id ||
+                            rpt.mentions.length === 0
+                          }
+                          className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)] transition-all text-[11px] font-bold disabled:opacity-50"
+                        >
                           <span className="material-symbols-outlined text-[16px]">
-                            more_horiz
+                            download
                           </span>
-                          Thêm
+                          Excel
                         </button>
                       </div>
                     </div>

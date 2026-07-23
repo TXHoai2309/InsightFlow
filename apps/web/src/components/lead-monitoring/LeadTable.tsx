@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   ChevronLeft,
   ChevronRight,
@@ -26,6 +27,8 @@ import {
   saveDashboardReturnContext,
   type DashboardReturnContext,
 } from "@/lib/dashboard-return-context";
+import { isDemoPath } from "@/lib/demo-navigation";
+import { dummyStaff } from "@/lib/demoData";
 
 const filterChips = [
   { id: "all", label: "Tất cả" },
@@ -123,6 +126,7 @@ function calculateResponseTime(created: string, firstContacted?: string) {
 }
 
 export function LeadTable() {
+  const pathname = usePathname();
   const monitoringLeads = useLeadMonitoringLeads();
   const { profile } = useAuth();
   const { updateLeadDetails } = useDashboardStore();
@@ -131,6 +135,10 @@ export function LeadTable() {
 
   useEffect(() => {
     const fetchStaff = async () => {
+      if (isDemoPath(pathname)) {
+        setStaffList(dummyStaff.filter((item) => item.permissions.includes("leads")).map((item) => ({ ...item })));
+        return;
+      }
       try {
         const token = await auth.currentUser?.getIdToken();
         if (!token) return;
@@ -146,7 +154,7 @@ export function LeadTable() {
       }
     };
     fetchStaff();
-  }, []);
+  }, [pathname]);
 
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const showToast = (message: string, type: "success" | "error" = "success") => {

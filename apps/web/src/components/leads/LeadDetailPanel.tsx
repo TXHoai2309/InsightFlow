@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { ClipboardCheck, PanelRightClose, Sparkles, UserPlus, ChevronDown } from "lucide-react";
 import { LeadHistoryTab } from "@/components/leads/LeadHistoryTab";
 import { LeadProfileTab } from "@/components/leads/LeadProfileTab";
@@ -34,6 +35,8 @@ import {
   type LeadActionLink,
   type LeadWorkbenchView,
 } from "@/lib/lead-workbench";
+import { isDemoPath } from "@/lib/demo-navigation";
+import { dummyStaff } from "@/lib/demoData";
 
 interface LeadDetailPanelProps {
   lead: Lead | null;
@@ -129,6 +132,7 @@ export function LeadDetailPanel({
   onCollapseToggle,
 }: LeadDetailPanelProps) {
   const { profile, role, user } = useAuth();
+  const pathname = usePathname();
   const { updateLeadDetails, claimLead, skipLead, restoreLead } = useDashboardStore();
   const [internalActiveTab, setInternalActiveTab] = useState<PanelTab>("action");
   const [staffList, setStaffList] = useState<AssignableStaff[]>([]);
@@ -161,6 +165,11 @@ export function LeadDetailPanel({
     const controller = new AbortController();
     const loadStaff = async () => {
       setLoadingStaff(true);
+      if (isDemoPath(pathname)) {
+        setStaffList(dummyStaff.filter((item) => item.permissions.includes("leads")).map((item) => ({ ...item })));
+        setLoadingStaff(false);
+        return;
+      }
       try {
         const token = await user.getIdToken();
         const response = await fetch("/api/staff", {
@@ -192,7 +201,7 @@ export function LeadDetailPanel({
 
     void loadStaff();
     return () => controller.abort();
-  }, [role, user, workbenchView]);
+  }, [pathname, role, user, workbenchView]);
   const [selectedResult, setSelectedResult] = useState<ResultAction | null>(null);
   const [showSkipConfirmation, setShowSkipConfirmation] = useState(false);
   const [isSkipping, setIsSkipping] = useState(false);

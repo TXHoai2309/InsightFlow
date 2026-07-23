@@ -81,10 +81,44 @@ test("personal Lead KPIs exclude unassigned leads and use activity timestamps in
   assert.equal(report.personalKpis.conversionRate, 100);
   assert.equal(report.personalKpis.needResultCurrent, 1);
   assert.equal(report.kpis.total, 2);
-  assert.equal(report.priorityRows[0]?.id, "owned-hot-overdue");
-  assert.equal(report.priorityRows[0]?.urgencyLevel, "urgent");
-  assert.ok(report.priorityRows[0]?.urgencyReasons.includes("Đã quá SLA"));
+  const overdueRow = report.priorityRows.find((row) => row.id === "owned-hot-overdue");
+  assert.equal(overdueRow?.urgencyLevel, "urgent");
+  assert.ok(overdueRow?.urgencyReasons.includes("Đã quá SLA"));
   assert.ok(!report.detailRows.some((row) => row.id === "unassigned"));
+});
+
+test("does not charge employees for SLA already breached before ingestion", () => {
+  const now = new Date("2026-07-22T12:00:00.000Z").getTime();
+  const report = buildLeadEmployeeReportData(
+    [
+      lead({
+        id: "eligible",
+        owner_id: profile.uid,
+        posted_at: "2026-07-22T08:00:00.000Z",
+        created_at: "2026-07-22T08:05:00.000Z",
+        first_contacted_at: "2026-07-22T08:30:00.000Z",
+        last_contact_at: "2026-07-22T08:30:00.000Z",
+      }),
+      lead({
+        id: "late-ingestion",
+        owner_id: profile.uid,
+        posted_at: "2026-06-21T01:04:00.000Z",
+        created_at: "2026-07-21T02:10:00.000Z",
+        first_contacted_at: "2026-07-21T03:00:00.000Z",
+        last_contact_at: "2026-07-21T03:00:00.000Z",
+      }),
+    ],
+    { ...DEFAULT_LEAD_REPORT_FILTERS, timeRange: "7d", owner: "mine" },
+    profile,
+    now,
+  );
+
+  assert.equal(report.personalKpis.contactedInPeriod, 2);
+  assert.equal(report.personalKpis.slaOnTimeRate, 100);
+  assert.equal(
+    report.detailRows.find((row) => row.id === "late-ingestion")?.slaStatus,
+    "Qua han truoc ghi nhan",
+  );
 });
 
 test("Lead Excel preview and downloaded document share the same report sections", () => {

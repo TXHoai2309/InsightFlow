@@ -9,6 +9,8 @@ import { normalizeBrandName, DashboardService } from "@/lib/services/dashboard";
 import { canPerformAction, type UserRoleProfile } from "@/lib/rbac";
 import { isSameBrandScope } from "@/lib/brandScope";
 import { normalizeClassificationLabel } from "@/lib/label-change";
+import { isDemoRuntime } from "@/lib/demo-navigation";
+import { getLeadExpiryTime } from "@/lib/lead-workbench";
 import type {
   DashboardStats,
   DashboardFilters,
@@ -268,7 +270,9 @@ export const useDashboardStore = create<DashboardState>()(
           throw new Error("Lead is outside the user's brand scope.");
         }
 
-        await DashboardService.updateLeadStatus(id, status, profile, currentLead);
+        if (!isDemoRuntime()) {
+          await DashboardService.updateLeadStatus(id, status, profile, currentLead);
+        }
         set((state) => ({
           leads: state.leads.map((l) => (l.id === id ? { ...l, status } : l)),
         }));
@@ -291,7 +295,9 @@ export const useDashboardStore = create<DashboardState>()(
           throw new Error("Lead is outside the user's brand scope.");
         }
 
-        await DashboardService.updateLeadDetails(id, data, profile, currentLead);
+        if (!isDemoRuntime()) {
+          await DashboardService.updateLeadDetails(id, data, profile, currentLead);
+        }
         set((state) => ({
           leads: state.leads.map((l) => (l.id === id ? { ...l, ...data } : l)),
         }));
@@ -304,6 +310,9 @@ export const useDashboardStore = create<DashboardState>()(
     claimLead: async (id, profile) => {
       try {
         const currentLead = get().leads.find((lead) => lead.id === id);
+        if (!profile) {
+          throw new Error("User is not allowed to claim this lead.");
+        }
         if (!canPerformAction(profile, "update_lead_details")) {
           throw new Error("User is not allowed to claim this lead.");
         }
@@ -314,7 +323,19 @@ export const useDashboardStore = create<DashboardState>()(
           throw new Error("Lead is outside the user's brand scope.");
         }
 
-        const claimData = await DashboardService.claimLead(id, profile, currentLead);
+        const nowIso = new Date().toISOString();
+        const claimData: Partial<Lead> = isDemoRuntime()
+          ? {
+              status: currentLead.status === "new" ? "processing" : currentLead.status,
+              owner_id: profile.uid,
+              owner_name: profile.displayName || profile.email || "Khách xem Demo",
+              owner_email: profile.email,
+              assigned_at: nowIso,
+              assigned_by: profile.uid,
+              claimed_at: nowIso,
+              updated_at: nowIso,
+            }
+          : await DashboardService.claimLead(id, profile, currentLead);
         set((state) => ({
           leads: state.leads.map((lead) =>
             lead.id === id ? { ...lead, ...claimData } : lead,
@@ -370,7 +391,9 @@ export const useDashboardStore = create<DashboardState>()(
           ].filter(Boolean).join("\n"),
         };
 
-        await DashboardService.updateLeadDetails(id, skipData, profile, currentLead);
+        if (!isDemoRuntime()) {
+          await DashboardService.updateLeadDetails(id, skipData, profile, currentLead);
+        }
         set((state) => ({
           leads: state.leads.map((lead) =>
             lead.id === id ? { ...lead, ...skipData } : lead,
@@ -431,7 +454,9 @@ export const useDashboardStore = create<DashboardState>()(
           ].filter(Boolean).join("\n"),
         };
 
-        await DashboardService.updateLeadDetails(id, restoreData, profile, currentLead);
+        if (!isDemoRuntime()) {
+          await DashboardService.updateLeadDetails(id, restoreData, profile, currentLead);
+        }
         set((state) => ({
           leads: state.leads.map((lead) =>
             lead.id === id ? { ...lead, ...restoreData } : lead,
@@ -713,22 +738,11 @@ export const useDashboardStore = create<DashboardState>()(
 
       // 2. Urgency and status filters
       const nowMs = Date.now();
-      const getExpiryTime = (lead: Lead) => {
-        if (lead.expiry_at) return new Date(lead.expiry_at).getTime();
-        const durationMin =
-          lead.intent === "hot"
-            ? 30
-            : lead.intent === "warm"
-              ? 24 * 60
-              : 7 * 24 * 60;
-        return new Date(lead.created_at).getTime() + durationMin * 60 * 1000;
-      };
-
       const urgency = filters.urgency || "pending";
       if (urgency !== "all") {
         result = result.filter((l) => {
           const isPending = l.status === "new" || l.status === "processing";
-          const expiryTime = getExpiryTime(l);
+          const expiryTime = getLeadExpiryTime(l);
           const isExpired = expiryTime <= nowMs;
 
           if (urgency === "pending") {
@@ -743,7 +757,7 @@ export const useDashboardStore = create<DashboardState>()(
             if (l.intent === "warm") {
               return remainingMs > 0 && remainingMs < 2 * 60 * 60 * 1000; // < 2 hours
             }
-            return false;
+            return remainingMs > 0 && remainingMs < 24 * 60 * 60 * 1000; // < 24 hours
           }
           if (urgency === "overdue") {
             return isPending && isExpired;
@@ -763,8 +777,8 @@ export const useDashboardStore = create<DashboardState>()(
         const aPending = a.status === "new" || a.status === "processing";
         const bPending = b.status === "new" || b.status === "processing";
 
-        const aExpiry = getExpiryTime(a);
-        const bExpiry = getExpiryTime(b);
+        const aExpiry = getLeadExpiryTime(a);
+        const bExpiry = getLeadExpiryTime(b);
         const aExpired = aExpiry <= nowMs;
         const bExpired = bExpiry <= nowMs;
 

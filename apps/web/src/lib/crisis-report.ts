@@ -163,6 +163,14 @@ function percentage(part: number, total: number) {
   return Math.round((part / total) * 100);
 }
 
+function toLocalDayKey(value: number | string) {
+  const date = new Date(value);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function normalizeText(value: unknown) {
   return String(value || "").trim().toLowerCase();
 }
@@ -276,20 +284,20 @@ function buildDistribution(
     }));
 }
 
-function buildResponseTrend(alerts: AlertData[], daysCount = 7): CrisisReportTrendPoint[] {
+function buildResponseTrend(alerts: AlertData[], daysCount = 7, nowMs = Date.now()): CrisisReportTrendPoint[] {
   const buckets: Record<string, { created: number; resolved: number; escalated: number; responseTotal: number; responseCount: number }> = {};
   for (let index = daysCount - 1; index >= 0; index -= 1) {
-    const date = new Date();
+    const date = new Date(nowMs);
     date.setDate(date.getDate() - index);
     date.setHours(0, 0, 0, 0);
-    const key = date.toISOString().slice(0, 10);
+    const key = toLocalDayKey(date.getTime());
     buckets[key] = { created: 0, resolved: 0, escalated: 0, responseTotal: 0, responseCount: 0 };
   }
 
   alerts.forEach((alert) => {
     const createdTime = toTime(alert.created_at);
     if (createdTime !== null) {
-      const key = new Date(createdTime).toISOString().slice(0, 10);
+      const key = toLocalDayKey(createdTime);
       const bucket = buckets[key];
       if (bucket) {
         bucket.created += 1;
@@ -304,7 +312,7 @@ function buildResponseTrend(alerts: AlertData[], daysCount = 7): CrisisReportTre
 
     const resolvedTime = toTime(alert.resolved_at);
     if (resolvedTime !== null) {
-      const key = new Date(resolvedTime).toISOString().slice(0, 10);
+      const key = toLocalDayKey(resolvedTime);
       if (buckets[key]) buckets[key].resolved += 1;
     }
   });
@@ -461,7 +469,7 @@ export function buildCrisisReportData(
       {},
       {},
     ),
-    responseTrend: buildResponseTrend(operationalAlerts),
+    responseTrend: buildResponseTrend(operationalAlerts, 7, nowMs),
     staffPerformance: buildStaffPerformance(operationalRows),
     overdueRows: operationalRows.filter((row) => row.slaStatus === "Qua han" || row.slaStatus === "Tre SLA"),
     escalationRows: operationalRows.filter((row) => row.escalated),

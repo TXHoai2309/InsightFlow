@@ -7,6 +7,7 @@ import {
   DEFAULT_LEAD_WORKBENCH_FILTERS,
   countActiveLeadFilters,
   filterLeadWorkbenchItems,
+  getLeadDateFilterBasis,
   readLeadWorkbenchFilters,
   writeLeadWorkbenchFilters,
 } from "./lead-filters";
@@ -14,6 +15,7 @@ import {
   DEFAULT_LEAD_REPORT_FILTERS,
   filterLeadReportItems,
 } from "./lead-report-filters";
+import { buildLeadReportData } from "./lead-report";
 
 const NOW = new Date("2026-07-16T08:00:00.000Z").getTime();
 const PROFILE: UserRoleProfile = {
@@ -72,6 +74,126 @@ test("filters leads by accent-insensitive query, priority, SLA and ownership", (
   );
 
   assert.deepEqual(result.map((lead) => lead.id), ["lead-1"]);
+});
+
+test("defaults the customer intake scope to posts published today in Vietnam", () => {
+  const now = new Date("2026-07-16T12:00:00+07:00").getTime();
+  const today = makeLead({
+    id: "today",
+    posted_at: "2026-07-16T00:00:00+07:00",
+    created_at: "2026-07-16T02:00:00.000Z",
+  });
+  const yesterdayButUpdatedToday = makeLead({
+    id: "yesterday",
+    posted_at: "2026-07-15T23:59:59+07:00",
+    created_at: "2026-07-16T02:00:00.000Z",
+    updated_at: "2026-07-16T04:00:00.000Z",
+  });
+
+  const result = filterLeadWorkbenchItems(
+    [today, yesterdayButUpdatedToday],
+    DEFAULT_LEAD_WORKBENCH_FILTERS,
+    now,
+    PROFILE.uid,
+    "posted",
+  );
+
+  assert.deepEqual(result.map((lead) => lead.id), ["today"]);
+});
+
+test("keeps operational queues unbounded by publication date", () => {
+  const oldAssignedLead = makeLead({
+    id: "old-assigned",
+    posted_at: "2026-06-01T08:00:00+07:00",
+  });
+
+  const result = filterLeadWorkbenchItems(
+    [oldAssignedLead],
+    DEFAULT_LEAD_WORKBENCH_FILTERS,
+    NOW,
+    PROFILE.uid,
+    "none",
+  );
+
+  assert.deepEqual(result.map((lead) => lead.id), ["old-assigned"]);
+});
+
+test("uses one selected range with the timestamp appropriate to each tab", () => {
+  assert.equal(getLeadDateFilterBasis("unassigned"), "posted");
+  assert.equal(getLeadDateFilterBasis("priority"), "posted");
+  assert.equal(getLeadDateFilterBasis("active"), "posted");
+  assert.equal(getLeadDateFilterBasis("follow_up"), "follow_up");
+  assert.equal(getLeadDateFilterBasis("closed"), "terminal");
+  assert.equal(getLeadDateFilterBasis("skipped"), "terminal");
+});
+
+test("filters follow-up by appointment time rather than publication time", () => {
+  const oldPostWithTodayAppointment = makeLead({
+    id: "follow-up-today",
+    posted_at: "2026-06-01T08:00:00+07:00",
+    follow_up_at: "2026-07-16T10:00:00+07:00",
+  });
+  const todayPostWithFutureAppointment = makeLead({
+    id: "follow-up-future",
+    posted_at: "2026-07-16T08:00:00+07:00",
+    follow_up_at: "2026-07-17T10:00:00+07:00",
+  });
+
+  const result = filterLeadWorkbenchItems(
+    [oldPostWithTodayAppointment, todayPostWithFutureAppointment],
+    DEFAULT_LEAD_WORKBENCH_FILTERS,
+    NOW,
+    PROFILE.uid,
+    "follow_up",
+  );
+
+  assert.deepEqual(result.map((lead) => lead.id), ["follow-up-today"]);
+});
+
+test("filters terminal queues by completion time rather than publication time", () => {
+  const oldPostClosedToday = makeLead({
+    id: "closed-today",
+    status: "completed",
+    posted_at: "2026-06-01T08:00:00+07:00",
+    closed_at: "2026-07-16T10:00:00+07:00",
+  });
+
+  const result = filterLeadWorkbenchItems(
+    [oldPostClosedToday],
+    { ...DEFAULT_LEAD_WORKBENCH_FILTERS, updatedRange: "today" },
+    NOW,
+    PROFILE.uid,
+    "terminal",
+  );
+
+  assert.deepEqual(result.map((lead) => lead.id), ["closed-today"]);
+});
+
+test("supports an inclusive custom publication-date range", () => {
+  const inRange = makeLead({
+    id: "in-range",
+    posted_at: "2026-07-15T23:59:59+07:00",
+  });
+  const outside = makeLead({
+    id: "outside",
+    posted_at: "2026-07-16T00:00:00+07:00",
+  });
+  const filters = {
+    ...DEFAULT_LEAD_WORKBENCH_FILTERS,
+    updatedRange: "custom" as const,
+    customStartDate: "2026-07-15",
+    customEndDate: "2026-07-15",
+  };
+
+  const result = filterLeadWorkbenchItems(
+    [inRange, outside],
+    filters,
+    NOW,
+    PROFILE.uid,
+    "posted",
+  );
+
+  assert.deepEqual(result.map((lead) => lead.id), ["in-range"]);
 });
 
 test("counts only optional workbench filters and can include workspace for admins", () => {
@@ -174,4 +296,29 @@ test("report periods use the same latest-update timestamp as customer filters", 
   );
 
   assert.deepEqual(filtered.map((lead) => lead.id), ["recently-updated"]);
+});
+
+test("lead trend assigns created, contacted and closed events to their actual days", () => {
+  const report = buildLeadReportData([
+    makeLead({
+      id: "multi-day-lead",
+      status: "completed",
+      created_at: "2026-07-14T12:00:00.000Z",
+      first_contacted_at: "2026-07-15T12:00:00.000Z",
+      last_contact_at: "2026-07-15T12:00:00.000Z",
+      result_recorded_at: "2026-07-16T07:00:00.000Z",
+      closed_at: "2026-07-16T07:00:00.000Z",
+      updated_at: "2026-07-16T07:00:00.000Z",
+      result_type: "converted",
+    }),
+  ], PROFILE, NOW);
+  const createdDay = report.responseTrend.at(-3);
+  const contactedDay = report.responseTrend.at(-2);
+  const closedDay = report.responseTrend.at(-1);
+
+  assert.equal(createdDay?.created, 1);
+  assert.equal(createdDay?.contacted, 0);
+  assert.equal(contactedDay?.contacted, 1);
+  assert.equal(contactedDay?.completed, 0);
+  assert.equal(closedDay?.completed, 1);
 });

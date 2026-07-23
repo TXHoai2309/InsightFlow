@@ -268,15 +268,15 @@ function buildExecutiveSummary(brandName: string, mentions: any[], labels: Repor
 
   const summary = vi
     ? [
-        `${brand} ghi nhận ${mentions.length} mention trong kỳ, Net Sentiment ${stats.netSentiment >= 0 ? "+" : ""}${stats.netSentiment}%.`,
-        `Chủ đề chi phối thảo luận là ${mainTopic}; rủi ro nổi bật cần theo dõi là ${riskTopic}.`,
-        `Cơ hội tốt nhất là khuếch đại phản hồi tích cực quanh ${opportunityTopic}.`,
-      ]
+      `${brand} ghi nhận ${mentions.length} mention trong kỳ, Net Sentiment ${stats.netSentiment >= 0 ? "+" : ""}${stats.netSentiment}%.`,
+      `Chủ đề chi phối thảo luận là ${mainTopic}; rủi ro nổi bật cần theo dõi là ${riskTopic}.`,
+      `Cơ hội tốt nhất là khuếch đại phản hồi tích cực quanh ${opportunityTopic}.`,
+    ]
     : [
-        `${brand} recorded ${mentions.length} mentions, with Net Sentiment ${stats.netSentiment >= 0 ? "+" : ""}${stats.netSentiment}%.`,
-        `The main discussion driver is ${mainTopic}; the most visible risk topic is ${riskTopic}.`,
-        `The strongest opportunity is to amplify positive feedback around ${opportunityTopic}.`,
-      ];
+      `${brand} recorded ${mentions.length} mentions, with Net Sentiment ${stats.netSentiment >= 0 ? "+" : ""}${stats.netSentiment}%.`,
+      `The main discussion driver is ${mainTopic}; the most visible risk topic is ${riskTopic}.`,
+      `The strongest opportunity is to amplify positive feedback around ${opportunityTopic}.`,
+    ];
 
   return table(
     labels.executiveSummary,
@@ -291,17 +291,17 @@ function buildActionRows(mentions: any[], labels: ReportLabels, lang: string) {
   const positiveTopic = topEntries(countBy(mentions.filter((item) => getSentimentKey(item.sentiment) === "positive"), (item) => String(item.topic || "other").toLowerCase()), 1)[0]?.[0] || "quality";
   const actions = vi
     ? [
-        ["Ưu tiên phản hồi", `Xử lý mention tiêu cực có tương tác cao về ${negativeTopic} trong 24 giờ.`],
-        ["Tối ưu vận hành", `Rà soát quy trình liên quan tới ${negativeTopic} và ghi lại nguyên nhân lặp lại.`],
-        ["Khuếch đại điểm mạnh", `Biến lời khen về ${positiveTopic} thành thông điệp ngắn cho nội dung tuần tới.`],
-        ["Theo dõi kênh", "Phân công người phụ trách nguồn có tỷ lệ tiêu cực cao nhất."],
-      ]
+      ["Ưu tiên phản hồi", `Xử lý mention tiêu cực có tương tác cao về ${negativeTopic} trong 24 giờ.`],
+      ["Tối ưu vận hành", `Rà soát quy trình liên quan tới ${negativeTopic} và ghi lại nguyên nhân lặp lại.`],
+      ["Khuếch đại điểm mạnh", `Biến lời khen về ${positiveTopic} thành thông điệp ngắn cho nội dung tuần tới.`],
+      ["Theo dõi kênh", "Phân công người phụ trách nguồn có tỷ lệ tiêu cực cao nhất."],
+    ]
     : [
-        ["Response priority", `Handle high-engagement negative mentions about ${negativeTopic} within 24 hours.`],
-        ["Operational review", `Review the process related to ${negativeTopic} and log repeated root causes.`],
-        ["Amplify strengths", `Turn praise around ${positiveTopic} into short campaign proof points.`],
-        ["Channel ownership", "Assign ownership for the source with the highest negative share."],
-      ];
+      ["Response priority", `Handle high-engagement negative mentions about ${negativeTopic} within 24 hours.`],
+      ["Operational review", `Review the process related to ${negativeTopic} and log repeated root causes.`],
+      ["Amplify strengths", `Turn praise around ${positiveTopic} into short campaign proof points.`],
+      ["Channel ownership", "Assign ownership for the source with the highest negative share."],
+    ];
 
   return table(
     labels.actionPlan,
@@ -347,49 +347,49 @@ function buildDashboardSheet({
     <h1>${escapeHtml(isVietnamese(lang) ? "Báo cáo quản trị thương hiệu" : "Brand Management Report")}</h1>
     <p class="subtitle">${escapeHtml(`${brandName} | ${startDate} - ${endDate}`)}</p>
     ${table(
-      labels.dashboard,
-      [
-        row([labels.brand, brandName, labels.period, `${startDate} - ${endDate}`], "kpi-row"),
-        row([labels.filters, filtersSummary, labels.total, mentions.length], "kpi-row"),
-        row([labels.brandHealth, `${stats.brandHealth}/100`, labels.netSentiment, `${stats.netSentiment >= 0 ? "+" : ""}${stats.netSentiment}%`], "kpi-row"),
-      ].join(""),
-      4,
-    )}
+    labels.dashboard,
+    [
+      row([labels.brand, brandName, labels.period, `${startDate} - ${endDate}`], "kpi-row"),
+      row([labels.filters, filtersSummary, labels.total, mentions.length], "kpi-row"),
+      row([labels.brandHealth, `${stats.brandHealth}/100`, labels.netSentiment, `${stats.netSentiment >= 0 ? "+" : ""}${stats.netSentiment}%`], "kpi-row"),
+    ].join(""),
+    4,
+  )}
     ${buildExecutiveSummary(brandName, mentions, labels, lang)}
     ${table(
-      labels.sentimentMix,
-      row([labels.metric, labels.value, labels.share, "Chart"], "header-row") +
-        sentimentRows.map(([name, count, share, bar]) => rawRow([escapeHtml(name), escapeHtml(count), escapeHtml(share), String(bar)])).join(""),
-      4,
-    )}
+    labels.sentimentMix,
+    row([labels.metric, labels.value, labels.share, "Chart"], "header-row") +
+    sentimentRows.map(([name, count, share, bar]) => rawRow([escapeHtml(name), escapeHtml(count), escapeHtml(share), String(bar)])).join(""),
+    4,
+  )}
     ${table(
-      labels.sourcePerformance,
-      row([labels.source, labels.mentions, labels.share, "Chart"], "header-row") +
-        sourceCounts.map(([source, count]) => rawRow([escapeHtml(source), escapeHtml(count), escapeHtml(pct(count, mentions.length)), barCell(count, topSourceTotal, "#4f46e5")])).join(""),
-      4,
-    )}
+    labels.sourcePerformance,
+    row([labels.source, labels.mentions, labels.share, "Chart"], "header-row") +
+    sourceCounts.map(([source, count]) => rawRow([escapeHtml(source), escapeHtml(count), escapeHtml(pct(count, mentions.length)), barCell(count, topSourceTotal, "#4f46e5")])).join(""),
+    4,
+  )}
     ${table(
-      labels.topicSignals,
-      row([labels.topic, labels.mentions, labels.share, "Chart"], "header-row") +
-        topicCounts.map(([topic, count]) => rawRow([escapeHtml(topic), escapeHtml(count), escapeHtml(pct(count, mentions.length)), barCell(count, topTopicTotal, "#0891b2")])).join(""),
-      4,
-    )}
+    labels.topicSignals,
+    row([labels.topic, labels.mentions, labels.share, "Chart"], "header-row") +
+    topicCounts.map(([topic, count]) => rawRow([escapeHtml(topic), escapeHtml(count), escapeHtml(pct(count, mentions.length)), barCell(count, topTopicTotal, "#0891b2")])).join(""),
+    4,
+  )}
     ${table(
-      labels.riskRadar,
-      row([labels.source, labels.topic, labels.engagement, labels.content], "header-row") +
-        (negativeMentions.length
-          ? negativeMentions.slice(0, 8).map((item) => row([item.source || "", translateTopic(item.topic, t, lang), getEngagement(item), String(item.content || "").slice(0, 220)], "wrap")).join("")
-          : row(["", "", "", isVietnamese(lang) ? "Chưa ghi nhận mention tiêu cực trong kỳ." : "No negative mentions in this period."], "wrap")),
-      4,
-    )}
+    labels.riskRadar,
+    row([labels.source, labels.topic, labels.engagement, labels.content], "header-row") +
+    (negativeMentions.length
+      ? negativeMentions.slice(0, 8).map((item) => row([item.source || "", translateTopic(item.topic, t, lang), getEngagement(item), String(item.content || "").slice(0, 220)], "wrap")).join("")
+      : row(["", "", "", isVietnamese(lang) ? "Chưa ghi nhận mention tiêu cực trong kỳ." : "No negative mentions in this period."], "wrap")),
+    4,
+  )}
     ${table(
-      labels.opportunities,
-      row([labels.source, labels.topic, labels.engagement, labels.content], "header-row") +
-        (positiveMentions.length
-          ? positiveMentions.slice(0, 8).map((item) => row([item.source || "", translateTopic(item.topic, t, lang), getEngagement(item), String(item.content || "").slice(0, 220)], "wrap")).join("")
-          : row(["", "", "", isVietnamese(lang) ? "Chưa ghi nhận mention tích cực trong kỳ." : "No positive mentions in this period."], "wrap")),
-      4,
-    )}
+    labels.opportunities,
+    row([labels.source, labels.topic, labels.engagement, labels.content], "header-row") +
+    (positiveMentions.length
+      ? positiveMentions.slice(0, 8).map((item) => row([item.source || "", translateTopic(item.topic, t, lang), getEngagement(item), String(item.content || "").slice(0, 220)], "wrap")).join("")
+      : row(["", "", "", isVietnamese(lang) ? "Chưa ghi nhận mention tích cực trong kỳ." : "No positive mentions in this period."], "wrap")),
+    4,
+  )}
     ${buildActionRows(mentions, labels, lang)}
     ${insights ? table(isVietnamese(lang) ? "Nhận định phân tích" : "Analyst Notes", row([insights], "wrap"), 1) : ""}
   `;
@@ -537,12 +537,12 @@ function buildTable(title: string, rows: Array<Array<unknown>>) {
       <thead><tr><th colspan="8">${escapeHtml(title)}</th></tr></thead>
       <tbody>
         ${rows
-          .map(
-            (row) => `
+      .map(
+        (row) => `
               <tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>
             `,
-          )
-          .join("")}
+      )
+      .join("")}
       </tbody>
     </table>
   `;
@@ -752,8 +752,8 @@ export function buildLeadEmployeeReportExcelDocument(
   const renderRows = (rows: unknown[][], columnCount: number) =>
     rows.length > 0
       ? rows
-          .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`)
-          .join("")
+        .map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`)
+        .join("")
       : `<tr><td colspan="${columnCount}" class="empty">Không có dữ liệu phù hợp.</td></tr>`;
 
   return `<!doctype html>
@@ -800,8 +800,8 @@ export function buildLeadEmployeeReportExcelDocument(
           <h2>Cần xử lý ngay</h2>
           <table><tr>
             ${report.attentionItems.length > 0
-              ? report.attentionItems.slice(0, 4).map((item) => `<td class="attention"><span>${escapeHtml(item.title)}</span><strong>${item.count}</strong><p>${escapeHtml(item.description)}</p></td>`).join("")
-              : `<td class="attention"><span>Trạng thái</span><strong>0</strong><p>Không có tồn đọng nổi bật trong phạm vi hiện tại.</p></td>`}
+      ? report.attentionItems.slice(0, 4).map((item) => `<td class="attention"><span>${escapeHtml(item.title)}</span><strong>${item.count}</strong><p>${escapeHtml(item.description)}</p></td>`).join("")
+      : `<td class="attention"><span>Trạng thái</span><strong>0</strong><p>Không có tồn đọng nổi bật trong phạm vi hiện tại.</p></td>`}
           </tr></table>
         </section>
 
@@ -1050,11 +1050,11 @@ export function buildCrisisEmployeeReportExcelDocument(
   const renderRows = (rows: unknown[][], columnCount: number) =>
     rows.length > 0
       ? rows
-          .map(
-            (row) =>
-              `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`,
-          )
-          .join("")
+        .map(
+          (row) =>
+            `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`,
+        )
+        .join("")
       : `<tr><td colspan="${columnCount}" class="empty">Không có dữ liệu phù hợp.</td></tr>`;
 
   const hasAI = Boolean(options.aiInsights || options.insightReport);
@@ -1095,16 +1095,16 @@ export function buildCrisisEmployeeReportExcelDocument(
     <body>
       <main class="report">
         ${hasAI
-          ? buildUnifiedBIInsightHTML({
-              insightReport: options.insightReport,
-              aiInsights: options.aiInsights,
-              periodLabel,
-              brandName,
-              slaRate: report.personalKpis.slaOnTimeRate,
-              overdueCount: report.personalKpis.criticalHighOpen || 0,
-              totalCount: report.personalKpis.createdInPeriod || 0,
-            })
-          : `<header class="hero">
+      ? buildUnifiedBIInsightHTML({
+        insightReport: options.insightReport,
+        aiInsights: options.aiInsights,
+        periodLabel,
+        brandName,
+        slaRate: report.personalKpis.slaOnTimeRate,
+        overdueCount: report.personalKpis.criticalHighOpen || 0,
+        totalCount: report.personalKpis.createdInPeriod || 0,
+      })
+      : `<header class="hero">
               <p class="eyebrow">Báo cáo công việc cá nhân</p>
               <h1>Xử lý khủng hoảng</h1>
               <p>Tập trung vào case cần chú ý, kết quả cá nhân và xu hướng xử lý.</p>
@@ -1115,8 +1115,8 @@ export function buildCrisisEmployeeReportExcelDocument(
           <h2>Cần xử lý ngay</h2>
           <table><tr>
             ${report.attentionItems.length > 0
-              ? report.attentionItems.slice(0, 4).map((item) => `<td class="attention"><span>${escapeHtml(item.title)}</span><strong>${item.count}</strong><p>${escapeHtml(item.description)}</p></td>`).join("")
-              : `<td class="attention"><span>Trạng thái</span><strong>0</strong><p>Không có rủi ro nổi bật trong phạm vi hiện tại.</p></td>`}
+      ? report.attentionItems.slice(0, 4).map((item) => `<td class="attention"><span>${escapeHtml(item.title)}</span><strong>${item.count}</strong><p>${escapeHtml(item.description)}</p></td>`).join("")
+      : `<td class="attention"><span>Trạng thái</span><strong>0</strong><p>Không có rủi ro nổi bật trong phạm vi hiện tại.</p></td>`}
           </tr></table>
         </section>
 
@@ -1335,9 +1335,9 @@ export function buildUnifiedBIInsightHTML(params: {
 
   const TYPE_CARD_STYLES: Record<string, { bg: string; border: string; text: string; icon: string }> = {
     negative: { bg: "#FBEEE7", border: "#A85A3E", text: "#A85A3E", icon: "" },
-    warning:  { bg: "#FBF3E2", border: "#9C7A2E", text: "#9C7A2E", icon: "⚠️ " },
+    warning: { bg: "#FBF3E2", border: "#9C7A2E", text: "#9C7A2E", icon: "⚠️ " },
     positive: { bg: "#ECF4EE", border: "#3F8F5F", text: "#3F8F5F", icon: "" },
-    neutral:  { bg: "#FAF8F5", border: "#756F66", text: "#756F66", icon: "" },
+    neutral: { bg: "#FAF8F5", border: "#756F66", text: "#756F66", icon: "" },
   };
 
   const IMPACT_TAG_MAP: Record<string, string> = {
@@ -1425,11 +1425,11 @@ export function buildUnifiedBIInsightHTML(params: {
           <div style="width:100%; max-width:520px;">
             <div style="display:flex; flex-direction:column; gap:10px;">
               ${sortedTopics
-                .map(([name, val]) => {
-                  const pct = typeof val === "number" ? val : parseFloat(val) || 0;
-                  const widthPct = Math.max(5, Math.min(100, Math.round((pct / maxTopicVal) * 100)));
-                  const barColor = name.toLowerCase() === "other" ? "#C5BEB5" : name.toLowerCase() === "quality" ? "#2563EB" : name.toLowerCase() === "service" ? "#3B82F6" : "#A8A29E";
-                  return `
+      .map(([name, val]) => {
+        const pct = typeof val === "number" ? val : parseFloat(val) || 0;
+        const widthPct = Math.max(5, Math.min(100, Math.round((pct / maxTopicVal) * 100)));
+        const barColor = name.toLowerCase() === "other" ? "#C5BEB5" : name.toLowerCase() === "quality" ? "#2563EB" : name.toLowerCase() === "service" ? "#3B82F6" : "#A8A29E";
+        return `
                     <div style="display:flex; align-items:center; gap:12px; font-size:12px;">
                       <span style="width:80px; text-align:right; font-weight:600; color:#3A3936;">${escapeHtml(name)}</span>
                       <div style="flex:1; background:#EAE7E1; height:18px; border-radius:4px; overflow:hidden;">
@@ -1437,8 +1437,8 @@ export function buildUnifiedBIInsightHTML(params: {
                       </div>
                       <span style="width:45px; font-weight:700; color:#3A3936;">${pct}%</span>
                     </div>`;
-                })
-                .join("")}
+      })
+      .join("")}
             </div>
             <p style="font-size:11px; color:#756F66; font-style:italic; text-align:center; margin:14px 0 0 0; font-family:'Georgia', serif;">
               Cơ cấu chủ đề sau khi normalize theo 6 nhóm và gộp outlier vào "other".
@@ -1454,10 +1454,10 @@ export function buildUnifiedBIInsightHTML(params: {
         </h2>
         <div style="display:flex; flex-direction:column; gap:14px;">
           ${reportData.key_insights
-            .map((item: any) => {
-              const style = TYPE_CARD_STYLES[item.type] || TYPE_CARD_STYLES.neutral;
-              const impactLabel = IMPACT_TAG_MAP[item.impact] || item.impact;
-              return `
+      .map((item: any) => {
+        const style = TYPE_CARD_STYLES[item.type] || TYPE_CARD_STYLES.neutral;
+        const impactLabel = IMPACT_TAG_MAP[item.impact] || item.impact;
+        return `
                 <div style="padding:15px 18px; background:${style.bg}; border-left:4px solid ${style.border}; border-radius:0 8px 8px 0;">
                   <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
                     <span style="font-family:'Calibri', 'Segoe UI', sans-serif; font-weight:700; color:${style.text}; font-size:14px;">
@@ -1471,8 +1471,8 @@ export function buildUnifiedBIInsightHTML(params: {
                     ${escapeHtml(item.description)}
                   </p>
                 </div>`;
-            })
-            .join("")}
+      })
+      .join("")}
         </div>
       </div>
 
@@ -1483,10 +1483,10 @@ export function buildUnifiedBIInsightHTML(params: {
         </h2>
         <div style="display:flex; flex-direction:column; gap:12px;">
           ${reportData.recommendations
-            .map((rec: any) => {
-              const priorityLabel = IMPACT_TAG_MAP[rec.priority] || rec.priority;
-              const priorityColor = rec.priority === "high" ? "#A85A3E" : rec.priority === "medium" ? "#9C7A2E" : "#3F8F5F";
-              return `
+      .map((rec: any) => {
+        const priorityLabel = IMPACT_TAG_MAP[rec.priority] || rec.priority;
+        const priorityColor = rec.priority === "high" ? "#A85A3E" : rec.priority === "medium" ? "#9C7A2E" : "#3F8F5F";
+        return `
                 <div style="padding:14px 16px; background:#FAF9F6; border-left:4px solid ${priorityColor}; border-radius:0 8px 8px 0;">
                   <div style="font-family:'Calibri', 'Segoe UI', sans-serif; font-weight:700; color:#3A3936; font-size:13.5px; margin-bottom:4px;">
                     <span style="color:${priorityColor}; font-weight:800; margin-right:6px; letter-spacing:0.2px;">[Ưu tiên ${escapeHtml(priorityLabel)}]</span>
@@ -1496,8 +1496,8 @@ export function buildUnifiedBIInsightHTML(params: {
                     ${escapeHtml(rec.description)}
                   </p>
                 </div>`;
-            })
-            .join("")}
+      })
+      .join("")}
         </div>
       </div>
 
@@ -1529,7 +1529,7 @@ function dualMetricCell(label: string, value: unknown, tone = "") {
   return `<td class="metric ${tone}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></td>`;
 }
 
-function dualDetailTable(title: string, headers: string[], rows: unknown[][]) {
+function dualSummaryTable(title: string, headers: string[], rows: unknown[][]) {
   return `
     <section class="report-section details">
       <h2>${escapeHtml(title)}</h2>
@@ -1537,8 +1537,8 @@ function dualDetailTable(title: string, headers: string[], rows: unknown[][]) {
         <thead><tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead>
         <tbody>
           ${rows.length > 0
-            ? rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("")
-            : `<tr><td colspan="${headers.length}" class="empty">Không có dữ liệu phù hợp.</td></tr>`}
+      ? rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("")
+      : `<tr><td colspan="${headers.length}" class="empty">Không có dữ liệu phù hợp.</td></tr>`}
         </tbody>
       </table>
     </section>`;
@@ -1553,24 +1553,51 @@ export function buildDualOperationsReportExcelDocument(
   const brandName = options.brandName || "Highlands Coffee";
   const showLead = options.operation !== "crisis";
   const showCrisis = options.operation !== "lead";
-  const leadRows = report.lead.detailRows.map((row) => [
-    row.id,
-    row.customer,
-    row.intent.toUpperCase(),
-    row.status,
-    row.slaStatus,
-    row.ownerName,
-    row.content,
+  const leadTrendRows = report.lead.responseTrend.map((row) => [
+    row.day,
+    row.created,
+    row.completed,
   ]);
-  const crisisRows = report.crisis.detailRows.map((row) => [
-    row.id,
-    row.topic,
-    row.severity.toUpperCase(),
-    row.status,
-    row.slaStatus,
-    row.assigneeName,
-    row.content,
+  const crisisTrendRows = report.crisis.responseTrend.map((row) => [
+    row.day,
+    row.created,
+    row.resolved,
   ]);
+  const leadCreated7d = report.lead.responseTrend.reduce((total, row) => total + row.created, 0);
+  const leadClosed7d = report.lead.responseTrend.reduce((total, row) => total + row.completed, 0);
+  const crisisCreated7d = report.crisis.responseTrend.reduce((total, row) => total + row.created, 0);
+  const crisisClosed7d = report.crisis.responseTrend.reduce((total, row) => total + row.resolved, 0);
+  const totalCreated7d = (showLead ? leadCreated7d : 0) + (showCrisis ? crisisCreated7d : 0);
+  const totalClosed7d = (showLead ? leadClosed7d : 0) + (showCrisis ? crisisClosed7d : 0);
+  const backlogDelta7d = totalCreated7d - totalClosed7d;
+  const trendAssessment = backlogDelta7d > 0
+    ? `Tồn đọng có xu hướng tăng ${backlogDelta7d} công việc trong 7 ngày.`
+    : backlogDelta7d < 0
+      ? `Tồn đọng có xu hướng giảm ${Math.abs(backlogDelta7d)} công việc trong 7 ngày.`
+      : "Khối lượng phát sinh và hoàn tất đang cân bằng trong 7 ngày.";
+  const workflowRows = [
+    ["Chưa phân công", report.kpis.workflow.unassigned.lead, report.kpis.workflow.unassigned.crisis, report.kpis.workflow.unassigned.total],
+    ["Cần tiếp tục xử lý", report.kpis.workflow.inProgress.lead, report.kpis.workflow.inProgress.crisis, report.kpis.workflow.inProgress.total],
+    ["Đã hoàn tất (Đã đóng)", report.kpis.workflow.completed.lead, report.kpis.workflow.completed.crisis, report.kpis.workflow.completed.total],
+    ["Quá hạn còn mở", report.kpis.workflow.overdueOpen.lead, report.kpis.workflow.overdueOpen.crisis, report.kpis.workflow.overdueOpen.total],
+    ["Tỷ lệ hoàn thành", `${report.kpis.workflow.completionRate.lead}%`, `${report.kpis.workflow.completionRate.crisis}%`, `${report.kpis.workflow.completionRate.total}%`],
+  ];
+  const sourceRows = Array.from(new Set([
+    ...(showLead ? report.lead.sourceDistribution.map((item) => item.label) : []),
+    ...(showCrisis ? report.crisis.sourceDistribution.map((item) => item.label) : []),
+  ])).map((label) => {
+    const leadCount = showLead
+      ? report.lead.sourceDistribution.find((item) => item.label === label)?.count || 0
+      : 0;
+    const crisisCount = showCrisis
+      ? report.crisis.sourceDistribution.find((item) => item.label === label)?.count || 0
+      : 0;
+    return [label, leadCount, crisisCount, leadCount + crisisCount];
+  }).sort((first, second) => Number(second[3]) - Number(first[3]));
+  const attentionRows = Array.from(
+    { length: Math.ceil(report.attentionItems.length / 3) },
+    (_, index) => report.attentionItems.slice(index * 3, index * 3 + 3),
+  );
 
   const hasAI = Boolean(options.aiInsights || options.insightReport);
   const totalCount = (report.kpis.completedTasks || 0) + (report.kpis.pendingTasks || 0);
@@ -1589,14 +1616,14 @@ export function buildDualOperationsReportExcelDocument(
       <body>
         <main class="report-paper">
           ${buildUnifiedBIInsightHTML({
-            insightReport: options.insightReport,
-            aiInsights: options.aiInsights,
-            periodLabel,
-            brandName,
-            slaRate: report.kpis.slaOnTimeRate,
-            overdueCount: report.kpis.overdueTasks,
-            totalCount: totalCount > 0 ? totalCount : 300,
-          })}
+      insightReport: options.insightReport,
+      aiInsights: options.aiInsights,
+      periodLabel,
+      brandName,
+      slaRate: report.kpis.slaOnTimeRate,
+      overdueCount: report.kpis.overdueTasks,
+      totalCount: totalCount > 0 ? totalCount : 300,
+    })}
         </main>
       </body>
     </html>`;
@@ -1631,30 +1658,38 @@ export function buildDualOperationsReportExcelDocument(
         .operation-grid td { padding: 7px 0; border-bottom: 1px solid #efedf5; font-size: 12px; }
         .operation-grid td:last-child { text-align: right; font-weight: 700; }
         .recommendation { margin: 8px 0; padding: 11px 13px; border-left: 4px solid #4f46e5; background: #f4f3ff; font-size: 12px; }
-        .data-table { border-spacing: 0; table-layout: fixed; width: 100%; }
-        .data-table th { padding: 10px 12px; color: #ffffff; background: #6B5B4D; border: 1px solid #57493D; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; text-align: left; }
-        .data-table td { padding: 8px 10px; border: 1px solid #EBE8E3; font-size: 11px; color: #3A3936; line-height: 1.45; white-space: normal; word-break: break-word; }
-        .data-table tr:nth-child(even) td { background: #FAF9F6; }
-        .empty { padding: 20px !important; color: #756F66; text-align: center; font-style: italic; }
-        .footer { padding: 16px 32px; color: #756F66; background: #FAF9F6; font-size: 11px; border-top: 1px solid #EBE8E3; }
+        .summary { margin: 0; padding: 14px 16px; border: 1px solid #d8d4ff; background: #f7f6ff; font-size: 12px; line-height: 1.65; }
+        .note { margin: 7px 0; color: #5d596b; font-size: 11px; line-height: 1.55; }
+        .data-table { border-spacing: 0; table-layout: fixed; }
+        .data-table th { padding: 9px; color: #fff; background: #4f46e5; border: 1px solid #3932bd; font-size: 11px; text-align: left; }
+        .data-table td { padding: 8px; border: 1px solid #dedcea; font-size: 10px; white-space: normal; word-break: break-word; }
+        .data-table tr:nth-child(even) td { background: #f8f7fc; }
+        .empty { padding: 20px !important; color: #6f6b7e; text-align: center; }
+        .footer { padding: 16px 32px; color: #6f6b7e; background: #f7f7fc; font-size: 10px; }
       </style>
     </head>
     <body>
       <main class="report">
         <header class="hero">
-          <p class="eyebrow">Báo cáo công việc cá nhân</p>
-          <h1>Lead &amp; Khủng hoảng</h1>
-          <p>Bản báo cáo tập trung vào kết quả, rủi ro cần chú ý và dữ liệu đối soát.</p>
+          <p class="eyebrow">Báo cáo tổng quan thương hiệu</p>
+          <h1>Vận hành Khách hàng &amp; Cảnh báo</h1>
+          <p>Bản báo cáo quản trị tập trung vào khối lượng, kết quả, rủi ro và xu hướng; không bao gồm nội dung mention chi tiết.</p>
           <p class="meta"><strong>Kỳ báo cáo:</strong> ${escapeHtml(periodLabel)} &nbsp;·&nbsp; <strong>Phạm vi:</strong> ${escapeHtml(filterLabel)} &nbsp;·&nbsp; <strong>Cập nhật:</strong> ${escapeHtml(new Date(report.generatedAt).toLocaleString("vi-VN"))}</p>
         </header>
 
         <section class="report-section">
-          <h2>Dữ liệu đối soát — Cần chú ý</h2>
-          <table><tr>
-            ${report.attentionItems.length > 0
-              ? report.attentionItems.slice(0, 4).map((item) => `<td class="attention"><span>${escapeHtml(item.title)}</span><strong>${item.count}</strong><p>${escapeHtml(item.description)}</p></td>`).join("")
-              : `<td class="attention"><span>Trạng thái</span><strong>0</strong><p>Không có rủi ro nổi bật trong phạm vi báo cáo.</p></td>`}
-          </tr></table>
+          <h2>Tóm tắt điều hành</h2>
+          <p class="summary">Trong <strong>${escapeHtml(periodLabel)}</strong>, báo cáo ghi nhận <strong>${report.kpis.totalTasks}</strong> công việc cần xử lý; đã đóng <strong>${report.kpis.completedTasks}</strong>, còn <strong>${report.kpis.pendingTasks}</strong> công việc chưa đóng và đạt tỷ lệ hoàn thành <strong>${report.kpis.workflow.completionRate.total}%</strong>. ${escapeHtml(trendAssessment)}</p>
+          <p class="note"><strong>Phạm vi và bộ lọc:</strong> ${escapeHtml(filterLabel)}. <strong>So sánh kỳ trước:</strong> chưa hiển thị vì nguồn dữ liệu hiện tại chưa cung cấp tập dữ liệu kỳ đối chiếu tương đương.</p>
+        </section>
+
+        <section class="report-section">
+          <h2>Cần chú ý</h2>
+          <table>
+            ${attentionRows.length > 0
+      ? attentionRows.map((items) => `<tr>${items.map((item) => `<td class="attention"><span>${escapeHtml(item.title)}</span><strong>${item.count}</strong><p>${escapeHtml(item.description)}</p></td>`).join("")}</tr>`).join("")
+      : `<tr><td class="attention"><span>Trạng thái</span><strong>0</strong><p>Không có rủi ro nổi bật trong phạm vi báo cáo.</p></td></tr>`}
+          </table>
         </section>
 
         <section class="report-section">
@@ -1667,33 +1702,61 @@ export function buildDualOperationsReportExcelDocument(
           </tr></table>
         </section>
 
+        ${dualSummaryTable("Tình trạng công việc theo nghiệp vụ", ["Trạng thái", "Khách hàng tiềm năng", "Cảnh báo", "Tổng"], workflowRows)}
+
         <section class="report-section">
           <h2>Kết quả chi tiết theo nghiệp vụ</h2>
           <table><tr>
             ${showLead ? `<td class="operation">
               <h3>Khách hàng tiềm năng</h3>
               <table class="operation-grid">
-                <tr><td>Đã liên hệ</td><td>${report.lead.kpis.contacted}/${report.lead.kpis.total}</td></tr>
+                <tr><td>Đã đóng</td><td>${report.kpis.workflow.completed.lead}/${report.kpis.leadTotal}</td></tr>
+                <tr><td>Tỷ lệ hoàn thành</td><td>${report.kpis.workflow.completionRate.lead}%</td></tr>
                 <tr><td>Tỷ lệ chuyển đổi</td><td>${report.lead.kpis.conversionRate}%</td></tr>
-                <tr><td>Chưa ghi kết quả</td><td>${report.lead.kpis.needResult}</td></tr>
-                <tr><td>Trễ SLA</td><td>${report.lead.kpis.slaBreached}</td></tr>
+                <tr><td>Đúng SLA</td><td>${report.lead.kpis.slaOnTimeRate}%</td></tr>
+                <tr><td>Follow-up quá hạn</td><td>${report.lead.kpis.followUpOverdue}</td></tr>
               </table>
             </td>` : ""}
             ${showCrisis ? `<td class="operation">
               <h3>Khủng hoảng</h3>
               <table class="operation-grid">
-                <tr><td>Đã giải quyết</td><td>${report.crisis.kpis.resolved}/${report.crisis.kpis.total}</td></tr>
-                <tr><td>Critical/High còn mở</td><td>${report.crisis.kpis.critical + report.crisis.kpis.high}</td></tr>
-                <tr><td>Chờ duyệt</td><td>${report.crisis.kpis.pendingApproval}</td></tr>
-                <tr><td>Quá hạn</td><td>${report.crisis.kpis.overdue}</td></tr>
+                <tr><td>Đã đóng</td><td>${report.kpis.workflow.completed.crisis}/${report.kpis.crisisTotal}</td></tr>
+                <tr><td>Tỷ lệ hoàn thành</td><td>${report.kpis.workflow.completionRate.crisis}%</td></tr>
+                <tr><td>Critical/High còn mở</td><td>${report.kpis.priorityOpen.crisis}</td></tr>
+                <tr><td>Quá hạn còn mở</td><td>${report.kpis.workflow.overdueOpen.crisis}</td></tr>
+                <tr><td>Đúng SLA</td><td>${report.crisis.kpis.slaOnTimeRate}%</td></tr>
               </table>
             </td>` : ""}
           </tr></table>
         </section>
 
-        ${showLead ? dualDetailTable("Danh sách Chi tiết Lead", ["ID", "Khách hàng", "Intent", "Trạng thái", "SLA", "Phụ trách", "Nội dung"], leadRows) : ""}
-        ${showCrisis ? dualDetailTable("Danh sách Chi tiết Khủng hoảng", ["ID", "Chủ đề", "Mức độ", "Trạng thái", "SLA", "Phụ trách", "Nội dung"], crisisRows) : ""}
-        <footer class="footer">InsightFlow · Nội dung trong bản xem trước và file Excel được tạo từ cùng một tài liệu đối soát.</footer>
+        <section class="report-section">
+          <h2>Nhận định và đề xuất</h2>
+          ${report.managementInsights.map((item) => `<p class="recommendation"><strong>Nhận định:</strong> ${escapeHtml(item)}</p>`).join("")}
+          ${report.recommendations.map((item) => `<p class="recommendation"><strong>Hành động:</strong> ${escapeHtml(item)}</p>`).join("")}
+        </section>
+
+        <section class="report-section">
+          <h2>Xu hướng và biến động tồn đọng 7 ngày</h2>
+          <table><tr>
+            ${dualMetricCell("Phát sinh mới", totalCreated7d)}
+            ${dualMetricCell("Đã đóng", totalClosed7d, "good")}
+            ${dualMetricCell("Biến động tồn đọng", backlogDelta7d > 0 ? `+${backlogDelta7d}` : backlogDelta7d, backlogDelta7d > 0 ? "danger" : "good")}
+            ${dualMetricCell("Đánh giá", backlogDelta7d > 0 ? "Tăng" : backlogDelta7d < 0 ? "Giảm" : "Cân bằng", backlogDelta7d > 0 ? "danger" : "good")}
+          </tr></table>
+          <p class="note">${escapeHtml(trendAssessment)} Số phát sinh được ghi theo ngày tạo; số hoàn tất được ghi theo ngày đóng thực tế.</p>
+        </section>
+
+        ${showLead ? dualSummaryTable("Xu hướng Khách hàng 7 ngày", ["Ngày", "Lead mới", "Đã đóng"], leadTrendRows) : ""}
+        ${showCrisis ? dualSummaryTable("Xu hướng Cảnh báo 7 ngày", ["Ngày", "Case mới", "Đã đóng"], crisisTrendRows) : ""}
+        ${dualSummaryTable("Cơ cấu nguồn phát sinh", ["Nguồn", "Khách hàng tiềm năng", "Cảnh báo", "Tổng"], sourceRows)}
+        <section class="report-section">
+          <h2>Ghi chú cách tính</h2>
+          <p class="note">“Cần tiếp tục xử lý” của Khách hàng gồm Đang xử lý và Follow-up; của Cảnh báo gồm Đang xử lý và Cần liên hệ lại.</p>
+          <p class="note">“Đã hoàn tất” chỉ tính trạng thái Đã đóng, không tính Đã bỏ qua. Tỷ lệ hoàn thành = số công việc Đã đóng / tổng công việc cần xử lý trong phạm vi và bộ lọc đang áp dụng.</p>
+          <p class="note">Các nhóm rủi ro trong “Cần chú ý” có thể giao nhau và không được cộng thành tổng số công việc.</p>
+        </section>
+        <footer class="footer">InsightFlow · Báo cáo quản trị tổng hợp, không chứa mention hoặc hồ sơ công việc chi tiết.</footer>
       </main>
     </body>
   </html>`;

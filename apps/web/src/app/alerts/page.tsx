@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import {
@@ -44,6 +44,8 @@ import {
   getAlertDeduplicationKey,
 } from "@/lib/operational-metrics";
 import { isCrisisClassificationLabel } from "@/lib/label-change";
+import { isDemoPath, toDemoHref } from "@/lib/demo-navigation";
+import { copyTextToClipboard } from "@/lib/clipboard";
 
 const ALERTS_PER_PAGE = 5;
 import { collection, getDocs, doc, getDoc } from "firebase/firestore";
@@ -173,6 +175,7 @@ function MonitoringCountdown({ alert }: MonitoringCountdownProps) {
  */
 export default function AlertsPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const { profile, loading: authLoading } = useAuth();
   const isManager = profile?.role === "brand_manager";
   const scopedBrandKey = getScopedBrandKey(profile);
@@ -284,12 +287,10 @@ export default function AlertsPage() {
     if (targetUrl) window.open(targetUrl, "_blank", "noopener,noreferrer");
 
     // Copy full text to clipboard for manual Ctrl+F fallback.
-    try {
-      await navigator.clipboard.writeText(text);
+    const didCopy = await copyTextToClipboard(text);
+    if (didCopy) {
       setCopied(true);
       setTimeout(() => setCopied(false), 3000);
-    } catch (err) {
-      console.warn("[AlertsPage] Failed to copy source text:", err);
     }
 
   };
@@ -509,8 +510,8 @@ export default function AlertsPage() {
           : workflowStatus === "processing"
             ? "processing"
             : workflowStatus === "contact_failed"
-            ? "contact_failed"
-            : "all",
+              ? "contact_failed"
+              : "all",
     );
     setAlertPage(1);
     setDetailPanelTab("action");
@@ -1181,7 +1182,11 @@ export default function AlertsPage() {
       {dashboardReturnNavigation && (
         <button
           type="button"
-          onClick={() => router.push(dashboardReturnNavigation.href)}
+          onClick={() => router.push(
+            isDemoPath(pathname)
+              ? toDemoHref(dashboardReturnNavigation.href) || "/demo/insights"
+              : dashboardReturnNavigation.href,
+          )}
           className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] px-3.5 text-sm font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-bg-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]"
         >
           <span className="material-symbols-outlined text-base">arrow_back</span>
@@ -1364,7 +1369,7 @@ export default function AlertsPage() {
           setSeverityFilter("all");
           setSourceFilter("all");
           setContentTypeFilter("all");
-    setSlaFilter("all");
+          setSlaFilter("all");
           setShowMineOnly(false);
           setStatusFilter("processing");
           setAlertPage(1);
@@ -1478,6 +1483,7 @@ function TrendModal({ alert, onClose }: TrendModalProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<any>(null);
   const router = useRouter();
+  const pathname = usePathname();
   const { setFilters: setDashboardFilters, workspaces } = useDashboardStore();
 
   const brandName = formatBrandName(alert.brand);
@@ -1687,7 +1693,7 @@ function TrendModal({ alert, onClose }: TrendModalProps) {
     });
 
     onClose();
-    router.push("/mentions");
+    router.push(isDemoPath(pathname) ? toDemoHref("/mentions") || "/demo/mentions" : "/mentions");
   };
 
   return (
