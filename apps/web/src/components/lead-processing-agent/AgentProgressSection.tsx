@@ -72,7 +72,7 @@ export function AgentProgressSection({
           </p>
         </div>
         <span className="rounded-full border border-indigo-100 bg-indigo-50 px-4 py-2 text-xs font-bold text-indigo-700 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-400">
-          {t("agentDashboard.stats.fromSupabase", { defaultValue: "Đồng bộ từ Supabase" })}
+          {t("agentDashboard.stats.fromVps", { defaultValue: "Đồng bộ từ VPS" })}
         </span>
       </div>
 

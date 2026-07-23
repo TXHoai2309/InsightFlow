@@ -35,8 +35,8 @@ export function AgentStatsBar({ stats }: AgentStatsBarProps) {
       title: t("agentDashboard.stats.processing"),
       value: stats.processing.toLocaleString("vi-VN"),
       icon: Clock,
-      detail: t("agentDashboard.stats.fromSupabase", {
-        defaultValue: "Đồng bộ từ Supabase",
+      detail: t("agentDashboard.stats.fromVps", {
+        defaultValue: "Đồng bộ từ VPS",
       }),
       detailColor: "text-slate-500 dark:text-gray-400",
       iconColor: "text-blue-500 dark:text-blue-400",

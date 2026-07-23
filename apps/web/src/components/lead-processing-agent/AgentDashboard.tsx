@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Database, RefreshCw, ShieldAlert, Target } from "lucide-react";
+import { CalendarDays, Database, RefreshCw, ShieldAlert, Target } from "lucide-react";
 import { AgentStatsBar } from "./AgentStatsBar";
 import { AgentProgressSection } from "./AgentProgressSection";
 import { AgentKanbanBoard } from "./AgentKanbanBoard";
@@ -12,6 +12,7 @@ import { useDashboard } from "@/hooks/useDashboardData";
 import { getScopedBrandKey } from "@/lib/brandScope";
 import {
   buildEmployeeOperationsData,
+  type DateRangeOption,
   type EmployeeOperationsRole,
 } from "@/lib/employee-operations";
 import { canPerformAction } from "@/lib/rbac";
@@ -35,6 +36,7 @@ export function AgentDashboard() {
     uid: string;
     role: EmployeeOperationsRole;
   } | null>(null);
+  const [dateRange, setDateRange] = useState<DateRangeOption>("30d");
   const selectedOperationRole =
     viewSelection && viewSelection.uid === profile?.uid ? viewSelection.role : null;
   const activeOperationRole =
@@ -88,8 +90,9 @@ export function AgentDashboard() {
       alerts: isCrisisView ? alerts : [],
       leads: isLeadView ? leads : [],
       nowMs,
+      dateRange,
     });
-  }, [activeOperationRole, alerts, canViewCrisis, canViewLead, isCrisisView, isLeadView, leads, nowMs, profile]);
+  }, [activeOperationRole, alerts, canViewCrisis, canViewLead, dateRange, isCrisisView, isLeadView, leads, nowMs, profile]);
 
   const handleRefresh = useCallback(async () => {
     if (!profile) return;
@@ -153,9 +156,19 @@ export function AgentDashboard() {
             <h1 className="bg-gradient-to-r from-indigo-800 to-purple-800 bg-clip-text text-3xl font-extrabold tracking-tight text-transparent dark:from-indigo-400 dark:to-purple-400">
               {pageTitle}
             </h1>
-            <p className="mt-1.5 text-sm font-medium text-slate-500 dark:text-gray-400">
+            <p className="mt-1.5 flex flex-wrap items-center gap-2 text-sm font-medium text-slate-500 dark:text-gray-400">
               {pageSubtitle}
               {profile?.brandName ? ` · ${profile.brandName}` : ""}
+              <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-bold text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400">
+                <CalendarDays className="h-3 w-3" />
+                {dateRange === "today"
+                  ? "Hôm nay"
+                  : dateRange === "7d"
+                    ? "7 ngày gần nhất"
+                    : dateRange === "30d"
+                      ? "30 ngày gần nhất"
+                      : "Toàn bộ dữ liệu"}
+              </span>
             </p>
           </div>
 
@@ -196,14 +209,43 @@ export function AgentDashboard() {
                 </button>
               </div>
             )}
+
+            {/* ── Bộ lọc khoảng thời gian ── */}
+            <div
+              className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 dark:border-[#262338] dark:bg-[#13111C]"
+              role="group"
+              aria-label="Lọc theo khoảng thời gian"
+            >
+              <CalendarDays className="ml-2 h-3.5 w-3.5 shrink-0 text-slate-400" />
+              {([
+                { value: "today", label: "Hôm nay" },
+                { value: "7d",    label: "7 ngày" },
+                { value: "30d",   label: "30 ngày" },
+                { value: "all",   label: "Tất cả" },
+              ] as { value: DateRangeOption; label: string }[]).map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setDateRange(opt.value)}
+                  className={`rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${
+                    dateRange === opt.value
+                      ? "bg-white text-indigo-600 shadow-sm dark:bg-[#262338] dark:text-indigo-400"
+                      : "text-slate-500 hover:text-slate-700 dark:text-gray-400 dark:hover:text-gray-200"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
             <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500 dark:border-[#262338] dark:bg-[#13111C] dark:text-gray-400">
               <Database className="h-3.5 w-3.5 text-emerald-500" />
               {lastFetchedAt > 0
                 ? t("agentDashboard.lastSync", {
                     time: new Date(lastFetchedAt).toLocaleString("vi-VN"),
-                    defaultValue: `Supabase: ${new Date(lastFetchedAt).toLocaleString("vi-VN")}`,
+                    defaultValue: `VPS data: ${new Date(lastFetchedAt).toLocaleString("vi-VN")}`,
                   })
-                : t("agentDashboard.waitingSync", { defaultValue: "Đang chờ đồng bộ Supabase" })}
+                : t("agentDashboard.waitingSync", { defaultValue: "Đang kết nối VPS..." })}
             </div>
             <button
               type="button"

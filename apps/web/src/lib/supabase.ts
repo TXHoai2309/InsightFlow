@@ -2,8 +2,8 @@ import type { AlertData, ResolutionAttempt, InternalNote } from "@/stores/alert.
 import { calculateNegativityScore } from "@/lib/negativityScore";
 import { getPersistedAlertStatus } from "@/lib/alertWorkflow";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+const supabaseUrl = process.env.NEXT_PUBLIC_VPS_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const supabaseAnonKey = process.env.NEXT_PUBLIC_VPS_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
 function normalizeUrl(url: string): string {
   const trimmed = url.trim().replace(/\/rest\/v1\/?$/, "");

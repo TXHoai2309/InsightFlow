@@ -5,6 +5,10 @@ import {
   canLeadBeVisibleToUser,
   getLeadExpiryTime,
 } from "@/lib/lead-workbench";
+import {
+  getAlertCompletenessScore,
+  getAlertDeduplicationKey,
+} from "@/lib/operational-metrics";
 import type { UserRoleProfile } from "@/lib/rbac";
 import type { AlertData } from "@/stores/alert.store";
 import type { Lead } from "@/types/dashboard";
@@ -56,12 +60,15 @@ export interface EmployeeOperationsData {
   stats: EmployeeOperationsStats;
 }
 
+export type DateRangeOption = "today" | "7d" | "30d" | "all";
+
 interface BuildEmployeeOperationsDataParams {
   profile: UserRoleProfile;
   role?: EmployeeOperationsRole;
   alerts?: AlertData[];
   leads?: Lead[];
   nowMs?: number;
+  dateRange?: DateRangeOption;
 }
 
 const VIETNAM_TIME_ZONE = "Asia/Ho_Chi_Minh";
@@ -299,14 +306,29 @@ export function buildEmployeeOperationsData({
   alerts = [],
   leads = [],
   nowMs = Date.now(),
+  dateRange = "30d",
 }: BuildEmployeeOperationsDataParams): EmployeeOperationsData {
   const role = requestedRole || (profile.role as EmployeeOperationsRole);
   let tasks: EmployeeOperationsTask[];
 
   if (role === "crisis_employee") {
-    tasks = alerts
-      .filter((alert) => canAlertBeVisibleToUser(alert, profile))
-      .map((alert) => alertToTask(alert, nowMs));
+    // 1. Chỉ lấy cảnh báo tiêu cực (khớp với mặc định alertScope của trang quản lý)
+    const negativeAlerts = alerts.filter((alert) => alert.sentiment === "negative");
+
+    // 2. Lọc quyền xem của user
+    const visibleAlerts = negativeAlerts.filter((alert) => canAlertBeVisibleToUser(alert, profile));
+
+    // 3. Khử trùng lặp theo key (khớp với trang quản lý /alerts)
+    const deduplicated = new Map<string, AlertData>();
+    visibleAlerts.forEach((alert) => {
+      const key = getAlertDeduplicationKey(alert);
+      const existing = deduplicated.get(key);
+      if (!existing || getAlertCompletenessScore(alert) > getAlertCompletenessScore(existing)) {
+        deduplicated.set(key, alert);
+      }
+    });
+
+    tasks = Array.from(deduplicated.values()).map((alert) => alertToTask(alert, nowMs));
   } else {
     tasks = leads
       .filter(isIntentLead)
@@ -314,16 +336,40 @@ export function buildEmployeeOperationsData({
       .map((lead) => leadToTask(lead, nowMs));
   }
 
-  // Keep a useful 30-day completion log in the board. Daily progress and KPI
-  // counters are still calculated from items completed today only.
-  const historyCutoff = nowMs - 30 * 24 * 60 * 60 * 1000;
-  tasks = tasks
-    .filter((task) => {
+  // ── Date range filter ────────────────────────────────────────────────────
+  // Tính mốc bắt đầu ngày giống hệt trang quản lý (/alerts page)
+  const startOfToday = new Date(nowMs);
+  startOfToday.setHours(0, 0, 0, 0);
+  const startOfTodayMs = startOfToday.getTime();
+
+  let startDateMs: number | null = null;
+  if (dateRange === "today") {
+    startDateMs = startOfTodayMs;
+  } else if (dateRange === "7d") {
+    startDateMs = startOfTodayMs - 6 * 24 * 60 * 60 * 1000; // 7 ngày gần nhất (bao gồm hôm nay)
+  } else if (dateRange === "30d") {
+    startDateMs = startOfTodayMs - 29 * 24 * 60 * 60 * 1000; // 30 ngày gần nhất (bao gồm hôm nay)
+  }
+  // "all" → startDateMs = null
+
+  if (startDateMs !== null) {
+    tasks = tasks.filter((task) => {
+      const createdTime = toTime(task.createdAt);
+      return createdTime !== null && createdTime >= startDateMs!;
+    });
+  }
+
+  // Đối với chế độ "Tất cả", giới hạn việc đã đóng ở mốc 30 ngày để tránh quá tải DOM
+  if (dateRange === "all") {
+    const historyCutoff = nowMs - 30 * 24 * 60 * 60 * 1000;
+    tasks = tasks.filter((task) => {
       if (task.status !== "completed") return true;
       const completedTime = toTime(task.completedAt);
       return completedTime !== null && completedTime >= historyCutoff;
-    })
-    .sort(compareTasks);
+    });
+  }
+
+  tasks.sort(compareTasks);
 
   return {
     role,
