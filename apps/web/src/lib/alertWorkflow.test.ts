@@ -6,6 +6,7 @@ import {
   canRestoreAlert,
   getAlertWorkflowStatus,
   getPersistedAlertStatus,
+  getRealtimeAlertWorkflowStatus,
   isResolvedAlert,
   isSkippedAlert,
   isTerminalAlert,
@@ -35,6 +36,61 @@ test("keeps active and resolved statuses unchanged", () => {
   assert.equal(getAlertWorkflowStatus({ status: "resolving" }), "processing");
   assert.equal(getAlertWorkflowStatus({ status: "contact_failed" }), "contact_failed");
   assert.equal(getAlertWorkflowStatus({ status: "resolved" }), "resolved");
+});
+
+test("a newer claim wins over terminal metadata from an older workflow cycle", () => {
+  assert.equal(
+    getAlertWorkflowStatus({
+      status: "resolving",
+      being_resolved_by: "crisis@example.com",
+      being_resolved_at: "2026-07-23T08:00:00.000Z",
+      resolved_at: "2026-07-14T08:00:00.000Z",
+      monitoring_started_at: "2026-07-14T08:00:00.000Z",
+    }),
+    "processing",
+  );
+  assert.equal(
+    getAlertWorkflowStatus({
+      status: "resolving",
+      being_resolved_by: "crisis@example.com",
+      being_resolved_at: "2026-07-23T08:00:00.000Z",
+      skipped_at: "2026-07-14T08:00:00.000Z",
+    }),
+    "processing",
+  );
+});
+
+test("newer terminal evidence still protects legacy stale active statuses", () => {
+  assert.equal(
+    getAlertWorkflowStatus({
+      status: "resolving",
+      being_resolved_by: "crisis@example.com",
+      being_resolved_at: "2026-07-14T08:00:00.000Z",
+      resolved_at: "2026-07-23T08:00:00.000Z",
+    }),
+    "resolved",
+  );
+});
+
+test("realtime ignores the annotation pipeline completed status", () => {
+  assert.equal(
+    getRealtimeAlertWorkflowStatus(
+      { status: "completed", updated_at: "2026-07-23T08:00:00.000Z" },
+      {
+        resolution_status: "resolving",
+        being_resolved_by: "crisis@example.com",
+        being_resolved_at: "2026-07-23T08:00:00.000Z",
+      },
+    ),
+    "resolving",
+  );
+  assert.equal(
+    getRealtimeAlertWorkflowStatus(
+      { status: "completed" },
+      {},
+    ),
+    "new",
+  );
 });
 
 test("allows skip only for the owner of a processing alert", () => {

@@ -244,6 +244,40 @@ export function getAlertCompletenessScore(alert: AlertData) {
   );
 }
 
+export function getAlertWorkflowUpdatedAtMs(alert: AlertData): number {
+  const history = alert.resolution_history || [];
+  const latestHistoryAt = history.reduce((latest, entry) => {
+    const timestamp = new Date(entry.timestamp || 0).getTime();
+    return Number.isFinite(timestamp) ? Math.max(latest, timestamp) : latest;
+  }, 0);
+
+  return [
+    alert.updated_at,
+    alert.being_resolved_at,
+    alert.skipped_at,
+    alert.resolved_at,
+    alert.monitoring_started_at,
+  ].reduce((latest, value) => {
+    const timestamp = new Date(value || 0).getTime();
+    return Number.isFinite(timestamp) ? Math.max(latest, timestamp) : latest;
+  }, latestHistoryAt);
+}
+
+export function selectPreferredOperationalAlert(
+  existing: AlertData,
+  candidate: AlertData,
+): AlertData {
+  const existingUpdatedAt = getAlertWorkflowUpdatedAtMs(existing);
+  const candidateUpdatedAt = getAlertWorkflowUpdatedAtMs(candidate);
+  if (candidateUpdatedAt !== existingUpdatedAt) {
+    return candidateUpdatedAt > existingUpdatedAt ? candidate : existing;
+  }
+
+  return getAlertCompletenessScore(candidate) > getAlertCompletenessScore(existing)
+    ? candidate
+    : existing;
+}
+
 function getOperationalAlertSlaHours(alert: AlertData) {
   const severity = getAlertCanonicalSeverity(alert);
   if (severity === "critical") return 1;
@@ -307,10 +341,7 @@ export function filterOperationalAlerts(
   });
 
   return deduplicateSourceRecords(scopedAlerts, {
-    selectPreferred: (existing, candidate) =>
-      getAlertCompletenessScore(candidate) > getAlertCompletenessScore(existing)
-        ? candidate
-        : existing,
+    selectPreferred: selectPreferredOperationalAlert,
   });
 }
 

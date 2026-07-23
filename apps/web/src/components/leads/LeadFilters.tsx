@@ -183,7 +183,8 @@ export function LeadFilters({
               )}
             </div>
             <p className="mt-0.5 max-w-2xl text-xs text-[var(--color-text-secondary)]">
-              Thu hẹp khách hàng trong nhóm “{activeViewLabel}” theo nền tảng, mức ưu tiên và SLA.
+              Thu hẹp khách hàng trong nhóm “{activeViewLabel}” theo nền tảng, mức ưu tiên,
+              SLA và người phụ trách.
             </p>
           </div>
 
@@ -198,7 +199,10 @@ export function LeadFilters({
           )}
         </header>
 
-        <div className={`grid gap-2 md:grid-cols-2 ${brandLocked ? "xl:grid-cols-5" : "xl:grid-cols-6"}`}>
+        <div
+          className={`grid gap-2 md:grid-cols-2 ${brandLocked ? "xl:grid-cols-5" : "xl:grid-cols-6"
+            }`}
+        >
           {!brandLocked && (
             <div>
               <label htmlFor="lead-filter-workspace" className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
@@ -332,9 +336,9 @@ export function LeadFilters({
                 ? "Thời điểm hoàn tất"
                 : dateBasis === "follow_up"
                   ? "Thời điểm hẹn"
-                : dateBasis === "none"
-                  ? "Phạm vi nghiệp vụ"
-                  : "Ngày đăng"}
+                  : dateBasis === "none"
+                    ? "Phạm vi nghiệp vụ"
+                    : "Ngày đăng"}
             </label>
             <div className="relative">
               <select

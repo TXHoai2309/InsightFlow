@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import {
@@ -34,7 +34,10 @@ import {
   isAlertOwnedByUser,
 } from "@/lib/alert-visibility";
 import { findAlertByNavigationTarget } from "@/lib/alert-navigation";
-import { readDashboardReturnNavigation } from "@/lib/dashboard-return-context";
+import {
+  getDashboardNavigationMode,
+  readDashboardReturnNavigation,
+} from "@/lib/dashboard-return-context";
 import { usePinnedQueue } from "@/hooks/usePinnedQueue";
 import { useAlertViewPresence } from "@/hooks/useAlertViewPresence";
 import { getAlertSourceUrl } from "@/lib/alert-source-url";
@@ -43,9 +46,9 @@ import {
   isAlertWithinTimeScope,
   isHighPriorityAlert,
 } from "@/lib/operational-metrics";
+import { isCrisisClassificationLabel } from "@/lib/label-change";
 import { isDemoPath, toDemoHref } from "@/lib/demo-navigation";
 import { copyTextToClipboard } from "@/lib/clipboard";
-import { isCrisisClassificationLabel } from "@/lib/label-change";
 
 const ALERTS_PER_PAGE = 5;
 import { collection, getDocs, doc, getDoc } from "firebase/firestore";
@@ -175,6 +178,7 @@ function MonitoringCountdown({ alert }: MonitoringCountdownProps) {
  */
 export default function AlertsPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const { profile, loading: authLoading } = useAuth();
   const isManager = profile?.role === "brand_manager";
   const scopedBrandKey = getScopedBrandKey(profile);
@@ -243,8 +247,11 @@ export default function AlertsPage() {
   const mentionIdParam = searchParams.get("mentionId");
   const alertScope = searchParams.get("scope") === "crisis" ? "crisis" : "negative";
   const dashboardReturnNavigation = useMemo(
-    () => readDashboardReturnNavigation(searchParams),
-    [searchParams],
+    () => readDashboardReturnNavigation(
+      searchParams,
+      getDashboardNavigationMode(pathname),
+    ),
+    [pathname, searchParams],
   );
   const handledAlertIdParamRef = useRef<string | null>(null);
 
@@ -591,6 +598,7 @@ export default function AlertsPage() {
   const alertViewers = useAlertViewPresence({
     alertId: selectedAlert?.id || null,
     enabled: Boolean(
+      !isDemoPath(pathname) &&
       selectedAlert &&
       !isDetailPanelCollapsed &&
       getAlertWorkflowStatus(selectedAlert) === "pending",
@@ -973,6 +981,14 @@ export default function AlertsPage() {
         return;
       }
 
+      // Demo evidence is resolved only from the in-memory sample snapshot.
+      // Never fall through to the production Supabase tables.
+      if (isDemoPath(pathname)) {
+        setParentText(null);
+        setLoadingParent(false);
+        return;
+      }
+
       setLoadingParent(true);
       const fetchParent = async () => {
         try {
@@ -995,7 +1011,7 @@ export default function AlertsPage() {
     } else {
       setParentText(null);
     }
-  }, [selectedEvidence, alerts, rawAlerts]);
+  }, [selectedEvidence, alerts, pathname, rawAlerts]);
 
   const dashboardStore = useDashboardStore();
   useDashboard({
@@ -1425,6 +1441,7 @@ interface TrendModalProps {
 
 function TrendModal({ alert, onClose }: TrendModalProps) {
   const { t, i18n } = useTranslation();
+  const pathname = usePathname();
   const { profile } = useAuth();
   const scopedBrandKey = getScopedBrandKey(profile);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -1639,7 +1656,11 @@ function TrendModal({ alert, onClose }: TrendModalProps) {
     });
 
     onClose();
-    router.push("/mentions");
+    router.push(
+      isDemoPath(pathname)
+        ? toDemoHref("/mentions") || "/demo/mentions"
+        : "/mentions",
+    );
   };
 
   return (

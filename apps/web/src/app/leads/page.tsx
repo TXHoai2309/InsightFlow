@@ -56,12 +56,13 @@ import {
   type LeadFilterSessionIdentity,
 } from "@/lib/lead-filter-session";
 import {
+  getDashboardNavigationMode,
   readDashboardReturnNavigation,
   type DashboardReturnNavigation,
 } from "@/lib/dashboard-return-context";
 import { usePinnedQueue } from "@/hooks/usePinnedQueue";
 import { useLeadViewPresence } from "@/hooks/useAlertViewPresence";
-import { isDemoPath, toDemoHref } from "@/lib/demo-navigation";
+import { isDemoPath } from "@/lib/demo-navigation";
 import { dummyStaff } from "@/lib/demoData";
 
 const LEADS_PAGE_SIZE = 5;
@@ -171,9 +172,12 @@ export default function LeadsPage() {
 
   useEffect(() => {
     setDashboardReturnNavigation(
-      readDashboardReturnNavigation(new URLSearchParams(window.location.search)),
+      readDashboardReturnNavigation(
+        new URLSearchParams(window.location.search),
+        getDashboardNavigationMode(pathname),
+      ),
     );
-  }, []);
+  }, [pathname]);
 
   const clearPendingRestore = useCallback((clearHighlight = false) => {
     pendingRestoreLeadId.current = null;
@@ -617,6 +621,7 @@ export default function LeadsPage() {
   const leadViewers = useLeadViewPresence({
     leadId: selectedLead?.id || null,
     enabled: Boolean(
+      !isDemoPath(pathname) &&
       selectedLead &&
       !isPanelCollapsed &&
       getLeadOwnershipMeta(selectedLead, profile).status === "unassigned",
@@ -1000,11 +1005,7 @@ export default function LeadsPage() {
       {dashboardReturnNavigation && (
         <button
           type="button"
-          onClick={() => router.push(
-            isDemoPath(pathname)
-              ? toDemoHref(dashboardReturnNavigation.href) || "/demo"
-              : dashboardReturnNavigation.href,
-          )}
+          onClick={() => router.push(dashboardReturnNavigation.href)}
           className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] px-3.5 text-sm font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-bg-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]"
         >
           <span className="material-symbols-outlined text-base">arrow_back</span>

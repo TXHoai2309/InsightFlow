@@ -344,6 +344,30 @@ export function DualOperationsEmployeeReportPage({
         reportFilters.operation,
         brandName,
       );
+      const leadSamples = reportFilters.operation === "crisis"
+        ? []
+        : report.lead.detailRows.map((row) => ({
+          content: `LEAD | ${row.customer} | ${row.intent || "other"} | ${row.content}`,
+          sentiment: "positive",
+          topic: row.intent || "lead",
+          source: row.platform || "system",
+          priority: row.priorityScore,
+        }));
+      const crisisSamples = reportFilters.operation === "lead"
+        ? []
+        : report.crisis.detailRows.map((row) => ({
+          content: `CRISIS | ${row.topic || row.brand} | ${row.content}`,
+          sentiment: row.sentiment || "negative",
+          topic: row.topic || "crisis",
+          source: row.platform || "system",
+          priority:
+            row.severity === "critical" ? 100 : row.severity === "high" ? 75 : row.negativityScore,
+        }));
+      const sampleRows = [...crisisSamples, ...leadSamples]
+        .sort((a, b) => b.priority - a.priority)
+        .slice(0, 20)
+        .map(({ priority: _priority, ...row }) => row);
+
       const res = await fetch("/api/reports/ai-insights", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

@@ -1563,24 +1563,6 @@ export function buildDualOperationsReportExcelDocument(
     row.created,
     row.resolved,
   ]);
-  const leadDetailRows = report.lead.detailRows.map((row) => [
-    row.id,
-    row.customer,
-    row.intent.toUpperCase(),
-    row.status,
-    row.slaStatus,
-    row.ownerName,
-    row.content,
-  ]);
-  const crisisDetailRows = report.crisis.detailRows.map((row) => [
-    row.id,
-    row.topic,
-    row.severity.toUpperCase(),
-    row.status,
-    row.slaStatus,
-    row.assigneeName,
-    row.content,
-  ]);
   const leadCreated7d = report.lead.responseTrend.reduce((total, row) => total + row.created, 0);
   const leadClosed7d = report.lead.responseTrend.reduce((total, row) => total + row.completed, 0);
   const crisisCreated7d = report.crisis.responseTrend.reduce((total, row) => total + row.created, 0);
