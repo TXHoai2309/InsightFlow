@@ -25,6 +25,12 @@ import {
 import { canAlertBeVisibleToUser } from "@/lib/alert-visibility";
 import { isSameAlertRecord } from "@/lib/alertRecordIdentity";
 import { dummyMentions } from "@/lib/demoData";
+import { isDemoRuntime } from "@/lib/demo-navigation";
+import {
+  hydrateDemoAlertWorkflows,
+  isDemoAlertRecord,
+  persistDemoAlertWorkflow,
+} from "@/lib/demo-alert-session";
 import { getCalendarPeriodStartMs, isWithinCalendarPeriod } from "@/lib/dashboard-display";
 
 function getResolverName(emailOrId: string | null | undefined): string {
@@ -668,8 +674,8 @@ export const useAlertStore = create<AlertState>()(
       // Demo must be completely deterministic and must never depend on the
       // production cache/realtime pipeline. Build the same alert view model
       // used by the real page directly from the in-memory demo mentions.
-      if (typeof window !== "undefined" && window.location.pathname.startsWith("/demo")) {
-        const demoAlerts = buildDemoAlertData();
+      if (isDemoRuntime()) {
+        const demoAlerts = hydrateDemoAlertWorkflows(buildDemoAlertData());
         const demoBrands = Array.from(
           new Set(demoAlerts.map((alert) => alert.brand)),
         ).sort();
@@ -895,8 +901,13 @@ export const useAlertStore = create<AlertState>()(
       newStatus = getPersistedAlertStatus({ resolution_status: newStatus });
       console.log("[AlertStore] updateAlertStatus called:", { id, newStatus, profileEmail: profile?.email, profileRole: profile?.role });
       const currentAlert = get().rawAlerts.find((alert) => isSameAlertRecord(alert, id));
+      const isDemoMutation = isDemoRuntime();
       const isRestore = attempt?.action_type === "restore";
       console.log("[AlertStore] currentAlert found:", currentAlert);
+
+      if (isDemoMutation && (!currentAlert || !isDemoAlertRecord(currentAlert))) {
+        throw new Error("Cảnh báo không thuộc dữ liệu của phiên Demo.");
+      }
 
       if (
         newStatus === "resolving" &&
@@ -982,7 +993,10 @@ export const useAlertStore = create<AlertState>()(
         currentAlertNormalized: resolvedBrand ? normalizeBrandName(resolvedBrand) : null,
       });
 
-      if (!resolvedBrand || !isSameBrandScope(profile, { brand: resolvedBrand })) {
+      if (
+        !isDemoMutation &&
+        (!resolvedBrand || !isSameBrandScope(profile, { brand: resolvedBrand }))
+      ) {
         console.error("[AlertStore] Brand scope check failed:", { resolvedBrand, sameScope: resolvedBrand ? isSameBrandScope(profile, { brand: resolvedBrand }) : false });
         throw new Error(`Alert is outside the user's brand scope. Profile: [Name: ${profile?.brandName}, ID: ${profile?.brandId}], Alert Brand: [${resolvedBrand}]`);
       }
@@ -1151,6 +1165,14 @@ export const useAlertStore = create<AlertState>()(
             : state.recentLocks,
         };
       });
+
+      if (isDemoMutation) {
+        const updatedAlert = get().rawAlerts.find((alert) =>
+          isSameAlertRecord(alert, id),
+        );
+        if (updatedAlert) persistDemoAlertWorkflow(updatedAlert);
+        return;
+      }
 
       try {
         await updateSupabaseAlertLabel(id, (existingLabel) => {
@@ -1784,6 +1806,10 @@ export const useAlertStore = create<AlertState>()(
       if (!profile) return;
       const now = new Date().toISOString();
       const previousAlert = get().rawAlerts.find((alert) => isSameAlertRecord(alert, id));
+      const isDemoMutation = isDemoRuntime();
+      if (isDemoMutation && (!previousAlert || !isDemoAlertRecord(previousAlert))) {
+        throw new Error("Cảnh báo không thuộc dữ liệu của phiên Demo.");
+      }
 
       // Update local state immediately
       set((state) => {
@@ -1807,6 +1833,14 @@ export const useAlertStore = create<AlertState>()(
           recentLocks: nextRecentLocks,
         };
       });
+
+      if (isDemoMutation) {
+        const updatedAlert = get().rawAlerts.find((alert) =>
+          isSameAlertRecord(alert, id),
+        );
+        if (updatedAlert) persistDemoAlertWorkflow(updatedAlert);
+        return;
+      }
 
       try {
         await updateSupabaseAlertLabel(id, (existingLabel) => ({
@@ -1856,6 +1890,12 @@ export const useAlertStore = create<AlertState>()(
     },
 
     unlockAlertForResolution: async (id) => {
+      const isDemoMutation = isDemoRuntime();
+      const previousAlert = get().rawAlerts.find((alert) => isSameAlertRecord(alert, id));
+      if (isDemoMutation && (!previousAlert || !isDemoAlertRecord(previousAlert))) {
+        throw new Error("Cảnh báo không thuộc dữ liệu của phiên Demo.");
+      }
+
       // Update local state immediately
       set((state) => {
         const nextRawAlerts = state.rawAlerts.map((alert) => {
@@ -1878,6 +1918,14 @@ export const useAlertStore = create<AlertState>()(
           recentLocks: nextRecentLocks,
         };
       });
+
+      if (isDemoMutation) {
+        const updatedAlert = get().rawAlerts.find((alert) =>
+          isSameAlertRecord(alert, id),
+        );
+        if (updatedAlert) persistDemoAlertWorkflow(updatedAlert);
+        return;
+      }
 
       try {
         await updateSupabaseAlertLabel(id, (existingLabel) => ({

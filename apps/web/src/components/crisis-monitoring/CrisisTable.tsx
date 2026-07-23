@@ -21,6 +21,10 @@ import { canPerformAction } from "@/lib/rbac";
 import { useAlertStore, type AlertData } from "@/stores/alert.store";
 import { cn } from "@/lib/utils";
 import {
+  getCrisisAssigneeDisplayName,
+  getCrisisSlaInfo,
+} from "@/lib/crisis-table-display";
+import {
   DASHBOARD_RETURN_CONFIG,
   createDashboardReturnHref,
   getAppScrollTop,
@@ -57,29 +61,6 @@ function normalizeSeverity(value?: string) {
   if (severity === "high") return "high";
   if (severity === "medium" || severity === "normal") return "medium";
   return "low";
-}
-
-function getSlaInfo(alert: AlertData) {
-  const severity = normalizeSeverity(alert.severity);
-  const limitHours = severity === "critical" ? 1 : severity === "high" ? 2 : severity === "medium" ? 4 : 8;
-  const createdAt = new Date(alert.detected_at || alert.created_at).getTime();
-  const usedMinutes = Number.isFinite(createdAt) ? Math.max(0, Math.floor((Date.now() - createdAt) / 60000)) : 0;
-  const limitMinutes = limitHours * 60;
-  const isTerminal = getAlertWorkflowStatus(alert) === "resolved";
-  const overdueMinutes = Math.max(0, usedMinutes - limitMinutes);
-
-  if (isTerminal) return { isOverdue: false, label: "Đã kết thúc", percent: 100 };
-  if (overdueMinutes > 0) {
-    const label = overdueMinutes >= 60
-      ? `Quá ${Math.floor(overdueMinutes / 60)}g ${overdueMinutes % 60}p`
-      : `Quá ${overdueMinutes}p`;
-    return { isOverdue: true, label, percent: 100 };
-  }
-  return {
-    isOverdue: false,
-    label: `Còn ${Math.max(1, limitMinutes - usedMinutes)}p`,
-    percent: Math.min(100, Math.round((usedMinutes / limitMinutes) * 100)),
-  };
 }
 
 function getStatusInfo(alert: AlertData) {
@@ -173,7 +154,7 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
         const severity = normalizeSeverity(alert.severity);
         const status = getAlertWorkflowStatus(alert);
         if (activeFilter === "high-risk") return severity === "critical" || severity === "high";
-        if (activeFilter === "overdue") return getSlaInfo(alert).isOverdue;
+        if (activeFilter === "overdue") return getCrisisSlaInfo(alert).isOverdue;
         if (activeFilter === "unassigned") return !alert.being_resolved_by && !["resolved", "contact_failed"].includes(status);
         if (activeFilter === "processing") return status === "processing";
         return true;
@@ -300,8 +281,10 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
           <tbody className="divide-y divide-[#EEEAF6]">
             {pageAlerts.map((alert) => {
               const severity = getSeverityInfo(alert);
-              const sla = getSlaInfo(alert);
+              const sla = getCrisisSlaInfo(alert);
               const status = getStatusInfo(alert);
+              const assigneeName = getCrisisAssigneeDisplayName(alert, staff);
+              const hasAssignee = assigneeName !== "Chưa giao";
               const url = sourceUrl(alert);
               return (
                 <tr id={`dashboard-alert-row-${alert.id}`} key={alert.id} className={cn("align-middle hover:bg-[#FCFBFF]", highlightedAlertId === alert.id && "bg-[#EEEBFF] ring-2 ring-inset ring-[#5B4FCF]")}>
@@ -324,7 +307,7 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
                   </td>
                   <td className="px-4 py-4"><span className={cn("inline-flex rounded-full px-2.5 py-1 text-xs font-bold", sla.isOverdue ? "bg-red-100 text-red-700" : "bg-indigo-50 text-indigo-700")}>{sla.label}</span></td>
                   <td className="px-4 py-4"><span className={cn("inline-flex items-center gap-2 text-xs font-bold", status.text)}><span className={cn("h-2 w-2 rounded-full", status.dot)} />{status.label}</span></td>
-                  <td className="max-w-[170px] px-4 py-4"><span className={cn("block truncate text-xs font-bold", alert.being_resolved_by ? "text-[#36323F]" : "text-amber-700")}>{alert.being_resolved_by || "Chưa giao"}</span></td>
+                  <td className="max-w-[170px] px-4 py-4"><span className={cn("block truncate text-xs font-bold", hasAssignee ? "text-[#36323F]" : "text-amber-700")} title={assigneeName}>{assigneeName}</span></td>
                   <td className="relative px-5 py-4">
                     <div className="flex justify-end gap-2">
                       {canAssign && (

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "@/contexts/ThemeContext";
+import { resetDemoClientSession } from "@/lib/reset-demo-session";
 
 interface NavItem {
   href: string;
@@ -103,6 +104,7 @@ export function DemoSidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () 
         <div className="mt-auto pt-4 px-4">
           <Link
             href="/#consultation"
+            onClick={resetDemoClientSession}
             className="w-full py-2.5 rounded-lg border border-[#10B981] text-[#10B981] font-bold text-center block mb-4 hover:bg-[#10B981]/10 transition"
           >
             Thoát Demo

@@ -14,6 +14,7 @@ import { auth } from "@/lib/firebase";
 import { useTheme } from "@/contexts/ThemeContext";
 import { canAccessPath } from "@/lib/rbac";
 import { useAuth } from "@/hooks/useAuth";
+import { resetDemoClientSession } from "@/lib/reset-demo-session";
 
 interface NavItem {
   href: string;
@@ -116,6 +117,7 @@ export function Sidebar({ isOpen, onClose, isCollapsed = false, onToggleCollapse
 
   const handleLogout = async () => {
     if (isDemoMode) {
+      resetDemoClientSession();
       router.push("/");
       return;
     }
