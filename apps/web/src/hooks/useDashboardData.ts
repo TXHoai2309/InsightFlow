@@ -28,7 +28,7 @@ interface UseDashboardOptions {
 }
 
 const DASHBOARD_CACHE_PREFIX = "insightflow_dashboard_cache_";
-const DASHBOARD_CACHE_VERSION = "v5";
+const DASHBOARD_CACHE_VERSION = "v6";
 const DASHBOARD_CACHE_LIMITS = {
   mentions: 150,
   alerts: 150,
@@ -181,7 +181,7 @@ export function useDashboard(options: UseDashboardOptions = {}) {
             leads: dummyLeads,
             labelChangeRequests: dummyLabelChangeRequests,
           }
-        : await DashboardService.fetchRawData({ brandKey: rawBrandKey });
+        : await DashboardService.fetchRawData({ brandKey: rawBrandKey }, profile);
       // Ignore stale responses from a previous navigation/refresh.
       if (latestFetchGeneration.get(fetchScopeKey) !== generation) return;
       const workspaces = filterByBusinessPolicy(
