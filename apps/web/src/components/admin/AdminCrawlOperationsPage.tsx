@@ -6,15 +6,33 @@ import {
   Activity,
   AlertTriangle,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  CircleDashed,
   Clock3,
+  Coffee,
+  Database,
+  Filter,
+  Globe2,
+  MapPinned,
+  MessageCircle,
+  Music2,
+  Newspaper,
+  Play,
   RefreshCw,
+  Search,
+  ThumbsUp,
   Trash2,
+  Utensils,
   XCircle,
 } from "lucide-react";
 import { auth } from "@/lib/firebase";
 
 type Run = Record<string, any> & { id: string };
-type Event = Record<string, any> & { id: string };
+type RunEvent = Record<string, any> & { id: string };
+type RunTab = "production" | "trial";
+
+const PAGE_SIZE = 6;
 
 const PLATFORM_OPTIONS = [
   ["facebook", "Facebook"],
@@ -27,6 +45,20 @@ const PLATFORM_OPTIONS = [
   ["website", "Website"],
 ] as const;
 
+const STATUS_OPTIONS = [
+  ["all", "Tất cả trạng thái"],
+  ["active", "Đang hoạt động"],
+  ["queued", "Đang xếp hàng"],
+  ["waiting_resource", "Chờ tài nguyên"],
+  ["running", "Đang thu thập"],
+  ["labeling", "Đang gán nhãn"],
+  ["syncing", "Đang đồng bộ"],
+  ["completed", "Hoàn tất"],
+  ["partial", "Hoàn tất một phần"],
+  ["failed", "Thất bại"],
+  ["cancelled", "Đã hủy"],
+] as const;
+
 const ACTIVE_RUN_STATUSES = new Set([
   "queued",
   "waiting_resource",
@@ -35,37 +67,101 @@ const ACTIVE_RUN_STATUSES = new Set([
   "syncing",
 ]);
 
-function dateText(value: any) {
-  const date = value?.toDate ? value.toDate() : value ? new Date(value) : null;
-  return date && !Number.isNaN(date.getTime()) ? date.toLocaleString("vi-VN") : "—";
-}
+const STATUS_LABELS: Record<string, string> = {
+  queued: "Đang xếp hàng",
+  waiting_resource: "Chờ tài nguyên",
+  running: "Đang thu thập",
+  labeling: "Đang gán nhãn",
+  syncing: "Đang đồng bộ",
+  completed: "Hoàn tất",
+  partial: "Hoàn tất một phần",
+  failed: "Thất bại",
+  cancelled: "Đã hủy",
+};
+
+const PHASE_LABELS: Record<string, string> = {
+  queued: "đang xếp hàng",
+  starting: "đang khởi động",
+  crawl: "đang thu thập",
+  completed: "đã hoàn tất",
+  failed: "thất bại",
+  import_failed: "nhập dữ liệu thất bại",
+  labeling: "đang gán nhãn",
+  syncing: "đang đồng bộ",
+  publish_failed: "xuất bản thất bại",
+  skipped: "đã bỏ qua",
+  finished: "đã kết thúc",
+  worker_error: "worker gặp lỗi",
+  worker_stopped: "worker đã dừng",
+};
 
 const statusStyle: Record<string, string> = {
   queued: "bg-slate-100 text-slate-700",
   waiting_resource: "bg-amber-100 text-amber-700",
   running: "bg-blue-100 text-blue-700",
   labeling: "bg-violet-100 text-violet-700",
-  syncing: "bg-amber-100 text-amber-700",
+  syncing: "bg-cyan-100 text-cyan-700",
   completed: "bg-emerald-100 text-emerald-700",
   partial: "bg-orange-100 text-orange-700",
   failed: "bg-rose-100 text-rose-700",
   cancelled: "bg-slate-200 text-slate-700",
 };
 
+function dateText(value: any) {
+  const date = value?.toDate ? value.toDate() : value ? new Date(value) : null;
+  return date && !Number.isNaN(date.getTime())
+    ? date.toLocaleString("vi-VN")
+    : "—";
+}
+
+function platformLabel(platform: string) {
+  return PLATFORM_OPTIONS.find(([value]) => value === platform)?.[1] || platform;
+}
+
+function PlatformIcon({ platform, size = 15 }: { platform?: string; size?: number }) {
+  const props = { size, strokeWidth: 2 };
+  if (platform === "facebook") return <ThumbsUp {...props} />;
+  if (platform === "threads") return <MessageCircle {...props} />;
+  if (platform === "tiktok") return <Music2 {...props} />;
+  if (platform === "youtube") return <Play {...props} />;
+  if (platform === "google_maps") return <MapPinned {...props} />;
+  if (platform === "befood") return <Utensils {...props} />;
+  if (platform === "news_html") return <Newspaper {...props} />;
+  if (platform === "website") return <Globe2 {...props} />;
+  return <Database {...props} />;
+}
+
+function StatusIcon({ status, size = 18 }: { status: string; size?: number }) {
+  if (status === "failed") return <XCircle size={size} />;
+  if (status === "completed") return <CheckCircle2 size={size} />;
+  if (status === "partial") return <AlertTriangle size={size} />;
+  if (status === "running" || status === "labeling" || status === "syncing") {
+    return <Activity size={size} />;
+  }
+  if (status === "cancelled") return <XCircle size={size} />;
+  if (status === "waiting_resource") return <CircleDashed size={size} />;
+  return <Clock3 size={size} />;
+}
+
 export default function AdminCrawlOperationsPage() {
   const [runs, setRuns] = useState<Run[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [events, setEvents] = useState<Event[]>([]);
+  const [events, setEvents] = useState<RunEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
+  const [activeTab, setActiveTab] = useState<RunTab>("trial");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [platformFilter, setPlatformFilter] = useState("all");
+  const [searchText, setSearchText] = useState("");
+  const [page, setPage] = useState(1);
 
   const loadRuns = useCallback(async () => {
     const user = auth.currentUser;
     if (!user) return;
     try {
       const token = await user.getIdToken();
-      const response = await fetch("/api/admin/crawl-runs?limit=20", {
+      const response = await fetch("/api/admin/crawl-runs?limit=100", {
         headers: { Authorization: `Bearer ${token}` },
         cache: "no-store",
       });
@@ -73,9 +169,6 @@ export default function AdminCrawlOperationsPage() {
       if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
       const next = Array.isArray(payload.runs) ? payload.runs : [];
       setRuns(next);
-      setSelectedId((current) => current && next.some((run: Run) => run.id === current)
-        ? current
-        : next[0]?.id || null);
       setErrorMessage("");
     } catch (error) {
       console.error("[Crawl operations] load runs:", error);
@@ -100,34 +193,103 @@ export default function AdminCrawlOperationsPage() {
     };
   }, [loadRuns]);
 
+  const filteredRuns = useMemo(() => {
+    const normalizedSearch = searchText.trim().toLocaleLowerCase("vi");
+    return runs.filter((run) => {
+      const runTab: RunTab = run.runType === "trial" ? "trial" : "production";
+      if (runTab !== activeTab) return false;
+      if (
+        statusFilter === "active"
+          ? !ACTIVE_RUN_STATUSES.has(run.status)
+          : statusFilter !== "all" && run.status !== statusFilter
+      ) {
+        return false;
+      }
+      if (platformFilter !== "all" && !(run.platforms || []).includes(platformFilter)) {
+        return false;
+      }
+      if (!normalizedSearch) return true;
+      const searchable = [
+        run.id,
+        run.consultationId,
+        run.lastMessage,
+        run.currentPlatform,
+        run.metadata?.brandName,
+        run.metadata?.company,
+        ...(run.platforms || []),
+      ].filter(Boolean).join(" ").toLocaleLowerCase("vi");
+      return searchable.includes(normalizedSearch);
+    });
+  }, [activeTab, platformFilter, runs, searchText, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRuns.length / PAGE_SIZE));
+  const visibleRuns = useMemo(
+    () => filteredRuns.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filteredRuns, page],
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [activeTab, platformFilter, searchText, statusFilter]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  useEffect(() => {
+    if (filteredRuns.length === 0) {
+      setSelectedId(null);
+      return;
+    }
+    if (!filteredRuns.some((run) => run.id === selectedId)) {
+      setSelectedId(filteredRuns[0].id);
+    }
+  }, [filteredRuns, selectedId]);
+
+  useEffect(() => {
+    if (visibleRuns.length > 0 && !visibleRuns.some((run) => run.id === selectedId)) {
+      setSelectedId(visibleRuns[0].id);
+    }
+  }, [selectedId, visibleRuns]);
+
   const selectedStatus = runs.find((run) => run.id === selectedId)?.status;
 
   useEffect(() => {
-    if (!selectedId) { setEvents([]); return; }
+    if (!selectedId) {
+      setEvents([]);
+      return;
+    }
     let cancelled = false;
     const loadDetail = async () => {
       const user = auth.currentUser;
       if (!user) return;
       try {
         const token = await user.getIdToken();
-        const response = await fetch(`/api/admin/crawl-runs/${encodeURIComponent(selectedId)}?eventLimit=30`, {
-          headers: { Authorization: `Bearer ${token}` },
-          cache: "no-store",
-        });
+        const response = await fetch(
+          `/api/admin/crawl-runs/${encodeURIComponent(selectedId)}?eventLimit=30`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            cache: "no-store",
+          },
+        );
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
         if (cancelled) return;
-        setEvents(Array.isArray(payload.events)
-          ? payload.events.filter((event: Event) => event.eventType !== "heartbeat")
-          : []);
+        setEvents(
+          Array.isArray(payload.events)
+            ? payload.events.filter((event: RunEvent) => event.eventType !== "heartbeat")
+            : [],
+        );
         if (payload.run) {
-          setRuns((current) => current.map((run) => run.id === payload.run.id ? payload.run : run));
+          setRuns((current) =>
+            current.map((run) => (run.id === payload.run.id ? payload.run : run)),
+          );
         }
         setErrorMessage("");
       } catch (error) {
         if (cancelled) return;
         console.error("[Crawl operations] load detail:", error);
-        setErrorMessage(error instanceof Error ? error.message : "Không tải được log phiên cào.");
+        setErrorMessage(error instanceof Error ? error.message : "Không tải được nhật ký phiên cào.");
       }
     };
     void loadDetail();
@@ -140,12 +302,20 @@ export default function AdminCrawlOperationsPage() {
     };
   }, [selectedId, selectedStatus]);
 
-  const selected = useMemo(() => runs.find((run) => run.id === selectedId) || null, [runs, selectedId]);
-  const iconFor = (status: string) => status === "failed" ? XCircle : status === "completed" ? CheckCircle2 : status === "running" ? Activity : Clock3;
+  const selected = useMemo(
+    () => runs.find((run) => run.id === selectedId) || null,
+    [runs, selectedId],
+  );
+
+  const counts = useMemo(() => ({
+    production: runs.filter((run) => run.runType !== "trial").length,
+    trial: runs.filter((run) => run.runType === "trial").length,
+    active: runs.filter((run) => ACTIVE_RUN_STATUSES.has(run.status)).length,
+  }), [runs]);
 
   const cancelQueuedRun = async () => {
     if (!selected || selected.status !== "queued") return;
-    if (!window.confirm("Xóa phiên này khỏi hàng đợi? Lịch sử vẫn được giữ với trạng thái cancelled.")) return;
+    if (!window.confirm("Xóa phiên này khỏi hàng đợi? Lịch sử vẫn được giữ với trạng thái đã hủy.")) return;
     setActionBusy(true);
     setErrorMessage("");
     try {
@@ -159,7 +329,9 @@ export default function AdminCrawlOperationsPage() {
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
       if (payload.run) {
-        setRuns((current) => current.map((run) => run.id === payload.run.id ? payload.run : run));
+        setRuns((current) =>
+          current.map((run) => (run.id === payload.run.id ? payload.run : run)),
+        );
       }
       await loadRuns();
     } catch (error) {
@@ -170,60 +342,406 @@ export default function AdminCrawlOperationsPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[var(--color-background)] px-6 py-8 text-[var(--color-foreground)]">
-      <div className="mx-auto max-w-7xl">
-        <div className="mb-6 flex items-center justify-between">
+    <main className="min-h-screen bg-[var(--color-background)] px-4 py-6 text-[var(--color-foreground)] sm:px-6 lg:py-8">
+      <div className="mx-auto max-w-[1500px]">
+        <header className="mb-6 flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-brand)]">Operations</p>
-            <h1 className="mt-1 text-2xl font-black">Tiến trình cào dữ liệu</h1>
-            <p className="mt-1 text-sm opacity-70">Production và trial dùng chung một luồng giám sát realtime.</p>
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[var(--color-brand)]">
+              <Activity size={15} />
+              Vận hành hệ thống
+            </div>
+            <h1 className="mt-1 text-2xl font-black sm:text-3xl">Tiến trình cào dữ liệu</h1>
+            <p className="mt-1 text-sm opacity-70">
+              Theo dõi các phiên production và dùng thử theo thời gian thực.
+            </p>
           </div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600"><span className="h-2 w-2 rounded-full bg-emerald-500" />Tự cập nhật tiết kiệm 30–60 giây</div>
-        </div>
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)]">
-          <section className="space-y-3">
-            {errorMessage && <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700"><AlertTriangle className="mr-2 inline" size={16} />{errorMessage}</div>}
-            {loading && runs.length === 0 && <div className="rounded-2xl border border-dashed p-8 text-center text-sm opacity-60">Đang tải các phiên cào…</div>}
-            {!loading && !errorMessage && runs.length === 0 && <div className="rounded-2xl border border-dashed p-8 text-center text-sm opacity-60">Chưa có phiên cào nào.</div>}
-            {runs.map((run) => {
-              const Icon = iconFor(run.status);
-              const ratio = run.progressTotal ? Math.min(100, Math.round((run.progressCurrent || 0) / run.progressTotal * 100)) : 0;
-              return <button key={run.id} type="button" onClick={() => setSelectedId(run.id)} className={`w-full rounded-2xl border p-4 text-left transition ${selectedId === run.id ? "border-[var(--color-brand)] shadow-md" : "hover:border-[var(--color-brand)]/40"}`}>
-                <div className="flex items-start justify-between gap-3"><div className="flex items-center gap-2"><Icon size={18} /><span className="font-bold">{run.runType === "trial" ? "Trial" : "Production"}</span></div><span className={`rounded-full px-2 py-1 text-[11px] font-bold ${statusStyle[run.status] || statusStyle.queued}`}>{run.status}</span></div>
-                <div className="mt-2 text-xs opacity-70">{(run.platforms || []).join(" · ")} · {dateText(run.createdAt)}</div>
-                <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-[var(--color-brand)] transition-all" style={{ width: `${ratio}%` }} /></div>
-                <div className="mt-2 flex justify-between text-xs opacity-70"><span>{run.currentPlatform || "—"} / {run.currentPhase || "đang chờ"}</span><span>{run.progressCurrent || 0}/{run.progressTotal || 0}</span></div>
-              </button>;
-            })}
-          </section>
-          <section className="rounded-2xl border p-5">
-            {!selected ? <div className="flex h-full min-h-64 items-center justify-center text-sm opacity-60">Chọn một phiên cào để xem log.</div> : <>
-              <div className="flex items-start justify-between gap-4 border-b pb-4"><div><h2 className="font-black">{selected.lastMessage || "Phiên cào"}</h2><p className="mt-1 text-xs opacity-60">Bắt đầu: {dateText(selected.startedAt || selected.createdAt)} · heartbeat: {dateText(selected.heartbeatAt)}</p></div><button type="button" onClick={() => void loadRuns()} className="rounded-lg border p-2" title="Refresh"><RefreshCw size={16} /></button></div>
-              <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs"><div className="rounded-xl bg-slate-50 p-3"><b className="block text-lg">{selected.postsFound || 0}</b>bài viết</div><div className="rounded-xl bg-slate-50 p-3"><b className="block text-lg">{selected.commentsFound || 0}</b>bình luận</div><div className="rounded-xl bg-slate-50 p-3"><b className="block text-lg">{selected.errorsCount || 0}</b>lỗi</div></div>
-              <div className="mt-5 rounded-2xl border bg-slate-50/60 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h3 className="font-bold">Cấu hình trial</h3>
-                    <p className="mt-1 text-xs opacity-60">Run ID: {selected.id}{selected.consultationId ? ` · Yêu cầu: ${selected.consultationId}` : ""}</p>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="rounded-xl border bg-white/70 px-3 py-2 text-xs font-semibold">
+              <span className="mr-2 inline-block h-2 w-2 rounded-full bg-blue-500" />
+              {counts.active} phiên đang hoạt động
+            </div>
+            <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              Tự cập nhật sau 30–60 giây
+            </div>
+          </div>
+        </header>
+
+        {errorMessage && (
+          <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+            <AlertTriangle className="mr-2 inline" size={16} />
+            {errorMessage}
+          </div>
+        )}
+
+        <div className="grid items-start gap-5 lg:grid-cols-[minmax(390px,0.85fr)_minmax(0,1.5fr)]">
+          <aside className="rounded-3xl border bg-white/80 p-4 shadow-sm lg:sticky lg:top-5 lg:max-h-[calc(100vh-2.5rem)] lg:overflow-hidden">
+            <div className="grid grid-cols-2 rounded-2xl bg-slate-100 p-1">
+              {([
+                ["production", "Production", counts.production, Database],
+                ["trial", "Dùng thử", counts.trial, Coffee],
+              ] as const).map(([value, label, count, Icon]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setActiveTab(value)}
+                  className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-bold transition ${
+                    activeTab === value
+                      ? "bg-white text-[var(--color-brand)] shadow-sm"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  <Icon size={16} />
+                  {label}
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">
+                    {count}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-4 space-y-2">
+              <label className="relative block">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                <input
+                  value={searchText}
+                  onChange={(event) => setSearchText(event.target.value)}
+                  placeholder="Tìm thương hiệu, mã phiên..."
+                  className="h-10 w-full rounded-xl border bg-white pl-9 pr-3 text-sm outline-none transition focus:border-[var(--color-brand)]"
+                />
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="relative">
+                  <Filter className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                  <select
+                    value={statusFilter}
+                    onChange={(event) => setStatusFilter(event.target.value)}
+                    className="h-10 w-full appearance-none rounded-xl border bg-white pl-8 pr-2 text-xs font-semibold outline-none focus:border-[var(--color-brand)]"
+                  >
+                    {STATUS_OPTIONS.map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                </label>
+                <select
+                  value={platformFilter}
+                  onChange={(event) => setPlatformFilter(event.target.value)}
+                  className="h-10 w-full rounded-xl border bg-white px-2 text-xs font-semibold outline-none focus:border-[var(--color-brand)]"
+                >
+                  <option value="all">Tất cả nền tảng</option>
+                  {PLATFORM_OPTIONS.map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-3 lg:max-h-[calc(100vh-350px)] lg:overflow-y-auto lg:pr-1">
+              {loading && runs.length === 0 && (
+                <div className="rounded-2xl border border-dashed p-8 text-center text-sm opacity-60">
+                  Đang tải các phiên cào…
+                </div>
+              )}
+              {!loading && filteredRuns.length === 0 && (
+                <div className="rounded-2xl border border-dashed p-8 text-center text-sm opacity-60">
+                  Không tìm thấy phiên cào phù hợp.
+                </div>
+              )}
+              {visibleRuns.map((run) => {
+                const ratio = run.progressTotal
+                  ? Math.min(100, Math.round(((run.progressCurrent || 0) / run.progressTotal) * 100))
+                  : 0;
+                const currentPlatform = run.currentPlatform || run.platforms?.[0];
+                const isSelected = selectedId === run.id;
+                return (
+                  <button
+                    key={run.id}
+                    type="button"
+                    onClick={() => setSelectedId(run.id)}
+                    className={`w-full rounded-2xl border p-4 text-left transition ${
+                      isSelected
+                        ? "border-[var(--color-brand)] bg-[var(--color-brand)]/[0.035] shadow-md"
+                        : "bg-white hover:border-[var(--color-brand)]/40 hover:shadow-sm"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl ${
+                          ACTIVE_RUN_STATUSES.has(run.status)
+                            ? "bg-blue-50 text-blue-600"
+                            : "bg-slate-100 text-slate-600"
+                        }`}>
+                          <StatusIcon status={run.status} size={17} />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-black">
+                            {String(run.metadata?.brandName || run.metadata?.company || (
+                              run.runType === "trial" ? "Phiên dùng thử" : "Phiên production"
+                            ))}
+                          </p>
+                          <p className="text-[11px] text-slate-500">
+                            {run.runType === "trial" ? "Dùng thử" : "Production"}
+                          </p>
+                        </div>
+                      </div>
+                      <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${
+                        statusStyle[run.status] || statusStyle.queued
+                      }`}>
+                        {STATUS_LABELS[run.status] || run.status}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {(run.platforms || []).slice(0, 4).map((platform: string) => (
+                        <span
+                          key={platform}
+                          title={platformLabel(platform)}
+                          className="inline-flex h-7 items-center gap-1 rounded-lg bg-slate-50 px-2 text-[10px] font-semibold text-slate-600"
+                        >
+                          <PlatformIcon platform={platform} size={13} />
+                          {platformLabel(platform)}
+                        </span>
+                      ))}
+                      {(run.platforms || []).length > 4 && (
+                        <span className="grid h-7 place-items-center rounded-lg bg-slate-50 px-2 text-[10px] font-bold text-slate-500">
+                          +{run.platforms.length - 4}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          run.status === "failed" ? "bg-rose-500" : "bg-[var(--color-brand)]"
+                        }`}
+                        style={{ width: `${ratio}%` }}
+                      />
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-slate-500">
+                      <span className="flex min-w-0 items-center gap-1 truncate">
+                        <PlatformIcon platform={currentPlatform} size={12} />
+                        {currentPlatform ? platformLabel(currentPlatform) : "Chưa bắt đầu"}
+                        {" · "}
+                        {PHASE_LABELS[run.currentPhase] || run.currentPhase || "đang chờ"}
+                      </span>
+                      <span className="shrink-0 font-semibold">
+                        {run.progressCurrent || 0}/{run.progressTotal || 0}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-[10px] text-slate-400">{dateText(run.createdAt)}</p>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-4 flex items-center justify-between border-t pt-4">
+              <p className="text-[11px] text-slate-500">
+                {filteredRuns.length === 0
+                  ? "0 phiên"
+                  : `${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, filteredRuns.length)} / ${filteredRuns.length} phiên`}
+              </p>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  disabled={page <= 1}
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  className="grid h-8 w-8 place-items-center rounded-lg border bg-white disabled:cursor-not-allowed disabled:opacity-35"
+                  aria-label="Trang trước"
+                >
+                  <ChevronLeft size={15} />
+                </button>
+                <span className="min-w-16 text-center text-xs font-bold">{page}/{totalPages}</span>
+                <button
+                  type="button"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                  className="grid h-8 w-8 place-items-center rounded-lg border bg-white disabled:cursor-not-allowed disabled:opacity-35"
+                  aria-label="Trang sau"
+                >
+                  <ChevronRight size={15} />
+                </button>
+              </div>
+            </div>
+          </aside>
+
+          <section className="min-h-[620px] rounded-3xl border bg-white/80 p-4 shadow-sm sm:p-6">
+            {!selected ? (
+              <div className="flex min-h-[560px] flex-col items-center justify-center text-center text-sm text-slate-500">
+                <Database className="mb-3 text-slate-300" size={40} />
+                Chọn một phiên cào để xem thông tin chi tiết.
+              </div>
+            ) : (
+              <>
+                <div className="flex items-start justify-between gap-4 border-b pb-5">
+                  <div className="min-w-0">
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
+                        statusStyle[selected.status] || statusStyle.queued
+                      }`}>
+                        {STATUS_LABELS[selected.status] || selected.status}
+                      </span>
+                      <span className="text-xs font-semibold text-slate-500">
+                        {selected.runType === "trial" ? "Phiên dùng thử" : "Phiên production"}
+                      </span>
+                    </div>
+                    <h2 className="text-lg font-black sm:text-xl">
+                      {selected.lastMessage || "Chi tiết phiên cào"}
+                    </h2>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Bắt đầu: {dateText(selected.startedAt || selected.createdAt)}
+                      {" · "}
+                      Cập nhật gần nhất: {dateText(selected.heartbeatAt || selected.updatedAt)}
+                    </p>
                   </div>
-                  {selected.runType === "trial" && selected.status === "queued" && <div className="flex gap-2">
-                    <button type="button" onClick={() => void cancelQueuedRun()} disabled={actionBusy} className="inline-flex items-center gap-2 rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50"><Trash2 size={14} />Xóa khỏi hàng đợi</button>
-                  </div>}
+                  <button
+                    type="button"
+                    onClick={() => void loadRuns()}
+                    className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border bg-white transition hover:border-[var(--color-brand)] hover:text-[var(--color-brand)]"
+                    title="Làm mới dữ liệu"
+                  >
+                    <RefreshCw size={17} />
+                  </button>
                 </div>
 
-                <div className="mt-4 space-y-3 text-sm">
-                  <div><span className="text-xs font-bold opacity-60">THƯƠNG HIỆU</span><p className="mt-1 font-semibold">{String(selected.metadata?.brandName || selected.metadata?.company || "—")}</p></div>
-                  <div><span className="text-xs font-bold opacity-60">NỀN TẢNG</span><div className="mt-2 flex flex-wrap gap-2">{(selected.platforms || []).map((platform: string) => <span key={platform} className="rounded-full border bg-white px-2.5 py-1 text-xs">{PLATFORM_OPTIONS.find(([value]) => value === platform)?.[1] || platform}</span>)}</div></div>
-                  <div><span className="text-xs font-bold opacity-60">TỪ KHÓA</span><div className="mt-2 flex flex-wrap gap-2">{(Array.isArray(selected.metadata?.keywords) ? selected.metadata.keywords : []).map((keyword: string) => <span key={keyword} className="rounded-full bg-amber-50 px-2.5 py-1 text-xs text-amber-800">{keyword}</span>)}</div></div>
-                  <p className="text-xs text-[var(--color-text-muted)]">Cấu hình được quản lý tại trang Yêu cầu tư vấn.</p>
+                <div className="mt-5 grid grid-cols-3 gap-2 text-center text-xs sm:gap-3">
+                  <div className="rounded-2xl bg-blue-50 p-3 text-blue-800">
+                    <b className="block text-xl">{selected.postsFound || 0}</b>
+                    bài viết
+                  </div>
+                  <div className="rounded-2xl bg-violet-50 p-3 text-violet-800">
+                    <b className="block text-xl">{selected.commentsFound || 0}</b>
+                    bình luận
+                  </div>
+                  <div className="rounded-2xl bg-rose-50 p-3 text-rose-800">
+                    <b className="block text-xl">{selected.errorsCount || 0}</b>
+                    lỗi
+                  </div>
                 </div>
-              </div>
-              <div className="mt-5 max-h-[520px] space-y-3 overflow-auto pr-1">{events.length === 0 && <p className="text-sm opacity-60">Chưa có event.</p>}{events.map((event) => <div key={event.id} className="border-l-2 border-slate-200 pl-3"><div className="flex items-center justify-between gap-3 text-[11px] opacity-60"><span>{event.platform || "system"} · {event.phase || ""}</span><span>{dateText(event.createdAt)}</span></div><p className={`mt-1 text-sm ${event.level === "error" ? "text-rose-600" : event.level === "warn" ? "text-amber-700" : ""}`}>{event.message}</p></div>)}</div>
-            </>}
+
+                <div className="mt-5 rounded-2xl border bg-slate-50/70 p-4 sm:p-5">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h3 className="font-black">
+                        {selected.runType === "trial" ? "Cấu hình dùng thử" : "Thông tin phiên chạy"}
+                      </h3>
+                      <p className="mt-1 break-all text-[11px] text-slate-500">
+                        Mã phiên: {selected.id}
+                        {selected.consultationId ? ` · Mã yêu cầu: ${selected.consultationId}` : ""}
+                      </p>
+                    </div>
+                    {selected.runType === "trial" && selected.status === "queued" && (
+                      <button
+                        type="button"
+                        onClick={() => void cancelQueuedRun()}
+                        disabled={actionBusy}
+                        className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-600 transition hover:bg-rose-50 disabled:opacity-50"
+                      >
+                        <Trash2 size={14} />
+                        Xóa khỏi hàng đợi
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="mt-5 space-y-4 text-sm">
+                    {(selected.metadata?.brandName || selected.metadata?.company) && (
+                      <div>
+                        <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                          Thương hiệu
+                        </span>
+                        <p className="mt-1 font-bold">
+                          {String(selected.metadata?.brandName || selected.metadata?.company)}
+                        </p>
+                      </div>
+                    )}
+                    <div>
+                      <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                        Nền tảng
+                      </span>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {(selected.platforms || []).map((platform: string) => (
+                          <span
+                            key={platform}
+                            className="inline-flex items-center gap-1.5 rounded-full border bg-white px-3 py-1.5 text-xs font-semibold"
+                          >
+                            <PlatformIcon platform={platform} size={13} />
+                            {platformLabel(platform)}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    {Array.isArray(selected.metadata?.keywords) && selected.metadata.keywords.length > 0 && (
+                      <div>
+                        <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                          Từ khóa
+                        </span>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {selected.metadata.keywords.map((keyword: string) => (
+                            <span
+                              key={keyword}
+                              className="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800"
+                            >
+                              {keyword}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {selected.runType === "trial" && (
+                      <p className="text-xs text-slate-500">
+                        Cấu hình được quản lý tại trang Yêu cầu tư vấn.
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-6">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="font-black">Nhật ký hoạt động</h3>
+                    <span className="text-xs text-slate-500">{events.length} sự kiện gần nhất</span>
+                  </div>
+                  <div className="max-h-[520px] space-y-3 overflow-auto pr-1">
+                    {events.length === 0 && (
+                      <p className="rounded-2xl border border-dashed p-6 text-center text-sm text-slate-500">
+                        Chưa có sự kiện.
+                      </p>
+                    )}
+                    {events.map((event) => (
+                      <div
+                        key={event.id}
+                        className={`rounded-r-xl border-l-2 py-1 pl-3 ${
+                          event.level === "error"
+                            ? "border-rose-400"
+                            : event.level === "warn"
+                              ? "border-amber-400"
+                              : "border-slate-200"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-3 text-[11px] text-slate-500">
+                          <span className="flex items-center gap-1.5">
+                            <PlatformIcon platform={event.platform} size={12} />
+                            {event.platform ? platformLabel(event.platform) : "Hệ thống"}
+                            {event.phase ? ` · ${PHASE_LABELS[event.phase] || event.phase}` : ""}
+                          </span>
+                          <span>{dateText(event.createdAt)}</span>
+                        </div>
+                        <p className={`mt-1 text-sm ${
+                          event.level === "error"
+                            ? "text-rose-600"
+                            : event.level === "warn"
+                              ? "text-amber-700"
+                              : ""
+                        }`}>
+                          {event.message}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
           </section>
         </div>
       </div>
     </main>
   );
 }
-
