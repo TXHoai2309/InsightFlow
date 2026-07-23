@@ -17,6 +17,7 @@ interface KpiDef {
   sub?: string;
   resolved?: number;
   remaining?: number;
+  resolvedLabel?: string;
   subColor?: string;
   trend?: { value: string; positive: boolean };
   status: "neutral" | "positive" | "warning" | "danger";
@@ -83,6 +84,7 @@ export function BMKpiCards({
       sub: t("bm.kpi.needsAssign"),
       resolved: leadsResolved,
       remaining: hotLeads,
+      resolvedLabel: t("bm.kpi.processed", "Đã xử lý"),
       status: hotLeads > 0 ? "positive" : "neutral",
       href: leadsHref,
     },
@@ -97,6 +99,7 @@ export function BMKpiCards({
         const taskTotal = resolved + remaining;
         const resolvedPct = taskTotal === 0 ? 0 : Math.round((resolved / taskTotal) * 100);
         const remainingColor = card.status === "danger" ? "#EF4444" : "#6366F1";
+        const resolvedLabel = card.resolvedLabel || t("bm.kpi.processed", "Đã xử lý");
         return (
           <Link
             key={card.id}
@@ -153,7 +156,7 @@ export function BMKpiCards({
                   <div
                     className="bm-kpi-donut"
                     style={{ background: `conic-gradient(#22C55E 0 ${resolvedPct}%, ${remainingColor} ${resolvedPct}% 100%)` }}
-                    aria-label={`Đã xử lý ${resolvedPct}%, còn lại ${100 - resolvedPct}%`}
+                    aria-label={`${resolvedLabel} ${resolvedPct}%, còn lại ${100 - resolvedPct}%`}
                   >
                     <div className="bm-kpi-donut-center">
                       <strong>{resolvedPct}%</strong>
@@ -166,7 +169,7 @@ export function BMKpiCards({
 
             {card.resolved !== undefined && (
               <div className="bm-kpi-progress">
-                <span className="bm-kpi-progress-done"><i />Đã xử lý: {resolved.toLocaleString("vi-VN")}</span>
+                <span className="bm-kpi-progress-done"><i />{resolvedLabel}: {resolved.toLocaleString("vi-VN")}</span>
                 <span className="bm-kpi-progress-left"><i style={{ background: s.iconColor }} />Còn lại: {remaining.toLocaleString("vi-VN")}</span>
               </div>
             )}

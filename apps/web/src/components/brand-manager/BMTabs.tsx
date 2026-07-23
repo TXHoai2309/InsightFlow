@@ -13,6 +13,7 @@ import {
   buildLeadOperationalMetrics,
   filterOperationalAlerts,
   filterOperationalLeads,
+  isAlertWithinTimeScope,
 } from "@/lib/operational-metrics";
 import { useTranslation } from "react-i18next";
 
@@ -37,15 +38,32 @@ export function BMTabs() {
     // Severity/urgency only controls priority; it must not exclude records
     // from the total shown in the tab.
     const scoped = filterOperationalAlerts(rawAlerts.filter(
-      (alert) => alert.sentiment === "negative",
+      (alert) =>
+        alert.sentiment === "negative" &&
+        isAlertWithinTimeScope(alert, {
+          timeRange: filters.time_range,
+          singleDate: filters.single_date,
+          customStartDate: filters.custom_start_date,
+          customEndDate: filters.custom_end_date,
+        }),
     ), {
       profile,
       workspaceId: filters.workspace_id,
       platform: filters.platform,
+      reviewWindowDays: 36_500,
       dateBasis: "created_at",
     });
     return buildAlertOperationalMetrics(scoped).total;
-  }, [filters.platform, filters.workspace_id, profile, rawAlerts]);
+  }, [
+    filters.custom_end_date,
+    filters.custom_start_date,
+    filters.platform,
+    filters.single_date,
+    filters.time_range,
+    filters.workspace_id,
+    profile,
+    rawAlerts,
+  ]);
 
   useEffect(() => setPendingHref(null), [pathname]);
 

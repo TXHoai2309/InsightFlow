@@ -13,6 +13,10 @@ import { normalizeBrandName } from "@/lib/brand-normalization";
 import type { UserRoleProfile } from "@/lib/rbac";
 import type { AlertData } from "@/stores/alert.store";
 import type { Lead } from "@/types/dashboard";
+import {
+  deduplicateSourceRecords,
+  getSourceRecordTypedKey,
+} from "@/lib/source-content-identity";
 
 export const ALERT_REVIEW_WINDOW_DAYS = 30;
 
@@ -117,11 +121,116 @@ export function isAlertInReviewWindow(
 }
 
 export function getAlertDeduplicationKey(alert: AlertData) {
-  const contentType = String(alert.content_type || "mention").toLowerCase();
-  const sourceRecordId = contentType === "comment" || contentType === "reply"
-    ? alert.comment_id || alert.source_id || alert.id
-    : alert.post_id || alert.source_id || alert.id;
-  return `${String(alert.source || "unknown").toLowerCase()}:${contentType}:${sourceRecordId}`;
+  return getSourceRecordTypedKey(alert);
+}
+
+export type CanonicalAlertSeverity =
+  | "critical"
+  | "high"
+  | "medium"
+  | "low";
+
+export function normalizeAlertSeverity(
+  value: unknown,
+): CanonicalAlertSeverity {
+  const severity = String(value || "").trim().toLowerCase();
+  if (severity === "critical" || severity === "urgent") return "critical";
+  if (severity === "high") return "high";
+  if (severity === "medium" || severity === "normal") return "medium";
+  return "low";
+}
+
+export function getAlertCanonicalSeverity(
+  alert: Pick<AlertData, "severity" | "urgency">,
+) {
+  const severityRank: Record<CanonicalAlertSeverity, number> = {
+    critical: 4,
+    high: 3,
+    medium: 2,
+    low: 1,
+  };
+  const severity = normalizeAlertSeverity(alert.severity);
+  const urgency = normalizeAlertSeverity(alert.urgency);
+  return severityRank[urgency] > severityRank[severity] ? urgency : severity;
+}
+
+export function isHighPriorityAlert(
+  alert: Pick<AlertData, "severity" | "urgency">,
+) {
+  const severity = getAlertCanonicalSeverity(alert);
+  return severity === "critical" || severity === "high";
+}
+
+export function isAlertWithinTimeScope(
+  alert: Pick<AlertData, "created_at">,
+  {
+    timeRange,
+    singleDate = "",
+    customStartDate = "",
+    customEndDate = "",
+    nowMs = Date.now(),
+  }: {
+    timeRange: string;
+    singleDate?: string;
+    customStartDate?: string;
+    customEndDate?: string;
+    nowMs?: number;
+  },
+) {
+  if (timeRange === "all") return true;
+
+  const eventMs = new Date(alert.created_at || "").getTime();
+  if (!Number.isFinite(eventMs)) return false;
+
+  const today = new Date(nowMs);
+  today.setHours(0, 0, 0, 0);
+  let startMs: number | null = null;
+  let endMs: number | null = null;
+
+  const calendarDays: Record<string, number> = {
+    "24h": 1,
+    "2d": 2,
+    "3d": 3,
+    "5d": 5,
+    "7d": 7,
+    "30d": 30,
+  };
+  const dayCount = calendarDays[timeRange];
+
+  if (dayCount) {
+    startMs = today.getTime() - (dayCount - 1) * 24 * 60 * 60 * 1000;
+    endMs = today.getTime() + 24 * 60 * 60 * 1000;
+  } else if (timeRange === "this_month") {
+    startMs = new Date(today.getFullYear(), today.getMonth(), 1).getTime();
+    endMs = new Date(today.getFullYear(), today.getMonth() + 1, 1).getTime();
+  } else if (timeRange === "last_month") {
+    startMs = new Date(today.getFullYear(), today.getMonth() - 1, 1).getTime();
+    endMs = new Date(today.getFullYear(), today.getMonth(), 1).getTime();
+  } else if (timeRange === "single" && singleDate) {
+    startMs = new Date(`${singleDate}T00:00:00`).getTime();
+    endMs = new Date(`${singleDate}T00:00:00`).getTime() + 24 * 60 * 60 * 1000;
+  } else if (timeRange === "custom") {
+    if (customStartDate) {
+      startMs = new Date(`${customStartDate}T00:00:00`).getTime();
+    }
+    if (customEndDate) {
+      endMs =
+        new Date(`${customEndDate}T00:00:00`).getTime() +
+        24 * 60 * 60 * 1000;
+    }
+  } else if (/^\d{4}-\d{2}$/.test(timeRange)) {
+    const [year, month] = timeRange.split("-").map(Number);
+    startMs = new Date(year, month - 1, 1).getTime();
+    endMs = new Date(year, month, 1).getTime();
+  }
+
+  if (startMs !== null && (!Number.isFinite(startMs) || eventMs < startMs)) {
+    return false;
+  }
+  if (endMs !== null && (!Number.isFinite(endMs) || eventMs >= endMs)) {
+    return false;
+  }
+  return true;
 }
 
 export function getAlertCompletenessScore(alert: AlertData) {
@@ -135,6 +244,28 @@ export function getAlertCompletenessScore(alert: AlertData) {
   );
 }
 
+function getOperationalAlertSlaHours(alert: AlertData) {
+  const severity = getAlertCanonicalSeverity(alert);
+  if (severity === "critical") return 1;
+  if (severity === "high") return 2;
+  if (severity === "medium") return 4;
+  return 8;
+}
+
+export function getAlertOperationalDueAt(alert: AlertData) {
+  const startedAt = new Date(alert.detected_at || alert.created_at || "").getTime();
+  if (!Number.isFinite(startedAt)) return null;
+  return startedAt + getOperationalAlertSlaHours(alert) * 60 * 60 * 1000;
+}
+
+export function getAlertOperationalSlaBucket(
+  alert: AlertData,
+  nowMs = Date.now(),
+): "in_sla" | "overdue" | "closed" {
+  if (isTerminalAlert(alert)) return "closed";
+  const dueAt = getAlertOperationalDueAt(alert);
+  return dueAt !== null && dueAt <= nowMs ? "overdue" : "in_sla";
+}
 export function filterOperationalAlerts(
   alerts: AlertData[],
   {
@@ -152,7 +283,7 @@ export function filterOperationalAlerts(
     dateBasis?: "created_at" | "relevant_at";
   },
 ) {
-  const deduplicated = new Map<string, AlertData>();
+  const scopedAlerts: AlertData[] = [];
 
   alerts.forEach((alert) => {
     const isInWindow = dateBasis === "created_at"
@@ -172,23 +303,30 @@ export function filterOperationalAlerts(
     if (platform && platform !== "all" && alert.source !== platform) return;
     if (!canAlertBeVisibleToUser(alert, profile)) return;
 
-    const key = getAlertDeduplicationKey(alert);
-    const existing = deduplicated.get(key);
-    if (!existing || getAlertCompletenessScore(alert) > getAlertCompletenessScore(existing)) {
-      deduplicated.set(key, alert);
-    }
+    scopedAlerts.push(alert);
   });
 
-  return Array.from(deduplicated.values());
+  return deduplicateSourceRecords(scopedAlerts, {
+    selectPreferred: (existing, candidate) =>
+      getAlertCompletenessScore(candidate) > getAlertCompletenessScore(existing)
+        ? candidate
+        : existing,
+  });
 }
 
+export function filterNegativeOperationalAlerts(
+  alerts: AlertData[],
+  options: Parameters<typeof filterOperationalAlerts>[1],
+) {
+  return filterOperationalAlerts(
+    alerts.filter((alert) => alert.sentiment === "negative"),
+    options,
+  );
+}
 export function buildAlertOperationalMetrics(alerts: AlertData[]): AlertOperationalMetrics {
   const statuses = alerts.map(getAlertWorkflowStatus);
   const activeAlerts = alerts.filter((alert) => !isTerminalAlert(alert));
-  const highActive = activeAlerts.filter((alert) => {
-    const severity = String(alert.severity || alert.urgency || "").toLowerCase();
-    return severity === "critical" || severity === "high" || severity === "urgent";
-  }).length;
+  const highActive = activeAlerts.filter(isHighPriorityAlert).length;
 
   return {
     total: alerts.length,
