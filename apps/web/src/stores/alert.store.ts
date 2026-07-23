@@ -25,7 +25,6 @@ import { canAlertBeVisibleToUser } from "@/lib/alert-visibility";
 import { isSameAlertRecord } from "@/lib/alertRecordIdentity";
 import { dummyMentions } from "@/lib/demoData";
 import { getCalendarPeriodStartMs, isWithinCalendarPeriod } from "@/lib/dashboard-display";
-import { isDemoRuntime } from "@/lib/demo-navigation";
 
 function getResolverName(emailOrId: string | null | undefined): string {
   if (!emailOrId) return "";
@@ -366,18 +365,9 @@ function mentionToAlertData(m: Mention): AlertData {
     labelObj.urgency === "urgent" ||
     labelObj.urgency === "high" ||
     negativity.score > 80;
-  const rawUrgency = String(labelObj.severity || labelObj.urgency || "").toLowerCase();
-  const severity = rawUrgency === "urgent" || rawUrgency === "critical"
-    ? "critical"
-    : rawUrgency === "high"
-      ? "high"
-      : rawUrgency === "medium" || rawUrgency === "normal"
-        ? "medium"
-        : rawUrgency === "low"
-          ? "low"
-          : isCritical
-            ? "high"
-            : negativity.severity === "critical" ? "high" : negativity.severity;
+  const severity =
+    labelObj.urgency ||
+    (isCritical ? "high" : negativity.severity === "critical" ? "high" : negativity.severity);
 
   return {
     id: m.entity_key || m.id,
@@ -1067,10 +1057,6 @@ export const useAlertStore = create<AlertState>()(
         };
       });
 
-      // Demo actions are intentionally session-local. The optimistic state
-      // above is the final state and no production Supabase write may occur.
-      if (isDemoRuntime()) return;
-
       try {
         await updateSupabaseAlertLabel(id, (existingLabel) => {
           if (
@@ -1507,36 +1493,6 @@ export const useAlertStore = create<AlertState>()(
         history: newDoc.history,
       };
 
-      if (isDemoRuntime()) {
-        const createdRequest: CorrectionRequest = {
-          id: `demo-correction-${Date.now()}`,
-          alert_id: requestData.alert_id,
-          brand: requestData.brand || "",
-          requester_uid: requestData.requester_uid || "",
-          requester_email: requestData.requester_email || "",
-          created_at: newDoc.created_at,
-          status: "pending",
-          original_sentiment: newDoc.old_label.sentiment,
-          new_sentiment: newDoc.proposed_label.sentiment,
-          original_severity: newDoc.old_label.urgency,
-          new_severity: newDoc.proposed_label.urgency,
-          original_topic: newDoc.old_label.topic,
-          new_topic: newDoc.proposed_label.topic,
-          original_relevance: newDoc.old_label.relevance,
-          new_relevance: newDoc.proposed_label.relevance,
-          original_urgency: newDoc.old_label.urgency,
-          new_urgency: newDoc.proposed_label.urgency,
-          original_intent: newDoc.old_label.intent,
-          new_intent: newDoc.proposed_label.intent,
-          reason: newDoc.reason,
-          alert_text: alert?.text || "",
-        };
-        set((state) => ({
-          correctionRequests: [createdRequest, ...state.correctionRequests],
-        }));
-        return;
-      }
-
       const insertedRows = await supabaseRequest<Array<{ id?: string }>>("label_change_requests", "", {
         method: "POST",
         body: JSON.stringify([supabasePayload]),
@@ -1583,24 +1539,11 @@ export const useAlertStore = create<AlertState>()(
     },
 
     resolveCorrectionRequest: async (requestId, alertId, decision, profile) => {
+      if (!dbSecond) throw new Error("Firebase data project is not configured.");
       if (!profile) throw new Error("User is not authenticated.");
 
       // Read correction data synchronously BEFORE any await.
       const req = get().correctionRequests.find((r) => r.id === requestId);
-
-      if (isDemoRuntime()) {
-        const reviewedAt = new Date().toISOString();
-        set((state) => ({
-          correctionRequests: state.correctionRequests.map((request) =>
-            request.id === requestId
-              ? { ...request, status: decision, reviewed_at: reviewedAt }
-              : request,
-          ),
-        }));
-        return;
-      }
-
-      if (!dbSecond) throw new Error("Firebase data project is not configured.");
 
       const requestRef = doc(dbSecond, "label_change_requests", requestId);
 
@@ -1754,8 +1697,6 @@ export const useAlertStore = create<AlertState>()(
         };
       });
 
-      if (isDemoRuntime()) return;
-
       try {
         await updateSupabaseAlertLabel(id, (existingLabel) => ({
           ...existingLabel,
@@ -1826,8 +1767,6 @@ export const useAlertStore = create<AlertState>()(
           recentLocks: nextRecentLocks,
         };
       });
-
-      if (isDemoRuntime()) return;
 
       try {
         await updateSupabaseAlertLabel(id, (existingLabel) => ({

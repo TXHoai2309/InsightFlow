@@ -57,7 +57,12 @@ import {
   isLocationReviewPlatform,
   parseVietnameseRelativeDate,
 } from "@/lib/dashboard-display";
-import { isDemoRuntime } from "@/lib/demo-navigation";
+import {
+  buildLeadWorkflowLookupKeys,
+  getMissingLeadWorkflowKeys,
+  indexLeadWorkflowRows,
+  mergeLeadWorkflowRows,
+} from "@/lib/lead-workflow-state";
 
 // ─── Collection names ────────────────────────────────────────────────────────
 export const COLLECTION_NAMES = {
@@ -1018,6 +1023,89 @@ async function loadSupabaseRowsByIds<T extends SupabaseRow>(
   return finalResults.slice(0, maxRows);
 }
 
+async function fetchSupabaseLeadWorkflowRows(
+  config: SupabaseConfig,
+  mentions: Mention[],
+  profile?: UserRoleProfile | null,
+): Promise<SupabaseRow[]> {
+  const lookupKeys = buildLeadWorkflowLookupKeys(mentions);
+  const order = "updated_at.desc.nullslast";
+
+  const scopedRowsPromise = (() => {
+    if (!profile?.uid) return Promise.resolve([] as SupabaseRow[]);
+
+    // Nhân viên phải nhận được toàn bộ workflow do chính mình phụ trách,
+    // kể cả khi bản ghi đã nằm ngoài 2.000 dòng mới nhất toàn hệ thống.
+    if (profile.role !== "brand_manager" && profile.role !== "admin") {
+      return loadSupabaseRows<SupabaseRow>(
+        config,
+        "leads",
+        { owner_id: `eq.${profile.uid}` },
+        10_000,
+      );
+    }
+
+    // Quản lý thương hiệu cần toàn bộ workflow trong đúng thương hiệu để số
+    // đếm và danh sách dùng chung một phạm vi dữ liệu.
+    if (profile.role === "brand_manager" && profile.brandName) {
+      return loadSupabaseRows<SupabaseRow>(
+        config,
+        "leads",
+        { workspace_id: `eq.${profile.brandName}` },
+        10_000,
+      );
+    }
+
+    return Promise.resolve([] as SupabaseRow[]);
+  })();
+
+  const [recentRows, scopedRows] = await Promise.all([
+    loadSupabaseRows<SupabaseRow>(config, "leads", { order }, 2_000),
+    scopedRowsPromise,
+  ]);
+
+  let workflowRows = mergeLeadWorkflowRows(recentRows, scopedRows);
+  let missingKeys = getMissingLeadWorkflowKeys(lookupKeys, workflowRows);
+  if (missingKeys.length === 0) return workflowRows;
+
+  // Các phiên bản ingestion cũ từng dùng ba khóa khác nhau. Tra cứu lần lượt
+  // để một workflow đã tồn tại không bị dựng lại thành lead mới/chưa phân công.
+  const rowsById = await loadSupabaseRowsByIds<SupabaseRow>(
+    config,
+    "leads",
+    "id",
+    missingKeys,
+    ["*"],
+  );
+  workflowRows = mergeLeadWorkflowRows(workflowRows, rowsById);
+  missingKeys = getMissingLeadWorkflowKeys(lookupKeys, workflowRows);
+
+  if (missingKeys.length > 0) {
+    const rowsByMentionId = await loadSupabaseRowsByIds<SupabaseRow>(
+      config,
+      "leads",
+      "mention_id",
+      missingKeys,
+      ["*"],
+    );
+    workflowRows = mergeLeadWorkflowRows(workflowRows, rowsByMentionId);
+    missingKeys = getMissingLeadWorkflowKeys(lookupKeys, workflowRows);
+  }
+
+  if (missingKeys.length > 0) {
+    const rowsBySourceMentionId = await loadSupabaseRowsByIds<SupabaseRow>(
+      config,
+      "leads",
+      "source_mention_id",
+      missingKeys,
+      ["*"],
+    );
+    workflowRows = mergeLeadWorkflowRows(workflowRows, rowsBySourceMentionId);
+  }
+
+  return workflowRows;
+}
+
 async function loadSupabaseRowsByPostIdsWithSelectFallback<T extends SupabaseRow>(
   config: SupabaseConfig,
   table: string,
@@ -1911,12 +1999,6 @@ export class DashboardService {
    * Results are cached per post so switching between leads in the same thread is cheap.
    */
   static async fetchMentionThread(postId: string): Promise<Mention[]> {
-    if (isDemoRuntime()) {
-      const { dummyMentions } = await import("@/lib/demoData");
-      return dummyMentions.filter(
-        (mention) => mention.id === postId || mention.post_id === postId,
-      );
-    }
     return fetchSupabaseMentionThread(postId);
   }
 
@@ -2129,24 +2211,22 @@ export class DashboardService {
       const sbLeadsById = new Map<string, SupabaseRow>();
       try {
         const sbConfig = getSupabaseConfig();
-        supabaseLeadRows = await loadSupabaseRows<SupabaseRow>(
+        supabaseLeadRows = await fetchSupabaseLeadWorkflowRows(
           sbConfig,
-          "leads",
-          { order: "updated_at.desc.nullslast" },
-          2000,
+          mentions,
+          profile,
         );
-        for (const row of supabaseLeadRows) {
-          // Different ingestion versions have used either the lead id, mention
-          // id, or source mention id as the primary key. Index every known key
-          // so workflow state from Supabase is merged back into the source
-          // mention instead of silently falling back to a new/unassigned lead.
-          [row.id, row.mention_id, row.source_mention_id]
-            .map((value) => String(value || "").trim())
-            .filter(Boolean)
-            .forEach((rowId) => sbLeadsById.set(rowId, row));
-        }
-      } catch {
-        // Bảng chưa tồn tại hoặc lỗi — bỏ qua, derive từ mentions
+        indexLeadWorkflowRows(supabaseLeadRows).forEach((row, key) => {
+          sbLeadsById.set(key, row);
+        });
+      } catch (error) {
+        // Không dựng lại workflow thành new/unassigned nếu nguồn trạng thái
+        // gặp lỗi vì điều đó làm sai quyền truy cập, số đếm và danh sách.
+        console.error("[DashboardService] Failed to load lead workflow rows:", error);
+        throw new Error(
+          "Không thể đồng bộ trạng thái xử lý khách hàng. Vui lòng thử làm mới.",
+          { cause: error },
+        );
       }
 
       // Bước 2: Luôn derive leads từ Supabase mentions thật (có intent label)
@@ -2478,7 +2558,6 @@ export class DashboardService {
       assigned_by: profile.uid,
       claimed_at: nowIso,
     };
-    if (isDemoRuntime()) return claimData;
     const auditFields = {
       updated_by: profile.uid,
       updated_by_name: getProfileDisplayName(profile),
@@ -2502,8 +2581,6 @@ export class DashboardService {
     if (!profile || !canPerformAction(profile, "update_lead_status")) {
       throw new Error("User is not allowed to update lead status.");
     }
-
-    if (isDemoRuntime()) return;
 
     const auditFields = {
       updated_by: profile.uid,
@@ -2541,8 +2618,6 @@ export class DashboardService {
     if (data.status && !canPerformAction(profile, "update_lead_status")) {
       throw new Error("User is not allowed to update lead status.");
     }
-
-    if (isDemoRuntime()) return;
 
     const auditFields = {
       updated_by: profile.uid,
@@ -2718,13 +2793,6 @@ export class DashboardService {
       updated_by_role: profile.role,
     });
 
-    if (isDemoRuntime()) {
-      return {
-        ...requestData,
-        id: `demo-label-request-${Date.now()}`,
-      } as LabelChangeRequest;
-    }
-
     const config = getSupabaseConfig();
     const insertedRows = await supabaseWrite<any[]>(
       config,
@@ -2794,8 +2862,6 @@ export class DashboardService {
       updated_by_role: profile.role,
       revision_count: (request.revision_count || 0) + 1,
     };
-
-    if (isDemoRuntime()) return updatedRequest;
 
     const updateData = stripUndefinedFields({
       requested_labels: data.requested_labels,
@@ -2884,8 +2950,6 @@ export class DashboardService {
       cancelled_by_name: profile.displayName || profile.email,
       cancel_reason: cancelReason.trim(),
     };
-
-    if (isDemoRuntime()) return cancelledRequest;
 
     const cancelData = stripUndefinedFields({
       status: "cancelled",

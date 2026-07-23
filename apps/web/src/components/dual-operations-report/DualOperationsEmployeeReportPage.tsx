@@ -338,13 +338,21 @@ export function DualOperationsEmployeeReportPage({
     try {
       const sampleRows = [
         ...report.crisis.detailRows.map((row) => ({
+<<<<<<< HEAD
           content: `CRISIS | ${row.topic} | ${row.content}`,
+=======
+          content: `CRISIS | ${row.topic || "other"} | ${row.content}`,
+>>>>>>> 64d1c2b40afb1d7afc2b85f63914a8b648f5086f
           sentiment: row.sentiment || "negative",
           topic: row.topic || "crisis",
           source: row.platform || "system",
         })),
         ...report.lead.detailRows.map((row) => ({
+<<<<<<< HEAD
           content: `LEAD | ${row.customer} | ${row.content}`,
+=======
+          content: `LEAD | ${row.intent || "other"} | ${row.content}`,
+>>>>>>> 64d1c2b40afb1d7afc2b85f63914a8b648f5086f
           sentiment: "positive",
           topic: row.intent || "lead",
           source: row.platform || "system",

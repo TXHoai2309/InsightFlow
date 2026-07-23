@@ -1711,7 +1711,7 @@ export function buildDualOperationsReportExcelDocument(
         </section>
 
         <section class="report-section">
-          <h2>Kết quả chỉ số trong kỳ</h2>
+          <h2>Kết quả trong kỳ</h2>
           <table><tr>
             ${dualMetricCell("Chưa phân công", report.kpis.workflow.unassigned.total)}
             ${dualMetricCell("Cần tiếp tục xử lý", report.kpis.workflow.inProgress.total, "warn")}
@@ -1774,10 +1774,14 @@ export function buildDualOperationsReportExcelDocument(
           <p class="note">“Đã hoàn tất” chỉ tính trạng thái Đã đóng, không tính Đã bỏ qua. Tỷ lệ hoàn thành = số công việc Đã đóng / tổng công việc cần xử lý trong phạm vi và bộ lọc đang áp dụng.</p>
           <p class="note">Các nhóm rủi ro trong “Cần chú ý” có thể giao nhau và không được cộng thành tổng số công việc.</p>
         </section>
+<<<<<<< HEAD
 
         ${showLead ? dualSummaryTable("Danh sách Chi tiết Lead", ["ID", "Khách hàng", "Intent", "Trạng thái", "SLA", "Phụ trách", "Nội dung"], leadDetailRows) : ""}
         ${showCrisis ? dualSummaryTable("Danh sách Chi tiết Khủng hoảng", ["ID", "Chủ đề", "Mức độ", "Trạng thái", "SLA", "Phụ trách", "Nội dung"], crisisDetailRows) : ""}
         <footer class="footer">InsightFlow · Nội dung trong bản xem trước và file Excel được tạo từ cùng một tài liệu đối soát.</footer>
+=======
+        <footer class="footer">InsightFlow · Báo cáo quản trị tổng hợp, không chứa mention hoặc hồ sơ công việc chi tiết.</footer>
+>>>>>>> 64d1c2b40afb1d7afc2b85f63914a8b648f5086f
       </main>
     </body>
   </html>`;

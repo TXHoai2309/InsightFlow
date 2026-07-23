@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import {
@@ -43,8 +43,11 @@ import {
   getAlertCompletenessScore,
   getAlertDeduplicationKey,
 } from "@/lib/operational-metrics";
+<<<<<<< HEAD
 import { isDemoPath, toDemoHref } from "@/lib/demo-navigation";
 import { copyTextToClipboard } from "@/lib/clipboard";
+=======
+>>>>>>> 64d1c2b40afb1d7afc2b85f63914a8b648f5086f
 import { isCrisisClassificationLabel } from "@/lib/label-change";
 
 const ALERTS_PER_PAGE = 5;
@@ -175,7 +178,6 @@ function MonitoringCountdown({ alert }: MonitoringCountdownProps) {
  */
 export default function AlertsPage() {
   const router = useRouter();
-  const pathname = usePathname();
   const { profile, loading: authLoading } = useAuth();
   const isManager = profile?.role === "brand_manager";
   const scopedBrandKey = getScopedBrandKey(profile);
@@ -282,10 +284,12 @@ export default function AlertsPage() {
     if (targetUrl) window.open(targetUrl, "_blank", "noopener,noreferrer");
 
     // Copy full text to clipboard for manual Ctrl+F fallback.
-    const didCopy = await copyTextToClipboard(text);
-    if (didCopy) {
+    try {
+      await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 3000);
+    } catch (err) {
+      console.warn("[AlertsPage] Failed to copy source text:", err);
     }
 
   };
@@ -1151,11 +1155,7 @@ export default function AlertsPage() {
       {dashboardReturnNavigation && (
         <button
           type="button"
-          onClick={() => router.push(
-            isDemoPath(pathname)
-              ? toDemoHref(dashboardReturnNavigation.href) || "/demo/insights"
-              : dashboardReturnNavigation.href,
-          )}
+          onClick={() => router.push(dashboardReturnNavigation.href)}
           className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] px-3.5 text-sm font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-bg-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]"
         >
           <span className="material-symbols-outlined text-base">arrow_back</span>
@@ -1448,7 +1448,6 @@ function TrendModal({ alert, onClose }: TrendModalProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartRef = useRef<any>(null);
   const router = useRouter();
-  const pathname = usePathname();
   const { setFilters: setDashboardFilters, workspaces } = useDashboardStore();
 
   const brandName = formatBrandName(alert.brand);
@@ -1658,7 +1657,7 @@ function TrendModal({ alert, onClose }: TrendModalProps) {
     });
 
     onClose();
-    router.push(isDemoPath(pathname) ? toDemoHref("/mentions") || "/demo/mentions" : "/mentions");
+    router.push("/mentions");
   };
 
   return (
