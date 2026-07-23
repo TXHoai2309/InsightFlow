@@ -2477,7 +2477,6 @@ export class DashboardService {
       // Gửi thông báo đến nhân viên nếu được phân công mới
       const isNewAssignment = data.owner_id && data.owner_id !== (lead?.owner_id || null);
       const isStatusChanged = data.status && data.status !== (lead?.status || null);
-      const isPriorityChanged = data.priority && data.priority !== (lead?.priority || null);
       const isNotesChanged = data.notes && data.notes !== (lead?.notes || null);
       
       if (dbData) {
@@ -2500,14 +2499,14 @@ export class DashboardService {
             });
           }
 
-          // Gửi thông báo nếu có hoạt động cập nhật (trạng thái, ưu tiên, ghi chú)
+          // Gửi thông báo nếu có hoạt động cập nhật (trạng thái, ghi chú)
           // Chỉ gửi nếu người cập nhật không phải là người đang giữ lead, hoặc muốn báo cho Brand Manager (hiện tại báo cho owner)
           const targetOwnerEmail = data.owner_email || lead?.owner_email;
           if (targetOwnerEmail && profile?.email !== targetOwnerEmail) {
             let updateMessage = "";
             if (isStatusChanged) updateMessage = `được chuyển trạng thái thành: ${data.status}`;
-            else if (isPriorityChanged) updateMessage = `được thay đổi độ ưu tiên thành: ${data.priority}`;
             else if (isNotesChanged) updateMessage = `có ghi chú mới`;
+
 
             if (updateMessage) {
               await addDoc(collection(dbData, "notifications"), {

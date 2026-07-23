@@ -187,15 +187,11 @@ export function useDashboard(options: UseDashboardOptions = {}) {
         : await DashboardService.fetchRawData({
             brandKey: rawBrandKey,
             maxMentions: 1500,
-            maxLeads: 2000,
           });
       // Ignore stale responses from a previous navigation/refresh.
       if (latestFetchGeneration.get(fetchScopeKey) !== generation) return;
       const workspaces = filterByBusinessPolicy(
-        rawData.workspaces.map((workspace) => ({
-          ...workspace,
-          brand: workspace.brand_name,
-        })),
+        rawData.workspaces,
         profile,
         "view_dashboard",
       );

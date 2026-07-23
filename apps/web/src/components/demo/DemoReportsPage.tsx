@@ -454,7 +454,7 @@ export function DemoReportsPage() {
           <div>
             <div className="flex items-center gap-2 mb-1">
               <h1 className="text-xl font-black text-[var(--color-text-primary)] dark:text-white">
-                Lead & Khủng hoảng
+                Tiềm năng & Khủng hoảng
               </h1>
               <span className="rounded-full bg-[var(--color-brand)]/10 border border-[var(--color-brand)]/20 px-2.5 py-0.5 text-[10px] font-black text-[var(--color-brand)] dark:text-[#9B8CFF]">
                 DEMO

@@ -442,18 +442,20 @@ function createExcelReport(filename: string, dashboardHtml: string, evidenceHtml
           </x:ExcelWorkbook>
         </xml><![endif]-->
         <style>
-          body { font-family: Inter, "Segoe UI", Arial, sans-serif; color: #172033; }
-          h1 { font-size: 22px; margin: 0 0 4px; color: #1f2937; }
-          .subtitle { color: #64748b; margin: 0 0 14px; }
-          table { border-collapse: collapse; margin: 12px 0 18px; width: 100%; }
-          th, td { border: 1px solid #cbd5e1; padding: 7px 8px; vertical-align: top; font-size: 12px; }
-          th, .section-title { background: #3730a3; color: #fff; font-weight: 700; text-align: left; }
-          .header-row td, .header-row th { background: #eef2ff; color: #1e1b4b; font-weight: 700; }
-          .kpi-row td:nth-child(odd) { background: #f8fafc; font-weight: 700; color: #475569; width: 160px; }
-          .wrap td { white-space: normal; mso-number-format:"\\@"; }
-          .bar-wrap { position: relative; width: 220px; height: 18px; background: #e2e8f0; border-radius: 3px; overflow: hidden; }
-          .bar { height: 18px; }
-          .bar-wrap span { position: absolute; left: 8px; top: 1px; font-size: 11px; color: #111827; font-weight: 700; }
+          body { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; color: #0f172a; margin: 20px; background: #f8fafc; }
+          h1 { font-size: 24px; font-weight: 800; margin: 0 0 6px; color: #0f172a; letter-spacing: -0.5px; }
+          .subtitle { color: #64748b; font-size: 13px; font-weight: 600; margin: 0 0 18px; }
+          table { border-collapse: separate; border-spacing: 0; margin: 16px 0 24px; width: 100%; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+          th, td { border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; padding: 10px 12px; vertical-align: top; font-size: 12px; }
+          th:last-child, td:last-child { border-right: none; }
+          tr:last-child td { border-bottom: none; }
+          th, .section-title { background: linear-gradient(135deg, #3730a3 0%, #4f46e5 100%); color: #ffffff; font-weight: 700; text-align: left; padding: 11px 14px; font-size: 12px; letter-spacing: 0.3px; }
+          .header-row td, .header-row th { background: #eef2ff; color: #1e1b4b; font-weight: 700; border-bottom: 2px solid #c7d2fe; }
+          .kpi-row td:nth-child(odd) { background: #f8fafc; font-weight: 700; color: #475569; width: 180px; }
+          .wrap td { white-space: normal; word-break: break-word; mso-number-format:"\\@"; }
+          .bar-wrap { position: relative; width: 220px; height: 20px; background: #e2e8f0; border-radius: 10px; overflow: hidden; display: flex; align-items: center; }
+          .bar { height: 100%; border-radius: 10px; }
+          .bar-wrap span { position: absolute; left: 10px; font-size: 11px; color: #0f172a; font-weight: 800; text-shadow: 0 0 2px rgba(255,255,255,0.8); }
           .page-break { page-break-before: always; }
         </style>
       </head>
@@ -541,9 +543,13 @@ function downloadExcelSheets(filename: string, sheets: Array<{ name: string; row
       <head>
         <meta charset="utf-8" />
         <style>
-          table { border-collapse: collapse; font-family: Inter, "Segoe UI", Arial, sans-serif; font-size: 12px; }
-          th { background: #4648d4; color: #fff; font-weight: 700; }
-          td, th { border: 1px solid #c7c4d7; padding: 6px; vertical-align: top; }
+          body { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; color: #0f172a; margin: 24px; background: #f1f5f9; }
+          table { border-collapse: separate; border-spacing: 0; font-size: 12px; width: 100%; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.06); }
+          th { background: linear-gradient(135deg, #3730a3 0%, #4f46e5 100%); color: #fff; font-weight: 700; padding: 10px 13px; text-align: left; letter-spacing: 0.3px; }
+          td { border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; padding: 9px 12px; vertical-align: top; }
+          th:last-child, td:last-child { border-right: none; }
+          tr:last-child td { border-bottom: none; }
+          tr:nth-child(even) td { background: #f8fafc; }
         </style>
       </head>
       <body>
@@ -748,28 +754,37 @@ export function buildLeadEmployeeReportExcelDocument(
     <head>
       <meta charset="utf-8" />
       <style>
-        body { margin: 0; padding: 28px; background: #f7f7fc; color: #1f1b2d; font-family: Arial, sans-serif; }
-        .report { width: 1120px; margin: 0 auto; background: #fff; border: 1px solid #e2dff1; }
-        .hero { padding: 28px 32px; color: #fff; background: #5b4de3; }
-        .eyebrow { margin: 0 0 8px; font-size: 11px; font-weight: 700; letter-spacing: 1.8px; text-transform: uppercase; }
-        h1 { margin: 0; font-size: 28px; } .hero p { margin: 10px 0 0; font-size: 13px; }
-        .meta { margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.3); }
-        .section { padding: 22px 32px; border-bottom: 1px solid #ece9f5; }
-        h2 { margin: 0 0 14px; font-size: 17px; }
-        table { width: 100%; border-collapse: separate; border-spacing: 10px; } td { vertical-align: top; }
-        .attention { width: 25%; padding: 14px; border: 1px solid #ddd8fa; background: #f8f7ff; }
-        .attention span, .metric span { display: block; color: #6d6781; font-size: 11px; font-weight: 700; text-transform: uppercase; }
-        .attention strong { display: block; margin-top: 8px; color: #5b4de3; font-size: 24px; }
-        .attention p { margin: 8px 0 0; color: #625c73; font-size: 11px; line-height: 1.5; }
-        .metric { width: 25%; padding: 16px; border: 1px solid #e2dff1; background: #faf9ff; }
-        .metric strong { display: block; margin-top: 8px; color: #5b4de3; font-size: 25px; }
-        .metric.good strong { color: #157347; } .metric.warn strong { color: #b45309; }
-        .recommendation { margin: 8px 0; padding: 11px 13px; border-left: 4px solid #5b4de3; background: #f4f2ff; font-size: 12px; }
-        .trend { border-spacing: 0; } .trend th, .data th { padding: 9px; color: #fff; background: #5b4de3; border: 1px solid #4234b6; font-size: 11px; text-align: left; }
-        .trend td, .data td { padding: 8px; border: 1px solid #e2dff1; font-size: 10px; white-space: normal; word-break: break-word; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+        body { margin: 0; padding: 0; background: #f1f5f9; color: #0f172a; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; }
+        .report { width: 1160px; margin: 28px auto; background: #ffffff; border-radius: 14px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 8px 32px rgba(79,70,229,0.09); }
+        .hero { padding: 32px 40px; color: #fff; background: linear-gradient(135deg, #4338ca 0%, #6d28d9 100%); position: relative; overflow: hidden; }
+        .hero::after { content: ''; position: absolute; right: -40px; top: -40px; width: 220px; height: 220px; border-radius: 50%; background: rgba(255,255,255,0.07); pointer-events: none; }
+        .eyebrow { margin: 0 0 10px; font-size: 10px; font-weight: 800; letter-spacing: 2.5px; text-transform: uppercase; opacity: 0.75; }
+        h1 { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -0.7px; line-height: 1.2; } 
+        .hero p { margin: 10px 0 0; font-size: 13px; opacity: 0.85; line-height: 1.55; }
+        .meta { margin-top: 20px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.22); font-size: 12px; opacity: 0.9; }
+        .section { padding: 26px 40px; border-bottom: 1px solid #f1f5f9; }
+        h2 { margin: 0 0 18px; font-size: 17px; font-weight: 800; color: #1e1b4b; letter-spacing: -0.3px; }
+        table { width: 100%; border-collapse: separate; border-spacing: 10px; }
+        td { vertical-align: top; }
+        .attention { width: 25%; padding: 16px; border: 1px solid #c7d2fe; background: linear-gradient(135deg, #f0f0ff 0%, #faf9ff 100%); border-radius: 10px; }
+        .attention span, .metric span { display: block; color: #7c3aed; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
+        .attention strong { display: block; margin-top: 10px; color: #4338ca; font-size: 28px; font-weight: 800; }
+        .attention p { margin: 8px 0 0; color: #6b7280; font-size: 11px; line-height: 1.6; }
+        .metric { width: 25%; padding: 18px; border: 1px solid #e2e8f0; background: linear-gradient(135deg, #fafaff 0%, #f0f0ff 100%); border-radius: 10px; }
+        .metric strong { display: block; margin-top: 10px; color: #4338ca; font-size: 28px; font-weight: 800; }
+        .metric.good strong { color: #059669; } .metric.warn strong { color: #d97706; }
+        .recommendation { margin: 10px 0; padding: 12px 16px; border-left: 4px solid #4338ca; background: #f5f3ff; border-radius: 0 8px 8px 0; font-size: 12px; line-height: 1.6; color: #312e81; }
+        .trend, .data { border-spacing: 0; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
+        .trend th, .data th { padding: 10px 12px; color: #fff; background: linear-gradient(90deg, #4338ca, #6d28d9); font-size: 11px; text-align: left; font-weight: 700; letter-spacing: 0.3px; border-right: 1px solid rgba(255,255,255,0.12); }
+        .trend th:last-child, .data th:last-child { border-right: none; }
+        .trend td, .data td { padding: 9px 12px; border-bottom: 1px solid #f1f5f9; border-right: 1px solid #f1f5f9; font-size: 11px; white-space: normal; word-break: break-word; }
+        .trend td:last-child, .data td:last-child { border-right: none; }
+        .trend tr:last-child td, .data tr:last-child td { border-bottom: none; }
         .trend tr:nth-child(even) td, .data tr:nth-child(even) td { background: #f8f7ff; }
-        .data { border-spacing: 0; table-layout: fixed; } .empty { padding: 20px !important; color: #6d6781; text-align: center; }
-        .footer { padding: 16px 32px; color: #6d6781; background: #f7f6fb; font-size: 10px; }
+        .data { table-layout: fixed; }
+        .empty { padding: 24px !important; color: #94a3b8; text-align: center; font-style: italic; }
+        .footer { padding: 16px 40px; color: #94a3b8; background: #f8fafc; font-size: 10px; border-top: 1px solid #f1f5f9; }
       </style>
     </head>
     <body>
@@ -1045,30 +1060,37 @@ export function buildCrisisEmployeeReportExcelDocument(
     <head>
       <meta charset="utf-8" />
       <style>
-        body { margin: 0; padding: 28px; background: #f7f7fc; color: #211b1b; font-family: Arial, sans-serif; }
-        .report { width: 1120px; margin: 0 auto; background: #fff; border: 1px solid #eadede; }
-        .hero { padding: 28px 32px; color: #fff; background: #b42318; }
-        .eyebrow { margin: 0 0 8px; font-size: 11px; font-weight: 700; letter-spacing: 1.8px; text-transform: uppercase; }
-        h1 { margin: 0; font-size: 28px; } .hero p { margin: 10px 0 0; font-size: 13px; }
-        .meta { margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.3); }
-        .section { padding: 22px 32px; border-bottom: 1px solid #eee3e3; }
-        h2 { margin: 0 0 14px; font-size: 17px; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+        body { margin: 0; padding: 0; background: #fff7f7; color: #0f172a; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; }
+        .report { width: 1160px; margin: 28px auto; background: #ffffff; border-radius: 14px; overflow: hidden; border: 1px solid #fecaca; box-shadow: 0 8px 32px rgba(180,35,24,0.09); }
+        .hero { padding: 32px 40px; color: #fff; background: linear-gradient(135deg, #991b1b 0%, #dc2626 60%, #ef4444 100%); position: relative; overflow: hidden; }
+        .hero::after { content: ''; position: absolute; right: -40px; top: -40px; width: 220px; height: 220px; border-radius: 50%; background: rgba(255,255,255,0.07); pointer-events: none; }
+        .eyebrow { margin: 0 0 10px; font-size: 10px; font-weight: 800; letter-spacing: 2.5px; text-transform: uppercase; opacity: 0.75; }
+        h1 { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -0.7px; line-height: 1.2; }
+        .hero p { margin: 10px 0 0; font-size: 13px; opacity: 0.85; line-height: 1.55; }
+        .meta { margin-top: 20px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.22); font-size: 12px; opacity: 0.9; }
+        .section { padding: 26px 40px; border-bottom: 1px solid #fff1f2; }
+        h2 { margin: 0 0 18px; font-size: 17px; font-weight: 800; color: #7f1d1d; letter-spacing: -0.3px; }
         table { width: 100%; border-collapse: separate; border-spacing: 10px; }
         td { vertical-align: top; }
-        .attention { width: 25%; padding: 14px; border: 1px solid #f0c7c7; background: #fff8f7; }
-        .attention span, .metric span { display: block; color: #756767; font-size: 11px; font-weight: 700; text-transform: uppercase; }
-        .attention strong { display: block; margin-top: 8px; color: #b42318; font-size: 24px; }
-        .attention p { margin: 8px 0 0; color: #655b5b; font-size: 11px; line-height: 1.5; }
-        .metric { width: 25%; padding: 16px; border: 1px solid #eadede; background: #fffafa; }
-        .metric strong { display: block; margin-top: 8px; color: #b42318; font-size: 25px; }
-        .metric.good strong { color: #157347; } .metric.warn strong { color: #b45309; }
-        .recommendation { margin: 8px 0; padding: 11px 13px; border-left: 4px solid #b42318; background: #fff3f2; font-size: 12px; }
-        .trend { border-spacing: 0; } .trend th, .data th { padding: 9px; color: #fff; background: #b42318; border: 1px solid #8f1c14; font-size: 11px; text-align: left; }
-        .trend td, .data td { padding: 8px; border: 1px solid #eadede; font-size: 10px; white-space: normal; word-break: break-word; }
-        .trend tr:nth-child(even) td, .data tr:nth-child(even) td { background: #fff8f7; }
-        .data { border-spacing: 0; table-layout: fixed; }
-        .empty { padding: 20px !important; color: #756767; text-align: center; }
-        .footer { padding: 16px 32px; color: #756767; background: #faf6f6; font-size: 10px; }
+        .attention { width: 25%; padding: 16px; border: 1px solid #fecaca; background: linear-gradient(135deg, #fff1f2 0%, #fffafa 100%); border-radius: 10px; }
+        .attention span, .metric span { display: block; color: #dc2626; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
+        .attention strong { display: block; margin-top: 10px; color: #991b1b; font-size: 28px; font-weight: 800; }
+        .attention p { margin: 8px 0 0; color: #6b7280; font-size: 11px; line-height: 1.6; }
+        .metric { width: 25%; padding: 18px; border: 1px solid #fecaca; background: linear-gradient(135deg, #fffafa 0%, #fff1f2 100%); border-radius: 10px; }
+        .metric strong { display: block; margin-top: 10px; color: #dc2626; font-size: 28px; font-weight: 800; }
+        .metric.good strong { color: #059669; } .metric.warn strong { color: #d97706; }
+        .recommendation { margin: 10px 0; padding: 12px 16px; border-left: 4px solid #dc2626; background: #fff1f2; border-radius: 0 8px 8px 0; font-size: 12px; line-height: 1.6; color: #7f1d1d; }
+        .trend, .data { border-spacing: 0; border: 1px solid #fecaca; border-radius: 10px; overflow: hidden; }
+        .trend th, .data th { padding: 10px 12px; color: #fff; background: linear-gradient(90deg, #991b1b, #dc2626); font-size: 11px; text-align: left; font-weight: 700; letter-spacing: 0.3px; border-right: 1px solid rgba(255,255,255,0.12); }
+        .trend th:last-child, .data th:last-child { border-right: none; }
+        .trend td, .data td { padding: 9px 12px; border-bottom: 1px solid #fff1f2; border-right: 1px solid #fff1f2; font-size: 11px; white-space: normal; word-break: break-word; }
+        .trend td:last-child, .data td:last-child { border-right: none; }
+        .trend tr:last-child td, .data tr:last-child td { border-bottom: none; }
+        .trend tr:nth-child(even) td, .data tr:nth-child(even) td { background: #fff8f8; }
+        .data { table-layout: fixed; }
+        .empty { padding: 24px !important; color: #94a3b8; text-align: center; font-style: italic; }
+        .footer { padding: 16px 40px; color: #94a3b8; background: #fdf2f2; font-size: 10px; border-top: 1px solid #fecaca; }
       </style>
     </head>
     <body>
@@ -1238,36 +1260,47 @@ export function buildDualOperationsReportExcelDocument(
     <head>
       <meta charset="utf-8" />
       <style>
-        body { margin: 0; padding: 28px; background: #f7f7fc; color: #17152b; font-family: Arial, sans-serif; }
-        .report { width: 1120px; margin: 0 auto; background: #fff; border: 1px solid #dedcea; }
-        .hero { padding: 28px 32px; color: #fff; background: #4f46e5; }
-        .eyebrow { margin: 0 0 8px; font-size: 11px; font-weight: 700; letter-spacing: 1.8px; text-transform: uppercase; }
-        h1 { margin: 0; font-size: 28px; } .hero p { margin: 10px 0 0; font-size: 13px; }
-        .meta { margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.3); }
-        .report-section { padding: 22px 32px; border-bottom: 1px solid #e6e4ef; }
-        h2 { margin: 0 0 14px; font-size: 17px; } h3 { margin: 0 0 6px; font-size: 14px; }
-        table { width: 100%; border-collapse: separate; border-spacing: 10px; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+        body { margin: 0; padding: 0; background: #f1f5f9; color: #0f172a; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; }
+        .report { width: 1200px; margin: 28px auto; background: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #e0e7ff; box-shadow: 0 10px 40px rgba(79,70,229,0.10); }
+        .hero { padding: 36px 44px; color: #fff; background: linear-gradient(135deg, #312e81 0%, #4f46e5 55%, #7c3aed 100%); position: relative; overflow: hidden; }
+        .hero::before { content: ''; position: absolute; left: -60px; bottom: -60px; width: 260px; height: 260px; border-radius: 50%; background: rgba(255,255,255,0.05); pointer-events: none; }
+        .hero::after { content: ''; position: absolute; right: -40px; top: -40px; width: 180px; height: 180px; border-radius: 50%; background: rgba(255,255,255,0.07); pointer-events: none; }
+        .eyebrow { margin: 0 0 10px; font-size: 10px; font-weight: 800; letter-spacing: 3px; text-transform: uppercase; opacity: 0.70; }
+        h1 { margin: 0; font-size: 32px; font-weight: 800; letter-spacing: -0.8px; line-height: 1.2; }
+        .hero > p { margin: 12px 0 0; font-size: 13px; opacity: 0.80; line-height: 1.6; max-width: 660px; }
+        .meta { margin-top: 22px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.18); font-size: 12px; opacity: 0.88; }
+        .report-section { padding: 30px 44px; border-bottom: 1px solid #f1f5f9; }
+        h2 { margin: 0 0 20px; font-size: 18px; font-weight: 800; color: #1e1b4b; letter-spacing: -0.4px; display: flex; align-items: center; gap: 8px; }
+        h2::before { content: ''; display: inline-block; width: 4px; height: 18px; background: linear-gradient(180deg, #4f46e5, #7c3aed); border-radius: 2px; flex-shrink: 0; }
+        h3 { margin: 0 0 10px; font-size: 14px; font-weight: 700; color: #312e81; }
+        table { width: 100%; border-collapse: separate; border-spacing: 12px; }
         td { vertical-align: top; }
-        .attention { width: 25%; padding: 14px; border: 1px solid #f0c7c7; background: #fff8f7; }
-        .attention strong { display: block; margin-top: 8px; color: #b42318; font-size: 24px; }
-        .attention span, .metric span { display: block; color: #6f6b7e; font-size: 11px; font-weight: 700; text-transform: uppercase; }
-        .attention p { margin: 8px 0 0; color: #5d596b; font-size: 11px; line-height: 1.5; }
-        .metric { width: 25%; padding: 16px; border: 1px solid #dedcea; background: #fafaff; }
-        .metric strong { display: block; margin-top: 8px; color: #4f46e5; font-size: 26px; }
-        .metric.good strong { color: #157347; } .metric.warn strong { color: #b45309; } .metric.danger strong { color: #b42318; }
-        .operation { width: 50%; padding: 18px; border: 1px solid #dedcea; background: #fff; }
-        .operation-grid { border-spacing: 0; margin-top: 10px; }
-        .operation-grid td { padding: 7px 0; border-bottom: 1px solid #efedf5; font-size: 12px; }
-        .operation-grid td:last-child { text-align: right; font-weight: 700; }
-        .recommendation { margin: 8px 0; padding: 11px 13px; border-left: 4px solid #4f46e5; background: #f4f3ff; font-size: 12px; }
-        .summary { margin: 0; padding: 14px 16px; border: 1px solid #d8d4ff; background: #f7f6ff; font-size: 12px; line-height: 1.65; }
-        .note { margin: 7px 0; color: #5d596b; font-size: 11px; line-height: 1.55; }
-        .data-table { border-spacing: 0; table-layout: fixed; }
-        .data-table th { padding: 9px; color: #fff; background: #4f46e5; border: 1px solid #3932bd; font-size: 11px; text-align: left; }
-        .data-table td { padding: 8px; border: 1px solid #dedcea; font-size: 10px; white-space: normal; word-break: break-word; }
-        .data-table tr:nth-child(even) td { background: #f8f7fc; }
-        .empty { padding: 20px !important; color: #6f6b7e; text-align: center; }
-        .footer { padding: 16px 32px; color: #6f6b7e; background: #f7f7fc; font-size: 10px; }
+        .attention { width: 25%; padding: 18px; border: 1px solid #fca5a5; background: linear-gradient(135deg, #fff1f2 0%, #fff8f8 100%); border-radius: 12px; box-shadow: 0 2px 8px rgba(220,38,38,0.06); }
+        .attention strong { display: block; margin-top: 10px; color: #dc2626; font-size: 30px; font-weight: 800; line-height: 1; }
+        .attention span, .metric span { display: block; color: #64748b; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.2px; }
+        .attention p { margin: 10px 0 0; color: #6b7280; font-size: 11px; line-height: 1.65; }
+        .metric { width: 25%; padding: 20px; border: 1px solid #e0e7ff; background: linear-gradient(135deg, #fafaff 0%, #ede9fe 100%); border-radius: 12px; box-shadow: 0 2px 8px rgba(79,70,229,0.06); }
+        .metric strong { display: block; margin-top: 10px; color: #4f46e5; font-size: 30px; font-weight: 800; line-height: 1; }
+        .metric.good strong { color: #059669; } .metric.warn strong { color: #d97706; } .metric.danger strong { color: #dc2626; }
+        .operation { width: 50%; padding: 20px; border: 1px solid #e0e7ff; background: #ffffff; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
+        .operation-grid { border-spacing: 0; margin-top: 12px; width: 100%; }
+        .operation-grid td { padding: 8px 4px; border-bottom: 1px solid #f1f5f9; font-size: 12px; color: #374151; }
+        .operation-grid tr:last-child td { border-bottom: none; }
+        .operation-grid td:last-child { text-align: right; font-weight: 800; color: #4f46e5; }
+        .recommendation { margin: 10px 0; padding: 13px 18px; border-left: 4px solid #4f46e5; background: linear-gradient(90deg, #f5f3ff, #fafaff); border-radius: 0 10px 10px 0; font-size: 12px; line-height: 1.65; color: #312e81; box-shadow: 0 1px 3px rgba(79,70,229,0.08); }
+        .summary { margin: 0; padding: 16px 20px; border: 1px solid #c7d2fe; background: linear-gradient(135deg, #f5f3ff, #ede9fe); font-size: 13px; line-height: 1.7; border-radius: 10px; color: #1e1b4b; }
+        .note { margin: 8px 0; color: #64748b; font-size: 11px; line-height: 1.6; padding-left: 12px; border-left: 2px solid #e0e7ff; }
+        .data-table { border-spacing: 0; table-layout: fixed; border: 1px solid #e0e7ff; border-radius: 10px; overflow: hidden; width: 100%; }
+        .data-table th { padding: 11px 13px; color: #fff; background: linear-gradient(90deg, #312e81, #4f46e5); font-size: 11px; text-align: left; font-weight: 700; letter-spacing: 0.3px; border-right: 1px solid rgba(255,255,255,0.12); }
+        .data-table th:last-child { border-right: none; }
+        .data-table td { padding: 9px 12px; border-bottom: 1px solid #f1f5f9; border-right: 1px solid #f1f5f9; font-size: 11px; white-space: normal; word-break: break-word; }
+        .data-table td:last-child { border-right: none; }
+        .data-table tr:last-child td { border-bottom: none; }
+        .data-table tr:nth-child(even) td { background: #f8f7ff; }
+        .empty { padding: 28px !important; color: #94a3b8; text-align: center; font-style: italic; font-size: 12px; }
+        .footer { padding: 18px 44px; color: #94a3b8; background: #f8fafc; font-size: 11px; border-top: 1px solid #f1f5f9; display: flex; justify-content: space-between; }
+        details { padding: 12px 14px; background: #f8f7ff; border: 1px solid #e0e7ff; border-radius: 8px; margin-top: 10px; font-size: 11px; color: #4b5563; line-height: 1.6; }
       </style>
     </head>
     <body>

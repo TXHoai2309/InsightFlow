@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
+import { usePathname } from "next/navigation";
 import {
   Activity,
   AlertTriangle,
   BarChart3,
   CheckCircle2,
   Clock3,
+  MessageSquareWarning,
   ShieldAlert,
   UserRoundCheck,
 } from "lucide-react";

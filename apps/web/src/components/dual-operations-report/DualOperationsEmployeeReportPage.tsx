@@ -11,7 +11,7 @@ import {
   exportDualOperationsReportExcel,
   type DualOperationsExcelViewOptions,
 } from "@/lib/excelExport";
-import type { DualOperationsAttentionItem, DualOperationsPriorityRow } from "@/lib/dual-operations-report";
+import type { DualOperationsAttentionItem } from "@/lib/dual-operations-report";
 import {
   DEFAULT_CRISIS_REPORT_FILTERS,
   type CrisisReportFilters,
@@ -40,6 +40,17 @@ import {
   Table2,
   TrendingUp,
 } from "lucide-react";
+
+export interface DualOperationsPriorityRow {
+  id: string;
+  type: string;
+  typeLabel: string;
+  title: string;
+  content: string;
+  urgencyLevel: "urgent" | "attention" | "normal";
+  urgencyReasons: string[];
+  href: string;
+}
 
 type OperationScope = "all" | "lead" | "crisis";
 type OperationTab = "lead" | "crisis";
@@ -180,7 +191,7 @@ function AttentionCard({ item }: { item: DualOperationsAttentionItem }) {
     <Link href={item.href} className={`flex flex-col justify-between rounded-xl border p-4 transition hover:shadow-md ${toneClass}`}>
       <div>
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[10px] font-black uppercase text-[var(--color-text-muted)] dark:text-gray-400">{item.scope === "lead" ? "Khách hàng" : "Khủng hoảng"}</span>
+          <span className="text-[10px] font-black uppercase text-[var(--color-text-muted)] dark:text-gray-400">{item.key.startsWith("lead") ? "Khách hàng" : "Khủng hoảng"}</span>
           <span className={`rounded-full px-2 py-0.5 text-xs font-black ${badgeClass}`}>{item.count}</span>
         </div>
         <p className="mt-2 text-sm font-black">{item.title}</p>
@@ -340,7 +351,7 @@ export function DualOperationsEmployeeReportPage({
   });
 
   const scopedBrandKey = getScopedBrandKey(profile);
-  useDashboard({ autoFetch: true, scopedBrandKey });
+  useDashboard({ autoFetch: true });
 
   const fetchAlerts = useAlertStore((state) => state.fetchAlerts);
   useEffect(() => {
@@ -364,28 +375,6 @@ export function DualOperationsEmployeeReportPage({
     return count;
   }, [reportFilters]);
 
-  const excelOptions = useMemo<DualOperationsExcelViewOptions>(() => ({
-    operationScope: reportFilters.operation,
-    timeRangeLabel:
-      reportFilters.timeRange === "today"
-        ? "Hôm nay"
-        : reportFilters.timeRange === "7d"
-          ? "7 ngày gần nhất"
-          : reportFilters.timeRange === "30d"
-            ? "30 ngày gần nhất"
-            : reportFilters.timeRange === "custom"
-              ? "Khoảng thời gian tùy chọn"
-              : "Toàn bộ dữ liệu",
-    brandLabel: profile?.brandName || "Tất cả thương hiệu",
-    exportedByName: profile?.displayName || profile?.email || "Nhân viên vận hành",
-  }), [profile, reportFilters.operation, reportFilters.timeRange]);
-
-  const excelPreviewHtml = useMemo(() => {
-    if (!showExcelPreview) return "";
-    const doc = buildDualOperationsReportExcelDocument(report, excelOptions);
-    return doc.renderHtml();
-  }, [excelOptions, report, showExcelPreview]);
-
   const periodLabel =
     reportFilters.timeRange === "today"
       ? "Hôm nay"
@@ -397,24 +386,67 @@ export function DualOperationsEmployeeReportPage({
             ? "Khoảng thời gian tùy chọn"
             : "Toàn bộ dữ liệu";
 
+  const excelOptions = useMemo<DualOperationsExcelViewOptions>(() => ({
+    operation: reportFilters.operation,
+    periodLabel,
+    filterLabel: profile?.brandName || "Tất cả thương hiệu",
+  }), [periodLabel, profile?.brandName, reportFilters.operation]);
+
+  const excelPreviewHtml = useMemo(() => {
+    if (!showExcelPreview) return "";
+    return buildDualOperationsReportExcelDocument(report, excelOptions);
+  }, [excelOptions, report, showExcelPreview]);
+
   const inputClass =
     "w-full rounded-lg border border-[var(--color-border)] dark:border-white/10 bg-[var(--color-bg-surface)] dark:bg-white/5 px-3 py-2 text-xs font-semibold text-[var(--color-text-primary)] dark:text-white outline-none focus:border-[var(--color-brand)] dark:focus:border-[#9B8CFF]";
 
   const attentionItems = report.attentionItems;
-  const visiblePriorityRows = report.priorityRows;
-  const loading = report.loading;
-  const error = report.error;
+  
+  const visiblePriorityRows = useMemo<DualOperationsPriorityRow[]>(() => {
+    const rows: DualOperationsPriorityRow[] = [];
+    if (reportFilters.operation !== "crisis") {
+      report.lead.detailRows
+        .filter((r: any) => r.intent === "hot" || r.slaStatus === "Qua han" || r.slaStatus === "Tre SLA")
+        .slice(0, 10)
+        .forEach((r: any) => {
+          rows.push({
+            id: r.id,
+            type: "lead",
+            typeLabel: "Khách hàng",
+            title: `${r.customer} (${r.platform})`,
+            content: r.content,
+            urgencyLevel: r.slaStatus === "Qua han" ? "urgent" : r.intent === "hot" ? "attention" : "normal",
+            urgencyReasons: [r.slaStatus, r.intent ? `Intent ${String(r.intent).toUpperCase()}` : ""].filter(Boolean),
+            href: `/leads?id=${r.id}`,
+          });
+        });
+    }
+    if (reportFilters.operation !== "lead") {
+      report.crisis.detailRows
+        .filter((r: any) => r.severity === "critical" || r.severity === "high" || r.slaStatus === "Qua han")
+        .slice(0, 10)
+        .forEach((r: any) => {
+          rows.push({
+            id: r.id,
+            type: "crisis",
+            typeLabel: "Khủng hoảng",
+            title: `${r.brand} - ${r.platform}`,
+            content: r.text,
+            urgencyLevel: r.severity === "critical" || r.slaStatus === "Qua han" ? "urgent" : "attention",
+            urgencyReasons: [r.slaStatus, `Độ nghiêm trọng: ${String(r.severity).toUpperCase()}`].filter(Boolean),
+            href: `/alerts?id=${r.id}`,
+          });
+        });
+    }
+    return rows;
+  }, [report, reportFilters.operation]);
 
   return (
     <main className="mx-auto max-w-[1600px] space-y-6 p-4 md:p-6 lg:p-8">
       {showExcelPreview ? (
         <ExcelDocumentPreviewModal
           title="Báo cáo tổng quan vận hành thương hiệu"
-          subtitle="Xem trước nội dung Excel được xuất theo dữ liệu và bộ lọc hiện tại"
-          filename={`Bao_cao_tong_quan_thuong_hieu_${new Date().toISOString().slice(0, 10)}.xlsx`}
-          excelTitle="BÁO CÁO TỔNG QUAN VẬN HÀNH THƯƠNG HIỆU"
-          excelSubtitle="Vận hành tổng hợp Khách hàng tiềm năng & Cảnh báo khủng hoảng"
-          title="Nội dung và hình thức sẽ được xuất nguyên bản"
+          description="Xem trước nội dung Excel được xuất theo dữ liệu và bộ lọc hiện tại"
           html={excelPreviewHtml}
           onClose={() => setShowExcelPreview(false)}
           onExport={() => exportDualOperationsReportExcel(report, `Bao_cao_tong_quan_thuong_hieu_${new Date().toISOString().slice(0, 10)}`, excelOptions)}
@@ -424,7 +456,7 @@ export function DualOperationsEmployeeReportPage({
       <header className="border-b border-[var(--color-border)] dark:border-white/10 pb-4">
         <div className="flex flex-col gap-4 min-[1100px]:flex-row min-[1100px]:items-center min-[1100px]:justify-between">
           <div>
-            <h1 className="text-xl font-black text-[var(--color-text-primary)] dark:text-white">Lead &amp; Khủng hoảng</h1>
+            <h1 className="text-xl font-black text-[var(--color-text-primary)] dark:text-white">Tiềm năng &amp; Khủng hoảng</h1>
             <p className="mt-1 text-xs text-[var(--color-text-secondary)] dark:text-gray-400">
               {isBrandManager
                 ? "Theo dõi hiệu suất, rủi ro và việc cần xử lý của toàn bộ đội ngũ trong kỳ báo cáo."
@@ -520,9 +552,6 @@ export function DualOperationsEmployeeReportPage({
           </div>
         </section>
       ) : null}
-
-      {loading && report.kpis.totalTasks === 0 ? <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-4 text-sm font-semibold text-[var(--color-text-secondary)]">Đang tải dữ liệu báo cáo...</div> : null}
-      {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">Một phần dữ liệu chưa tải được: {error}</div> : null}
 
       <section className="overflow-hidden rounded-2xl border border-[var(--color-border)] dark:border-white/10 bg-[var(--color-bg-surface)] dark:bg-[#1A1B20]/90 shadow-sm dark:shadow-[0_8px_30px_rgba(0,0,0,0.12)] dark:backdrop-blur-xl">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-border)] dark:border-white/10 px-5 py-4">
