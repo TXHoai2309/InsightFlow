@@ -22,6 +22,7 @@ import { useAlertStore } from "@/stores/alert.store";
 import { canLeadBeVisibleToUser } from "@/lib/lead-workbench";
 import { canPerformAction } from "@/lib/rbac";
 import type { Lead } from "@/types/dashboard";
+import { setActiveLeadRealtimeChannel } from "@/lib/realtimeLeads";
 
 interface UseDashboardOptions {
   autoFetch?: boolean;
@@ -476,6 +477,18 @@ export function useDashboard(options: UseDashboardOptions = {}) {
       const channel = supabaseClient
         .channel(channelId)
         .on(
+          "broadcast",
+          { event: "lead_assigned" },
+          (event: any) => {
+            const payload = event?.payload;
+            if (payload?.leadId) {
+              const { leadId, ...updatedFields } = payload;
+              pendingUpdates.set(leadId, updatedFields);
+              if (!updateTimer) updateTimer = setTimeout(flushUpdates, 50);
+            }
+          }
+        )
+        .on(
           "postgres_changes",
           { event: "*", schema: "public", table: "leads" },
           (payload: any) => {
@@ -484,20 +497,39 @@ export function useDashboard(options: UseDashboardOptions = {}) {
               if (!updated.id) return;
               pendingUpdates.set(updated.id, updated);
               if (!updateTimer) updateTimer = setTimeout(flushUpdates, 50);
-            } else if (payload.eventType === "INSERT" || payload.eventType === "DELETE") {
-              // Collapse a burst of structural changes into one full refresh.
+            } else if (payload.eventType === "INSERT") {
+              const inserted = payload.new as Partial<Lead>;
+              const currentLeads = useDashboardStore.getState().leads;
+              const alreadyExists = Boolean(
+                inserted.id && currentLeads.some((lead) => lead.id === inserted.id),
+              );
+
+              if (alreadyExists && inserted.id) {
+                // Upsert operation on an existing lead - update in-place without triggering full re-fetch
+                pendingUpdates.set(inserted.id, inserted);
+                if (!updateTimer) updateTimer = setTimeout(flushUpdates, 50);
+              } else {
+                // Truly new lead - collapse structural change into one full refresh
+                if (structuralRefreshTimer) clearTimeout(structuralRefreshTimer);
+                structuralRefreshTimer = setTimeout(() => fetchDashboardData(true), 250);
+              }
+            } else if (payload.eventType === "DELETE") {
               if (structuralRefreshTimer) clearTimeout(structuralRefreshTimer);
               structuralRefreshTimer = setTimeout(() => fetchDashboardData(true), 250);
             }
           }
         )
         .subscribe((status) => {
-          if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          if (status === "SUBSCRIBED") {
+            setActiveLeadRealtimeChannel(channel);
+          } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
             console.warn("[useDashboard] Realtime leads unavailable:", status);
+            setActiveLeadRealtimeChannel(null);
           }
         });
 
       return () => {
+        setActiveLeadRealtimeChannel(null);
         if (updateTimer) clearTimeout(updateTimer);
         if (structuralRefreshTimer) clearTimeout(structuralRefreshTimer);
         flushUpdates();
