@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { collection, deleteDoc, doc, onSnapshot, setDoc, Timestamp } from "firebase/firestore";
 import { auth, dbSecond } from "@/lib/firebase";
+import { isDemoRuntime } from "@/lib/demo-navigation";
 
 export interface AlertViewer {
   uid: string;
@@ -26,7 +27,7 @@ function useViewPresence({ resource, resourceId, enabled }: UseViewPresenceOptio
 
   useEffect(() => {
     const currentUser = auth.currentUser;
-    if (!enabled || !resourceId || !currentUser || !dbSecond) {
+    if (isDemoRuntime() || !enabled || !resourceId || !currentUser || !dbSecond) {
       setViewers([]);
       return;
     }

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   ChevronLeft,
   ChevronRight,
@@ -13,6 +14,8 @@ import { PlatformLogo } from "@/components/platform/PlatformLogo";
 import { useAuth } from "@/hooks/useAuth";
 import { auth } from "@/lib/firebase";
 import { createAlertWorkbenchHref } from "@/lib/alert-navigation";
+import { isDemoPath } from "@/lib/demo-navigation";
+import { dummyStaff } from "@/lib/demoData";
 import { getAlertWorkflowStatus } from "@/lib/alertWorkflow";
 import { canPerformAction } from "@/lib/rbac";
 import { useAlertStore, type AlertData } from "@/stores/alert.store";
@@ -21,6 +24,8 @@ import {
   DASHBOARD_RETURN_CONFIG,
   createDashboardReturnHref,
   getAppScrollTop,
+  getDashboardNavigationMode,
+  getDashboardReturnPath,
   loadDashboardReturnContext,
   removeDashboardReturnTokenFromCurrentUrl,
   saveDashboardReturnContext,
@@ -99,6 +104,7 @@ function sourceUrl(alert: AlertData) {
 }
 
 export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
+  const pathname = usePathname();
   const { profile } = useAuth();
   const lockAlertForResolution = useAlertStore((state) => state.lockAlertForResolution);
   const [activeFilter, setActiveFilter] = useState<FilterId>("all");
@@ -113,10 +119,14 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
   const [toast, setToast] = useState<{ message: string; error?: boolean } | null>(null);
   const canAssign = profile?.role === "brand_manager" && canPerformAction(profile, "update_crisis_status");
   const dashboardReturnToken = DASHBOARD_RETURN_CONFIG["crisis-monitoring"].token;
+  const navigationMode = getDashboardNavigationMode(pathname);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const context = loadDashboardReturnContext(params.get("dashboardReturnToken"));
+    const context = loadDashboardReturnContext(
+      params.get("dashboardReturnToken"),
+      navigationMode,
+    );
     if (!context || context.origin !== "crisis-monitoring") return;
     isRestoringContext.current = true;
     if (FILTERS.some((filter) => filter.id === context.filter)) {
@@ -127,11 +137,19 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
     setHighlightedAlertId(context.selectedItemId || null);
     pendingRestoreContext.current = context;
     removeDashboardReturnTokenFromCurrentUrl();
-  }, []);
+  }, [navigationMode]);
 
   useEffect(() => {
     if (!canAssign) return;
     const loadStaff = async () => {
+      if (isDemoPath(pathname)) {
+        setStaff(
+          dummyStaff
+            .filter((item) => item.permissions.includes("alerts"))
+            .map((item) => ({ ...item })),
+        );
+        return;
+      }
       try {
         const token = await auth.currentUser?.getIdToken();
         if (!token) return;
@@ -145,7 +163,7 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
       }
     };
     void loadStaff();
-  }, [canAssign]);
+  }, [canAssign, pathname]);
 
   const filteredAlerts = useMemo(() => {
     const query = searchText.trim().toLowerCase();
@@ -205,7 +223,8 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
     saveDashboardReturnContext({
       token: dashboardReturnToken,
       origin: "crisis-monitoring",
-      returnPath: DASHBOARD_RETURN_CONFIG["crisis-monitoring"].path,
+      mode: navigationMode,
+      returnPath: getDashboardReturnPath("crisis-monitoring", navigationMode),
       filter: activeFilter,
       searchText,
       page: safePage,
@@ -216,7 +235,11 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
     window.history.replaceState(
       window.history.state,
       "",
-      createDashboardReturnHref("crisis-monitoring", dashboardReturnToken),
+      createDashboardReturnHref(
+        "crisis-monitoring",
+        dashboardReturnToken,
+        navigationMode,
+      ),
     );
   };
 
@@ -283,7 +306,7 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
               return (
                 <tr id={`dashboard-alert-row-${alert.id}`} key={alert.id} className={cn("align-middle hover:bg-[#FCFBFF]", highlightedAlertId === alert.id && "bg-[#EEEBFF] ring-2 ring-inset ring-[#5B4FCF]")}>
                   <td className="max-w-[390px] px-5 py-4">
-                    <Link href={createAlertWorkbenchHref(alert, { origin: "crisis-monitoring", token: dashboardReturnToken })} onClick={() => rememberDashboardContext(alert)} onAuxClick={() => rememberDashboardContext(alert)} onContextMenu={() => rememberDashboardContext(alert)} className="group block">
+                    <Link href={createAlertWorkbenchHref(alert, { origin: "crisis-monitoring", token: dashboardReturnToken, mode: navigationMode })} onClick={() => rememberDashboardContext(alert)} onAuxClick={() => rememberDashboardContext(alert)} onContextMenu={() => rememberDashboardContext(alert)} className="group block">
                       <div className="flex items-center gap-2">
                         <span className={cn("rounded-md px-2 py-0.5 text-[10px] font-black uppercase", severity.tone)}>{severity.label}</span>
                         <span className="text-[11px] font-semibold text-[#787585]">{alert.topic || "Khác"}</span>

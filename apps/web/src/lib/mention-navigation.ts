@@ -1,6 +1,7 @@
 import type { Lead, Mention } from "@/types/dashboard";
 import {
   appendDashboardReturnParams,
+  type DashboardNavigationMode,
   type DashboardReturnOrigin,
 } from "@/lib/dashboard-return-context";
 
@@ -92,14 +93,23 @@ export function getLeadPrimaryMentionId(lead: Lead) {
 
 export function createLeadWorkbenchHref(
   lead: Lead,
-  dashboardReturn?: { origin: DashboardReturnOrigin; token: string },
+  dashboardReturn?: {
+    origin: DashboardReturnOrigin;
+    token: string;
+    mode?: DashboardNavigationMode;
+  },
 ) {
   const params = new URLSearchParams({ leadId: lead.id });
   const mentionId = getLeadPrimaryMentionId(lead);
   if (mentionId) params.set("mentionId", mentionId);
   const href = `/leads?${params.toString()}`;
   return dashboardReturn
-    ? appendDashboardReturnParams(href, dashboardReturn.origin, dashboardReturn.token)
+    ? appendDashboardReturnParams(
+        href,
+        dashboardReturn.origin,
+        dashboardReturn.token,
+        dashboardReturn.mode,
+      )
     : href;
 }
 
