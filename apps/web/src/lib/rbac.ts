@@ -20,6 +20,8 @@ export interface UserRoleProfile {
   companyDomain: string;
   brandId?: string;
   brandName?: string;
+  brandIds?: string[];
+  workspaceIds?: string[];
   displayName?: string;
   photoURL?: string;
   permissions: string[];
@@ -379,6 +381,8 @@ export function buildUserRoleProfile(params: {
   storedRole?: unknown;
   storedBrandId?: unknown;
   storedBrandName?: unknown;
+  storedBrandIds?: unknown;
+  storedWorkspaceIds?: unknown;
   storedPermissions?: unknown;
   storedDefaultRoute?: unknown;
   storedTemporaryPasswordIssued?: unknown;
@@ -437,6 +441,12 @@ export function buildUserRoleProfile(params: {
       typeof params.storedBrandName === "string"
         ? params.storedBrandName
         : undefined,
+    brandIds: Array.isArray(params.storedBrandIds)
+      ? params.storedBrandIds.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+      : undefined,
+    workspaceIds: Array.isArray(params.storedWorkspaceIds)
+      ? params.storedWorkspaceIds.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+      : undefined,
     displayName: params.displayName || "",
     photoURL: params.photoURL || "",
     permissions,

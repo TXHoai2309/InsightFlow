@@ -9,12 +9,27 @@ export interface BrandScopedRecord {
   workspace_id?: string;
   brand?: string;
   brandName?: string;
+  brand_slug?: string;
+  brand_id?: string;
 }
 
 export function getScopedBrandKey(profile?: UserRoleProfile | null) {
   if (!profile || profile.role === "admin") return null;
   const rawBrand = profile.brandName || profile.brandId || "";
   return rawBrand ? normalizeBrandName(rawBrand) : null;
+}
+
+function getScopedBrandKeys(profile?: UserRoleProfile | null) {
+  if (!profile || profile.role === "admin") return [];
+  const candidates = [
+    profile.brandName,
+    profile.brandId,
+    ...(Array.isArray(profile.brandIds) ? profile.brandIds : []),
+    ...(Array.isArray(profile.workspaceIds) ? profile.workspaceIds : []),
+  ];
+  return Array.from(new Set(candidates
+    .map((value) => normalizeBrandName(String(value || "")))
+    .filter(Boolean)));
 }
 
 export function hasRequiredBrandScope(profile?: UserRoleProfile | null) {
@@ -30,8 +45,14 @@ export function hasBusinessBrandScope(profile?: UserRoleProfile | null) {
 
 export function isRecordInBrandScope(record: BrandScopedRecord, scopedBrandKey: string | null) {
   if (!scopedBrandKey) return true;
-  const rawBrand = String(record.workspace_id || record.brand || record.brandName || "");
-  return normalizeBrandName(rawBrand) === scopedBrandKey;
+  const rawBrands = [
+    record.workspace_id,
+    record.brand,
+    record.brandName,
+    record.brand_slug,
+    record.brand_id,
+  ];
+  return rawBrands.some((rawBrand) => normalizeBrandName(String(rawBrand || "")) === scopedBrandKey);
 }
 
 export function isSameBrandScope(
@@ -55,7 +76,12 @@ export function assertBrandScopedAccess(
 
 export function filterByBrandScope<T>(records: T[], profile?: UserRoleProfile | null) {
   const scopedBrandKey = getScopedBrandKey(profile);
-  return records.filter((record) => isRecordInBrandScope(record as BrandScopedRecord, scopedBrandKey));
+  if (!scopedBrandKey) return records;
+  const scopedBrandKeys = getScopedBrandKeys(profile);
+  return records.filter((record) => {
+    const scopedRecord = record as BrandScopedRecord;
+    return scopedBrandKeys.some((key) => isRecordInBrandScope(scopedRecord, key));
+  });
 }
 
 export function filterByBusinessPolicy<T>(

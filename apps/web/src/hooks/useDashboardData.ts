@@ -181,7 +181,7 @@ export function useDashboard(options: UseDashboardOptions = {}) {
             leads: dummyLeads,
             labelChangeRequests: dummyLabelChangeRequests,
           }
-        : await DashboardService.fetchRawData({ brandKey: rawBrandKey });
+        : await DashboardService.fetchRawData({ brandKey: rawBrandKey }, profile);
       // Ignore stale responses from a previous navigation/refresh.
       if (latestFetchGeneration.get(fetchScopeKey) !== generation) return;
       const workspaces = filterByBusinessPolicy(
