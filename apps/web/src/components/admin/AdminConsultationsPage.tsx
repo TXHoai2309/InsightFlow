@@ -295,11 +295,12 @@ export default function AdminConsultationsPage() {
   }, [requests, selectedId]);
   const isFinalDecision = selectedRequest?.status === "completed" || selectedRequest?.status === "not_approved";
   const willApproveRequest = editStatus === "completed" && selectedRequest?.status !== "completed";
-  const trialIsComplete = selectedRequest?.trialCrawlStatus === "completed";
+  const trialIsComplete = selectedRequest?.trialCrawlStatus === "completed" || selectedRequest?.trialCrawlStatus === "partial";
   const trialCrawlActive = ["queued", "waiting_resource", "running", "labeling", "syncing"]
     .includes(selectedRequest?.trialCrawlStatus || "");
   const trialNeedsRecrawl = ["partial", "failed", "cancelled"]
     .includes(selectedRequest?.trialCrawlStatus || "");
+  const trialCanPublish = trialIsComplete || (Boolean(selectedRequest?.trialCrawlRunId) && !trialCrawlActive);
   const trialIsPublished = selectedRequest?.trialDataStatus === "published" || Boolean(selectedRequest?.trialPublishedAt);
   const accountWasCreated = Boolean(selectedRequest?.provisionedAccountEmail)
     || ["created", "sent", "email_failed", "activated"].includes(selectedRequest?.accountStatus || "");
@@ -1126,24 +1127,24 @@ export default function AdminConsultationsPage() {
                           Đang thu thập dữ liệu
                         </button>
                       )}
-                      {trialIsComplete && !trialIsPublished && (
+                      {trialCanPublish && !trialIsPublished && (
                         <button
                           type="button"
-                          onClick={() => void handlePublishTrialData()}
+                          onClick={() => void handlePublishTrialData(trialNeedsRecrawl)}
                           disabled={publishingTrial}
                           className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-cyan-600 px-4 text-[12px] font-bold text-white shadow-sm transition hover:bg-cyan-700 disabled:opacity-50"
                         >
                           {publishingTrial ? <Loader2 className="h-4 w-4 animate-spin" /> : <Globe2 className="h-4 w-4" />}
-                          Xuất bản dữ liệu trial
+                          {trialNeedsRecrawl ? "Bỏ qua lỗi & Xuất bản trial" : "Xuất bản dữ liệu trial"}
                         </button>
                       )}
-                      {trialIsPublished && !accountWasCreated && (
+                      {(trialIsPublished || trialCanPublish) && !accountWasCreated && (
                         <button
                           type="button"
                           onClick={() => setShowAccountConfirmation(true)}
                           className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-[12px] font-bold text-white shadow-sm transition hover:bg-emerald-700"
                         >
-                          <KeyRound className="h-4 w-4" /> Tạo tài khoản dùng thử
+                          <KeyRound className="h-4 w-4" /> {trialNeedsRecrawl && !trialIsPublished ? "Bỏ qua lỗi & Tạo tài khoản" : "Tạo tài khoản dùng thử"}
                         </button>
                       )}
                       {accountWasCreated && !accountWasActivated && (
@@ -1242,7 +1243,7 @@ export default function AdminConsultationsPage() {
                         </dl>
                         <div className="mt-5 flex justify-end gap-2">
                           <button type="button" onClick={() => setShowAccountConfirmation(false)} disabled={creatingAccount} className="h-10 rounded-lg border border-[var(--color-border)] px-4 text-[12px] font-bold text-[var(--color-text-secondary)]">Hủy</button>
-                          <button type="button" onClick={() => void handleCreateTrialAccount()} disabled={creatingAccount} className="inline-flex h-10 items-center gap-2 rounded-lg bg-emerald-600 px-4 text-[12px] font-bold text-white disabled:opacity-50">
+                          <button type="button" onClick={() => void handleCreateTrialAccount(trialNeedsRecrawl)} disabled={creatingAccount} className="inline-flex h-10 items-center gap-2 rounded-lg bg-emerald-600 px-4 text-[12px] font-bold text-white disabled:opacity-50">
                             {creatingAccount && <Loader2 className="h-4 w-4 animate-spin" />} Xác nhận tạo tài khoản
                           </button>
                         </div>
