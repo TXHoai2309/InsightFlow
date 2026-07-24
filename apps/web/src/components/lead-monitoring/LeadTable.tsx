@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   ChevronLeft,
   ChevronRight,
@@ -21,11 +22,15 @@ import {
   DASHBOARD_RETURN_CONFIG,
   createDashboardReturnHref,
   getAppScrollTop,
+  getDashboardNavigationMode,
+  getDashboardReturnPath,
   loadDashboardReturnContext,
   removeDashboardReturnTokenFromCurrentUrl,
   saveDashboardReturnContext,
   type DashboardReturnContext,
 } from "@/lib/dashboard-return-context";
+import { isDemoPath } from "@/lib/demo-navigation";
+import { dummyStaff } from "@/lib/demoData";
 
 const filterChips = [
   { id: "all", label: "Tất cả" },
@@ -123,6 +128,7 @@ function calculateResponseTime(created: string, firstContacted?: string) {
 }
 
 export function LeadTable() {
+  const pathname = usePathname();
   const monitoringLeads = useLeadMonitoringLeads();
   const { profile } = useAuth();
   const { updateLeadDetails } = useDashboardStore();
@@ -131,6 +137,10 @@ export function LeadTable() {
 
   useEffect(() => {
     const fetchStaff = async () => {
+      if (isDemoPath(pathname)) {
+        setStaffList(dummyStaff.filter((item) => item.permissions.includes("leads")).map((item) => ({ ...item })));
+        return;
+      }
       try {
         const token = await auth.currentUser?.getIdToken();
         if (!token) return;
@@ -146,7 +156,7 @@ export function LeadTable() {
       }
     };
     fetchStaff();
-  }, []);
+  }, [pathname]);
 
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const showToast = (message: string, type: "success" | "error" = "success") => {
@@ -204,10 +214,14 @@ export function LeadTable() {
   const pendingRestoreContext = useRef<DashboardReturnContext | null>(null);
   const itemsPerPage = 8;
   const dashboardReturnToken = DASHBOARD_RETURN_CONFIG["lead-monitoring"].token;
+  const navigationMode = getDashboardNavigationMode(pathname);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const context = loadDashboardReturnContext(params.get("dashboardReturnToken"));
+    const context = loadDashboardReturnContext(
+      params.get("dashboardReturnToken"),
+      navigationMode,
+    );
     if (!context || context.origin !== "lead-monitoring") return;
     if (filterChips.some((chip) => chip.id === context.filter)) {
       setActiveFilter(context.filter as FilterChip);
@@ -216,7 +230,7 @@ export function LeadTable() {
     setHighlightedLeadId(context.selectedItemId || null);
     pendingRestoreContext.current = context;
     removeDashboardReturnTokenFromCurrentUrl();
-  }, []);
+  }, [navigationMode]);
 
   const filteredLeads = useMemo(() => {
     if (activeFilter === "all") return rawLeads;
@@ -267,7 +281,8 @@ export function LeadTable() {
     saveDashboardReturnContext({
       token: dashboardReturnToken,
       origin: "lead-monitoring",
-      returnPath: DASHBOARD_RETURN_CONFIG["lead-monitoring"].path,
+      mode: navigationMode,
+      returnPath: getDashboardReturnPath("lead-monitoring", navigationMode),
       filter: activeFilter,
       page: Math.min(page, totalPages),
       selectedItemId: lead.id,
@@ -277,8 +292,18 @@ export function LeadTable() {
     window.history.replaceState(
       window.history.state,
       "",
-      createDashboardReturnHref("lead-monitoring", dashboardReturnToken),
+      createDashboardReturnHref(
+        "lead-monitoring",
+        dashboardReturnToken,
+        navigationMode,
+      ),
     );
+  };
+
+  const dashboardReturn = {
+    origin: "lead-monitoring" as const,
+    token: dashboardReturnToken,
+    mode: navigationMode,
   };
 
   return (
@@ -337,10 +362,7 @@ export function LeadTable() {
                 const statusInfo = getStatusInfo(lead.status);
                 const sla = formatSla(lead);
                 const sourceHref = lead.url || lead.source_url;
-                const leadHref = createLeadWorkbenchHref(lead, {
-                  origin: "lead-monitoring",
-                  token: dashboardReturnToken,
-                });
+                const leadHref = createLeadWorkbenchHref(lead, dashboardReturn);
 
                 return (
                   <tr id={`dashboard-lead-row-${lead.id}`} key={lead.id} className={`transition-colors hover:bg-[#FAF8FF] ${highlightedLeadId === lead.id ? "bg-[#EEEBFF] ring-2 ring-inset ring-[#5B4FCF]" : ""}`}>

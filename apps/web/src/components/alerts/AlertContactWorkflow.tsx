@@ -21,6 +21,7 @@ interface AlertContactWorkflowProps {
   alert: AlertData;
   getResolverName: (value: string | null | undefined) => string;
   onRecordResult: (draft: AlertContactResultDraft) => Promise<void>;
+  onOpenSourceWithTemplate: () => Promise<void>;
 }
 
 export interface AlertContactResultDraft {
@@ -45,7 +46,12 @@ export function createDefaultContactTemplate(customerName: string, brand: string
   return `Xin chào ${customerName || "Anh/Chị"}, ${formatBrandName(brand)} thành thật xin lỗi về trải nghiệm chưa tốt của Anh/Chị. Anh/Chị vui lòng nhắn tin trực tiếp hoặc để lại thông tin liên hệ để chúng tôi kiểm tra và hỗ trợ giải quyết vấn đề sớm nhất. Cảm ơn Anh/Chị đã phản hồi.`;
 }
 
-export function AlertContactWorkflow({ alert, getResolverName, onRecordResult }: AlertContactWorkflowProps) {
+export function AlertContactWorkflow({
+  alert,
+  getResolverName,
+  onRecordResult,
+  onOpenSourceWithTemplate,
+}: AlertContactWorkflowProps) {
   const [contactEvidenceNote, setContactEvidenceNote] = useState(alert.customer_contact_note || "");
   const [contactEvidenceImage, setContactEvidenceImage] = useState<string | null>(alert.customer_contact_evidence_image || null);
   const [selectedResponseResult, setSelectedResponseResult] = useState<CustomerResponseResult | null>(alert.customer_response_result || null);
@@ -189,15 +195,13 @@ export function AlertContactWorkflow({ alert, getResolverName, onRecordResult }:
         <span>{alert.customer_contact_opened_at ? "Đã mở nguồn để liên hệ. Hãy bổ sung ghi chú và ảnh minh chứng bên dưới." : "Sử dụng nút Mở nguồn ở đầu panel trước khi bổ sung minh chứng."}</span>
       </div>
 
-      {alert.customer_contact_opened_at && (
-        <div className="space-y-2 rounded-xl border border-green-200 bg-green-50/60 p-3">
+      <div className="space-y-2 rounded-xl border border-green-200 bg-green-50/60 p-3">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-[10px] font-black uppercase tracking-wider text-green-700">Mẫu đã sao chép</p>
-            <button type="button" onClick={() => void navigator.clipboard.writeText(alert.customer_contact_template || createDefaultContactTemplate(alert.author || "Anh/Chị", alert.brand))} className="text-[10px] font-bold text-green-700 hover:underline">Sao chép lại</button>
+            <p className="text-[10px] font-black uppercase tracking-wider text-green-700">Mẫu xin lỗi tham khảo</p>
+            <button type="button" onClick={() => void onOpenSourceWithTemplate()} className="text-[10px] font-bold text-green-700 hover:underline">Mở nguồn và sao chép</button>
           </div>
           <p className="text-[11px] leading-relaxed text-[var(--color-text-secondary)]">{alert.customer_contact_template || createDefaultContactTemplate(alert.author || "Anh/Chị", alert.brand)}</p>
-        </div>
-      )}
+      </div>
 
       <div className={`space-y-3 rounded-xl border border-[var(--color-border)] p-3 ${!alert.customer_contact_opened_at ? "opacity-50" : ""}`}>
         <p className="text-[10px] font-black uppercase tracking-wider text-[var(--color-text-secondary)]">Minh chứng liên hệ <span className="text-red-500">*</span></p>

@@ -287,7 +287,10 @@ export function buildLeadEmployeeReportData(
         : Math.round((contacted - created) / 60000);
     })
     .filter((value): value is number => value !== null);
-  const slaOnTime = contactedInPeriod.filter((lead) => {
+  const slaEligibleContacts = contactedInPeriod.filter(
+    (lead) => !getLeadWorkbenchMeta(lead, nowMs).wasOverdueOnIngest,
+  );
+  const slaOnTime = slaEligibleContacts.filter((lead) => {
     const contacted = toTime(contactTime(lead));
     return contacted !== null && contacted <= getLeadExpiryTime(lead);
   }).length;
@@ -305,7 +308,7 @@ export function buildLeadEmployeeReportData(
     convertedInPeriod,
     resultRecordedInPeriod: outcomesInPeriod.length,
     conversionRate: percentage(convertedInPeriod, outcomesInPeriod.length),
-    slaOnTimeRate: percentage(slaOnTime, contactedInPeriod.length),
+    slaOnTimeRate: percentage(slaOnTime, slaEligibleContacts.length),
     avgFirstResponseMinutes: average(responseMinutes),
     openCurrent: openCurrentLeads.length,
     needResultCurrent: openCurrentLeads.filter(needsLeadResultCapture).length,

@@ -31,6 +31,31 @@ export default function MentionsPage() {
     return filteredMentions;
   }, [contentMode, filteredMentions]);
 
+  const handleExport = () => {
+    const escapeCsv = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const rows = [
+      ["ID", "Nền tảng", "Tác giả", "Cảm xúc", "Chủ đề", "Thời gian", "Nội dung"],
+      ...mentions.map((mention) => [
+        mention.id,
+        mention.platform,
+        mention.author,
+        mention.sentiment,
+        mention.topic,
+        mention.posted_at,
+        mention.content,
+      ]),
+    ];
+    const csv = `\uFEFF${rows.map((row) => row.map(escapeCsv).join(",")).join("\r\n")}`;
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `InsightFlow_mentions_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div data-tour="mentions-page" className="p-4 md:p-8">
       {/* Header Section */}
@@ -44,7 +69,12 @@ export default function MentionsPage() {
           </p>
         </div>
         <div className="flex gap-2 md:gap-3 flex-wrap">
-          <button className="flex items-center gap-2 px-4 py-3 bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)] rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-bg-surface-high)] transition-all font-medium text-sm">
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={mentions.length === 0}
+            className="flex items-center gap-2 px-4 py-3 bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)] rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-bg-surface-high)] transition-all font-medium text-sm disabled:cursor-not-allowed disabled:opacity-50"
+          >
             <span className="material-symbols-outlined text-lg">
               file_download
             </span>

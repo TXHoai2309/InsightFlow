@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDashboardStore } from "@/stores/dashboard.store";
@@ -16,6 +16,7 @@ import {
 } from "@/lib/mention-thread";
 import { PlatformLogo } from "@/components/platform/PlatformLogo";
 import type { Mention } from "@/types/dashboard";
+import { isDemoPath, toDemoHref } from "@/lib/demo-navigation";
 
 const STICKY_HEADER_OFFSET = 96;
 const DETAIL_TOP_ID = "mention-detail-top";
@@ -240,6 +241,7 @@ export default function MentionDetailPage() {
   const { t, i18n } = useTranslation();
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const pathname = usePathname();
   const mentionId = decodeURIComponent(String(params.id || ""));
   const cachedMentions = useDashboardStore((state) => state.mentions);
   const [mentions, setMentions] = useState<Mention[]>(cachedMentions);
@@ -250,6 +252,9 @@ export default function MentionDetailPage() {
   const [requestedTargetId, setRequestedTargetId] = useState("");
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [leadReturnHref, setLeadReturnHref] = useState("");
+  const returnHref = isDemoPath(pathname)
+    ? toDemoHref(leadReturnHref || "/mentions") || "/demo/mentions"
+    : leadReturnHref || "/mentions";
   const autoFocusedTargetKeyRef = useRef("");
 
   useEffect(() => {
@@ -469,7 +474,7 @@ export default function MentionDetailPage() {
             {error ? t(error) : t("mentionDetail.notFoundDescription")}
           </p>
           <button
-            onClick={() => router.push(leadReturnHref || "/mentions")}
+            onClick={() => router.push(returnHref)}
             className="mt-6 rounded-xl bg-[var(--color-brand)] px-5 py-3 text-sm font-bold text-white"
           >
             {leadReturnHref ? "Quay lại xử lý lead" : t("mentionDetail.backToMentions")}
@@ -507,7 +512,7 @@ export default function MentionDetailPage() {
         <div className="flex items-center justify-between gap-4 px-4 py-4 md:px-8">
           <div className="flex items-center gap-4">
             <button
-              onClick={() => router.push(leadReturnHref || "/mentions")}
+              onClick={() => router.push(returnHref)}
               className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)]"
               aria-label={leadReturnHref ? "Quay lại xử lý lead" : t("mentionDetail.back")}
             >
@@ -521,7 +526,7 @@ export default function MentionDetailPage() {
           </div>
           {leadReturnHref && (
             <Link
-              href={leadReturnHref}
+              href={returnHref}
               className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-brand)] px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-[var(--color-brand-hover)]"
             >
               <span className="material-symbols-outlined text-base">

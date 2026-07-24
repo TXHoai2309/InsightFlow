@@ -21,6 +21,8 @@ import { supabaseClient } from "@/lib/supabaseClient";
 import { useAlertStore } from "@/stores/alert.store";
 import { canLeadBeVisibleToUser } from "@/lib/lead-workbench";
 import { canPerformAction } from "@/lib/rbac";
+import type { Lead } from "@/types/dashboard";
+import { setActiveLeadRealtimeChannel } from "@/lib/realtimeLeads";
 
 interface UseDashboardOptions {
   autoFetch?: boolean;
@@ -28,7 +30,7 @@ interface UseDashboardOptions {
 }
 
 const DASHBOARD_CACHE_PREFIX = "insightflow_dashboard_cache_";
-const DASHBOARD_CACHE_VERSION = "v4";
+const DASHBOARD_CACHE_VERSION = "v6";
 const DASHBOARD_CACHE_LIMITS = {
   mentions: 150,
   alerts: 150,
@@ -42,6 +44,53 @@ const DASHBOARD_CACHE_LIMITS = {
 const latestFetchGeneration = new Map<string, number>();
 let fetchGenerationCounter = 0;
 const activeDashboardFetches = new Set<string>();
+const VIETNAM_OFFSET_MS = 7 * 60 * 60 * 1000;
+
+function getVietnamTodayRange(nowMs = Date.now()) {
+  const vietnamTime = new Date(nowMs + VIETNAM_OFFSET_MS);
+  const startMs = Date.UTC(
+    vietnamTime.getUTCFullYear(),
+    vietnamTime.getUTCMonth(),
+    vietnamTime.getUTCDate(),
+  ) - VIETNAM_OFFSET_MS;
+
+  return {
+    postedFrom: new Date(startMs).toISOString(),
+    postedBefore: new Date(startMs + 24 * 60 * 60 * 1000).toISOString(),
+  };
+}
+
+function mergeRealtimeLead(lead: Lead, updated: Partial<Lead>): Lead {
+  return {
+    ...lead,
+    status: updated.status ?? lead.status,
+    owner_id: updated.owner_id ?? undefined,
+    owner_name: updated.owner_name ?? undefined,
+    owner_email: updated.owner_email ?? undefined,
+    assigned_at: updated.assigned_at ?? undefined,
+    assigned_by: updated.assigned_by ?? undefined,
+    claimed_at: updated.claimed_at ?? undefined,
+    first_contacted_at: updated.first_contacted_at ?? undefined,
+    contact_attempts: updated.contact_attempts ?? lead.contact_attempts,
+    last_contact_at: updated.last_contact_at ?? undefined,
+    pending_result: updated.pending_result ?? lead.pending_result,
+    last_action_at: updated.last_action_at ?? undefined,
+    last_action_type: updated.last_action_type ?? undefined,
+    last_contact_channel: updated.last_contact_channel ?? undefined,
+    result_type: updated.result_type ?? null,
+    result_recorded_at: updated.result_recorded_at ?? null,
+    follow_up_at: updated.follow_up_at ?? null,
+    closed_at: updated.closed_at ?? null,
+    updated_at: updated.updated_at ?? lead.updated_at,
+    expiry_at: updated.expiry_at ?? lead.expiry_at,
+    notes: updated.notes ?? lead.notes,
+    sales_status: updated.sales_status ?? lead.sales_status,
+    sales_owner_id: updated.sales_owner_id ?? lead.sales_owner_id,
+    sales_owner_name: updated.sales_owner_name ?? lead.sales_owner_name,
+    sales_transferred_at: updated.sales_transferred_at ?? lead.sales_transferred_at,
+    crm_deal_id: updated.crm_deal_id ?? lead.crm_deal_id,
+  };
+}
 
 function isStorageQuotaError(error: unknown) {
   return (
@@ -104,6 +153,7 @@ export function useDashboard(options: UseDashboardOptions = {}) {
   } = useDashboardStore();
 
   const [isInitialized, setIsInitialized] = useState(false);
+  const realtimePermissionKey = [...(profile?.permissions || [])].sort().join(",");
 
   const fetchDashboardData = async (force: boolean = false) => {
     const isDemoMode =
@@ -173,15 +223,60 @@ export function useDashboard(options: UseDashboardOptions = {}) {
 
       // 1. Fetch raw data từ Supabase (lọc theo brand nếu có)
       const rawBrandKey = brandKey === "global" ? undefined : brandKey;
-      const rawData = isDemoMode
+      const isLeadPage =
+        typeof window !== "undefined" && /^\/(?:demo\/)?leads(?:\/|$)/.test(window.location.pathname);
+      const todayRange = getVietnamTodayRange();
+      const previewStartMs = new Date(todayRange.postedFrom).getTime();
+      const previewEndMs = new Date(todayRange.postedBefore).getTime();
+      const hasTodayLeadInStore = useDashboardStore.getState().leads.some((lead) => {
+        const postedAt = new Date(lead.posted_at || lead.created_at).getTime();
+        return postedAt >= previewStartMs && postedAt < previewEndMs;
+      });
+      const needsLeadPreview =
+        !isDemoMode &&
+        isLeadPage &&
+        !hasTodayLeadInStore;
+
+      if (needsLeadPreview) {
+        try {
+          const preview = await DashboardService.fetchTodayLeadPreview({
+            brandKey: rawBrandKey,
+            ...todayRange,
+          });
+          if (latestFetchGeneration.get(fetchScopeKey) !== generation) return;
+
+          const visiblePreview = filterByBusinessPolicy(
+            preview,
+            profile,
+            "view_leads",
+          ).filter((lead) => canLeadBeVisibleToUser(lead, profile));
+          const cachedLeads = useDashboardStore.getState().leads;
+          const mergedPreview = new Map(
+            cachedLeads.map((lead) => [lead.id, lead] as const),
+          );
+          visiblePreview.forEach((lead) => mergedPreview.set(lead.id, lead));
+          setLeads(Array.from(mergedPreview.values()));
+          setLoading(false);
+        } catch (previewError) {
+          // Preview is an optimization only; the full snapshot remains the
+          // authoritative fallback for older or partially migrated schemas.
+          console.warn("[useDashboard] Today Lead preview skipped:", previewError);
+        }
+      }
+
+      // Give the small Lead query priority so the full mentions/dashboard scan
+      // cannot compete with the first useful result on a cold page visit.
+      const rawDataPromise = isDemoMode
         ? {
-            workspaces: dummyWorkspaces,
-            mentions: dummyMentions,
-            alerts: dummyAlerts,
-            leads: dummyLeads,
-            labelChangeRequests: dummyLabelChangeRequests,
-          }
-        : await DashboardService.fetchRawData({ brandKey: rawBrandKey }, profile);
+          workspaces: dummyWorkspaces,
+          mentions: dummyMentions,
+          alerts: dummyAlerts,
+          leads: dummyLeads,
+          labelChangeRequests: dummyLabelChangeRequests,
+        }
+        : DashboardService.fetchRawData({ brandKey: rawBrandKey }, profile);
+
+      const rawData = await rawDataPromise;
       // Ignore stale responses from a previous navigation/refresh.
       if (latestFetchGeneration.get(fetchScopeKey) !== generation) return;
       const workspaces = filterByBusinessPolicy(
@@ -355,68 +450,101 @@ export function useDashboard(options: UseDashboardOptions = {}) {
     if (window.location.pathname.startsWith("/demo")) return;
 
     if (supabaseClient) {
-      console.log("[useDashboard] Initializing Realtime leads subscription");
+      // Realtime can emit many UPDATE events within the same few milliseconds.
+      // Applying every event separately causes a full Lead list render for each
+      // row. Buffer them briefly and commit one Zustand update per burst.
+      const pendingUpdates = new Map<string, Partial<Lead>>();
+      let updateTimer: ReturnType<typeof setTimeout> | null = null;
+      let structuralRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+      const flushUpdates = () => {
+        updateTimer = null;
+        if (pendingUpdates.size === 0) return;
+        const updates = new Map(pendingUpdates);
+        pendingUpdates.clear();
+        const currentLeads = useDashboardStore.getState().leads;
+        let changed = false;
+        const nextLeads = currentLeads.map((lead) => {
+          const updated = updates.get(lead.id);
+          if (!updated) return lead;
+          changed = true;
+          return mergeRealtimeLead(lead, updated);
+        });
+        if (changed) setLeads(nextLeads);
+      };
+
       const channelId = `realtime-leads-dashboard-${Math.random().toString(36).substring(2, 10)}`;
       const channel = supabaseClient
         .channel(channelId)
         .on(
+          "broadcast",
+          { event: "lead_assigned" },
+          (event: any) => {
+            const payload = event?.payload;
+            if (payload?.leadId) {
+              const { leadId, ...updatedFields } = payload;
+              pendingUpdates.set(leadId, updatedFields);
+              if (!updateTimer) updateTimer = setTimeout(flushUpdates, 50);
+            }
+          }
+        )
+        .on(
           "postgres_changes",
           { event: "*", schema: "public", table: "leads" },
           (payload: any) => {
-            console.log("[useDashboard] Realtime lead event received:", payload);
             if (payload.eventType === "UPDATE") {
-              const updated = payload.new as any;
-              setLeads(
-                useDashboardStore.getState().leads.map((l) =>
-                  l.id === updated.id
-                    ? {
-                      ...l,
-                      status: updated.status ?? l.status,
-                      owner_id: updated.owner_id ?? undefined,
-                      owner_name: updated.owner_name ?? undefined,
-                      owner_email: updated.owner_email ?? undefined,
-                      assigned_at: updated.assigned_at ?? undefined,
-                      assigned_by: updated.assigned_by ?? undefined,
-                      claimed_at: updated.claimed_at ?? undefined,
-                      first_contacted_at: updated.first_contacted_at ?? undefined,
-                      contact_attempts: updated.contact_attempts ?? l.contact_attempts,
-                      last_contact_at: updated.last_contact_at ?? undefined,
-                      pending_result: updated.pending_result ?? l.pending_result,
-                      last_action_at: updated.last_action_at ?? undefined,
-                      last_action_type: updated.last_action_type ?? undefined,
-                      last_contact_channel: updated.last_contact_channel ?? undefined,
-                      result_type: updated.result_type ?? null,
-                      result_recorded_at: updated.result_recorded_at ?? null,
-                      follow_up_at: updated.follow_up_at ?? null,
-                      closed_at: updated.closed_at ?? null,
-                      updated_at: updated.updated_at ?? l.updated_at,
-                      expiry_at: updated.expiry_at ?? l.expiry_at,
-                      notes: updated.notes ?? l.notes,
-                      sales_status: updated.sales_status ?? l.sales_status,
-                      sales_owner_id: updated.sales_owner_id ?? l.sales_owner_id,
-                      sales_owner_name: updated.sales_owner_name ?? l.sales_owner_name,
-                      sales_transferred_at: updated.sales_transferred_at ?? l.sales_transferred_at,
-                      crm_deal_id: updated.crm_deal_id ?? l.crm_deal_id,
-                    }
-                    : l
-                )
+              const updated = payload.new as Partial<Lead>;
+              if (!updated.id) return;
+              pendingUpdates.set(updated.id, updated);
+              if (!updateTimer) updateTimer = setTimeout(flushUpdates, 50);
+            } else if (payload.eventType === "INSERT") {
+              const inserted = payload.new as Partial<Lead>;
+              const currentLeads = useDashboardStore.getState().leads;
+              const alreadyExists = Boolean(
+                inserted.id && currentLeads.some((lead) => lead.id === inserted.id),
               );
-            } else if (payload.eventType === "INSERT" || payload.eventType === "DELETE") {
-              // Reload derived data for new or deleted leads
-              fetchDashboardData(true);
+
+              if (alreadyExists && inserted.id) {
+                // Upsert operation on an existing lead - update in-place without triggering full re-fetch
+                pendingUpdates.set(inserted.id, inserted);
+                if (!updateTimer) updateTimer = setTimeout(flushUpdates, 50);
+              } else {
+                // Truly new lead - collapse structural change into one full refresh
+                if (structuralRefreshTimer) clearTimeout(structuralRefreshTimer);
+                structuralRefreshTimer = setTimeout(() => fetchDashboardData(true), 250);
+              }
+            } else if (payload.eventType === "DELETE") {
+              if (structuralRefreshTimer) clearTimeout(structuralRefreshTimer);
+              structuralRefreshTimer = setTimeout(() => fetchDashboardData(true), 250);
             }
           }
         )
         .subscribe((status) => {
-          console.log("[useDashboard] Realtime leads channel status:", status);
+          if (status === "SUBSCRIBED") {
+            setActiveLeadRealtimeChannel(channel);
+          } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+            console.warn("[useDashboard] Realtime leads unavailable:", status);
+            setActiveLeadRealtimeChannel(null);
+          }
         });
 
       return () => {
-        console.log("[useDashboard] Cleaning up Realtime leads subscription");
+        setActiveLeadRealtimeChannel(null);
+        if (updateTimer) clearTimeout(updateTimer);
+        if (structuralRefreshTimer) clearTimeout(structuralRefreshTimer);
+        flushUpdates();
         supabaseClient?.removeChannel(channel);
       };
     }
-  }, [profile, authLoading, setLeads]);
+  }, [
+    authLoading,
+    profile?.uid,
+    profile?.role,
+    profile?.brandId,
+    profile?.brandName,
+    realtimePermissionKey,
+    setLeads,
+  ]);
 
   // Re-tính trend data khi time_range filter thay đổi
   useEffect(() => {

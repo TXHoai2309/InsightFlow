@@ -2,7 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import type { CrisisReportData } from "./crisis-report";
 import type { LeadReportData } from "./lead-report";
-import { buildDualOperationsReportData } from "./dual-operations-report";
+import {
+  buildDualOperationsAIRequestData,
+  buildDualOperationsReportData,
+} from "./dual-operations-report";
 import { buildDualOperationsReportExcelDocument } from "./excelExport";
 
 function leadReport(): LeadReportData {
@@ -111,19 +114,20 @@ function crisisReport(): CrisisReportData {
   };
 }
 
-test("builds explainable attention and urgency data for both operations", () => {
+test("builds aggregate management risks for both operations", () => {
   const report = buildDualOperationsReportData(leadReport(), crisisReport());
 
   assert.deepEqual(report.kpis.workflow.inProgress, { total: 2, lead: 1, crisis: 1 });
   assert.deepEqual(report.kpis.workflow.unassigned, { total: 0, lead: 0, crisis: 0 });
   assert.deepEqual(report.kpis.workflow.completionRate, { total: 0, lead: 0, crisis: 0 });
   assert.equal(report.kpis.workflow.overdueOpen.total, 2);
+  assert.deepEqual(report.kpis.priorityOpen, { total: 2, lead: 1, crisis: 1 });
   assert.ok(report.kpis.overdueTasks <= report.kpis.pendingTasks);
   assert.equal(report.attentionItems[0]?.count, 1);
-  assert.equal(report.priorityRows[0]?.urgencyLevel, "urgent");
-  assert.ok(report.priorityRows.some((row) => row.type === "lead"));
-  assert.ok(report.priorityRows.some((row) => row.type === "crisis"));
-  assert.ok(report.priorityRows.every((row) => row.urgencyReasons.length > 0));
+  assert.ok(report.attentionItems.some((item) => item.key === "crisis_high_priority"));
+  assert.ok(report.attentionItems.every((item) => !Object.hasOwn(item, "content")));
+  assert.ok(report.managementInsights.length > 0);
+  assert.ok(report.managementInsights.length <= 3);
   assert.ok(report.recommendations.length > 0);
   assert.ok(report.recommendations.length <= 3);
 });
@@ -150,6 +154,7 @@ test("does not count completed late work as open or overdue", () => {
   assert.deepEqual(report.kpis.workflow.completionRate, { total: 100, lead: 100, crisis: 100 });
   assert.equal(report.kpis.pendingTasks, 0);
   assert.equal(report.kpis.overdueTasks, 0);
+  assert.deepEqual(report.kpis.priorityOpen, { total: 0, lead: 0, crisis: 0 });
 });
 
 test("uses the same actionable queues as the customer and alert pages", () => {
@@ -184,6 +189,25 @@ test("uses the same actionable queues as the customer and alert pages", () => {
   assert.equal(report.kpis.pendingTasks, 7);
 });
 
+test("AI request data follows the active report tab without changing the overview prompt", () => {
+  const report = buildDualOperationsReportData(leadReport(), crisisReport());
+  const overview = buildDualOperationsAIRequestData(report, "all", "Highlands Coffee");
+  const leadOnly = buildDualOperationsAIRequestData(report, "lead", "Highlands Coffee");
+  const crisisOnly = buildDualOperationsAIRequestData(report, "crisis", "Highlands Coffee");
+
+  assert.deepEqual(overview.mentions.map((item) => item.topic).sort(), ["lead", "Dịch vụ"].sort());
+  assert.equal(overview.prompt.includes("Phạm vi báo cáo chỉ gồm"), false);
+
+  assert.equal(leadOnly.mentions.length, 1);
+  assert.equal(leadOnly.mentions[0]?.topic, "lead");
+  assert.match(leadOnly.prompt, /chỉ gồm Khách hàng tiềm năng/);
+  assert.match(leadOnly.prompt, /không đưa nhận định hoặc số liệu về Cảnh báo\/Khủng hoảng/);
+
+  assert.equal(crisisOnly.mentions.length, 1);
+  assert.equal(crisisOnly.mentions[0]?.topic, "Dịch vụ");
+  assert.match(crisisOnly.prompt, /chỉ gồm Cảnh báo\/Khủng hoảng/);
+  assert.match(crisisOnly.prompt, /không đưa nhận định hoặc số liệu về Lead/);
+});
 test("Excel preview document contains the same report sections and filtered context", () => {
   const report = buildDualOperationsReportData(leadReport(), crisisReport());
   const document = buildDualOperationsReportExcelDocument(report, {
@@ -191,20 +215,30 @@ test("Excel preview document contains the same report sections and filtered cont
     filterLabel: "Cả hai nghiệp vụ",
   });
 
-  assert.match(document, /Báo cáo công việc cá nhân/);
+  assert.match(document, /Báo cáo tổng quan thương hiệu/);
   assert.match(document, /7 ngày gần nhất/);
   assert.match(document, /Cả hai nghiệp vụ/);
-  assert.match(document, /Kết quả trong kỳ/);
+  assert.match(document, /Kết quả chỉ số trong kỳ/);
+  assert.match(document, /Tóm tắt điều hành/);
+  assert.match(document, /Tình trạng công việc theo nghiệp vụ/);
   assert.match(document, /Tỷ lệ hoàn thành/);
-  assert.match(document, /Chi tiết Lead/);
-  assert.match(document, /Chi tiết Khủng hoảng/);
-  assert.match(document, /Khách hàng A/);
+  assert.match(document, /Nhận định:/);
+  assert.match(document, /Hành động:/);
+  assert.match(document, /Xu hướng và biến động tồn đọng 7 ngày/);
+  assert.match(document, /Xu hướng Khách hàng 7 ngày/);
+  assert.match(document, /Xu hướng Cảnh báo 7 ngày/);
+  assert.match(document, /Cơ cấu nguồn phát sinh/);
+  assert.match(document, /Ghi chú cách tính/);
+  assert.match(document, /không tính Đã bỏ qua/);
+  assert.doesNotMatch(document, /Chi tiết Lead/);
+  assert.doesNotMatch(document, /Chi tiết Khủng hoảng/);
+  assert.doesNotMatch(document, /Khách hàng A/);
 
   const leadOnlyDocument = buildDualOperationsReportExcelDocument(report, {
     periodLabel: "7 ngày gần nhất",
     filterLabel: "Chỉ Khách hàng tiềm năng",
     operation: "lead",
   });
-  assert.match(leadOnlyDocument, /Chi tiết Lead/);
-  assert.doesNotMatch(leadOnlyDocument, /Chi tiết Khủng hoảng/);
+  assert.match(leadOnlyDocument, /Xu hướng Khách hàng 7 ngày/);
+  assert.doesNotMatch(leadOnlyDocument, /Xu hướng Cảnh báo 7 ngày/);
 });

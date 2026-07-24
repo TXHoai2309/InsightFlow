@@ -23,6 +23,7 @@ import {
 } from "@/components/onboarding/events";
 import { dbSecond } from "@/lib/firebase";
 import { normalizeBrandName } from "@/lib/services/dashboard";
+import { toDemoHref } from "@/lib/demo-navigation";
 import { TrialTimeRemaining } from "@/components/auth/TrialTimeRemaining";
 import { collection, doc, limit, onSnapshot, query, updateDoc } from "firebase/firestore";
 
@@ -43,6 +44,36 @@ interface AppNotification {
   recipient_role?: string;
   recipient_email?: string | null;
 }
+
+const DEMO_NOTIFICATIONS: AppNotification[] = [
+  {
+    id: "demo-notification-1",
+    title: "Cảnh báo ưu tiên cao cần xử lý",
+    message: "Một cảnh báo mới đang chờ người phụ trách tiếp nhận.",
+    type: "crisis_alert",
+    alert_id: "demo-mention-002",
+    created_at: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
+    read: false,
+  },
+  {
+    id: "demo-notification-2",
+    title: "Lead mới được phân công",
+    message: "Một khách hàng tiềm năng cần được liên hệ trong thời hạn SLA.",
+    type: "lead_assignment",
+    alert_id: "demo-lead-002",
+    created_at: new Date(Date.now() - 42 * 60 * 1000).toISOString(),
+    read: false,
+  },
+  {
+    id: "demo-notification-3",
+    title: "Cảnh báo đã có cập nhật",
+    message: "Kết quả xử lý mới đã được ghi nhận trong dữ liệu demo.",
+    type: "crisis_alert",
+    alert_id: "demo-mention-005",
+    created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    read: true,
+  },
+];
 
 export function Header({ onMenuToggle, isSidebarCollapsed = false }: HeaderProps) {
   const router = useRouter();
@@ -94,7 +125,7 @@ export function Header({ onMenuToggle, isSidebarCollapsed = false }: HeaderProps
 
   useEffect(() => {
     if (isDemoMode) {
-      setNotifications((current) => (current.length === 0 ? current : []));
+      setNotifications(DEMO_NOTIFICATIONS.map((notification) => ({ ...notification })));
       return;
     }
     if (!dbSecond || !profile) {
@@ -145,8 +176,12 @@ export function Header({ onMenuToggle, isSidebarCollapsed = false }: HeaderProps
   }, [notifications]);
 
   const handleNotificationClick = async (notification: AppNotification) => {
+    setNotifications((current) => current.map((item) =>
+      item.id === notification.id ? { ...item, read: true } : item,
+    ));
+
     try {
-      if (!notification.read && dbSecond) {
+      if (!isDemoMode && !notification.read && dbSecond) {
         await updateDoc(doc(dbSecond, "notifications", notification.id), { read: true });
       }
     } catch (error) {
@@ -155,12 +190,31 @@ export function Header({ onMenuToggle, isSidebarCollapsed = false }: HeaderProps
 
     setShowNotifications(false);
     if (notification.alert_id) {
-      if (notification.type === "lead_assignment") {
-        router.push(`/leads?leadId=${encodeURIComponent(notification.alert_id)}`);
-      } else {
-        router.push(`/alerts/${encodeURIComponent(notification.alert_id)}`);
-      }
+      const destination = notification.type === "lead_assignment"
+        ? `/leads?leadId=${encodeURIComponent(notification.alert_id)}`
+        : `/alerts?alertId=${encodeURIComponent(notification.alert_id)}`;
+      router.push(isDemoMode ? (toDemoHref(destination) || "/demo") : destination);
     }
+  };
+
+  const handleMarkAllRead = async () => {
+    const unreadNotifications = notifications.filter((notification) => !notification.read);
+    setNotifications((current) => current.map((notification) => ({ ...notification, read: true })));
+
+    if (isDemoMode || !dbSecond || unreadNotifications.length === 0) return;
+    try {
+      await Promise.all(unreadNotifications.map((notification) =>
+        updateDoc(doc(dbSecond, "notifications", notification.id), { read: true }),
+      ));
+    } catch (error) {
+      console.warn("[Header] failed to mark all notifications read:", error);
+    }
+  };
+
+  const handleViewAllNotifications = () => {
+    setShowNotifications(false);
+    const destination = "/alerts";
+    router.push(isDemoMode ? (toDemoHref(destination) || "/demo") : destination);
   };
 
   return (
@@ -244,7 +298,11 @@ export function Header({ onMenuToggle, isSidebarCollapsed = false }: HeaderProps
                     )}
                   </h4>
                   {unreadCount > 0 && (
-                    <button className="text-[12px] font-semibold text-[var(--color-brand)] hover:underline transition-all">
+                    <button
+                      type="button"
+                      onClick={handleMarkAllRead}
+                      className="text-[12px] font-semibold text-[var(--color-brand)] hover:underline transition-all"
+                    >
                       {t("header.markAllRead", "Đánh dấu đã đọc")}
                     </button>
                   )}
@@ -321,7 +379,11 @@ export function Header({ onMenuToggle, isSidebarCollapsed = false }: HeaderProps
                     className="p-3 text-center bg-[var(--color-bg-surface)] hover:bg-[var(--color-bg-surface-raised)] transition-colors"
                     style={{ borderTop: "1px solid var(--color-border)" }}
                   >
-                    <button className="text-[13px] font-bold text-[var(--color-brand)] flex items-center justify-center gap-1 w-full py-1">
+                    <button
+                      type="button"
+                      onClick={handleViewAllNotifications}
+                      className="text-[13px] font-bold text-[var(--color-brand)] flex items-center justify-center gap-1 w-full py-1"
+                    >
                       {t("header.viewAll", "Xem tất cả")} <span className="material-symbols-outlined" style={{ fontSize: 16 }}>arrow_forward</span>
                     </button>
                   </div>

@@ -2,8 +2,8 @@ import type { AlertData, ResolutionAttempt, InternalNote } from "@/stores/alert.
 import { calculateNegativityScore } from "@/lib/negativityScore";
 import { getPersistedAlertStatus } from "@/lib/alertWorkflow";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+const supabaseUrl = process.env.NEXT_PUBLIC_VPS_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const supabaseAnonKey = process.env.NEXT_PUBLIC_VPS_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
 function normalizeUrl(url: string): string {
   const trimmed = url.trim().replace(/\/rest\/v1\/?$/, "");
@@ -244,7 +244,7 @@ async function fetchAnnotationByAnyKey(key: string): Promise<SupabaseAnnotationR
 
     const postMatches = await supabaseRequest<SupabaseAnnotationRow[]>(
       "annotations",
-      `post_id=eq.${encodedKey}&order=updated_at.desc.nullslast&limit=10`
+      `post_id=eq.${encodedKey}&entity_type=eq.post&order=updated_at.desc.nullslast&limit=1`
     );
     const postMatch = pickBestAnnotationMatch(postMatches || [], lookupKey);
     if (postMatch) return postMatch;
@@ -433,6 +433,7 @@ export async function fetchSupabaseAlerts(options: {
 
       const alert: AlertData = {
         id: anno.entity_key, // Use entity_key as ID
+        annotation_id: anno.annotation_id,
         brand,
         source,
         text,
@@ -441,6 +442,7 @@ export async function fetchSupabaseAlerts(options: {
         severity,
         negativity_score,
         created_at: parseDate(postedAtStr),
+        updated_at: parseDate(labelObj.updated_at || anno.updated_at),
         status: resolveAlertStatusFromLabel(labelObj),
         resolved_at: labelObj.resolved_at ? parseDate(labelObj.resolved_at) : undefined,
         collectionName: "annotations",
@@ -460,6 +462,10 @@ export async function fetchSupabaseAlerts(options: {
           : undefined,
         resolved_by_email: labelObj.resolved_by_email || null,
         resolved_by_name: labelObj.resolved_by_name || null,
+        skipped_at: labelObj.skipped_at || null,
+        skipped_by_uid: labelObj.skipped_by_uid || null,
+        skipped_by_email: labelObj.skipped_by_email || null,
+        skipped_by_name: labelObj.skipped_by_name || null,
         post_content,
         comment_content,
         parent_id,
@@ -570,6 +576,7 @@ export async function fetchSingleSupabaseAlert(entityKey: string): Promise<Alert
 
   return {
     id: anno.entity_key,
+    annotation_id: anno.annotation_id,
     brand,
     source,
     text,
@@ -578,6 +585,7 @@ export async function fetchSingleSupabaseAlert(entityKey: string): Promise<Alert
     severity,
     negativity_score,
     created_at: parseDate(comment?.posted_at || commentPayload.posted_at || post?.posted_at || postPayload.posted_at || anno.updated_at),
+    updated_at: parseDate(labelObj.updated_at || anno.updated_at),
     status: resolveAlertStatusFromLabel(labelObj),
     resolved_at: labelObj.resolved_at ? parseDate(labelObj.resolved_at) : undefined,
     collectionName: "annotations",
@@ -597,6 +605,10 @@ export async function fetchSingleSupabaseAlert(entityKey: string): Promise<Alert
       : undefined,
     resolved_by_email: labelObj.resolved_by_email || null,
     resolved_by_name: labelObj.resolved_by_name || null,
+    skipped_at: labelObj.skipped_at || null,
+    skipped_by_uid: labelObj.skipped_by_uid || null,
+    skipped_by_email: labelObj.skipped_by_email || null,
+    skipped_by_name: labelObj.skipped_by_name || null,
     post_content,
     comment_content,
     parent_id,

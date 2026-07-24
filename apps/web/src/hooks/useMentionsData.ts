@@ -5,6 +5,8 @@ import { DashboardService } from "@/lib/services/dashboard";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { filterByBusinessPolicy, getScopedBrandKey } from "@/lib/brandScope";
 import { useAuth } from "@/hooks/useAuth";
+import { isDemoRuntime } from "@/lib/demo-navigation";
+import { canLeadBeVisibleToUser } from "@/lib/lead-workbench";
 
 interface UseMentionsOptions {
   autoFetch?: boolean;
@@ -12,7 +14,7 @@ interface UseMentionsOptions {
 }
 
 const DASHBOARD_CACHE_PREFIX = "insightflow_dashboard_cache_";
-const DASHBOARD_CACHE_VERSION = "v3";
+const DASHBOARD_CACHE_VERSION = "v6";
 
 // Module-level in-memory cache time tracking to avoid duplicate fetching during menu transitions
 
@@ -43,7 +45,7 @@ export function useMentionsData(options: UseMentionsOptions = {}) {
       let hasRenderedCache = false;
 
       // Check client-side localStorage cache if not forcing refresh
-      if (!force && typeof window !== "undefined") {
+      if (!force && !isDemoRuntime() && typeof window !== "undefined") {
         const cached = localStorage.getItem(cacheKey);
         if (cached) {
           try {
@@ -75,7 +77,10 @@ export function useMentionsData(options: UseMentionsOptions = {}) {
       }
 
       const rawBrandKey = brandKey === "global" ? undefined : brandKey;
-      const rawData = await DashboardService.fetchRawData({ brandKey: rawBrandKey, maxMentions: 1000 });
+      const rawData = await DashboardService.fetchRawData(
+        { brandKey: rawBrandKey, maxMentions: 1000 },
+        profile,
+      );
       const mentions = filterByBusinessPolicy(rawData.mentions, profile, "view_mentions");
       const workspaces = filterByBusinessPolicy(
         rawData.workspaces.map((workspace) => ({
@@ -86,7 +91,8 @@ export function useMentionsData(options: UseMentionsOptions = {}) {
         "view_mentions",
       );
       const alerts = filterByBusinessPolicy(rawData.alerts, profile, "view_crisis_queue");
-      const leads = filterByBusinessPolicy(rawData.leads, profile, "view_leads");
+      const leads = filterByBusinessPolicy(rawData.leads, profile, "view_leads")
+        .filter((lead) => canLeadBeVisibleToUser(lead, profile));
 
       const stats = DashboardService.calculateStats(mentions, alerts, leads);
 
@@ -97,7 +103,7 @@ export function useMentionsData(options: UseMentionsOptions = {}) {
       setStats(stats);
 
       // Save to localStorage cache
-      if (typeof window !== "undefined") {
+      if (!isDemoRuntime() && typeof window !== "undefined") {
         try {
           localStorage.setItem(
             cacheKey,

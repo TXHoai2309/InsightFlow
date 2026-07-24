@@ -18,12 +18,19 @@ import {
   canSkipAlert,
   getAlertWorkflowStatus,
   getPersistedAlertStatus,
+  getRealtimeAlertWorkflowStatus,
   isResolvedAlert,
   isTerminalAlert,
 } from "@/lib/alertWorkflow";
 import { canAlertBeVisibleToUser } from "@/lib/alert-visibility";
 import { isSameAlertRecord } from "@/lib/alertRecordIdentity";
 import { dummyMentions } from "@/lib/demoData";
+import { isDemoRuntime } from "@/lib/demo-navigation";
+import {
+  hydrateDemoAlertWorkflows,
+  isDemoAlertRecord,
+  persistDemoAlertWorkflow,
+} from "@/lib/demo-alert-session";
 import { getCalendarPeriodStartMs, isWithinCalendarPeriod } from "@/lib/dashboard-display";
 
 function getResolverName(emailOrId: string | null | undefined): string {
@@ -97,6 +104,7 @@ export interface EscalationData {
 
 export interface AlertData {
   id: string;
+  annotation_id?: string;
   source_id?: string;
   brand: string;
   source: string;
@@ -106,6 +114,8 @@ export interface AlertData {
   severity: string;
   negativity_score: number;
   created_at: string;
+  /** Latest persisted workflow/annotation update used to reject stale realtime events. */
+  updated_at?: string;
   /** Time the mention was ingested/classified and entered the workflow. */
   detected_at?: string;
   status: string;
@@ -254,7 +264,12 @@ interface AlertState {
   ) => Promise<void>;
   lockAlertForResolution: (id: string, profile: UserRoleProfile | null | undefined) => Promise<void>;
   unlockAlertForResolution: (id: string) => Promise<void>;
-  recentLocks: Record<string, { email: string | null; timestamp: number }>;
+  recentLocks: Record<string, {
+    email: string | null;
+    timestamp: number;
+    workflowStatus?: string;
+    workflowUpdatedAt?: string;
+  }>;
 }
 
 function parseDate(field: unknown): string {
@@ -388,6 +403,7 @@ function mentionToAlertData(m: Mention): AlertData {
     severity,
     negativity_score: negativity.score,
     created_at: m.posted_at || m.created_at,
+    updated_at: labelObj.updated_at || labelObj.workflow_updated_at || m.classified_at,
     detected_at: m.classified_at || m.created_at || m.posted_at,
     status: resolveAlertStatusFromLabel(labelObj),
     resolved_at: labelObj.resolved_at,
@@ -510,7 +526,17 @@ function applyRealtimeAnnotationUpdate(
   const beingResolvedAt = row.being_resolved_at || labelObj.being_resolved_at || null;
   const resolvedByEmail = row.resolved_by_email || labelObj.resolved_by_email || null;
   const resolvedByName = row.resolved_by_name || labelObj.resolved_by_name || null;
-  const newStatus = row.status || row.resolution_status || resolveAlertStatusFromLabel(labelObj);
+  // `row.status` belongs to the annotation classification pipeline and is
+  // commonly "completed". Treating it as a crisis workflow status makes a
+  // freshly claimed alert jump to Closed until the next full reload.
+  const newStatus = getRealtimeAlertWorkflowStatus(row, labelObj);
+  const incomingUpdatedAt = String(
+    row.updated_at ||
+    labelObj.updated_at ||
+    row.being_resolved_at ||
+    labelObj.being_resolved_at ||
+    "",
+  ).trim();
   const getRealtimeValue = (key: string, currentValue: unknown) => {
     if (Object.prototype.hasOwnProperty.call(row, key)) return row[key];
     if (Object.prototype.hasOwnProperty.call(labelObj, key)) return labelObj[key];
@@ -546,14 +572,28 @@ function applyRealtimeAnnotationUpdate(
     const nextRecentLocks = { ...state.recentLocks };
     const nextRawAlerts = state.rawAlerts.map((alert) => {
       if (!lookupIds.some((lookupId) => isSameAlertRecord(alert, lookupId))) return alert;
+
+      const currentUpdatedAtMs = new Date(alert.updated_at || 0).getTime();
+      const incomingUpdatedAtMs = new Date(incomingUpdatedAt || 0).getTime();
+      if (
+        Number.isFinite(currentUpdatedAtMs) &&
+        Number.isFinite(incomingUpdatedAtMs) &&
+        currentUpdatedAtMs > incomingUpdatedAtMs
+      ) {
+        return alert;
+      }
+
       changed = true;
       nextRecentLocks[alert.id] = {
         email: beingResolvedBy,
         timestamp: Date.now(),
+        workflowStatus: newStatus,
+        workflowUpdatedAt: incomingUpdatedAt || undefined,
       };
       return {
         ...alert,
         status: newStatus || alert.status,
+        updated_at: incomingUpdatedAt || alert.updated_at,
         resolved_at: getRealtimeValue("resolved_at", alert.resolved_at) || undefined,
         being_resolved_by: getRealtimeValue("being_resolved_by", beingResolvedBy) || null,
         being_resolved_at: getRealtimeValue("being_resolved_at", beingResolvedAt) || null,
@@ -564,6 +604,11 @@ function applyRealtimeAnnotationUpdate(
         skipped_by_uid: getRealtimeValue("skipped_by_uid", alert.skipped_by_uid) || null,
         skipped_by_email: getRealtimeValue("skipped_by_email", alert.skipped_by_email) || null,
         skipped_by_name: getRealtimeValue("skipped_by_name", alert.skipped_by_name) || null,
+        monitoring_started_at: getRealtimeValue("monitoring_started_at", alert.monitoring_started_at) || undefined,
+        monitoring_duration_hours: getRealtimeValue("monitoring_duration_hours", alert.monitoring_duration_hours) || undefined,
+        monitoring_initial_comments: getRealtimeValue("monitoring_initial_comments", alert.monitoring_initial_comments) || undefined,
+        monitoring_initial_likes: getRealtimeValue("monitoring_initial_likes", alert.monitoring_initial_likes) || undefined,
+        monitoring_initial_shares: getRealtimeValue("monitoring_initial_shares", alert.monitoring_initial_shares) || undefined,
         resolution_history: Array.isArray(row.resolution_history || labelObj.resolution_history)
           ? (row.resolution_history || labelObj.resolution_history)
           : alert.resolution_history,
@@ -641,8 +686,8 @@ export const useAlertStore = create<AlertState>()(
       // Demo must be completely deterministic and must never depend on the
       // production cache/realtime pipeline. Build the same alert view model
       // used by the real page directly from the in-memory demo mentions.
-      if (typeof window !== "undefined" && window.location.pathname.startsWith("/demo")) {
-        const demoAlerts = buildDemoAlertData();
+      if (isDemoRuntime()) {
+        const demoAlerts = hydrateDemoAlertWorkflows(buildDemoAlertData());
         const demoBrands = Array.from(
           new Set(demoAlerts.map((alert) => alert.brand)),
         ).sort();
@@ -683,22 +728,53 @@ export const useAlertStore = create<AlertState>()(
         const loadGeneration = ++alertLoadGeneration;
         try {
           const rawBrandKey = (scopedBrandKey === "global" || !scopedBrandKey) ? undefined : scopedBrandKey;
-          const rawData = await DashboardService.fetchRawData({
+          const mentions = await DashboardService.fetchAlertMentions({
             brandKey: rawBrandKey,
             forceRefresh,
-          }, profile);
-          const filtered = buildAlertsFromMentions(rawData.mentions, scopedBrandKey, profile);
+          });
+          const filtered = buildAlertsFromMentions(mentions, scopedBrandKey);
 
           const scopedBrands = Array.from(new Set(filtered.map((alert) => alert.brand))).sort();
           const fallbackBrands = ["Highlands Coffee", "Starbucks", "Mixue"].filter((brand) => {
             return !scopedBrandKey || normalizeBrandName(brand) === scopedBrandKey;
           });
 
-          // Merge with recent lock cache to avoid race condition overwrites from slow REST API responses
+          // Merge with recent workflow mutations to avoid a stale snapshot
+          // replacing the optimistic claim before Supabase has converged.
           const recentLocks = get().recentLocks || {};
           const merged = filtered.map((fetchedAlert) => {
-            const recent = recentLocks[fetchedAlert.id];
+            const recent = recentLocks[fetchedAlert.id] ||
+              Object.entries(recentLocks).find(([lookupId]) =>
+                isSameAlertRecord(fetchedAlert, lookupId)
+              )?.[1];
             if (recent && Date.now() - recent.timestamp < 60000) {
+              const workflowUpdatedAt =
+                recent.workflowUpdatedAt ||
+                new Date(recent.timestamp).toISOString();
+
+              if (recent.workflowStatus === "resolving" && recent.email) {
+                return {
+                  ...fetchedAlert,
+                  status: "resolving",
+                  updated_at: workflowUpdatedAt,
+                  being_resolved_by: recent.email,
+                  being_resolved_at: workflowUpdatedAt,
+                  resolved_at: undefined,
+                  resolved_by: null,
+                  resolved_by_email: null,
+                  resolved_by_name: null,
+                  skipped_at: null,
+                  skipped_by_uid: null,
+                  skipped_by_email: null,
+                  skipped_by_name: null,
+                  monitoring_started_at: undefined,
+                  monitoring_duration_hours: undefined,
+                  monitoring_initial_comments: undefined,
+                  monitoring_initial_likes: undefined,
+                  monitoring_initial_shares: undefined,
+                };
+              }
+
               return {
                 ...fetchedAlert,
                 being_resolved_by: recent.email,
@@ -731,8 +807,8 @@ export const useAlertStore = create<AlertState>()(
       };
 
       try {
-        // fetchRawData shares its promise cache with Dashboard. A forced
-        // refresh is still propagated so explicit reloads cannot reuse stale rows.
+        // The alert-only mention snapshot shares the mention cache with the
+        // dashboard, but never waits for Lead workflow hydration.
         await loadAlerts(force);
 
         // Demo pages use DashboardService's in-memory sample data only. Do not
@@ -778,7 +854,7 @@ export const useAlertStore = create<AlertState>()(
                       entity_key: payload.alertId,
                       being_resolved_by: payload.assignedTo,
                       being_resolved_at: payload.assignedAt,
-                      status: "resolving",
+                      resolution_status: "resolving",
                     });
                     if (realtimeReloadTimer) clearTimeout(realtimeReloadTimer);
                     realtimeReloadTimer = setTimeout(() => {
@@ -837,8 +913,13 @@ export const useAlertStore = create<AlertState>()(
       newStatus = getPersistedAlertStatus({ resolution_status: newStatus });
       console.log("[AlertStore] updateAlertStatus called:", { id, newStatus, profileEmail: profile?.email, profileRole: profile?.role });
       const currentAlert = get().rawAlerts.find((alert) => isSameAlertRecord(alert, id));
+      const isDemoMutation = isDemoRuntime();
       const isRestore = attempt?.action_type === "restore";
       console.log("[AlertStore] currentAlert found:", currentAlert);
+
+      if (isDemoMutation && (!currentAlert || !isDemoAlertRecord(currentAlert))) {
+        throw new Error("Cảnh báo không thuộc dữ liệu của phiên Demo.");
+      }
 
       if (
         newStatus === "resolving" &&
@@ -924,7 +1005,10 @@ export const useAlertStore = create<AlertState>()(
         currentAlertNormalized: resolvedBrand ? normalizeBrandName(resolvedBrand) : null,
       });
 
-      if (!resolvedBrand || !isSameBrandScope(profile, { brand: resolvedBrand })) {
+      if (
+        !isDemoMutation &&
+        (!resolvedBrand || !isSameBrandScope(profile, { brand: resolvedBrand }))
+      ) {
         console.error("[AlertStore] Brand scope check failed:", { resolvedBrand, sameScope: resolvedBrand ? isSameBrandScope(profile, { brand: resolvedBrand }) : false });
         throw new Error(`Alert is outside the user's brand scope. Profile: [Name: ${profile?.brandName}, ID: ${profile?.brandId}], Alert Brand: [${resolvedBrand}]`);
       }
@@ -1024,6 +1108,7 @@ export const useAlertStore = create<AlertState>()(
             return {
               ...alert,
               status: newStatus,
+              updated_at: operationAt,
               resolution_history: nextHistory,
               resolved_at: resolvedAt || undefined,
               resolved_by_email: resolvedAt ? profile.email : null,
@@ -1044,7 +1129,20 @@ export const useAlertStore = create<AlertState>()(
               // so the filter hides it from other officers instantly
               ...(newStatus === "resolving" ? {
                 being_resolved_by: profile.email,
-                being_resolved_at: new Date().toISOString(),
+                being_resolved_at: operationAt,
+                resolved_at: undefined,
+                resolved_by: null,
+                resolved_by_email: null,
+                resolved_by_name: null,
+                skipped_at: null,
+                skipped_by_uid: null,
+                skipped_by_email: null,
+                skipped_by_name: null,
+                monitoring_started_at: undefined,
+                monitoring_duration_hours: undefined,
+                monitoring_initial_comments: undefined,
+                monitoring_initial_likes: undefined,
+                monitoring_initial_shares: undefined,
               } : {}),
               // Terminal states release the active ownership lock.
               ...(["resolved", "skipped"].includes(newStatus) ? {
@@ -1066,8 +1164,27 @@ export const useAlertStore = create<AlertState>()(
         return {
           rawAlerts: nextRawAlerts,
           alerts: applyFilters(nextRawAlerts, state.filters),
+          recentLocks: newStatus === "resolving"
+            ? {
+              ...state.recentLocks,
+              [id]: {
+                email: profile.email,
+                timestamp: Date.now(),
+                workflowStatus: "resolving",
+                workflowUpdatedAt: operationAt,
+              },
+            }
+            : state.recentLocks,
         };
       });
+
+      if (isDemoMutation) {
+        const updatedAlert = get().rawAlerts.find((alert) =>
+          isSameAlertRecord(alert, id),
+        );
+        if (updatedAlert) persistDemoAlertWorkflow(updatedAlert);
+        return;
+      }
 
       try {
         await updateSupabaseAlertLabel(id, (existingLabel) => {
@@ -1225,7 +1342,20 @@ export const useAlertStore = create<AlertState>()(
             // Persist ownership together with the workflow status. The Alert
             // list and detail page then agree after a single "Nhận xử lý" click.
             updateObj.being_resolved_by = existingLabel.being_resolved_by || profile.email;
-            updateObj.being_resolved_at = existingLabel.being_resolved_at || new Date().toISOString();
+            updateObj.being_resolved_at = operationAt;
+            updateObj.resolved_at = null;
+            updateObj.resolved_by = null;
+            updateObj.resolved_by_email = null;
+            updateObj.resolved_by_name = null;
+            updateObj.skipped_at = null;
+            updateObj.skipped_by_uid = null;
+            updateObj.skipped_by_email = null;
+            updateObj.skipped_by_name = null;
+            updateObj.monitoring_started_at = null;
+            updateObj.monitoring_duration_hours = null;
+            updateObj.monitoring_initial_comments = null;
+            updateObj.monitoring_initial_likes = null;
+            updateObj.monitoring_initial_shares = null;
           }
 
           return updateObj;
@@ -1247,9 +1377,12 @@ export const useAlertStore = create<AlertState>()(
             }
             return alert;
           });
+          const nextRecentLocks = { ...state.recentLocks };
+          delete nextRecentLocks[id];
           return {
             rawAlerts: nextRawAlerts,
             alerts: applyFilters(nextRawAlerts, state.filters),
+            recentLocks: nextRecentLocks,
           };
         });
         throw error;
@@ -1688,6 +1821,10 @@ export const useAlertStore = create<AlertState>()(
       if (!profile) return;
       const now = new Date().toISOString();
       const previousAlert = get().rawAlerts.find((alert) => isSameAlertRecord(alert, id));
+      const isDemoMutation = isDemoRuntime();
+      if (isDemoMutation && (!previousAlert || !isDemoAlertRecord(previousAlert))) {
+        throw new Error("Cảnh báo không thuộc dữ liệu của phiên Demo.");
+      }
 
       // Update local state immediately
       set((state) => {
@@ -1711,6 +1848,14 @@ export const useAlertStore = create<AlertState>()(
           recentLocks: nextRecentLocks,
         };
       });
+
+      if (isDemoMutation) {
+        const updatedAlert = get().rawAlerts.find((alert) =>
+          isSameAlertRecord(alert, id),
+        );
+        if (updatedAlert) persistDemoAlertWorkflow(updatedAlert);
+        return;
+      }
 
       try {
         await updateSupabaseAlertLabel(id, (existingLabel) => ({
@@ -1760,6 +1905,12 @@ export const useAlertStore = create<AlertState>()(
     },
 
     unlockAlertForResolution: async (id) => {
+      const isDemoMutation = isDemoRuntime();
+      const previousAlert = get().rawAlerts.find((alert) => isSameAlertRecord(alert, id));
+      if (isDemoMutation && (!previousAlert || !isDemoAlertRecord(previousAlert))) {
+        throw new Error("Cảnh báo không thuộc dữ liệu của phiên Demo.");
+      }
+
       // Update local state immediately
       set((state) => {
         const nextRawAlerts = state.rawAlerts.map((alert) => {
@@ -1782,6 +1933,14 @@ export const useAlertStore = create<AlertState>()(
           recentLocks: nextRecentLocks,
         };
       });
+
+      if (isDemoMutation) {
+        const updatedAlert = get().rawAlerts.find((alert) =>
+          isSameAlertRecord(alert, id),
+        );
+        if (updatedAlert) persistDemoAlertWorkflow(updatedAlert);
+        return;
+      }
 
       try {
         await updateSupabaseAlertLabel(id, (existingLabel) => ({

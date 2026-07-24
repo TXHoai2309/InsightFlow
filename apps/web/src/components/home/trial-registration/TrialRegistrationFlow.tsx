@@ -85,6 +85,7 @@ export function TrialRegistrationFlow() {
         consultationId: result.consultationId,
         email: basicInfo.email,
       });
+      setConsultationEmailSent(result.emailSent === true);
       setCurrentStep("SUCCESS");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Không thể gửi yêu cầu tư vấn.";

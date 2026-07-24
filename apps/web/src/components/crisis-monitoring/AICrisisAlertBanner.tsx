@@ -4,12 +4,13 @@ import React from "react";
 import { AlertOctagon, CheckCircle2, ShieldAlert } from "lucide-react";
 import { useDashboardStore } from "@/stores/dashboard.store";
 import { motion } from "framer-motion";
+import { isTerminalAlert } from "@/lib/alertWorkflow";
 
 export function AICrisisAlertBanner() {
   const { getFilteredAlerts } = useDashboardStore();
   const alerts = getFilteredAlerts();
-  const criticalAlerts = alerts.filter(a => a.severity === "critical" || a.severity === "high");
-  const activeAlerts = alerts.filter(a => a.status === "new" || a.status === "acknowledged");
+  const activeAlerts = alerts.filter((alert) => !isTerminalAlert(alert));
+  const criticalAlerts = activeAlerts.filter(a => a.severity === "critical" || a.severity === "high");
   const latestAlert = activeAlerts.length > 0 ? activeAlerts[0] : criticalAlerts.length > 0 ? criticalAlerts[0] : null;
 
   if (!latestAlert) {

@@ -14,7 +14,7 @@ interface ConsultationEmailInput {
 }
 
 const SUBJECTS: Record<ConsultationEmailKind, string> = {
-  received: "InsightFlow đã nhận yêu cầu tư vấn của bạn",
+  received: "Cảm ơn bạn đã đăng ký dùng thử InsightFlow",
   approved: "Yêu cầu dùng thử InsightFlow của bạn đã được duyệt",
   rejected: "Thông báo kết quả yêu cầu tư vấn InsightFlow",
 };
@@ -24,12 +24,14 @@ function buildMessage(input: ConsultationEmailInput) {
     return [
       `Xin chào ${input.toName},`,
       "",
-      "Bạn đã gửi yêu cầu tư vấn thành công.",
-      `Mã yêu cầu: ${input.requestId}`,
+      "Cảm ơn bạn đã đăng ký dùng thử InsightFlow.",
+      "Thông tin đăng ký của bạn đã được hệ thống tiếp nhận thành công.",
+      `Mã đăng ký: ${input.requestId}`,
       `Doanh nghiệp: ${input.company}`,
       `Nhu cầu chính: ${input.need}`,
       "",
-      "Vui lòng chờ đội ngũ InsightFlow xem xét và phản hồi yêu cầu của bạn.",
+      "Đội ngũ InsightFlow sẽ kiểm tra thông tin và liên hệ với bạn trong thời gian sớm nhất.",
+      "Email này xác nhận chúng tôi đã nhận đăng ký; tài khoản dùng thử chưa được phê duyệt hoặc kích hoạt tại thời điểm này.",
       "",
       "Trân trọng,",
       "Đội ngũ InsightFlow",

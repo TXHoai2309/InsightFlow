@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   ChevronLeft,
   ChevronRight,
@@ -13,14 +14,22 @@ import { PlatformLogo } from "@/components/platform/PlatformLogo";
 import { useAuth } from "@/hooks/useAuth";
 import { auth } from "@/lib/firebase";
 import { createAlertWorkbenchHref } from "@/lib/alert-navigation";
+import { isDemoPath } from "@/lib/demo-navigation";
+import { dummyStaff } from "@/lib/demoData";
 import { getAlertWorkflowStatus } from "@/lib/alertWorkflow";
 import { canPerformAction } from "@/lib/rbac";
 import { useAlertStore, type AlertData } from "@/stores/alert.store";
 import { cn } from "@/lib/utils";
 import {
+  getCrisisAssigneeDisplayName,
+  getCrisisSlaInfo,
+} from "@/lib/crisis-table-display";
+import {
   DASHBOARD_RETURN_CONFIG,
   createDashboardReturnHref,
   getAppScrollTop,
+  getDashboardNavigationMode,
+  getDashboardReturnPath,
   loadDashboardReturnContext,
   removeDashboardReturnTokenFromCurrentUrl,
   saveDashboardReturnContext,
@@ -54,29 +63,6 @@ function normalizeSeverity(value?: string) {
   return "low";
 }
 
-function getSlaInfo(alert: AlertData) {
-  const severity = normalizeSeverity(alert.severity);
-  const limitHours = severity === "critical" ? 1 : severity === "high" ? 2 : severity === "medium" ? 4 : 8;
-  const createdAt = new Date(alert.detected_at || alert.created_at).getTime();
-  const usedMinutes = Number.isFinite(createdAt) ? Math.max(0, Math.floor((Date.now() - createdAt) / 60000)) : 0;
-  const limitMinutes = limitHours * 60;
-  const isTerminal = getAlertWorkflowStatus(alert) === "resolved";
-  const overdueMinutes = Math.max(0, usedMinutes - limitMinutes);
-
-  if (isTerminal) return { isOverdue: false, label: "Đã kết thúc", percent: 100 };
-  if (overdueMinutes > 0) {
-    const label = overdueMinutes >= 60
-      ? `Quá ${Math.floor(overdueMinutes / 60)}g ${overdueMinutes % 60}p`
-      : `Quá ${overdueMinutes}p`;
-    return { isOverdue: true, label, percent: 100 };
-  }
-  return {
-    isOverdue: false,
-    label: `Còn ${Math.max(1, limitMinutes - usedMinutes)}p`,
-    percent: Math.min(100, Math.round((usedMinutes / limitMinutes) * 100)),
-  };
-}
-
 function getStatusInfo(alert: AlertData) {
   const status = getAlertWorkflowStatus(alert);
   if (status === "resolved") return { label: "Đã giải quyết", dot: "bg-emerald-500", text: "text-emerald-700" };
@@ -99,6 +85,7 @@ function sourceUrl(alert: AlertData) {
 }
 
 export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
+  const pathname = usePathname();
   const { profile } = useAuth();
   const lockAlertForResolution = useAlertStore((state) => state.lockAlertForResolution);
   const [activeFilter, setActiveFilter] = useState<FilterId>("all");
@@ -113,10 +100,14 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
   const [toast, setToast] = useState<{ message: string; error?: boolean } | null>(null);
   const canAssign = profile?.role === "brand_manager" && canPerformAction(profile, "update_crisis_status");
   const dashboardReturnToken = DASHBOARD_RETURN_CONFIG["crisis-monitoring"].token;
+  const navigationMode = getDashboardNavigationMode(pathname);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const context = loadDashboardReturnContext(params.get("dashboardReturnToken"));
+    const context = loadDashboardReturnContext(
+      params.get("dashboardReturnToken"),
+      navigationMode,
+    );
     if (!context || context.origin !== "crisis-monitoring") return;
     isRestoringContext.current = true;
     if (FILTERS.some((filter) => filter.id === context.filter)) {
@@ -127,11 +118,19 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
     setHighlightedAlertId(context.selectedItemId || null);
     pendingRestoreContext.current = context;
     removeDashboardReturnTokenFromCurrentUrl();
-  }, []);
+  }, [navigationMode]);
 
   useEffect(() => {
     if (!canAssign) return;
     const loadStaff = async () => {
+      if (isDemoPath(pathname)) {
+        setStaff(
+          dummyStaff
+            .filter((item) => item.permissions.includes("alerts"))
+            .map((item) => ({ ...item })),
+        );
+        return;
+      }
       try {
         const token = await auth.currentUser?.getIdToken();
         if (!token) return;
@@ -145,7 +144,7 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
       }
     };
     void loadStaff();
-  }, [canAssign]);
+  }, [canAssign, pathname]);
 
   const filteredAlerts = useMemo(() => {
     const query = searchText.trim().toLowerCase();
@@ -155,7 +154,7 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
         const severity = normalizeSeverity(alert.severity);
         const status = getAlertWorkflowStatus(alert);
         if (activeFilter === "high-risk") return severity === "critical" || severity === "high";
-        if (activeFilter === "overdue") return getSlaInfo(alert).isOverdue;
+        if (activeFilter === "overdue") return getCrisisSlaInfo(alert).isOverdue;
         if (activeFilter === "unassigned") return !alert.being_resolved_by && !["resolved", "contact_failed"].includes(status);
         if (activeFilter === "processing") return status === "processing";
         return true;
@@ -205,7 +204,8 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
     saveDashboardReturnContext({
       token: dashboardReturnToken,
       origin: "crisis-monitoring",
-      returnPath: DASHBOARD_RETURN_CONFIG["crisis-monitoring"].path,
+      mode: navigationMode,
+      returnPath: getDashboardReturnPath("crisis-monitoring", navigationMode),
       filter: activeFilter,
       searchText,
       page: safePage,
@@ -216,7 +216,11 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
     window.history.replaceState(
       window.history.state,
       "",
-      createDashboardReturnHref("crisis-monitoring", dashboardReturnToken),
+      createDashboardReturnHref(
+        "crisis-monitoring",
+        dashboardReturnToken,
+        navigationMode,
+      ),
     );
   };
 
@@ -277,13 +281,15 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
           <tbody className="divide-y divide-[#EEEAF6]">
             {pageAlerts.map((alert) => {
               const severity = getSeverityInfo(alert);
-              const sla = getSlaInfo(alert);
+              const sla = getCrisisSlaInfo(alert);
               const status = getStatusInfo(alert);
+              const assigneeName = getCrisisAssigneeDisplayName(alert, staff);
+              const hasAssignee = assigneeName !== "Chưa giao";
               const url = sourceUrl(alert);
               return (
                 <tr id={`dashboard-alert-row-${alert.id}`} key={alert.id} className={cn("align-middle hover:bg-[#FCFBFF]", highlightedAlertId === alert.id && "bg-[#EEEBFF] ring-2 ring-inset ring-[#5B4FCF]")}>
                   <td className="max-w-[390px] px-5 py-4">
-                    <Link href={createAlertWorkbenchHref(alert, { origin: "crisis-monitoring", token: dashboardReturnToken })} onClick={() => rememberDashboardContext(alert)} onAuxClick={() => rememberDashboardContext(alert)} onContextMenu={() => rememberDashboardContext(alert)} className="group block">
+                    <Link href={createAlertWorkbenchHref(alert, { origin: "crisis-monitoring", token: dashboardReturnToken, mode: navigationMode })} onClick={() => rememberDashboardContext(alert)} onAuxClick={() => rememberDashboardContext(alert)} onContextMenu={() => rememberDashboardContext(alert)} className="group block">
                       <div className="flex items-center gap-2">
                         <span className={cn("rounded-md px-2 py-0.5 text-[10px] font-black uppercase", severity.tone)}>{severity.label}</span>
                         <span className="text-[11px] font-semibold text-[#787585]">{alert.topic || "Khác"}</span>
@@ -301,7 +307,7 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
                   </td>
                   <td className="px-4 py-4"><span className={cn("inline-flex rounded-full px-2.5 py-1 text-xs font-bold", sla.isOverdue ? "bg-red-100 text-red-700" : "bg-indigo-50 text-indigo-700")}>{sla.label}</span></td>
                   <td className="px-4 py-4"><span className={cn("inline-flex items-center gap-2 text-xs font-bold", status.text)}><span className={cn("h-2 w-2 rounded-full", status.dot)} />{status.label}</span></td>
-                  <td className="max-w-[170px] px-4 py-4"><span className={cn("block truncate text-xs font-bold", alert.being_resolved_by ? "text-[#36323F]" : "text-amber-700")}>{alert.being_resolved_by || "Chưa giao"}</span></td>
+                  <td className="max-w-[170px] px-4 py-4"><span className={cn("block truncate text-xs font-bold", hasAssignee ? "text-[#36323F]" : "text-amber-700")} title={assigneeName}>{assigneeName}</span></td>
                   <td className="relative px-5 py-4">
                     <div className="flex justify-end gap-2">
                       {canAssign && (

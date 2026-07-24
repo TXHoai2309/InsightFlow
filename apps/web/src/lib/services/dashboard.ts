@@ -40,6 +40,7 @@ import type {
   Platform,
   DashboardFilters,
 } from "@/types/dashboard";
+import { broadcastLeadRealtimeUpdate } from "@/lib/realtimeLeads";
 import { canPerformAction, type UserRoleProfile } from "@/lib/rbac";
 import {
   getChangedLabelFields,
@@ -57,6 +58,15 @@ import {
   isLocationReviewPlatform,
   parseVietnameseRelativeDate,
 } from "@/lib/dashboard-display";
+import { isDemoRuntime } from "@/lib/demo-navigation";
+import {
+  buildLeadWorkflowLookupKeys,
+  getMissingLeadWorkflowKeys,
+  indexLeadWorkflowRows,
+  mergeLeadWorkflowRows,
+} from "@/lib/lead-workflow-state";
+import { deduplicateSourceRecords } from "@/lib/source-content-identity";
+import { buildSentimentTrend } from "@/lib/sentiment-trend";
 
 // ─── Collection names ────────────────────────────────────────────────────────
 export const COLLECTION_NAMES = {
@@ -591,8 +601,8 @@ interface SupabaseConfig {
 }
 
 function getSupabaseConfig(): SupabaseConfig {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+  const url = process.env.NEXT_PUBLIC_VPS_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  const anonKey = process.env.NEXT_PUBLIC_VPS_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
   if (!url.trim() || !anonKey.trim()) {
     throw new Error("Thiếu NEXT_PUBLIC_SUPABASE_URL hoặc NEXT_PUBLIC_SUPABASE_ANON_KEY để tải mentions từ Supabase.");
   }
@@ -1017,6 +1027,89 @@ async function loadSupabaseRowsByIds<T extends SupabaseRow>(
   return finalResults.slice(0, maxRows);
 }
 
+async function fetchSupabaseLeadWorkflowRows(
+  config: SupabaseConfig,
+  mentions: Mention[],
+  profile?: UserRoleProfile | null,
+): Promise<SupabaseRow[]> {
+  const lookupKeys = buildLeadWorkflowLookupKeys(mentions);
+  const order = "updated_at.desc.nullslast";
+
+  const scopedRowsPromise = (() => {
+    if (!profile?.uid) return Promise.resolve([] as SupabaseRow[]);
+
+    // Nhân viên phải nhận được toàn bộ workflow do chính mình phụ trách,
+    // kể cả khi bản ghi đã nằm ngoài 2.000 dòng mới nhất toàn hệ thống.
+    if (profile.role !== "brand_manager" && profile.role !== "admin") {
+      return loadSupabaseRows<SupabaseRow>(
+        config,
+        "leads",
+        { owner_id: `eq.${profile.uid}` },
+        10_000,
+      );
+    }
+
+    // Quản lý thương hiệu cần toàn bộ workflow trong đúng thương hiệu để số
+    // đếm và danh sách dùng chung một phạm vi dữ liệu.
+    if (profile.role === "brand_manager" && profile.brandName) {
+      return loadSupabaseRows<SupabaseRow>(
+        config,
+        "leads",
+        { workspace_id: `eq.${profile.brandName}` },
+        10_000,
+      );
+    }
+
+    return Promise.resolve([] as SupabaseRow[]);
+  })();
+
+  const [recentRows, scopedRows] = await Promise.all([
+    loadSupabaseRows<SupabaseRow>(config, "leads", { order }, 2_000),
+    scopedRowsPromise,
+  ]);
+
+  let workflowRows = mergeLeadWorkflowRows(recentRows, scopedRows);
+  let missingKeys = getMissingLeadWorkflowKeys(lookupKeys, workflowRows);
+  if (missingKeys.length === 0) return workflowRows;
+
+  // Các phiên bản ingestion cũ từng dùng ba khóa khác nhau. Tra cứu lần lượt
+  // để một workflow đã tồn tại không bị dựng lại thành lead mới/chưa phân công.
+  const rowsById = await loadSupabaseRowsByIds<SupabaseRow>(
+    config,
+    "leads",
+    "id",
+    missingKeys,
+    ["*"],
+  );
+  workflowRows = mergeLeadWorkflowRows(workflowRows, rowsById);
+  missingKeys = getMissingLeadWorkflowKeys(lookupKeys, workflowRows);
+
+  if (missingKeys.length > 0) {
+    const rowsByMentionId = await loadSupabaseRowsByIds<SupabaseRow>(
+      config,
+      "leads",
+      "mention_id",
+      missingKeys,
+      ["*"],
+    );
+    workflowRows = mergeLeadWorkflowRows(workflowRows, rowsByMentionId);
+    missingKeys = getMissingLeadWorkflowKeys(lookupKeys, workflowRows);
+  }
+
+  if (missingKeys.length > 0) {
+    const rowsBySourceMentionId = await loadSupabaseRowsByIds<SupabaseRow>(
+      config,
+      "leads",
+      "source_mention_id",
+      missingKeys,
+      ["*"],
+    );
+    workflowRows = mergeLeadWorkflowRows(workflowRows, rowsBySourceMentionId);
+  }
+
+  return workflowRows;
+}
+
 async function loadSupabaseRowsByPostIdsWithSelectFallback<T extends SupabaseRow>(
   config: SupabaseConfig,
   table: string,
@@ -1132,6 +1225,9 @@ function getSupabaseLabel(
   const rawLabel = {
     ...rowLabels,
     ...annotationLabel,
+    // Preserve the workflow clock so downstream deduplication can choose the
+    // newest annotation instead of the copy with the longest old history.
+    updated_at: annotationLabel.updated_at || annotation?.updated_at,
     intent:
       hasAnnotationIntent || hasRowLabelIntent || inferredIntent !== "none"
         ? inferredIntent
@@ -1204,8 +1300,8 @@ function supabasePostToMention(row: SupabaseRow, annotationByKey: Map<string, Su
         : 100,
     created_at: parseDate(row.updated_at || row.created_at || row.crawled_at || row.posted_at),
     classified_at: parseDate(
-      annotation?.created_at ||
-        annotation?.updated_at ||
+      annotation?.updated_at ||
+        annotation?.created_at ||
         row.updated_at ||
         row.created_at ||
         row.crawled_at ||
@@ -1275,8 +1371,8 @@ function supabaseCommentToMention(
         : 100,
     created_at: parseDate(row.updated_at || row.created_at || row.crawled_at || row.posted_at),
     classified_at: parseDate(
-      annotation?.created_at ||
-        annotation?.updated_at ||
+      annotation?.updated_at ||
+        annotation?.created_at ||
         row.updated_at ||
         row.created_at ||
         row.crawled_at ||
@@ -1749,13 +1845,8 @@ function parseDate(field: unknown, referenceField?: unknown): string {
   return s.includes("+") || s.endsWith("Z") ? s : s + "Z";
 }
 
-function uniqueRecordsById<T extends { id: string }>(records: T[]): T[] {
-  const seen = new Set<string>();
-  return records.filter((record) => {
-    if (!record.id || seen.has(record.id)) return false;
-    seen.add(record.id);
-    return true;
-  });
+function uniqueRecordsById(records: Mention[]): Mention[] {
+  return deduplicateSourceRecords(records);
 }
 
 function getProfileDisplayName(profile: UserRoleProfile) {
@@ -1869,14 +1960,137 @@ export interface FetchOptions {
   forceRefresh?: boolean;
 }
 
+export interface LeadPreviewOptions {
+  brandKey?: string;
+  postedFrom: string;
+  postedBefore: string;
+  maxRows?: number;
+}
+
+function mapSupabaseLeadPreviewRow(row: SupabaseRow): Lead | null {
+  const { intent, labels } = resolveSupabaseLeadClassification(row);
+  if (!isQualifiedLeadClassification(intent, labels)) return null;
+
+  const id = String(row.id || row.mention_id || row.source_mention_id || "").trim();
+  if (!id) return null;
+
+  const parsedContact = parseContactString(normalizeOptionalText(row.contact));
+  const workspaceId = readFirstText(row.workspace_id, row.brand, row.brand_slug);
+  const persistedSignals = parseSupabaseStringArray(row.intent_signals);
+
+  return {
+    id,
+    mention_id: normalizeOptionalText(row.mention_id) || id,
+    source_mention_id: normalizeOptionalText(row.source_mention_id) || id,
+    parent_id: normalizeOptionalText(row.parent_id) || null,
+    content_type: ["post", "comment", "reply"].includes(String(row.content_type || "").toLowerCase())
+      ? (String(row.content_type).toLowerCase() as Lead["content_type"])
+      : undefined,
+    post_id: normalizeOptionalText(row.post_id) || id,
+    workspace_id: workspaceId,
+    platform: mapSourceToPlatform(String(row.platform || row.source || "")),
+    author: normalizeOptionalText(row.author || row.author_name),
+    content: readFirstText(row.content, row.text),
+    intent,
+    current_label: row.current_label ? mapLabelValue(row.current_label) : undefined,
+    labels,
+    intent_signals: persistedSignals.length > 0 ? persistedSignals : labels.topic,
+    status: mapLeadStatus(row.status),
+    created_at: parseDate(row.created_at || row.posted_at || row.updated_at),
+    updated_at: row.updated_at ? parseDate(row.updated_at) : undefined,
+    expiry_at: row.expiry_at ? parseDate(row.expiry_at) : undefined,
+    posted_at: row.posted_at ? parseDate(row.posted_at) : undefined,
+    url: normalizeOptionalUrl(row.url, row.post_url, row.source_url),
+    source_url: normalizeOptionalUrl(row.source_url, row.url, row.post_url),
+    phone: normalizeOptionalText(row.phone) || parsedContact.phone,
+    email: normalizeOptionalText(row.email) || parsedContact.email,
+    zalo_id: normalizeOptionalText(row.zalo_id) || parsedContact.zalo_id,
+    messenger_id: normalizeOptionalText(row.messenger_id) || parsedContact.messenger_id,
+    social_profile_url:
+      normalizeOptionalUrl(row.social_profile_url, row.profile_url) ||
+      parsedContact.social_profile_url,
+    owner_id: normalizeOptionalText(row.owner_id || row.firebase_uid),
+    owner_name: normalizeOptionalText(row.owner_name),
+    owner_email: normalizeOptionalText(row.owner_email),
+    assigned_at: row.assigned_at ? parseDate(row.assigned_at) : undefined,
+    assigned_by: normalizeOptionalText(row.assigned_by),
+    claimed_at: row.claimed_at ? parseDate(row.claimed_at) : undefined,
+    first_contacted_at: row.first_contacted_at ? parseDate(row.first_contacted_at) : undefined,
+    contact_attempts: Number.isFinite(Number(row.contact_attempts)) ? Number(row.contact_attempts) : 0,
+    last_contact_at: row.last_contact_at ? parseDate(row.last_contact_at) : undefined,
+    pending_result: row.pending_result === true,
+    last_action_at: row.last_action_at ? parseDate(row.last_action_at) : undefined,
+    last_action_type: normalizeOptionalText(row.last_action_type) as Lead["last_action_type"],
+    last_contact_channel: normalizeOptionalText(row.last_contact_channel),
+    result_type: normalizeOptionalText(row.result_type) as Lead["result_type"],
+    result_recorded_at: row.result_recorded_at ? parseDate(row.result_recorded_at) : undefined,
+    follow_up_at: row.follow_up_at ? parseDate(row.follow_up_at) : undefined,
+    closed_at: row.closed_at ? parseDate(row.closed_at) : undefined,
+    notes: normalizeOptionalText(row.notes),
+  };
+}
+
 // ─── Main service ─────────────────────────────────────────────────────────────
 export class DashboardService {
+  /**
+   * Small, server-filtered snapshot used to render the default Lead queue
+  * immediately. The authoritative all-time workflow snapshot continues in
+  * the background and replaces this preview when it is ready.
+  */
+  static async fetchTodayLeadPreview(opts: LeadPreviewOptions): Promise<Lead[]> {
+    if (isDemoRuntime()) {
+      const { dummyLeads } = await import("@/lib/demoData");
+      const start = new Date(opts.postedFrom).getTime();
+      const end = new Date(opts.postedBefore).getTime();
+      return dummyLeads.filter((lead) => {
+        const postedAt = new Date(lead.posted_at || lead.created_at).getTime();
+        return postedAt >= start && postedAt < end;
+      });
+    }
+
+    const config = getSupabaseConfig();
+    const rows = await loadSupabaseRows<SupabaseRow>(
+      config,
+      "leads",
+      {
+        order: "posted_at.desc.nullslast",
+        and: `(posted_at.gte.${opts.postedFrom},posted_at.lt.${opts.postedBefore})`,
+      },
+      opts.maxRows || 1000,
+    );
+
+    const normalizedBrand = normalizeBrandName(opts.brandKey || "");
+    return rows
+      .map(mapSupabaseLeadPreviewRow)
+      .filter((lead): lead is Lead => Boolean(lead))
+      .filter(
+        (lead) =>
+          !normalizedBrand || normalizeBrandName(lead.workspace_id) === normalizedBrand,
+      );
+  }
+
   /**
    * Load the complete post/comment/reply context only when a detail view needs it.
    * Results are cached per post so switching between leads in the same thread is cheap.
    */
   static async fetchMentionThread(postId: string): Promise<Mention[]> {
     return fetchSupabaseMentionThread(postId);
+  }
+
+  /**
+   * Load the brand-scoped mention snapshot used by the operational Alerts queue.
+   *
+   * This path deliberately does not hydrate Lead workflow rows. Alerts and the
+   * employee operations dashboard must remain available even when the `leads`
+   * table is large or temporarily unavailable.
+   */
+  static async fetchAlertMentions(opts: FetchOptions = {}): Promise<Mention[]> {
+    if (typeof window !== "undefined" && window.location.pathname.startsWith("/demo")) {
+      const { dummyMentions } = await import("@/lib/demoData");
+      return dummyMentions;
+    }
+
+    return fetchSupabaseMentions(opts);
   }
 
   /**
@@ -2094,24 +2308,22 @@ export class DashboardService {
       const sbLeadsById = new Map<string, SupabaseRow>();
       try {
         const sbConfig = getSupabaseConfig();
-        supabaseLeadRows = await loadSupabaseRows<SupabaseRow>(
+        supabaseLeadRows = await fetchSupabaseLeadWorkflowRows(
           sbConfig,
-          "leads",
-          { order: "updated_at.desc.nullslast" },
-          2000,
+          mentions,
+          profile,
         );
-        for (const row of supabaseLeadRows) {
-          // Different ingestion versions have used either the lead id, mention
-          // id, or source mention id as the primary key. Index every known key
-          // so workflow state from Supabase is merged back into the source
-          // mention instead of silently falling back to a new/unassigned lead.
-          [row.id, row.mention_id, row.source_mention_id]
-            .map((value) => String(value || "").trim())
-            .filter(Boolean)
-            .forEach((rowId) => sbLeadsById.set(rowId, row));
-        }
-      } catch {
-        // Bảng chưa tồn tại hoặc lỗi — bỏ qua, derive từ mentions
+        indexLeadWorkflowRows(supabaseLeadRows).forEach((row, key) => {
+          sbLeadsById.set(key, row);
+        });
+      } catch (error) {
+        // Không dựng lại workflow thành new/unassigned nếu nguồn trạng thái
+        // gặp lỗi vì điều đó làm sai quyền truy cập, số đếm và danh sách.
+        console.error("[DashboardService] Failed to load lead workflow rows:", error);
+        throw new Error(
+          "Không thể đồng bộ trạng thái xử lý khách hàng. Vui lòng thử làm mới.",
+          { cause: error },
+        );
       }
 
       // Bước 2: Luôn derive leads từ Supabase mentions thật (có intent label)
@@ -2526,6 +2738,13 @@ export class DashboardService {
         id,
         buildLeadWorkflowPayload(lead, data, profile, auditFields),
       );
+
+      // Broadcast realtime update to all connected clients immediately
+      void broadcastLeadRealtimeUpdate({
+        leadId: id,
+        ...data,
+        updated_at: auditFields.updated_at,
+      });
 
       // Gửi thông báo đến nhân viên nếu được phân công mới
       const isNewAssignment = data.owner_id && data.owner_id !== (lead?.owner_id || null);
@@ -3255,87 +3474,6 @@ export class DashboardService {
     mentions: Mention[],
     timeRange: DashboardFilters["time_range"],
   ): SentimentTrendPoint[] {
-    const now = Date.now();
-
-    if (timeRange === "24h") {
-      const result: SentimentTrendPoint[] = [];
-      for (let i = 23; i >= 0; i--) {
-        const slotEnd = now - i * 60 * 60 * 1000;
-        const slotStart = slotEnd - 60 * 60 * 1000;
-        const slot = mentions.filter((m) => {
-          // Dùng posted_at (ngày đăng bài) để vẽ biểu đồ
-          const t = new Date(m.posted_at).getTime();
-          return t >= slotStart && t < slotEnd;
-        });
-        const d = new Date(slotEnd);
-        result.push({
-          date: `${String(d.getHours()).padStart(2, "0")}:00`,
-          positive: slot.filter((m) => m.sentiment === "positive").length,
-          negative: slot.filter((m) => m.sentiment === "negative").length,
-          neutral: slot.filter((m) => m.sentiment === "neutral").length,
-        });
-      }
-      return result;
-    }
-
-    // Group theo ngày đăng bài (posted_at)
-    let days = 30;
-    if (timeRange === "2d") {
-      days = 2;
-    } else if (timeRange === "3d") {
-      days = 3;
-    } else if (timeRange === "5d") {
-      days = 5;
-    } else if (timeRange === "7d") {
-      days = 7;
-    } else if (timeRange === "30d") {
-      days = 30;
-    } else if (timeRange === "all") {
-      if (mentions.length === 0) {
-        return [];
-      }
-      const timestamps = mentions.map((m) => new Date(m.posted_at).getTime());
-      const minTimestamp = Math.min(...timestamps);
-      const diffMs = now - minTimestamp;
-      const diffDays = Math.ceil(diffMs / (24 * 60 * 60 * 1000));
-      // Giới hạn tối thiểu 1 ngày, tối đa 90 ngày để tránh render quá tải
-      days = Math.max(1, Math.min(90, diffDays));
-    } else if (timeRange === "custom") {
-      if (mentions.length > 0) {
-        const timestamps = mentions.map((m) => new Date(m.posted_at).getTime());
-        const minTimestamp = Math.min(...timestamps);
-        const maxTimestamp = Math.max(...timestamps, now);
-        const diffMs = maxTimestamp - minTimestamp;
-        days = Math.max(1, Math.min(90, Math.ceil(diffMs / (24 * 60 * 60 * 1000))));
-      } else {
-        days = 30;
-      }
-    }
-
-    const result: SentimentTrendPoint[] = [];
-    for (let i = days - 1; i >= 0; i--) {
-      const dayStart = new Date(now);
-      dayStart.setDate(dayStart.getDate() - i);
-      dayStart.setHours(0, 0, 0, 0);
-      const dayEnd = new Date(dayStart);
-      dayEnd.setDate(dayEnd.getDate() + 1);
-
-      const slot = mentions.filter((m) => {
-        // Dùng posted_at (ngày đăng bài thật) thay vì created_at (ngày cào)
-        const t = new Date(m.posted_at).getTime();
-        return t >= dayStart.getTime() && t < dayEnd.getTime();
-      });
-
-      result.push({
-        date: dayStart.toLocaleDateString("vi-VN", {
-          day: "2-digit",
-          month: "2-digit",
-        }),
-        positive: slot.filter((m) => m.sentiment === "positive").length,
-        negative: slot.filter((m) => m.sentiment === "negative").length,
-        neutral: slot.filter((m) => m.sentiment === "neutral").length,
-      });
-    }
-    return result;
+    return buildSentimentTrend(mentions, timeRange);
   }
 }

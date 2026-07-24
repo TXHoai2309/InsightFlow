@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
+import Link from "next/link";
 import {
   Activity,
   AlertTriangle,
@@ -15,10 +16,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { PlatformLogo } from "@/components/platform/PlatformLogo";
 import { useAuth } from "@/hooks/useAuth";
 import { getScopedBrandKey } from "@/lib/brandScope";
-import { isTerminalAlert } from "@/lib/alertWorkflow";
+import { isSkippedAlert, isTerminalAlert } from "@/lib/alertWorkflow";
 import {
   buildAlertOperationalMetrics,
-  filterOperationalAlerts,
+  filterNegativeOperationalAlerts,
+  getAlertCanonicalSeverity,
+  getAlertDeduplicationKey,
+  isAlertWithinTimeScope,
+  isHighPriorityAlert,
 } from "@/lib/operational-metrics";
 import { getDiscussionPeriodDays } from "@/lib/dashboard-display";
 import { cn } from "@/lib/utils";
@@ -71,16 +76,8 @@ function buildStats(alerts: AlertData[], getKey: (alert: AlertData) => string, l
     .sort((left, right) => right.count - left.count);
 }
 
-function normalizeSeverity(value?: string) {
-  const severity = String(value || "").toLowerCase();
-  if (severity === "critical" || severity === "urgent") return "critical";
-  if (severity === "high") return "high";
-  if (severity === "medium" || severity === "normal") return "medium";
-  return "low";
-}
-
 function slaLimitHours(alert: AlertData) {
-  const severity = normalizeSeverity(alert.severity);
+  const severity = getAlertCanonicalSeverity(alert);
   if (severity === "critical") return 1;
   if (severity === "high") return 2;
   if (severity === "medium") return 4;
@@ -145,44 +142,73 @@ export function CrisisCommandCenter() {
   const alerts = useMemo(() => {
     // Every negative mention must enter the Crisis work queue. The crisis
     // classification is a priority signal, not an admission condition.
-    return filterOperationalAlerts(rawAlerts.filter(
-      (alert) => alert.sentiment === "negative",
-    ), {
+    const timeScopedAlerts = rawAlerts.filter((alert) =>
+      isAlertWithinTimeScope(alert, {
+        timeRange: filters.time_range,
+        singleDate: filters.single_date,
+        customStartDate: filters.custom_start_date,
+        customEndDate: filters.custom_end_date,
+      }),
+    );
+    return filterNegativeOperationalAlerts(timeScopedAlerts, {
       profile,
       workspaceId: filters.workspace_id,
       platform: filters.platform,
-      reviewWindowDays: periodDays,
+      reviewWindowDays: 36_500,
       dateBasis: "created_at",
     });
-  }, [filters.platform, filters.workspace_id, periodDays, profile, rawAlerts]);
+  }, [
+    filters.custom_end_date,
+    filters.custom_start_date,
+    filters.platform,
+    filters.single_date,
+    filters.time_range,
+    filters.workspace_id,
+    profile,
+    rawAlerts,
+  ]);
 
   const data = useMemo(() => {
     const operationalMetrics = buildAlertOperationalMetrics(alerts);
-    const activeAlerts = alerts.filter(isActive);
-    const criticalAlerts = activeAlerts.filter((alert) => ["critical", "high"].includes(normalizeSeverity(alert.severity)));
-    const overdueAlerts = activeAlerts.filter(isOverdue);
-    const unassignedAlerts = activeAlerts.filter((alert) => !alert.being_resolved_by);
+    const skippedAlertKeys = new Set(rawAlerts.filter(isSkippedAlert).map(getAlertDeduplicationKey));
+    const activeAlerts = alerts.filter((alert) => isActive(alert) && !skippedAlertKeys.has(getAlertDeduplicationKey(alert)));
+    const criticalAlerts = activeAlerts.filter(isHighPriorityAlert);
+    const overdueAlerts = activeAlerts.filter((alert) => !isSkippedAlert(alert) && isOverdue(alert));
+    const unassignedAlerts = activeAlerts.filter((alert) => !isSkippedAlert(alert) && !alert.being_resolved_by);
     const resolvedAlerts = alerts.filter((alert) => !isActive(alert));
     const platformStats = buildStats(alerts, (alert) => alert.source || "other", PLATFORM_LABELS);
     const topicStats = buildStats(alerts, (alert) => alert.topic || "other", TOPIC_LABELS);
     const latestAlert = alerts.slice().sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())[0];
     return { activeAlerts, criticalAlerts, overdueAlerts, unassignedAlerts, resolvedAlerts, platformStats, topicStats, latestAlert, operationalMetrics };
-  }, [alerts]);
+  }, [alerts, rawAlerts]);
 
+  const alertFilterHref = (extra: Record<string, string> = {}) => {
+    const params = new URLSearchParams({ scope: "negative", status: "all", time: filters.time_range, ...extra });
+    if (filters.workspace_id !== "all") params.set("brand", filters.workspace_id);
+    if (filters.platform !== "all") params.set("source", filters.platform);
+    if (filters.single_date) params.set("date", filters.single_date);
+    if (filters.custom_start_date) params.set("start", filters.custom_start_date);
+    if (filters.custom_end_date) params.set("end", filters.custom_end_date);
+    return `/alerts?${params.toString()}`;
+  };
+  const totalNegativeHref = alertFilterHref();
+  const highPriorityHref = alertFilterHref({ severity: "high_priority" });
+  const overdueHref = alertFilterHref({ sla: "overdue" });
+  const unassignedHref = alertFilterHref({ status: "pending" });
   const topPlatform = data.platformStats[0];
   const topTopic = data.topicStats[0];
   return (
     <div data-tour="dashboard-insights" className="w-full space-y-6">
       <section data-tour="dashboard-insights-kpis" className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          { icon: ShieldAlert, label: "Tổng tiêu cực", value: alerts.length, unit: "đề cập", hint: "Tất cả đề cập tiêu cực cần theo dõi trong kỳ", tone: "border-[#E2DFFF] bg-[#F7F5FF] text-[#4234B6]", iconTone: "bg-[#E2DFFF] text-[#4234B6]" },
-          { icon: AlertTriangle, label: "Ưu tiên cao", value: data.criticalAlerts.length, unit: "cảnh báo", hint: "Mức Critical hoặc Cao đang mở", tone: "border-[#FFE2C7] bg-[#FFF8F0] text-[#A14A00]", iconTone: "bg-[#FFE2C7] text-[#A14A00]" },
-          { icon: Clock3, label: "Quá SLA", value: data.overdueAlerts.length, unit: "cảnh báo", hint: "Vượt thời gian phản hồi theo mức ưu tiên", tone: "border-[#FFDAD6] bg-[#FFF4F2] text-[#BA1A1A]", iconTone: "bg-[#FFDAD6] text-[#BA1A1A]" },
-          { icon: UserRoundCheck, label: "Chưa có người xử lý", value: data.unassignedAlerts.length, unit: "cảnh báo", hint: "Cần phân công nhân viên", tone: "border-[#D7F4E2] bg-[#F3FCF6] text-[#147A3F]", iconTone: "bg-[#D7F4E2] text-[#147A3F]" },
+          { icon: ShieldAlert, label: "Tổng tiêu cực", value: alerts.length, unit: "đề cập", hint: "Tất cả đề cập tiêu cực cần theo dõi trong kỳ", href: totalNegativeHref, tone: "border-[#E2DFFF] bg-[#F7F5FF] text-[#4234B6]", iconTone: "bg-[#E2DFFF] text-[#4234B6]" },
+          { icon: AlertTriangle, label: "Ưu tiên cao", value: data.criticalAlerts.length, unit: "cảnh báo", hint: "Mức Critical hoặc Cao đang mở", href: highPriorityHref, tone: "border-[#FFE2C7] bg-[#FFF8F0] text-[#A14A00]", iconTone: "bg-[#FFE2C7] text-[#A14A00]" },
+          { icon: Clock3, label: "Quá SLA", value: data.overdueAlerts.length, unit: "cảnh báo", hint: "Vượt thời gian phản hồi theo mức ưu tiên", href: overdueHref, tone: "border-[#FFDAD6] bg-[#FFF4F2] text-[#BA1A1A]", iconTone: "bg-[#FFDAD6] text-[#BA1A1A]" },
+          { icon: UserRoundCheck, label: "Chưa có người xử lý", value: data.unassignedAlerts.length, unit: "cảnh báo", hint: "Cần phân công nhân viên", href: unassignedHref, tone: "border-[#D7F4E2] bg-[#F3FCF6] text-[#147A3F]", iconTone: "bg-[#D7F4E2] text-[#147A3F]" },
         ].map((item) => {
           const Icon = item.icon;
           return (
-            <div key={item.label} className={`rounded-[12px] border px-4 py-4 shadow-sm ${item.tone}`}>
+            <Link href={item.href} key={item.label} className={`rounded-[12px] border px-4 py-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${item.tone}`}>
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-[12px] font-bold uppercase tracking-wide text-[#474554]">{item.label}</p>
@@ -194,7 +220,7 @@ export function CrisisCommandCenter() {
                 </div>
                 <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] ${item.iconTone}`}><Icon className="h-5 w-5" /></div>
               </div>
-            </div>
+            </Link>
           );
         })}
       </section>

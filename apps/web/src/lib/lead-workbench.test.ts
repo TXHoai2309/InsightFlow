@@ -2,7 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import type { Lead } from "@/types/dashboard";
 import type { UserRoleProfile } from "./rbac";
-import { getLeadFollowUpMeta, matchesLeadWorkbenchView } from "./lead-workbench";
+import {
+  getLeadExpiryTime,
+  getLeadFollowUpMeta,
+  getLeadWorkbenchMeta,
+  matchesLeadWorkbenchView,
+} from "./lead-workbench";
 
 const profile: UserRoleProfile = {
   uid: "lead-employee-1",
@@ -30,6 +35,41 @@ function lead(overrides: Partial<Lead>): Lead {
     ...overrides,
   };
 }
+
+test("calculates SLA from publication time even when persisted expiry used ingestion time", () => {
+  const item = lead({
+    intent: "warm",
+    posted_at: "2026-06-21T08:04:00+07:00",
+    created_at: "2026-07-21T09:10:00+07:00",
+    expiry_at: "2026-07-22T09:10:00+07:00",
+  });
+  const expectedExpiry = new Date("2026-06-22T08:04:00+07:00").getTime();
+  const meta = getLeadWorkbenchMeta(
+    item,
+    new Date("2026-07-22T14:00:00+07:00").getTime(),
+  );
+
+  assert.equal(getLeadExpiryTime(item), expectedExpiry);
+  assert.equal(meta.isOverdue, true);
+  assert.equal(meta.wasOverdueOnIngest, true);
+});
+
+test("falls back to system creation time when publication time is missing or invalid", () => {
+  const missing = lead({
+    intent: "hot",
+    posted_at: undefined,
+    created_at: "2026-07-20T08:00:00.000Z",
+  });
+  const invalid = lead({
+    intent: "hot",
+    posted_at: "invalid",
+    created_at: "2026-07-20T08:00:00.000Z",
+  });
+  const expected = new Date("2026-07-20T08:30:00.000Z").getTime();
+
+  assert.equal(getLeadExpiryTime(missing), expected);
+  assert.equal(getLeadExpiryTime(invalid), expected);
+});
 
 test("separates completed and skipped leads into different workbench views", () => {
   const completed = lead({ id: "completed", status: "completed", owner_id: profile.uid });

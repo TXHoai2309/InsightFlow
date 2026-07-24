@@ -6,6 +6,7 @@ type AlertStatusSource = {
   resolved_at?: string | null;
   monitoring_started_at?: string | null;
   being_resolved_by?: string | null;
+  being_resolved_at?: string | null;
   skipped_at?: string | null;
   skipped_by_uid?: string | null;
   skipped_by_email?: string | null;
@@ -29,6 +30,12 @@ const PROCESSING_STATUSES = new Set([
 ]);
 const CONTACT_FAILED_STATUSES = new Set(["contact_failed", "contact_unsuccessful"]);
 
+function getTimestamp(value: string | null | undefined): number {
+  if (!value) return 0;
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
 /**
  * Legacy statuses are normalized here so every screen uses the same rule.
  */
@@ -37,11 +44,27 @@ export function getAlertWorkflowStatus(alert: AlertStatusSource): AlertWorkflowS
     .trim()
     .toLowerCase();
 
-  // A deliberate skip wins over stale ownership/completion evidence.
-  if (alert.skipped_at || SKIPPED_STATUSES.has(rawStatus)) return "skipped";
-  // Completion evidence wins over a stale status saved by older clients.
-  if (alert.resolved_at || alert.monitoring_started_at || RESOLVED_STATUSES.has(rawStatus)) return "resolved";
+  // An explicit persisted status is authoritative. Metadata is only used as a
+  // compatibility fallback for old annotations that did not persist a status.
+  if (SKIPPED_STATUSES.has(rawStatus)) return "skipped";
+  if (RESOLVED_STATUSES.has(rawStatus)) return "resolved";
   if (CONTACT_FAILED_STATUSES.has(rawStatus)) return "contact_failed";
+
+  if (PROCESSING_STATUSES.has(rawStatus)) {
+    const activeAt = getTimestamp(alert.being_resolved_at);
+    const terminalAt = Math.max(
+      getTimestamp(alert.skipped_at),
+      getTimestamp(alert.resolved_at),
+      getTimestamp(alert.monitoring_started_at),
+    );
+
+    // A new claim must win over terminal evidence left by an older workflow
+    // cycle. Otherwise the alert briefly reappears as Closed.
+    if (!terminalAt || (activeAt && activeAt >= terminalAt)) return "processing";
+  }
+
+  if (alert.skipped_at) return "skipped";
+  if (alert.resolved_at || alert.monitoring_started_at) return "resolved";
   if (alert.being_resolved_by || PROCESSING_STATUSES.has(rawStatus)) return "processing";
   return "pending";
 }
@@ -55,6 +78,26 @@ export function getPersistedAlertStatus(alert: AlertStatusSource): "new" | "reso
   if (CONTACT_FAILED_STATUSES.has(rawStatus)) return "contact_failed";
   if (workflowStatus === "processing") return "resolving";
   return "new";
+}
+
+/**
+ * Annotation rows have a top-level `status` for the classification pipeline
+ * (normally "completed"). It is not the crisis workflow status. Realtime
+ * consumers must read the workflow fields stored in the annotation label.
+ */
+export function getRealtimeAlertWorkflowStatus(
+  row: Record<string, unknown>,
+  label: Record<string, unknown>,
+): ReturnType<typeof getPersistedAlertStatus> {
+  const resolutionStatus =
+    row.resolution_status ??
+    label.resolution_status ??
+    label.status;
+
+  return getPersistedAlertStatus({
+    ...label,
+    resolution_status: typeof resolutionStatus === "string" ? resolutionStatus : null,
+  });
 }
 
 export function isResolvedAlert(alert: AlertStatusSource): boolean {

@@ -5,6 +5,8 @@ import { useTranslation } from "react-i18next";
 import { PLATFORM_META } from "@/lib/services/dashboard";
 import {
   countActiveLeadFilters,
+  type LeadDateFilterBasis,
+  type LeadUpdatedRangeFilter,
   type LeadWorkbenchFilters,
 } from "@/lib/lead-filters";
 import type { Platform, Workspace } from "@/types/dashboard";
@@ -24,6 +26,8 @@ interface LeadFiltersProps {
   brandLabel?: string;
   staffList?: StaffOption[];
   canSelectStaff?: boolean;
+  dateBasis: LeadDateFilterBasis;
+  defaultDateRange: LeadUpdatedRangeFilter;
   onChange: (next: LeadWorkbenchFilters) => void;
   onReset: () => void;
 }
@@ -58,11 +62,13 @@ export function LeadFilters({
   brandLabel,
   staffList = [],
   canSelectStaff = false,
+  dateBasis,
+  defaultDateRange,
   onChange,
   onReset,
 }: LeadFiltersProps) {
   const { t } = useTranslation();
-  const activeCount = countActiveLeadFilters(value, !brandLocked);
+  const activeCount = countActiveLeadFilters(value, !brandLocked, defaultDateRange);
   const selectedPlatform =
     value.platform === "all" ? "" : PLATFORM_META[value.platform]?.label || value.platform;
 
@@ -137,16 +143,27 @@ export function LeadFilters({
       clear: () => patchValue({ ownership: "all", ownerId: undefined }),
     });
   }
-  if (value.updatedRange !== "all") {
-    const labels = {
-      today: "Cập nhật hôm nay",
-      "7d": "Cập nhật trong 7 ngày",
-      "30d": "Cập nhật trong 30 ngày",
-    } as const;
+  if (dateBasis !== "none" && value.updatedRange !== defaultDateRange) {
+    const prefix = dateBasis === "terminal"
+      ? "Hoàn tất"
+      : dateBasis === "follow_up"
+        ? "Hẹn"
+        : "Đăng";
+    const labels: Record<LeadUpdatedRangeFilter, string> = {
+      all: "Tất cả thời gian",
+      today: `${prefix} hôm nay`,
+      "7d": `${prefix} trong 7 ngày`,
+      "30d": `${prefix} trong 30 ngày`,
+      custom: `${prefix} trong khoảng đã chọn`,
+    };
     chips.push({
       key: "updatedRange",
       label: labels[value.updatedRange],
-      clear: () => patchValue({ updatedRange: "all" }),
+      clear: () => patchValue({
+        updatedRange: defaultDateRange,
+        customStartDate: undefined,
+        customEndDate: undefined,
+      }),
     });
   }
 
@@ -166,8 +183,8 @@ export function LeadFilters({
               )}
             </div>
             <p className="mt-0.5 max-w-2xl text-xs text-[var(--color-text-secondary)]">
-              Thu hẹp khách hàng trong nhóm “{activeViewLabel}” theo từ khóa, nền tảng,
-              mức ưu tiên và SLA.
+              Thu hẹp khách hàng trong nhóm “{activeViewLabel}” theo nền tảng, mức ưu tiên,
+              SLA và người phụ trách.
             </p>
           </div>
 
@@ -182,26 +199,10 @@ export function LeadFilters({
           )}
         </header>
 
-        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-6">
-          <div className="md:col-span-2 xl:col-span-2">
-            <label htmlFor="lead-filter-query" className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
-              Tìm kiếm
-            </label>
-            <div className="relative">
-              <span className="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-base text-[var(--color-text-muted)]">
-                search
-              </span>
-              <input
-                id="lead-filter-query"
-                type="search"
-                value={value.query}
-                onChange={(event) => patchValue({ query: event.target.value })}
-                placeholder="Tên khách hàng hoặc nội dung"
-                className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] py-2 pl-9 pr-3 text-sm text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-brand)] focus:ring-1 focus:ring-[var(--color-brand)]"
-              />
-            </div>
-          </div>
-
+        <div
+          className={`grid gap-2 md:grid-cols-2 ${brandLocked ? "xl:grid-cols-5" : "xl:grid-cols-6"
+            }`}
+        >
           {!brandLocked && (
             <div>
               <label htmlFor="lead-filter-workspace" className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
@@ -331,22 +332,52 @@ export function LeadFilters({
 
           <div>
             <label htmlFor="lead-filter-updated" className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
-              Cập nhật gần nhất
+              {dateBasis === "terminal"
+                ? "Thời điểm hoàn tất"
+                : dateBasis === "follow_up"
+                  ? "Thời điểm hẹn"
+                  : dateBasis === "none"
+                    ? "Phạm vi nghiệp vụ"
+                    : "Ngày đăng"}
             </label>
             <div className="relative">
               <select
                 id="lead-filter-updated"
-                value={value.updatedRange}
-                onChange={(event) => patchValue({ updatedRange: event.target.value as LeadWorkbenchFilters["updatedRange"] })}
+                value={dateBasis === "none" ? "all" : value.updatedRange}
+                disabled={dateBasis === "none"}
+                onChange={(event) => patchValue({
+                  updatedRange: event.target.value as LeadWorkbenchFilters["updatedRange"],
+                  customStartDate: event.target.value === "custom" ? value.customStartDate : undefined,
+                  customEndDate: event.target.value === "custom" ? value.customEndDate : undefined,
+                })}
                 className={selectClassName}
               >
-                <option value="all">Tất cả thời gian</option>
+                <option value="all">{dateBasis === "none" ? "Tất cả việc đang mở" : "Tất cả thời gian"}</option>
                 <option value="today">Hôm nay</option>
                 <option value="7d">7 ngày gần nhất</option>
                 <option value="30d">30 ngày gần nhất</option>
+                <option value="custom">Khoảng ngày</option>
               </select>
               <SelectChevron />
             </div>
+            {dateBasis !== "none" && value.updatedRange === "custom" && (
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <input
+                  type="date"
+                  aria-label="Từ ngày"
+                  value={value.customStartDate || ""}
+                  onChange={(event) => patchValue({ customStartDate: event.target.value || undefined })}
+                  className={selectClassName}
+                />
+                <input
+                  type="date"
+                  aria-label="Đến ngày"
+                  value={value.customEndDate || ""}
+                  onChange={(event) => patchValue({ customEndDate: event.target.value || undefined })}
+                  className={selectClassName}
+                />
+              </div>
+            )}
           </div>
         </div>
 

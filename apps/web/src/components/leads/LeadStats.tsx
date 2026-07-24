@@ -11,6 +11,7 @@ import {
 
 interface LeadStatsProps {
   leads: Lead[];
+  followUpLeads?: Lead[];
   isLoading: boolean;
   profile?: UserRoleProfile | null;
   onSelectView?: (view: LeadWorkbenchView) => void;
@@ -23,7 +24,7 @@ function getOwnerScope(lead: Lead, profile?: UserRoleProfile | null) {
   return "other";
 }
 
-export function LeadStats({ leads, isLoading, profile, onSelectView }: LeadStatsProps) {
+export function LeadStats({ leads, followUpLeads = leads, isLoading, profile, onSelectView }: LeadStatsProps) {
   const stats = useMemo(() => {
     const nowMs = Date.now();
     const splitItems = (matched: Lead[]) => {
@@ -35,16 +36,16 @@ export function LeadStats({ leads, isLoading, profile, onSelectView }: LeadStats
         ).length,
       };
     };
-    const splitView = (view: LeadWorkbenchView) =>
+    const splitView = (view: LeadWorkbenchView, source = leads) =>
       splitItems(
-        leads.filter((lead) =>
+        source.filter((lead) =>
           matchesLeadWorkbenchView(lead, view, nowMs, profile),
         ),
       );
 
     const immediate = splitView("priority");
     const urgent = splitView("urgent");
-    const followUp = splitView("follow_up");
+    const followUp = splitView("follow_up", followUpLeads);
     const needResult = splitView("need_result");
     const hotPending = leads.filter(
       (lead) =>
@@ -54,7 +55,7 @@ export function LeadStats({ leads, isLoading, profile, onSelectView }: LeadStats
     ).length;
 
     return { immediate, urgent, followUp, needResult, hotPending };
-  }, [leads, profile]);
+  }, [followUpLeads, leads, profile]);
 
   const scopeSub = (item: { mine: number; unassigned: number }) =>
     `${item.mine} của tôi · ${item.unassigned} chưa ai nhận`;
@@ -72,7 +73,7 @@ export function LeadStats({ leads, isLoading, profile, onSelectView }: LeadStats
             view: "priority" as const,
           },
           {
-            title: "Sắp quá hạn",
+            title: "Theo dõi SLA",
             value: stats.urgent.total,
             sub: scopeSub(stats.urgent),
             icon: "timer",
@@ -104,9 +105,9 @@ export function LeadStats({ leads, isLoading, profile, onSelectView }: LeadStats
             view: "priority" as const,
           },
           {
-            title: "Sắp quá hạn",
+            title: "Theo dõi SLA",
             value: stats.urgent.total,
-            sub: "Theo SLA hiện tại",
+            sub: "Đã quá hạn hoặc sắp đến hạn",
             icon: "timer",
             color: "var(--color-warning)",
             bg: "var(--color-warning-subtle)",
@@ -115,7 +116,7 @@ export function LeadStats({ leads, isLoading, profile, onSelectView }: LeadStats
           {
             title: "Follow-up cần xử lý",
             value: stats.followUp.total,
-            sub: "Tất cả lịch follow-up đang mở",
+            sub: "Theo phạm vi thời gian đang chọn",
             icon: "event",
             color: "var(--color-info)",
             bg: "var(--color-info-subtle)",
