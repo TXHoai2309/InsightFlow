@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, deleteDoc, doc, onSnapshot, setDoc, Timestamp } from "firebase/firestore";
-import { auth, dbSecond } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
 import { isDemoRuntime } from "@/lib/demo-navigation";
 
 export interface AlertViewer {
@@ -20,78 +19,83 @@ interface UseViewPresenceOptions {
 }
 
 const HEARTBEAT_INTERVAL_MS = 15_000;
-const ACTIVE_WINDOW_MS = 120_000;
+const REFRESH_INTERVAL_MS = 5_000;
 
 function useViewPresence({ resource, resourceId, enabled }: UseViewPresenceOptions) {
   const [viewers, setViewers] = useState<AlertViewer[]>([]);
 
   useEffect(() => {
     const currentUser = auth.currentUser;
-    if (isDemoRuntime() || !enabled || !resourceId || !currentUser || !dbSecond) {
+    if (isDemoRuntime() || !enabled || !resourceId || !currentUser) {
       setViewers([]);
       return;
     }
 
     let disposed = false;
-    const collectionName = resource === "alerts" ? "alert_view_presence" : "lead_view_presence";
-    const viewersCollection = collection(dbSecond, collectionName, resourceId, "viewers");
-    const viewerRef = doc(viewersCollection, currentUser.uid);
+    let bearerToken = "";
+    let requestInFlight = false;
+    const endpoint = `/api/view-presence/${resource}/${encodeURIComponent(resourceId)}`;
 
-    const heartbeat = async () => {
-      if (disposed) return;
-      await setDoc(viewerRef, {
-        uid: currentUser.uid,
-        displayName: currentUser.displayName || currentUser.email || "Người dùng",
-        email: currentUser.email || "",
-        photoURL: currentUser.photoURL || "",
-        lastSeenAt: Timestamp.now(),
-      }, { merge: true });
+    const syncPresence = async (method: "GET" | "POST") => {
+      if (disposed || requestInFlight) return;
+      requestInFlight = true;
+      try {
+        const token = await currentUser.getIdToken();
+        if (disposed) return;
+        bearerToken = token;
+        const response = await fetch(endpoint, {
+          method,
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload.error || `HTTP ${response.status}`);
+        }
+        if (!disposed) {
+          setViewers(Array.isArray(payload.viewers) ? payload.viewers : []);
+        }
+      } finally {
+        requestInFlight = false;
+      }
     };
 
     const sendHeartbeat = () => {
-      void heartbeat().catch((error) => {
-        console.error("[View presence] Firestore heartbeat failed:", error);
+      void syncPresence("POST").catch((error) => {
+        console.error("[View presence] heartbeat failed:", error);
+      });
+    };
+
+    const refreshViewers = () => {
+      void syncPresence("GET").catch((error) => {
+        console.error("[View presence] refresh failed:", error);
       });
     };
 
     const leave = () => {
-      void deleteDoc(viewerRef).catch(() => undefined);
+      if (!bearerToken) return;
+      void fetch(endpoint, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${bearerToken}` },
+        keepalive: true,
+      }).catch(() => undefined);
     };
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") sendHeartbeat();
+      else leave();
     };
-
-    const unsubscribe = onSnapshot(viewersCollection, (snapshot) => {
-      if (disposed) return;
-      const activeSince = Date.now() - ACTIVE_WINDOW_MS;
-      const activeViewers = snapshot.docs.flatMap((viewerDoc) => {
-        const data = viewerDoc.data() as Partial<AlertViewer> & { lastSeenAt?: Timestamp };
-        const lastSeenAtMs = data.lastSeenAt?.toMillis?.() || 0;
-        if (lastSeenAtMs < activeSince) return [];
-        return [{
-          uid: viewerDoc.id,
-          displayName: data.displayName || data.email || "Người dùng",
-          email: data.email || "",
-          photoURL: data.photoURL || "",
-          lastSeenAt: new Date(lastSeenAtMs).toISOString(),
-        }];
-      });
-      setViewers(activeViewers.sort((left, right) => right.lastSeenAt.localeCompare(left.lastSeenAt)));
-    }, (error) => {
-      console.error("[View presence] Firestore subscription failed:", error);
-      if (!disposed) setViewers([]);
-    });
 
     sendHeartbeat();
     const heartbeatInterval = window.setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
+    const refreshInterval = window.setInterval(refreshViewers, REFRESH_INTERVAL_MS);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("pagehide", leave);
 
     return () => {
       disposed = true;
       window.clearInterval(heartbeatInterval);
-      unsubscribe();
+      window.clearInterval(refreshInterval);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("pagehide", leave);
       leave();
