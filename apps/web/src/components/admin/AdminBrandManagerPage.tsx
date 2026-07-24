@@ -90,6 +90,12 @@ const Icon = {
       <path d="M5.5 15a7.5 7.5 0 0013.4 2.5M18.5 9A7.5 7.5 0 005.1 6.5" />
     </svg>
   ),
+  Activity: (p: React.SVGProps<SVGSVGElement>) => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}>
+      <path d="M4 18V9M10 18V5M16 18v-7M22 18V7" />
+      <path d="M3 21h20" />
+    </svg>
+  ),
   Copy: (p: React.SVGProps<SVGSVGElement>) => (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...p}>
       <rect x="9" y="9" width="12" height="12" rx="2" />
@@ -585,9 +591,6 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
           <h1 className="mt-2 text-[28px] font-bold text-[var(--color-text-primary)]">
             Quản trị tài khoản Brand Manager
           </h1>
-          <p className="mt-2 max-w-2xl text-[14px] leading-6 text-[var(--color-text-secondary)]">
-            Chọn tác vụ cần thực hiện: cấp tài khoản quản lý thương hiệu mới hoặc xem và quản lý danh sách tài khoản đã tạo.
-          </p>
         </section>
 
         <section className="grid gap-4 md:grid-cols-2">
@@ -650,6 +653,23 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
               Công cụ gắn nhãn dữ liệu hệ thống để phục vụ cho việc huấn luyện và cải thiện AI.
             </p>
           </Link>
+
+          <Link
+            href="/admin/crawl-operations"
+            className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 transition hover:border-[var(--color-brand)] hover:bg-[var(--color-brand-subtle)] md:col-span-2 md:flex md:items-center md:gap-5"
+          >
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--color-brand-subtle)] text-[var(--color-brand)]">
+              <Icon.Activity className="h-6 w-6" />
+            </div>
+            <div>
+              <h2 className="mt-4 text-[18px] font-bold text-[var(--color-text-primary)] md:mt-0">
+                {t("nav.admin_crawl_operations", "Tiến trình cào")}
+              </h2>
+              <p className="mt-2 text-[13px] leading-6 text-[var(--color-text-secondary)]">
+                Theo dõi tiến độ, trạng thái và nhật ký của các phiên cào dữ liệu Production và Trial.
+              </p>
+            </div>
+          </Link>
         </section>
       </div>
     );
@@ -666,15 +686,9 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
               <Icon.Shield className="h-6 w-6" />
             </div>
             <div>
-              <p className="text-[12px] font-bold uppercase tracking-[0.12em] text-[var(--color-brand)]">
-                {t("admin.brandManager.badge")}
-              </p>
-              <h1 className="mt-1 text-[26px] font-bold leading-tight text-[var(--color-text-primary)] md:text-[28px]">
+              <h1 className="text-[26px] font-bold leading-tight text-[var(--color-text-primary)] md:text-[28px]">
                 {t("admin.brandManager.title")}
               </h1>
-              <p className="mt-1.5 max-w-2xl text-[14px] leading-6 text-[var(--color-text-secondary)]">
-                {t("admin.brandManager.subtitle")}
-              </p>
             </div>
           </div>
 

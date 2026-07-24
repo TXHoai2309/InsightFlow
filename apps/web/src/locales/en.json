@@ -1,7 +1,5 @@
 {
-  "admin.brandManager.badge": "Sprint 2 Admin",
   "admin.brandManager.title": "Create Brand Manager Account",
-  "admin.brandManager.subtitle": "Brand Managers do not self-register. Admins create accounts, assign the correct brand, and issue a temporary password so the brand owner can sign in to InsightFlow.",
   "admin.brandManager.flow.1": "Admin identifies the Brand Manager in Sprint 2",
   "admin.brandManager.flow.2": "Admin enters full name, email, brand, and temporary password",
   "admin.brandManager.flow.3": "The system creates a Firebase Auth user",
