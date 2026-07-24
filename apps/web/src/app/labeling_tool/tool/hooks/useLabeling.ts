@@ -142,9 +142,12 @@ export function useLabeling(
         const byId = progress.current_thread_id
           ? threads.findIndex(thread => thread.post._entity_key === progress.current_thread_id)
           : -1;
-        const fallback = Math.min(
-          progress.current_thread_index,
-          Math.max(0, threads.length - 1),
+        const fallback = Math.max(
+          0,
+          Math.min(
+            Number.isFinite(progress.current_thread_index) ? progress.current_thread_index : 0,
+            Math.max(0, threads.length - 1),
+          ),
         );
         setCurrentThreadIndex(byId >= 0 ? byId : fallback);
       })
@@ -348,6 +351,7 @@ export function useLabeling(
 
   const persistProgress = useCallback((index: number) => {
     if (!person) return;
+    if (threads.length === 0) return;
     const threadId = threads[index]?.post._entity_key ?? null;
     void saveProgress(person, index, threadId).catch(error => {
       setStorageError(error instanceof Error ? error.message : String(error));
@@ -355,6 +359,11 @@ export function useLabeling(
   }, [person, threads]);
 
   const goNext = useCallback(() => {
+    if (threads.length === 0) {
+      setCurrentThreadIndex(0);
+      setFocusedItemId(null);
+      return;
+    }
     setCurrentThreadIndex(index => {
       const next = Math.min(index + 1, threads.length - 1);
       persistProgress(next);
@@ -364,13 +373,18 @@ export function useLabeling(
   }, [persistProgress, threads.length]);
 
   const goPrev = useCallback(() => {
+    if (threads.length === 0) {
+      setCurrentThreadIndex(0);
+      setFocusedItemId(null);
+      return;
+    }
     setCurrentThreadIndex(index => {
       const next = Math.max(index - 1, 0);
       persistProgress(next);
       return next;
     });
     setFocusedItemId(null);
-  }, [persistProgress]);
+  }, [persistProgress, threads.length]);
 
   const jumpTo = useCallback((index: number) => {
     const clamped = Math.max(0, Math.min(index, threads.length - 1));
