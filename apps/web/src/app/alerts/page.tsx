@@ -100,7 +100,7 @@ function getRelativeTime(isoString: string, t: any): string {
 function normalizeBrandId(brand: string): string {
   if (!brand) return "other";
   let b = brand.toLowerCase().trim();
-  if (b.includes("mixue")) return "mixue";
+  if (b.includes("mixue") || b.includes("bingxue")) return "mixue";
   if (b.includes("starbuck")) return "starbucks";
   if (b.includes("highland")) return "highland-coffee";
 

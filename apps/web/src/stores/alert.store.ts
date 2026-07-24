@@ -296,7 +296,7 @@ function normalizeBrandKey(brand: string): string {
 
   if (normalized.includes("highland")) return "highlandcoffee";
   if (normalized.includes("starbuck")) return "starbucks";
-  if (normalized.includes("mixue")) return "mixue";
+  if (normalized.includes("mixue") || normalized.includes("bingxue")) return "mixue";
   return normalized;
 }
 
@@ -730,9 +730,13 @@ export const useAlertStore = create<AlertState>()(
           const rawBrandKey = (scopedBrandKey === "global" || !scopedBrandKey) ? undefined : scopedBrandKey;
           const mentions = await DashboardService.fetchAlertMentions({
             brandKey: rawBrandKey,
+            profileBrandId: profile?.brandId,
+            profileBrandName: profile?.brandName,
+            profileBrandIds: profile?.brandIds,
+            profileWorkspaceIds: profile?.workspaceIds,
             forceRefresh,
           });
-          const filtered = buildAlertsFromMentions(mentions, scopedBrandKey);
+          const filtered = buildAlertsFromMentions(mentions, scopedBrandKey, profile);
 
           const scopedBrands = Array.from(new Set(filtered.map((alert) => alert.brand))).sort();
           const fallbackBrands = ["Highlands Coffee", "Starbucks", "Mixue"].filter((brand) => {

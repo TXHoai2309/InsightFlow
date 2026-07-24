@@ -1502,7 +1502,7 @@ async function fetchSupabaseMentionsUncached(opts: FetchOptions): Promise<Mentio
       } else if (brandKey.includes("starbuck")) {
         searchTerm = "starbucks";
         displayBrandName = "Starbucks";
-      } else if (brandKey.includes("mixue")) {
+      } else if (brandKey.includes("mixue") || brandKey.includes("bingxue")) {
         searchTerm = "mixue";
         displayBrandName = "Mixue";
       }
