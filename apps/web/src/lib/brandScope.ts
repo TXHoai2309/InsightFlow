@@ -60,9 +60,10 @@ export function isSameBrandScope(
   record: BrandScopedRecord,
 ) {
   if (!profile) return false;
-  const scopedBrandKey = getScopedBrandKey(profile);
-  if (!scopedBrandKey) return profile.role === "admin";
-  return isRecordInBrandScope(record, scopedBrandKey);
+  if (profile.role === "admin") return true;
+  const scopedBrandKeys = getScopedBrandKeys(profile);
+  if (scopedBrandKeys.length === 0) return false;
+  return scopedBrandKeys.some((key) => isRecordInBrandScope(record, key));
 }
 
 export function assertBrandScopedAccess(

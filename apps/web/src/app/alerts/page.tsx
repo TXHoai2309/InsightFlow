@@ -1097,9 +1097,9 @@ export default function AlertsPage() {
   useEffect(() => {
     if (authLoading || !canViewCrisisQueue) return;
     setFilters({ status: "all" });
-    fetchAlerts(scopedBrandKey, false);
-    fetchCorrectionRequests(scopedBrandKey);
-  }, [authLoading, canViewCrisisQueue, scopedBrandKey, fetchAlerts, fetchCorrectionRequests, setFilters]);
+    fetchAlerts(scopedBrandKey, false, profile);
+    fetchCorrectionRequests(scopedBrandKey, false, profile);
+  }, [authLoading, canViewCrisisQueue, scopedBrandKey, profile, fetchAlerts, fetchCorrectionRequests, setFilters]);
 
   // Auto-switch view Mode once based on high-risk counts
   useEffect(() => {
@@ -1196,8 +1196,8 @@ export default function AlertsPage() {
         getResolverName={getResolverName}
         onRefresh={async () => {
           try {
-            await fetchAlerts(scopedBrandKey, true);
-            await fetchCorrectionRequests(scopedBrandKey, true);
+            await fetchAlerts(scopedBrandKey, true, profile);
+            await fetchCorrectionRequests(scopedBrandKey, true, profile);
             triggerToast("Đã làm mới dữ liệu.");
           } catch (refreshError) {
             triggerToast("Không thể làm mới dữ liệu.");

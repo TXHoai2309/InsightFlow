@@ -377,8 +377,8 @@ export default function AlertDetailPage() {
   }, [alert]);
 
   useEffect(() => {
-    fetchCorrectionRequests();
-  }, [fetchCorrectionRequests]);
+    fetchCorrectionRequests(getScopedBrandKey(profile), false, profile);
+  }, [fetchCorrectionRequests, profile]);
 
   const alertCorrectionRequests = useMemo(() => {
     if (!alert) return [];
@@ -580,7 +580,7 @@ export default function AlertDetailPage() {
     );
     let storeAlert = readStoreAlert();
     if (!storeAlert) {
-      await useAlertStore.getState().fetchAlerts(getScopedBrandKey(profile));
+      await useAlertStore.getState().fetchAlerts(getScopedBrandKey(profile), false, profile);
       storeAlert = readStoreAlert();
     }
 

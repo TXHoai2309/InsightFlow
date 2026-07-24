@@ -203,7 +203,11 @@ interface AlertState {
   correctionRequests: CorrectionRequest[];
   isLoadingRequests: boolean;
   setFilters: (filters: Partial<AlertFilters>) => void;
-  fetchAlerts: (scopedBrandKey?: string | null, force?: boolean) => Promise<void>;
+  fetchAlerts: (
+    scopedBrandKey?: string | null,
+    force?: boolean,
+    profile?: UserRoleProfile | null,
+  ) => Promise<void>;
   updateAlertStatus: (
     id: string,
     newStatus: string,
@@ -236,7 +240,11 @@ interface AlertState {
     profile: UserRoleProfile | null | undefined,
     brandFallback?: string,
   ) => Promise<void>;
-  fetchCorrectionRequests: (scopedBrandKey?: string | null, force?: boolean) => Promise<void>;
+  fetchCorrectionRequests: (
+    scopedBrandKey?: string | null,
+    force?: boolean,
+    profile?: UserRoleProfile | null,
+  ) => Promise<void>;
   createCorrectionRequest: (requestData: Omit<CorrectionRequest, "id" | "created_at" | "status">) => Promise<void>;
   resolveCorrectionRequest: (
     requestId: string,
@@ -457,6 +465,7 @@ function resolveAlertStatusFromLabel(labelObj: any): string {
 function buildAlertsFromMentions(
   mentions: Mention[],
   scopedBrandKey?: string | null,
+  profile?: UserRoleProfile | null,
 ): AlertData[] {
   return mentions
     // Every negative mention is an actionable alert. Crisis classification is
@@ -476,6 +485,9 @@ function buildAlertsFromMentions(
       // Keep the complete crisis history in the store. Each screen owns its
       // visible time range: Crisis Monitoring uses 30 days, while /alerts can
       // genuinely show all time or a user-selected period.
+      if (profile && profile.role !== "admin") {
+        return isSameBrandScope(profile, { brand: alert.brand });
+      }
       return isRecordInBrandScope({ brand: alert.brand }, scopedBrandKey ?? null);
     });
 }
@@ -625,7 +637,7 @@ export const useAlertStore = create<AlertState>()(
       });
     },
 
-    fetchAlerts: async (scopedBrandKey = null, force = false) => {
+    fetchAlerts: async (scopedBrandKey = null, force = false, profile = null) => {
       // Demo must be completely deterministic and must never depend on the
       // production cache/realtime pipeline. Build the same alert view model
       // used by the real page directly from the in-memory demo mentions.
@@ -674,8 +686,8 @@ export const useAlertStore = create<AlertState>()(
           const rawData = await DashboardService.fetchRawData({
             brandKey: rawBrandKey,
             forceRefresh,
-          });
-          const filtered = buildAlertsFromMentions(rawData.mentions, scopedBrandKey);
+          }, profile);
+          const filtered = buildAlertsFromMentions(rawData.mentions, scopedBrandKey, profile);
 
           const scopedBrands = Array.from(new Set(filtered.map((alert) => alert.brand))).sort();
           const fallbackBrands = ["Highlands Coffee", "Starbucks", "Mixue"].filter((brand) => {
@@ -1223,7 +1235,7 @@ export const useAlertStore = create<AlertState>()(
         // from Supabase before returning so the Alert page never renders a
         // stale cached queue after navigation from the detail screen.
         if (isRestore || ["resolved", "contact_waiting", "contact_failed", "skipped"].includes(newStatus)) {
-          await get().fetchAlerts(getScopedBrandKey(profile), true);
+          await get().fetchAlerts(getScopedBrandKey(profile), true, profile);
         }
       } catch (error) {
         console.error("[AlertStore] Failed to persist alert status:", error);
@@ -1271,7 +1283,7 @@ export const useAlertStore = create<AlertState>()(
       );
     },
 
-    fetchCorrectionRequests: async (scopedBrandKey = null, force = false) => {
+    fetchCorrectionRequests: async (scopedBrandKey = null, force = false, profile = null) => {
       if (typeof window !== "undefined" && window.location.pathname.startsWith("/demo")) {
         set({ correctionRequests: [], isLoadingRequests: false });
         return;
@@ -1338,7 +1350,10 @@ export const useAlertStore = create<AlertState>()(
               alert_text: data.content_preview || data.mention_content || data.alert_text || "",
             } as CorrectionRequest;
 
-            if (!isRecordInBrandScope({ brand: req.brand }, scopedBrandKey)) return;
+            const isInScope = profile && profile.role !== "admin"
+              ? isSameBrandScope(profile, { brand: req.brand })
+              : isRecordInBrandScope({ brand: req.brand }, scopedBrandKey);
+            if (!isInScope) return;
             if (!isWithinAlertReviewWindow(req.created_at)) return;
             requests.push(req);
           });

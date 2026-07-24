@@ -353,8 +353,8 @@ export function DualOperationsEmployeeReportPage({
 
   useEffect(() => {
     const scopedBrandKey = getScopedBrandKey(profile);
-    fetchAlerts(scopedBrandKey, false);
-    fetchCorrectionRequests(scopedBrandKey, false);
+    fetchAlerts(scopedBrandKey, false, profile);
+    fetchCorrectionRequests(scopedBrandKey, false, profile);
   }, [fetchAlerts, fetchCorrectionRequests, profile]);
 
   useEffect(() => {

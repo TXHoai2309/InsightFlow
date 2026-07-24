@@ -139,7 +139,7 @@ export function CrisisCommandCenter() {
 
   useEffect(() => {
     if (!profile) return;
-    void fetchAlerts(scopedBrandKey, false);
+    void fetchAlerts(scopedBrandKey, false, profile);
   }, [fetchAlerts, profile, scopedBrandKey]);
 
   const alerts = useMemo(() => {

@@ -77,7 +77,7 @@ export function AgentDashboard() {
 
   useEffect(() => {
     if (!canViewCrisis || authLoading || !profile) return;
-    void fetchAlerts(brandKey === "global" ? null : brandKey);
+    void fetchAlerts(brandKey === "global" ? null : brandKey, false, profile);
   }, [authLoading, brandKey, canViewCrisis, fetchAlerts, profile]);
 
   const data = useMemo(() => {
@@ -96,7 +96,7 @@ export function AgentDashboard() {
     setIsRefreshing(true);
     try {
       if (isCrisisView) {
-        await fetchAlerts(brandKey === "global" ? null : brandKey, true);
+        await fetchAlerts(brandKey === "global" ? null : brandKey, true, profile);
       } else if (isLeadView) {
         await refetchDashboard(true);
       }

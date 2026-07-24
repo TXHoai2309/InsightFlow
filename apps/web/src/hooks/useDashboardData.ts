@@ -334,10 +334,10 @@ export function useDashboard(options: UseDashboardOptions = {}) {
       const hasAlerts = alertStore.rawAlerts.length > 0;
       const isAlertsFresh = Date.now() - alertStore.lastFetchedAt < 30 * 60 * 1000;
       if (!hasAlerts || !isAlertsFresh) {
-        alertStore.fetchAlerts(brandKey === "global" ? null : brandKey);
+        alertStore.fetchAlerts(brandKey === "global" ? null : brandKey, false, profile);
         const isDemoMode = window.location.pathname.startsWith("/demo");
         if (!isDemoMode) {
-          alertStore.fetchCorrectionRequests(brandKey === "global" ? null : brandKey);
+          alertStore.fetchCorrectionRequests(brandKey === "global" ? null : brandKey, false, profile);
         }
       }
     }, 1500);
