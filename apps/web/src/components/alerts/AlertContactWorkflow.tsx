@@ -22,6 +22,7 @@ interface AlertContactWorkflowProps {
   getResolverName: (value: string | null | undefined) => string;
   onRecordResult: (draft: AlertContactResultDraft) => Promise<void>;
   onOpenSourceWithTemplate: () => Promise<void>;
+  requireEvidence?: boolean;
 }
 
 export interface AlertContactResultDraft {
@@ -176,7 +177,7 @@ export function AlertContactWorkflow({
                   </div>
                   <p className="whitespace-pre-wrap text-[11px] leading-relaxed text-[var(--color-text-secondary)]">{contactAttempt.note}</p>
                   <p className="text-[10px] font-bold text-purple-700">Kết quả: {resultLabel}</p>
-                  <button type="button" onClick={() => setPreviewEvidenceImage(contactAttempt.evidence_image)} className="block w-full cursor-zoom-in rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/30" title="Bấm để xem ảnh lớn ngay trong InsightFlow">
+                  <button type="button" onClick={() => setPreviewEvidenceImage(contactAttempt.evidence_image || null)} className="block w-full cursor-zoom-in rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/30" title="Bấm để xem ảnh lớn ngay trong InsightFlow">
                     <img src={contactAttempt.evidence_image} alt={`Minh chứng lần liên hệ ${attemptNumber}`} className="max-h-52 w-full rounded-lg border border-[var(--color-border)] bg-slate-50 object-contain" />
                   </button>
                 </article>
@@ -186,21 +187,31 @@ export function AlertContactWorkflow({
         </div>
       )}
 
-      <div className={`flex items-start gap-2 rounded-xl border p-3 text-[11px] font-bold ${
-        alert.customer_contact_opened_at
-          ? "border-green-200 bg-green-50 text-green-700"
-          : "border-amber-200 bg-amber-50 text-amber-700"
-      }`}>
-        <span className="material-symbols-outlined text-base">{alert.customer_contact_opened_at ? "check_circle" : "info"}</span>
-        <span>{alert.customer_contact_opened_at ? "Đã mở nguồn để liên hệ. Hãy bổ sung ghi chú và ảnh minh chứng bên dưới." : "Sử dụng nút Mở nguồn ở đầu panel trước khi bổ sung minh chứng."}</span>
-      </div>
+      {alert.customer_contact_opened_at && (
+        <div className="flex items-center gap-1.5 rounded-lg border border-emerald-200/80 bg-emerald-50/60 px-3 py-2 text-[11px] font-bold text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-400">
+          <span className="material-symbols-outlined text-base">check_circle</span>
+          <span>Đã mở nguồn. Hãy bổ sung ghi chú và chọn kết quả phản hồi bên dưới.</span>
+        </div>
+      )}
 
-      <div className="space-y-2 rounded-xl border border-green-200 bg-green-50/60 p-3">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-[10px] font-black uppercase tracking-wider text-green-700">Mẫu xin lỗi tham khảo</p>
-            <button type="button" onClick={() => void onOpenSourceWithTemplate()} className="text-[10px] font-bold text-green-700 hover:underline">Mở nguồn và sao chép</button>
-          </div>
-          <p className="text-[11px] leading-relaxed text-[var(--color-text-secondary)]">{alert.customer_contact_template || createDefaultContactTemplate(alert.author || "Anh/Chị", alert.brand)}</p>
+      <div className="space-y-2.5 rounded-xl border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)]/70 p-3 shadow-sm dark:bg-[var(--color-brand-subtle)]/20">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-[var(--color-brand)]">
+            <span className="material-symbols-outlined text-sm">content_paste</span>
+            Mẫu xin lỗi tham khảo
+          </p>
+          <button
+            type="button"
+            onClick={() => void onOpenSourceWithTemplate()}
+            className="inline-flex items-center gap-1 rounded-lg bg-[var(--color-brand)] px-2.5 py-1 text-[11px] font-bold text-white shadow-sm transition hover:bg-[var(--color-brand-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]"
+          >
+            <span className="material-symbols-outlined text-xs">open_in_new</span>
+            <span>Mở nguồn & sao chép</span>
+          </button>
+        </div>
+        <p className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-2.5 text-[11px] font-medium leading-relaxed text-[var(--color-text-primary)]">
+          {alert.customer_contact_template || createDefaultContactTemplate(alert.author || "Anh/Chị", alert.brand)}
+        </p>
       </div>
 
       <div className={`space-y-3 rounded-xl border border-[var(--color-border)] p-3 ${!alert.customer_contact_opened_at ? "opacity-50" : ""}`}>

@@ -478,7 +478,7 @@ export default function AlertDetailPage() {
   const buildContactHistory = (
     outcomeStatus: CustomerContactAttempt["outcome_status"],
     note: string,
-    evidenceImage: string,
+    evidenceImage: string | undefined,
     responseResult: CustomerResponseResult,
   ): CustomerContactAttempt[] => {
     if (!alert?.customer_contact_opened_at) {
@@ -502,8 +502,17 @@ export default function AlertDetailPage() {
   const handleCompleteAction = async () => {
     if (!alert) return;
     const normalizedNote = contactEvidenceNote.trim();
-    if (!alert.customer_contact_opened_at || !normalizedNote || !contactEvidenceImage || !selectedCustomerResponseResult) {
-      triggerToast("Chưa đủ liên kết, ghi chú, ảnh minh chứng và kết quả phản hồi.");
+    if (
+      !alert.customer_contact_opened_at ||
+      !normalizedNote ||
+      (!isManager && !contactEvidenceImage) ||
+      !selectedCustomerResponseResult
+    ) {
+      triggerToast(
+        isManager
+          ? "Chưa đủ liên kết, ghi chú và kết quả phản hồi."
+          : "Chưa đủ liên kết, ghi chú, ảnh minh chứng và kết quả phản hồi."
+      );
       return;
     }
 
@@ -515,7 +524,7 @@ export default function AlertDetailPage() {
       customer_contact_opened_by: alert.customer_contact_opened_by,
       customer_contact_template: alert.customer_contact_template,
       customer_contact_note: normalizedNote,
-      customer_contact_evidence_image: contactEvidenceImage,
+      customer_contact_evidence_image: contactEvidenceImage || undefined,
       customer_response_result: selectedCustomerResponseResult,
     };
 
@@ -525,7 +534,7 @@ export default function AlertDetailPage() {
         await updateAlertStatus(alert.id, "contact_waiting", profile, {
           note: `Đã liên hệ khách hàng nhưng chưa nhận được phản hồi.${resultLabel ? ` Kết quả: ${resultLabel}.` : ""}`,
           ...contactEvidencePayload,
-          customer_contact_history: buildContactHistory("contact_waiting", normalizedNote, contactEvidenceImage, selectedCustomerResponseResult),
+          customer_contact_history: buildContactHistory("contact_waiting", normalizedNote, contactEvidenceImage || undefined, selectedCustomerResponseResult),
           reset_customer_contact: true,
         }, alert.brand);
         router.push("/alerts");
@@ -536,7 +545,7 @@ export default function AlertDetailPage() {
         await updateAlertStatus(alert.id, "contact_failed", profile, {
           note: `Liên hệ trao đổi không thành; khách hàng vẫn bức xúc.${resultLabel ? ` Kết quả: ${resultLabel}.` : ""}`,
           ...contactEvidencePayload,
-          customer_contact_history: buildContactHistory("contact_failed", normalizedNote, contactEvidenceImage, selectedCustomerResponseResult),
+          customer_contact_history: buildContactHistory("contact_failed", normalizedNote, contactEvidenceImage || undefined, selectedCustomerResponseResult),
           reset_customer_contact: true,
         }, alert.brand);
         router.push("/alerts");
@@ -548,7 +557,7 @@ export default function AlertDetailPage() {
           ? `Hoàn tất xử lý sau khi liên hệ khách hàng. Kết quả: ${resultLabel}.`
           : "Hoàn tất xử lý sau khi liên hệ khách hàng.",
         ...contactEvidencePayload,
-        customer_contact_history: buildContactHistory("resolved", normalizedNote, contactEvidenceImage, selectedCustomerResponseResult),
+        customer_contact_history: buildContactHistory("resolved", normalizedNote, contactEvidenceImage || undefined, selectedCustomerResponseResult),
       }, alert.brand);
       router.push("/alerts");
     } catch (error) {
@@ -853,7 +862,7 @@ export default function AlertDetailPage() {
   const hasCompleteContactDraft = Boolean(
     alert.customer_contact_opened_at &&
     contactEvidenceNote.trim() &&
-    contactEvidenceImage &&
+    (isManager || contactEvidenceImage) &&
     selectedCustomerResponseResult
   );
 
@@ -1344,21 +1353,23 @@ export default function AlertDetailPage() {
                               <p className="text-[9px] font-black uppercase tracking-wider text-[var(--color-text-muted)]">Ghi chú</p>
                               <p className="mt-1 whitespace-pre-wrap leading-relaxed">{contactAttempt.note}</p>
                             </div>
-                            <div>
-                              <p className="mb-1 text-[9px] font-black uppercase tracking-wider text-[var(--color-text-muted)]">Ảnh minh chứng</p>
-                              <button
-                                type="button"
-                                onClick={() => setPreviewEvidenceImage(contactAttempt.evidence_image)}
-                                className="block max-w-sm cursor-zoom-in overflow-hidden rounded-lg border border-[var(--color-border)] bg-white p-1 shadow-sm"
-                                title="Bấm để xem ảnh đầy đủ"
-                              >
-                                <img
-                                  src={contactAttempt.evidence_image}
-                                  alt={`Minh chứng liên hệ lần ${index + 1}`}
-                                  className="max-h-64 w-full object-contain"
-                                />
-                              </button>
-                            </div>
+                            {contactAttempt.evidence_image && (
+                              <div>
+                                <p className="mb-1 text-[9px] font-black uppercase tracking-wider text-[var(--color-text-muted)]">Ảnh minh chứng</p>
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewEvidenceImage(contactAttempt.evidence_image || null)}
+                                  className="block max-w-sm cursor-zoom-in overflow-hidden rounded-lg border border-[var(--color-border)] bg-white p-1 shadow-sm"
+                                  title="Bấm để xem ảnh đầy đủ"
+                                >
+                                  <img
+                                    src={contactAttempt.evidence_image}
+                                    alt={`Minh chứng liên hệ lần ${index + 1}`}
+                                    className="max-h-64 w-full object-contain"
+                                  />
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1442,9 +1453,10 @@ export default function AlertDetailPage() {
                               {contactAttempt.note}
                             </p>
                             <p className="text-[10px] font-bold text-purple-700">Kết quả: {resultLabel}</p>
+                            {contactAttempt.evidence_image && (
                             <button
                               type="button"
-                              onClick={() => setPreviewEvidenceImage(contactAttempt.evidence_image)}
+                              onClick={() => setPreviewEvidenceImage(contactAttempt.evidence_image || null)}
                               className="block w-full cursor-zoom-in rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/30"
                               title="Bấm để xem ảnh lớn ngay trong InsightFlow"
                             >
@@ -1454,6 +1466,7 @@ export default function AlertDetailPage() {
                                 className="max-h-52 w-full rounded-lg border border-[var(--color-border)] object-contain bg-slate-50"
                               />
                             </button>
+                            )}
                           </article>
                         );
                       })}
@@ -1499,7 +1512,7 @@ export default function AlertDetailPage() {
 
                 <div className={`space-y-3 rounded-xl border border-[var(--color-border)] p-3 ${!alert.customer_contact_opened_at ? "opacity-50" : ""}`}>
                   <p className="text-[10px] font-black uppercase tracking-wider text-[var(--color-text-secondary)]">
-                    Minh chứng liên hệ <span className="text-red-500">*</span>
+                    Ghi chú liên hệ <span className="text-red-500">*</span>
                   </p>
                   <textarea
                     value={contactEvidenceNote}
@@ -1509,57 +1522,52 @@ export default function AlertDetailPage() {
                     placeholder="Ghi rõ đã phản hồi ở đâu, nội dung trao đổi và thời điểm liên hệ..."
                     className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-2.5 text-xs text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-purple-500/20 disabled:cursor-not-allowed"
                   />
-                  <div className="space-y-2">
-                    <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-dashed border-purple-300 bg-purple-50 px-3 py-2 text-[11px] font-bold text-purple-700 hover:bg-purple-100">
-                      <span className="material-symbols-outlined text-base">add_photo_alternate</span>
-                      {contactEvidenceImage ? "Đổi ảnh minh chứng" : "Thêm ảnh minh chứng"}
-                      <input
-                        type="file"
-                        accept="image/*"
-                        disabled={!alert.customer_contact_opened_at}
-                        onChange={(event) => handleContactEvidenceImage(event.target.files?.[0])}
-                        className="hidden"
-                      />
-                    </label>
-                    {contactEvidenceImage && (
-                      <div className="relative overflow-hidden rounded-xl border border-[var(--color-border)] bg-slate-50 p-2">
-                        <img src={contactEvidenceImage} alt="Minh chứng liên hệ khách hàng" className="max-h-44 w-full object-contain" />
-                        <button
-                          type="button"
-                          onClick={() => setContactEvidenceImage(null)}
-                          className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-full bg-black/70 text-white"
-                        >
-                          <span className="material-symbols-outlined text-sm">close</span>
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                  {!isManager && (
+                    <div className="space-y-2">
+                      <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-dashed border-purple-300 bg-purple-50 px-3 py-2 text-[11px] font-bold text-purple-700 hover:bg-purple-100">
+                        <span className="material-symbols-outlined text-base">add_photo_alternate</span>
+                        {contactEvidenceImage ? "Đổi ảnh minh chứng" : "Thêm ảnh minh chứng"}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          disabled={!alert.customer_contact_opened_at}
+                          onChange={(event) => handleContactEvidenceImage(event.target.files?.[0])}
+                          className="hidden"
+                        />
+                      </label>
+                      {contactEvidenceImage && (
+                        <div className="relative overflow-hidden rounded-xl border border-[var(--color-border)] bg-slate-50 p-2">
+                          <img src={contactEvidenceImage} alt="Minh chứng liên hệ khách hàng" className="max-h-44 w-full object-contain" />
+                          <button
+                            type="button"
+                            onClick={() => setContactEvidenceImage(null)}
+                            className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-full bg-black/70 text-white"
+                          >
+                            <span className="material-symbols-outlined text-sm">close</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <fieldset disabled={!alert.customer_contact_opened_at} className="space-y-2 disabled:opacity-50">
-                  <legend className="mb-2 text-[10px] font-black uppercase tracking-wider text-[var(--color-text-secondary)]">
+                  <label htmlFor={`customer-response-${alert.id}`} className="mb-2 block text-[10px] font-black uppercase tracking-wider text-[var(--color-text-secondary)]">
                     Kết quả phản hồi của khách hàng
-                  </legend>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {CUSTOMER_RESPONSE_OPTIONS.map((option) => {
-                      const selected = selectedCustomerResponseResult === option.value;
-                      return (
-                        <button
-                          type="button"
-                          key={option.value}
-                          disabled={!alert.customer_contact_opened_at}
-                          onClick={() => setSelectedCustomerResponseResult(option.value)}
-                          aria-pressed={selected}
-                          className={`rounded-xl border p-2.5 text-left text-[11px] font-bold flex items-center gap-2 transition-all disabled:cursor-not-allowed ${
-                            selected ? `${option.tone} ring-2 ring-offset-1 ring-current` : "border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)] hover:border-purple-300"
-                          }`}
-                        >
-                          <span className="material-symbols-outlined text-base">{option.icon}</span>
-                          {option.label}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  </label>
+                  <select
+                    id={`customer-response-${alert.id}`}
+                    value={selectedCustomerResponseResult || ""}
+                    onChange={(event) => setSelectedCustomerResponseResult((event.target.value || null) as CustomerResponseResult | null)}
+                    className="min-h-10 w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 text-xs font-semibold text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-brand)] focus:ring-2 focus:ring-[var(--color-brand)]/15 disabled:cursor-not-allowed"
+                  >
+                    <option value="">Chọn kết quả phản hồi</option>
+                    {CUSTOMER_RESPONSE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
                 </fieldset>
 
                 {hasCompleteContactDraft && (

@@ -1633,6 +1633,8 @@
     "workspace": "Brand Manager Workspace",
     "workspaceDesc": "Dedicated workspace for Brand Managers",
     "realtimeSync": "Realtime Sync",
+    "tryNow": "Start free trial",
+    "tryNowAria": "Register for an InsightFlow free trial",
     "tab.overview": "Overview",
     "tab.team": "Team Management",
     "tab.contact": "Contact Processing",

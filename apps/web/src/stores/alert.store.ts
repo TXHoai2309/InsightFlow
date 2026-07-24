@@ -81,7 +81,7 @@ export interface CustomerContactAttempt {
   opened_by?: string;
   template?: string;
   note: string;
-  evidence_image: string;
+  evidence_image?: string;
   response_result: "positive" | "no_response" | "still_upset" | "not_suitable";
   completed_at: string;
   outcome_status: "resolved" | "contact_waiting" | "contact_failed";
@@ -981,9 +981,17 @@ export const useAlertStore = create<AlertState>()(
         const hasResponseResult = Boolean(
           attempt?.customer_response_result || currentAlert?.customer_response_result
         );
-        if (!hasOpenedContact || !hasContactNote || !hasContactEvidence || !hasResponseResult) {
+        const requiresContactEvidence = profile.role !== "brand_manager";
+        if (
+          !hasOpenedContact ||
+          !hasContactNote ||
+          (requiresContactEvidence && !hasContactEvidence) ||
+          !hasResponseResult
+        ) {
           throw new Error(
-            "Phải mở liên kết liên hệ, nhập ghi chú, thêm ảnh minh chứng và ghi nhận kết quả phản hồi."
+            requiresContactEvidence
+              ? "Phải mở liên kết liên hệ, nhập ghi chú, thêm ảnh minh chứng và ghi nhận kết quả phản hồi."
+              : "Phải mở liên kết liên hệ, nhập ghi chú và ghi nhận kết quả phản hồi."
           );
         }
         const responseResult = attempt?.customer_response_result || currentAlert?.customer_response_result;

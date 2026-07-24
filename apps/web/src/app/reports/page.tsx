@@ -2081,7 +2081,7 @@ function LegacyReportsPage({
   ];
 
   return (
-    <div data-tour="reports-center" className="p-4 md:p-8 mx-auto space-y-5 md:space-y-8">
+    <div data-tour="reports-center" className="reports-workbench-theme mx-auto min-h-full space-y-5 bg-[var(--color-bg-primary)] p-4 md:space-y-8 md:p-8">
       {previewReport && (
         <ReportPreviewModal
           report={previewReport}

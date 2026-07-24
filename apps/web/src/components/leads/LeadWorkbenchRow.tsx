@@ -300,7 +300,7 @@ export function LeadWorkbenchRow({
           : "bg-[var(--color-brand)] text-white hover:bg-[var(--color-brand-hover)] hover:shadow-md";
 
   const cardStateClass = pinned
-    ? "border-l-4 border-l-orange-500 border-[var(--color-brand)] p-[4%] shadow-sm ring-2 ring-[var(--color-brand)]/25 transition-colors"
+    ? "border-l-2 border-l-orange-500 border-[var(--color-brand)] p-3 shadow-xs ring-2 ring-[var(--color-brand)]/20 transition-colors"
     : highlighted
     ? "border-[var(--color-brand)] bg-[var(--color-brand-subtle)] ring-4 ring-[var(--color-brand)]/20"
     : selected

@@ -40,7 +40,7 @@ export default function FilterPanel({
         onChange={e => onBrandChange(e.target.value)}
         className="select-control text-xs"
       >
-        <option value="">Tất cả brand</option>
+        <option value="">Tất cả thương hiệu</option>
         {brands.map(b => (
           <option key={b} value={b}>{b}</option>
         ))}

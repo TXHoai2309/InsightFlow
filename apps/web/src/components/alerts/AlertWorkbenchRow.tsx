@@ -21,10 +21,10 @@ interface AlertWorkbenchRowProps {
 }
 
 const SEVERITY_STYLE: Record<string, { label: string; border: string; badge: string }> = {
-  critical: { label: "CRITICAL", border: "border-l-red-500", badge: "border-red-200 bg-red-50 text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300" },
-  high: { label: "HIGH", border: "border-l-orange-500", badge: "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-900/40 dark:bg-orange-950/30 dark:text-orange-300" },
-  medium: { label: "MEDIUM", border: "border-l-amber-400", badge: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300" },
-  low: { label: "LOW", border: "border-l-slate-300", badge: "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300" },
+  critical: { label: "CRITICAL", border: "border-l-red-500", badge: "border-red-200/60 bg-red-50/60 text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300" },
+  high: { label: "HIGH", border: "border-l-orange-400", badge: "border-orange-200/60 bg-orange-50/60 text-orange-700 dark:border-orange-900/40 dark:bg-orange-950/30 dark:text-orange-300" },
+  medium: { label: "MEDIUM", border: "border-l-amber-400", badge: "border-amber-200/60 bg-amber-50/60 text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300" },
+  low: { label: "LOW", border: "border-l-slate-300", badge: "border-slate-200/60 bg-slate-50/60 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300" },
 };
 
 function formatAge(createdAt: string) {
@@ -101,7 +101,7 @@ export function AlertWorkbenchRow({ alert, selected, pinned = false, canPin = fa
 
   return (
     <div role="button" tabIndex={0} onClick={() => onSelect(alert)} onKeyDown={handleKeyDown} aria-current={selected ? "true" : undefined}
-      className={`relative w-full cursor-pointer rounded-lg border border-l-4 ${pinned ? "border-l-orange-500" : severity.border} bg-[var(--color-bg-surface)] p-[4%] text-left shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] ${pinned || selected ? "border-[var(--color-brand)] ring-2 ring-[var(--color-brand)]/25" : "border-[var(--color-border)] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-bg-surface-raised)]"}`}>
+      className={`relative w-full cursor-pointer rounded-lg border border-l-2 ${pinned ? "border-l-orange-500" : severity.border} bg-[var(--color-bg-surface)] p-3 text-left shadow-xs transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] ${pinned || selected ? "border-[var(--color-brand)] ring-2 ring-[var(--color-brand)]/20" : "border-[var(--color-border)] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-bg-surface-raised)]"}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2.5">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-subtle)] text-xs font-black text-[var(--color-brand)]">

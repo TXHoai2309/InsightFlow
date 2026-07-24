@@ -154,10 +154,10 @@
   --color-text-muted:        #758196;
   --color-text-disabled:     #a9b1bd;
 
-  --color-brand:             #6558e8;
-  --color-brand-hover:       #5548d6;
-  --color-brand-subtle:      #f1efff;
-  --color-brand-border:      #d2cdfb;
+  --color-brand:             #1b4ef5;
+  --color-brand-hover:       #143ec8;
+  --color-brand-subtle:      #eef3ff;
+  --color-brand-border:      #b3c7fe;
 
   --color-success:           #18794e;
   --color-success-subtle:    #eaf7f0;
@@ -188,10 +188,10 @@
   --color-text-muted:        #919aaa;
   --color-text-disabled:     #687180;
 
-  --color-brand:             #9d94ff;
-  --color-brand-hover:       #b1aaff;
-  --color-brand-subtle:      rgba(101, 88, 232, 0.18);
-  --color-brand-border:      rgba(157, 148, 255, 0.42);
+  --color-brand:             #527dff;
+  --color-brand-hover:       #7ba0ff;
+  --color-brand-subtle:      rgba(27, 78, 245, 0.2);
+  --color-brand-border:      rgba(82, 125, 255, 0.45);
 
   --color-success:           #5bd19a;
   --color-success-subtle:    rgba(91, 209, 154, 0.14);
@@ -201,6 +201,30 @@
   --color-error-subtle:      rgba(255, 142, 136, 0.14);
   --color-info:              #77adff;
   --color-info-subtle:       rgba(119, 173, 255, 0.14);
+}
+
+.alert-workbench-theme {
+  --color-bg-primary:        #ffffff;
+  --color-bg-surface-raised: #fff5f5;
+  --color-bg-surface-high:   #feecec;
+  --color-bg-overlay:        #fde2e2;
+  --color-brand:             #1b4ef5;
+  --color-brand-hover:       #143ec8;
+  --color-brand-subtle:      #eef3ff;
+  --color-brand-border:      #b3c7fe;
+  --shadow-card:             0 1px 2px rgba(133, 28, 28, 0.05);
+  --shadow-card-hover:       0 8px 24px rgba(133, 28, 28, 0.1);
+}
+
+.dark .alert-workbench-theme {
+  --color-bg-primary:        #151011;
+  --color-bg-surface-raised: #24191b;
+  --color-bg-surface-high:   #302023;
+  --color-bg-overlay:        #3a2529;
+  --color-brand:             #527dff;
+  --color-brand-hover:       #7ba0ff;
+  --color-brand-subtle:      rgba(27, 78, 245, 0.2);
+  --color-brand-border:      rgba(82, 125, 255, 0.45);
 }
 
 /* Glow Layers for Dark Mode */

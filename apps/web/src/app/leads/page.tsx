@@ -1089,9 +1089,10 @@ export default function LeadsPage() {
                 setDetailTab("action");
                 setIsPanelCollapsed(false);
               }}
-              className="rounded-lg border border-[var(--color-warning)]/40 bg-[var(--color-bg-surface)] px-3 py-1.5 text-sm font-bold text-[var(--color-text-primary)] transition hover:bg-[var(--color-bg-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-warning)]"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-[var(--color-brand)] px-4 py-2 text-xs font-black text-white shadow-md transition hover:bg-[var(--color-brand-hover)] hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]"
             >
-              Ghi nhận ngay
+              <span className="material-symbols-outlined text-base">edit_note</span>
+              <span>Ghi nhận ngay</span>
             </button>
           </div>
         </section>

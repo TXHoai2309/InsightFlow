@@ -1249,10 +1249,14 @@ export default function AlertsPage() {
           if (
             !alert.customer_contact_opened_at ||
             !draft.note.trim() ||
-            !draft.evidenceImage ||
+            (!isManager && !draft.evidenceImage) ||
             !draft.responseResult
           ) {
-            const missingEvidenceError = new Error("Cần có minh chứng liên hệ và kết quả phản hồi của khách hàng.");
+            const missingEvidenceError = new Error(
+              isManager
+                ? "Cần có ghi chú liên hệ và kết quả phản hồi của khách hàng."
+                : "Cần có minh chứng liên hệ và kết quả phản hồi của khách hàng."
+            );
             triggerToast(missingEvidenceError.message);
             throw missingEvidenceError;
           }

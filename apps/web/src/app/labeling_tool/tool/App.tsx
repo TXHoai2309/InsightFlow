@@ -691,10 +691,10 @@ export default function App() {
                 <select
                   value={supabaseBrandQuery}
                   onChange={e => setSupabaseBrandQuery(e.target.value)}
-                  className="select-control text-xs w-32"
+                  className="select-control text-xs w-40"
                   title="Thương hiệu cần gán nhãn"
                 >
-                  <option value="all">Tất cả Brand</option>
+                  <option value="all">Tất cả thương hiệu</option>
                   {brandOptions.map((brand) => (
                     <option key={brand.value} value={brand.value}>{brand.label}</option>
                   ))}

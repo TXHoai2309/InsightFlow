@@ -776,7 +776,7 @@ export function LeadDetailPanel({
                     type="button"
                     disabled={!ownership.canWork || Boolean(isOpening)}
                     onClick={() => void handleOpenAction(sourceAction, true)}
-                    className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-bg-surface)] px-3 text-[13px] font-semibold text-[var(--color-brand)] shadow-sm transition hover:bg-[var(--color-brand-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3.5 text-[13px] font-bold text-white shadow-md transition hover:bg-[var(--color-brand-hover)] hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     title="Mở lại nguồn của Lead"
                   >
                     <span className="material-symbols-outlined text-lg">open_in_new</span>
@@ -787,7 +787,7 @@ export function LeadDetailPanel({
                   <button
                     type="button"
                     onClick={handleScrollToResult}
-                    className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[var(--color-brand-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2"
+                    className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] px-3 text-[13px] font-bold text-[var(--color-brand)] shadow-sm transition hover:bg-[var(--color-brand)] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2"
                   >
                     <ClipboardCheck size={18} aria-hidden="true" />
                     <span className="hidden sm:inline">Ghi nhận kết quả</span>
@@ -872,21 +872,23 @@ export function LeadDetailPanel({
 
             <aside className="space-y-2 min-[1280px]:min-h-0 min-[1280px]:overflow-y-auto min-[1280px]:pl-1 min-[1280px]:[scrollbar-gutter:stable]" aria-label="Thao tác nhanh với lead">
               {lead.status === "processing" && ownership.canWork && (
-                <section className="space-y-2 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 dark:border-emerald-900/40 dark:bg-emerald-950/15">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+                <section className="space-y-2 rounded-xl border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)]/70 p-3 shadow-sm dark:bg-[var(--color-brand-subtle)]/20">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-[var(--color-brand)]">
+                      <span className="material-symbols-outlined text-sm">content_paste</span>
                       Mẫu cảm ơn tham khảo
                     </p>
                     <button
                       type="button"
                       onClick={() => void handleOpenSourceWithThankYouTemplate()}
                       disabled={!sourceAction || Boolean(isOpening)}
-                      className="text-[10px] font-bold text-emerald-700 hover:underline disabled:cursor-not-allowed disabled:opacity-50 dark:text-emerald-400"
+                      className="inline-flex items-center gap-1 rounded-lg bg-[var(--color-brand)] px-2.5 py-1 text-[11px] font-bold text-white shadow-sm transition hover:bg-[var(--color-brand-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      Mở nguồn và sao chép
+                      <span className="material-symbols-outlined text-xs">open_in_new</span>
+                      <span>Mở nguồn & sao chép</span>
                     </button>
                   </div>
-                  <p className="text-[11px] leading-relaxed text-[var(--color-text-secondary)]">
+                  <p className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-2.5 text-[11px] font-medium leading-relaxed text-[var(--color-text-primary)]">
                     {createLeadThankYouTemplate(
                       lead.author || "Anh/Chị",
                       profile?.brandName || lead.workspace_id,
