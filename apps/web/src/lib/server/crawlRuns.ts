@@ -8,9 +8,11 @@ import {
   insertCrawlRun,
   insertCrawlRunEvent,
   patchCrawlRun,
+  selectProductionCrawlControl,
   selectCrawlRun,
   selectCrawlRunEvents,
   selectCrawlRuns,
+  upsertProductionCrawlControl,
   type CreateRunInput,
 } from "@/lib/server/vpsOperationalStore";
 
@@ -103,4 +105,16 @@ export async function listCrawlRuns(limit = 50) {
 
 export async function listCrawlRunEvents(runId: string, limit = 100) {
   return selectCrawlRunEvents(runId, limit);
+}
+
+export async function getProductionCrawlControl() {
+  return selectProductionCrawlControl();
+}
+
+export async function setProductionCrawlControl(input: {
+  paused: boolean;
+  updatedBy?: string;
+  reason?: string;
+}) {
+  return upsertProductionCrawlControl(input);
 }

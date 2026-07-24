@@ -8,6 +8,8 @@ import type {
 
 type JsonRecord = Record<string, unknown>;
 
+const PRODUCTION_CONTROL_RUN_ID = "production-crawl-control";
+
 type ConsultationRow = {
   id: string;
   status: string;
@@ -273,6 +275,75 @@ export async function selectCrawlRuns(limit = 50) {
     `ops_crawl_runs?select=*&order=created_at.desc&limit=${safeLimit}`,
   );
   return (rows || []).map(runFromRow);
+}
+
+export type ProductionCrawlControl = {
+  paused: boolean;
+  updatedAt?: string;
+  updatedBy?: string;
+  reason?: string;
+};
+
+export async function selectProductionCrawlControl(): Promise<ProductionCrawlControl> {
+  const run = await selectCrawlRun(PRODUCTION_CONTROL_RUN_ID);
+  const metadata = run?.metadata || {};
+  return {
+    paused: metadata.paused === true,
+    updatedAt: typeof metadata.updatedAt === "string" ? metadata.updatedAt : run?.updatedAt as string | undefined,
+    updatedBy: typeof metadata.updatedBy === "string" ? metadata.updatedBy : undefined,
+    reason: typeof metadata.reason === "string" ? metadata.reason : undefined,
+  };
+}
+
+export async function upsertProductionCrawlControl(input: {
+  paused: boolean;
+  updatedBy?: string;
+  reason?: string;
+}) {
+  const timestamp = nowIso();
+  const metadata: JsonRecord = {
+    controlScope: "production",
+    paused: input.paused,
+    updatedAt: timestamp,
+    updatedBy: input.updatedBy || "admin",
+    reason: input.reason || (
+      input.paused
+        ? "Admin tạm dừng production sau nền tảng hiện tại."
+        : "Admin tiếp tục production."
+    ),
+  };
+  const rows = await request<CrawlRunRow[]>("ops_crawl_runs?on_conflict=id", {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates,return=representation" },
+    body: JSON.stringify({
+      id: PRODUCTION_CONTROL_RUN_ID,
+      run_type: "production",
+      status: "completed",
+      platforms: ["facebook"],
+      current_platform: null,
+      current_phase: input.paused ? "paused" : "resumed",
+      progress_current: 1,
+      progress_total: 1,
+      posts_found: 0,
+      comments_found: 0,
+      errors_count: 0,
+      requested_by: input.updatedBy || "admin",
+      heartbeat_at: timestamp,
+      last_message: input.paused
+        ? "Production sẽ tạm dừng sau nền tảng hiện tại."
+        : "Production đã được tiếp tục.",
+      metadata,
+      created_at: timestamp,
+      updated_at: timestamp,
+    }),
+  });
+  if (!rows?.[0]) throw new Error("VPS production control upsert returned no row.");
+  return {
+    paused: input.paused,
+    updatedAt: timestamp,
+    updatedBy: input.updatedBy,
+    reason: String(metadata.reason),
+  } satisfies ProductionCrawlControl;
 }
 
 export async function upsertCrawlRunSnapshot(run: CrawlRunRecord) {
