@@ -31,6 +31,7 @@ interface BMKpiCardsProps {
   unprocessed: number;
   crises: number;
   hotLeads: number;
+  leadsTotal?: number;
   leadsResolved: number;
   negativeHref?: string;
   leadsHref?: string;
@@ -40,10 +41,10 @@ const STATUS_STYLES: Record<
   KpiDef["status"],
   { icon: string; iconBg: string; iconColor: string; valueColor?: string }
 > = {
-  neutral:  { icon: "", iconBg: "var(--color-brand-subtle)",       iconColor: "var(--color-brand)"  },
-  positive: { icon: "", iconBg: "rgba(34,197,94,0.1)",  iconColor: "#22C55E" },
-  warning:  { icon: "", iconBg: "rgba(245,158,11,0.12)", iconColor: "#F59E0B" },
-  danger:   { icon: "", iconBg: "rgba(239,68,68,0.1)",  iconColor: "#EF4444", valueColor: "#EF4444" },
+  neutral: { icon: "", iconBg: "var(--color-brand-subtle)", iconColor: "var(--color-brand)" },
+  positive: { icon: "", iconBg: "rgba(34,197,94,0.1)", iconColor: "#22C55E" },
+  warning: { icon: "", iconBg: "rgba(245,158,11,0.12)", iconColor: "#F59E0B" },
+  danger: { icon: "", iconBg: "rgba(239,68,68,0.1)", iconColor: "#EF4444", valueColor: "#EF4444" },
 };
 
 export function BMKpiCards({
@@ -53,12 +54,15 @@ export function BMKpiCards({
   unprocessed,
   crises,
   hotLeads,
+  leadsTotal,
   leadsResolved,
   negativeHref = "/alerts?scope=negative",
-  leadsHref = "/leads?view=unassigned",
+  leadsHref = "/leads?view=all",
 }: BMKpiCardsProps) {
   const { t } = useTranslation();
   const negDelta = negativeMentions - negativePrev;
+  const totalLeads = leadsTotal !== undefined ? leadsTotal : hotLeads;
+  const remainingLeads = Math.max(0, totalLeads - leadsResolved);
 
   const cards: KpiDef[] = [
     {
@@ -80,12 +84,12 @@ export function BMKpiCards({
       id: "bm-kpi-leads",
       icon: "person_add",
       label: t("bm.kpi.leads"),
-      value: hotLeads,
+      value: totalLeads.toLocaleString("vi-VN"),
       sub: t("bm.kpi.needsAssign"),
       resolved: leadsResolved,
-      remaining: hotLeads,
+      remaining: remainingLeads,
       resolvedLabel: t("bm.kpi.processed", "Đã xử lý"),
-      status: hotLeads > 0 ? "positive" : "neutral",
+      status: totalLeads > 0 ? "positive" : "neutral",
       href: leadsHref,
     },
   ];
@@ -155,11 +159,15 @@ export function BMKpiCards({
                 <div className="bm-kpi-donut-wrap">
                   <div
                     className="bm-kpi-donut"
-                    style={{ background: `conic-gradient(#22C55E 0 ${resolvedPct}%, ${remainingColor} ${resolvedPct}% 100%)` }}
+                    style={{
+                      background: resolvedPct > 0
+                        ? `conic-gradient(#22C55E 0 ${resolvedPct}%, var(--color-border) ${resolvedPct}% 100%)`
+                        : `var(--color-border)`,
+                    }}
                     aria-label={`${resolvedLabel} ${resolvedPct}%, còn lại ${100 - resolvedPct}%`}
                   >
                     <div className="bm-kpi-donut-center">
-                      <strong>{resolvedPct}%</strong>
+                      <strong style={{ color: resolvedPct > 0 ? "#22C55E" : "var(--color-text-primary)" }}>{resolvedPct}%</strong>
                       <span>đã xử lý</span>
                     </div>
                   </div>
@@ -169,8 +177,8 @@ export function BMKpiCards({
 
             {card.resolved !== undefined && (
               <div className="bm-kpi-progress">
-                <span className="bm-kpi-progress-done"><i />{resolvedLabel}: {resolved.toLocaleString("vi-VN")}</span>
-                <span className="bm-kpi-progress-left"><i style={{ background: s.iconColor }} />Còn lại: {remaining.toLocaleString("vi-VN")}</span>
+                <span className="bm-kpi-progress-done"><i style={{ background: "#22C55E" }} />{resolvedLabel}: {resolved.toLocaleString("vi-VN")}</span>
+                <span className="bm-kpi-progress-left"><i style={{ background: "var(--color-text-muted)" }} />Còn lại: {remaining.toLocaleString("vi-VN")}</span>
               </div>
             )}
             {/* Hover indicator */}

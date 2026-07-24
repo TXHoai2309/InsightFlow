@@ -8,6 +8,7 @@ import {
   updateCrawlRun,
 } from "@/lib/server/crawlRuns";
 import {
+  deleteCrawlRunRecord,
   patchQueuedCrawlRun,
   updateConsultation,
 } from "@/lib/server/vpsOperationalStore";
@@ -144,31 +145,38 @@ export async function DELETE(
   try {
     const current = await getCrawlRun(context.params.runId);
     if (!current) return NextResponse.json({ error: "Không tìm thấy phiên cào." }, { status: 404 });
-    if (current.status !== "queued") {
-      return NextResponse.json({ error: "Chỉ được xóa phiên chưa được worker nhận." }, { status: 409 });
+
+    const isCancelOnly = request.nextUrl.searchParams.get("action") === "cancel" && current.status === "queued";
+    if (isCancelOnly) {
+      const result = await patchQueuedCrawlRun(context.params.runId, {
+        status: "cancelled",
+        currentPhase: "cancelled",
+        finishedAt: new Date().toISOString(),
+      });
+      if (result.reason) {
+        return NextResponse.json({ error: "Phiên vừa được worker nhận; không thể hủy khỏi hàng đợi." }, { status: 409 });
+      }
+
+      await appendCrawlRunEvent(context.params.runId, {
+        level: "warn",
+        eventType: "cancelled",
+        phase: "cancelled",
+        message: "Admin đã hủy phiên trial khỏi hàng đợi.",
+      });
+      if (current.consultationId) {
+        await updateConsultation(current.consultationId, { trialCrawlStatus: "cancelled" }).catch(() => {});
+      }
+      return NextResponse.json({ success: true, run: await getCrawlRun(context.params.runId) });
     }
 
-    const result = await patchQueuedCrawlRun(context.params.runId, {
-      status: "cancelled",
-      currentPhase: "cancelled",
-      finishedAt: new Date().toISOString(),
-    });
-    if (result.reason) {
-      return NextResponse.json({ error: "Phiên vừa được worker nhận; không thể xóa khỏi hàng đợi." }, { status: 409 });
-    }
-
-    await appendCrawlRunEvent(context.params.runId, {
-      level: "warn",
-      eventType: "cancelled",
-      phase: "cancelled",
-      message: "Admin đã xóa phiên trial khỏi hàng đợi.",
-    });
+    // Direct deletion from database
+    await deleteCrawlRunRecord(context.params.runId);
     if (current.consultationId) {
-      await updateConsultation(current.consultationId, { trialCrawlStatus: "cancelled" });
+      await updateConsultation(current.consultationId, { trialCrawlStatus: "deleted" }).catch(() => {});
     }
-    return NextResponse.json({ success: true, run: await getCrawlRun(context.params.runId) });
+    return NextResponse.json({ success: true, deleted: true, id: context.params.runId });
   } catch (error) {
-    console.error("[Admin crawl runs API] cancel error:", error);
-    return NextResponse.json({ error: "Không thể xóa phiên khỏi hàng đợi." }, { status: 500 });
+    console.error("[Admin crawl runs API] delete error:", error);
+    return NextResponse.json({ error: "Không thể xóa phiên cào." }, { status: 500 });
   }
 }

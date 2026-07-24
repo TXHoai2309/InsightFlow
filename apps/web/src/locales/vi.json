@@ -1578,7 +1578,7 @@
       "crises": "Khủng hoảng",
       "noCrises": "Không có khủng hoảng",
       "leads": "Lead tiềm năng",
-      "needsAssign": "Tất cả lead trong kỳ"
+      "needsAssign": "lead cần xử lý"
     },
     "chart": {
       "title": "Xu hướng Mentions & Sentiment",

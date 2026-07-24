@@ -370,29 +370,31 @@ export default function AdminCrawlOperationsPage() {
     && !ACTIVE_RUN_STATUSES.has(selected.status)
   );
 
-  const cancelQueuedRun = async () => {
-    if (!selected || selected.status !== "queued") return;
-    if (!window.confirm("Xóa phiên này khỏi hàng đợi? Lịch sử vẫn được giữ với trạng thái đã hủy.")) return;
+  const deleteRun = async (runId?: string) => {
+    const targetId = runId || selected?.id;
+    if (!targetId) return;
+    const target = runs.find((r) => r.id === targetId) || selected;
+    const targetLabel = target?.metadata?.brandName || target?.metadata?.company || targetId;
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa phiên cào "${targetLabel}" (${targetId.slice(0, 8)}) khỏi danh sách?`)) return;
+
     setActionBusy(true);
     setErrorMessage("");
     try {
       const user = auth.currentUser;
       if (!user) throw new Error("Phiên đăng nhập đã hết hạn.");
       const token = await user.getIdToken();
-      const response = await fetch(`/api/admin/crawl-runs/${encodeURIComponent(selected.id)}`, {
+      const response = await fetch(`/api/admin/crawl-runs/${encodeURIComponent(targetId)}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
-      if (payload.run) {
-        setRuns((current) =>
-          current.map((run) => (run.id === payload.run.id ? payload.run : run)),
-        );
+      setRuns((current) => current.filter((run) => run.id !== targetId));
+      if (selectedId === targetId) {
+        setSelectedId(null);
       }
-      await loadRuns();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Không thể xóa phiên khỏi hàng đợi.");
+      setErrorMessage(error instanceof Error ? error.message : "Không thể xóa phiên cào.");
     } finally {
       setActionBusy(false);
     }
@@ -630,12 +632,25 @@ export default function AdminCrawlOperationsPage() {
                           </p>
                         </div>
                       </div>
-                      <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-1 text-[10px] font-bold ${
-                        statusStyle[run.status] || statusStyle.queued
-                      }`}>
-                        <span className={`h-1.5 w-1.5 rounded-full ${statusDotStyle[run.status] || statusDotStyle.queued}`} />
-                        {STATUS_LABELS[run.status] || run.status}
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[10px] font-bold ${
+                          statusStyle[run.status] || statusStyle.queued
+                        }`}>
+                          <span className={`h-1.5 w-1.5 rounded-full ${statusDotStyle[run.status] || statusDotStyle.queued}`} />
+                          {STATUS_LABELS[run.status] || run.status}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void deleteRun(run.id);
+                          }}
+                          className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-600 transition"
+                          title="Xóa phiên cào"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </div>
 
                     <div className="mt-3 flex flex-wrap gap-1.5">
@@ -777,17 +792,16 @@ export default function AdminCrawlOperationsPage() {
                         {selected.consultationId ? ` · Mã yêu cầu: ${selected.consultationId}` : ""}
                       </p>
                     </div>
-                    {selected.runType === "trial" && selected.status === "queued" && (
-                      <button
-                        type="button"
-                        onClick={() => void cancelQueuedRun()}
-                        disabled={actionBusy}
-                        className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-600 transition hover:bg-rose-50 disabled:opacity-50"
-                      >
-                        <Trash2 size={14} />
-                        Xóa khỏi hàng đợi
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => void deleteRun()}
+                      disabled={actionBusy}
+                      className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-white px-3.5 py-2 text-xs font-bold text-rose-600 transition hover:bg-rose-50 disabled:opacity-50"
+                      title="Xóa phiên cào này khỏi danh sách"
+                    >
+                      <Trash2 size={14} />
+                      Xóa phiên cào
+                    </button>
                   </div>
 
                   <div className="mt-5 space-y-4 text-sm">

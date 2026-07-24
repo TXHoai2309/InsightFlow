@@ -551,13 +551,13 @@ export default function AdminConsultationsPage() {
     return result;
   };
 
-  const handlePublishTrialData = async () => {
+  const handlePublishTrialData = async (allowPartial = false) => {
     if (!selectedId) return;
     setPublishingTrial(true);
     setTrialCrawlError("");
     setTrialCrawlMessage("");
     try {
-      const result = await callTrialAction("publish_trial_data");
+      const result = await callTrialAction("publish_trial_data", { allowPartial });
       setRequests((current) => current.map((item) => item.id === selectedId ? {
         ...item,
         trialDataStatus: "published",
@@ -572,13 +572,13 @@ export default function AdminConsultationsPage() {
     }
   };
 
-  const handleCreateTrialAccount = async () => {
+  const handleCreateTrialAccount = async (allowPartial = false) => {
     if (!selectedId) return;
     setCreatingAccount(true);
     setTrialCrawlError("");
     setTrialCrawlMessage("");
     try {
-      const result = await callTrialAction("create_trial_account", { trialDays });
+      const result = await callTrialAction("create_trial_account", { trialDays, allowPartial });
       setGeneratedCredentials(result.account as GeneratedCredentials);
       setRequests((current) => current.map((item) => item.id === selectedId ? {
         ...item,

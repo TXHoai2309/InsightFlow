@@ -324,16 +324,16 @@ export function BrandManagerDashboard({
           ratio > 0.3 ? "critical" : ratio > 0.15 ? "high" : ratio > 0.05 ? "medium" : "low";
         const sample = data.mentions[0];
         const TOPIC_LABELS: Record<string, string> = {
-          quality: t("dashboard.topics.quality") || "Chất lượng sản phẩm", 
+          quality: t("dashboard.topics.quality") || "Chất lượng sản phẩm",
           service: t("dashboard.topics.service") || "Phục vụ & CSKH",
-          price: t("dashboard.topics.price") || "Giá cả", 
-          delivery: t("dashboard.topics.delivery") || "Giao hàng", 
+          price: t("dashboard.topics.price") || "Giá cả",
+          delivery: t("dashboard.topics.delivery") || "Giao hàng",
           staff: t("dashboard.topics.staff") || "Thái độ nhân viên",
-          legal: t("dashboard.topics.legal") || "Pháp lý", 
-          operation: t("dashboard.topics.operation") || "Vận hành", 
+          legal: t("dashboard.topics.legal") || "Pháp lý",
+          operation: t("dashboard.topics.operation") || "Vận hành",
           marketing: t("dashboard.topics.marketing") || "Marketing",
-          experience: t("dashboard.topics.experience") || "Trải nghiệm", 
-          competitor: t("dashboard.topics.competitor") || "Đối thủ", 
+          experience: t("dashboard.topics.experience") || "Trải nghiệm",
+          competitor: t("dashboard.topics.competitor") || "Đối thủ",
           other: t("dashboard.topics.other") || "Chủ đề khác",
         };
         return {
@@ -377,9 +377,9 @@ export function BrandManagerDashboard({
       profile,
       workspaceId: filters.workspace_id,
       platform: filters.platform,
-    });
+    }).filter((lead) => checkTimeFilter(lead.posted_at || lead.created_at));
     return buildLeadOperationalMetrics(scopedLeads, profile);
-  }, [filters.platform, filters.workspace_id, leads, profile]);
+  }, [checkTimeFilter, filters.platform, filters.workspace_id, leads, profile]);
   const unprocessedContacts = leadOperationalMetrics.unassigned;
   const kpiDrilldownLinks = useMemo(() => {
     const alertLink = (scope: "negative" | "crisis") => {
@@ -393,9 +393,23 @@ export function BrandManagerDashboard({
       return `/alerts?${params.toString()}`;
     };
 
-    const leadParams = new URLSearchParams({ view: "unassigned" });
+    const leadParams = new URLSearchParams({ view: "unassigned", ownership: "unassigned" });
     if (filters.workspace_id !== "all") leadParams.set("workspace", filters.workspace_id);
     if (filters.platform !== "all") leadParams.set("platform", filters.platform);
+
+    if (filters.time_range === "24h" || filters.time_range === "2d" || filters.time_range === "3d" || filters.time_range === "5d") {
+      leadParams.set("updatedRange", "today");
+    } else if (filters.time_range === "7d") {
+      leadParams.set("updatedRange", "7d");
+    } else if (filters.time_range === "30d") {
+      leadParams.set("updatedRange", "30d");
+    } else if (filters.time_range === "custom") {
+      leadParams.set("updatedRange", "custom");
+      if (filters.custom_start_date) leadParams.set("dateFrom", filters.custom_start_date);
+      if (filters.custom_end_date) leadParams.set("dateTo", filters.custom_end_date);
+    } else {
+      leadParams.set("updatedRange", "all");
+    }
 
     return {
       negative: alertLink("negative"),
@@ -488,6 +502,7 @@ export function BrandManagerDashboard({
           unprocessed={unprocessedContacts}
           crises={derivedAlerts.filter((a) => a.severity === "critical").length}
           hotLeads={leadOperationalMetrics.unassigned}
+          leadsTotal={leadOperationalMetrics.total}
           leadsResolved={leadOperationalMetrics.closed + leadOperationalMetrics.skipped}
           negativeHref={kpiDrilldownLinks.negative}
           leadsHref={kpiDrilldownLinks.leads}

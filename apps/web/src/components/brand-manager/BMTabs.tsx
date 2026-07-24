@@ -30,9 +30,28 @@ export function BMTabs() {
       profile,
       workspaceId: filters.workspace_id,
       platform: filters.platform,
-    });
+    }).filter((lead) =>
+      isAlertWithinTimeScope(
+        { created_at: lead.posted_at || lead.created_at },
+        {
+          timeRange: filters.time_range,
+          singleDate: filters.single_date,
+          customStartDate: filters.custom_start_date,
+          customEndDate: filters.custom_end_date,
+        },
+      ),
+    );
     return buildLeadOperationalMetrics(scoped, profile).total;
-  }, [filters.platform, filters.workspace_id, leads, profile]);
+  }, [
+    filters.custom_end_date,
+    filters.custom_start_date,
+    filters.platform,
+    filters.single_date,
+    filters.time_range,
+    filters.workspace_id,
+    leads,
+    profile,
+  ]);
   const alertsCount = useMemo(() => {
     // Crisis Monitoring is the operational queue for every negative mention.
     // Severity/urgency only controls priority; it must not exclude records

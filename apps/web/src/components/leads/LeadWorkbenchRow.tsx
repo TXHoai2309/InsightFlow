@@ -459,14 +459,24 @@ export function LeadWorkbenchRow({
               {lead.content}
             </p>
 
-            <div className="mt-2.5 flex items-end justify-between gap-3 border-t border-[var(--color-border)] pt-2.5">
-              <div className="min-w-0">
-                <p className={`flex items-center gap-1 truncate text-xs font-black ${isUrgentFollowUp || meta.isOverdue || meta.isUrgent ? "text-[var(--color-error)]" : isActiveFollowUp ? "text-[var(--color-info)]" : "text-[var(--color-text-primary)]"}`}>
-                  {!isCompleted && (isActiveFollowUp || meta.isOverdue || meta.isUrgent) && <span className="material-symbols-outlined text-sm">{isActiveFollowUp ? "event_upcoming" : "schedule"}</span>}
+            <div className="mt-3 flex items-center justify-between gap-3 border-t border-[var(--color-border)] pt-2.5">
+              <div className="min-w-0 flex-1">
+                <div className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-black transition-all ${
+                  isUrgentFollowUp || meta.isOverdue || meta.isUrgent
+                    ? "bg-red-500/10 text-red-600 dark:bg-red-950/40 dark:text-red-400 border border-red-500/20"
+                    : isActiveFollowUp
+                      ? "bg-blue-500/10 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400 border border-blue-500/20"
+                      : "bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)] border border-[var(--color-border)]"
+                }`}>
+                  {!isCompleted && (isActiveFollowUp || meta.isOverdue || meta.isUrgent) && (
+                    <span className={`material-symbols-outlined text-[15px] ${meta.isOverdue || meta.isUrgent ? "animate-pulse" : ""}`}>
+                      {isActiveFollowUp ? "event_upcoming" : "schedule"}
+                    </span>
+                  )}
                   <span className="truncate">{isCompleted ? `Đã xử lý ${formatCompletedTime(lead, nowMs)}` : timingLabel}</span>
-                </p>
+                </div>
                 {!isCompleted && (
-                  <p className="mt-0.5 truncate text-[11px] font-semibold text-[var(--color-text-muted)]">
+                  <p className="mt-1 truncate text-[11px] font-medium text-[var(--color-text-muted)]">
                     {isActiveFollowUp
                       ? timingCaption
                       : meta.wasOverdueOnIngest
@@ -477,11 +487,11 @@ export function LeadWorkbenchRow({
                   </p>
                 )}
               </div>
-              <div className="shrink-0 text-right">
-                <p className="text-lg font-black leading-none text-[var(--color-brand)]">
+              <div className="shrink-0 text-right bg-[var(--color-brand-subtle)]/70 border border-[var(--color-brand-border)]/40 px-3 py-1.5 rounded-xl flex flex-col items-center justify-center">
+                <p className="text-base font-black leading-none text-[var(--color-brand)]">
                   {meta.priorityScore}
                 </p>
-                <p className="mt-0.5 text-[11px] font-semibold text-[var(--color-text-muted)]">
+                <p className="mt-0.5 text-[9px] font-extrabold uppercase tracking-wider text-[var(--color-text-muted)]">
                   Điểm ưu tiên
                 </p>
               </div>

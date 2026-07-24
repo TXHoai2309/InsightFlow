@@ -310,8 +310,9 @@ export async function PATCH(request: NextRequest) {
       }
       const crawlRunId = text(consultation.trialCrawlRunId, 120);
       const crawlRun = crawlRunId ? await getCrawlRun(crawlRunId) : null;
-      if (!crawlRun || crawlRun.status !== "completed") {
-        return NextResponse.json({ error: "Chỉ có thể xuất bản sau khi trial crawl hoàn tất." }, { status: 409 });
+      const isExecutableStatus = crawlRun && ["completed", "failed", "partial", "syncing", "labeling"].includes(crawlRun.status);
+      if (!crawlRun || !isExecutableStatus) {
+        return NextResponse.json({ error: "Chỉ có thể xuất bản sau khi trial crawl đã chạy hoặc hoàn tất." }, { status: 409 });
       }
       const crawlRunMetadata = crawlRun.metadata;
       const trialBrandSlug = crawlRunMetadata && typeof crawlRunMetadata === "object"
@@ -319,9 +320,11 @@ export async function PATCH(request: NextRequest) {
         : "";
       const brandId = trialBrandSlug
         || `trial-${slugify(company)}-${crawlRunId.slice(0, 8).toLowerCase()}`;
-      if (!(await hasPublishedTrialPosts(brandId))) {
+      const forcePublish = body.force === true || body.allowPartial === true;
+      const hasPosts = await hasPublishedTrialPosts(brandId);
+      if (!hasPosts && !forcePublish) {
         return NextResponse.json(
-          { error: "Chưa tìm thấy dữ liệu trial đã đồng bộ trên Supabase. Hãy kiểm tra bước sync của worker." },
+          { error: "Chưa tìm thấy dữ liệu trial đã đồng bộ trên Supabase. Nếu một kênh bị lỗi (như Google Maps), hãy kiểm tra hoặc bật tùy chọn xuất bản bỏ qua kênh lỗi." },
           { status: 409 },
         );
       }
@@ -346,15 +349,18 @@ export async function PATCH(request: NextRequest) {
       }
       const crawlRunId = text(consultation.trialCrawlRunId, 120);
       const crawlRun = crawlRunId ? await getCrawlRun(crawlRunId) : null;
-      if (!crawlRun || crawlRun.status !== "completed") {
-        return NextResponse.json({ error: "Chỉ có thể tạo tài khoản sau khi trial crawl hoàn tất." }, { status: 409 });
+      const isExecutableStatus = crawlRun && ["completed", "failed", "partial", "syncing", "labeling"].includes(crawlRun.status);
+      if (!crawlRun || !isExecutableStatus) {
+        return NextResponse.json({ error: "Chỉ có thể tạo tài khoản sau khi phiên cào trial đã khởi chạy hoặc hoàn tất." }, { status: 409 });
       }
       const brandId = text(consultation.trialBrandSlug, 100)
         || text(crawlRun.metadata?.trialBrandSlug, 100)
         || `trial-${slugify(company)}-${crawlRunId.slice(0, 8).toLowerCase()}`;
       const publishedAt = text(consultation.trialPublishedAt, 80)
         || text(crawlRun.metadata?.trialPublishedAt, 80);
-      if (!publishedAt || !(await hasPublishedTrialPosts(brandId))) {
+      const forceAccount = body.force === true || body.allowPartial === true;
+      const hasPosts = await hasPublishedTrialPosts(brandId);
+      if (!publishedAt && !hasPosts && !forceAccount) {
         return NextResponse.json({ error: "Hãy xuất bản dữ liệu trial trước khi tạo tài khoản." }, { status: 409 });
       }
       if (!companyEmailDomain) {
