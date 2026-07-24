@@ -1,7 +1,5 @@
 {
-  "admin.brandManager.badge": "Sprint 2 Admin",
   "admin.brandManager.title": "Cấp tài khoản Brand Manager",
-  "admin.brandManager.subtitle": "Brand Manager không tự đăng ký. Admin tạo tài khoản sẵn, gán đúng thương hiệu và cấp mật khẩu tạm thời để người phụ trách thương hiệu đăng nhập vào InsightFlow.",
   "admin.brandManager.flow.1": "Admin xác định Brand Manager trong Sprint 2",
   "admin.brandManager.flow.2": "Admin nhập họ tên, email, thương hiệu và mật khẩu tạm",
   "admin.brandManager.flow.3": "Hệ thống tạo Firebase Auth user",
