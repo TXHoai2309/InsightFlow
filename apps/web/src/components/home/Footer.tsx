@@ -41,6 +41,7 @@ export default function Footer() {
 
   const companyLinks = [
     { label: t("nav.about"), href: "/ve-chung-toi" },
+    { label: "Hướng dẫn sử dụng", href: "/huong-dan" },
     { label: t("footer.blog"), href: "#" },
     { label: t("footer.careers"), href: "#" },
     { label: t("footer.contactLink"), href: "#" },

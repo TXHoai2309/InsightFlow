@@ -61,6 +61,7 @@ export default function RootLayout({
     "/nganh",
     "/ve-chung-toi",
     "/profile",
+    "/huong-dan",
   ].includes(pathname || "");
   const isDemoPage = pathname === "/demo" || pathname?.startsWith("/demo/") === true;
   const hideShell = isAuthPage || isPublicPage;
@@ -94,6 +95,8 @@ export default function RootLayout({
         return "metadata.about.title";
       case "/profile":
         return "metadata.profile.title";
+      case "/huong-dan":
+        return "Hướng dẫn sử dụng — InsightFlow";
       case "/dashboard":
         return "metadata.dashboard.title";
       case "/demo":

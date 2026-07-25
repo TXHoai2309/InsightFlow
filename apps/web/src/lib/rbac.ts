@@ -182,6 +182,7 @@ const PUBLIC_ROUTES = [
   "/nganh",
   "/ve-chung-toi",
   "/profile",
+  "/huong-dan",
 ];
 
 const ROUTE_POLICIES: RoutePolicy[] = [
