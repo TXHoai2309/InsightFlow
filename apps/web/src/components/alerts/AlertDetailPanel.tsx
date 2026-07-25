@@ -32,6 +32,7 @@ import { dummyStaff } from "@/lib/demoData";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import { WorkflowProgress } from "@/components/ui/WorkflowProgress";
 import { dispatchTourAction } from "@/components/onboarding/RouteTour";
+import { openCompactSourceWindow } from "@/lib/compact-source-window";
 
 export type AlertDetailPanelTab = "action" | "profile" | "interactions" | "history";
 
@@ -251,6 +252,10 @@ export function AlertDetailPanel({
       showToast("Cảnh báo này chưa có liên kết nguồn.", "error");
       return;
     }
+
+    // Open small floating Chrome popup window directly for live commenting
+    openCompactSourceWindow(sourceUrl);
+    dispatchTourAction("open_source");
 
     onOpenSource(alert);
     // Always return the InsightFlow panel to the action workspace so the

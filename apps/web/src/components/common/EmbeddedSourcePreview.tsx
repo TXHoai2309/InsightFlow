@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { ExternalLink, Copy, Check, X, ShieldAlert, Globe, MessageSquare } from "lucide-react";
+import { ExternalLink, Copy, Check, X, Globe, MessageSquare } from "lucide-react";
 import { PlatformLogo } from "@/components/platform/PlatformLogo";
 
 export interface EmbeddedSourcePreviewProps {
@@ -15,33 +15,45 @@ export interface EmbeddedSourcePreviewProps {
 }
 
 /**
- * Transforms standard video URLs (TikTok, YouTube) into official iframe embed player URLs
- * so they render natively inside the modal without frame restriction blocks.
+ * Transforms standard post URLs into official iframe embed player URLs for TikTok, YouTube, and Facebook
+ * so they load 100% natively directly INSIDE the modal box without being blocked by X-Frame-Options.
  */
-export function getEmbeddableUrl(rawUrl: string | null): string | null {
+export function getEmbeddableUrl(rawUrl: string | null, platformStr?: string): string | null {
   if (!rawUrl) return null;
   try {
     const parsed = new URL(rawUrl);
+    const host = parsed.hostname.toLowerCase();
+    const plat = String(platformStr || "").toLowerCase();
 
-    // TikTok official embed player conversion
-    if (parsed.hostname.includes("tiktok.com")) {
+    // 1. TikTok official embed player URL
+    if (host.includes("tiktok.com") || plat.includes("tiktok")) {
       const videoMatch = parsed.pathname.match(/\/video\/(\d+)/);
       if (videoMatch && videoMatch[1]) {
         return `https://www.tiktok.com/embed/v2/${videoMatch[1]}`;
       }
     }
 
-    // YouTube official embed player conversion
-    if (parsed.hostname.includes("youtube.com") && parsed.searchParams.get("v")) {
+    // 2. YouTube official embed player URL
+    if (host.includes("youtube.com") || plat.includes("youtube")) {
       const videoId = parsed.searchParams.get("v");
-      return `https://www.youtube.com/embed/${videoId}?autoplay=1`;
+      if (videoId) {
+        return `https://www.youtube.com/embed/${videoId}?autoplay=1`;
+      }
     }
-    if (parsed.hostname.includes("youtu.be")) {
+    if (host.includes("youtu.be")) {
       const videoId = parsed.pathname.replace(/^\//, "");
-      return `https://www.youtube.com/embed/${videoId}?autoplay=1`;
+      if (videoId) {
+        return `https://www.youtube.com/embed/${videoId}?autoplay=1`;
+      }
+    }
+
+    // 3. Facebook official embed plugin URL
+    if (host.includes("facebook.com") || host.includes("fb.com") || plat.includes("facebook")) {
+      const cleanUrl = rawUrl.replace(/#.*$/, "");
+      return `https://www.facebook.com/plugins/post.php?href=${encodeURIComponent(cleanUrl)}&show_text=true&width=500`;
     }
   } catch {
-    // Return original url if URL parsing fails
+    // Return original url if parsing fails
   }
   return rawUrl;
 }
@@ -59,7 +71,7 @@ export function EmbeddedSourcePreview({
   const [iframeError, setIframeError] = useState(false);
   const [iframeLoading, setIframeLoading] = useState(true);
 
-  const embedUrl = React.useMemo(() => getEmbeddableUrl(url), [url]);
+  const embedUrl = React.useMemo(() => getEmbeddableUrl(url, platform), [url, platform]);
 
   useEffect(() => {
     if (isOpen) {
@@ -91,7 +103,7 @@ export function EmbeddedSourcePreview({
         className="relative flex h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-2xl transition-all dark:bg-slate-900"
         role="dialog"
         aria-modal="true"
-        aria-label="Khung xem nguồn"
+        aria-label="Khung xem nguồn bài viết"
       >
         {/* Header */}
         <header className="flex shrink-0 items-center justify-between border-b border-[var(--color-border)] px-4 py-3 sm:px-6">
@@ -142,15 +154,15 @@ export function EmbeddedSourcePreview({
           </div>
         </header>
 
-        {/* Content Body - Iframe Player & Preview */}
-        <div className="relative flex-1 overflow-hidden bg-slate-950/10 dark:bg-slate-950/60">
+        {/* Content Body - Official Embed Player inside the Modal Box */}
+        <div className="relative flex-1 overflow-hidden bg-slate-950/20 dark:bg-slate-950/80">
           {!iframeError ? (
             <>
               {iframeLoading && (
                 <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[var(--color-bg-surface)] p-6">
                   <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--color-brand)] border-t-transparent" />
                   <p className="text-xs font-semibold text-[var(--color-text-secondary)]">
-                    Đang tải nội dung bài viết gốc...
+                    Đang tải phát trực tiếp bài viết gốc trong khung...
                   </p>
                 </div>
               )}
@@ -162,55 +174,55 @@ export function EmbeddedSourcePreview({
                   setIframeError(true);
                   setIframeLoading(false);
                 }}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
                 sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation"
-                title="Khung xem bài viết gốc"
+                title="Khung xem phát bài viết gốc"
               />
             </>
           ) : (
-            /* Fallback Card when Iframe Framing is explicitly blocked by browser */
+            /* Fallback preview if embed player encounters network failure */
             <div className="flex h-full w-full flex-col items-center justify-center p-6 text-center overflow-y-auto">
-              <div className="max-w-lg space-y-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 shadow-xl dark:bg-slate-900">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-                  <ShieldAlert size={24} />
+              <div className="w-full max-w-xl space-y-5 rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 sm:p-8 shadow-2xl dark:bg-slate-900">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--color-brand-subtle)] text-[var(--color-brand)]">
+                  <PlatformLogo platform={platform || ""} size="lg" />
                 </div>
+
                 <div>
-                  <h3 className="text-base font-black text-[var(--color-text-primary)]">
-                    Nền tảng này không cho xem trực tiếp trong iframe
+                  <h3 className="text-base sm:text-lg font-black text-[var(--color-text-primary)]">
+                    Bài viết từ {platform ? String(platform).toUpperCase() : "nền tảng"}
                   </h3>
-                  <p className="mt-1.5 text-xs leading-relaxed text-[var(--color-text-secondary)]">
-                    Bạn vẫn có thể bấm nút bên dưới để mở bài viết gốc trong tab mới hoặc sao chép liên kết.
-                  </p>
                 </div>
 
                 {contentSnippet && (
-                  <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-3 text-left">
-                    <p className="flex items-center gap-1.5 text-[11px] font-bold text-[var(--color-brand)]">
-                      <MessageSquare size={14} />
-                      <span>Trích dẫn bài viết {author ? `từ ${author}` : ""}</span>
+                  <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-4 text-left shadow-xs">
+                    <p className="flex items-center gap-1.5 text-xs font-bold text-[var(--color-brand)]">
+                      <MessageSquare size={16} />
+                      <span>Trích dẫn bình luận {author ? `từ ${author}` : ""}</span>
                     </p>
-                    <p className="mt-1 line-clamp-4 text-xs italic leading-relaxed text-[var(--color-text-primary)]">
-                      &ldquo;{contentSnippet}&rdquo;
+                    <p className="mt-2 text-xs sm:text-sm italic leading-relaxed text-[var(--color-text-primary)]">
+                      "{contentSnippet}"
                     </p>
                   </div>
                 )}
 
-                <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                <div className="flex items-center justify-center gap-3 pt-2">
                   <button
                     type="button"
-                    onClick={handleCopyLink}
-                    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-4 text-xs font-bold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)]"
+                    onClick={handleOpenNewTab}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[var(--color-brand)] px-6 text-sm font-bold text-white shadow-md transition hover:bg-[var(--color-brand-hover)]"
                   >
-                    {copied ? <Check size={16} className="text-green-600" /> : <Copy size={16} />}
-                    <span>{copied ? "Đã sao chép link" : "Sao chép link"}</span>
+                    <ExternalLink size={18} />
+                    <span>Mở bài gốc trong tab mới</span>
                   </button>
 
                   <button
                     type="button"
-                    onClick={handleOpenNewTab}
-                    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[var(--color-brand)] px-5 text-xs font-bold text-white shadow-md hover:bg-[var(--color-brand-hover)]"
+                    onClick={handleCopyLink}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-5 text-sm font-bold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)]"
                   >
-                    <ExternalLink size={16} />
-                    <span>Mở tab mới ngay</span>
+                    {copied ? <Check size={18} className="text-green-600" /> : <Copy size={18} />}
+                    <span>{copied ? "Đã sao chép" : "Sao chép link"}</span>
                   </button>
                 </div>
               </div>

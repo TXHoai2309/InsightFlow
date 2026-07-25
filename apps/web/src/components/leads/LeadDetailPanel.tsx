@@ -21,6 +21,7 @@ import {
   LEAD_DETAIL_PANEL_SCROLL_ID,
   type LeadDetailPanelTab,
 } from "@/lib/lead-return-context";
+import { openCompactSourceWindow } from "@/lib/compact-source-window";
 import type {
   DashboardFilters,
   Lead,
@@ -443,7 +444,7 @@ export function LeadDetailPanel({
     // Keep the source reusable while a result is pending, without recording
     // another contact attempt every time the user reopens the same post.
     if (countAsContact && meta.needsResultCapture) {
-      window.open(action.href, "_blank", "noopener,noreferrer");
+      openCompactSourceWindow(action.href);
       showToast("Đã mở lại nguồn của khách hàng.");
       return;
     }
@@ -478,7 +479,7 @@ export function LeadDetailPanel({
 
       const updatedLead = { ...lead, ...actionData };
       onStartedAction?.(updatedLead);
-      window.open(action.href, "_blank", "noopener,noreferrer");
+      openCompactSourceWindow(action.href);
     } catch (error) {
       console.error(error);
       setSaveError(
@@ -525,7 +526,7 @@ export function LeadDetailPanel({
       return;
     }
 
-    window.open(sourceAction.href, "_blank", "noopener,noreferrer");
+    openCompactSourceWindow(sourceAction.href);
   };
 
   const handleSaveResult = async () => {

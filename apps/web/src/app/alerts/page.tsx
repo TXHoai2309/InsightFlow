@@ -42,6 +42,7 @@ import { usePinnedQueue } from "@/hooks/usePinnedQueue";
 import { useAlertViewPresence } from "@/hooks/useAlertViewPresence";
 import { getAlertSourceUrl } from "@/lib/alert-source-url";
 import { EmbeddedSourcePreview } from "@/components/common/EmbeddedSourcePreview";
+import { openCompactSourceWindow } from "@/lib/compact-source-window";
 import { dispatchTourAction } from "@/components/onboarding/RouteTour";
 import {
   filterOperationalAlerts,
@@ -295,8 +296,8 @@ export default function AlertsPage() {
     const text = alert.comment_content || alert.text || "";
     const targetUrl = getAlertSourceUrl(alert);
     if (targetUrl) {
-      setPreviewUrl(targetUrl);
-      setPreviewAlert(alert);
+      // Open small floating Chrome popup window directly for live commenting
+      openCompactSourceWindow(targetUrl);
       dispatchTourAction("open_source");
     }
 

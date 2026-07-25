@@ -20,6 +20,7 @@ import {
   getPrimaryLeadAction,
 } from "@/lib/lead-workbench";
 import type { AlertViewer } from "@/hooks/useAlertViewPresence";
+import { openCompactSourceWindow } from "@/lib/compact-source-window";
 
 interface LeadWorkbenchRowProps {
   lead: Lead;
@@ -267,7 +268,7 @@ export function LeadWorkbenchRow({
       }
 
       const updatedLead = { ...lead, ...actionData };
-      window.open(primaryAction.href, "_blank", "noopener,noreferrer");
+      openCompactSourceWindow(primaryAction.href);
       onStartedAction?.(updatedLead);
       onSelect(updatedLead);
     } catch (err) {
