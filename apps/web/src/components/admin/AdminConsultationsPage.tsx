@@ -724,7 +724,7 @@ export default function AdminConsultationsPage() {
           </div>
         </div>
       ) : (
-        <div className="grid items-start gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
+        <div data-tour="consultation-list" className="grid items-start gap-5 xl:grid-cols-[380px_minmax(0,1fr)]">
           {/* LEFT LIST PANE */}
           <div
             className="flex min-h-[560px] min-w-0 flex-col gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)]/70 p-3 shadow-sm backdrop-blur"
@@ -870,7 +870,7 @@ export default function AdminConsultationsPage() {
           </div>
 
           {/* RIGHT DETAIL PANE */}
-          <div ref={detailPanelRef} className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm">
+          <div ref={detailPanelRef} data-tour="consultation-detail" className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm">
             {selectedRequest ? (
               <div>
                 {/* Details Header */}
@@ -974,7 +974,7 @@ export default function AdminConsultationsPage() {
                     </div>
                   </section>
 
-                  <section className="overflow-hidden rounded-lg border border-[var(--color-border)] bg-white/60 shadow-sm dark:bg-white/5">
+                  <section data-tour="trial-config" className="overflow-hidden rounded-lg border border-[var(--color-border)] bg-white/60 shadow-sm dark:bg-white/5">
                     <div className="flex items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-brand-subtle)]/35 px-4 py-3">
                       <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[var(--color-brand)]/10 text-[var(--color-brand)]">
                         <Layers className="h-4 w-4" />
@@ -1107,6 +1107,7 @@ export default function AdminConsultationsPage() {
                       )}
                       <button
                         type="button"
+                        data-tour="trial-run-button"
                         onClick={() => void handleStartTrialCrawl()}
                         disabled={startingTrialCrawl || trialCrawlActive || accountWasCreated || selectedRequest.status !== "completed" || !hasValidTrialConfiguration}
                         title={accountWasCreated ? "Tài khoản đã gắn với brand slug hiện tại nên không thể tạo run mới." : undefined}
@@ -1130,6 +1131,7 @@ export default function AdminConsultationsPage() {
                       {trialCanPublish && !trialIsPublished && (
                         <button
                           type="button"
+                          data-tour="trial-publish-button"
                           onClick={() => void handlePublishTrialData(trialNeedsRecrawl)}
                           disabled={publishingTrial}
                           className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-cyan-600 px-4 text-[12px] font-bold text-white shadow-sm transition hover:bg-cyan-700 disabled:opacity-50"
@@ -1141,6 +1143,7 @@ export default function AdminConsultationsPage() {
                       {(trialIsPublished || trialCanPublish) && !accountWasCreated && (
                         <button
                           type="button"
+                          data-tour="trial-account-button"
                           onClick={() => setShowAccountConfirmation(true)}
                           className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-[12px] font-bold text-white shadow-sm transition hover:bg-emerald-700"
                         >

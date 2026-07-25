@@ -230,7 +230,7 @@ export function Header({ onMenuToggle, isSidebarCollapsed = false }: HeaderProps
       <div className="flex items-center gap-4 md:gap-6">
         {!isDemoMode && <TrialTimeRemaining />}
 
-        {!isDemoMode && (role === "brand_manager" || role === "crisis_employee" || role === "lead_employee") && (
+        {!isDemoMode && (role === "admin" || role === "brand_manager" || role === "crisis_employee" || role === "lead_employee") && (
           <button
             type="button"
             onClick={handleOpenGuide}

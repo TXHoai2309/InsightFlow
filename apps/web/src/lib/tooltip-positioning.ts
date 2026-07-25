@@ -22,16 +22,21 @@ export interface TooltipPositionResult {
  */
 export function calculateTooltipPosition({
   targetRect,
-  tooltipWidth = 360,
-  tooltipHeight = 220,
+  tooltipWidth = 380,
+  tooltipHeight = 240,
   viewportWidth = typeof window !== "undefined" ? window.innerWidth : 1280,
   viewportHeight = typeof window !== "undefined" ? window.innerHeight : 800,
   preferredPlacement = "auto",
   headerOffset = 72,
   screenPadding = 16,
 }: CalculateTooltipPositionOptions): TooltipPositionResult {
-  const actualWidth = Math.min(tooltipWidth, viewportWidth - screenPadding * 2);
-  const actualHeight = Math.min(tooltipHeight, viewportHeight - screenPadding * 2);
+  // Max-width constraint: 360px - 420px
+  const constrainedWidth = Math.min(Math.max(tooltipWidth, 360), 420);
+  const actualWidth = Math.min(constrainedWidth, viewportWidth - screenPadding * 2);
+
+  // Max-height constraint: min(420px, calc(100vh - 48px))
+  const constrainedMaxHeight = Math.min(420, viewportHeight - 48);
+  const actualHeight = Math.min(tooltipHeight, constrainedMaxHeight - screenPadding * 2);
 
   // Available spaces in 4 cardinal directions
   const spaceBelow = viewportHeight - targetRect.bottom - screenPadding;
@@ -41,23 +46,32 @@ export function calculateTooltipPosition({
 
   let placement: "top" | "bottom" | "left" | "right" | "center" = "bottom";
 
+  const fitsTop = spaceAbove >= actualHeight + 12;
+  const fitsBottom = spaceBelow >= actualHeight + 12;
+  const fitsRight = spaceRight >= actualWidth + 12;
+  const fitsLeft = spaceLeft >= actualWidth + 12;
+
   if (preferredPlacement !== "auto") {
-    placement = preferredPlacement;
+    if (preferredPlacement === "top" && fitsTop) placement = "top";
+    else if (preferredPlacement === "bottom" && fitsBottom) placement = "bottom";
+    else if (preferredPlacement === "right" && fitsRight) placement = "right";
+    else if (preferredPlacement === "left" && fitsLeft) placement = "left";
+    else {
+      // Fallback chain: bottom -> top -> right -> left -> center
+      if (fitsBottom) placement = "bottom";
+      else if (fitsTop) placement = "top";
+      else if (fitsRight) placement = "right";
+      else if (fitsLeft) placement = "left";
+      else placement = "center";
+    }
   } else {
     // Determine best fit automatically
-    if (spaceBelow >= actualHeight + 12) {
-      placement = "bottom";
-    } else if (spaceAbove >= actualHeight + 12) {
-      placement = "top";
-    } else if (spaceRight >= actualWidth + 12) {
-      placement = "right";
-    } else if (spaceLeft >= actualWidth + 12) {
-      placement = "left";
-    } else if (spaceBelow > spaceAbove) {
-      placement = "bottom";
-    } else {
-      placement = "top";
-    }
+    if (fitsBottom) placement = "bottom";
+    else if (fitsTop) placement = "top";
+    else if (fitsRight) placement = "right";
+    else if (fitsLeft) placement = "left";
+    else if (spaceBelow >= spaceAbove) placement = "bottom";
+    else placement = "top";
   }
 
   let top = 0;
@@ -100,7 +114,7 @@ export function calculateTooltipPosition({
     top: `${top}px`,
     left: `${left}px`,
     width: `${actualWidth}px`,
-    maxHeight: `${Math.min(actualHeight, viewportHeight - top - screenPadding)}px`,
+    maxHeight: `${Math.min(constrainedMaxHeight, viewportHeight - top - screenPadding)}px`,
     zIndex: 9999,
   };
 

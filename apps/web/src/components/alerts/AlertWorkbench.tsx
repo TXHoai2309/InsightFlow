@@ -119,7 +119,7 @@ export function AlertWorkbench(props: AlertWorkbenchProps) {
   const isPanelOpen = Boolean(props.selectedAlert && !props.panelCollapsed);
 
   const ALL_STATUS_VIEWS = [
-    { id: "all" as const, label: props.includeClosed ? "Tất cả cảnh báo" : "Tất cả việc đang mở", count: props.includeClosed ? props.alerts.length : openCount },
+    { id: "all" as const, label: props.includeClosed ? "Tất cả cảnh báo" : "Tất cả", count: props.includeClosed ? props.alerts.length : openCount },
     { id: "pending" as const, label: "Chưa phân công", count: counts.pending },
     { id: "processing" as const, label: "Đang xử lý", count: counts.processing },
     { id: "contact_failed" as const, label: "Cần liên hệ lại", count: counts.contact_failed },
@@ -158,7 +158,7 @@ export function AlertWorkbench(props: AlertWorkbenchProps) {
       </header>
 
       <section aria-label="Tóm tắt hàng đợi cảnh báo" className="grid gap-2.5 md:grid-cols-3">
-        <KpiCard title={props.includeClosed ? "Tất cả cảnh báo" : "Tất cả việc đang mở"} value={props.includeClosed ? props.alerts.length : openCount} sub={`${urgentCount} việc có mức ưu tiên cao`} icon="bolt" color="#c9362f" bg="#fff0ef" onClick={() => props.onStatusFilterChange("all")} />
+        <KpiCard title={props.includeClosed ? "Tất cả cảnh báo" : "Tất cả"} value={props.includeClosed ? props.alerts.length : openCount} sub={`${urgentCount} việc có mức ưu tiên cao`} icon="bolt" color="#c9362f" bg="#fff0ef" onClick={() => props.onStatusFilterChange("all")} />
         <KpiCard title="Chưa phân công" value={counts.pending} sub="Chưa có người phụ trách" icon="person_add" color="#df554e" bg="#fff4f3" onClick={() => props.onStatusFilterChange("pending")} />
         <KpiCard title="Đang được xử lý" value={counts.processing} sub="Đã có người phụ trách" icon="timer" color="#ef756d" bg="#fff8f7" onClick={() => props.onStatusFilterChange("processing")} />
       </section>
@@ -222,7 +222,7 @@ export function AlertWorkbench(props: AlertWorkbenchProps) {
         {props.error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{props.error}</div>}
 
         <div className={`grid w-full items-start gap-y-3 ${isPanelOpen ? "min-[1280px]:grid-cols-[clamp(20rem,27vw,27rem)_minmax(0,1fr)] min-[1280px]:gap-x-3" : "grid-cols-1"}`}>
-          <main data-tour="alerts-queue-list" className="flex min-w-0 scroll-mt-24 flex-col self-start rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm min-[1280px]:sticky min-[1280px]:top-3 min-[1280px]:max-h-[calc(100vh-88px)]">
+          <main data-tour="alert-list" className="flex min-w-0 scroll-mt-24 flex-col self-start rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm min-[1280px]:sticky min-[1280px]:top-3 min-[1280px]:max-h-[calc(100vh-88px)]">
             <header className="flex shrink-0 items-center justify-between border-b border-[var(--color-border)] px-[4%] py-[3%]">
               <div><h2 className="text-sm font-black text-[var(--color-text-primary)]">Danh sách cảnh báo</h2><p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">{STATUS_VIEWS.find((view) => view.id === props.statusFilter)?.label || "Cảnh báo đang mở"}</p></div>
               <div className="flex items-center gap-2">
@@ -234,7 +234,7 @@ export function AlertWorkbench(props: AlertWorkbenchProps) {
               {props.isLoading && props.pageAlerts.length === 0 ? (
                 [0, 1, 2].map((item) => <div key={item} className="h-[18vh] animate-pulse rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)]" />)
               ) : props.pageAlerts.length === 0 ? (
-                <div data-tour="alert-item-first" className="flex min-h-[45vh] flex-col items-center justify-center rounded-lg border border-dashed border-[var(--color-border)] p-[8%] text-center">
+                <div data-tour="alert-list-first-item" className="flex min-h-[45vh] flex-col items-center justify-center rounded-lg border border-dashed border-[var(--color-border)] p-[8%] text-center">
                   <p className="text-sm font-black text-[var(--color-text-primary)]">Không có cảnh báo phù hợp</p>
                   <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
                     {props.canViewAllAssignments ? "Thử chọn trạng thái hoặc điều chỉnh bộ lọc 7 ngày / tất cả." : "Không có cảnh báo nào đang chờ bạn xử lý."}
@@ -242,7 +242,7 @@ export function AlertWorkbench(props: AlertWorkbenchProps) {
                 </div>
               ) : (
                 props.pageAlerts.map((alert, index) => (
-                  <div key={alert.id} data-tour={index === 0 ? "alert-item-first" : undefined}>
+                  <div key={alert.id} data-tour={index === 0 ? "alert-list-first-item" : undefined}>
                     <AlertWorkbenchRow
                       alert={alert}
                       selected={props.selectedAlertId === alert.id}

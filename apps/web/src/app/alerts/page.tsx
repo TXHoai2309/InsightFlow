@@ -223,7 +223,11 @@ export default function AlertsPage() {
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [contentTypeFilter, setContentTypeFilter] = useState<string>("all");
   const [slaFilter, setSlaFilter] = useState<"all" | "overdue" | "due_soon">("all");
-  const [statusFilter, setStatusFilter] = useState<AlertStatusFilter>("all");
+  const [statusFilter, setStatusFilter] = useState<AlertStatusFilter>(() => {
+    if (typeof window === "undefined") return "pending";
+    const requestedStatus = new URLSearchParams(window.location.search).get("status") as AlertStatusFilter | null;
+    return requestedStatus || "pending";
+  });
   const [includeClosed, setIncludeClosed] = useState(() => {
     if (typeof window === "undefined") return false;
     return new URLSearchParams(window.location.search).get("include") === "all";

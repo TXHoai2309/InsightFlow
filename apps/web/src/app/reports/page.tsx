@@ -2133,7 +2133,7 @@ function LegacyReportsPage({
       />
 
       {/* ── Header ── */}
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+      <div data-tour="reports-header" className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold text-[var(--color-text-primary)]">
             Trung tâm Báo cáo

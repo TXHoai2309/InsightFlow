@@ -6,7 +6,7 @@ import { BrandManagerDashboard } from "@/components/brand-manager/BrandManagerDa
 
 export default function DemoPage() {
   return (
-    <div className="mx-auto max-w-[1600px] p-4 md:p-8">
+    <div data-tour="demo-overview" className="mx-auto max-w-[1600px] p-4 md:p-8">
       <BMLayoutHeader demoMode />
       <BMTabs />
       <div className="mt-4">

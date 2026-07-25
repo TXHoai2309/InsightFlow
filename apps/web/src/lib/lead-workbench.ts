@@ -94,7 +94,6 @@ function isLeadEmployee(profile: UserRoleProfile | null | undefined) {
   if (profile.role === "lead_employee") return true;
   return profile.role === "crisis_employee" && profile.permissions?.includes("leads");
 }
-
 export function getLeadWorkbenchViews(profile: UserRoleProfile | null | undefined) {
   void profile;
   return WORKBENCH_VIEWS;
@@ -104,7 +103,7 @@ export function getDefaultLeadWorkbenchView(
   profile: UserRoleProfile | null | undefined,
 ): LeadWorkbenchView {
   void profile;
-  return "priority";
+  return "unassigned";
 }
 
 export function canLeadBeVisibleToUser(

@@ -25,12 +25,13 @@ export function BMLayoutHeader({ demoMode = false }: BMLayoutHeaderProps) {
       <div className="flex w-full items-center gap-3 sm:w-auto">
         {demoMode ? (
           <Link
-            href="/#consultation"
-            aria-label={t("bm.tryNowAria")}
+            href="/trial-registration"
+            data-tour="demo-try-now-btn"
+            aria-label="Trải nghiệm ngay"
             className="group inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#6D5EF6] to-[#5B4FE0] px-4 py-2 text-sm font-bold text-white shadow-[0_10px_24px_rgba(91,79,224,0.24)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_30px_rgba(91,79,224,0.34)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6D5EF6] focus-visible:ring-offset-2 active:translate-y-0 sm:w-auto"
           >
             <Sparkles className="h-4 w-4" aria-hidden="true" />
-            <span>{t("bm.tryNow")}</span>
+            <span>Trải nghiệm ngay</span>
             <ArrowRight
               className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5"
               aria-hidden="true"

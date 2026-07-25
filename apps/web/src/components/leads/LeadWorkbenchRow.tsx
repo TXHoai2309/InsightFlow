@@ -353,7 +353,7 @@ export function LeadWorkbenchRow({
       <div
         id={`lead-row-${lead.id}`}
         data-lead-id={lead.id}
-        data-tour={rank === 1 ? "lead-row-first" : undefined}
+        data-tour={rank === 1 ? "customer-list-first-item" : undefined}
         role="button"
         tabIndex={0}
         aria-current={selected ? "true" : undefined}
@@ -514,7 +514,7 @@ export function LeadWorkbenchRow({
       <div
         id={`lead-row-${lead.id}`}
         data-lead-id={lead.id}
-        data-tour={rank === 1 ? "lead-row-first" : undefined}
+        data-tour={rank === 1 ? "customer-list-first-item" : undefined}
         role="button"
         tabIndex={0}
         onClick={() => onSelect(lead)}

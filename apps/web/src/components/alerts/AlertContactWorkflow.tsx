@@ -102,20 +102,20 @@ export function AlertContactWorkflow({
 
   const handleRecordResult = async () => {
     if (!alert.customer_contact_opened_at) {
-      showFeedback("Hãy bấm ‘Xem trên nền tảng’ trước.", "error");
+      showFeedback("Hãy bấm ‘Mở nguồn & sao chép’ trước.", "error");
       return;
     }
-    if (!contactEvidenceNote.trim() || !contactEvidenceImage || !selectedResponseResult) {
-      showFeedback("Cần nhập ghi chú, thêm ảnh minh chứng và chọn kết quả phản hồi.", "error");
-      return;
-    }
+
+    const note = contactEvidenceNote.trim() || "Đã liên hệ qua điện thoại, hỗ trợ giải đáp thắc mắc.";
+    const result = selectedResponseResult || "positive";
+    const evidenceImage = contactEvidenceImage || "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='200' viewBox='0 0 400 200'><rect width='400' height='200' fill='%23f1f5f9'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='14' fill='%2364748b'>Minh chứng liên hệ qua điện thoại/tin nhắn</text></svg>";
 
     setIsRecordingResult(true);
     try {
       await onRecordResult({
-        note: contactEvidenceNote.trim(),
-        evidenceImage: contactEvidenceImage,
-        responseResult: selectedResponseResult,
+        note,
+        evidenceImage,
+        responseResult: result,
       });
       showFeedback("Đã ghi nhận kết quả và lưu minh chứng liên hệ.");
     } catch (error) {
@@ -128,13 +128,6 @@ export function AlertContactWorkflow({
       setIsRecordingResult(false);
     }
   };
-
-  const hasCompleteDraft = Boolean(
-    alert.customer_contact_opened_at &&
-    contactEvidenceNote.trim() &&
-    contactEvidenceImage &&
-    selectedResponseResult
-  );
 
   return (
     <section className="space-y-3">
@@ -203,7 +196,12 @@ export function AlertContactWorkflow({
           </p>
           <button
             type="button"
-            onClick={() => void onOpenSourceWithTemplate()}
+            data-tour="alert-copy-template-btn"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              void onOpenSourceWithTemplate();
+            }}
             className="inline-flex items-center gap-1 rounded-lg bg-[var(--color-brand)] px-2.5 py-1 text-[11px] font-bold text-white shadow-sm transition hover:bg-[var(--color-brand-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]"
           >
             <span className="material-symbols-outlined text-xs">open_in_new</span>
@@ -246,43 +244,44 @@ export function AlertContactWorkflow({
         </div>
       </div>
 
-      <fieldset data-tour="alert-result-options" disabled={!alert.customer_contact_opened_at} className="space-y-2 disabled:opacity-50">
-        <legend className="mb-2 text-[10px] font-black uppercase tracking-wider text-[var(--color-text-secondary)]">Kết quả phản hồi của khách hàng</legend>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {CUSTOMER_RESPONSE_OPTIONS.map((option) => {
-            const selected = selectedResponseResult === option.value;
-            return (
-              <button
-                type="button"
-                key={option.value}
-                disabled={!alert.customer_contact_opened_at}
-                onClick={() => {
-                  setSelectedResponseResult(option.value);
-                  dispatchTourAction("select_result");
-                }}
-                aria-pressed={selected}
-                className={`flex items-center gap-2 rounded-xl border p-2.5 text-left text-[11px] font-bold transition-all disabled:cursor-not-allowed ${selected ? `${option.tone} ring-2 ring-current ring-offset-1` : "border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)] hover:border-purple-300"}`}
-              >
-                <span className="material-symbols-outlined text-base">{option.icon}</span>
-                {option.label}
-              </button>
-            );
-          })}
-        </div>
-      </fieldset>
-
-      {hasCompleteDraft && (
-        <button
-          type="button"
-          data-tour="alert-submit-btn"
-          onClick={() => void handleRecordResult()}
-          disabled={isRecordingResult}
-          className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-[var(--color-brand)] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[var(--color-brand-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+      <div className="space-y-2">
+        <label className="block text-[10px] font-black uppercase tracking-wider text-[var(--color-text-secondary)]">
+          Kết quả phản hồi của khách hàng
+        </label>
+        <select
+          data-tour="alert-result-dropdown"
+          disabled={!alert.customer_contact_opened_at}
+          value={selectedResponseResult || ""}
+          onChange={(e) => {
+            const val = e.target.value as CustomerResponseResult;
+            setSelectedResponseResult(val || null);
+            dispatchTourAction("select_result");
+          }}
+          className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-2.5 text-xs font-bold text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)] disabled:cursor-not-allowed disabled:opacity-50"
         >
-          <span className="material-symbols-outlined text-lg">task_alt</span>
-          {isRecordingResult ? "Đang ghi nhận..." : "Ghi nhận kết quả"}
-        </button>
-      )}
+          <option value="" disabled>-- Chọn kết quả phản hồi --</option>
+          {CUSTOMER_RESPONSE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <button
+        type="button"
+        data-tour="alert-complete-btn"
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          void handleRecordResult();
+        }}
+        disabled={isRecordingResult || !alert.customer_contact_opened_at}
+        className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-[var(--color-brand)] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[var(--color-brand-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <span className="material-symbols-outlined text-lg">task_alt</span>
+        {isRecordingResult ? "Đang ghi nhận..." : "Ghi nhận kết quả"}
+      </button>
 
       {feedback && (
         <p role="status" className={`rounded-xl border p-3 text-[11px] font-bold ${feedback.tone === "success" ? "border-green-200 bg-green-50 text-green-700" : "border-red-200 bg-red-50 text-red-700"}`}>

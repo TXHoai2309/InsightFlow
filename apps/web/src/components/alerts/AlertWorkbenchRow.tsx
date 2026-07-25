@@ -104,6 +104,7 @@ export function AlertWorkbenchRow({ alert, selected, pinned = false, canPin = fa
     <div
       role="button"
       tabIndex={0}
+      data-tour="alert-list-first-item"
       onClick={() => {
         onSelect(alert);
         dispatchTourAction("select_alert");

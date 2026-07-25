@@ -109,6 +109,7 @@ export function BMKpiCards({
             key={card.id}
             id={card.id}
             href={card.href}
+            data-tour={card.id === "bm-kpi-negative" ? "dashboard-negative-card" : card.id === "bm-kpi-leads" ? "dashboard-lead-card" : undefined}
             className="bm-kpi-card"
           >
             {/* Top row */}

@@ -141,7 +141,7 @@ export default function LeadsPage() {
     }
   }, [profile, authLoading, canLoadStaffList, pathname]);
 
-  const [activeView, setActiveView] = useState<LeadWorkbenchView>("priority");
+  const [activeView, setActiveView] = useState<LeadWorkbenchView>("unassigned");
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -1154,7 +1154,7 @@ export default function LeadsPage() {
             </button>
             <button
               type="button"
-              data-tour="lead-filter-button"
+              data-tour="customer-filter"
               onClick={() => setShowFilters((value) => !value)}
               className={`inline-flex h-10 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] ${showFilters || activeFilterCount > 0 ? "border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] text-[var(--color-brand)]" : "border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)]"}`}
             >
@@ -1213,7 +1213,7 @@ export default function LeadsPage() {
             : "grid-cols-1"
             }`}
         >
-          <main className="flex min-w-0 flex-col self-start rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm min-[1100px]:sticky min-[1100px]:top-3 min-[1100px]:max-h-[calc(100vh-88px)]">
+          <main data-tour="customer-list" className="flex min-w-0 flex-col self-start rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm min-[1100px]:sticky min-[1100px]:top-3 min-[1100px]:max-h-[calc(100vh-88px)]">
             <header className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--color-border)] px-4 py-3">
               <div className="min-w-0">
                 <h2 className="text-sm font-black text-[var(--color-text-primary)]">

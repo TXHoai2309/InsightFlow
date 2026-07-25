@@ -339,7 +339,7 @@ export function LeadTable() {
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      <div data-tour="lead-list" className="overflow-x-auto">
         <table className="w-full min-w-[1180px] text-left font-sans">
           <thead className="sticky top-0 z-10 bg-[#F4F3FA]">
             <tr>
@@ -395,7 +395,7 @@ export function LeadTable() {
                     </td>
 
                     <td className="px-5 py-4 align-top">
-                      <div className="flex min-w-[90px] flex-col gap-2">
+                      <div data-tour="lead-score" className="flex min-w-[90px] flex-col gap-2">
                         <span className={`text-[14px] font-bold ${scoreInfo.color}`}>
                           {scoreInfo.score}/100
                         </span>
@@ -496,11 +496,11 @@ export function LeadTable() {
                         )}
 
                         {sourceHref ? (
-                          <a href={sourceHref} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#E9E7EE] text-[#474554] hover:bg-[#F4F3FA] transition-all" title="Mở bài gốc">
+                          <a data-tour="lead-open-source" href={sourceHref} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()} className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#E9E7EE] text-[#474554] hover:bg-[#F4F3FA] transition-all" title="Mở bài gốc">
                             <ExternalLink className="h-4 w-4" />
                           </a>
                         ) : (
-                          <Link href={leadHref} onClick={() => rememberDashboardContext(lead)} onAuxClick={() => rememberDashboardContext(lead)} onContextMenu={() => rememberDashboardContext(lead)} className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#E9E7EE] text-[#787585] hover:bg-[#F4F3FA]" title="Xem tại trang Khách hàng">
+                          <Link data-tour="lead-open-source" href={leadHref} onClick={() => rememberDashboardContext(lead)} onAuxClick={() => rememberDashboardContext(lead)} onContextMenu={() => rememberDashboardContext(lead)} className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#E9E7EE] text-[#787585] hover:bg-[#F4F3FA]" title="Xem tại trang Khách hàng">
                             <MessageSquare className="h-4 w-4" />
                           </Link>
                         )}
