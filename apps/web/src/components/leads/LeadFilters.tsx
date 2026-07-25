@@ -352,7 +352,7 @@ export function LeadFilters({
                 })}
                 className={selectClassName}
               >
-                <option value="all">{dateBasis === "none" ? "Tất cả việc đang mở" : "Tất cả thời gian"}</option>
+                <option value="all">{dateBasis === "none" ? "Tất cả" : "Tất cả thời gian"}</option>
                 <option value="today">Hôm nay</option>
                 <option value="7d">7 ngày gần nhất</option>
                 <option value="30d">30 ngày gần nhất</option>

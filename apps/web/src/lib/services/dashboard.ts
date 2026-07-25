@@ -1444,6 +1444,43 @@ const SUPABASE_ANNOTATION_COLUMNS = [
   "created_at",
 ];
 
+function normalizeBrandLookupValue(value: unknown) {
+  return String(value || "").trim();
+}
+
+function compactBrandLookupValue(value: unknown) {
+  return normalizeBrandLookupValue(value)
+    .toLowerCase()
+    .replace(/[\s\-_.]/g, "")
+    .trim();
+}
+
+function buildBrandLookupCandidates(input: {
+  brandKey: string;
+  searchTerm: string;
+  displayBrandName: string;
+  profileBrandId?: string;
+  profileBrandName?: string;
+  profileBrandIds?: string[];
+  profileWorkspaceIds?: string[];
+}) {
+  const candidates = [
+    input.profileBrandId,
+    input.profileBrandName,
+    ...(Array.isArray(input.profileBrandIds) ? input.profileBrandIds : []),
+    ...(Array.isArray(input.profileWorkspaceIds) ? input.profileWorkspaceIds : []),
+    input.searchTerm,
+    input.displayBrandName,
+    input.brandKey,
+    compactBrandLookupValue(input.profileBrandName),
+    compactBrandLookupValue(input.profileBrandId),
+  ];
+
+  return Array.from(new Set(candidates
+    .map(normalizeBrandLookupValue)
+    .filter(Boolean)));
+}
+
 async function fetchSupabaseMentionsUncached(opts: FetchOptions): Promise<Mention[]> {
   const config = getSupabaseConfig();
   // Keep the dashboard responsive and protect Supabase from multi-platform
@@ -1465,10 +1502,19 @@ async function fetchSupabaseMentionsUncached(opts: FetchOptions): Promise<Mentio
       } else if (brandKey.includes("starbuck")) {
         searchTerm = "starbucks";
         displayBrandName = "Starbucks";
-      } else if (brandKey.includes("mixue")) {
+      } else if (brandKey.includes("mixue") || brandKey.includes("bingxue")) {
         searchTerm = "mixue";
         displayBrandName = "Mixue";
       }
+      const brandLookupCandidates = buildBrandLookupCandidates({
+        brandKey,
+        searchTerm,
+        displayBrandName,
+        profileBrandId: opts.profileBrandId,
+        profileBrandName: opts.profileBrandName,
+        profileBrandIds: opts.profileBrandIds,
+        profileWorkspaceIds: opts.profileWorkspaceIds,
+      });
       const fetchBrandPosts = (column: "brand_slug" | "brand", value: string) =>
         loadSupabaseRows<SupabaseRow>(
           config,
@@ -1482,11 +1528,26 @@ async function fetchSupabaseMentionsUncached(opts: FetchOptions): Promise<Mentio
       // index, so sorting this scan exceeds Supabase's statement timeout.
       // Mention details are sorted by posted_at after they have been loaded.
       // Brand slug is canonical; display name is a legacy fallback.
-      let brandPosts = await fetchBrandPosts("brand_slug", searchTerm);
-      if (brandPosts.length === 0) {
-        brandPosts = await fetchBrandPosts("brand", displayBrandName);
+      const brandPostMap = new Map<string, SupabaseRow>();
+      for (const candidate of brandLookupCandidates) {
+        const rows = await fetchBrandPosts("brand_slug", candidate);
+        rows.forEach((row) => {
+          const id = String(row.post_id || "").trim();
+          if (id) brandPostMap.set(id, row);
+        });
+        if (brandPostMap.size >= maxMentions) break;
       }
-      postIds = brandPosts.map((p) => String(p.post_id || "").trim()).filter(Boolean);
+      if (brandPostMap.size === 0) {
+        for (const candidate of brandLookupCandidates) {
+          const rows = await fetchBrandPosts("brand", candidate);
+          rows.forEach((row) => {
+            const id = String(row.post_id || "").trim();
+            if (id) brandPostMap.set(id, row);
+          });
+          if (brandPostMap.size >= maxMentions) break;
+        }
+      }
+      postIds = Array.from(brandPostMap.keys());
     } catch (err: any) {
       console.error("[DashboardService] Failed to fetch brand posts:", err);
     }
@@ -1720,7 +1781,14 @@ async function fetchSupabaseMentionThread(postId: string): Promise<Mention[]> {
 }
 
 async function fetchSupabaseMentions(opts: FetchOptions): Promise<Mention[]> {
-  const cacheKey = `${normalizeBrandName(opts.brandKey || "global")}:${opts.maxMentions || 30000}`;
+  const cacheScope = [
+    opts.brandKey || "global",
+    opts.profileBrandId || "",
+    opts.profileBrandName || "",
+    ...(Array.isArray(opts.profileBrandIds) ? opts.profileBrandIds : []),
+    ...(Array.isArray(opts.profileWorkspaceIds) ? opts.profileWorkspaceIds : []),
+  ].map((value) => normalizeBrandName(String(value || ""))).filter(Boolean).join("|");
+  const cacheKey = `${cacheScope || "global"}:${opts.maxMentions || 30000}`;
   // Workflow mutations and realtime events must never be rebuilt from the
   // 30-minute dashboard snapshot. Dropping the scoped entry also refreshes
   // the shared cache for any page opened after the alert action completes.
@@ -1881,6 +1949,11 @@ export interface FetchOptions {
   after?: QueryDocumentSnapshot<DocumentData>;
   /** Optional normalized brand scope key passed by dashboard hooks */
   brandKey?: string;
+  /** Raw brand fields from the authenticated profile, used for trial slugs. */
+  profileBrandId?: string;
+  profileBrandName?: string;
+  profileBrandIds?: string[];
+  profileWorkspaceIds?: string[];
   /** Set a max limit (default: 10,000 rows per fetch stage) */
   maxMentions?: number;
   /** Bypass the shared snapshot after a workflow mutation or realtime event. */
@@ -2048,7 +2121,13 @@ export class DashboardService {
       // ── Mentions ──────────────────────────────────────────────────────────
       // NOTE: No orderBy — avoids Firestore index requirement.
       // We sort in-memory after fetching.
-      let mentions = await fetchSupabaseMentions(opts);
+      let mentions = await fetchSupabaseMentions({
+        ...opts,
+        profileBrandId: profile?.brandId,
+        profileBrandName: profile?.brandName,
+        profileBrandIds: profile?.brandIds,
+        profileWorkspaceIds: profile?.workspaceIds,
+      });
       /*
       const legacyFirestoreMentionMapper = (doc: QueryDocumentSnapshot<DocumentData>) => {
         const d = doc.data();
@@ -2287,8 +2366,16 @@ export class DashboardService {
           status: "new",
           created_at: m.created_at,
           updated_at: m.created_at,
-          url: m.url,
-          source_url: m.url,
+          url:
+            normalizeOptionalUrl(
+              m.content_type === "post" ? undefined : m.comment_url,
+              m.url,
+              m.post_url,
+              m.source_url,
+            ) || undefined,
+          post_url: normalizeOptionalUrl(m.post_url, m.source_url, m.content_type === "post" ? m.url : undefined) || undefined,
+          comment_url: normalizeOptionalUrl(m.comment_url, m.content_type === "post" ? undefined : m.url) || undefined,
+          source_url: normalizeOptionalUrl(m.source_url, m.post_url, m.url) || undefined,
           label_correction_status: undefined,
           pending_label_request_id: undefined,
           last_label_corrected_at: undefined,
@@ -2397,9 +2484,17 @@ export class DashboardService {
           .filter(Boolean)
           .forEach((key) => includedLeadKeys.add(key));
       });
-      const scopedLeadBrand = opts.brandKey
-        ? normalizeBrandName(opts.brandKey)
-        : "";
+      const scopedLeadBrands = opts.brandKey
+        ? buildBrandLookupCandidates({
+            brandKey: opts.brandKey,
+            searchTerm: opts.brandKey,
+            displayBrandName: opts.brandKey,
+            profileBrandId: profile?.brandId,
+            profileBrandName: profile?.brandName,
+            profileBrandIds: profile?.brandIds,
+            profileWorkspaceIds: profile?.workspaceIds,
+          }).map((value) => normalizeBrandName(value))
+        : [];
 
       for (const row of supabaseLeadRows) {
         const rowKeys = [row.id, row.mention_id, row.source_mention_id]
@@ -2419,8 +2514,8 @@ export class DashboardService {
           sourceMention?.workspace_id,
         );
         if (
-          scopedLeadBrand &&
-          (!workspaceId || normalizeBrandName(workspaceId) !== scopedLeadBrand)
+          scopedLeadBrands.length > 0 &&
+          (!workspaceId || !scopedLeadBrands.includes(normalizeBrandName(workspaceId)))
         ) {
           continue;
         }
@@ -2471,11 +2566,37 @@ export class DashboardService {
           ),
           updated_at: row.updated_at ? parseDate(row.updated_at) : undefined,
           expiry_at: row.expiry_at ? parseDate(row.expiry_at) : undefined,
-          url: normalizeOptionalUrl(row.url, row.post_url, row.source_url, sourceMention?.url),
+          url: normalizeOptionalUrl(
+            row.url,
+            sourceMention?.comment_url,
+            sourceMention?.url,
+            row.post_url,
+            row.source_url,
+          ),
+          post_url: normalizeOptionalUrl(
+            row.post_url,
+            sourceMention?.post_url,
+            sourceMention?.source_url,
+            row.url,
+          ),
+          comment_url: normalizeOptionalUrl(
+            row.comment_url,
+            sourceMention?.comment_url,
+            contentType !== "post" ? sourceMention?.url : undefined,
+          ),
+          source_comment_url: normalizeOptionalUrl(
+            row.source_comment_url,
+            sourceMention?.comment_url,
+          ),
+          original_comment_url: normalizeOptionalUrl(
+            row.original_comment_url,
+            sourceMention?.comment_url,
+          ),
           source_url: normalizeOptionalUrl(
             row.source_url,
-            row.url,
             row.post_url,
+            sourceMention?.source_url,
+            sourceMention?.post_url,
             sourceMention?.url,
           ),
           label_correction_status: mapLabelCorrectionStatus(row.label_correction_status),

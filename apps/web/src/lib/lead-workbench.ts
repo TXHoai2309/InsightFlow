@@ -1,5 +1,6 @@
 import type { Lead } from "@/types/dashboard";
 import type { UserRoleProfile } from "@/lib/rbac";
+import { getLeadSourceUrl } from "@/lib/lead-source-url";
 
 export type LeadWorkbenchView =
   | "all"
@@ -93,7 +94,6 @@ function isLeadEmployee(profile: UserRoleProfile | null | undefined) {
   if (profile.role === "lead_employee") return true;
   return profile.role === "crisis_employee" && profile.permissions?.includes("leads");
 }
-
 export function getLeadWorkbenchViews(profile: UserRoleProfile | null | undefined) {
   void profile;
   return WORKBENCH_VIEWS;
@@ -103,7 +103,7 @@ export function getDefaultLeadWorkbenchView(
   profile: UserRoleProfile | null | undefined,
 ): LeadWorkbenchView {
   void profile;
-  return "priority";
+  return "unassigned";
 }
 
 export function canLeadBeVisibleToUser(
@@ -188,20 +188,8 @@ export function getLeadOwnershipMeta(
   };
 }
 
-function getOptionalLeadUrl(lead: Lead, field: string) {
-  const value = (lead as Lead & Record<string, unknown>)[field];
-  return typeof value === "string" && value.trim() ? value.trim() : "";
-}
-
 function getLeadOriginUrl(lead: Lead) {
-  return (
-    getOptionalLeadUrl(lead, "comment_url") ||
-    getOptionalLeadUrl(lead, "source_comment_url") ||
-    getOptionalLeadUrl(lead, "original_comment_url") ||
-    getOptionalLeadUrl(lead, "source_url") ||
-    getOptionalLeadUrl(lead, "post_url") ||
-    getOptionalLeadUrl(lead, "url")
-  );
+  return getLeadSourceUrl(lead) || "";
 }
 
 function getLeadPlatformLabel(platform: Lead["platform"]) {

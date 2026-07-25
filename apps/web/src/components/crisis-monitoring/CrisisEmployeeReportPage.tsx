@@ -241,8 +241,8 @@ export function CrisisEmployeeReportPage() {
 
   useEffect(() => {
     const scopedBrandKey = getScopedBrandKey(profile);
-    fetchAlerts(scopedBrandKey, false);
-    fetchCorrectionRequests(scopedBrandKey, false);
+    fetchAlerts(scopedBrandKey, false, profile);
+    fetchCorrectionRequests(scopedBrandKey, false, profile);
   }, [fetchAlerts, fetchCorrectionRequests, profile]);
 
   const updateFilter = <K extends keyof CrisisReportFilters>(key: K, value: CrisisReportFilters[K]) => {

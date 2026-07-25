@@ -422,6 +422,7 @@ export default function ThreadView({
       ) : (
         /* Normal post card */
         <div
+          data-tour="labeling-thread-card"
           className={`card p-4 border-l-4 transition-all duration-150
             ${!isPostAssigned ? 'border-l-gray-200 dark:border-l-surface-600'
               : isPostSkipped ? 'border-l-gray-400 opacity-50 item-skipped'
@@ -560,7 +561,7 @@ export default function ThreadView({
         <div className="text-xs text-gray-400 dark:text-gray-500 hidden sm:block">
           Space = Bỏ qua · Enter = Xong → Next
         </div>
-        <button onClick={() => void handleDone()} className="btn-primary text-sm gap-2">
+        <button data-tour="labeling-approve-button" onClick={() => void handleDone()} className="btn-primary text-sm gap-2">
           ✅ Xong → Next
         </button>
       </div>

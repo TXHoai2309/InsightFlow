@@ -6,6 +6,6 @@ export function normalizeBrandName(name: string): string {
 
   if (normalized.includes("highland")) return "highlandcoffee";
   if (normalized.includes("starbuck")) return "starbucks";
-  if (normalized.includes("mixue")) return "mixue";
+  if (normalized.includes("mixue") || normalized.includes("bingxue")) return "mixue";
   return normalized;
 }

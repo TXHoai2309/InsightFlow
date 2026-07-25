@@ -417,6 +417,17 @@ export async function patchCrawlRun(id: string, patch: Partial<CrawlRunRecord> &
   return rows?.[0] ? runFromRow(rows[0]) : null;
 }
 
+export async function deleteCrawlRunRecord(id: string) {
+  await request(`ops_crawl_run_events?run_id=eq.${encode(id)}`, {
+    method: "DELETE",
+  }).catch(() => {});
+  const rows = await request<CrawlRunRow[]>(`ops_crawl_runs?id=eq.${encode(id)}`, {
+    method: "DELETE",
+    headers: { Prefer: "return=representation" },
+  });
+  return rows?.[0] ? runFromRow(rows[0]) : null;
+}
+
 export async function patchQueuedCrawlRun(id: string, patch: Partial<CrawlRunRecord>) {
   const updated = await patchCrawlRun(id, patch, "queued");
   if (updated) return { reason: null, run: updated };

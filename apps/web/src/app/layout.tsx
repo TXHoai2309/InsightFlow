@@ -23,27 +23,8 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 
-const BrandManagerOnboarding = dynamic(
-  () =>
-    import("@/components/onboarding/BrandManagerOnboarding").then(
-      (mod) => mod.BrandManagerOnboarding,
-    ),
-  { ssr: false },
-);
-
-const CrisisEmployeeOnboarding = dynamic(
-  () =>
-    import("@/components/onboarding/CrisisEmployeeOnboarding").then(
-      (mod) => mod.CrisisEmployeeOnboarding,
-    ),
-  { ssr: false },
-);
-
-const LeadEmployeeOnboarding = dynamic(
-  () =>
-    import("@/components/onboarding/LeadEmployeeOnboarding").then(
-      (mod) => mod.LeadEmployeeOnboarding,
-    ),
+const RouteTour = dynamic(
+  () => import("@/components/onboarding/RouteTour").then((mod) => mod.RouteTour),
   { ssr: false },
 );
 
@@ -255,9 +236,7 @@ export default function RootLayout({
                         {children}
                       </main>
                       <MobileNav />
-                      <BrandManagerOnboarding />
-                      <CrisisEmployeeOnboarding />
-                      <LeadEmployeeOnboarding />
+                      <RouteTour />
                     </div>
                   </div>
                 </ProtectedRoute>

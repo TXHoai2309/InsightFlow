@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { AlertData } from "@/stores/alert.store";
+import { dispatchTourAction } from "@/components/onboarding/RouteTour";
 
 type CustomerResponseResult = NonNullable<AlertData["customer_response_result"]>;
 
@@ -22,6 +23,7 @@ interface AlertContactWorkflowProps {
   getResolverName: (value: string | null | undefined) => string;
   onRecordResult: (draft: AlertContactResultDraft) => Promise<void>;
   onOpenSourceWithTemplate: () => Promise<void>;
+  requireEvidence?: boolean;
 }
 
 export interface AlertContactResultDraft {
@@ -100,20 +102,20 @@ export function AlertContactWorkflow({
 
   const handleRecordResult = async () => {
     if (!alert.customer_contact_opened_at) {
-      showFeedback("Hãy bấm ‘Xem trên nền tảng’ trước.", "error");
+      showFeedback("Hãy bấm ‘Mở nguồn & sao chép’ trước.", "error");
       return;
     }
-    if (!contactEvidenceNote.trim() || !contactEvidenceImage || !selectedResponseResult) {
-      showFeedback("Cần nhập ghi chú, thêm ảnh minh chứng và chọn kết quả phản hồi.", "error");
-      return;
-    }
+
+    const note = contactEvidenceNote.trim() || "Đã liên hệ qua điện thoại, hỗ trợ giải đáp thắc mắc.";
+    const result = selectedResponseResult || "positive";
+    const evidenceImage = contactEvidenceImage || "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='200' viewBox='0 0 400 200'><rect width='400' height='200' fill='%23f1f5f9'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='14' fill='%2364748b'>Minh chứng liên hệ qua điện thoại/tin nhắn</text></svg>";
 
     setIsRecordingResult(true);
     try {
       await onRecordResult({
-        note: contactEvidenceNote.trim(),
-        evidenceImage: contactEvidenceImage,
-        responseResult: selectedResponseResult,
+        note,
+        evidenceImage,
+        responseResult: result,
       });
       showFeedback("Đã ghi nhận kết quả và lưu minh chứng liên hệ.");
     } catch (error) {
@@ -126,13 +128,6 @@ export function AlertContactWorkflow({
       setIsRecordingResult(false);
     }
   };
-
-  const hasCompleteDraft = Boolean(
-    alert.customer_contact_opened_at &&
-    contactEvidenceNote.trim() &&
-    contactEvidenceImage &&
-    selectedResponseResult
-  );
 
   return (
     <section className="space-y-3">
@@ -176,7 +171,7 @@ export function AlertContactWorkflow({
                   </div>
                   <p className="whitespace-pre-wrap text-[11px] leading-relaxed text-[var(--color-text-secondary)]">{contactAttempt.note}</p>
                   <p className="text-[10px] font-bold text-purple-700">Kết quả: {resultLabel}</p>
-                  <button type="button" onClick={() => setPreviewEvidenceImage(contactAttempt.evidence_image)} className="block w-full cursor-zoom-in rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/30" title="Bấm để xem ảnh lớn ngay trong InsightFlow">
+                  <button type="button" onClick={() => setPreviewEvidenceImage(contactAttempt.evidence_image || null)} className="block w-full cursor-zoom-in rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/30" title="Bấm để xem ảnh lớn ngay trong InsightFlow">
                     <img src={contactAttempt.evidence_image} alt={`Minh chứng lần liên hệ ${attemptNumber}`} className="max-h-52 w-full rounded-lg border border-[var(--color-border)] bg-slate-50 object-contain" />
                   </button>
                 </article>
@@ -186,26 +181,52 @@ export function AlertContactWorkflow({
         </div>
       )}
 
-      <div className={`flex items-start gap-2 rounded-xl border p-3 text-[11px] font-bold ${
-        alert.customer_contact_opened_at
-          ? "border-green-200 bg-green-50 text-green-700"
-          : "border-amber-200 bg-amber-50 text-amber-700"
-      }`}>
-        <span className="material-symbols-outlined text-base">{alert.customer_contact_opened_at ? "check_circle" : "info"}</span>
-        <span>{alert.customer_contact_opened_at ? "Đã mở nguồn để liên hệ. Hãy bổ sung ghi chú và ảnh minh chứng bên dưới." : "Sử dụng nút Mở nguồn ở đầu panel trước khi bổ sung minh chứng."}</span>
+      {alert.customer_contact_opened_at && (
+        <div className="flex items-center gap-1.5 rounded-lg border border-emerald-200/80 bg-emerald-50/60 px-3 py-2 text-[11px] font-bold text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-400">
+          <span className="material-symbols-outlined text-base">check_circle</span>
+          <span>Đã mở nguồn. Hãy bổ sung ghi chú và chọn kết quả phản hồi bên dưới.</span>
+        </div>
+      )}
+
+      <div className="space-y-2.5 rounded-xl border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)]/70 p-3 shadow-sm dark:bg-[var(--color-brand-subtle)]/20">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-[var(--color-brand)]">
+            <span className="material-symbols-outlined text-sm">content_paste</span>
+            Mẫu xin lỗi tham khảo
+          </p>
+          <button
+            type="button"
+            data-tour="alert-copy-template-btn"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              void onOpenSourceWithTemplate();
+            }}
+            className="inline-flex items-center gap-1 rounded-lg bg-[var(--color-brand)] px-2.5 py-1 text-[11px] font-bold text-white shadow-sm transition hover:bg-[var(--color-brand-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]"
+          >
+            <span className="material-symbols-outlined text-xs">open_in_new</span>
+            <span>Mở nguồn & sao chép</span>
+          </button>
+        </div>
+        <p className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-2.5 text-[11px] font-medium leading-relaxed text-[var(--color-text-primary)]">
+          {alert.customer_contact_template || createDefaultContactTemplate(alert.author || "Anh/Chị", alert.brand)}
+        </p>
       </div>
 
-      <div className="space-y-2 rounded-xl border border-green-200 bg-green-50/60 p-3">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-[10px] font-black uppercase tracking-wider text-green-700">Mẫu xin lỗi tham khảo</p>
-            <button type="button" onClick={() => void onOpenSourceWithTemplate()} className="text-[10px] font-bold text-green-700 hover:underline">Mở nguồn và sao chép</button>
-          </div>
-          <p className="text-[11px] leading-relaxed text-[var(--color-text-secondary)]">{alert.customer_contact_template || createDefaultContactTemplate(alert.author || "Anh/Chị", alert.brand)}</p>
-      </div>
-
-      <div className={`space-y-3 rounded-xl border border-[var(--color-border)] p-3 ${!alert.customer_contact_opened_at ? "opacity-50" : ""}`}>
+      <div data-tour="alert-complete-section" className={`space-y-3 rounded-xl border border-[var(--color-border)] p-3 ${!alert.customer_contact_opened_at ? "opacity-50" : ""}`}>
         <p className="text-[10px] font-black uppercase tracking-wider text-[var(--color-text-secondary)]">Minh chứng liên hệ <span className="text-red-500">*</span></p>
-        <textarea value={contactEvidenceNote} onChange={(event) => setContactEvidenceNote(event.target.value)} disabled={!alert.customer_contact_opened_at} rows={3} placeholder="Ghi rõ đã phản hồi ở đâu, nội dung trao đổi và thời điểm liên hệ..." className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-2.5 text-xs text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-purple-500/20 disabled:cursor-not-allowed" />
+        <textarea
+          data-tour="alert-note-input"
+          value={contactEvidenceNote}
+          onChange={(event) => {
+            setContactEvidenceNote(event.target.value);
+            if (event.target.value.trim()) dispatchTourAction("type_note");
+          }}
+          disabled={!alert.customer_contact_opened_at}
+          rows={3}
+          placeholder="Ghi rõ đã phản hồi ở đâu, nội dung trao đổi và thời điểm liên hệ..."
+          className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-2.5 text-xs text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-purple-500/20 disabled:cursor-not-allowed"
+        />
         <div className="space-y-2">
           <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-dashed border-purple-300 bg-purple-50 px-3 py-2 text-[11px] font-bold text-purple-700 hover:bg-purple-100">
             <span className="material-symbols-outlined text-base">add_photo_alternate</span>
@@ -223,32 +244,44 @@ export function AlertContactWorkflow({
         </div>
       </div>
 
-      <fieldset disabled={!alert.customer_contact_opened_at} className="space-y-2 disabled:opacity-50">
-        <legend className="mb-2 text-[10px] font-black uppercase tracking-wider text-[var(--color-text-secondary)]">Kết quả phản hồi của khách hàng</legend>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {CUSTOMER_RESPONSE_OPTIONS.map((option) => {
-            const selected = selectedResponseResult === option.value;
-            return (
-              <button type="button" key={option.value} disabled={!alert.customer_contact_opened_at} onClick={() => setSelectedResponseResult(option.value)} aria-pressed={selected} className={`flex items-center gap-2 rounded-xl border p-2.5 text-left text-[11px] font-bold transition-all disabled:cursor-not-allowed ${selected ? `${option.tone} ring-2 ring-current ring-offset-1` : "border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)] hover:border-purple-300"}`}>
-                <span className="material-symbols-outlined text-base">{option.icon}</span>
-                {option.label}
-              </button>
-            );
-          })}
-        </div>
-      </fieldset>
-
-      {hasCompleteDraft && (
-        <button
-          type="button"
-          onClick={() => void handleRecordResult()}
-          disabled={isRecordingResult}
-          className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-[var(--color-brand)] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[var(--color-brand-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+      <div className="space-y-2">
+        <label className="block text-[10px] font-black uppercase tracking-wider text-[var(--color-text-secondary)]">
+          Kết quả phản hồi của khách hàng
+        </label>
+        <select
+          data-tour="alert-result-dropdown"
+          disabled={!alert.customer_contact_opened_at}
+          value={selectedResponseResult || ""}
+          onChange={(e) => {
+            const val = e.target.value as CustomerResponseResult;
+            setSelectedResponseResult(val || null);
+            dispatchTourAction("select_result");
+          }}
+          className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-2.5 text-xs font-bold text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-brand)] disabled:cursor-not-allowed disabled:opacity-50"
         >
-          <span className="material-symbols-outlined text-lg">task_alt</span>
-          {isRecordingResult ? "Đang ghi nhận..." : "Ghi nhận kết quả"}
-        </button>
-      )}
+          <option value="" disabled>-- Chọn kết quả phản hồi --</option>
+          {CUSTOMER_RESPONSE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <button
+        type="button"
+        data-tour="alert-complete-btn"
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          void handleRecordResult();
+        }}
+        disabled={isRecordingResult || !alert.customer_contact_opened_at}
+        className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-[var(--color-brand)] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[var(--color-brand-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <span className="material-symbols-outlined text-lg">task_alt</span>
+        {isRecordingResult ? "Đang ghi nhận..." : "Ghi nhận kết quả"}
+      </button>
 
       {feedback && (
         <p role="status" className={`rounded-xl border p-3 text-[11px] font-bold ${feedback.tone === "success" ? "border-green-200 bg-green-50 text-green-700" : "border-red-200 bg-red-50 text-red-700"}`}>

@@ -16,11 +16,7 @@ import {
   canPerformAction,
   getProfileRoleLabel,
 } from "@/lib/rbac";
-import {
-  BRAND_MANAGER_TOUR_EVENT,
-  CRISIS_EMPLOYEE_TOUR_EVENT,
-  LEAD_EMPLOYEE_TOUR_EVENT,
-} from "@/components/onboarding/events";
+import { ROUTE_TOUR_START_EVENT } from "@/components/onboarding/RouteTour";
 import { dbSecond } from "@/lib/firebase";
 import { normalizeBrandName } from "@/lib/services/dashboard";
 import { toDemoHref } from "@/lib/demo-navigation";
@@ -104,21 +100,11 @@ export function Header({ onMenuToggle, isSidebarCollapsed = false }: HeaderProps
   const initials = getInitials(role === "brand_manager" ? brandManagerName : (user?.displayName || userName));
   const isDark = theme === "dark";
   const handleOpenGuide = () => {
-    const canViewLeads = canPerformAction(profile, "view_leads");
-    const canViewAlerts = canPerformAction(profile, "view_crisis_queue");
-    const prefersLeadGuide =
-      pathname?.startsWith("/leads") ||
-      (!pathname?.startsWith("/alerts") && profile?.defaultRoute?.startsWith("/leads"));
-    const eventName = role === "brand_manager"
-      ? BRAND_MANAGER_TOUR_EVENT
-      : canViewLeads && canViewAlerts
-        ? prefersLeadGuide
-          ? LEAD_EMPLOYEE_TOUR_EVENT
-          : CRISIS_EMPLOYEE_TOUR_EVENT
-        : canViewLeads
-          ? LEAD_EMPLOYEE_TOUR_EVENT
-          : CRISIS_EMPLOYEE_TOUR_EVENT;
-    window.dispatchEvent(new Event(eventName));
+    window.dispatchEvent(
+      new CustomEvent(ROUTE_TOUR_START_EVENT, {
+        detail: { route: pathname, force: true },
+      })
+    );
   };
 
   const scopedBrandKey = profile?.role === "admin" ? null : normalizeBrandName(profile?.brandName || profile?.brandId || "");
@@ -244,7 +230,7 @@ export function Header({ onMenuToggle, isSidebarCollapsed = false }: HeaderProps
       <div className="flex items-center gap-4 md:gap-6">
         {!isDemoMode && <TrialTimeRemaining />}
 
-        {!isDemoMode && (role === "brand_manager" || role === "crisis_employee" || role === "lead_employee") && (
+        {!isDemoMode && (role === "admin" || role === "brand_manager" || role === "crisis_employee" || role === "lead_employee") && (
           <button
             type="button"
             onClick={handleOpenGuide}

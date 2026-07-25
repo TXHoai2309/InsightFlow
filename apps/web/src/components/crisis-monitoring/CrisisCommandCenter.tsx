@@ -136,7 +136,7 @@ export function CrisisCommandCenter() {
 
   useEffect(() => {
     if (!profile) return;
-    void fetchAlerts(scopedBrandKey, false);
+    void fetchAlerts(scopedBrandKey, false, profile);
   }, [fetchAlerts, profile, scopedBrandKey]);
 
   const alerts = useMemo(() => {
@@ -199,7 +199,7 @@ export function CrisisCommandCenter() {
   const topTopic = data.topicStats[0];
   return (
     <div data-tour="dashboard-insights" className="w-full space-y-6">
-      <section data-tour="dashboard-insights-kpis" className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section data-tour="crisis-summary" className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
           { icon: ShieldAlert, label: "Tổng tiêu cực", value: alerts.length, unit: "đề cập", hint: "Tất cả đề cập tiêu cực cần theo dõi trong kỳ", href: totalNegativeHref, tone: "border-[#E2DFFF] bg-[#F7F5FF] text-[#4234B6]", iconTone: "bg-[#E2DFFF] text-[#4234B6]" },
           { icon: AlertTriangle, label: "Ưu tiên cao", value: data.criticalAlerts.length, unit: "cảnh báo", hint: "Mức Critical hoặc Cao đang mở", href: highPriorityHref, tone: "border-[#FFE2C7] bg-[#FFF8F0] text-[#A14A00]", iconTone: "bg-[#FFE2C7] text-[#A14A00]" },
@@ -225,9 +225,11 @@ export function CrisisCommandCenter() {
         })}
       </section>
 
-      <CrisisAnalyticsCharts alerts={alerts} periodDays={periodDays} />
+      <div data-tour="crisis-trend">
+        <CrisisAnalyticsCharts alerts={alerts} periodDays={periodDays} />
+      </div>
 
-      <section data-tour="dashboard-insights-breakdown" className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+      <section data-tour="crisis-topics" className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <Card className={cardClass}>
           <CardHeader className="px-5 pb-3 pt-5"><div className="flex items-center justify-between gap-3"><div><CardTitle className="text-base font-black text-[#1A1B20]">Rủi ro theo nền tảng</CardTitle><p className="mt-1 text-xs font-medium text-[#6E6A7C]">Xác định kênh đang tập trung nhiều sự vụ nhất.</p></div><BarChart3 className="h-4 w-4 text-[#6E6A7C]" /></div></CardHeader>
           <CardContent className="space-y-4 px-5 pb-5">
@@ -247,7 +249,9 @@ export function CrisisCommandCenter() {
         </Card>
       </section>
 
-      {isLoading && alerts.length === 0 ? <div className="rounded-xl border border-[#DDD9E8] bg-white px-5 py-12 text-center text-sm font-medium text-[#6E6A7C]">Đang đồng bộ dữ liệu cảnh báo...</div> : <CrisisTable alerts={alerts} />}
+      <div data-tour="crisis-action-link">
+        {isLoading && alerts.length === 0 ? <div className="rounded-xl border border-[#DDD9E8] bg-white px-5 py-12 text-center text-sm font-medium text-[#6E6A7C]">Đang đồng bộ dữ liệu cảnh báo...</div> : <CrisisTable alerts={alerts} />}
+      </div>
       {error && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">Dữ liệu realtime đang gián đoạn. Hệ thống đang hiển thị bản dữ liệu gần nhất: {error}</div>}
     </div>
   );

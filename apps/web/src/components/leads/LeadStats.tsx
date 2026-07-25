@@ -140,6 +140,8 @@ export function LeadStats({ leads, followUpLeads = leads, isLoading, profile, on
     );
   }
 
+  const cardBgs = ["#edf7e7", "#f2f9ed", "#f6fcf3"];
+
   return (
     <div className="grid gap-3 md:grid-cols-3">
       {cards.map((card, index) => (
@@ -148,12 +150,13 @@ export function LeadStats({ leads, followUpLeads = leads, isLoading, profile, on
           type="button"
           data-tour={index === 0 ? "lead-stats-priority" : undefined}
           onClick={() => onSelectView?.(card.view)}
-          className="group relative flex min-h-[76px] items-center justify-between gap-3 overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-4 text-left shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-[var(--color-brand-border)] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2"
+          style={{ backgroundColor: cardBgs[index] || "#edf7e7" }}
+          className="group relative flex min-h-[76px] items-center justify-between gap-3 overflow-hidden rounded-2xl border border-[#b3df96]/60 p-4 text-left shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-[#499a13] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#499a13] focus-visible:ring-offset-2"
         >
           <div className="flex items-center gap-3 min-w-0">
             <span
-              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full"
-              style={{ backgroundColor: card.bg, color: card.color }}
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/80 shadow-sm dark:bg-slate-800/80"
+              style={{ color: card.color }}
             >
               <span className="material-symbols-outlined text-2xl">{card.icon}</span>
             </span>

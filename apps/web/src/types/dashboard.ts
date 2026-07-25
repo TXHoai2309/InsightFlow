@@ -167,6 +167,10 @@ export interface Lead {
   updated_at?: string;
   expiry_at?: string;
   url?: string;
+  post_url?: string;
+  comment_url?: string;
+  source_comment_url?: string;
+  original_comment_url?: string;
   source_url?: string;
   label_correction_status?: "none" | "pending" | "approved" | "rejected";
   pending_label_request_id?: string;

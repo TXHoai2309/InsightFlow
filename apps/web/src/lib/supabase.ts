@@ -105,6 +105,35 @@ function normalizeSource(source: string): string {
   return normalized || "news";
 }
 
+function readUrl(...values: unknown[]): string {
+  for (const value of values) {
+    const text = String(value || "").trim();
+    if (text && text !== "#") return text;
+  }
+  return "";
+}
+
+function getPostUrl(post: SupabasePostRow | null | undefined, postPayload: Record<string, any>) {
+  return readUrl(
+    post?.url,
+    postPayload.url,
+    postPayload.post_url,
+    postPayload.source_url,
+    postPayload.original_url,
+    postPayload.permalink,
+  );
+}
+
+function getCommentUrl(comment: SupabaseCommentRow | null | undefined, commentPayload: Record<string, any>) {
+  return readUrl(
+    comment?.url,
+    commentPayload.url,
+    commentPayload.comment_url,
+    commentPayload.source_comment_url,
+    commentPayload.original_comment_url,
+  );
+}
+
 function normalizeTopic(topic: unknown): string {
   const firstTopic = Array.isArray(topic) ? topic[0] : topic;
   const normalized = String(firstTopic || "other").toLowerCase().trim();
@@ -420,6 +449,14 @@ export async function fetchSupabaseAlerts(options: {
 
       const post_content = String(post?.payload_json?.text || post?.url || "");
       const comment_content = anno.entity_type === "comment" ? text : "";
+      const postUrl = getPostUrl(post, postPayload);
+      const commentUrl = getCommentUrl(comment, commentPayload);
+      const sourceUrl = readUrl(
+        commentPayload.source_url,
+        commentPayload.original_url,
+        commentUrl,
+        postUrl,
+      );
 
       const postedAtStr = comment?.posted_at || commentPayload.posted_at || post?.posted_at || postPayload.posted_at || anno.updated_at;
       if (postedAtStr) {
@@ -446,7 +483,7 @@ export async function fetchSupabaseAlerts(options: {
         status: resolveAlertStatusFromLabel(labelObj),
         resolved_at: labelObj.resolved_at ? parseDate(labelObj.resolved_at) : undefined,
         collectionName: "annotations",
-        url: String(comment?.url || commentPayload.url || post?.url || postPayload.url || ""),
+        url: anno.entity_type === "comment" ? readUrl(commentUrl, postUrl) : postUrl,
         reach: Number(post?.like_count || postPayload.like_count || 0),
         likes: Number(comment?.like_count || commentPayload.like_count || post?.like_count || postPayload.like_count || 0),
         comments: Number(post?.comment_count || postPayload.comment_count || 0),
@@ -472,7 +509,6 @@ export async function fetchSupabaseAlerts(options: {
         content_type: anno.entity_type,
         internal_notes: Array.isArray(labelObj.internal_notes) ? labelObj.internal_notes : undefined,
         post_id: anno.post_id,
-        post_url: String(post?.url || postPayload.url || ""),
         post_like_count: postLikes,
         post_comment_count: postComments,
         post_share_count: postShares,
@@ -492,6 +528,10 @@ export async function fetchSupabaseAlerts(options: {
         customer_contact_evidence_image: labelObj.customer_contact_evidence_image || undefined,
         customer_response_result: labelObj.customer_response_result || undefined,
         customer_contact_history: Array.isArray(labelObj.customer_contact_history) ? labelObj.customer_contact_history : [],
+        comment_id: anno.comment_id || undefined,
+        comment_url: commentUrl || undefined,
+        source_url: sourceUrl || undefined,
+        post_url: postUrl,
       };
 
       alerts.push(alert);
@@ -573,6 +613,14 @@ export async function fetchSingleSupabaseAlert(entityKey: string): Promise<Alert
   const parent_id = anno.entity_type === "comment" ? anno.post_id : null;
   const post_content = String(post?.payload_json?.text || post?.url || "");
   const comment_content = anno.entity_type === "comment" ? text : "";
+  const postUrl = getPostUrl(post, postPayload);
+  const commentUrl = getCommentUrl(comment, commentPayload);
+  const sourceUrl = readUrl(
+    commentPayload.source_url,
+    commentPayload.original_url,
+    commentUrl,
+    postUrl,
+  );
 
   return {
     id: anno.entity_key,
@@ -589,7 +637,7 @@ export async function fetchSingleSupabaseAlert(entityKey: string): Promise<Alert
     status: resolveAlertStatusFromLabel(labelObj),
     resolved_at: labelObj.resolved_at ? parseDate(labelObj.resolved_at) : undefined,
     collectionName: "annotations",
-    url: String(comment?.url || commentPayload.url || post?.url || postPayload.url || ""),
+    url: anno.entity_type === "comment" ? readUrl(commentUrl, postUrl) : postUrl,
     reach: Number(post?.like_count || postPayload.like_count || 0),
     likes: Number(comment?.like_count || commentPayload.like_count || post?.like_count || postPayload.like_count || 0),
     comments: Number(post?.comment_count || postPayload.comment_count || 0),
@@ -615,7 +663,10 @@ export async function fetchSingleSupabaseAlert(entityKey: string): Promise<Alert
     content_type: anno.entity_type,
     internal_notes: Array.isArray(labelObj.internal_notes) ? labelObj.internal_notes : undefined,
     post_id: anno.post_id,
-    post_url: String(post?.url || postPayload.url || ""),
+    comment_id: anno.comment_id || undefined,
+    comment_url: commentUrl || undefined,
+    source_url: sourceUrl || undefined,
+    post_url: postUrl,
     post_like_count: singlePostLikes,
     post_comment_count: singlePostComments,
     post_share_count: singlePostShares,

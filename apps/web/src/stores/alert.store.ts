@@ -81,7 +81,7 @@ export interface CustomerContactAttempt {
   opened_by?: string;
   template?: string;
   note: string;
-  evidence_image: string;
+  evidence_image?: string;
   response_result: "positive" | "no_response" | "still_upset" | "not_suitable";
   completed_at: string;
   outcome_status: "resolved" | "contact_waiting" | "contact_failed";
@@ -213,7 +213,11 @@ interface AlertState {
   correctionRequests: CorrectionRequest[];
   isLoadingRequests: boolean;
   setFilters: (filters: Partial<AlertFilters>) => void;
-  fetchAlerts: (scopedBrandKey?: string | null, force?: boolean) => Promise<void>;
+  fetchAlerts: (
+    scopedBrandKey?: string | null,
+    force?: boolean,
+    profile?: UserRoleProfile | null,
+  ) => Promise<void>;
   updateAlertStatus: (
     id: string,
     newStatus: string,
@@ -246,7 +250,11 @@ interface AlertState {
     profile: UserRoleProfile | null | undefined,
     brandFallback?: string,
   ) => Promise<void>;
-  fetchCorrectionRequests: (scopedBrandKey?: string | null, force?: boolean) => Promise<void>;
+  fetchCorrectionRequests: (
+    scopedBrandKey?: string | null,
+    force?: boolean,
+    profile?: UserRoleProfile | null,
+  ) => Promise<void>;
   createCorrectionRequest: (requestData: Omit<CorrectionRequest, "id" | "created_at" | "status">) => Promise<void>;
   resolveCorrectionRequest: (
     requestId: string,
@@ -288,7 +296,7 @@ function normalizeBrandKey(brand: string): string {
 
   if (normalized.includes("highland")) return "highlandcoffee";
   if (normalized.includes("starbuck")) return "starbucks";
-  if (normalized.includes("mixue")) return "mixue";
+  if (normalized.includes("mixue") || normalized.includes("bingxue")) return "mixue";
   return normalized;
 }
 
@@ -384,6 +392,11 @@ function mentionToAlertData(m: Mention): AlertData {
     labelObj.urgency ||
     (isCritical ? "high" : negativity.severity === "critical" ? "high" : negativity.severity);
 
+  const contentType = m.content_type || "post";
+  const isCommentLike = contentType !== "post";
+  const postUrl = m.post_url || m.source_url || (!isCommentLike ? m.url : "") || "";
+  const commentUrl = m.comment_url || (isCommentLike ? m.url : undefined);
+
   return {
     id: m.entity_key || m.id,
     source_id: m.id,
@@ -400,7 +413,7 @@ function mentionToAlertData(m: Mention): AlertData {
     status: resolveAlertStatusFromLabel(labelObj),
     resolved_at: labelObj.resolved_at,
     collectionName: "annotations",
-    url: m.url || m.comment_url || m.post_url || m.source_url || "",
+    url: isCommentLike ? (commentUrl || postUrl) : (postUrl || m.url || ""),
     reach: m.star_count || 0,
     likes: m.star_count || 0,
     comments: 0,
@@ -420,12 +433,12 @@ function mentionToAlertData(m: Mention): AlertData {
     post_content: m.post_content,
     comment_content: m.comment_content,
     parent_id: m.parent_id,
-    content_type: m.content_type || "post",
+    content_type: contentType,
     internal_notes: labelObj.internal_notes || [],
     post_id: m.post_id || m.parent_id || m.id,
     comment_id: m.comment_id || undefined,
-    post_url: m.post_url || m.source_url || m.url || "",
-    comment_url: m.comment_url || (m.content_type !== "post" ? m.url : undefined),
+    post_url: postUrl,
+    comment_url: commentUrl,
     source_url: m.source_url,
     post_like_count: m.star_count || 0,
     relevance: typeof labelObj.relevance === "boolean" ? labelObj.relevance : null,
@@ -473,6 +486,7 @@ function resolveAlertStatusFromLabel(labelObj: any): string {
 function buildAlertsFromMentions(
   mentions: Mention[],
   scopedBrandKey?: string | null,
+  profile?: UserRoleProfile | null,
 ): AlertData[] {
   return mentions
     // Every negative mention is an actionable alert. Crisis classification is
@@ -492,6 +506,9 @@ function buildAlertsFromMentions(
       // Keep the complete crisis history in the store. Each screen owns its
       // visible time range: Crisis Monitoring uses 30 days, while /alerts can
       // genuinely show all time or a user-selected period.
+      if (profile && profile.role !== "admin") {
+        return isSameBrandScope(profile, { brand: alert.brand });
+      }
       return isRecordInBrandScope({ brand: alert.brand }, scopedBrandKey ?? null);
     });
 }
@@ -670,7 +687,7 @@ export const useAlertStore = create<AlertState>()(
       });
     },
 
-    fetchAlerts: async (scopedBrandKey = null, force = false) => {
+    fetchAlerts: async (scopedBrandKey = null, force = false, profile = null) => {
       // Demo must be completely deterministic and must never depend on the
       // production cache/realtime pipeline. Build the same alert view model
       // used by the real page directly from the in-memory demo mentions.
@@ -718,9 +735,13 @@ export const useAlertStore = create<AlertState>()(
           const rawBrandKey = (scopedBrandKey === "global" || !scopedBrandKey) ? undefined : scopedBrandKey;
           const mentions = await DashboardService.fetchAlertMentions({
             brandKey: rawBrandKey,
+            profileBrandId: profile?.brandId,
+            profileBrandName: profile?.brandName,
+            profileBrandIds: profile?.brandIds,
+            profileWorkspaceIds: profile?.workspaceIds,
             forceRefresh,
           });
-          const filtered = buildAlertsFromMentions(mentions, scopedBrandKey);
+          const filtered = buildAlertsFromMentions(mentions, scopedBrandKey, profile);
 
           const scopedBrands = Array.from(new Set(filtered.map((alert) => alert.brand))).sort();
           const fallbackBrands = ["Highlands Coffee", "Starbucks", "Mixue"].filter((brand) => {
@@ -965,9 +986,17 @@ export const useAlertStore = create<AlertState>()(
         const hasResponseResult = Boolean(
           attempt?.customer_response_result || currentAlert?.customer_response_result
         );
-        if (!hasOpenedContact || !hasContactNote || !hasContactEvidence || !hasResponseResult) {
+        const requiresContactEvidence = profile.role !== "brand_manager";
+        if (
+          !hasOpenedContact ||
+          !hasContactNote ||
+          (requiresContactEvidence && !hasContactEvidence) ||
+          !hasResponseResult
+        ) {
           throw new Error(
-            "Phải mở liên kết liên hệ, nhập ghi chú, thêm ảnh minh chứng và ghi nhận kết quả phản hồi."
+            requiresContactEvidence
+              ? "Phải mở liên kết liên hệ, nhập ghi chú, thêm ảnh minh chứng và ghi nhận kết quả phản hồi."
+              : "Phải mở liên kết liên hệ, nhập ghi chú và ghi nhận kết quả phản hồi."
           );
         }
         const responseResult = attempt?.customer_response_result || currentAlert?.customer_response_result;
@@ -1154,14 +1183,14 @@ export const useAlertStore = create<AlertState>()(
           alerts: applyFilters(nextRawAlerts, state.filters),
           recentLocks: newStatus === "resolving"
             ? {
-                ...state.recentLocks,
-                [id]: {
-                  email: profile.email,
-                  timestamp: Date.now(),
-                  workflowStatus: "resolving",
-                  workflowUpdatedAt: operationAt,
-                },
-              }
+              ...state.recentLocks,
+              [id]: {
+                email: profile.email,
+                timestamp: Date.now(),
+                workflowStatus: "resolving",
+                workflowUpdatedAt: operationAt,
+              },
+            }
             : state.recentLocks,
         };
       });
@@ -1353,7 +1382,7 @@ export const useAlertStore = create<AlertState>()(
         // from Supabase before returning so the Alert page never renders a
         // stale cached queue after navigation from the detail screen.
         if (isRestore || ["resolved", "contact_waiting", "contact_failed", "skipped"].includes(newStatus)) {
-          await get().fetchAlerts(getScopedBrandKey(profile), true);
+          await get().fetchAlerts(getScopedBrandKey(profile), true, profile);
         }
       } catch (error) {
         console.error("[AlertStore] Failed to persist alert status:", error);
@@ -1404,7 +1433,7 @@ export const useAlertStore = create<AlertState>()(
       );
     },
 
-    fetchCorrectionRequests: async (scopedBrandKey = null, force = false) => {
+    fetchCorrectionRequests: async (scopedBrandKey = null, force = false, profile = null) => {
       if (typeof window !== "undefined" && window.location.pathname.startsWith("/demo")) {
         set({ correctionRequests: [], isLoadingRequests: false });
         return;
@@ -1471,7 +1500,10 @@ export const useAlertStore = create<AlertState>()(
               alert_text: data.content_preview || data.mention_content || data.alert_text || "",
             } as CorrectionRequest;
 
-            if (!isRecordInBrandScope({ brand: req.brand }, scopedBrandKey)) return;
+            const isInScope = profile && profile.role !== "admin"
+              ? isSameBrandScope(profile, { brand: req.brand })
+              : isRecordInBrandScope({ brand: req.brand }, scopedBrandKey);
+            if (!isInScope) return;
             if (!isWithinAlertReviewWindow(req.created_at)) return;
             requests.push(req);
           });

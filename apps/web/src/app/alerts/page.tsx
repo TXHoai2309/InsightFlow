@@ -41,6 +41,9 @@ import {
 import { usePinnedQueue } from "@/hooks/usePinnedQueue";
 import { useAlertViewPresence } from "@/hooks/useAlertViewPresence";
 import { getAlertSourceUrl } from "@/lib/alert-source-url";
+import { EmbeddedSourcePreview } from "@/components/common/EmbeddedSourcePreview";
+import { openCompactSourceWindow } from "@/lib/compact-source-window";
+import { dispatchTourAction } from "@/components/onboarding/RouteTour";
 import {
   filterOperationalAlerts,
   isAlertWithinTimeScope,
@@ -100,7 +103,7 @@ function getRelativeTime(isoString: string, t: any): string {
 function normalizeBrandId(brand: string): string {
   if (!brand) return "other";
   let b = brand.toLowerCase().trim();
-  if (b.includes("mixue")) return "mixue";
+  if (b.includes("mixue") || b.includes("bingxue")) return "mixue";
   if (b.includes("starbuck")) return "starbucks";
   if (b.includes("highland")) return "highland-coffee";
 
@@ -220,7 +223,11 @@ export default function AlertsPage() {
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [contentTypeFilter, setContentTypeFilter] = useState<string>("all");
   const [slaFilter, setSlaFilter] = useState<"all" | "overdue" | "due_soon">("all");
-  const [statusFilter, setStatusFilter] = useState<AlertStatusFilter>("all");
+  const [statusFilter, setStatusFilter] = useState<AlertStatusFilter>(() => {
+    if (typeof window === "undefined") return "pending";
+    const requestedStatus = new URLSearchParams(window.location.search).get("status") as AlertStatusFilter | null;
+    return requestedStatus || "pending";
+  });
   const [includeClosed, setIncludeClosed] = useState(() => {
     if (typeof window === "undefined") return false;
     return new URLSearchParams(window.location.search).get("include") === "all";
@@ -282,17 +289,22 @@ export default function AlertsPage() {
     }
   };
 
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewAlert, setPreviewAlert] = useState<any | null>(null);
+
   const handleSaveConfig = () => {
     triggerToast(t("alerts.toast.saved"));
   };
 
   const handleAccessSource = async (alert: Parameters<typeof getAlertSourceUrl>[0]) => {
     const text = alert.comment_content || alert.text || "";
-    // Open synchronously from the click event so browsers do not block the new tab.
     const targetUrl = getAlertSourceUrl(alert);
-    if (targetUrl) window.open(targetUrl, "_blank", "noopener,noreferrer");
+    if (targetUrl) {
+      // Open small floating Chrome popup window directly for live commenting
+      openCompactSourceWindow(targetUrl);
+      dispatchTourAction("open_source");
+    }
 
-    // Copy full text to clipboard for manual Ctrl+F fallback.
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -300,7 +312,6 @@ export default function AlertsPage() {
     } catch (err) {
       console.warn("[AlertsPage] Failed to copy source text:", err);
     }
-
   };
 
   const {
@@ -1096,9 +1107,9 @@ export default function AlertsPage() {
   useEffect(() => {
     if (authLoading || !canViewCrisisQueue) return;
     setFilters({ status: "all" });
-    fetchAlerts(scopedBrandKey, false);
-    fetchCorrectionRequests(scopedBrandKey);
-  }, [authLoading, canViewCrisisQueue, scopedBrandKey, fetchAlerts, fetchCorrectionRequests, setFilters]);
+    fetchAlerts(scopedBrandKey, false, profile);
+    fetchCorrectionRequests(scopedBrandKey, false, profile);
+  }, [authLoading, canViewCrisisQueue, scopedBrandKey, profile, fetchAlerts, fetchCorrectionRequests, setFilters]);
 
   // Auto-switch view Mode once based on high-risk counts
   useEffect(() => {
@@ -1197,8 +1208,8 @@ export default function AlertsPage() {
         getResolverName={getResolverName}
         onRefresh={async () => {
           try {
-            await fetchAlerts(scopedBrandKey, true);
-            await fetchCorrectionRequests(scopedBrandKey, true);
+            await fetchAlerts(scopedBrandKey, true, profile);
+            await fetchCorrectionRequests(scopedBrandKey, true, profile);
             triggerToast("Đã làm mới dữ liệu.");
           } catch (refreshError) {
             triggerToast("Không thể làm mới dữ liệu.");
@@ -1249,10 +1260,14 @@ export default function AlertsPage() {
           if (
             !alert.customer_contact_opened_at ||
             !draft.note.trim() ||
-            !draft.evidenceImage ||
+            (!isManager && !draft.evidenceImage) ||
             !draft.responseResult
           ) {
-            const missingEvidenceError = new Error("Cần có minh chứng liên hệ và kết quả phản hồi của khách hàng.");
+            const missingEvidenceError = new Error(
+              isManager
+                ? "Cần có ghi chú liên hệ và kết quả phản hồi của khách hàng."
+                : "Cần có minh chứng liên hệ và kết quả phản hồi của khách hàng."
+            );
             triggerToast(missingEvidenceError.message);
             throw missingEvidenceError;
           }
@@ -1372,6 +1387,15 @@ export default function AlertsPage() {
           onClose={() => setSelectedEvidence(null)}
         />
       )}
+
+      <EmbeddedSourcePreview
+        isOpen={Boolean(previewUrl)}
+        onClose={() => setPreviewUrl(null)}
+        url={previewUrl}
+        author={previewAlert?.author}
+        platform={previewAlert?.source}
+        contentSnippet={previewAlert?.comment_content || previewAlert?.text}
+      />
 
       {showToast && (
         <div className="fixed bottom-5 right-5 z-50 bg-green-600 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 border border-green-500">

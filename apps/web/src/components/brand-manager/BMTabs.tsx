@@ -40,7 +40,17 @@ export function BMTabs() {
       profile,
       workspaceId: filters.workspace_id,
       platform: filters.platform,
-    });
+    }).filter((lead) =>
+      isAlertWithinTimeScope(
+        { created_at: lead.posted_at || lead.created_at },
+        {
+          timeRange: filters.time_range,
+          singleDate: filters.single_date,
+          customStartDate: filters.custom_start_date,
+          customEndDate: filters.custom_end_date,
+        },
+      ),
+    );
     return buildLeadOperationalMetrics(scoped, profile).total;
   }, [
     filters.custom_end_date,
@@ -118,6 +128,7 @@ export function BMTabs() {
           <Link
             key={tab.href}
             href={tab.href}
+            data-tour={isCrisisTab ? "dashboard-tab-crisis" : isLeadTab ? "dashboard-tab-lead" : undefined}
             prefetch
             aria-busy={pendingHref === tab.href}
             onClick={() => setPendingHref(tab.href)}

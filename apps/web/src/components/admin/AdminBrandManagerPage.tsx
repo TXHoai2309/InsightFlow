@@ -740,6 +740,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
       {(view === "all" || view === "create") && (
         <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
           <form
+            data-tour="brand-account-create"
             onSubmit={handleSubmit}
             className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6 space-y-5"
           >
@@ -797,7 +798,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
               </label>
             </div>
 
-            <label className="space-y-2 block">
+            <label data-tour="brand-account-workspace" className="space-y-2 block">
               <span className="flex items-center gap-1.5 text-[13px] font-semibold text-[var(--color-text-primary)]">
                 <Icon.Building className="h-3.5 w-3.5 text-[var(--color-text-muted)]" />
                 {t("admin.brandManager.form.brand")}
@@ -823,7 +824,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
               )}
             </label>
 
-            <label className="space-y-2 block">
+            <label data-tour="brand-account-temp-password" className="space-y-2 block">
               <span className="flex items-center gap-1.5 text-[13px] font-semibold text-[var(--color-text-primary)]">
                 <Icon.Key className="h-3.5 w-3.5 text-[var(--color-text-muted)]" />
                 {t("admin.brandManager.form.tempPassword")}
@@ -848,6 +849,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
             </label>
 
             <button
+              data-tour="brand-account-submit"
               type="submit"
               disabled={loading}
               className="w-full rounded-lg bg-[var(--color-brand)] px-5 py-3 text-[14px] font-semibold text-white shadow-sm transition hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-60 md:w-auto"
@@ -919,7 +921,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
 
       {/* Brand manager list */}
       {(view === "all" || view === "list") && (
-        <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6">
+        <section data-tour="brand-account-list" className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-[18px] font-bold text-[var(--color-text-primary)]">Danh sách Brand Manager</h2>
@@ -931,6 +933,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
               <div className="relative">
                 <Icon.Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--color-text-muted)]" />
                 <input
+                  data-tour="brand-account-search"
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
                   name="brand-manager-search"
@@ -957,7 +960,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
             </div>
           )}
 
-          <div className="mt-5 overflow-x-auto">
+          <div data-tour="brand-list" className="mt-5 overflow-x-auto">
             <table className="min-w-full text-left text-[14px]">
               <thead className="text-[11px] uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
                 <tr className="border-b border-[var(--color-border)]">
@@ -1010,6 +1013,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
                       </td>
                       <td className="py-3.5 pr-4">
                         <span
+                          data-tour="brand-status"
                           className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold ${item.disabled ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"
                             }`}
                         >
@@ -1044,7 +1048,7 @@ export function AdminBrandManagerPage({ view = "all" }: { view?: AdminBrandManag
                         )}
                       </td>
                       <td className="py-3.5 pr-4">
-                        <div className="flex flex-wrap gap-2">
+                        <div data-tour="brand-open-workspace" className="flex flex-wrap gap-2">
                           <button
                             type="button"
                             onClick={() => openEditModal(item)}

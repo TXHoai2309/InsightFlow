@@ -1,4 +1,4 @@
-﻿import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Person, StoredLabel, StoredThreadState, Thread } from '../types';
 import { buildExport, downloadJson } from '../utils/exportJson';
 
@@ -35,6 +35,7 @@ export default function ExportButton({ person, threads, labels, threadStates }: 
 
   return (
     <button
+      data-tour="labeling-export-json"
       onClick={handleExport}
       disabled={exporting || labeledCount + skippedCount === 0}
       title={`Export ${labeledCount} labeled, ${skippedCount} skipped`}

@@ -58,18 +58,20 @@ export default function DashboardLeadMonitoringPage() {
         </div>
       ) : null}
 
-      <section data-tour="dashboard-lead-monitoring-priority">
+      <section data-tour="lead-summary">
         <LeadPriorityOverview />
       </section>
 
-      <section data-tour="dashboard-lead-monitoring-metrics" className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <section data-tour="lead-priority-list">
+        <div data-tour="lead-action-link">
+          <LeadTable />
+        </div>
+      </section>
+
+      <section data-tour="lead-analytics" className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <LeadScoreDoughnutCard />
         <LeadSourceBarCard />
         <ResponseTimeTrendCard />
-      </section>
-
-      <section data-tour="dashboard-lead-monitoring-table">
-        <LeadTable />
       </section>
     </div>
   );

@@ -653,6 +653,7 @@ export default function App() {
                   </button>
                   <button
                     type="button"
+                    data-tour="labeling-ai-pending-tab"
                     onClick={() => setAssignmentView('ai_review')}
                     className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${assignmentView === 'ai_review'
                         ? 'bg-violet-600 text-white'
@@ -674,6 +675,7 @@ export default function App() {
                 </div>
 
                 <select
+                  data-tour="labeling-platform-filter"
                   value={platformFilter}
                   onChange={e => setPlatformFilter(e.target.value as PlatformFilter)}
                   className="select-control text-xs"
@@ -689,12 +691,13 @@ export default function App() {
                 </select>
 
                 <select
+                  data-tour="labeling-brand-filter"
                   value={supabaseBrandQuery}
                   onChange={e => setSupabaseBrandQuery(e.target.value)}
-                  className="select-control text-xs w-32"
+                  className="select-control text-xs w-40"
                   title="Thương hiệu cần gán nhãn"
                 >
-                  <option value="all">Tất cả Brand</option>
+                  <option data-tour="labeling-brand-all-option" value="all">Tất cả thương hiệu</option>
                   {brandOptions.map((brand) => (
                     <option key={brand.value} value={brand.value}>{brand.label}</option>
                   ))}

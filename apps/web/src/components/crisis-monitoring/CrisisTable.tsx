@@ -17,6 +17,8 @@ import { createAlertWorkbenchHref } from "@/lib/alert-navigation";
 import { isDemoPath } from "@/lib/demo-navigation";
 import { dummyStaff } from "@/lib/demoData";
 import { getAlertWorkflowStatus } from "@/lib/alertWorkflow";
+import { getAlertSourceUrl } from "@/lib/alert-source-url";
+import { openCompactSourceWindow } from "@/lib/compact-source-window";
 import { canPerformAction } from "@/lib/rbac";
 import { useAlertStore, type AlertData } from "@/stores/alert.store";
 import { cn } from "@/lib/utils";
@@ -81,7 +83,7 @@ function getSeverityInfo(alert: AlertData) {
 }
 
 function sourceUrl(alert: AlertData) {
-  return [alert.url, alert.post_url, alert.social_profile_url].find((url) => Boolean(url && url !== "#"));
+  return getAlertSourceUrl(alert) || alert.social_profile_url;
 }
 
 export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
@@ -247,7 +249,7 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
   };
 
   return (
-    <section className="overflow-hidden rounded-xl border border-[#DDD9E8] bg-white shadow-[0_8px_24px_rgba(30,31,36,0.06)]">
+    <section data-tour="crisis-list" className="overflow-hidden rounded-xl border border-[#DDD9E8] bg-white shadow-[0_8px_24px_rgba(30,31,36,0.06)]">
       <div className="flex flex-col gap-4 border-b border-[#EEEAF6] px-5 py-5 xl:flex-row xl:items-center xl:justify-between">
         <div>
           <h2 className="text-lg font-black text-[#1A1B20]">Danh sách cảnh báo Crisis ({filteredAlerts.length})</h2>
@@ -259,7 +261,7 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
         </label>
       </div>
 
-      <div className="flex flex-wrap gap-2 border-b border-[#EEEAF6] px-5 py-3">
+      <div data-tour="crisis-filter" className="flex flex-wrap gap-2 border-b border-[#EEEAF6] px-5 py-3">
         {FILTERS.map((filter) => (
           <button key={filter.id} type="button" onClick={() => setActiveFilter(filter.id)} className={cn("rounded-full border px-3 py-1.5 text-xs font-bold transition-colors", activeFilter === filter.id ? "border-[#5B4FCF] bg-[#5B4FCF] text-white" : "border-[#DDD9E8] bg-white text-[#514D5E] hover:bg-[#F7F5FC]")}>{filter.label}</button>
         ))}
@@ -288,7 +290,7 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
               const url = sourceUrl(alert);
               return (
                 <tr id={`dashboard-alert-row-${alert.id}`} key={alert.id} className={cn("align-middle hover:bg-[#FCFBFF]", highlightedAlertId === alert.id && "bg-[#EEEBFF] ring-2 ring-inset ring-[#5B4FCF]")}>
-                  <td className="max-w-[390px] px-5 py-4">
+                  <td className="max-w-[390px] px-5 py-4" data-tour="crisis-selected-item">
                     <Link href={createAlertWorkbenchHref(alert, { origin: "crisis-monitoring", token: dashboardReturnToken, mode: navigationMode })} onClick={() => rememberDashboardContext(alert)} onAuxClick={() => rememberDashboardContext(alert)} onContextMenu={() => rememberDashboardContext(alert)} className="group block">
                       <div className="flex items-center gap-2">
                         <span className={cn("rounded-md px-2 py-0.5 text-[10px] font-black uppercase", severity.tone)}>{severity.label}</span>
@@ -313,7 +315,7 @@ export function CrisisTable({ alerts }: { alerts: AlertData[] }) {
                       {canAssign && (
                         <button type="button" onClick={() => setAssignmentAlertId(assignmentAlertId === alert.id ? null : alert.id)} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#D8D4E3] px-3 text-xs font-bold text-[#4234B6] hover:bg-[#F3F0FF]"><UserPlus className="h-4 w-4" />Giao nhiệm vụ</button>
                       )}
-                      <button type="button" disabled={!url} onClick={() => url && window.open(url, "_blank", "noopener,noreferrer")} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#D8D4E3] px-3 text-xs font-bold text-[#4234B6] hover:bg-[#F3F0FF] disabled:cursor-not-allowed disabled:opacity-45"><ExternalLink className="h-4 w-4" />Mở nguồn</button>
+                      <button type="button" data-tour="crisis-open-source" disabled={!url} onClick={() => url && openCompactSourceWindow(url)} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#D8D4E3] px-3 text-xs font-bold text-[#4234B6] hover:bg-[#F3F0FF] disabled:cursor-not-allowed disabled:opacity-45"><ExternalLink className="h-4 w-4" />Mở nguồn</button>
                     </div>
                     {assignmentAlertId === alert.id && (
                       <div className="absolute right-5 top-[58px] z-20 w-64 rounded-xl border border-[#D8D4E3] bg-white p-2 shadow-xl">

@@ -370,29 +370,31 @@ export default function AdminCrawlOperationsPage() {
     && !ACTIVE_RUN_STATUSES.has(selected.status)
   );
 
-  const cancelQueuedRun = async () => {
-    if (!selected || selected.status !== "queued") return;
-    if (!window.confirm("Xóa phiên này khỏi hàng đợi? Lịch sử vẫn được giữ với trạng thái đã hủy.")) return;
+  const deleteRun = async (runId?: string) => {
+    const targetId = runId || selected?.id;
+    if (!targetId) return;
+    const target = runs.find((r) => r.id === targetId) || selected;
+    const targetLabel = target?.metadata?.brandName || target?.metadata?.company || targetId;
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa phiên cào "${targetLabel}" (${targetId.slice(0, 8)}) khỏi danh sách?`)) return;
+
     setActionBusy(true);
     setErrorMessage("");
     try {
       const user = auth.currentUser;
       if (!user) throw new Error("Phiên đăng nhập đã hết hạn.");
       const token = await user.getIdToken();
-      const response = await fetch(`/api/admin/crawl-runs/${encodeURIComponent(selected.id)}`, {
+      const response = await fetch(`/api/admin/crawl-runs/${encodeURIComponent(targetId)}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
-      if (payload.run) {
-        setRuns((current) =>
-          current.map((run) => (run.id === payload.run.id ? payload.run : run)),
-        );
+      setRuns((current) => current.filter((run) => run.id !== targetId));
+      if (selectedId === targetId) {
+        setSelectedId(null);
       }
-      await loadRuns();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Không thể xóa phiên khỏi hàng đợi.");
+      setErrorMessage(error instanceof Error ? error.message : "Không thể xóa phiên cào.");
     } finally {
       setActionBusy(false);
     }
@@ -483,6 +485,7 @@ export default function AdminCrawlOperationsPage() {
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
+              data-tour="ops-pause-production"
               onClick={() => void setProductionPaused(!productionControl.paused)}
               disabled={controlBusy}
               className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-bold shadow-sm transition disabled:cursor-wait disabled:opacity-60 ${
@@ -523,27 +526,38 @@ export default function AdminCrawlOperationsPage() {
         <div className="grid items-start gap-5 lg:grid-cols-[minmax(390px,0.85fr)_minmax(0,1.5fr)]">
           <aside className="rounded-3xl border bg-white/80 p-4 shadow-sm lg:sticky lg:top-5 lg:max-h-[calc(100vh-2.5rem)] lg:overflow-hidden">
             <div className="grid grid-cols-2 rounded-2xl bg-slate-100 p-1">
-              {([
-                ["production", "Production", counts.production, Database],
-                ["trial", "Dùng thử", counts.trial, Coffee],
-              ] as const).map(([value, label, count, Icon]) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setActiveTab(value)}
-                  className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-bold transition ${
-                    activeTab === value
-                      ? "bg-white text-[var(--color-brand)] shadow-sm"
-                      : "text-slate-500 hover:text-slate-800"
-                  }`}
-                >
-                  <Icon size={16} />
-                  {label}
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">
-                    {count}
-                  </span>
-                </button>
-              ))}
+              <button
+                type="button"
+                data-tour="ops-production-tab"
+                onClick={() => setActiveTab("production")}
+                className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-bold transition ${
+                  activeTab === "production"
+                    ? "bg-white text-[var(--color-brand)] shadow-sm"
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                <Database size={16} />
+                Production
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">
+                  {counts.production}
+                </span>
+              </button>
+              <button
+                type="button"
+                data-tour="ops-trial-tab"
+                onClick={() => setActiveTab("trial")}
+                className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-bold transition ${
+                  activeTab === "trial"
+                    ? "bg-white text-[var(--color-brand)] shadow-sm"
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                <Coffee size={16} />
+                Dùng thử
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">
+                  {counts.trial}
+                </span>
+              </button>
             </div>
 
             <div className="mt-4 space-y-2">
@@ -560,6 +574,7 @@ export default function AdminCrawlOperationsPage() {
                 <label className="relative">
                   <Filter className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
                   <select
+                    data-tour="ops-status-filter"
                     value={statusFilter}
                     onChange={(event) => setStatusFilter(event.target.value)}
                     className="h-10 w-full appearance-none rounded-xl border bg-white pl-8 pr-2 text-xs font-semibold outline-none focus:border-[var(--color-brand)]"
@@ -570,6 +585,7 @@ export default function AdminCrawlOperationsPage() {
                   </select>
                 </label>
                 <select
+                  data-tour="ops-platform-filter"
                   value={platformFilter}
                   onChange={(event) => setPlatformFilter(event.target.value)}
                   className="h-10 w-full rounded-xl border bg-white px-2 text-xs font-semibold outline-none focus:border-[var(--color-brand)]"
@@ -582,7 +598,7 @@ export default function AdminCrawlOperationsPage() {
               </div>
             </div>
 
-            <div className="mt-4 space-y-3 lg:max-h-[calc(100vh-350px)] lg:overflow-y-auto lg:pr-1">
+            <div data-tour="ops-task-list" className="mt-4 space-y-3 lg:max-h-[calc(100vh-350px)] lg:overflow-y-auto lg:pr-1">
               {loading && runs.length === 0 && (
                 <div className="rounded-2xl border border-dashed p-8 text-center text-sm opacity-60">
                   Đang tải các phiên cào…
@@ -630,12 +646,25 @@ export default function AdminCrawlOperationsPage() {
                           </p>
                         </div>
                       </div>
-                      <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-1 text-[10px] font-bold ${
-                        statusStyle[run.status] || statusStyle.queued
-                      }`}>
-                        <span className={`h-1.5 w-1.5 rounded-full ${statusDotStyle[run.status] || statusDotStyle.queued}`} />
-                        {STATUS_LABELS[run.status] || run.status}
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[10px] font-bold ${
+                          statusStyle[run.status] || statusStyle.queued
+                        }`}>
+                          <span className={`h-1.5 w-1.5 rounded-full ${statusDotStyle[run.status] || statusDotStyle.queued}`} />
+                          {STATUS_LABELS[run.status] || run.status}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void deleteRun(run.id);
+                          }}
+                          className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-600 transition"
+                          title="Xóa phiên cào"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </div>
 
                     <div className="mt-3 flex flex-wrap gap-1.5">
@@ -711,7 +740,7 @@ export default function AdminCrawlOperationsPage() {
             </div>
           </aside>
 
-          <section className="min-h-[620px] rounded-3xl border bg-white/80 p-4 shadow-sm sm:p-6">
+          <section data-tour="ops-task-detail" className="min-h-[620px] rounded-3xl border bg-white/80 p-4 shadow-sm sm:p-6">
             {!selected ? (
               <div className="flex min-h-[560px] flex-col items-center justify-center text-center text-sm text-slate-500">
                 <Database className="mb-3 text-slate-300" size={40} />
@@ -777,17 +806,16 @@ export default function AdminCrawlOperationsPage() {
                         {selected.consultationId ? ` · Mã yêu cầu: ${selected.consultationId}` : ""}
                       </p>
                     </div>
-                    {selected.runType === "trial" && selected.status === "queued" && (
-                      <button
-                        type="button"
-                        onClick={() => void cancelQueuedRun()}
-                        disabled={actionBusy}
-                        className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-600 transition hover:bg-rose-50 disabled:opacity-50"
-                      >
-                        <Trash2 size={14} />
-                        Xóa khỏi hàng đợi
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => void deleteRun()}
+                      disabled={actionBusy}
+                      className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-white px-3.5 py-2 text-xs font-bold text-rose-600 transition hover:bg-rose-50 disabled:opacity-50"
+                      title="Xóa phiên cào này khỏi danh sách"
+                    >
+                      <Trash2 size={14} />
+                      Xóa phiên cào
+                    </button>
                   </div>
 
                   <div className="mt-5 space-y-4 text-sm">
@@ -816,6 +844,7 @@ export default function AdminCrawlOperationsPage() {
                             {canRetrySelectedPlatform && (
                               <button
                                 type="button"
+                                data-tour="ops-rerun-platform"
                                 onClick={() => void retryPlatform(platform)}
                                 disabled={retryingPlatform === platform}
                                 className="ml-1 inline-flex h-5 items-center gap-1 rounded-full border border-[var(--color-brand)]/20 px-1.5 text-[10px] font-bold text-[var(--color-brand)] transition hover:bg-[var(--color-brand)]/10 disabled:cursor-wait disabled:opacity-60"

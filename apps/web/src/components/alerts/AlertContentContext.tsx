@@ -7,6 +7,7 @@ import {
   mergeMentionThreadItems,
   type MentionThreadNode,
 } from "@/lib/mention-thread";
+import { getAlertSourceUrl } from "@/lib/alert-source-url";
 import { DashboardService, PLATFORM_META } from "@/lib/services/dashboard";
 import type { AlertData } from "@/stores/alert.store";
 import type { Mention } from "@/types/dashboard";
@@ -62,7 +63,10 @@ function makeAlertMentions(alert: AlertData) {
     credibility_score: 100,
     created_at: alert.created_at,
     posted_at: alert.created_at,
-    url: alert.url || alert.post_url,
+    url: getAlertSourceUrl(alert) || alert.url || alert.post_url,
+    post_url: alert.post_url,
+    comment_url: alert.comment_url,
+    source_url: alert.source_url,
   };
 
   const post = contentType !== "post" && postId && alert.post_content
@@ -76,7 +80,9 @@ function makeAlertMentions(alert: AlertData) {
         original_content: alert.post_content,
         content_type: "post" as const,
         author: "Tác giả bài viết",
-        url: alert.post_url || alert.url,
+        url: alert.post_url || alert.source_url || alert.url,
+        post_url: alert.post_url,
+        source_url: alert.source_url,
       }
     : null;
 

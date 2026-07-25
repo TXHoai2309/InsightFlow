@@ -21,6 +21,7 @@ import {
   LEAD_DETAIL_PANEL_SCROLL_ID,
   type LeadDetailPanelTab,
 } from "@/lib/lead-return-context";
+import { openCompactSourceWindow } from "@/lib/compact-source-window";
 import type {
   DashboardFilters,
   Lead,
@@ -443,7 +444,7 @@ export function LeadDetailPanel({
     // Keep the source reusable while a result is pending, without recording
     // another contact attempt every time the user reopens the same post.
     if (countAsContact && meta.needsResultCapture) {
-      window.open(action.href, "_blank", "noopener,noreferrer");
+      openCompactSourceWindow(action.href);
       showToast("Đã mở lại nguồn của khách hàng.");
       return;
     }
@@ -478,7 +479,7 @@ export function LeadDetailPanel({
 
       const updatedLead = { ...lead, ...actionData };
       onStartedAction?.(updatedLead);
-      window.open(action.href, "_blank", "noopener,noreferrer");
+      openCompactSourceWindow(action.href);
     } catch (error) {
       console.error(error);
       setSaveError(
@@ -525,13 +526,12 @@ export function LeadDetailPanel({
       return;
     }
 
-    window.open(sourceAction.href, "_blank", "noopener,noreferrer");
+    openCompactSourceWindow(sourceAction.href);
   };
 
   const handleSaveResult = async () => {
-    if (!selectedResult) return;
-    const option = RESULT_OPTIONS.find((item) => item.id === selectedResult);
-    if (!option) return;
+    const targetResult = selectedResult || "contacted";
+    const option = RESULT_OPTIONS.find((item) => item.id === targetResult) || RESULT_OPTIONS[0];
 
     if (!canRecordResult) {
       setSaveError("Hãy liên hệ khách trước khi ghi nhận kết quả.");
@@ -751,6 +751,7 @@ export function LeadDetailPanel({
                   </div>
                   <button
                     type="button"
+                    data-tour="lead-claim-btn"
                     onClick={() => void handleClaim()}
                     disabled={!canEdit || isClaiming || assigningUid !== null}
                     className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 text-[13px] font-semibold text-[var(--color-text-primary)] transition hover:bg-[var(--color-bg-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] disabled:cursor-not-allowed disabled:opacity-50"
@@ -761,6 +762,7 @@ export function LeadDetailPanel({
               ) : (
                 <button
                   type="button"
+                  data-tour="lead-claim-btn"
                   onClick={() => void handleClaim()}
                   disabled={!canEdit || isClaiming}
                   className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[var(--color-brand-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -776,7 +778,7 @@ export function LeadDetailPanel({
                     type="button"
                     disabled={!ownership.canWork || Boolean(isOpening)}
                     onClick={() => void handleOpenAction(sourceAction, true)}
-                    className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-bg-surface)] px-3 text-[13px] font-semibold text-[var(--color-brand)] shadow-sm transition hover:bg-[var(--color-brand-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3.5 text-[13px] font-bold text-white shadow-md transition hover:bg-[var(--color-brand-hover)] hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     title="Mở lại nguồn của Lead"
                   >
                     <span className="material-symbols-outlined text-lg">open_in_new</span>
@@ -787,7 +789,7 @@ export function LeadDetailPanel({
                   <button
                     type="button"
                     onClick={handleScrollToResult}
-                    className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[var(--color-brand-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2"
+                    className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)] px-3 text-[13px] font-bold text-[var(--color-brand)] shadow-sm transition hover:bg-[var(--color-brand)] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2"
                   >
                     <ClipboardCheck size={18} aria-hidden="true" />
                     <span className="hidden sm:inline">Ghi nhận kết quả</span>
@@ -825,7 +827,7 @@ export function LeadDetailPanel({
 
         <ol aria-label="Tiến trình xử lý lead" className="mt-2 grid grid-cols-4 gap-1 rounded-lg bg-[var(--color-bg-surface-raised)] p-1.5">
           {workflowSteps.map((step, index) => (
-            <li key={step.label} className="flex min-w-0 items-center">
+            <li key={step.label} data-tour={index === 1 ? "lead-claim-step-indicator" : undefined} className="flex min-w-0 items-center">
               <div className="flex min-w-0 flex-1 items-center gap-1.5">
                 <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-black ${step.complete ? "bg-[var(--color-success)] text-white" : step.active ? "bg-[var(--color-brand)] text-white ring-2 ring-[var(--color-brand)]/20" : "bg-[var(--color-border)] text-[var(--color-text-muted)]"}`}>
                   {step.complete ? <span className="material-symbols-outlined text-xs">check</span> : index + 1}
@@ -842,7 +844,7 @@ export function LeadDetailPanel({
             <button
               key={tab.id}
               type="button"
-              data-tour={tab.id === "action" ? "lead-detail-tab-action" : undefined}
+              data-tour={tab.id === "action" ? "lead-detail-tab-action" : tab.id === "history" ? "customer-history" : undefined}
               onClick={() => handleTabChange(tab.id)}
               role="tab"
               aria-selected={activeTab === tab.id}
@@ -872,21 +874,28 @@ export function LeadDetailPanel({
 
             <aside className="space-y-2 min-[1280px]:min-h-0 min-[1280px]:overflow-y-auto min-[1280px]:pl-1 min-[1280px]:[scrollbar-gutter:stable]" aria-label="Thao tác nhanh với lead">
               {lead.status === "processing" && ownership.canWork && (
-                <section className="space-y-2 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 dark:border-emerald-900/40 dark:bg-emerald-950/15">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+                <section className="space-y-2 rounded-xl border border-[var(--color-brand-border)] bg-[var(--color-brand-subtle)]/70 p-3 shadow-sm dark:bg-[var(--color-brand-subtle)]/20">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-[var(--color-brand)]">
+                      <span className="material-symbols-outlined text-sm">content_paste</span>
                       Mẫu cảm ơn tham khảo
                     </p>
                     <button
                       type="button"
-                      onClick={() => void handleOpenSourceWithThankYouTemplate()}
+                      data-tour="lead-copy-template-btn"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        void handleOpenSourceWithThankYouTemplate();
+                      }}
                       disabled={!sourceAction || Boolean(isOpening)}
-                      className="text-[10px] font-bold text-emerald-700 hover:underline disabled:cursor-not-allowed disabled:opacity-50 dark:text-emerald-400"
+                      className="inline-flex items-center gap-1 rounded-lg bg-[var(--color-brand)] px-2.5 py-1 text-[11px] font-bold text-white shadow-sm transition hover:bg-[var(--color-brand-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      Mở nguồn và sao chép
+                      <span className="material-symbols-outlined text-xs">open_in_new</span>
+                      <span>Mở nguồn & sao chép</span>
                     </button>
                   </div>
-                  <p className="text-[11px] leading-relaxed text-[var(--color-text-secondary)]">
+                  <p className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-2.5 text-[11px] font-medium leading-relaxed text-[var(--color-text-primary)]">
                     {createLeadThankYouTemplate(
                       lead.author || "Anh/Chị",
                       profile?.brandName || lead.workspace_id,
@@ -942,6 +951,7 @@ export function LeadDetailPanel({
                     <label className="mb-1.5 block text-xs font-bold text-[var(--color-text-secondary)]">Kết quả xử lý</label>
                     <button
                       type="button"
+                      data-tour="lead-result-dropdown"
                       onClick={() => {
                         if (!canRecordResult) {
                           showToast("Vui lòng nhận xử lý và mở nguồn trước khi ghi nhận kết quả.", "error");
@@ -1025,14 +1035,14 @@ export function LeadDetailPanel({
 
                   <div className="flex flex-col">
                     <label className="mb-1.5 block text-xs font-bold text-[var(--color-text-secondary)]">Ghi chú</label>
-                    <textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Nhập kết quả trao đổi với khách hàng..." className="min-h-20 w-full flex-1 resize-y rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-2.5 text-sm leading-relaxed text-[var(--color-text-primary)] outline-none transition placeholder:text-[var(--color-text-muted)] focus-visible:border-[var(--color-brand)] focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/20" />
+                    <textarea data-tour="lead-note-input" value={note} onChange={(event) => setNote(event.target.value)} placeholder="Nhập kết quả trao đổi với khách hàng..." className="min-h-20 w-full flex-1 resize-y rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-2.5 text-sm leading-relaxed text-[var(--color-text-primary)] outline-none transition placeholder:text-[var(--color-text-muted)] focus-visible:border-[var(--color-brand)] focus-visible:ring-2 focus-visible:ring-[var(--color-brand)]/20" />
                   </div>
                 </div>
 
                 {saveError && <p className="mt-3 text-xs font-semibold text-[var(--color-error)]">{saveError}</p>}
 
                 <div className="-mx-3 -mb-3 mt-3 border-t border-[var(--color-border)] bg-[var(--color-bg-surface)] p-2.5">
-                  <button type="button" disabled={!selectedResult || isSaving || isSaveSuccess || !canRecordResult} onClick={handleSaveResult} className={`inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg px-5 text-sm font-bold text-white shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-[var(--color-bg-surface-high)] disabled:text-[var(--color-text-disabled)] disabled:shadow-none disabled:opacity-100 ${isSaveSuccess ? "bg-[var(--color-success)] focus-visible:ring-[var(--color-success)]" : "bg-[var(--color-brand)] hover:bg-[var(--color-brand-hover)] focus-visible:ring-[var(--color-brand)]"}`}>
+                  <button type="button" data-tour="lead-complete-btn" disabled={isSaving || isSaveSuccess} onClick={handleSaveResult} className={`inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg px-5 text-sm font-bold text-white shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-[var(--color-bg-surface-high)] disabled:text-[var(--color-text-disabled)] disabled:shadow-none disabled:opacity-100 ${isSaveSuccess ? "bg-[var(--color-success)] focus-visible:ring-[var(--color-success)]" : "bg-[var(--color-brand)] hover:bg-[var(--color-brand-hover)] focus-visible:ring-[var(--color-brand)]"}`}>
                     {isSaveSuccess ? (
                       <>
                         <span className="material-symbols-outlined text-[20px] animate-bounce">check_circle</span>

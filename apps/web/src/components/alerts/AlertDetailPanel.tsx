@@ -30,6 +30,9 @@ import { isAlertOwnedByUser } from "@/lib/alert-visibility";
 import { isDemoPath } from "@/lib/demo-navigation";
 import { dummyStaff } from "@/lib/demoData";
 import { copyTextToClipboard } from "@/lib/clipboard";
+import { WorkflowProgress } from "@/components/ui/WorkflowProgress";
+import { dispatchTourAction } from "@/components/onboarding/RouteTour";
+import { openCompactSourceWindow } from "@/lib/compact-source-window";
 
 export type AlertDetailPanelTab = "action" | "profile" | "interactions" | "history";
 
@@ -250,6 +253,10 @@ export function AlertDetailPanel({
       return;
     }
 
+    // Open small floating Chrome popup window directly for live commenting
+    openCompactSourceWindow(sourceUrl);
+    dispatchTourAction("open_source");
+
     onOpenSource(alert);
     // Always return the InsightFlow panel to the action workspace so the
     // evidence form is visible as soon as the user comes back from the source.
@@ -425,6 +432,7 @@ export function AlertDetailPanel({
       setOptimisticClaimId(alert.id);
       try {
         await onClaim(alert);
+        dispatchTourAction("claim_alert");
       } catch {
         setOptimisticClaimId(null);
       }
@@ -465,27 +473,29 @@ export function AlertDetailPanel({
   };
   const tabs: Array<{ id: AlertDetailPanelTab; label: string }> = [
     { id: "action", label: "Xử lý" },
-    { id: "profile", label: "Hồ sơ" },
-    { id: "interactions", label: "Tương tác" },
+    { id: "profile", label: "Thông tin" },
     { id: "history", label: "Lịch sử" },
   ];
   const workflowSteps = [
-    { label: "Đã chọn", complete: true, active: false },
-    { label: "Nhận xử lý", complete: Boolean(effectiveOwner), active: !effectiveOwner },
     {
-      label: "Mở nguồn",
-      complete: Boolean(contactAlert.customer_contact_opened_at) || effectiveWorkflowStatus === "resolved",
-      active: Boolean(effectiveOwner) && !contactAlert.customer_contact_opened_at && !isTerminal,
+      label: "Tiếp nhận",
+      complete: Boolean(effectiveOwner) || isTerminal,
+      active: !effectiveOwner && !isTerminal,
     },
     {
-      label: "Ghi nhận kết quả",
-      complete: effectiveWorkflowStatus === "resolved",
-      active: Boolean(contactAlert.customer_contact_opened_at) && !isTerminal,
+      label: "Đang xử lý",
+      complete: isTerminal,
+      active: Boolean(effectiveOwner) && !isTerminal,
+    },
+    {
+      label: "Hoàn tất",
+      complete: isTerminal,
+      active: false,
     },
   ];
 
   return (
-    <aside data-tour="alert-detail-panel" className="flex min-w-0 shrink-0 flex-col self-start rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm min-[1100px]:sticky min-[1100px]:top-3 min-[1100px]:h-[calc(100vh-88px)] min-[1100px]:max-h-[calc(100vh-88px)]">
+    <aside data-tour="alert-detail-panel" className="flex min-w-0 shrink-0 flex-col self-start rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-sm min-[1280px]:sticky min-[1280px]:top-3 min-[1280px]:h-[calc(100vh-88px)] min-[1280px]:max-h-[calc(100vh-88px)]">
       <header className="shrink-0 border-b border-[var(--color-border)] px-3 pb-0 pt-2.5">
         <div className="flex items-start justify-between gap-2.5">
           <div className="flex min-w-0 items-center gap-2.5">
@@ -556,18 +566,18 @@ export function AlertDetailPanel({
                       </div>
                     )}
                   </div>
-                  <button type="button" onClick={() => void handlePrimaryAction()} disabled={!canUpdate || assigningUid !== null} title="Tự nhận xử lý" className="inline-flex min-h-9 items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 text-[13px] font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)] disabled:opacity-50">
+                  <button type="button" data-tour="alert-claim-btn" onClick={() => void handlePrimaryAction()} disabled={!canUpdate || assigningUid !== null} title="Tự nhận xử lý" className="inline-flex min-h-9 items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 text-[13px] font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)] disabled:opacity-50">
                     <span className="hidden sm:inline">Nhận xử lý</span>
                   </button>
                 </div>
               ) : (
-                <button type="button" onClick={() => void handlePrimaryAction()} disabled={!canUpdate} className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 text-[13px] font-semibold text-white shadow-sm hover:bg-[var(--color-brand-hover)] disabled:opacity-50">
+                <button type="button" data-tour="alert-claim-btn" onClick={() => void handlePrimaryAction()} disabled={!canUpdate} className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 text-[13px] font-semibold text-white shadow-sm hover:bg-[var(--color-brand-hover)] disabled:opacity-50">
                   <UserPlus size={16} />
                   <span className="hidden sm:inline">Nhận xử lý</span>
                 </button>
               )
             ) : canOpenSource ? (
-              <button type="button" onClick={() => void handleOpenCustomerContact()} disabled={!sourceUrl} className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 text-[13px] font-semibold text-white shadow-sm hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50" title={!sourceUrl ? "Cảnh báo chưa có liên kết nguồn" : "Mở nguồn"}>
+              <button type="button" data-tour="alert-open-source-btn" onClick={() => void handleOpenCustomerContact()} disabled={!sourceUrl} className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 text-[13px] font-semibold text-white shadow-sm hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50" title={!sourceUrl ? "Cảnh báo chưa có liên kết nguồn" : "Mở nguồn"}>
                 <ExternalLink size={16} />
                 <span className="hidden sm:inline">Mở nguồn</span>
               </button>
@@ -593,19 +603,7 @@ export function AlertDetailPanel({
           </div>
         </div>
 
-        <ol aria-label="Tiến trình xử lý cảnh báo" className="mt-2 grid grid-cols-4 gap-1 rounded-lg bg-[var(--color-bg-surface-raised)] p-1.5">
-          {workflowSteps.map((step, index) => (
-            <li key={step.label} className="flex min-w-0 items-center">
-              <div className="flex min-w-0 flex-1 items-center gap-1.5">
-                <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-black ${step.complete ? "bg-[var(--color-success)] text-white" : step.active ? "bg-[var(--color-brand)] text-white ring-2 ring-[var(--color-brand)]/20" : "bg-[var(--color-border)] text-[var(--color-text-muted)]"}`}>
-                  {step.complete ? <span className="material-symbols-outlined text-xs">check</span> : index + 1}
-                </span>
-                <span className={`truncate text-[11px] font-bold ${step.active ? "text-[var(--color-brand)]" : step.complete ? "text-[var(--color-text-primary)]" : "text-[var(--color-text-muted)]"}`}>{step.label}</span>
-              </div>
-              {index < workflowSteps.length - 1 && <span className="mx-1 h-px w-3 shrink-0 bg-[var(--color-border)]" />}
-            </li>
-          ))}
-        </ol>
+        <WorkflowProgress label="Tiến trình xử lý cảnh báo" steps={workflowSteps} />
 
         <div className="mt-1.5 flex gap-4 overflow-x-auto" role="tablist" aria-label="Chi tiết cảnh báo">
           {tabs.map((tab) => (
@@ -653,6 +651,7 @@ export function AlertDetailPanel({
                 <AlertContactWorkflow
                   alert={contactAlert}
                   getResolverName={getResolverName}
+                  requireEvidence={role !== "brand_manager"}
                   onOpenSourceWithTemplate={() => handleOpenCustomerContact(true)}
                   onRecordResult={async (draft) => {
                     await onRecordResult(contactAlert, draft);
@@ -698,6 +697,7 @@ export function AlertDetailPanel({
 
         {activeTab === "history" && (
           <div className="space-y-3">
+            <CustomerInteractionHistoryPanel sourceType="alert" sourceId={alert.id} />
             <section className="grid gap-3 sm:grid-cols-3">
               <Metric icon={<Clock3 size={18} />} label="Phát hiện" value={formatDate(alert.created_at)} />
               <Metric icon={<MessageSquareText size={18} />} label="Lần liên hệ" value={String(alert.customer_contact_history?.length || 0)} />
