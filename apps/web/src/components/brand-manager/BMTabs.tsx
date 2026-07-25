@@ -118,6 +118,7 @@ export function BMTabs() {
           <Link
             key={tab.href}
             href={tab.href}
+            data-tour={isCrisisTab ? "dashboard-tab-crisis" : isLeadTab ? "dashboard-tab-lead" : undefined}
             prefetch
             aria-busy={pendingHref === tab.href}
             onClick={() => setPendingHref(tab.href)}

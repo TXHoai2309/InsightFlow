@@ -369,7 +369,7 @@ export function BMHeroRow({
   return (
     <div className="bm-hero-row">
       {/* ── A. Brand Health Gauge ─────────────────────────────── */}
-      <div className="bm-hero-card bm-hero-gauge">
+      <div className="bm-hero-card bm-hero-gauge" data-tour="dashboard-brand-health">
         <div className="bm-card-header">
           <div className="bm-card-icon" style={{ background: "var(--color-brand-subtle)", color: "var(--color-brand)" }}>
             <span className="material-symbols-outlined" style={{ fontSize: 18, fontVariationSettings: "'FILL' 1" }}>
@@ -444,7 +444,7 @@ export function BMHeroRow({
       </div>
 
       {/* ── B. Sentiment Donut ────────────────────────────────── */}
-      <div className="bm-hero-card bm-hero-sentiment">
+      <div className="bm-hero-card bm-hero-sentiment" data-tour="dashboard-sentiment">
         <div className="bm-card-header">
           <div className="bm-card-icon" style={{ background: "rgba(99,102,241,0.1)", color: "#6366F1" }}>
             <span className="material-symbols-outlined" style={{ fontSize: 18, fontVariationSettings: "'FILL' 1" }}>

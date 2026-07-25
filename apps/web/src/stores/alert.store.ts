@@ -392,6 +392,11 @@ function mentionToAlertData(m: Mention): AlertData {
     labelObj.urgency ||
     (isCritical ? "high" : negativity.severity === "critical" ? "high" : negativity.severity);
 
+  const contentType = m.content_type || "post";
+  const isCommentLike = contentType !== "post";
+  const postUrl = m.post_url || m.source_url || (!isCommentLike ? m.url : "") || "";
+  const commentUrl = m.comment_url || (isCommentLike ? m.url : undefined);
+
   return {
     id: m.entity_key || m.id,
     source_id: m.id,
@@ -408,7 +413,7 @@ function mentionToAlertData(m: Mention): AlertData {
     status: resolveAlertStatusFromLabel(labelObj),
     resolved_at: labelObj.resolved_at,
     collectionName: "annotations",
-    url: m.url || m.comment_url || m.post_url || m.source_url || "",
+    url: isCommentLike ? (commentUrl || postUrl) : (postUrl || m.url || ""),
     reach: m.star_count || 0,
     likes: m.star_count || 0,
     comments: 0,
@@ -428,12 +433,12 @@ function mentionToAlertData(m: Mention): AlertData {
     post_content: m.post_content,
     comment_content: m.comment_content,
     parent_id: m.parent_id,
-    content_type: m.content_type || "post",
+    content_type: contentType,
     internal_notes: labelObj.internal_notes || [],
     post_id: m.post_id || m.parent_id || m.id,
     comment_id: m.comment_id || undefined,
-    post_url: m.post_url || m.source_url || m.url || "",
-    comment_url: m.comment_url || (m.content_type !== "post" ? m.url : undefined),
+    post_url: postUrl,
+    comment_url: commentUrl,
     source_url: m.source_url,
     post_like_count: m.star_count || 0,
     relevance: typeof labelObj.relevance === "boolean" ? labelObj.relevance : null,

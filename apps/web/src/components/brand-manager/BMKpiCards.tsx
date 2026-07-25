@@ -95,7 +95,7 @@ export function BMKpiCards({
   ];
 
   return (
-    <div className="bm-kpi-grid">
+    <div className="bm-kpi-grid" data-tour="dashboard-actionable">
       {cards.map((card) => {
         const s = STATUS_STYLES[card.status];
         const resolved = card.resolved ?? 0;

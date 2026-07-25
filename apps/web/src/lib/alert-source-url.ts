@@ -52,23 +52,50 @@ function setQueryParam(url: string, name: string, value: string): string {
   }
 }
 
+function samePlatformUrl(url: string, platform: string): boolean {
+  const normalizedPlatform = platform.toLowerCase();
+  const normalizedUrl = url.toLowerCase();
+  if (normalizedPlatform.includes("facebook")) {
+    return normalizedUrl.includes("facebook.com") || normalizedUrl.includes("fb.com");
+  }
+  if (normalizedPlatform.includes("tiktok")) {
+    return normalizedUrl.includes("tiktok.com");
+  }
+  if (normalizedPlatform.includes("youtube")) {
+    return normalizedUrl.includes("youtube.com") || normalizedUrl.includes("youtu.be");
+  }
+  return true;
+}
+
 /**
  * Returns the post URL with the strongest available locator for the alert's
  * exact comment. Native comment parameters are preferred; a text fragment is
  * used for platforms that do not expose a stable public comment permalink.
  */
 export function getAlertSourceUrl(alert: AlertSourceFields): string | null {
-  const postUrl = [alert.post_url, alert.source_url, alert.url].find(isUsableUrl);
+  const platform = String(alert.source || "").toLowerCase();
   const directCommentUrl = [alert.comment_url, alert.url].find(isUsableUrl);
+  const postUrl = [alert.post_url, alert.source_url, alert.url].find((url) => {
+    if (!isUsableUrl(url)) return false;
+    if (directCommentUrl && url === directCommentUrl) return false;
+    return true;
+  });
   const baseUrl = postUrl || directCommentUrl;
   if (!baseUrl) return null;
 
   const commentId = getCommentId(alert);
-  if (!commentId) return baseUrl;
-
-  const platform = String(alert.source || "").toLowerCase();
   const lowerUrl = baseUrl.toLowerCase();
   const text = alert.comment_content || alert.text || "";
+
+  if (
+    directCommentUrl &&
+    samePlatformUrl(directCommentUrl, platform) &&
+    (directCommentUrl.includes(commentId) || !postUrl)
+  ) {
+    return directCommentUrl;
+  }
+
+  if (!commentId) return baseUrl;
 
   if (platform.includes("youtube") || lowerUrl.includes("youtube.com") || lowerUrl.includes("youtu.be")) {
     return setQueryParam(baseUrl, "lc", commentId);

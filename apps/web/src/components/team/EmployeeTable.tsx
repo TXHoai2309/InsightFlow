@@ -134,13 +134,13 @@ export function EmployeeTable({
           <thead className="border-b border-gray-200 bg-gray-50">
             <tr>
               <th className="px-6 py-4 font-semibold text-gray-500">Nhân viên</th>
-              <th className="w-[148px] whitespace-nowrap px-4 py-4 font-semibold text-gray-500">Vai trò</th>
+              <th data-tour="team-roles" className="w-[148px] whitespace-nowrap px-4 py-4 font-semibold text-gray-500">Vai trò</th>
               <th className="w-[170px] whitespace-nowrap px-4 py-4 font-semibold text-gray-500">Nghiệp vụ</th>
               <th className="w-[128px] whitespace-nowrap px-4 py-4 font-semibold text-gray-500">Trạng thái</th>
               <th className="whitespace-nowrap px-6 py-4 font-semibold text-gray-500">Ngày tạo</th>
               <th className="whitespace-nowrap px-6 py-4 font-semibold text-gray-500">Đăng nhập cuối</th>
               <th className="whitespace-nowrap px-6 py-4 font-semibold text-gray-500">Mật khẩu tạm</th>
-              <th className="px-6 py-4 font-semibold text-gray-500">Hành động</th>
+              <th data-tour="team-actions" className="px-6 py-4 font-semibold text-gray-500">Hành động</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">

@@ -31,6 +31,7 @@ import { isDemoPath } from "@/lib/demo-navigation";
 import { dummyStaff } from "@/lib/demoData";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import { WorkflowProgress } from "@/components/ui/WorkflowProgress";
+import { dispatchTourAction } from "@/components/onboarding/RouteTour";
 
 export type AlertDetailPanelTab = "action" | "profile" | "interactions" | "history";
 
@@ -426,6 +427,7 @@ export function AlertDetailPanel({
       setOptimisticClaimId(alert.id);
       try {
         await onClaim(alert);
+        dispatchTourAction("claim_alert");
       } catch {
         setOptimisticClaimId(null);
       }
@@ -559,18 +561,18 @@ export function AlertDetailPanel({
                       </div>
                     )}
                   </div>
-                  <button type="button" onClick={() => void handlePrimaryAction()} disabled={!canUpdate || assigningUid !== null} title="Tự nhận xử lý" className="inline-flex min-h-9 items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 text-[13px] font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)] disabled:opacity-50">
+                  <button type="button" data-tour="alert-claim-btn" onClick={() => void handlePrimaryAction()} disabled={!canUpdate || assigningUid !== null} title="Tự nhận xử lý" className="inline-flex min-h-9 items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 text-[13px] font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-raised)] disabled:opacity-50">
                     <span className="hidden sm:inline">Nhận xử lý</span>
                   </button>
                 </div>
               ) : (
-                <button type="button" onClick={() => void handlePrimaryAction()} disabled={!canUpdate} className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 text-[13px] font-semibold text-white shadow-sm hover:bg-[var(--color-brand-hover)] disabled:opacity-50">
+                <button type="button" data-tour="alert-claim-btn" onClick={() => void handlePrimaryAction()} disabled={!canUpdate} className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 text-[13px] font-semibold text-white shadow-sm hover:bg-[var(--color-brand-hover)] disabled:opacity-50">
                   <UserPlus size={16} />
                   <span className="hidden sm:inline">Nhận xử lý</span>
                 </button>
               )
             ) : canOpenSource ? (
-              <button type="button" onClick={() => void handleOpenCustomerContact()} disabled={!sourceUrl} className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 text-[13px] font-semibold text-white shadow-sm hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50" title={!sourceUrl ? "Cảnh báo chưa có liên kết nguồn" : "Mở nguồn"}>
+              <button type="button" data-tour="alert-open-source-btn" onClick={() => void handleOpenCustomerContact()} disabled={!sourceUrl} className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-brand)] px-3 text-[13px] font-semibold text-white shadow-sm hover:bg-[var(--color-brand-hover)] disabled:cursor-not-allowed disabled:opacity-50" title={!sourceUrl ? "Cảnh báo chưa có liên kết nguồn" : "Mở nguồn"}>
                 <ExternalLink size={16} />
                 <span className="hidden sm:inline">Mở nguồn</span>
               </button>

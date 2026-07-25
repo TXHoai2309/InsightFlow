@@ -11,6 +11,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { getLeadWorkbenchMeta, sortLeadsForWorkbench } from "@/lib/lead-workbench";
+import { getLeadSourceUrl } from "@/lib/lead-source-url";
 import type { Lead } from "@/types/dashboard";
 import { useLeadMonitoringLeads } from "./useLeadMonitoringLeads";
 import { auth } from "@/lib/firebase";
@@ -361,7 +362,7 @@ export function LeadTable() {
                 const scoreInfo = getScoreInfo(lead);
                 const statusInfo = getStatusInfo(lead.status);
                 const sla = formatSla(lead);
-                const sourceHref = lead.url || lead.source_url;
+                const sourceHref = getLeadSourceUrl(lead);
                 const leadHref = createLeadWorkbenchHref(lead, dashboardReturn);
 
                 return (

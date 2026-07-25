@@ -41,6 +41,8 @@ import {
 import { usePinnedQueue } from "@/hooks/usePinnedQueue";
 import { useAlertViewPresence } from "@/hooks/useAlertViewPresence";
 import { getAlertSourceUrl } from "@/lib/alert-source-url";
+import { EmbeddedSourcePreview } from "@/components/common/EmbeddedSourcePreview";
+import { dispatchTourAction } from "@/components/onboarding/RouteTour";
 import {
   filterOperationalAlerts,
   isAlertWithinTimeScope,
@@ -282,17 +284,22 @@ export default function AlertsPage() {
     }
   };
 
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewAlert, setPreviewAlert] = useState<any | null>(null);
+
   const handleSaveConfig = () => {
     triggerToast(t("alerts.toast.saved"));
   };
 
   const handleAccessSource = async (alert: Parameters<typeof getAlertSourceUrl>[0]) => {
     const text = alert.comment_content || alert.text || "";
-    // Open synchronously from the click event so browsers do not block the new tab.
     const targetUrl = getAlertSourceUrl(alert);
-    if (targetUrl) window.open(targetUrl, "_blank", "noopener,noreferrer");
+    if (targetUrl) {
+      setPreviewUrl(targetUrl);
+      setPreviewAlert(alert);
+      dispatchTourAction("open_source");
+    }
 
-    // Copy full text to clipboard for manual Ctrl+F fallback.
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -300,7 +307,6 @@ export default function AlertsPage() {
     } catch (err) {
       console.warn("[AlertsPage] Failed to copy source text:", err);
     }
-
   };
 
   const {
@@ -1376,6 +1382,15 @@ export default function AlertsPage() {
           onClose={() => setSelectedEvidence(null)}
         />
       )}
+
+      <EmbeddedSourcePreview
+        isOpen={Boolean(previewUrl)}
+        onClose={() => setPreviewUrl(null)}
+        url={previewUrl}
+        author={previewAlert?.author}
+        platform={previewAlert?.source}
+        contentSnippet={previewAlert?.comment_content || previewAlert?.text}
+      />
 
       {showToast && (
         <div className="fixed bottom-5 right-5 z-50 bg-green-600 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-2 border border-green-500">

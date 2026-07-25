@@ -8,6 +8,7 @@ import {
   type MentionThreadNode,
 } from "@/lib/mention-thread";
 import { resolveLeadMentionTarget } from "@/lib/mention-navigation";
+import { getLeadPostUrl, getLeadSourceUrl } from "@/lib/lead-source-url";
 import { DashboardService, PLATFORM_META } from "@/lib/services/dashboard";
 import type { Lead, Mention } from "@/types/dashboard";
 
@@ -56,7 +57,10 @@ function makeFallbackMention(lead: Lead): Mention {
     credibility_score: 100,
     created_at: lead.created_at,
     posted_at: lead.posted_at || lead.created_at,
-    url: lead.url || lead.source_url,
+    url: getLeadSourceUrl(lead) || lead.url || lead.source_url,
+    post_url: getLeadPostUrl(lead) || undefined,
+    comment_url: lead.comment_url || lead.source_comment_url || lead.original_comment_url,
+    source_url: lead.source_url,
     labels: lead.labels,
   };
 }

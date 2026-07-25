@@ -17,6 +17,7 @@ import { createAlertWorkbenchHref } from "@/lib/alert-navigation";
 import { isDemoPath } from "@/lib/demo-navigation";
 import { dummyStaff } from "@/lib/demoData";
 import { getAlertWorkflowStatus } from "@/lib/alertWorkflow";
+import { getAlertSourceUrl } from "@/lib/alert-source-url";
 import { canPerformAction } from "@/lib/rbac";
 import { useAlertStore, type AlertData } from "@/stores/alert.store";
 import { cn } from "@/lib/utils";
@@ -81,7 +82,7 @@ function getSeverityInfo(alert: AlertData) {
 }
 
 function sourceUrl(alert: AlertData) {
-  return [alert.url, alert.post_url, alert.social_profile_url].find((url) => Boolean(url && url !== "#"));
+  return getAlertSourceUrl(alert) || alert.social_profile_url;
 }
 
 export function CrisisTable({ alerts }: { alerts: AlertData[] }) {

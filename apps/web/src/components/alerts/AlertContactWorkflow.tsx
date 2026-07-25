@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { AlertData } from "@/stores/alert.store";
+import { dispatchTourAction } from "@/components/onboarding/RouteTour";
 
 type CustomerResponseResult = NonNullable<AlertData["customer_response_result"]>;
 
@@ -214,9 +215,20 @@ export function AlertContactWorkflow({
         </p>
       </div>
 
-      <div className={`space-y-3 rounded-xl border border-[var(--color-border)] p-3 ${!alert.customer_contact_opened_at ? "opacity-50" : ""}`}>
+      <div data-tour="alert-complete-section" className={`space-y-3 rounded-xl border border-[var(--color-border)] p-3 ${!alert.customer_contact_opened_at ? "opacity-50" : ""}`}>
         <p className="text-[10px] font-black uppercase tracking-wider text-[var(--color-text-secondary)]">Minh chứng liên hệ <span className="text-red-500">*</span></p>
-        <textarea value={contactEvidenceNote} onChange={(event) => setContactEvidenceNote(event.target.value)} disabled={!alert.customer_contact_opened_at} rows={3} placeholder="Ghi rõ đã phản hồi ở đâu, nội dung trao đổi và thời điểm liên hệ..." className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-2.5 text-xs text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-purple-500/20 disabled:cursor-not-allowed" />
+        <textarea
+          data-tour="alert-note-input"
+          value={contactEvidenceNote}
+          onChange={(event) => {
+            setContactEvidenceNote(event.target.value);
+            if (event.target.value.trim()) dispatchTourAction("type_note");
+          }}
+          disabled={!alert.customer_contact_opened_at}
+          rows={3}
+          placeholder="Ghi rõ đã phản hồi ở đâu, nội dung trao đổi và thời điểm liên hệ..."
+          className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] p-2.5 text-xs text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-purple-500/20 disabled:cursor-not-allowed"
+        />
         <div className="space-y-2">
           <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-dashed border-purple-300 bg-purple-50 px-3 py-2 text-[11px] font-bold text-purple-700 hover:bg-purple-100">
             <span className="material-symbols-outlined text-base">add_photo_alternate</span>
@@ -234,13 +246,23 @@ export function AlertContactWorkflow({
         </div>
       </div>
 
-      <fieldset disabled={!alert.customer_contact_opened_at} className="space-y-2 disabled:opacity-50">
+      <fieldset data-tour="alert-result-options" disabled={!alert.customer_contact_opened_at} className="space-y-2 disabled:opacity-50">
         <legend className="mb-2 text-[10px] font-black uppercase tracking-wider text-[var(--color-text-secondary)]">Kết quả phản hồi của khách hàng</legend>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {CUSTOMER_RESPONSE_OPTIONS.map((option) => {
             const selected = selectedResponseResult === option.value;
             return (
-              <button type="button" key={option.value} disabled={!alert.customer_contact_opened_at} onClick={() => setSelectedResponseResult(option.value)} aria-pressed={selected} className={`flex items-center gap-2 rounded-xl border p-2.5 text-left text-[11px] font-bold transition-all disabled:cursor-not-allowed ${selected ? `${option.tone} ring-2 ring-current ring-offset-1` : "border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)] hover:border-purple-300"}`}>
+              <button
+                type="button"
+                key={option.value}
+                disabled={!alert.customer_contact_opened_at}
+                onClick={() => {
+                  setSelectedResponseResult(option.value);
+                  dispatchTourAction("select_result");
+                }}
+                aria-pressed={selected}
+                className={`flex items-center gap-2 rounded-xl border p-2.5 text-left text-[11px] font-bold transition-all disabled:cursor-not-allowed ${selected ? `${option.tone} ring-2 ring-current ring-offset-1` : "border-[var(--color-border)] bg-[var(--color-bg-surface-raised)] text-[var(--color-text-secondary)] hover:border-purple-300"}`}
+              >
                 <span className="material-symbols-outlined text-base">{option.icon}</span>
                 {option.label}
               </button>
@@ -252,6 +274,7 @@ export function AlertContactWorkflow({
       {hasCompleteDraft && (
         <button
           type="button"
+          data-tour="alert-submit-btn"
           onClick={() => void handleRecordResult()}
           disabled={isRecordingResult}
           className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-[var(--color-brand)] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[var(--color-brand-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"

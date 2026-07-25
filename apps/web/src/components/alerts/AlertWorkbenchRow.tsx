@@ -6,6 +6,7 @@ import { getAlertWorkflowStatus } from "@/lib/alertWorkflow";
 import { getEffectiveAlertOwner } from "@/lib/alert-visibility";
 import type { AlertData } from "@/stores/alert.store";
 import type { AlertViewer } from "@/hooks/useAlertViewPresence";
+import { dispatchTourAction } from "@/components/onboarding/RouteTour";
 
 interface AlertWorkbenchRowProps {
   alert: AlertData;
@@ -100,7 +101,15 @@ export function AlertWorkbenchRow({ alert, selected, pinned = false, canPin = fa
   };
 
   return (
-    <div role="button" tabIndex={0} onClick={() => onSelect(alert)} onKeyDown={handleKeyDown} aria-current={selected ? "true" : undefined}
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => {
+        onSelect(alert);
+        dispatchTourAction("select_alert");
+      }}
+      onKeyDown={handleKeyDown}
+      aria-current={selected ? "true" : undefined}
       className={`relative w-full cursor-pointer rounded-lg border border-l-2 ${pinned ? "border-l-orange-500" : severity.border} bg-[var(--color-bg-surface)] p-3 text-left shadow-xs transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand)] ${pinned || selected ? "border-[var(--color-brand)] ring-2 ring-[var(--color-brand)]/20" : "border-[var(--color-border)] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-bg-surface-raised)]"}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2.5">

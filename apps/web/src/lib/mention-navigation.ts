@@ -1,4 +1,5 @@
 import type { Lead, Mention } from "@/types/dashboard";
+import { getLeadSourceUrl } from "@/lib/lead-source-url";
 import {
   appendDashboardReturnParams,
   type DashboardNavigationMode,
@@ -146,7 +147,7 @@ function findMentionForLead(
   if (directMatch) return directMatch;
 
   const leadContent = normalizeLookupText(lead.content);
-  const leadUrl = String(lead.url || lead.source_url || "").trim();
+  const leadUrl = String(getLeadSourceUrl(lead) || "").trim();
   if (!leadContent && !leadUrl) return undefined;
 
   return Array.from(mentionById.values()).find((mention) => {
@@ -179,7 +180,7 @@ export function resolveLeadMentionTarget(
     return {
       ...resolveMentionDetailTarget(matchedMention, mentionById),
       canOpenMentionDetail: true,
-      fallbackUrl: lead.url || lead.source_url,
+      fallbackUrl: getLeadSourceUrl(lead) || undefined,
       matchedMention,
     };
   }
@@ -191,7 +192,7 @@ export function resolveLeadMentionTarget(
       href: `/mentions/${encodeURIComponent(fallbackMentionId)}`,
       targetId: lead.content_type === "post" ? undefined : fallbackMentionId,
       canOpenMentionDetail: true,
-      fallbackUrl: lead.url || lead.source_url,
+      fallbackUrl: getLeadSourceUrl(lead) || undefined,
     };
   }
 
@@ -199,6 +200,6 @@ export function resolveLeadMentionTarget(
     detailId: "",
     href: "",
     canOpenMentionDetail: false,
-    fallbackUrl: lead.url || lead.source_url,
+    fallbackUrl: getLeadSourceUrl(lead) || undefined,
   };
 }
