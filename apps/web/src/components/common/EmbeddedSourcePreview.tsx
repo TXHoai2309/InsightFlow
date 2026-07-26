@@ -201,7 +201,7 @@ export function EmbeddedSourcePreview({
                       <span>Trích dẫn bình luận {author ? `từ ${author}` : ""}</span>
                     </p>
                     <p className="mt-2 text-xs sm:text-sm italic leading-relaxed text-[var(--color-text-primary)]">
-                      "{contentSnippet}"
+                      &ldquo;{contentSnippet}&rdquo;
                     </p>
                   </div>
                 )}
