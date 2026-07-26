@@ -202,6 +202,7 @@ export default function RootLayout({
                       {children}
                     </main>
                     <MobileNav />
+                    <RouteTour />
                   </div>
                 </div>
               ) : isAuthPage ? (

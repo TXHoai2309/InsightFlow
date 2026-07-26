@@ -2,20 +2,28 @@
 
 import { useEffect, useState } from "react";
 import { motion, useReducedMotion, AnimatePresence } from "framer-motion";
-import { ChevronUp, Menu, X, ChevronDown } from "lucide-react";
+import {
+  ArrowRight,
+  BookOpen,
+  ChevronDown,
+  ChevronUp,
+  CircleHelp,
+  LayoutDashboard,
+  Menu,
+  ShieldCheck,
+  Sparkles,
+  UsersRound,
+  X,
+} from "lucide-react";
 import TopNavBar from "@/components/home/TopNavBar";
 
+const GUIDE_WELCOME_SESSION_KEY = "insightflow-guide-welcome-seen";
+
 const tocItems = [
-  { id: "tong-quan", label: "Tổng quan" },
+  { id: "tong-quan", label: "Tổng quan điều hành" },
   { id: "vai-tro", label: "Vai trò & Phân quyền" },
   { id: "dang-nhap", label: "Đăng nhập" },
-  { id: "admin", label: "Hướng dẫn Admin" },
-  { id: "brand-manager", label: "Hướng dẫn Brand Manager" },
-  { id: "canh-bao", label: "Xử lý Cảnh báo" },
-  { id: "khach-hang", label: "Xử lý Khách hàng" },
-  { id: "de-cap", label: "Đề cập" },
-  { id: "bao-cao", label: "Báo cáo" },
-  { id: "van-hanh", label: "Vận hành" },
+  { id: "huong-dan-vai-tro", label: "Hướng dẫn theo vai trò" },
   { id: "tinh-nang-chung", label: "Tính năng chung" },
   { id: "faq", label: "FAQ" },
 ];
@@ -53,7 +61,33 @@ export default function UserGuidePage() {
   const [activeTab, setActiveTab] = useState("admin");
   const [mobileTabOpen, setMobileTabOpen] = useState(false);
   const [openFaq, setOpenFaq] = useState<string | null>(null);
+  const [showWelcome, setShowWelcome] = useState(false);
   const reduceMotion = useReducedMotion();
+
+  useEffect(() => {
+    if (window.sessionStorage.getItem(GUIDE_WELCOME_SESSION_KEY) !== "true") {
+      setShowWelcome(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!showWelcome) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        window.sessionStorage.setItem(GUIDE_WELCOME_SESSION_KEY, "true");
+        setShowWelcome(false);
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [showWelcome]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -97,54 +131,244 @@ export default function UserGuidePage() {
     }
   };
 
+  const closeWelcome = () => {
+    window.sessionStorage.setItem(GUIDE_WELCOME_SESSION_KEY, "true");
+    setShowWelcome(false);
+  };
+
+  const openSectionFromWelcome = (id: string) => {
+    closeWelcome();
+    window.setTimeout(() => scrollToSection(id), 120);
+  };
+
   return (
     <div className="min-h-screen bg-[#FCFBFF] dark:bg-[#13141f]">
       <TopNavBar />
 
-      {/* Hero Section */}
-      <section className="relative isolate min-h-[500px] overflow-hidden pt-[72px] pb-[88px] md:pt-[120px] md:pb-[88px]">
-        {/* Gradient Background */}
-        <div className="absolute inset-0 -z-20 bg-gradient-to-br from-[#6D5EF6] via-[#8B5CF6] to-[#5B4BDB]" />
-        
-        {/* Glow Effect */}
-        <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[600px] h-[600px] md:w-[800px] md:h-[800px] rounded-full blur-[160px] bg-[#9B8CFF] opacity-30 -z-10 pointer-events-none" />
-        
-        {/* Grid Pattern */}
-        <div className="absolute inset-0 bg-vercel-grid opacity-10 pointer-events-none" />
+      <AnimatePresence>
+        {showWelcome && (
+          <motion.div
+            className="fixed inset-0 z-[120] flex items-center justify-center bg-[#171331]/65 p-4 backdrop-blur-md"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            role="presentation"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) closeWelcome();
+            }}
+          >
+            <motion.section
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="guide-welcome-title"
+              aria-describedby="guide-welcome-description"
+              initial={{ opacity: 0, y: reduceMotion ? 0 : 24, scale: reduceMotion ? 1 : 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: reduceMotion ? 0 : 12, scale: reduceMotion ? 1 : 0.99 }}
+              transition={{ duration: reduceMotion ? 0 : 0.28, ease: [0.22, 1, 0.36, 1] }}
+              className="relative grid max-h-[calc(100vh-32px)] w-full max-w-[920px] overflow-y-auto rounded-[28px] border border-white/30 bg-white shadow-[0_30px_100px_rgba(22,17,56,0.35)] dark:border-white/10 dark:bg-[#1B1C2A] lg:grid-cols-[0.85fr_1.15fr]"
+            >
+              <button
+                type="button"
+                onClick={closeWelcome}
+                className="absolute right-4 top-4 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white/90 text-slate-500 shadow-sm transition hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6D5EF6] dark:border-white/10 dark:bg-white/10 dark:text-white"
+                aria-label="Đóng hướng dẫn nhanh"
+              >
+                <X className="h-5 w-5" />
+              </button>
 
-        <div className="relative z-10 mx-auto max-w-[1250px] px-6 md:px-10 lg:px-12">
+              <div className="relative overflow-hidden bg-gradient-to-br from-[#6D5EF6] via-[#7659EA] to-[#4F46C8] p-7 text-white md:p-9">
+                <div className="absolute -left-16 -top-20 h-48 w-48 rounded-full bg-white/15 blur-3xl" />
+                <div className="absolute -bottom-16 -right-12 h-52 w-52 rounded-full bg-[#B6ABFF]/30 blur-3xl" />
+                <div className="relative">
+                  <div className="inline-flex items-center rounded-full border border-white/25 bg-white/10 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.15em]">
+                    Tài liệu chính thức
+                  </div>
+                  <h2 id="guide-welcome-title" className="mt-5 max-w-[360px] font-display text-[30px] font-extrabold leading-tight md:text-[36px]">
+                    Chào mừng đến với InsightFlow
+                  </h2>
+                  <p id="guide-welcome-description" className="mt-4 max-w-[360px] text-[14px] leading-[1.75] text-white/85">
+                    Chọn nội dung cần xem để đi thẳng tới phần phù hợp. Tài liệu được thiết kế cho Ban lãnh đạo và đội ngũ vận hành.
+                  </p>
+
+                  <div className="mt-8 grid grid-cols-2 gap-3">
+                    {[
+                      ["07", "nhóm nguồn dữ liệu"],
+                      ["04", "nhóm chỉ số điều hành"],
+                      ["04", "vai trò nghiệp vụ"],
+                      ["01", "quy trình thống nhất"],
+                    ].map(([value, label]) => (
+                      <div key={label} className="rounded-2xl border border-white/15 bg-white/10 p-3 backdrop-blur">
+                        <div className="text-[22px] font-extrabold">{value}</div>
+                        <div className="mt-1 text-[11px] leading-snug text-white/70">{label}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6 pt-16 md:p-9 md:pt-16 lg:pt-9">
+                <div className="text-[12px] font-extrabold uppercase tracking-[0.15em] text-[#6D5EF6]">
+                  Bạn muốn xem nội dung nào?
+                </div>
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  {[
+                    {
+                      id: "tong-quan",
+                      icon: "📊",
+                      title: "Tổng quan điều hành",
+                      description: "Chỉ số lãnh đạo và luồng dữ liệu.",
+                    },
+                    {
+                      id: "vai-tro",
+                      icon: "🛡️",
+                      title: "Vai trò & phân quyền",
+                      description: "Trách nhiệm của từng nhóm người dùng.",
+                    },
+                    {
+                      id: "huong-dan-vai-tro",
+                      icon: "👥",
+                      title: "Hướng dẫn theo vai trò",
+                      description: "Quy trình thao tác nghiệp vụ chi tiết.",
+                    },
+                    {
+                      id: "faq",
+                      icon: "💬",
+                      title: "Câu hỏi thường gặp",
+                      description: "Tra cứu nhanh các tình huống phổ biến.",
+                    },
+                  ].map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => openSectionFromWelcome(item.id)}
+                      className="group rounded-2xl border border-[#E8E4FA] bg-[#FCFBFF] p-4 text-left transition hover:-translate-y-0.5 hover:border-[#BEB5FF] hover:bg-[#F6F3FF] hover:shadow-[0_12px_30px_rgba(91,79,224,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6D5EF6] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-xl shadow-sm dark:bg-white/10" aria-hidden="true">
+                          {item.icon}
+                        </span>
+                        <span>
+                          <span className="block text-[14px] font-bold text-[#1B1B4A] dark:text-white">{item.title}</span>
+                          <span className="mt-1 block text-[12px] leading-[1.5] text-[#6B7090] dark:text-slate-300">{item.description}</span>
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={closeWelcome}
+                  className="mt-6 inline-flex h-11 w-full items-center justify-center rounded-xl bg-[#6D5EF6] px-5 text-sm font-bold text-white transition hover:bg-[#5B4FE0] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6D5EF6] focus-visible:ring-offset-2"
+                >
+                  Xem toàn bộ tài liệu
+                </button>
+                <p className="mt-3 text-center text-[11px] text-[#8A8FA8] dark:text-slate-400">
+                  Hộp giới thiệu chỉ tự mở một lần trong phiên trình duyệt.
+                </p>
+              </div>
+            </motion.section>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Hero Section */}
+      <section className="relative isolate overflow-hidden border-b border-[#E9E5FF] bg-[#F8F7FF] pb-12 pt-[96px] dark:border-white/10 dark:bg-[#141421] md:pb-16 md:pt-[112px]">
+        <div className="absolute inset-x-0 top-0 -z-20 h-[78%] bg-[radial-gradient(circle_at_78%_18%,rgba(166,151,255,0.34),transparent_34%),radial-gradient(circle_at_14%_12%,rgba(109,94,246,0.16),transparent_30%)]" />
+        <div className="absolute right-[-140px] top-[-180px] -z-10 h-[520px] w-[520px] rounded-full border-[90px] border-[#8B7CF6]/10" />
+        <div className="absolute left-1/2 top-[72px] -z-10 h-px w-[min(1180px,90vw)] -translate-x-1/2 bg-gradient-to-r from-transparent via-[#BFB8F6]/55 to-transparent" />
+
+        <div className="relative z-10 mx-auto grid max-w-[1200px] items-center gap-10 px-6 md:px-10 lg:grid-cols-[1.08fr_0.92fr] lg:gap-16 lg:px-12">
           <motion.div
             initial={{ opacity: 0, y: reduceMotion ? 0 : 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: reduceMotion ? 0 : 0.7, ease: [0.22, 1, 0.36, 1] }}
-            className="max-w-[800px]"
+            className="max-w-[670px]"
           >
-            <h1 className="font-display text-[38px] md:text-[56px] font-extrabold leading-[1.1] text-white tracking-tight">
-              Hướng dẫn sử dụng InsightFlow
+            <div className="inline-flex items-center gap-2 rounded-full border border-[#DCD6FF] bg-white/85 px-3.5 py-2 text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#6557E8] shadow-sm backdrop-blur dark:border-white/10 dark:bg-white/10 dark:text-[#BDB5FF]">
+              <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+              Cẩm nang vận hành chính thức
+            </div>
+
+            <h1 className="mt-6 max-w-[640px] font-display text-[40px] font-extrabold leading-[1.08] tracking-[-0.035em] text-[#17173B] dark:text-white md:text-[56px]">
+              Tài liệu hướng dẫn sử dụng InsightFlow
             </h1>
-            <p className="mt-6 max-w-[610px] text-[17px] leading-[1.7] text-white/90">
-              Tìm hiểu cách sử dụng nền tảng theo dõi thương hiệu thông minh — từ đăng nhập đến xử lý nghiệp vụ hàng ngày.
+            <p className="mt-5 max-w-[610px] text-[16px] leading-[1.75] text-[#626681] dark:text-slate-300 md:text-[17px]">
+              Tài liệu dành cho Ban lãnh đạo và đội ngũ vận hành, giúp đọc đúng chỉ số, hiểu rõ trách nhiệm và xử lý nghiệp vụ nhất quán.
             </p>
 
-            <div className="mt-10 flex flex-col gap-4 sm:flex-row">
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <button
                 onClick={() => scrollToSection("tong-quan")}
-                className="inline-flex h-[52px] px-8 items-center justify-center gap-2 rounded-[24px] bg-white text-[#6D5EF6] text-[16px] font-bold whitespace-nowrap shadow-[0_18px_50px_rgba(0,0,0,0.15)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_30px_60px_rgba(0,0,0,0.2)]"
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[#6557E8] px-6 text-[14px] font-bold text-white shadow-[0_14px_30px_rgba(101,87,232,0.25)] transition hover:-translate-y-0.5 hover:bg-[#5749D8] hover:shadow-[0_18px_36px_rgba(101,87,232,0.32)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6557E8] focus-visible:ring-offset-2"
               >
-                Bắt đầu ngay
+                Bắt đầu đọc tài liệu
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </button>
               <button
-                onClick={() => scrollToSection("vai-tro")}
-                className="inline-flex h-[52px] px-8 items-center justify-center gap-2 rounded-[24px] bg-white/20 border border-white/30 text-white text-[16px] font-bold whitespace-nowrap backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:bg-white/30"
+                onClick={() => setShowWelcome(true)}
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-[#DCD8F4] bg-white px-6 text-[14px] font-bold text-[#29294D] shadow-sm transition hover:-translate-y-0.5 hover:border-[#BFB7FF] hover:bg-[#FBFAFF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6557E8] dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
               >
-                Theo vai trò
+                <BookOpen className="h-4 w-4 text-[#6557E8]" aria-hidden="true" />
+                Chọn nội dung nhanh
               </button>
-              <button
-                onClick={() => scrollToSection("faq")}
-                className="inline-flex h-[52px] px-8 items-center justify-center gap-2 rounded-[24px] bg-white/20 border border-white/30 text-white text-[16px] font-bold whitespace-nowrap backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:bg-white/30"
-              >
-                Xem FAQ
-              </button>
+            </div>
+
+            <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-[#E1DEF3] pt-5 text-[12px] font-semibold text-[#737793] dark:border-white/10 dark:text-slate-400">
+              <span className="inline-flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-[#55C67A]" />
+                Cập nhật theo hệ thống hiện tại
+              </span>
+              <span>07 nhóm nguồn dữ liệu</span>
+              <span>04 vai trò nghiệp vụ</span>
+            </div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, x: reduceMotion ? 0 : 24 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: reduceMotion ? 0 : 0.7, delay: reduceMotion ? 0 : 0.12, ease: [0.22, 1, 0.36, 1] }}
+            className="hidden lg:block"
+          >
+            <div className="relative">
+              <div className="absolute -inset-5 -z-10 rounded-[36px] bg-gradient-to-br from-[#7667EC]/16 to-[#A79CFF]/6 blur-xl" />
+              <div className="overflow-hidden rounded-[26px] border border-[#E2DFFC] bg-white shadow-[0_24px_65px_rgba(67,56,151,0.15)] dark:border-white/10 dark:bg-[#1B1C2A]">
+                <div className="flex items-start justify-between border-b border-[#EEECFA] px-6 py-5 dark:border-white/10">
+                  <div>
+                    <div className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#6D5EF6]">Lối tắt nội dung</div>
+                    <div className="mt-1 text-[20px] font-extrabold text-[#1B1B42] dark:text-white">Bạn muốn tìm hiểu gì?</div>
+                  </div>
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#F0EDFF] text-[#6557E8] dark:bg-white/10">
+                    <BookOpen className="h-5 w-5" aria-hidden="true" />
+                  </div>
+                </div>
+
+                <div className="grid gap-2.5 p-4">
+                  {[
+                    { id: "tong-quan", icon: LayoutDashboard, title: "Tổng quan điều hành", text: "Đọc chỉ số và luồng dữ liệu" },
+                    { id: "vai-tro", icon: ShieldCheck, title: "Vai trò & phân quyền", text: "Hiểu trách nhiệm từng nhóm" },
+                    { id: "huong-dan-vai-tro", icon: UsersRound, title: "Quy trình nghiệp vụ", text: "Thao tác theo từng vai trò" },
+                    { id: "faq", icon: CircleHelp, title: "Câu hỏi thường gặp", text: "Tra cứu tình huống phổ biến" },
+                  ].map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => scrollToSection(item.id)}
+                      className="group flex items-center gap-4 rounded-2xl border border-transparent px-3 py-3 text-left transition hover:border-[#E1DCFF] hover:bg-[#F8F6FF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6557E8] dark:hover:border-white/10 dark:hover:bg-white/5"
+                    >
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F0EDFF] text-[#6557E8] transition group-hover:bg-[#6557E8] group-hover:text-white dark:bg-white/10">
+                        <item.icon className="h-[18px] w-[18px]" aria-hidden="true" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[14px] font-bold text-[#242447] dark:text-white">{item.title}</span>
+                        <span className="mt-0.5 block text-[12px] text-[#8588A0] dark:text-slate-400">{item.text}</span>
+                      </span>
+                      <ArrowRight className="h-4 w-4 text-[#B2AEC9] transition group-hover:translate-x-0.5 group-hover:text-[#6557E8]" aria-hidden="true" />
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </motion.div>
         </div>
@@ -222,7 +446,7 @@ export default function UserGuidePage() {
                       <div className="text-4xl mb-4">🔊</div>
                       <h3 className="font-display text-[20px] font-bold text-[#1B1B4A] dark:text-white mb-3">Lắng nghe</h3>
                       <p className="text-[15px] leading-[1.6] text-[#6B7090] dark:text-slate-300">
-                        Thu thập tự động các thảo luận công khai về thương hiệu trên nhiều nền tảng (Facebook, TikTok, Instagram, YouTube, báo chí...).
+                        Thu thập dữ liệu công khai từ 7 nhóm nguồn: Facebook, TikTok, YouTube, Threads, Google Maps, Tin tức và BeFood.
                       </p>
                     </div>
                     <div className="rounded-2xl border border-[#ECE9FF] dark:border-white/10 bg-white dark:bg-white/5 p-6 shadow-sm hover:shadow-md transition-shadow">
@@ -236,8 +460,63 @@ export default function UserGuidePage() {
                       <div className="text-4xl mb-4">⚡</div>
                       <h3 className="font-display text-[20px] font-bold text-[#1B1B4A] dark:text-white mb-3">Hành động nhanh</h3>
                       <p className="text-[15px] leading-[1.6] text-[#6B7090] dark:text-slate-300">
-                        Phân công tự động đến đúng người xử lý, theo dõi SLA, hỗ trợ phản hồi bằng template, và tạo báo cáo chuyên sâu.
+                        Phân công đúng người xử lý, theo dõi SLA, hỗ trợ phản hồi bằng mẫu có sẵn và tổng hợp báo cáo chuyên sâu.
                       </p>
+                    </div>
+                  </div>
+
+                  {/* Executive reading guide */}
+                  <div className="mt-12 rounded-3xl border border-[#DED8FF] bg-gradient-to-br from-white via-[#FBFAFF] to-[#F2EFFF] p-6 shadow-sm dark:border-white/10 dark:from-white/10 dark:via-white/5 dark:to-[#6D5EF6]/10 md:p-8">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                      <div>
+                        <div className="text-[12px] font-extrabold uppercase tracking-[0.16em] text-[#6D5EF6]">
+                          Dành cho Ban lãnh đạo
+                        </div>
+                        <h3 className="mt-2 font-display text-[25px] font-extrabold tracking-tight text-[#1B1B4A] dark:text-white">
+                          Bốn nhóm chỉ số cần theo dõi
+                        </h3>
+                      </div>
+                      <p className="max-w-[420px] text-[14px] leading-[1.6] text-[#6B7090] dark:text-slate-300">
+                        Các chỉ số này giúp đánh giá nhanh sức khỏe thương hiệu, rủi ro truyền thông, cơ hội kinh doanh và hiệu quả vận hành.
+                      </p>
+                    </div>
+
+                    <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                      {[
+                        {
+                          icon: "🛡️",
+                          title: "Sức khỏe thương hiệu",
+                          description: "Điểm tổng hợp từ lượng đề cập, cảm xúc và xu hướng thảo luận.",
+                        },
+                        {
+                          icon: "🚨",
+                          title: "Rủi ro & khủng hoảng",
+                          description: "Số cảnh báo, mức độ ưu tiên, nguyên nhân và diễn biến rủi ro.",
+                        },
+                        {
+                          icon: "🎯",
+                          title: "Cơ hội khách hàng",
+                          description: "Lead tiềm năng, mức độ quan tâm và tỷ lệ chuyển đổi theo kỳ.",
+                        },
+                        {
+                          icon: "⏱️",
+                          title: "Hiệu suất vận hành",
+                          description: "SLA, khối lượng công việc và kết quả xử lý của đội ngũ.",
+                        },
+                      ].map((metric) => (
+                        <div
+                          key={metric.title}
+                          className="rounded-2xl border border-[#ECE9FF] bg-white p-5 shadow-sm dark:border-white/10 dark:bg-white/5"
+                        >
+                          <div className="text-2xl" aria-hidden="true">{metric.icon}</div>
+                          <h4 className="mt-3 text-[15px] font-bold text-[#1B1B4A] dark:text-white">
+                            {metric.title}
+                          </h4>
+                          <p className="mt-2 text-[13px] leading-[1.6] text-[#6B7090] dark:text-slate-300">
+                            {metric.description}
+                          </p>
+                        </div>
+                      ))}
                     </div>
                   </div>
 
@@ -253,7 +532,7 @@ export default function UserGuidePage() {
                         { num: "01", icon: "📡", label: "Thu thập dữ liệu" },
                         { num: "02", icon: "🤖", label: "AI Phân tích" },
                         { num: "03", icon: "🛡️", label: "Admin Kiểm duyệt" },
-                        { num: "04", icon: "🏢", label: "Publish cho Brand" },
+                        { num: "04", icon: "🏢", label: "Xuất bản cho Brand" },
                         { num: "05", icon: "👥", label: "Đội ngũ xử lý" },
                         { num: "06", icon: "📊", label: "Báo cáo" },
                       ].map((step, i) => (
@@ -276,7 +555,7 @@ export default function UserGuidePage() {
                         { num: "01", icon: "📡", label: "Thu thập dữ liệu" },
                         { num: "02", icon: "🤖", label: "AI Phân tích" },
                         { num: "03", icon: "🛡️", label: "Admin Kiểm duyệt" },
-                        { num: "04", icon: "🏢", label: "Publish cho Brand" },
+                        { num: "04", icon: "🏢", label: "Xuất bản cho Brand" },
                         { num: "05", icon: "👥", label: "Đội ngũ xử lý" },
                         { num: "06", icon: "📊", label: "Báo cáo" },
                       ].map((step, i) => (
@@ -348,12 +627,12 @@ export default function UserGuidePage() {
                         </div>
                       </div>
                       <p className="text-[15px] leading-[1.6] text-[#6B7090] dark:text-slate-300 mb-4">
-                        Quản lý toàn bộ nghiệp vụ brand, quản lý nhân viên, duyệt yêu cầu sửa nhãn, xem báo cáo tổng quan.
+                        Quản lý toàn bộ nghiệp vụ thương hiệu, nhân viên, cảnh báo, khách hàng và báo cáo điều hành.
                       </p>
                       <div>
                         <div className="text-[13px] font-semibold text-[#1B1B4A] dark:text-white mb-2">Menu:</div>
                         <div className="flex flex-wrap gap-2">
-                          {["Tổng quan", "Quản lý đội ngũ", "Đề cập", "Cảnh báo", "Khách hàng", "Duyệt sửa nhãn", "Báo cáo"].map((item) => (
+                          {["Tổng quan", "Nhân viên", "Đề cập", "Cảnh báo", "Khách hàng", "Báo cáo"].map((item) => (
                             <span key={item} className="px-3 py-1 rounded-full bg-[#8B5CF6]/10 text-[#8B5CF6] text-[12px] font-medium">
                               {item}
                             </span>
@@ -671,7 +950,7 @@ export default function UserGuidePage() {
                               },
                               {
                                 icon: "👥",
-                                name: "Quản lý đội ngũ",
+                                name: "Nhân viên",
                                 route: "/team",
                                 description: "Xem danh sách nhân viên. Thêm nhân viên: nhập email, tên, chọn vai trò. Gán quyền: Alerts, Leads, hoặc cả hai (Dual). Theo dõi trạng thái: Hoạt động, Tạm khóa, Chưa kích hoạt. Xuất Excel."
                               },
@@ -771,7 +1050,7 @@ export default function UserGuidePage() {
                               Chi tiết vụ việc (/alerts/[id])
                             </h4>
                             <div className="rounded-xl border border-[#ECE9FF] dark:border-white/10 bg-white dark:bg-white/5 p-5 shadow-sm">
-                              <p className="text-[14px] font-semibold text-[#1B1B4A] dark:text-white mb-3">Widget "Quản lý & Sửa nhãn" gồm 3 tab:</p>
+                              <p className="text-[14px] font-semibold text-[#1B1B4A] dark:text-white mb-3">Widget &quot;Quản lý &amp; Sửa nhãn&quot; gồm 3 tab:</p>
                               <ul className="space-y-2 ml-4 text-[13px] text-[#6B7090] dark:text-slate-300">
                                 <li className="list-disc">Tab Sửa nhãn (Nhân viên): đề xuất thay đổi 5 trường nhãn</li>
                                 <li className="list-disc">Tab Chờ duyệt (Brand Manager): phê duyệt/từ chối</li>
@@ -1027,7 +1306,7 @@ export default function UserGuidePage() {
                       {
                         id: "faq5",
                         q: "Brand Manager tạo nhân viên ở đâu?",
-                        a: "Vào menu Quản lý đội ngũ → Thêm nhân viên mới → Nhập email, tên và chọn vai trò (Nhân viên khủng hoảng hoặc Nhân viên lead)."
+                        a: "Vào menu Nhân viên → Thêm nhân viên mới → Nhập email, tên và chọn vai trò (Nhân viên khủng hoảng hoặc Nhân viên lead)."
                       },
                       {
                         id: "faq6",

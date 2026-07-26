@@ -1,6 +1,10 @@
+import { auth } from "@/lib/firebase";
+
 export interface OnboardingStorageState {
   completed: boolean;
   skipped: boolean;
+  currentStepIndex?: number;
+  updatedAt?: string;
   completedAt?: string;
   skippedAt?: string;
 }
@@ -48,10 +52,69 @@ export function setOnboardingState(
     const updated: OnboardingStorageState = {
       ...existing,
       ...state,
+      updatedAt: new Date().toISOString(),
     };
     localStorage.setItem(key, JSON.stringify(updated));
   } catch (err) {
     console.warn("[onboarding-storage] Failed to save state:", err);
+  }
+}
+
+export async function getSyncedOnboardingState(
+  userId: string | null | undefined,
+  routeKey: string,
+  version: number,
+): Promise<OnboardingStorageState | null> {
+  const localState = getOnboardingState(userId, routeKey, version);
+  if (!userId || userId === "guest") return localState;
+
+  try {
+    const token = await auth.currentUser?.getIdToken();
+    if (!token) return localState;
+    const response = await fetch(
+      `/api/auth/onboarding?routeKey=${encodeURIComponent(routeKey)}&version=${version}`,
+      {
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    if (!response.ok) return localState;
+    const payload = (await response.json()) as { data?: OnboardingStorageState | null };
+    if (!payload.data) return localState;
+
+    const remoteState = payload.data;
+    const localUpdated = Date.parse(localState?.updatedAt || "") || 0;
+    const remoteUpdated = Date.parse(remoteState.updatedAt || "") || 0;
+    const resolved = localUpdated > remoteUpdated ? localState : remoteState;
+    if (resolved) setOnboardingState(userId, routeKey, version, resolved);
+    return resolved;
+  } catch {
+    return localState;
+  }
+}
+
+export async function setSyncedOnboardingState(
+  userId: string | null | undefined,
+  routeKey: string,
+  version: number,
+  state: Partial<OnboardingStorageState>,
+): Promise<void> {
+  setOnboardingState(userId, routeKey, version, state);
+  if (!userId || userId === "guest") return;
+
+  try {
+    const token = await auth.currentUser?.getIdToken();
+    if (!token) return;
+    await fetch("/api/auth/onboarding", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ routeKey, version, state }),
+    });
+  } catch {
+    // Local progress remains the offline fallback.
   }
 }
 

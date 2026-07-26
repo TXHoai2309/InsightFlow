@@ -33,7 +33,7 @@ export type RouteTourConfig = {
 export const ROUTE_TOUR_CONFIGS: Record<string, RouteTourConfig> = {
   "/dashboard": {
     routeKey: "/dashboard",
-    version: 2,
+    version: 10,
     title: "Hướng dẫn trang Tổng quan",
     nextRoute: {
       label: "Chuyển sang Crisis Monitoring",
@@ -62,16 +62,9 @@ export const ROUTE_TOUR_CONFIGS: Record<string, RouteTourConfig> = {
         placement: "top",
       },
       {
-        id: "overview_actionable",
-        target: '[data-tour="dashboard-negative-card"]',
-        title: "4. Hàng đợi cần xử lý",
-        body: "Các chỉ số này dẫn thẳng tới danh sách các cảnh báo và lead cần đội ngũ phản hồi ngay.",
-        placement: "top",
-      },
-      {
         id: "overview_crisis_tab",
         target: '[data-tour="dashboard-tab-crisis"]',
-        title: "5. Chuyển sang Crisis Monitoring",
+        title: "4. Chuyển sang Crisis Monitoring",
         body: "Bấm vào tab Crisis Monitoring để xem chi tiết các chủ đề rủi ro cần ưu tiên.",
         placement: "bottom",
       },
@@ -496,63 +489,38 @@ export const ROUTE_TOUR_CONFIGS: Record<string, RouteTourConfig> = {
   },
   "/demo": {
     routeKey: "/demo",
-    version: 3,
+    version: 10,
     title: "Hướng dẫn Trải nghiệm Demo InsightFlow",
     nextRoute: {
       label: "Trải nghiệm ngay",
-      href: "/trial-registration",
+      href: "/#consultation",
     },
     steps: [
       {
         id: "demo_overview",
         target: '[data-tour="demo-overview"], [data-tour="dashboard-overview"]',
-        title: "1. Tổng quan thương hiệu demo",
-        body: "Khám phá bảng điều khiển thông minh theo thời gian thực của thương hiệu mẫu.",
+        title: "1. Tổng quan dữ liệu mẫu",
+        body: "Đây là workspace minh họa với dữ liệu mẫu cố định, giúp bạn xem nhanh cách InsightFlow tổng hợp sức khỏe thương hiệu.",
         placement: "bottom",
       },
       {
         id: "demo_filters",
         target: '[data-tour="dashboard-filters"]',
         title: "2. Bộ lọc thời gian & nền tảng",
-        body: "Lọc nhanh chỉ số thảo luận theo 7 ngày, 30 ngày hoặc từng kênh truyền thông.",
+        body: "Bạn có thể đổi khoảng thời gian hoặc nền tảng để khám phá các lát cắt khác nhau của bộ dữ liệu demo.",
         placement: "bottom",
       },
       {
         id: "demo_health",
         target: '[data-tour="dashboard-health-score"], [data-tour="demo-health-score"]',
         title: "3. Điểm sức khỏe thương hiệu (BHS)",
-        body: "Đánh giá mức độ an toàn thương hiệu dựa trên AI Sentiment Score (0 - 100 điểm).",
+        body: "Điểm sức khỏe tóm tắt mức độ tích cực, tiêu cực và tín hiệu rủi ro trong dữ liệu mẫu.",
         placement: "bottom",
-      },
-      {
-        id: "demo_kpis",
-        target: '[data-tour="dashboard-actionable"], [data-tour="dashboard-negative-card"]',
-        title: "4. Chỉ số cần xử lý",
-        body: "Theo dõi lượng thảo luận tiêu cực khẩn cấp và cơ hội bán hàng (Leads) phát sinh.",
-        placement: "top",
-      },
-      {
-        id: "demo_crisis_tab",
-        target: '[data-tour="dashboard-tab-crisis"]',
-        title: "5. Giám sát Cảnh báo rủi ro",
-        body: "Bấm tab 'Giám sát Crisis' để xem chi tiết danh sách cảnh báo khủng hoảng.",
-        placement: "bottom",
-        allowInteraction: true,
-        action: { type: "click", selector: '[data-tour="dashboard-tab-crisis"]' },
-      },
-      {
-        id: "demo_lead_tab",
-        target: '[data-tour="dashboard-tab-lead"]',
-        title: "6. Giám sát Khách hàng (Leads)",
-        body: "Bấm tab 'Giám sát Lead' để xem danh sách khách hàng tiềm năng AI tự động phát hiện.",
-        placement: "bottom",
-        allowInteraction: true,
-        action: { type: "click", selector: '[data-tour="dashboard-tab-lead"]' },
       },
       {
         id: "demo_try_now",
         target: '[data-tour="demo-try-now-btn"]',
-        title: "7. Đăng ký Trải nghiệm ngay",
+        title: "4. Đăng ký Trải nghiệm ngay",
         body: "Bấm 'Trải nghiệm ngay' để bắt đầu kết nối thương hiệu của chính bạn với InsightFlow!",
         placement: "bottom",
         allowInteraction: true,
@@ -730,7 +698,7 @@ export const ROUTE_TOUR_CONFIGS: Record<string, RouteTourConfig> = {
   },
   "/admin/brands": {
     routeKey: "/admin/brands",
-    version: 2,
+    version: 3,
     title: "Hướng dẫn Quản lý Thương hiệu",
     steps: [
       {
@@ -748,19 +716,48 @@ export const ROUTE_TOUR_CONFIGS: Record<string, RouteTourConfig> = {
         placement: "bottom",
       },
       {
-        id: "brand_mgt_expiry",
-        target: '[data-tour="brand-trial-expiry"]',
-        title: "3. Hạn dùng thử",
-        body: "Thời điểm hết hạn gói trải nghiệm thương hiệu.",
-        placement: "bottom",
-      },
-      {
         id: "brand_mgt_open",
         target: '[data-tour="brand-open-workspace"]',
-        title: "4. Mở Workspace",
+        title: "3. Mở Workspace",
         body: "Nhấp để truy cập trực tiếp vào giao diện quản trị thương hiệu đó.",
         placement: "bottom",
       },
     ],
   },
 };
+
+// Keep the automatic, page-level introduction short. Detailed task execution
+// remains discoverable in the page UI instead of forcing 8-9 onboarding steps.
+const COMPACT_ROUTE_STEPS: Record<string, string[]> = {
+  "/alerts": [
+    "alerts_list",
+    "alerts_select",
+    "alerts_claim",
+    "alerts_note",
+    "alerts_nav_customers",
+  ],
+  "/leads": [
+    "customers_list",
+    "customers_filter",
+    "customers_select",
+    "customers_claim",
+    "customers_nav_reports",
+  ],
+};
+
+Object.entries(COMPACT_ROUTE_STEPS).forEach(([routeKey, stepIds]) => {
+  const config = ROUTE_TOUR_CONFIGS[routeKey];
+  if (!config) return;
+  config.version = 3;
+  config.steps = stepIds
+    .map((stepId) => config.steps.find((step) => step.id === stepId))
+    .filter((step): step is TourStep => Boolean(step))
+    .map((step, index) => ({
+      ...step,
+      title: step.title.replace(/^\d+\.\s*/, `${index + 1}. `),
+    }));
+});
+
+// `/customers` is an alias of `/leads`; keeping two copies caused the two
+// routes to drift and made one config unreachable.
+delete ROUTE_TOUR_CONFIGS["/customers"];

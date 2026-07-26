@@ -1,10 +1,6 @@
 "use client";
 
-import dynamic from "next/dynamic";
-
-const MentionDetailPage = dynamic(() => import("@/app/mentions/[id]/page"), {
-  ssr: false,
-});
+import MentionDetailPage from "@/app/mentions/[id]/page";
 
 export default function DemoMentionDetailPage() {
   return <MentionDetailPage />;

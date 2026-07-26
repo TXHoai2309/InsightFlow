@@ -859,20 +859,31 @@ export default function LeadsPage() {
   const handleStartedAction = (lead: Lead, preventJump = false) => {
     rememberOptimisticLead(lead);
     if (preventJump) return;
+
+    const meta = getLeadWorkbenchMeta(lead, currentTime);
+    const nextView: LeadWorkbenchView = meta.needsResultCapture
+      ? "active"
+      : "priority";
+
+    // Keep the claimed lead in focus while moving it to its new workflow
+    // queue. A freshly claimed lead belongs to "Chờ xử lý"; after the
+    // source has been opened/contact started it belongs to "Đang xử lý".
+    skipNextPageReset.current = true;
+    setActiveView(nextView);
+    setCurrentPage(1);
     setSelectedLeadId(lead.id);
+    setHighlightedLeadId(lead.id);
     setDetailTab("action");
     setIsPanelCollapsed(false);
-    const meta = getLeadWorkbenchMeta(lead, currentTime);
-    if (meta.needsResultCapture) {
-      skipNextPageReset.current = true;
-      window.setTimeout(() => {
-        document
-          .getElementById(LEAD_DETAIL_PANEL_SCROLL_ID)
-          ?.scrollIntoView({ block: "start", behavior: "smooth" });
-      }, 80);
-    }
-    const nextView = meta.needsResultCapture ? "active" : getDefaultLeadWorkbenchView(profile);
-    setActiveView(nextView);
+
+    window.setTimeout(() => {
+      document
+        .getElementById(LEAD_DETAIL_PANEL_SCROLL_ID)
+        ?.scrollIntoView({ block: "start", behavior: "smooth" });
+    }, 80);
+    window.setTimeout(() => {
+      setHighlightedLeadId((current) => current === lead.id ? null : current);
+    }, 4000);
   };
 
   const handleAfterResult = (updatedLead: Lead, resultType?: Lead["result_type"]) => {

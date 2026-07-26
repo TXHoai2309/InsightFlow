@@ -1,10 +1,8 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { useLayoutEffect } from "react";
 import { buildDemoAlertData, useAlertStore } from "@/stores/alert.store";
-
-const AlertsPage = dynamic(() => import("@/app/alerts/page"), { ssr: false });
+import AlertsPage from "@/app/alerts/page";
 
 export default function DemoAlertsPage() {
   useLayoutEffect(() => {

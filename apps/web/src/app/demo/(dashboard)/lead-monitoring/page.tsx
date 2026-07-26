@@ -1,12 +1,7 @@
 "use client";
 
 import React from "react";
-import dynamic from "next/dynamic";
-
-const DashboardLeadMonitoringPage = dynamic(
-  () => import("@/app/dashboard/lead-monitoring/page"),
-  { ssr: false }
-);
+import DashboardLeadMonitoringPage from "@/app/dashboard/lead-monitoring/page";
 
 export default function DemoLeadMonitoringPage() {
   return (

@@ -7,6 +7,7 @@
  */
 
 import React, { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/hooks/useAuth";
@@ -230,7 +231,27 @@ export function Header({ onMenuToggle, isSidebarCollapsed = false }: HeaderProps
       <div className="flex items-center gap-4 md:gap-6">
         {!isDemoMode && <TrialTimeRemaining />}
 
-        {!isDemoMode && (role === "admin" || role === "brand_manager" || role === "crisis_employee" || role === "lead_employee") && (
+        {isDemoMode && (
+          <Link
+            href="/#consultation"
+            data-tour="demo-try-now-btn"
+            className="group inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-[#6D5EF6] to-[#5B4FE0] px-3 text-xs font-bold text-white shadow-[0_8px_20px_rgba(91,79,224,0.22)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_26px_rgba(91,79,224,0.32)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6D5EF6] focus-visible:ring-offset-2 sm:px-4 sm:text-sm"
+            aria-label="Trải nghiệm InsightFlow ngay"
+          >
+            <span className="material-symbols-outlined text-[18px]" aria-hidden="true">
+              rocket_launch
+            </span>
+            <span className="hidden sm:inline">Trải nghiệm ngay</span>
+            <span
+              className="material-symbols-outlined hidden text-[17px] transition-transform duration-200 group-hover:translate-x-0.5 md:inline"
+              aria-hidden="true"
+            >
+              arrow_forward
+            </span>
+          </Link>
+        )}
+
+        {(isDemoMode || role === "admin" || role === "brand_manager" || role === "crisis_employee" || role === "lead_employee") && (
           <button
             type="button"
             onClick={handleOpenGuide}

@@ -1,8 +1,6 @@
 "use client";
 
-import dynamic from "next/dynamic";
-
-const LeadsPage = dynamic(() => import("@/app/leads/page"), { ssr: false });
+import LeadsPage from "@/app/leads/page";
 
 export default function DemoLeadsPage() {
   return <LeadsPage />;

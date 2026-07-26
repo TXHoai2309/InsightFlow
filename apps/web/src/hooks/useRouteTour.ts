@@ -1,28 +1,52 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { calculateTooltipPosition } from "@/lib/tooltip-positioning";
 import {
-  getOnboardingState,
-  setOnboardingState,
+  getSyncedOnboardingState,
+  setSyncedOnboardingState,
 } from "@/lib/onboarding-storage";
 import {
   ROUTE_TOUR_CONFIGS,
   type RouteTourConfig,
-  type TourStep,
 } from "@/components/onboarding/tourConfigs";
+import { isDemoPath, isPublicDemoExit, toDemoHref } from "@/lib/demo-navigation";
 
 export const TOUR_ACTION_EVENT = "insightflow_tour_action";
 export const ROUTE_TOUR_START_EVENT = "insightflow_start_route_tour";
 
+type TargetStatus = "idle" | "searching" | "found" | "missing";
+
+const ROUTE_ALIASES: Array<[RegExp, string]> = [
+  [/^\/(?:demo\/)?alerts(?:\/|$)/, "/alerts"],
+  [/^\/(?:demo\/)?team(?:\/|$)/, "/team"],
+  [/^\/(?:demo\/)?(?:customers|leads)(?:\/|$)/, "/leads"],
+  [/^\/(?:demo\/)?reports(?:\/|$)/, "/reports"],
+  [/^\/(?:demo\/)?dashboard\/lead-monitoring(?:\/|$)/, "/dashboard/lead-monitoring"],
+  [/^\/demo\/lead-monitoring(?:\/|$)/, "/dashboard/lead-monitoring"],
+  [/^\/(?:demo\/)?dashboard\/insights(?:\/|$)/, "/dashboard/insights"],
+  [/^\/demo\/insights(?:\/|$)/, "/dashboard/insights"],
+  [/^\/admin\/consultations(?:\/|$)/, "/admin/consultations"],
+  [/^\/admin\/crawl-operations(?:\/|$)/, "/admin/crawl-operations"],
+  [/^\/labeling_tool(?:\/|$)/, "/labeling_tool"],
+  [/^\/admin\/(?:create-brand-manager|brand-managers|brand-accounts)(?:\/|$)/, "/admin/brand-accounts"],
+  [/^\/admin\/brands(?:\/|$)/, "/admin/brands"],
+  [/^\/demo(?:\/|$)/, "/demo"],
+  [/^\/dashboard(?:\/|$)/, "/dashboard"],
+];
+
+export function getNormalizedTourRoute(path: string | null): string | null {
+  if (!path) return null;
+  return ROUTE_ALIASES.find(([pattern]) => pattern.test(path))?.[1] || null;
+}
+
 export function dispatchTourAction(actionName: string) {
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(
-      new CustomEvent(TOUR_ACTION_EVENT, { detail: { action: actionName } }),
-    );
-  }
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent(TOUR_ACTION_EVENT, { detail: { action: actionName } }),
+  );
 }
 
 export function useRouteTour() {
@@ -30,333 +54,327 @@ export function useRouteTour() {
   const router = useRouter();
   const { user } = useAuth();
   const userId = user?.uid || "guest";
+  const currentRouteKey = getNormalizedTourRoute(pathname);
 
   const [isOpen, setIsOpen] = useState(false);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
+  const [targetStatus, setTargetStatus] = useState<TargetStatus>("idle");
   const [activeConfig, setActiveConfig] = useState<RouteTourConfig | null>(null);
+  const [tooltipSize, setTooltipSize] = useState({ width: 380, height: 240 });
 
-  const retryTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const retryTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const routeLoadIdRef = useRef(0);
 
-  // Normalize pathname to base route key
-  const getNormalizedRouteKey = useCallback((path: string | null): string => {
-    if (!path) return "/dashboard";
-    if (path.startsWith("/alerts") || path.startsWith("/demo/alerts")) return "/alerts";
-    if (path.startsWith("/team")) return "/team";
-    if (path.startsWith("/customers") || path.startsWith("/leads") || path.startsWith("/demo/leads")) return "/leads";
-    if (path.startsWith("/reports")) return "/reports";
-    if (path.startsWith("/admin/consultations")) return "/admin/consultations";
-    if (path.startsWith("/admin/crawl-operations")) return "/admin/crawl-operations";
-    if (path.startsWith("/labeling_tool")) return "/labeling_tool";
-    if (path.startsWith("/admin/create-brand-manager")) return "/admin/brand-accounts";
-    if (path.startsWith("/admin/brand-managers")) return "/admin/brand-accounts";
-    if (path.startsWith("/admin/brand-accounts")) return "/admin/brand-accounts";
-    if (path.startsWith("/admin/brands")) return "/admin/brands";
-    if (path.startsWith("/admin")) return "/admin/brand-accounts";
-    if (path === "/dashboard/lead-monitoring" || path.startsWith("/demo/lead-monitoring")) return "/dashboard/lead-monitoring";
-    if (path === "/dashboard/insights" || path.startsWith("/demo/insights")) return "/dashboard/insights";
-    if (path === "/demo" || path.startsWith("/demo/")) return "/demo";
-    return "/dashboard";
-  }, []);
-
-  const currentRouteKey = getNormalizedRouteKey(pathname);
-
-  // Locate target selector with smooth scroll and retry
-  const locateTarget = useCallback((targetSelector: string) => {
+  const clearTargetTimer = useCallback(() => {
     if (retryTimerRef.current) {
       clearInterval(retryTimerRef.current);
       retryTimerRef.current = null;
     }
+  }, []);
 
-    setTargetRect(null);
+  const locateTarget = useCallback((targetSelector: string) => {
+    clearTargetTimer();
 
     let attempts = 0;
-    const maxAttempts = 60; // 60 * 150ms = 9.0s (Wait for heavy page / slow data loads)
+    const maxAttempts = 60;
+    const revealElement = (element: HTMLElement) => {
+      // `auto` can still inherit `scroll-behavior: smooth` from the app shell.
+      // `instant` keeps consecutive dashboard steps visually continuous.
+      element.scrollIntoView({
+        behavior: "instant" as ScrollBehavior,
+        block: "center",
+        inline: "nearest",
+      });
 
-    const checkElement = () => {
-      const el = document.querySelector(targetSelector);
-      if (el) {
-        const rect = el.getBoundingClientRect();
-        if (rect.width > 0 && rect.height > 0) {
-          el.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
-          setTimeout(() => {
-            const updatedRect = el.getBoundingClientRect();
-            if (updatedRect.width > 0 && updatedRect.height > 0) {
-              setTargetRect(updatedRect);
-            }
-          }, 100);
-          if (retryTimerRef.current) {
-            clearInterval(retryTimerRef.current);
-            retryTimerRef.current = null;
+      const updatedRect = element.getBoundingClientRect();
+      setTargetRect(updatedRect);
+      setTargetStatus("found");
+
+      // Re-measure once more after React/CSS has settled without hiding the
+      // tooltip in between the two steps.
+      window.requestAnimationFrame(() => {
+        const settledRect = element.getBoundingClientRect();
+        if (settledRect.width > 0 && settledRect.height > 0) {
+          setTargetRect(settledRect);
+        }
+      });
+    };
+
+    const findVisibleElement = () => {
+      const selectors = targetSelector.split(",").map((s) => s.trim());
+      for (const sel of selectors) {
+        if (!sel) continue;
+        const element = document.querySelector<HTMLElement>(sel);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.width > 0 && rect.height > 0) {
+            return element;
           }
-          return;
         }
       }
+      return null;
+    };
 
-      attempts++;
+    // Most transitions happen between elements that are already mounted.
+    // Resolve those synchronously so the overlay never disappears.
+    const immediateElement = findVisibleElement();
+    if (immediateElement) {
+      revealElement(immediateElement);
+      return;
+    }
+
+    setTargetRect(null);
+    setTargetStatus("searching");
+
+    const checkElement = () => {
+      const element = findVisibleElement();
+      if (element) {
+        clearTargetTimer();
+        revealElement(element);
+        return;
+      }
+      attempts += 1;
       if (attempts >= maxAttempts) {
-        if (retryTimerRef.current) {
-          clearInterval(retryTimerRef.current);
-          retryTimerRef.current = null;
-        }
-        setTargetRect(null);
+        clearTargetTimer();
+        setTargetStatus("missing");
       }
     };
 
     checkElement();
-    if (!retryTimerRef.current) {
-      retryTimerRef.current = setInterval(checkElement, 150);
-    }
-  }, []);
+    retryTimerRef.current = setInterval(checkElement, 150);
+  }, [clearTargetTimer]);
 
-  const startTour = useCallback((config: RouteTourConfig) => {
+  const saveProgress = useCallback((
+    config: RouteTourConfig,
+    stepIndex: number,
+    extra: Record<string, unknown> = {},
+  ) => {
+    void setSyncedOnboardingState(userId, config.routeKey, config.version, {
+      completed: false,
+      skipped: false,
+      currentStepIndex: stepIndex,
+      ...extra,
+    });
+  }, [userId]);
+
+  const startTour = useCallback((
+    config: RouteTourConfig,
+    initialStep = 0,
+    persist = true,
+  ) => {
+    const safeIndex = Math.min(Math.max(initialStep, 0), Math.max(config.steps.length - 1, 0));
     setActiveConfig(config);
-    setCurrentStepIndex(0);
+    setCurrentStepIndex(safeIndex);
     setIsOpen(true);
-    if (config.steps.length > 0) {
-      locateTarget(config.steps[0].target);
-    }
-  }, [locateTarget]);
+    if (persist) saveProgress(config, safeIndex);
+    if (config.steps[safeIndex]) locateTarget(config.steps[safeIndex].target);
+  }, [locateTarget, saveProgress]);
 
-  // Handle re-triggering from Header Guide button
   useEffect(() => {
     const handleStartEvent = (event: Event) => {
-      const customEvent = event as CustomEvent<{ route?: string; force?: boolean }>;
-      const targetRouteKey = customEvent.detail?.route ? getNormalizedRouteKey(customEvent.detail.route) : currentRouteKey;
-      const config = ROUTE_TOUR_CONFIGS[targetRouteKey];
-
-      if (config) {
-        startTour(config);
-      }
+      const detail = (event as CustomEvent<{ route?: string }>).detail;
+      const routeKey = detail?.route
+        ? getNormalizedTourRoute(detail.route)
+        : currentRouteKey;
+      const config = routeKey ? ROUTE_TOUR_CONFIGS[routeKey] : null;
+      if (config) startTour(config, 0);
     };
-
     window.addEventListener(ROUTE_TOUR_START_EVENT, handleStartEvent);
     return () => window.removeEventListener(ROUTE_TOUR_START_EVENT, handleStartEvent);
-  }, [currentRouteKey, getNormalizedRouteKey, startTour]);
+  }, [currentRouteKey, startTour]);
 
-  // Auto-start check on route change (only if not completed/skipped for this version)
   useEffect(() => {
-    const config = ROUTE_TOUR_CONFIGS[currentRouteKey];
+    const config = currentRouteKey ? ROUTE_TOUR_CONFIGS[currentRouteKey] : null;
+    const loadId = ++routeLoadIdRef.current;
+    clearTargetTimer();
+
     if (!config) {
       setIsOpen(false);
+      setActiveConfig(null);
       return;
     }
 
-    const state = getOnboardingState(userId, config.routeKey, config.version);
-    if (!state?.completed && !state?.skipped) {
-      const timer = setTimeout(() => {
-        startTour(config);
-      }, 600);
-      return () => clearTimeout(timer);
-    }
-  }, [currentRouteKey, userId, startTour]);
+    const timer = window.setTimeout(async () => {
+      const state = await getSyncedOnboardingState(userId, config.routeKey, config.version);
+      if (loadId !== routeLoadIdRef.current) return;
+      if (!state?.completed && !state?.skipped) {
+        startTour(config, state?.currentStepIndex || 0, false);
+      }
+    }, 600);
 
-  // Target rect update on resize & scroll
+    return () => window.clearTimeout(timer);
+  }, [clearTargetTimer, currentRouteKey, startTour, userId]);
+
   useEffect(() => {
-    if (!isOpen || !activeConfig) return;
-
+    if (!isOpen || !activeConfig || targetStatus !== "found") return;
     const updateRect = () => {
       const step = activeConfig.steps[currentStepIndex];
-      if (step) {
-        const el = document.querySelector(step.target);
-        if (el) {
-          setTargetRect(el.getBoundingClientRect());
-        }
-      }
+      const element = step ? document.querySelector(step.target) : null;
+      if (element) setTargetRect(element.getBoundingClientRect());
     };
-
     window.addEventListener("resize", updateRect);
     window.addEventListener("scroll", updateRect, true);
     return () => {
       window.removeEventListener("resize", updateRect);
       window.removeEventListener("scroll", updateRect, true);
     };
-  }, [isOpen, activeConfig, currentStepIndex]);
+  }, [activeConfig, currentStepIndex, isOpen, targetStatus]);
 
   const handleComplete = useCallback(() => {
-    if (activeConfig) {
-      setOnboardingState(userId, activeConfig.routeKey, activeConfig.version, {
-        completed: true,
-        completedAt: new Date().toISOString(),
-      });
-
-      // Handle nextRoute navigation if configured
-      if (activeConfig.nextRoute) {
-        router.push(activeConfig.nextRoute.href);
-      }
-    }
+    if (!activeConfig) return;
+    void setSyncedOnboardingState(userId, activeConfig.routeKey, activeConfig.version, {
+      completed: true,
+      skipped: false,
+      currentStepIndex: activeConfig.steps.length - 1,
+      completedAt: new Date().toISOString(),
+    });
     setIsOpen(false);
     setActiveConfig(null);
-  }, [activeConfig, userId, router]);
+    clearTargetTimer();
+    if (activeConfig.nextRoute) {
+      const nextHref = isDemoPath(pathname)
+        ? toDemoHref(activeConfig.nextRoute.href) ||
+          (isPublicDemoExit(
+            activeConfig.nextRoute.href.split(/[?#]/, 1)[0],
+          )
+            ? activeConfig.nextRoute.href
+            : null)
+        : activeConfig.nextRoute.href;
+
+      // Shared Brand Manager tours can point to authenticated-only pages
+      // (for example Team). Never let a public Demo tour fall through to
+      // ProtectedRoute and unexpectedly display the Login screen.
+      if (nextHref) router.push(nextHref);
+    }
+  }, [activeConfig, clearTargetTimer, pathname, router, userId]);
 
   const handleSkip = useCallback(() => {
     if (activeConfig) {
-      setOnboardingState(userId, activeConfig.routeKey, activeConfig.version, {
+      void setSyncedOnboardingState(userId, activeConfig.routeKey, activeConfig.version, {
         skipped: true,
+        completed: false,
+        currentStepIndex,
         skippedAt: new Date().toISOString(),
       });
     }
     setIsOpen(false);
     setActiveConfig(null);
-  }, [activeConfig, userId]);
+    clearTargetTimer();
+  }, [activeConfig, clearTargetTimer, currentStepIndex, userId]);
 
-  const lastAdvanceTimeRef = useRef<number>(0);
-
-  const advanceStep = useCallback((nextIdx: number) => {
-    const now = Date.now();
-    if (now - lastAdvanceTimeRef.current < 450) {
-      return; // Ignore rapid duplicate step advances within 450ms
-    }
-    lastAdvanceTimeRef.current = now;
-
-    if (activeConfig && nextIdx < activeConfig.steps.length) {
-      setCurrentStepIndex(nextIdx);
-      locateTarget(activeConfig.steps[nextIdx].target);
-    } else {
+  const advanceStep = useCallback((nextIndex: number) => {
+    if (!activeConfig) return;
+    if (nextIndex >= activeConfig.steps.length) {
       handleComplete();
+      return;
     }
-  }, [activeConfig, locateTarget, handleComplete]);
-
-  // Listen to interactive user actions
-  useEffect(() => {
-    if (!isOpen || !activeConfig) return;
-
-    const currentStep = activeConfig.steps[currentStepIndex];
-    if (!currentStep?.action) return;
-
-    const handleTourAction = (event: Event) => {
-      const customEvent = event as CustomEvent<{ action: string }>;
-      const actionName = customEvent.detail?.action;
-
-      if (
-        actionName === currentStep.id ||
-        actionName === currentStep.action?.type
-      ) {
-        advanceStep(currentStepIndex + 1);
-      }
-    };
-
-    window.addEventListener(TOUR_ACTION_EVENT, handleTourAction);
-    return () => window.removeEventListener(TOUR_ACTION_EVENT, handleTourAction);
-  }, [isOpen, activeConfig, currentStepIndex, advanceStep]);
-
-  const isInteractiveRoute =
-    currentRouteKey === "/alerts" || currentRouteKey === "/leads" || currentRouteKey === "/customers";
-
-  // Listen to direct clicks on target elements on screen to auto-advance step
-  useEffect(() => {
-    if (!isOpen || !activeConfig || !isInteractiveRoute) return;
-    const currentStep = activeConfig.steps[currentStepIndex];
-    if (!currentStep?.target) return;
-
-    const targetEl = document.querySelector<HTMLElement>(currentStep.target);
-    if (!targetEl) return;
-
-    const handleDirectClick = (e: MouseEvent) => {
-      const tooltip = document.querySelector('[role="dialog"]');
-      if (tooltip && tooltip.contains(e.target as Node)) return;
-
-      setTimeout(() => {
-        advanceStep(currentStepIndex + 1);
-      }, 180);
-    };
-
-    targetEl.addEventListener("click", handleDirectClick);
-    return () => targetEl.removeEventListener("click", handleDirectClick);
-  }, [isOpen, activeConfig, currentStepIndex, isInteractiveRoute, advanceStep]);
-
-  // Helper to trigger the target element's click/input action
-  const triggerStepAction = useCallback((step: TourStep) => {
-    if (!step?.target) return;
-    try {
-      const el = document.querySelector<HTMLElement>(step.target);
-      if (el) {
-        // Skip calling .click() on navigation links in triggerStepAction to prevent duplicate page reloads;
-        // client-side routing is handled smoothly by router.push in handleComplete.
-        if (
-          el.getAttribute("data-tour")?.startsWith("nav-") ||
-          step.id.includes("nav") ||
-          el.tagName === "A"
-        ) {
-          return;
-        }
-
-        if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") {
-          const inputEl = el as HTMLInputElement | HTMLTextAreaElement;
-          inputEl.focus();
-          if (!inputEl.value) {
-            const demoNote = "Đã liên hệ hỗ trợ khách hàng qua điện thoại, đã giải đáp thắc mắc.";
-            const nativeSetter =
-              Object.getOwnPropertyDescriptor(
-                window.HTMLTextAreaElement.prototype,
-                "value"
-              )?.set ||
-              Object.getOwnPropertyDescriptor(
-                window.HTMLInputElement.prototype,
-                "value"
-              )?.set;
-            if (nativeSetter) {
-              nativeSetter.call(inputEl, demoNote);
-            } else {
-              inputEl.value = demoNote;
-            }
-            inputEl.dispatchEvent(new Event("input", { bubbles: true }));
-            inputEl.dispatchEvent(new Event("change", { bubbles: true }));
-          }
-        } else if (el.tagName === "SELECT") {
-          const selectEl = el as HTMLSelectElement;
-          if (selectEl.options.length > 1 && (!selectEl.value || selectEl.value === "all")) {
-            selectEl.selectedIndex = 1;
-            selectEl.dispatchEvent(new Event("change", { bubbles: true }));
-          }
-          selectEl.focus();
-        } else {
-          const isExplicitClickable =
-            el.tagName === "BUTTON" ||
-            el.tagName === "A" ||
-            el.getAttribute("role") === "button";
-          if (isExplicitClickable) {
-            el.click();
-          }
-        }
-      }
-
-      if (step.action?.type) {
-        dispatchTourAction(step.action.type);
-      }
-    } catch (err) {
-      console.warn("[RouteTour] Could not trigger step action:", err);
-    }
-  }, []);
-
-  // Controls
-  const handleNext = useCallback(() => {
-    if (!activeConfig) return;
-    const currentStep = activeConfig.steps[currentStepIndex];
-    if (currentStep && isInteractiveRoute) {
-      triggerStepAction(currentStep);
-    }
-
-    advanceStep(currentStepIndex + 1);
-  }, [activeConfig, currentStepIndex, isInteractiveRoute, triggerStepAction, advanceStep]);
-
-  const handlePrev = useCallback(() => {
-    if (!activeConfig) return;
-    if (currentStepIndex > 0) {
-      const prevIdx = currentStepIndex - 1;
-      setCurrentStepIndex(prevIdx);
-      locateTarget(activeConfig.steps[prevIdx].target);
-    }
-  }, [activeConfig, currentStepIndex, locateTarget]);
+    setCurrentStepIndex(nextIndex);
+    saveProgress(activeConfig, nextIndex);
+    locateTarget(activeConfig.steps[nextIndex].target);
+  }, [activeConfig, handleComplete, locateTarget, saveProgress]);
 
   const currentStep = activeConfig?.steps[currentStepIndex] || null;
+  const currentActionSelector =
+    currentStep?.action && "selector" in currentStep.action
+      ? currentStep.action.selector
+      : currentStep?.target;
+  const waitingForAction = Boolean(
+    currentStep?.action &&
+    (currentStep.allowInteraction ?? true) &&
+    currentActionSelector &&
+    targetStatus === "found" &&
+    typeof document !== "undefined" &&
+    document.querySelector(currentActionSelector),
+  );
 
-  const tooltipPosition = (currentStep && targetRect)
-    ? calculateTooltipPosition({
-        targetRect,
-        preferredPlacement: currentStep.placement || "auto",
-      })
+  useEffect(() => {
+    if (!isOpen || !currentStep || !waitingForAction || targetStatus !== "found") return;
+    const element = currentActionSelector
+      ? document.querySelector<HTMLElement>(currentActionSelector)
+      : null;
+    if (!element) return;
+
+    let advanced = false;
+    const finishAction = () => {
+      if (advanced) return;
+      advanced = true;
+      window.setTimeout(() => advanceStep(currentStepIndex + 1), 180);
+    };
+    const eventNames: Array<keyof HTMLElementEventMap> =
+      element instanceof HTMLInputElement ||
+      element instanceof HTMLTextAreaElement ||
+      element instanceof HTMLSelectElement
+        ? ["change", "input"]
+        : ["click"];
+    eventNames.forEach((name) => element.addEventListener(name, finishAction));
+
+    const handleCustomAction = (event: Event) => {
+      const actionName = (event as CustomEvent<{ action: string }>).detail?.action;
+      if (actionName === currentStep.id || actionName === currentStep.action?.type) {
+        finishAction();
+      }
+    };
+    window.addEventListener(TOUR_ACTION_EVENT, handleCustomAction);
+    return () => {
+      eventNames.forEach((name) => element.removeEventListener(name, finishAction));
+      window.removeEventListener(TOUR_ACTION_EVENT, handleCustomAction);
+    };
+  }, [advanceStep, currentActionSelector, currentStep, currentStepIndex, isOpen, targetStatus, waitingForAction]);
+
+  const handleNext = useCallback(() => {
+    if (!waitingForAction) advanceStep(currentStepIndex + 1);
+  }, [advanceStep, currentStepIndex, waitingForAction]);
+
+  const handlePrev = useCallback(() => {
+    if (!activeConfig || currentStepIndex <= 0) return;
+    const previousIndex = currentStepIndex - 1;
+    setCurrentStepIndex(previousIndex);
+    saveProgress(activeConfig, previousIndex);
+    locateTarget(activeConfig.steps[previousIndex].target);
+  }, [activeConfig, currentStepIndex, locateTarget, saveProgress]);
+
+  const handleSkipStep = useCallback(() => {
+    advanceStep(currentStepIndex + 1);
+  }, [advanceStep, currentStepIndex]);
+
+  const handleRetryTarget = useCallback(() => {
+    if (currentStep) locateTarget(currentStep.target);
+  }, [currentStep, locateTarget]);
+
+  const handleTooltipSizeChange = useCallback((width: number, height: number) => {
+    setTooltipSize((current) =>
+      Math.abs(current.width - width) < 1 && Math.abs(current.height - height) < 1
+        ? current
+        : { width, height },
+    );
+  }, []);
+
+  const tooltipPosition = currentStep
+    ? targetStatus === "missing"
+      ? {
+          placement: "center" as const,
+          style: {
+            position: "fixed" as const,
+            top: "50%",
+            left: "50%",
+            width: `${Math.min(380, Math.max(280, (typeof window !== "undefined" ? window.innerWidth : 420) - 32))}px`,
+            maxHeight: "min(420px, calc(100vh - 32px))",
+            transform: "translate(-50%, -50%)",
+            zIndex: 9999,
+          },
+        }
+      : targetRect
+        ? calculateTooltipPosition({
+            targetRect,
+            tooltipWidth: tooltipSize.width,
+            tooltipHeight: tooltipSize.height,
+            preferredPlacement: currentStep.placement || "auto",
+          })
+        : null
     : null;
+
+  useEffect(() => () => clearTargetTimer(), [clearTargetTimer]);
 
   return {
     isOpen,
@@ -364,11 +382,15 @@ export function useRouteTour() {
     currentStepIndex,
     totalSteps: activeConfig?.steps.length || 0,
     targetRect,
+    targetStatus,
     tooltipPosition,
     activeConfig,
+    waitingForAction,
     handleNext,
     handlePrev,
     handleSkip,
-    handleComplete,
+    handleSkipStep,
+    handleRetryTarget,
+    handleTooltipSizeChange,
   };
 }

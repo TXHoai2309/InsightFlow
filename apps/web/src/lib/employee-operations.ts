@@ -1,4 +1,4 @@
-import { getAlertWorkflowStatus } from "@/lib/alertWorkflow";
+import { getAlertWorkflowStatus, isSkippedAlert } from "@/lib/alertWorkflow";
 import { canAlertBeVisibleToUser } from "@/lib/alert-visibility";
 import { isIntentLead } from "@/lib/lead-intent";
 import {
@@ -423,7 +423,9 @@ export function buildEmployeeOperationsData({
       }
     });
 
-    tasks = Array.from(deduplicated.values()).map((alert) => alertToTask(alert, nowMs));
+    tasks = Array.from(deduplicated.values())
+      .filter((alert) => !isSkippedAlert(alert))
+      .map((alert) => alertToTask(alert, nowMs));
   } else {
     tasks = leads
       .filter(isIntentLead)

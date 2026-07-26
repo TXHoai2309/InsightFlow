@@ -30,13 +30,27 @@ export function calculateTooltipPosition({
   headerOffset = 72,
   screenPadding = 16,
 }: CalculateTooltipPositionOptions): TooltipPositionResult {
+  if (viewportWidth < 640) {
+    return {
+      placement: "center",
+      style: {
+        position: "fixed",
+        left: `${screenPadding}px`,
+        bottom: `${Math.max(screenPadding, 12)}px`,
+        width: `${Math.max(280, viewportWidth - screenPadding * 2)}px`,
+        maxHeight: `${Math.min(tooltipHeight, viewportHeight * 0.62)}px`,
+        zIndex: 9999,
+      },
+    };
+  }
+
   // Max-width constraint: 360px - 420px
   const constrainedWidth = Math.min(Math.max(tooltipWidth, 360), 420);
   const actualWidth = Math.min(constrainedWidth, viewportWidth - screenPadding * 2);
 
   // Max-height constraint: min(420px, calc(100vh - 48px))
   const constrainedMaxHeight = Math.min(420, viewportHeight - 48);
-  const actualHeight = Math.min(tooltipHeight, constrainedMaxHeight - screenPadding * 2);
+  const actualHeight = Math.min(Math.max(tooltipHeight, 180), constrainedMaxHeight);
 
   // Available spaces in 4 cardinal directions
   const spaceBelow = viewportHeight - targetRect.bottom - screenPadding;
@@ -114,7 +128,7 @@ export function calculateTooltipPosition({
     top: `${top}px`,
     left: `${left}px`,
     width: `${actualWidth}px`,
-    maxHeight: `${Math.min(constrainedMaxHeight, viewportHeight - top - screenPadding)}px`,
+    maxHeight: `${Math.max(180, Math.min(constrainedMaxHeight, viewportHeight - top - screenPadding))}px`,
     zIndex: 9999,
   };
 
