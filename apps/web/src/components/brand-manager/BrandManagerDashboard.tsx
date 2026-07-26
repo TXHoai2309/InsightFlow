@@ -373,7 +373,14 @@ export function BrandManagerDashboard({
   );
 
   const leadOperationalMetrics = useMemo(() => {
-    const scopedLeads = filterOperationalLeads(leads, {
+    // Pre-filter leads theo time_range trước khi tính operational metrics
+    // để "Lead tiềm năng" thay đổi theo bộ lọc thời gian
+    const timeFilteredLeads = leads.filter((lead) => {
+      const dateForFilter = lead.posted_at || lead.created_at;
+      if (!dateForFilter) return true; // giữ lại nếu không có ngày
+      return checkTimeFilter(dateForFilter);
+    });
+    const scopedLeads = filterOperationalLeads(timeFilteredLeads, {
       profile,
       workspaceId: filters.workspace_id,
       platform: filters.platform,

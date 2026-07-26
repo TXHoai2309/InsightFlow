@@ -26,7 +26,17 @@ export function BMTabs() {
   const { leads, filters } = useDashboardStore();
   const rawAlerts = useAlertStore((state) => state.rawAlerts);
   const leadsCount = useMemo(() => {
-    const scoped = filterOperationalLeads(leads, {
+    const timeFilteredLeads = leads.filter((lead) => {
+      const dateForFilter = lead.posted_at || lead.created_at;
+      if (!dateForFilter) return true;
+      return isAlertWithinTimeScope({ created_at: dateForFilter }, {
+        timeRange: filters.time_range,
+        singleDate: filters.single_date,
+        customStartDate: filters.custom_start_date,
+        customEndDate: filters.custom_end_date,
+      });
+    });
+    const scoped = filterOperationalLeads(timeFilteredLeads, {
       profile,
       workspaceId: filters.workspace_id,
       platform: filters.platform,

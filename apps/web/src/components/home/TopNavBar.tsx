@@ -45,6 +45,7 @@ export default function TopNavBar() {
     { href: "/#workflow", label: "Quy trình" },
     { href: "/#modules", label: "Tính năng" },
     { href: "/#use-cases", label: "Vai trò" },
+    { href: "/huong-dan", label: "Hướng dẫn" },
     { href: "/#consultation", label: "Tư vấn" },
   ];
 
